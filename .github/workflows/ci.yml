@@ -28,6 +28,7 @@ jobs:
         run: mvn clean verify --batch-mode --no-transfer-progress -Dgpg.skip=true
 
   release:
+    needs: build
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     steps:
