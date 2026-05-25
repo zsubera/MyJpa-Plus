@@ -6,7 +6,7 @@
 - Maven 3.8+
 
 ```bash
-git clone <repo-url>
+git clone https://github.com/zsubera/myjpa-plus
 cd myjpa-plus
 ./mvnw compile
 ```

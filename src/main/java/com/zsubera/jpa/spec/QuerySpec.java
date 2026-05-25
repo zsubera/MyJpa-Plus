@@ -268,7 +268,7 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
             return resolveCollection((CollectionNode) node, path, cb);
         }
         if (node instanceof ExistsNode) {
-            return resolveExists((ExistsNode<?>) node, query, cb);
+            return resolveExists((ExistsNode<?>) node, path, query, cb);
         }
         if (node instanceof RawNode) {
             return ((RawNode) node).fn.apply(path, cb);
@@ -401,13 +401,16 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
     }
 
     @SuppressWarnings("unchecked")
-    private <S> Predicate resolveExists(ExistsNode<S> node, CriteriaQuery<?> query, CriteriaBuilder cb) {
+    private <S> Predicate resolveExists(ExistsNode<S> node, Path<?> outerPath, CriteriaQuery<?> query, CriteriaBuilder cb) {
         jakarta.persistence.criteria.Subquery<S> subquery = query.subquery(node.subEntity);
         Root<S> subRoot = subquery.from(node.subEntity);
-        SubQuerySpec<S> subSpec = new SubQuerySpec<>(subquery, subRoot, cb);
+        Root<?> correlatedOuter = subquery.correlate((Root<?>) outerPath);
+        SubQuerySpec<S> subSpec = new SubQuerySpec<>(subquery, subRoot, correlatedOuter, cb);
         node.config.accept(subSpec);
         subSpec.applyWhere();
-        subquery.select(subRoot);
+        if (!subSpec.isSelectSet()) {
+            subquery.select(subRoot);
+        }
         return node.negate ? cb.not(cb.exists(subquery)) : cb.exists(subquery);
     }
 
@@ -431,6 +434,11 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
             this.value = value;
             this.op = op;
         }
+
+        @Override
+        public String toString() {
+            return "SimpleNode[" + fieldName + " " + op + " " + value + "]";
+        }
     }
 
     static final class JoinNode implements ConditionNode {
@@ -442,10 +450,20 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
             this.fieldName = fieldName;
             this.joinType = joinType;
         }
+
+        @Override
+        public String toString() {
+            return "JoinNode[" + joinType + " " + fieldName + " conditions=" + innerConditions + "]";
+        }
     }
 
     static final class OrNode implements ConditionNode {
         final List<ConditionNode> nodes = new ArrayList<>();
+
+        @Override
+        public String toString() {
+            return "OrNode" + nodes;
+        }
     }
 
     static final class MultiLikeNode implements ConditionNode {

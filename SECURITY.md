@@ -4,12 +4,11 @@
 
 | Version | Supported          |
 |---------|--------------------|
-| 1.0.x   | :white_check_mark: |
+| 0.0.x   | :white_check_mark: |
 
 ## Reporting a Vulnerability
 
-Please report security vulnerabilities via email to the project maintainers.
-Do not open public issues for security vulnerabilities.
+Please report security vulnerabilities via the GitHub issue tracker or email the project maintainers at the address in the POM developer section.
 
 ## Dependencies
 

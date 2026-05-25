@@ -19,7 +19,7 @@
 - `lazy` package (Jackson Hibernate serializers — out of scope)
 - `spring-boot-starter-web`, `jackson-databind`, `javax.servlet-api` dependencies
 
-## [1.0.0] - 2022-04-01
+## [1.0.0] - 2022-04-01 (original jpa-extensions fork)
 
 ### Initial Release
 - Type-safe JPA `Specification` builder with lambda-based API
