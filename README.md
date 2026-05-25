@@ -25,7 +25,7 @@ Type-safe JPA Criteria query builder with a lambda-based fluent API for Spring D
 <dependency>
     <groupId>io.github.zsubera</groupId>
     <artifactId>myjpa-plus</artifactId>
-    <version>1.0.0</version>
+    <version>0.0.1</version>
 </dependency>
 ```
 
