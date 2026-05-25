@@ -23,7 +23,7 @@ Type-safe JPA Criteria query builder with a lambda-based fluent API for Spring D
 
 ```xml
 <dependency>
-    <groupId>com.zsubera</groupId>
+    <groupId>io.github.zsubera</groupId>
     <artifactId>myjpa-plus</artifactId>
     <version>1.0.0</version>
 </dependency>

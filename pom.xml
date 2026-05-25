@@ -9,7 +9,7 @@
         <version>3.3.5</version>
         <relativePath/>
     </parent>
-    <groupId>com.zsubera</groupId>
+    <groupId>io.github.zsubera</groupId>
     <artifactId>myjpa-plus</artifactId>
     <version>1.0.0</version>
     <name>MyJpa-Plus</name>
