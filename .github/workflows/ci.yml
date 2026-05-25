@@ -13,40 +13,33 @@ jobs:
     strategy:
       matrix:
         java: [17, 21]
-
     steps:
       - uses: actions/checkout@v4
-
       - name: Set up JDK ${{ matrix.java }}
         uses: actions/setup-java@v4
         with:
           java-version: ${{ matrix.java }}
           distribution: 'temurin'
           cache: maven
-
       - name: Build and verify
         run: mvn clean verify --batch-mode --no-transfer-progress -Dgpg.skip=true
 
-  release:
+  snapshot-deploy:
     needs: build
-    if: startsWith(github.ref, 'refs/tags/v')
+    if: github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
-      - name: Set up JDK 17
-        uses: actions/setup-java@v4
+      - uses: actions/setup-java@v4
         with:
           java-version: 17
           distribution: 'temurin'
           cache: maven
-
       - name: Import GPG key
         run: |
           echo "${{ secrets.GPG_PRIVATE_KEY }}" > "$HOME/private.key"
           gpg --batch --import "$HOME/private.key" || true
           rm "$HOME/private.key"
-
       - name: Create Maven settings
         run: |
           mkdir -p $HOME/.m2
@@ -73,12 +66,55 @@ jobs:
             </activeProfiles>
           </settings>
           EOF
+      - name: Deploy SNAPSHOT
+        run: mvn deploy --batch-mode --no-transfer-progress -DskipTests
 
+  release-deploy:
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          java-version: 17
+          distribution: 'temurin'
+          cache: maven
+      - name: Import GPG key
+        run: |
+          echo "${{ secrets.GPG_PRIVATE_KEY }}" > "$HOME/private.key"
+          gpg --batch --import "$HOME/private.key" || true
+          rm "$HOME/private.key"
+      - name: Create Maven settings
+        run: |
+          mkdir -p $HOME/.m2
+          cat > $HOME/.m2/settings.xml << 'EOF'
+          <settings>
+            <servers>
+              <server>
+                <id>central</id>
+                <username>${{ secrets.CENTRAL_TOKEN_USERNAME }}</username>
+                <password>${{ secrets.CENTRAL_TOKEN_PASSWORD }}</password>
+              </server>
+            </servers>
+            <profiles>
+              <profile>
+                <id>gpg</id>
+                <properties>
+                  <gpg.keyname>${{ secrets.GPG_KEY_NAME }}</gpg.keyname>
+                  <gpg.passphrase></gpg.passphrase>
+                </properties>
+              </profile>
+            </profiles>
+            <activeProfiles>
+              <activeProfile>gpg</activeProfile>
+            </activeProfiles>
+          </settings>
+          EOF
       - name: Set release version from tag
         run: |
           VERSION="${GITHUB_REF#refs/tags/v}"
           echo "Releasing version $VERSION"
           mvn versions:set -DnewVersion="$VERSION"
-
-      - name: Deploy to Maven Central
+      - name: Deploy RELEASE
         run: mvn deploy --batch-mode --no-transfer-progress -DskipTests
