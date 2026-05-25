@@ -74,5 +74,11 @@ jobs:
           </settings>
           EOF
 
+      - name: Set release version from tag
+        run: |
+          VERSION="${GITHUB_REF#refs/tags/v}"
+          echo "Releasing version $VERSION"
+          mvn versions:set -DnewVersion="$VERSION"
+
       - name: Deploy to Maven Central
         run: mvn deploy --batch-mode --no-transfer-progress -DskipTests
