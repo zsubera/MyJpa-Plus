@@ -713,8 +713,9 @@ public class QuerySpecTest {
         QuerySpec<TestEntity> qs = new QuerySpec<>();
         qs.or();
         qs.eq(TestEntity::getName, "test");
-        assertThrows(org.springframework.dao.InvalidDataAccessApiUsageException.class,
+        Exception e = assertThrows(Exception.class,
                 () -> repository.findAll(qs.toSpecification()));
+        assertInstanceOf(IllegalStateException.class, e.getCause());
     }
 
     @Test
