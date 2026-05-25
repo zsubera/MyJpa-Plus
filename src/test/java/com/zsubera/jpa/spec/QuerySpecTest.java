@@ -442,13 +442,13 @@ public class QuerySpecTest {
         repository.save(newEntity("c", 3));
         repository.save(newEntity("d", 4));
         QuerySpec<TestEntity> qs = new QuerySpec<>();
-        qs.or()
-            .eq(TestEntity::getStatus, 1)
-            .or()
-                .eq(TestEntity::getStatus, 2)
-                .eq(TestEntity::getStatus, 3);
-        // Outer OR: (status=1 OR (status=2 OR status=3))
-        // This is effectively status IN (1,2,3)
+        OrGroup<TestEntity> outer = qs.or();
+        outer.eq(TestEntity::getStatus, 1);
+        OrGroup<TestEntity> inner = outer.or();
+        inner.eq(TestEntity::getStatus, 2);
+        inner.eq(TestEntity::getStatus, 3);
+        inner.endOr();
+        outer.endOr();
         List<TestEntity> result = repository.findAll(qs.toSpecification());
         assertEquals(3, result.size());
     }

@@ -143,13 +143,21 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
     }
 
     void endOr() {
-        if (!groupStack.isEmpty()) {
-            groupStack.pop();
+        if (groupStack.isEmpty()) {
+            throw new IllegalStateException("endOr() called without a matching or()");
         }
+        groupStack.pop();
     }
 
     void pushGroupStack(List<ConditionNode> nodes) {
         groupStack.push(nodes);
+    }
+
+    private void validateCleanState() {
+        if (!groupStack.isEmpty()) {
+            throw new IllegalStateException(
+                    "Not all or() groups were closed with endOr() before building the query");
+        }
     }
 
     /**
@@ -176,6 +184,7 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
 
     @Override
     public Predicate toPredicate(Root<T> root, CriteriaQuery<?> query, CriteriaBuilder cb) {
+        validateCleanState();
         if (distinct) {
             query.distinct(true);
         }
@@ -239,15 +248,27 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
                 return cb.isNotNull(fieldPath);
             case IN: {
                 CriteriaBuilder.In<Object> in = cb.in(fieldPath);
-                for (Object v : (Object[]) node.value) {
-                    in.value(v);
+                if (node.value instanceof Collection) {
+                    for (Object v : (Collection<?>) node.value) {
+                        in.value(v);
+                    }
+                } else {
+                    for (Object v : (Object[]) node.value) {
+                        in.value(v);
+                    }
                 }
                 return in;
             }
             case NOT_IN: {
                 CriteriaBuilder.In<Object> in = cb.in(fieldPath);
-                for (Object v : (Object[]) node.value) {
-                    in.value(v);
+                if (node.value instanceof Collection) {
+                    for (Object v : (Collection<?>) node.value) {
+                        in.value(v);
+                    }
+                } else {
+                    for (Object v : (Object[]) node.value) {
+                        in.value(v);
+                    }
                 }
                 return cb.not(in);
             }

@@ -2,6 +2,7 @@ package com.zsubera.jpa.spec;
 
 import com.zsubera.jpa.util.LambdaUtils;
 
+import java.util.Collection;
 import java.util.List;
 
 /**
@@ -53,18 +54,27 @@ public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> {
         if (field == null) {
             throw new IllegalArgumentException("field must not be null");
         }
-        conditions().add(new QuerySpec.SimpleNode(LambdaUtils.getPropertyName(field), value, QuerySpec.Op.EQ));
+        if (value == null) {
+            conditions().add(new QuerySpec.SimpleNode(LambdaUtils.getPropertyName(field), null, QuerySpec.Op.IS_NULL));
+        } else {
+            conditions().add(new QuerySpec.SimpleNode(LambdaUtils.getPropertyName(field), value, QuerySpec.Op.EQ));
+        }
         return self();
     }
 
     /**
      * Adds a not-equal condition: {@code field != value}.
+     * If {@code value} is null, generates {@code field IS NOT NULL}.
      */
     default SELF ne(SFunction<E, ?> field, Object value) {
         if (field == null) {
             throw new IllegalArgumentException("field must not be null");
         }
-        conditions().add(new QuerySpec.SimpleNode(LambdaUtils.getPropertyName(field), value, QuerySpec.Op.NE));
+        if (value == null) {
+            conditions().add(new QuerySpec.SimpleNode(LambdaUtils.getPropertyName(field), null, QuerySpec.Op.IS_NOT_NULL));
+        } else {
+            conditions().add(new QuerySpec.SimpleNode(LambdaUtils.getPropertyName(field), value, QuerySpec.Op.NE));
+        }
         return self();
     }
 
@@ -158,6 +168,34 @@ public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> {
      * Adds a NOT IN condition: {@code field NOT IN (values)}.
      */
     default SELF notIn(SFunction<E, ?> field, Object... values) {
+        if (field == null) {
+            throw new IllegalArgumentException("field must not be null");
+        }
+        conditions().add(new QuerySpec.SimpleNode(LambdaUtils.getPropertyName(field), values, QuerySpec.Op.NOT_IN));
+        return self();
+    }
+
+    /**
+     * Adds an IN condition with a {@link Collection} of values:
+     * {@code field IN (values)}.
+     *
+     * @param field  a method reference to the entity property
+     * @param values the collection of values
+     * @return this builder for chaining
+     */
+    default SELF in(SFunction<E, ?> field, Collection<?> values) {
+        if (field == null) {
+            throw new IllegalArgumentException("field must not be null");
+        }
+        conditions().add(new QuerySpec.SimpleNode(LambdaUtils.getPropertyName(field), values, QuerySpec.Op.IN));
+        return self();
+    }
+
+    /**
+     * Adds a NOT IN condition with a {@link Collection} of values:
+     * {@code field NOT IN (values)}.
+     */
+    default SELF notIn(SFunction<E, ?> field, Collection<?> values) {
         if (field == null) {
             throw new IllegalArgumentException("field must not be null");
         }
