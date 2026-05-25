@@ -41,9 +41,7 @@ jobs:
           cache: maven
 
       - name: Import GPG key
-        run: |
-          echo "${{ secrets.GPG_PRIVATE_KEY }}" | gpg --batch --import
-          echo "${{ secrets.GPG_PASSPHRASE }}" | gpg --batch --passphrase-fd 0 --pinentry-mode loopback --output /dev/null --sign /dev/null
+        run: echo "${{ secrets.GPG_PRIVATE_KEY }}" | gpg --batch --import
 
       - name: Create Maven settings
         run: |
@@ -62,7 +60,7 @@ jobs:
                 <id>gpg</id>
                 <properties>
                   <gpg.keyname>${{ secrets.GPG_KEY_NAME }}</gpg.keyname>
-                  <gpg.passphrase>${{ secrets.GPG_PASSPHRASE }}</gpg.passphrase>
+                  <gpg.passphrase></gpg.passphrase>
                 </properties>
               </profile>
             </profiles>
