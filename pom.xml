@@ -11,7 +11,7 @@
     </parent>
     <groupId>io.github.zsubera</groupId>
     <artifactId>myjpa-plus</artifactId>
-    <version>1.0.0</version>
+    <version>1.0.1</version>
     <name>MyJpa-Plus</name>
     <description>Type-safe JPA Specification builder with lambda-based fluent API</description>
     <url>https://github.com/zsubera/myjpa-plus</url>
