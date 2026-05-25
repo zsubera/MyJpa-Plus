@@ -37,11 +37,6 @@ runs:
               <username>${{ inputs.central-username }}</username>
               <password>${{ inputs.central-password }}</password>
             </server>
-            <server>
-              <id>central-snapshots</id>
-              <username>${{ inputs.central-username }}</username>
-              <password>${{ inputs.central-password }}</password>
-            </server>
           </servers>
           <profiles>
             <profile>

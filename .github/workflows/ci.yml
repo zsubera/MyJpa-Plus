@@ -24,26 +24,6 @@ jobs:
       - name: Build and verify
         run: mvn clean verify --batch-mode --no-transfer-progress -Dgpg.skip=true
 
-  snapshot-deploy:
-    needs: build
-    if: github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
-        with:
-          java-version: 17
-          distribution: 'temurin'
-          cache: maven
-      - uses: ./.github/actions/setup-maven-central
-        with:
-          gpg-private-key: ${{ secrets.GPG_PRIVATE_KEY }}
-          gpg-key-name: ${{ secrets.GPG_KEY_NAME }}
-          central-username: ${{ secrets.CENTRAL_TOKEN_USERNAME }}
-          central-password: ${{ secrets.CENTRAL_TOKEN_PASSWORD }}
-      - name: Deploy SNAPSHOT
-        run: mvn deploy --batch-mode --no-transfer-progress -DskipTests
-
   release-deploy:
     needs: build
     if: startsWith(github.ref, 'refs/tags/v')
