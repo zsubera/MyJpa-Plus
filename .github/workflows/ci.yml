@@ -67,4 +67,4 @@ jobs:
           echo "Releasing version $VERSION"
           mvn versions:set -DnewVersion="$VERSION"
       - name: Deploy RELEASE
-        run: mvn deploy --batch-mode --no-transfer-progress -DskipTests
+        run: mvn deploy --batch-mode --no-transfer-progress -DskipTests -P central-release
