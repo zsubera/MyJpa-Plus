@@ -35,37 +35,12 @@ jobs:
           java-version: 17
           distribution: 'temurin'
           cache: maven
-      - name: Import GPG key
-        run: |
-          echo "${{ secrets.GPG_PRIVATE_KEY }}" > "$HOME/private.key"
-          gpg --batch --import "$HOME/private.key" || true
-          rm "$HOME/private.key"
-      - name: Create Maven settings
-        run: |
-          mkdir -p $HOME/.m2
-          cat > $HOME/.m2/settings.xml << 'EOF'
-          <settings>
-            <servers>
-              <server>
-                <id>central</id>
-                <username>${{ secrets.CENTRAL_TOKEN_USERNAME }}</username>
-                <password>${{ secrets.CENTRAL_TOKEN_PASSWORD }}</password>
-              </server>
-            </servers>
-            <profiles>
-              <profile>
-                <id>gpg</id>
-                <properties>
-                  <gpg.keyname>${{ secrets.GPG_KEY_NAME }}</gpg.keyname>
-                  <gpg.passphrase></gpg.passphrase>
-                </properties>
-              </profile>
-            </profiles>
-            <activeProfiles>
-              <activeProfile>gpg</activeProfile>
-            </activeProfiles>
-          </settings>
-          EOF
+      - uses: ./.github/actions/setup-maven-central
+        with:
+          gpg-private-key: ${{ secrets.GPG_PRIVATE_KEY }}
+          gpg-key-name: ${{ secrets.GPG_KEY_NAME }}
+          central-username: ${{ secrets.CENTRAL_TOKEN_USERNAME }}
+          central-password: ${{ secrets.CENTRAL_TOKEN_PASSWORD }}
       - name: Deploy SNAPSHOT
         run: mvn deploy --batch-mode --no-transfer-progress -DskipTests
 
@@ -80,37 +55,12 @@ jobs:
           java-version: 17
           distribution: 'temurin'
           cache: maven
-      - name: Import GPG key
-        run: |
-          echo "${{ secrets.GPG_PRIVATE_KEY }}" > "$HOME/private.key"
-          gpg --batch --import "$HOME/private.key" || true
-          rm "$HOME/private.key"
-      - name: Create Maven settings
-        run: |
-          mkdir -p $HOME/.m2
-          cat > $HOME/.m2/settings.xml << 'EOF'
-          <settings>
-            <servers>
-              <server>
-                <id>central</id>
-                <username>${{ secrets.CENTRAL_TOKEN_USERNAME }}</username>
-                <password>${{ secrets.CENTRAL_TOKEN_PASSWORD }}</password>
-              </server>
-            </servers>
-            <profiles>
-              <profile>
-                <id>gpg</id>
-                <properties>
-                  <gpg.keyname>${{ secrets.GPG_KEY_NAME }}</gpg.keyname>
-                  <gpg.passphrase></gpg.passphrase>
-                </properties>
-              </profile>
-            </profiles>
-            <activeProfiles>
-              <activeProfile>gpg</activeProfile>
-            </activeProfiles>
-          </settings>
-          EOF
+      - uses: ./.github/actions/setup-maven-central
+        with:
+          gpg-private-key: ${{ secrets.GPG_PRIVATE_KEY }}
+          gpg-key-name: ${{ secrets.GPG_KEY_NAME }}
+          central-username: ${{ secrets.CENTRAL_TOKEN_USERNAME }}
+          central-password: ${{ secrets.CENTRAL_TOKEN_PASSWORD }}
       - name: Set release version from tag
         run: |
           VERSION="${GITHUB_REF#refs/tags/v}"

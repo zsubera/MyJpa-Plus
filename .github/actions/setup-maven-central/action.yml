@@ -1,0 +1,54 @@
+name: Setup Maven Central
+description: Import GPG key and configure Maven settings for Central Portal deployment
+
+inputs:
+  gpg-private-key:
+    required: true
+    description: Armored GPG private key
+  gpg-key-name:
+    required: true
+    description: GPG key ID (short format)
+  central-username:
+    required: true
+    description: Central Portal token username
+  central-password:
+    required: true
+    description: Central Portal token password
+
+runs:
+  using: composite
+  steps:
+    - name: Import GPG key
+      shell: bash
+      run: |
+        echo "${{ inputs.gpg-private-key }}" > "$HOME/private.key"
+        gpg --batch --import "$HOME/private.key" || true
+        rm "$HOME/private.key"
+
+    - name: Create Maven settings
+      shell: bash
+      run: |
+        mkdir -p $HOME/.m2
+        cat > $HOME/.m2/settings.xml << 'EOF'
+        <settings>
+          <servers>
+            <server>
+              <id>central</id>
+              <username>${{ inputs.central-username }}</username>
+              <password>${{ inputs.central-password }}</password>
+            </server>
+          </servers>
+          <profiles>
+            <profile>
+              <id>gpg</id>
+              <properties>
+                <gpg.keyname>${{ inputs.gpg-key-name }}</gpg.keyname>
+                <gpg.passphrase></gpg.passphrase>
+              </properties>
+            </profile>
+          </profiles>
+          <activeProfiles>
+            <activeProfile>gpg</activeProfile>
+          </activeProfiles>
+        </settings>
+        EOF
