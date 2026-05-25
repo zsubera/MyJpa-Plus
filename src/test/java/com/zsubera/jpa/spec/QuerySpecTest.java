@@ -551,6 +551,186 @@ public class QuerySpecTest {
         assertEquals(2, result.size());
     }
 
+    // ---- Phase 2 tests: new features ----
+
+    @Test
+    void testEqNullAutoIsNull() {
+        repository.save(newEntity("hasName", 0));
+        TestEntity nullName = new TestEntity();
+        nullName.setName(null);
+        nullName.setStatus(99);
+        repository.save(nullName);
+        QuerySpec<TestEntity> qs = new QuerySpec<>();
+        qs.eq(TestEntity::getName, (String) null);
+        List<TestEntity> result = repository.findAll(qs.toSpecification());
+        assertEquals(1, result.size());
+        assertNull(result.get(0).getName());
+    }
+
+    @Test
+    void testNeNullAutoIsNotNull() {
+        repository.save(newEntity("hasName", 0));
+        TestEntity nullName = new TestEntity();
+        nullName.setName(null);
+        nullName.setStatus(99);
+        repository.save(nullName);
+        QuerySpec<TestEntity> qs = new QuerySpec<>();
+        qs.ne(TestEntity::getName, (String) null);
+        List<TestEntity> result = repository.findAll(qs.toSpecification());
+        assertEquals(1, result.size());
+        assertEquals("hasName", result.get(0).getName());
+    }
+
+    @Test
+    void testStartsWith() {
+        repository.save(newEntity("hello", 0));
+        repository.save(newEntity("help", 0));
+        repository.save(newEntity("world", 0));
+        QuerySpec<TestEntity> qs = new QuerySpec<>();
+        qs.startsWith(TestEntity::getName, "hel");
+        List<TestEntity> result = repository.findAll(qs.toSpecification());
+        assertEquals(2, result.size());
+    }
+
+    @Test
+    void testEndsWith() {
+        repository.save(newEntity("ending", 0));
+        repository.save(newEntity("pending", 0));
+        repository.save(newEntity("start", 0));
+        QuerySpec<TestEntity> qs = new QuerySpec<>();
+        qs.endsWith(TestEntity::getName, "ing");
+        List<TestEntity> result = repository.findAll(qs.toSpecification());
+        assertEquals(2, result.size());
+    }
+
+    @Test
+    void testContains() {
+        repository.save(newEntity("abc", 0));
+        repository.save(newEntity("xabcx", 0));
+        repository.save(newEntity("xyz", 0));
+        QuerySpec<TestEntity> qs = new QuerySpec<>();
+        qs.contains(TestEntity::getName, "ab");
+        List<TestEntity> result = repository.findAll(qs.toSpecification());
+        assertEquals(2, result.size());
+    }
+
+    @Test
+    void testOrConsumer() {
+        repository.save(newEntity("alpha", 1));
+        repository.save(newEntity("beta", 2));
+        repository.save(newEntity("gamma", 3));
+        QuerySpec<TestEntity> qs = new QuerySpec<>();
+        qs.or(g -> g.eq(TestEntity::getName, "alpha").eq(TestEntity::getName, "beta"));
+        List<TestEntity> result = repository.findAll(qs.toSpecification());
+        assertEquals(2, result.size());
+    }
+
+    @Test
+    void testJoinConsumer() {
+        ParentEntity parent = new ParentEntity();
+        parent.setCategory("admin");
+        parent.setLevel(10);
+        em.persist(parent);
+        TestEntity child = newEntity("child", 0);
+        child.setParent(parent);
+        repository.save(child);
+
+        QuerySpec<TestEntity> qs = new QuerySpec<>();
+        qs.<ParentEntity>join(TestEntity::getParent, j -> j.eq(ParentEntity::getCategory, "admin"));
+        List<TestEntity> result = repository.findAll(qs.toSpecification());
+        assertEquals(1, result.size());
+    }
+
+    @Test
+    void testLeftJoinConsumer() {
+        TestEntity orphan = newEntity("orphan", 0);
+        orphan.setParent(null);
+        repository.save(orphan);
+        ParentEntity parent = new ParentEntity();
+        parent.setCategory("admin");
+        parent.setLevel(10);
+        em.persist(parent);
+        TestEntity child = newEntity("child", 0);
+        child.setParent(parent);
+        repository.save(child);
+
+        QuerySpec<TestEntity> qs = new QuerySpec<>();
+        qs.<ParentEntity>leftJoin(TestEntity::getParent, j -> j
+            .or(oj -> oj.eq(ParentEntity::getCategory, "admin").isNull(ParentEntity::getCategory))
+        );
+        List<TestEntity> result = repository.findAll(qs.toSpecification());
+        assertEquals(2, result.size());
+    }
+
+    @Test
+    void testNotConsumer() {
+        repository.save(newEntity("a", 1));
+        repository.save(newEntity("b", 2));
+        repository.save(newEntity("c", 3));
+        QuerySpec<TestEntity> qs = new QuerySpec<>();
+        qs.not(g -> g.eq(TestEntity::getStatus, 1));
+        List<TestEntity> result = repository.findAll(qs.toSpecification());
+        assertEquals(2, result.size());
+    }
+
+    @Test
+    void testWhereRawPredicate() {
+        repository.save(newEntity("low", 1));
+        repository.save(newEntity("mid", 5));
+        repository.save(newEntity("high", 10));
+        QuerySpec<TestEntity> qs = new QuerySpec<>();
+        qs.where((path, cb) -> cb.greaterThan(path.get("status"), 5));
+        List<TestEntity> result = repository.findAll(qs.toSpecification());
+        assertEquals(1, result.size());
+        assertEquals("high", result.get(0).getName());
+    }
+
+    @Test
+    void testInCollection() {
+        repository.save(newEntity("a", 1));
+        repository.save(newEntity("b", 2));
+        repository.save(newEntity("c", 3));
+        QuerySpec<TestEntity> qs = new QuerySpec<>();
+        qs.in(TestEntity::getStatus, java.util.Arrays.asList(1, 3));
+        List<TestEntity> result = repository.findAll(qs.toSpecification());
+        assertEquals(2, result.size());
+    }
+
+    @Test
+    void testNotInCollection() {
+        repository.save(newEntity("a", 1));
+        repository.save(newEntity("b", 2));
+        repository.save(newEntity("c", 3));
+        QuerySpec<TestEntity> qs = new QuerySpec<>();
+        qs.notIn(TestEntity::getStatus, java.util.Arrays.asList(1, 3));
+        List<TestEntity> result = repository.findAll(qs.toSpecification());
+        assertEquals(1, result.size());
+        assertEquals(2, result.get(0).getStatus());
+    }
+
+    @Test
+    void testValidateCleanStateThrowsOnUnclosedOr() {
+        QuerySpec<TestEntity> qs = new QuerySpec<>();
+        qs.or();
+        qs.eq(TestEntity::getName, "test");
+        assertThrows(org.springframework.dao.InvalidDataAccessApiUsageException.class,
+                () -> repository.findAll(qs.toSpecification()));
+    }
+
+    @Test
+    void testOrGroupOrConsumer() {
+        repository.save(newEntity("a", 1));
+        repository.save(newEntity("b", 2));
+        repository.save(newEntity("c", 3));
+        repository.save(newEntity("d", 4));
+        QuerySpec<TestEntity> qs = new QuerySpec<>();
+        qs.or(outer -> outer
+            .eq(TestEntity::getStatus, 1)
+            .or(inner -> inner.eq(TestEntity::getStatus, 2).eq(TestEntity::getStatus, 3)));
+        List<TestEntity> result = repository.findAll(qs.toSpecification());
+        assertEquals(3, result.size());
+    }
+
     private TestEntity newEntity(String name, int status) {
         TestEntity entity = new TestEntity();
         entity.setName(name);

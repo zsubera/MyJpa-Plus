@@ -3,6 +3,7 @@ package com.zsubera.jpa.spec;
 import com.zsubera.jpa.util.LambdaUtils;
 
 import java.util.List;
+import java.util.function.Consumer;
 
 public class JoinGroup<T, J> implements ConditionBuilder<J, JoinGroup<T, J>> {
 
@@ -35,6 +36,16 @@ public class JoinGroup<T, J> implements ConditionBuilder<J, JoinGroup<T, J>> {
         QuerySpec.JoinNode nestedJoin = new QuerySpec.JoinNode(LambdaUtils.getPropertyName(field), QuerySpec.JoinType.LEFT);
         joinNode.innerConditions.add(nestedJoin);
         return new JoinGroup<>(root, nestedJoin);
+    }
+
+    /**
+     * Self-closing OR inside join: builds an OR group on the joined entity, then returns to this JoinGroup.
+     */
+    public JoinGroup<T, J> or(Consumer<OrJoinGroup<T, J>> config) {
+        QuerySpec.OrNode orNode = new QuerySpec.OrNode();
+        joinNode.innerConditions.add(orNode);
+        config.accept(new OrJoinGroup<>(root, joinNode, orNode));
+        return this;
     }
 
     public QuerySpec<T> endJoin() {
