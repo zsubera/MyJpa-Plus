@@ -1,25 +1,27 @@
 # MyJpa-Plus
 
-Type-safe JPA Criteria query builder with a lambda-based fluent API for Spring Data JPA.
+基于 Lambda 表达式的类型安全 JPA 动态查询构建器，专为 Spring Data JPA 设计。
 
-## Features
+*A type-safe JPA Criteria query builder with a lambda-based fluent API for Spring Data JPA.*
 
-- **Lambda type safety** — Use method references (`Entity::getField`) instead of hardcoded strings
-- **Fluent API** — Chainable conditions with AND/OR logic
-- **JOIN support** — Inner/left joins with nested conditions, sub-joins, and join cache
-- **EXISTS subqueries** — Correlated subqueries with type-safe conditions
-- **OR groups** — Arbitrary nesting of OR conditions within AND groups and vice versa
-- **Multi-field search** — Single keyword LIKE across multiple fields
-- **Collection operations** — `isEmpty` / `isNotEmpty` for `@OneToMany` / `@ManyToMany`
-- **Null-safe** — Input validation on all builder methods
+## 特性 / Features
 
-## Requirements
+- **Lambda 类型安全** — 使用方法引用（`Entity::getField`）替代硬编码字段名字符串
+- **流式 API** — 可链式调用的 AND / OR 条件组合
+- **JOIN 支持** — 内连接 / 左连接，支持嵌套条件、子连接和连接缓存
+- **EXISTS 子查询** — 带类型安全条件的关联子查询
+- **OR 分组** — 可在 AND 分组内任意嵌套 OR 分组，反之亦然
+- **多字段搜索** — 单个关键词跨多个字段 LIKE 搜索
+- **集合操作** — `isEmpty` / `isNotEmpty`，适用于 `@OneToMany` 和 `@ManyToMany`
+- **空值校验** — 所有构建器方法均对 Lambda 参数进行 null 检查
+
+## 环境要求 / Requirements
 
 - Java 17+
 - Spring Boot 3.x
 - Spring Data JPA
 
-## Installation
+## 安装 / Installation
 
 ```xml
 <dependency>
@@ -29,17 +31,17 @@ Type-safe JPA Criteria query builder with a lambda-based fluent API for Spring D
 </dependency>
 ```
 
-## Quick Start
+## 快速开始 / Quick Start
 
 ```java
-// Simple equality
+// 简单等值查询
 List<User> users = userRepository.findAll(
     new QuerySpec<User>()
         .eq(User::getStatus, "ACTIVE")
         .toSpecification()
 );
 
-// Multi-condition with OR
+// OR 多条件组合
 List<User> users = userRepository.findAll(
     new QuerySpec<User>()
         .like(User::getName, "%John%")
@@ -50,7 +52,7 @@ List<User> users = userRepository.findAll(
         .toSpecification()
 );
 
-// JOIN with conditions
+// JOIN 关联查询
 List<Order> orders = orderRepository.findAll(
     new QuerySpec<Order>()
         .join(Order::getCustomer)
@@ -61,24 +63,23 @@ List<Order> orders = orderRepository.findAll(
         .toSpecification()
 );
 
-// EXISTS subquery
+// EXISTS 子查询
 List<Customer> customers = customerRepository.findAll(
     new QuerySpec<Customer>()
         .exists(Order.class, sub -> sub
-            .eq(Order::getCustomerId, /* correlated implicitly */)
             .gt(Order::getAmount, 1000)
         )
         .toSpecification()
 );
 
-// Multi-field keyword search
+// 多字段模糊搜索
 List<Product> products = productRepository.findAll(
     new QuerySpec<Product>()
-        .multiLike("blue", Product::getName, Product::getDescription)
+        .multiLike("蓝色", Product::getName, Product::getDescription)
         .toSpecification()
 );
 
-// Combine with external Specification
+// 与外部 Specification 组合
 List<User> users = userRepository.findAll(
     new QuerySpec<User>()
         .eq(User::getStatus, "ACTIVE")
@@ -86,20 +87,20 @@ List<User> users = userRepository.findAll(
 );
 ```
 
-## API Overview
+## API 一览 / API Overview
 
-| Category | Methods |
-|----------|---------|
-| Comparison | `eq`, `ne`, `gt`, `ge`, `lt`, `le` |
-| String | `like`, `notLike` |
-| Collection | `in`, `notIn`, `between`, `isEmpty`, `isNotEmpty` |
-| Null | `isNull`, `isNotNull` |
-| Search | `multiLike(keyword, field1, field2, ...)` |
-| Join | `join`, `leftJoin` |
-| Subquery | `exists`, `notExists` |
-| Logic | `or()` ... `endOr()` |
-| Output | `toSpecification()`, `toSpecification(external)` |
+| 分类 | 方法 |
+|------|------|
+| 比较 / Comparison | `eq`, `ne`, `gt`, `ge`, `lt`, `le` |
+| 字符串 / String | `like`, `notLike` |
+| 集合 / Collection | `in`, `notIn`, `between`, `isEmpty`, `isNotEmpty` |
+| 空值 / Null | `isNull`, `isNotNull` |
+| 搜索 / Search | `multiLike(keyword, field1, field2, ...)` |
+| 连接 / Join | `join`, `leftJoin` |
+| 子查询 / Subquery | `exists`, `notExists` |
+| 逻辑 / Logic | `or()` ... `endOr()` |
+| 输出 / Output | `toSpecification()`, `toSpecification(external)` |
 
-## License
+## 协议 / License
 
-Apache 2.0 — see [LICENSE](./LICENSE)
+Apache 2.0 — 详见 [LICENSE](./LICENSE)
