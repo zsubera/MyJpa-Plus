@@ -6,6 +6,7 @@ import org.springframework.data.jpa.domain.Specification;
 
 import jakarta.persistence.criteria.*;
 import java.util.*;
+import java.util.function.BiFunction;
 import java.util.function.Consumer;
 
 /**
@@ -31,9 +32,6 @@ import java.util.function.Consumer;
  */
 public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, QuerySpec<T>> {
 
-    /** Default HTTP request parameter name for search keywords. */
-    public static final String SEARCH_PARAM_NAME = "s";
-
     private final List<ConditionNode> conditions = new ArrayList<>();
     private final Deque<List<ConditionNode>> groupStack = new ArrayDeque<>();
     private boolean distinct = false;
@@ -47,28 +45,6 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
         return currentGroup();
     }
 
-    /**
-     * Creates a {@code QuerySpec} from pipe-delimited field names and a keyword,
-     * producing a {@link #multiLike multiLike} condition across all fields.
-     *
-     * @param fieldNames pipe-delimited field names, e.g. {@code "name|email|phone"}
-     * @param keyword    the search keyword (wrapped in {@code %keyword%})
-     * @param <T>        the root entity type
-     * @return a new QuerySpec with the multiLike condition, or empty if keyword is blank
-     */
-    public static <T> QuerySpec<T> fromSearchParam(String fieldNames, String keyword) {
-        QuerySpec<T> qs = new QuerySpec<>();
-        if (fieldNames != null && !fieldNames.isEmpty() && keyword != null && !keyword.isEmpty()) {
-            qs.conditions.add(new MultiLikeNode(keyword, fieldNames.split("\\|")));
-        }
-        return qs;
-    }
-
-    /**
-     * Enables {@code SELECT DISTINCT} for this query.
-     *
-     * @return this QuerySpec for chaining
-     */
     public QuerySpec<T> distinct() {
         this.distinct = true;
         return this;
@@ -153,6 +129,81 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
         groupStack.push(nodes);
     }
 
+    // ---- Consumer-based API (self-closing) ----
+
+    /**
+     * Builds an OR group with a consumer, automatically closing it.
+     * Equivalent to calling {@code or()...endOr()} without the risk of forgetting endOr().
+     *
+     * <pre>{@code
+     * qs.or(g -> g.eq(User::getRole, "ADMIN").eq(User::getRole, "MODERATOR"));
+     * }</pre>
+     *
+     * @param config consumer to configure the OrGroup
+     * @return this QuerySpec for chaining
+     */
+    public QuerySpec<T> or(Consumer<OrGroup<T>> config) {
+        OrNode orNode = new OrNode();
+        currentGroup().add(orNode);
+        groupStack.push(orNode.nodes);
+        config.accept(new OrGroup<>(this));
+        groupStack.pop();
+        return this;
+    }
+
+    /**
+     * Builds a JOIN with a consumer, automatically closing it.
+     * Equivalent to {@code join(field)...endJoin()} without the risk of forgetting endJoin().
+     *
+     * @param field  a method reference to the relationship
+     * @param config consumer to configure the JoinGroup
+     * @param <J>    the joined entity type
+     * @return this QuerySpec for chaining
+     */
+    public <J> QuerySpec<T> join(SFunction<T, ?> field, Consumer<JoinGroup<T, J>> config) {
+        JoinNode joinNode = new JoinNode(LambdaUtils.getPropertyName(field), JoinType.INNER);
+        currentGroup().add(joinNode);
+        config.accept(new JoinGroup<>(this, joinNode));
+        return this;
+    }
+
+    /**
+     * Builds a LEFT JOIN with a consumer, automatically closing it.
+     *
+     * @param field  a method reference to the relationship
+     * @param config consumer to configure the JoinGroup
+     * @param <J>    the joined entity type
+     * @return this QuerySpec for chaining
+     */
+    public <J> QuerySpec<T> leftJoin(SFunction<T, ?> field, Consumer<JoinGroup<T, J>> config) {
+        JoinNode joinNode = new JoinNode(LambdaUtils.getPropertyName(field), JoinType.LEFT);
+        currentGroup().add(joinNode);
+        config.accept(new JoinGroup<>(this, joinNode));
+        return this;
+    }
+
+    /**
+     * Adds a NOT group that negates the combined conditions.
+     * Conditions inside are AND-ed together, then the entire group is negated.
+     *
+     * <pre>{@code
+     * qs.not(g -> g.eq(Entity::getStatus, "DELETED"));
+     * // Generates: NOT(status = 'DELETED')
+     * }</pre>
+     *
+     * @param config consumer to configure the negated group
+     * @return this QuerySpec for chaining
+     */
+    public QuerySpec<T> not(Consumer<OrGroup<T>> config) {
+        OrNode orNode = new OrNode();
+        NegateNode negate = new NegateNode(orNode);
+        currentGroup().add(negate);
+        groupStack.push(orNode.nodes);
+        config.accept(new OrGroup<>(this));
+        groupStack.pop();
+        return this;
+    }
+
     private void validateCleanState() {
         if (!groupStack.isEmpty()) {
             throw new IllegalStateException(
@@ -219,7 +270,14 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
         if (node instanceof ExistsNode) {
             return resolveExists((ExistsNode<?>) node, query, cb);
         }
-        return null;
+        if (node instanceof RawNode) {
+            return ((RawNode) node).fn.apply(path, cb);
+        }
+        if (node instanceof NegateNode) {
+            Predicate inner = resolveNode(((NegateNode) node).inner, path, query, cb, joinCache, pathPrefix);
+            return inner != null ? cb.not(inner) : null;
+        }
+        throw new IllegalArgumentException("Unknown ConditionNode type: " + node.getClass().getName());
     }
 
     @SuppressWarnings({"unchecked", "rawtypes"})
@@ -359,10 +417,11 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
 
     enum CollectionOp {IS_EMPTY, IS_NOT_EMPTY}
 
-    interface ConditionNode {
+    sealed interface ConditionNode
+            permits SimpleNode, JoinNode, OrNode, MultiLikeNode, CollectionNode, ExistsNode, RawNode, NegateNode {
     }
 
-    static class SimpleNode implements ConditionNode {
+    static final class SimpleNode implements ConditionNode {
         final String fieldName;
         final Object value;
         final Op op;
@@ -374,7 +433,7 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
         }
     }
 
-    static class JoinNode implements ConditionNode {
+    static final class JoinNode implements ConditionNode {
         final String fieldName;
         final JoinType joinType;
         final List<ConditionNode> innerConditions = new ArrayList<>();
@@ -385,11 +444,11 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
         }
     }
 
-    static class OrNode implements ConditionNode {
+    static final class OrNode implements ConditionNode {
         final List<ConditionNode> nodes = new ArrayList<>();
     }
 
-    static class MultiLikeNode implements ConditionNode {
+    static final class MultiLikeNode implements ConditionNode {
         final String keyword;
         final String[] fieldNames;
 
@@ -399,7 +458,7 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
         }
     }
 
-    static class CollectionNode implements ConditionNode {
+    static final class CollectionNode implements ConditionNode {
         final String fieldName;
         final CollectionOp op;
 
@@ -409,7 +468,7 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
         }
     }
 
-    static class ExistsNode<S> implements ConditionNode {
+    static final class ExistsNode<S> implements ConditionNode {
         final Class<S> subEntity;
         final Consumer<SubQuerySpec<S>> config;
         final boolean negate;
@@ -418,6 +477,20 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
             this.subEntity = subEntity;
             this.config = config;
             this.negate = negate;
+        }
+    }
+
+    static final class RawNode implements ConditionNode {
+        final BiFunction<Path<?>, CriteriaBuilder, Predicate> fn;
+        RawNode(BiFunction<Path<?>, CriteriaBuilder, Predicate> fn) {
+            this.fn = fn;
+        }
+    }
+
+    static final class NegateNode implements ConditionNode {
+        final ConditionNode inner;
+        NegateNode(ConditionNode inner) {
+            this.inner = inner;
         }
     }
 }

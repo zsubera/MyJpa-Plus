@@ -436,24 +436,6 @@ public class QuerySpecTest {
     }
 
     @Test
-    void testNestedOrGroups() {
-        repository.save(newEntity("a", 1));
-        repository.save(newEntity("b", 2));
-        repository.save(newEntity("c", 3));
-        repository.save(newEntity("d", 4));
-        QuerySpec<TestEntity> qs = new QuerySpec<>();
-        OrGroup<TestEntity> outer = qs.or();
-        outer.eq(TestEntity::getStatus, 1);
-        OrGroup<TestEntity> inner = outer.or();
-        inner.eq(TestEntity::getStatus, 2);
-        inner.eq(TestEntity::getStatus, 3);
-        inner.endOr();
-        outer.endOr();
-        List<TestEntity> result = repository.findAll(qs.toSpecification());
-        assertEquals(3, result.size());
-    }
-
-    @Test
     void testDistinct() {
         repository.save(newEntity("dup", 1));
         repository.save(newEntity("dup", 1));
@@ -461,24 +443,6 @@ public class QuerySpecTest {
         qs.eq(TestEntity::getName, "dup").distinct();
         List<TestEntity> result = repository.findAll(qs.toSpecification());
         assertEquals(2, result.size());
-    }
-
-    @Test
-    void testFromSearchParam() {
-        repository.save(newEntity("hello", 0));
-        repository.save(newEntity("world", 0));
-        repository.save(newEntity("help", 0));
-        QuerySpec<TestEntity> qs = QuerySpec.fromSearchParam("name", "hel");
-        List<TestEntity> result = repository.findAll(qs.toSpecification());
-        assertEquals(2, result.size());
-    }
-
-    @Test
-    void testFromSearchParamEmptyKeyword() {
-        repository.save(newEntity("a", 0));
-        QuerySpec<TestEntity> qs = QuerySpec.fromSearchParam("name", "");
-        List<TestEntity> result = repository.findAll(qs.toSpecification());
-        assertEquals(1, result.size());
     }
 
     @Test

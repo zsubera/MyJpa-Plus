@@ -2,8 +2,13 @@ package com.zsubera.jpa.spec;
 
 import com.zsubera.jpa.util.LambdaUtils;
 
+import jakarta.persistence.criteria.CriteriaBuilder;
+import jakarta.persistence.criteria.Path;
+import jakarta.persistence.criteria.Predicate;
+
 import java.util.Collection;
 import java.util.List;
+import java.util.function.BiFunction;
 
 /**
  * Common interface for building type-safe JPA query conditions using
@@ -147,6 +152,39 @@ public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> {
         return self();
     }
 
+    /**
+     * Adds a LIKE condition for prefix matching: {@code field LIKE 'value%'}.
+     */
+    default SELF startsWith(SFunction<E, ?> field, String value) {
+        if (field == null) {
+            throw new IllegalArgumentException("field must not be null");
+        }
+        conditions().add(new QuerySpec.SimpleNode(LambdaUtils.getPropertyName(field), value + "%", QuerySpec.Op.LIKE));
+        return self();
+    }
+
+    /**
+     * Adds a LIKE condition for suffix matching: {@code field LIKE '%value'}.
+     */
+    default SELF endsWith(SFunction<E, ?> field, String value) {
+        if (field == null) {
+            throw new IllegalArgumentException("field must not be null");
+        }
+        conditions().add(new QuerySpec.SimpleNode(LambdaUtils.getPropertyName(field), "%" + value, QuerySpec.Op.LIKE));
+        return self();
+    }
+
+    /**
+     * Adds a LIKE condition for substring matching: {@code field LIKE '%value%'}.
+     */
+    default SELF contains(SFunction<E, ?> field, String value) {
+        if (field == null) {
+            throw new IllegalArgumentException("field must not be null");
+        }
+        conditions().add(new QuerySpec.SimpleNode(LambdaUtils.getPropertyName(field), "%" + value + "%", QuerySpec.Op.LIKE));
+        return self();
+    }
+
     // ---- Collection operators ----
 
     /**
@@ -266,6 +304,22 @@ public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> {
             throw new IllegalArgumentException("field must not be null");
         }
         conditions().add(new QuerySpec.CollectionNode(LambdaUtils.getPropertyName(field), QuerySpec.CollectionOp.IS_NOT_EMPTY));
+        return self();
+    }
+
+    /**
+     * Adds a raw {@link Predicate} using the current entity {@link Path} and {@link CriteriaBuilder}.
+     * This is the escape hatch for conditions not covered by the builder API.
+     *
+     * @param fn function receiving the entity path and criteria builder, returning a predicate
+     * @return this builder for chaining
+     */
+    @SuppressWarnings("unchecked")
+    default SELF where(BiFunction<Path<E>, CriteriaBuilder, Predicate> fn) {
+        if (fn == null) {
+            throw new IllegalArgumentException("fn must not be null");
+        }
+        conditions().add(new QuerySpec.RawNode((BiFunction<Path<?>, CriteriaBuilder, Predicate>) (Object) fn));
         return self();
     }
 
