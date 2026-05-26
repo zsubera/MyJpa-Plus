@@ -18,6 +18,15 @@ import java.util.List;
  * Provides condition methods for the subquery entity and access to the
  * correlated outer query root for building correlation predicates.
  * <p>
+ * <strong>Design note:</strong> Unlike {@link ConditionBuilder}, which uses deferred
+ * evaluation (building a tree of {@link QuerySpec.ConditionNode} resolved at query
+ * execution time), {@code SubQuerySpec} uses <em>eager</em> evaluation — each
+ * condition method immediately creates a JPA {@link jakarta.persistence.criteria.Predicate}
+ * and adds it to an internal list. This is necessary because subqueries must be fully
+ * constructed before the outer query is built. As a result, the condition methods
+ * here intentionally duplicate those in {@code ConditionBuilder} rather than
+ * inheriting them.
+ * <p>
  * Usage via {@link QuerySpec#exists(Class, java.util.function.Consumer)}
  * or {@link QuerySpec#notExists(Class, java.util.function.Consumer)}.
  *
