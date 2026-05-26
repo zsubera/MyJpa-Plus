@@ -35,6 +35,8 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
     private final List<ConditionNode> conditions = new ArrayList<>();
     private final Deque<List<ConditionNode>> groupStack = new ArrayDeque<>();
     private boolean distinct = false;
+    private final List<String> groupByFields = new ArrayList<>();
+    private final List<BiFunction<Path<T>, CriteriaBuilder, Predicate>> havingConditions = new ArrayList<>();
 
     List<ConditionNode> currentGroup() {
         return groupStack.isEmpty() ? conditions : groupStack.peek();
@@ -47,6 +49,26 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
 
     public QuerySpec<T> distinct() {
         this.distinct = true;
+        return this;
+    }
+
+    /**
+     * Adds a GROUP BY clause on the given fields.
+     */
+    @SafeVarargs
+    public final QuerySpec<T> groupBy(SFunction<T, ?>... fields) {
+        for (SFunction<T, ?> f : fields) {
+            groupByFields.add(LambdaUtils.getPropertyName(f));
+        }
+        return this;
+    }
+
+    /**
+     * Adds a HAVING condition for use with {@link #groupBy}.
+     * The function receives the query root and criteria builder at execution time.
+     */
+    public QuerySpec<T> having(BiFunction<Path<T>, CriteriaBuilder, Predicate> condition) {
+        havingConditions.add(condition);
         return this;
     }
 
@@ -238,6 +260,16 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
         validateCleanState();
         if (distinct) {
             query.distinct(true);
+        }
+        if (!groupByFields.isEmpty()) {
+            List<Path<?>> paths = new ArrayList<>();
+            for (String field : groupByFields) {
+                paths.add(root.get(field));
+            }
+            query.groupBy(paths.toArray(new Expression[0]));
+            for (BiFunction<Path<T>, CriteriaBuilder, Predicate> having : havingConditions) {
+                query.having(having.apply(root, cb));
+            }
         }
         Map<String, Join<?, ?>> joinCache = new LinkedHashMap<>();
         List<Predicate> predicates = new ArrayList<>();
