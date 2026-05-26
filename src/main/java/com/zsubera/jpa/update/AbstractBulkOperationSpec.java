@@ -14,7 +14,10 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import java.util.function.BiFunction;
+import java.util.function.Consumer;
 import java.util.function.Function;
+import org.springframework.lang.Nullable;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 /**
  * Abstract base for type-safe JPA bulk operation builders
@@ -30,7 +33,7 @@ import java.util.function.Function;
 public abstract class AbstractBulkOperationSpec<T, SELF extends AbstractBulkOperationSpec<T, SELF>> {
 
     protected final Class<T> entityClass;
-    protected final List<BiFunction<Root<T>, CriteriaBuilder, Predicate>> conditionFunctions = new ArrayList<>();
+    protected final List<BulkConditionNode> conditionNodes = new ArrayList<>();
 
     protected AbstractBulkOperationSpec(Class<T> entityClass) {
         this.entityClass = entityClass;
@@ -71,6 +74,13 @@ public abstract class AbstractBulkOperationSpec<T, SELF extends AbstractBulkOper
      * @return the number of affected rows
      */
     protected int executeInTransaction(EntityManager em, Function<EntityManager, Integer> operation) {
+        // Check if Spring manages the transaction first (container-managed JTA or Spring tx)
+        boolean springTxActive = TransactionSynchronizationManager.isActualTransactionActive();
+        if (springTxActive) {
+            // Spring transaction is active — delegate to it, don't touch EntityTransaction directly
+            return operation.apply(em);
+        }
+        // No Spring transaction — use JPA's EntityTransaction for standalone scenarios
         EntityTransaction tx = em.getTransaction();
         boolean isNewTransaction = !tx.isActive();
         if (isNewTransaction) {
@@ -115,15 +125,75 @@ public abstract class AbstractBulkOperationSpec<T, SELF extends AbstractBulkOper
 
     protected abstract int doExecute(EntityManager em);
 
-    public SELF eq(SFunction<T, ?> field, Object value) {
-        String name = property(field);
-        conditionFunctions.add((root, cb) -> PredicateHelper.eq(root, name, value, cb));
+    /**
+     * Sealed node type for bulk operation condition trees.
+     * Supports AND (default), OR, NOT, and leaf predicate nodes.
+     */
+    @SuppressWarnings("unchecked")
+    sealed interface BulkConditionNode {
+        /** A leaf predicate function. */
+        record LeafNode(BiFunction<Root<?>, CriteriaBuilder, Predicate> fn) implements BulkConditionNode {}
+        /** An OR group of child nodes. */
+        record OrNode(List<BulkConditionNode> children) implements BulkConditionNode {}
+        /** A NOT wrapper around a child node. */
+        record NotNode(BulkConditionNode child) implements BulkConditionNode {}
+    }
+
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    private BulkConditionNode leaf(BiFunction<Root<T>, CriteriaBuilder, Predicate> fn) {
+        return new BulkConditionNode.LeafNode((BiFunction) fn);
+    }
+
+    /**
+     * Adds an OR group of conditions. All conditions added inside the consumer
+     * will be combined with OR instead of AND.
+     * <p>
+     * Example:
+     * <pre>{@code
+     * new DeleteSpec<>(User.class)
+     *     .or(o -> o.eq(User::getStatus, "INACTIVE").eq(User::getStatus, "SUSPENDED"))
+     *     .execute();
+     * // WHERE (status = 'INACTIVE' OR status = 'SUSPENDED')
+     * }</pre>
+     */
+    public SELF or(Consumer<OrConditionBuilder<T, SELF>> config) {
+        List<BulkConditionNode> children = new ArrayList<>();
+        config.accept(new OrConditionBuilder<>(self(), children));
+        conditionNodes.add(new BulkConditionNode.OrNode(children));
         return self();
     }
 
-    public SELF ne(SFunction<T, ?> field, Object value) {
+    /**
+     * Adds a NOT group of conditions. The combined conditions inside the consumer
+     * will be negated.
+     * <p>
+     * Example:
+     * <pre>{@code
+     * new DeleteSpec<>(User.class)
+     *     .not(o -> o.eq(User::getStatus, "ACTIVE"))
+     *     .execute();
+     * // WHERE NOT (status = 'ACTIVE')
+     * }</>
+     */
+    public SELF not(Consumer<OrConditionBuilder<T, SELF>> config) {
+        List<BulkConditionNode> children = new ArrayList<>();
+        config.accept(new OrConditionBuilder<>(self(), children));
+        BulkConditionNode combined = children.size() == 1
+                ? children.get(0)
+                : new BulkConditionNode.OrNode(children);
+        conditionNodes.add(new BulkConditionNode.NotNode(combined));
+        return self();
+    }
+
+    public SELF eq(SFunction<T, ?> field, @Nullable Object value) {
         String name = property(field);
-        conditionFunctions.add((root, cb) -> PredicateHelper.ne(root, name, value, cb));
+        conditionNodes.add(leaf((root, cb) -> PredicateHelper.eq(root, name, value, cb)));
+        return self();
+    }
+
+    public SELF ne(SFunction<T, ?> field, @Nullable Object value) {
+        String name = property(field);
+        conditionNodes.add(leaf((root, cb) -> PredicateHelper.ne(root, name, value, cb)));
         return self();
     }
 
@@ -133,7 +203,7 @@ public abstract class AbstractBulkOperationSpec<T, SELF extends AbstractBulkOper
             throw new IllegalArgumentException("value must not be null");
         }
         String name = property(field);
-        conditionFunctions.add((root, cb) -> PredicateHelper.gt(root, name, value, cb));
+        conditionNodes.add(leaf((root, cb) -> PredicateHelper.gt(root, name, value, cb)));
         return self();
     }
 
@@ -143,7 +213,7 @@ public abstract class AbstractBulkOperationSpec<T, SELF extends AbstractBulkOper
             throw new IllegalArgumentException("value must not be null");
         }
         String name = property(field);
-        conditionFunctions.add((root, cb) -> PredicateHelper.ge(root, name, value, cb));
+        conditionNodes.add(leaf((root, cb) -> PredicateHelper.ge(root, name, value, cb)));
         return self();
     }
 
@@ -153,7 +223,7 @@ public abstract class AbstractBulkOperationSpec<T, SELF extends AbstractBulkOper
             throw new IllegalArgumentException("value must not be null");
         }
         String name = property(field);
-        conditionFunctions.add((root, cb) -> PredicateHelper.lt(root, name, value, cb));
+        conditionNodes.add(leaf((root, cb) -> PredicateHelper.lt(root, name, value, cb)));
         return self();
     }
 
@@ -163,7 +233,7 @@ public abstract class AbstractBulkOperationSpec<T, SELF extends AbstractBulkOper
             throw new IllegalArgumentException("value must not be null");
         }
         String name = property(field);
-        conditionFunctions.add((root, cb) -> PredicateHelper.le(root, name, value, cb));
+        conditionNodes.add(leaf((root, cb) -> PredicateHelper.le(root, name, value, cb)));
         return self();
     }
 
@@ -172,7 +242,7 @@ public abstract class AbstractBulkOperationSpec<T, SELF extends AbstractBulkOper
             throw new IllegalArgumentException("value must not be null");
         }
         String name = property(field);
-        conditionFunctions.add((root, cb) -> PredicateHelper.like(root, name, value, cb));
+        conditionNodes.add(leaf((root, cb) -> PredicateHelper.like(root, name, value, cb)));
         return self();
     }
 
@@ -181,7 +251,7 @@ public abstract class AbstractBulkOperationSpec<T, SELF extends AbstractBulkOper
             throw new IllegalArgumentException("value must not be null");
         }
         String name = property(field);
-        conditionFunctions.add((root, cb) -> PredicateHelper.notLike(root, name, value, cb));
+        conditionNodes.add(leaf((root, cb) -> PredicateHelper.notLike(root, name, value, cb)));
         return self();
     }
 
@@ -190,7 +260,7 @@ public abstract class AbstractBulkOperationSpec<T, SELF extends AbstractBulkOper
             throw new IllegalArgumentException("value must not be null");
         }
         String name = property(field);
-        conditionFunctions.add((root, cb) -> PredicateHelper.startsWith(root, name, value, cb));
+        conditionNodes.add(leaf((root, cb) -> PredicateHelper.startsWith(root, name, value, cb)));
         return self();
     }
 
@@ -199,7 +269,7 @@ public abstract class AbstractBulkOperationSpec<T, SELF extends AbstractBulkOper
             throw new IllegalArgumentException("value must not be null");
         }
         String name = property(field);
-        conditionFunctions.add((root, cb) -> PredicateHelper.endsWith(root, name, value, cb));
+        conditionNodes.add(leaf((root, cb) -> PredicateHelper.endsWith(root, name, value, cb)));
         return self();
     }
 
@@ -208,13 +278,13 @@ public abstract class AbstractBulkOperationSpec<T, SELF extends AbstractBulkOper
             throw new IllegalArgumentException("value must not be null");
         }
         String name = property(field);
-        conditionFunctions.add((root, cb) -> PredicateHelper.contains(root, name, value, cb));
+        conditionNodes.add(leaf((root, cb) -> PredicateHelper.contains(root, name, value, cb)));
         return self();
     }
 
     public SELF eqIgnoreCase(SFunction<T, ?> field, String value) {
         String name = property(field);
-        conditionFunctions.add((root, cb) -> PredicateHelper.eqIgnoreCase(root, name, value, cb));
+        conditionNodes.add(leaf((root, cb) -> PredicateHelper.eqIgnoreCase(root, name, value, cb)));
         return self();
     }
 
@@ -223,7 +293,7 @@ public abstract class AbstractBulkOperationSpec<T, SELF extends AbstractBulkOper
             throw new IllegalArgumentException("value must not be null");
         }
         String name = property(field);
-        conditionFunctions.add((root, cb) -> PredicateHelper.likeIgnoreCase(root, name, value, cb));
+        conditionNodes.add(leaf((root, cb) -> PredicateHelper.likeIgnoreCase(root, name, value, cb)));
         return self();
     }
 
@@ -232,7 +302,7 @@ public abstract class AbstractBulkOperationSpec<T, SELF extends AbstractBulkOper
         if (values == null || values.length == 0) {
             throw new IllegalArgumentException("values must not be empty");
         }
-        conditionFunctions.add((root, cb) -> PredicateHelper.in(root, name, values, cb));
+        conditionNodes.add(leaf((root, cb) -> PredicateHelper.in(root, name, values, cb)));
         return self();
     }
 
@@ -241,7 +311,7 @@ public abstract class AbstractBulkOperationSpec<T, SELF extends AbstractBulkOper
         if (values == null || values.length == 0) {
             throw new IllegalArgumentException("values must not be empty");
         }
-        conditionFunctions.add((root, cb) -> PredicateHelper.notIn(root, name, values, cb));
+        conditionNodes.add(leaf((root, cb) -> PredicateHelper.notIn(root, name, values, cb)));
         return self();
     }
 
@@ -250,7 +320,7 @@ public abstract class AbstractBulkOperationSpec<T, SELF extends AbstractBulkOper
         if (values == null || values.isEmpty()) {
             throw new IllegalArgumentException("values must not be empty");
         }
-        conditionFunctions.add((root, cb) -> PredicateHelper.in(root, name, values, cb));
+        conditionNodes.add(leaf((root, cb) -> PredicateHelper.in(root, name, values, cb)));
         return self();
     }
 
@@ -259,7 +329,7 @@ public abstract class AbstractBulkOperationSpec<T, SELF extends AbstractBulkOper
         if (values == null || values.isEmpty()) {
             throw new IllegalArgumentException("values must not be empty");
         }
-        conditionFunctions.add((root, cb) -> PredicateHelper.notIn(root, name, values, cb));
+        conditionNodes.add(leaf((root, cb) -> PredicateHelper.notIn(root, name, values, cb)));
         return self();
     }
 
@@ -275,7 +345,7 @@ public abstract class AbstractBulkOperationSpec<T, SELF extends AbstractBulkOper
             throw new IllegalArgumentException("start must not be greater than end");
         }
         String name = property(field);
-        conditionFunctions.add((root, cb) -> PredicateHelper.between(root, name, start, end, cb));
+        conditionNodes.add(leaf((root, cb) -> PredicateHelper.between(root, name, start, end, cb)));
         return self();
     }
 
@@ -291,19 +361,19 @@ public abstract class AbstractBulkOperationSpec<T, SELF extends AbstractBulkOper
             throw new IllegalArgumentException("start must not be greater than end");
         }
         String name = property(field);
-        conditionFunctions.add((root, cb) -> PredicateHelper.notBetween(root, name, start, end, cb));
+        conditionNodes.add(leaf((root, cb) -> PredicateHelper.notBetween(root, name, start, end, cb)));
         return self();
     }
 
     public SELF isNull(SFunction<T, ?> field) {
         String name = property(field);
-        conditionFunctions.add((root, cb) -> PredicateHelper.isNull(root, name, cb));
+        conditionNodes.add(leaf((root, cb) -> PredicateHelper.isNull(root, name, cb)));
         return self();
     }
 
     public SELF isNotNull(SFunction<T, ?> field) {
         String name = property(field);
-        conditionFunctions.add((root, cb) -> PredicateHelper.isNotNull(root, name, cb));
+        conditionNodes.add(leaf((root, cb) -> PredicateHelper.isNotNull(root, name, cb)));
         return self();
     }
 
@@ -312,17 +382,41 @@ public abstract class AbstractBulkOperationSpec<T, SELF extends AbstractBulkOper
         if (condition == null) {
             throw new IllegalArgumentException("condition must not be null");
         }
-        conditionFunctions.add((root, cb) -> condition.apply(root));
+        conditionNodes.add(leaf((root, cb) -> condition.apply(root)));
         return self();
     }
 
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    private Predicate resolveNode(BulkConditionNode node, Root<T> root, CriteriaBuilder cb) {
+        if (node instanceof BulkConditionNode.LeafNode l) {
+            return ((BiFunction<Root<T>, CriteriaBuilder, Predicate>) (BiFunction) l.fn()).apply(root, cb);
+        }
+        if (node instanceof BulkConditionNode.OrNode o) {
+            List<Predicate> childPredicates = new ArrayList<>();
+            for (BulkConditionNode child : o.children()) {
+                childPredicates.add(resolveNode(child, root, cb));
+            }
+            if (childPredicates.isEmpty()) {
+                return cb.disjunction();
+            }
+            if (childPredicates.size() == 1) {
+                return childPredicates.get(0);
+            }
+            return cb.or(childPredicates.toArray(new Predicate[0]));
+        }
+        if (node instanceof BulkConditionNode.NotNode n) {
+            return cb.not(resolveNode(n.child(), root, cb));
+        }
+        throw new IllegalArgumentException("Unknown BulkConditionNode type: " + node.getClass().getName());
+    }
+
     protected Predicate[] buildPredicates(Root<T> root, CriteriaBuilder cb) {
-        if (conditionFunctions.isEmpty()) {
+        if (conditionNodes.isEmpty()) {
             return null;
         }
         List<Predicate> predicates = new ArrayList<>();
-        for (BiFunction<Root<T>, CriteriaBuilder, Predicate> fn : conditionFunctions) {
-            predicates.add(fn.apply(root, cb));
+        for (BulkConditionNode node : conditionNodes) {
+            predicates.add(resolveNode(node, root, cb));
         }
         return predicates.toArray(new Predicate[0]);
     }

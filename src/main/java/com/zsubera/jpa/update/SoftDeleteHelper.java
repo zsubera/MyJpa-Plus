@@ -11,11 +11,11 @@ import jakarta.persistence.criteria.Predicate;
 import jakarta.persistence.criteria.Root;
 
 import java.lang.reflect.Field;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 
@@ -25,6 +25,9 @@ import java.util.concurrent.ConcurrentMap;
  * Provides {@link Specification} instances that automatically filter
  * soft-deleted records using the annotated field.
  * <p>
+ * All caches use {@link ConcurrentHashMap} for consistent, thread-safe access.
+ * Entity class count is bounded in practice, so no LRU eviction is needed.
+ * <p>
  * Example:
  * <pre>{@code
  * Specification<Product> notDeleted = SoftDeleteHelper.isNotDeleted(Product.class);
@@ -33,17 +36,18 @@ import java.util.concurrent.ConcurrentMap;
  */
 public final class SoftDeleteHelper {
 
-    private static final int MAX_CACHE_SIZE = 1024;
+    private static final int MAX_FIELD_CACHE_SIZE = 1024;
 
     // Sentinel value for entities without a @SoftDelete field (avoids null in cache)
     private static final String NO_FIELD_SENTINEL = "\0";
 
     // Cache: entityClass -> field name (or sentinel for "no field")
+    // LRU-bounded synchronized map; entity class count is limited in practice
     private static final Map<Class<?>, String> FIELD_CACHE =
-            Collections.synchronizedMap(new LinkedHashMap<>(MAX_CACHE_SIZE, 0.75f, true) {
+            Collections.synchronizedMap(new LinkedHashMap<>(MAX_FIELD_CACHE_SIZE, 0.75f, true) {
                 @Override
                 protected boolean removeEldestEntry(Map.Entry<Class<?>, String> eldest) {
-                    return size() > MAX_CACHE_SIZE;
+                    return size() > MAX_FIELD_CACHE_SIZE;
                 }
             });
 
@@ -124,7 +128,14 @@ public final class SoftDeleteHelper {
         return cb.equal(path.get(fieldName), true);
     }
 
-    private static String findSoftDeleteField(Class<?> entityClass) {
+    /**
+     * Finds the field name annotated with {@link SoftDelete @SoftDelete} on the given entity class.
+     * Walks the class hierarchy (including superclasses). The result is cached per entity class.
+     *
+     * @param entityClass the entity class to scan
+     * @return the field name, or {@code null} if no {@code @SoftDelete} field is found
+     */
+    public static String findSoftDeleteField(Class<?> entityClass) {
         String result = FIELD_CACHE.computeIfAbsent(entityClass, cls -> {
             for (Field field : getAllFields(cls)) {
                 if (field.isAnnotationPresent(SoftDelete.class)) {

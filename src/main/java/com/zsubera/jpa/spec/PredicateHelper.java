@@ -26,7 +26,27 @@ import java.util.Collection;
  */
 public final class PredicateHelper {
 
+    /** Escape character used for LIKE wildcards: backslash. */
+    public static final char LIKE_ESCAPE_CHAR = '\\';
+
     private PredicateHelper() {}
+
+    /**
+     * Escapes SQL wildcard characters ({@code %}, {@code _}) in a LIKE pattern value.
+     * This prevents user-supplied values containing {@code %} or {@code _} from
+     * unintentionally matching unintended rows.
+     *
+     * @param input the raw string value (may be null)
+     * @return the escaped string, or null if input was null
+     */
+    public static String escapeLikeWildcards(String input) {
+        if (input == null) {
+            return null;
+        }
+        return input.replace("\\", "\\\\")
+                    .replace("_", "\\_")
+                    .replace("%", "\\%");
+    }
 
     // ==================== Comparison operators ====================
 
@@ -71,15 +91,15 @@ public final class PredicateHelper {
     }
 
     public static Predicate startsWith(Path<?> path, String fieldName, String value, CriteriaBuilder cb) {
-        return cb.like(path.get(fieldName).as(String.class), value + "%");
+        return cb.like(path.get(fieldName).as(String.class), escapeLikeWildcards(value) + "%", LIKE_ESCAPE_CHAR);
     }
 
     public static Predicate endsWith(Path<?> path, String fieldName, String value, CriteriaBuilder cb) {
-        return cb.like(path.get(fieldName).as(String.class), "%" + value);
+        return cb.like(path.get(fieldName).as(String.class), "%" + escapeLikeWildcards(value), LIKE_ESCAPE_CHAR);
     }
 
     public static Predicate contains(Path<?> path, String fieldName, String value, CriteriaBuilder cb) {
-        return cb.like(path.get(fieldName).as(String.class), "%" + value + "%");
+        return cb.like(path.get(fieldName).as(String.class), "%" + escapeLikeWildcards(value) + "%", LIKE_ESCAPE_CHAR);
     }
 
     public static Predicate eqIgnoreCase(Path<?> path, String fieldName, String value, CriteriaBuilder cb) {

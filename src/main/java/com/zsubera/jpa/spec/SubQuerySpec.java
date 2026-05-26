@@ -207,6 +207,22 @@ public class SubQuerySpec<S> {
         return this;
     }
 
+    public SubQuerySpec<S> notBetween(SFunction<S, ?> field, Comparable<?> start, Comparable<?> end) {
+        if (start == null) {
+            throw new IllegalArgumentException("start must not be null");
+        }
+        if (end == null) {
+            throw new IllegalArgumentException("end must not be null");
+        }
+        @SuppressWarnings({"unchecked", "rawtypes"})
+        int cmp = ((java.lang.Comparable) start).compareTo(end);
+        if (cmp > 0) {
+            throw new IllegalArgumentException("start must not be greater than end");
+        }
+        predicates.add(PredicateHelper.notBetween(root, property(field), start, end, cb));
+        return this;
+    }
+
     public SubQuerySpec<S> in(SFunction<S, ?> field, Object... values) {
         if (values == null || values.length == 0) {
             throw new IllegalArgumentException("values must not be empty");

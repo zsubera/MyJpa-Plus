@@ -51,29 +51,34 @@ public final class PageableHelper {
 
     /**
      * Merges a {@link Pageable}'s sort with the ordering from a {@link QuerySpec}.
-     * The QuerySpec ordering comes first, then the Pageable sort is appended.
-     * This allows combining explicit ordering with dynamic pagination.
+     * QuerySpec ordering comes first (higher priority), then the Pageable sort is
+     * appended. This allows combining QuerySpec's built-in ordering with dynamic
+     * pagination sort.
      * <p>
      * If the QuerySpec has no ordering, the Pageable sort is used as-is.
      *
-     * @param pageable the pageable with potential sort
+     * @param pageable  the pageable with potential sort
      * @param querySpec the QuerySpec with potentially built-in ordering
-     * @return a new Pageable that combines both orderings
+     * @return a new Pageable that combines both orderings (QuerySpec first, Pageable second)
      */
     public static Pageable merge(Pageable pageable, QuerySpec<?> querySpec) {
         if (pageable == null) {
             return Pageable.unpaged();
         }
-        Sort combined = pageable.getSort();
-        // QuerySpec ordering (if any) is applied via toPredicate, so
-        // we return the pageable as-is but with Sort.unsorted() to preserve
-        // the QuerySpec's own ordering.
-        if (combined.isSorted()) {
-            // If Pageable has sort AND QuerySpec has ordering, we need to combine
-            // But the standard approach is to use the Pageable sort only
-            return pageable;
+        Sort querySpecSort = querySpec.getSort();
+        Sort pageableSort = pageable.getSort();
+        Sort combined;
+        if (querySpecSort.isSorted()) {
+            // QuerySpec ordering takes precedence, then append Pageable sort
+            if (pageableSort.isSorted()) {
+                combined = querySpecSort.and(pageableSort);
+            } else {
+                combined = querySpecSort;
+            }
+        } else {
+            combined = pageableSort;
         }
-        return pageable;
+        return PageRequest.of(pageable.getPageNumber(), pageable.getPageSize(), combined);
     }
 
     /**

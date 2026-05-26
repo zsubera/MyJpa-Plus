@@ -385,6 +385,43 @@ class SubQuerySpecTest {
                 || ex instanceof IllegalArgumentException);
     }
 
+    @Test
+    void testExistsWithNotBetweenOperator() {
+        ParentEntity p = new ParentEntity();
+        p.setCategory("cat");
+        p.setLevel(10);
+        em.persist(p);
+        TestEntity child = newEntity("c1", 1);
+        child.setParent(p);
+        repository.save(child);
+
+        QuerySpec<ParentEntity> qs = new QuerySpec<>();
+        qs.exists(TestEntity.class, sub -> sub
+                .notBetween(TestEntity::getStatus, 5, 10));
+        List<ParentEntity> result = parentRepository.findAll(qs.toSpecification());
+        assertEquals(1, result.size());
+    }
+
+    @Test
+    void testSubQueryNotBetweenNullStartThrowsException() {
+        QuerySpec<ParentEntity> qs = new QuerySpec<>();
+        qs.exists(TestEntity.class, sub -> sub.notBetween(TestEntity::getStatus, null, 5));
+        RuntimeException ex = assertThrows(RuntimeException.class,
+                () -> parentRepository.findAll(qs.toSpecification()));
+        assertTrue(ex.getCause() instanceof IllegalArgumentException
+                || ex instanceof IllegalArgumentException);
+    }
+
+    @Test
+    void testSubQueryNotBetweenInvalidRangeThrowsException() {
+        QuerySpec<ParentEntity> qs = new QuerySpec<>();
+        qs.exists(TestEntity.class, sub -> sub.notBetween(TestEntity::getStatus, 10, 1));
+        RuntimeException ex = assertThrows(RuntimeException.class,
+                () -> parentRepository.findAll(qs.toSpecification()));
+        assertTrue(ex.getCause() instanceof IllegalArgumentException
+                || ex instanceof IllegalArgumentException);
+    }
+
     private TestEntity newEntity(String name, int status) {
         TestEntity entity = new TestEntity();
         entity.setName(name);

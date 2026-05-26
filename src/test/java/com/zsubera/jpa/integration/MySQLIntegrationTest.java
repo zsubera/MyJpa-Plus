@@ -1,0 +1,124 @@
+package com.zsubera.jpa.integration;
+
+import com.zsubera.jpa.spec.QuerySpec;
+import org.junit.jupiter.api.Tag;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabase;
+import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
+import org.springframework.test.context.DynamicPropertyRegistry;
+import org.springframework.test.context.DynamicPropertySource;
+import org.testcontainers.containers.MySQLContainer;
+import org.testcontainers.junit.jupiter.Container;
+import org.testcontainers.junit.jupiter.Testcontainers;
+
+import java.util.List;
+
+import static org.junit.jupiter.api.Assertions.*;
+
+@Tag("integration")
+@Testcontainers
+@DataJpaTest
+@AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
+class MySQLIntegrationTest {
+
+    @Container
+    static MySQLContainer<?> mysql = new MySQLContainer<>("mysql:8.0")
+            .withDatabaseName("myjpa_test")
+            .withUsername("test")
+            .withPassword("test");
+
+    @DynamicPropertySource
+    static void configureProperties(DynamicPropertyRegistry registry) {
+        registry.add("spring.datasource.url", mysql::getJdbcUrl);
+        registry.add("spring.datasource.username", mysql::getUsername);
+        registry.add("spring.datasource.password", mysql::getPassword);
+        registry.add("spring.datasource.driver-class-name", () -> "com.mysql.cj.jdbc.Driver");
+        registry.add("spring.jpa.database-platform", () -> "org.hibernate.dialect.MySQLDialect");
+        registry.add("spring.jpa.hibernate.ddl-auto", () -> "create-drop");
+    }
+
+    @Autowired
+    private PgTestEntityRepository repository;
+
+    @Test
+    void testSimpleEqOnMySQL() {
+        PgTestEntity entity = new PgTestEntity();
+        entity.setName("hello");
+        entity.setStatus(1);
+        repository.save(entity);
+
+        QuerySpec<PgTestEntity> qs = new QuerySpec<>();
+        qs.eq(PgTestEntity::getName, "hello");
+        List<PgTestEntity> result = repository.findAll(qs.toSpecification());
+        assertEquals(1, result.size());
+        assertEquals("hello", result.get(0).getName());
+    }
+
+    @Test
+    void testStartsWithOnMySQL() {
+        PgTestEntity e1 = new PgTestEntity();
+        e1.setName("hello_world");
+        e1.setStatus(0);
+        repository.save(e1);
+
+        PgTestEntity e2 = new PgTestEntity();
+        e2.setName("hello_test%");
+        e2.setStatus(0);
+        repository.save(e2);
+
+        PgTestEntity e3 = new PgTestEntity();
+        e3.setName("other");
+        e3.setStatus(0);
+        repository.save(e3);
+
+        QuerySpec<PgTestEntity> qs = new QuerySpec<>();
+        qs.startsWith(PgTestEntity::getName, "hello");
+        List<PgTestEntity> result = repository.findAll(qs.toSpecification());
+        assertEquals(2, result.size());
+    }
+
+    @Test
+    void testContainsWithSpecialCharsOnMySQL() {
+        PgTestEntity e1 = new PgTestEntity();
+        e1.setName("test%_value");
+        e1.setStatus(0);
+        repository.save(e1);
+
+        PgTestEntity e2 = new PgTestEntity();
+        e2.setName("test%_other");
+        e2.setStatus(0);
+        repository.save(e2);
+
+        PgTestEntity e3 = new PgTestEntity();
+        e3.setName("normal");
+        e3.setStatus(0);
+        repository.save(e3);
+
+        QuerySpec<PgTestEntity> qs = new QuerySpec<>();
+        qs.contains(PgTestEntity::getName, "%_");
+        List<PgTestEntity> result = repository.findAll(qs.toSpecification());
+        assertEquals(2, result.size());
+    }
+
+    @Test
+    void testLikeEscapeDoesNotMatchWildcard() {
+        // LIKE 'hello\\_world' escape '\\' should match 'hello_world' literally
+        // but NOT 'helloXworld'
+        PgTestEntity e1 = new PgTestEntity();
+        e1.setName("hello_world");
+        e1.setStatus(0);
+        repository.save(e1);
+
+        PgTestEntity e2 = new PgTestEntity();
+        e2.setName("helloXworld");
+        e2.setStatus(0);
+        repository.save(e2);
+
+        QuerySpec<PgTestEntity> qs = new QuerySpec<>();
+        qs.contains(PgTestEntity::getName, "_wor");
+        List<PgTestEntity> result = repository.findAll(qs.toSpecification());
+        assertEquals(1, result.size());
+        assertEquals("hello_world", result.get(0).getName());
+    }
+}

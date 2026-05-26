@@ -38,6 +38,9 @@
 
     <properties>
         <java.version>17</java.version>
+        <spotbugs-annotations.version>4.9.1</spotbugs-annotations.version>
+        <owasp-dependency-check.version>12.1.0</owasp-dependency-check.version>
+        <spotless.version>2.44.5</spotless.version>
     </properties>
 
     <dependencies>
@@ -47,10 +50,11 @@
             <optional>true</optional>
         </dependency>
 
+        <!-- Static analysis annotations (replaces deprecated findbugs:annotations) -->
         <dependency>
-            <groupId>com.google.code.findbugs</groupId>
-            <artifactId>annotations</artifactId>
-            <version>3.0.1u2</version>
+            <groupId>com.github.spotbugs</groupId>
+            <artifactId>spotbugs-annotations</artifactId>
+            <version>${spotbugs-annotations.version}</version>
             <scope>compile</scope>
             <optional>true</optional>
         </dependency>
@@ -64,6 +68,55 @@
         <dependency>
             <groupId>com.h2database</groupId>
             <artifactId>h2</artifactId>
+            <scope>test</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>org.openjdk.jmh</groupId>
+            <artifactId>jmh-core</artifactId>
+            <version>1.37</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.openjdk.jmh</groupId>
+            <artifactId>jmh-generator-annprocess</artifactId>
+            <version>1.37</version>
+            <scope>test</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>org.testcontainers</groupId>
+            <artifactId>testcontainers</artifactId>
+            <version>1.20.4</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.testcontainers</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <version>1.20.4</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.testcontainers</groupId>
+            <artifactId>postgresql</artifactId>
+            <version>1.20.4</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.postgresql</groupId>
+            <artifactId>postgresql</artifactId>
+            <scope>test</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>org.testcontainers</groupId>
+            <artifactId>mysql</artifactId>
+            <version>1.20.4</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>com.mysql</groupId>
+            <artifactId>mysql-connector-j</artifactId>
             <scope>test</scope>
         </dependency>
     </dependencies>
@@ -104,20 +157,6 @@
                 <configuration>
                     <doclint>reference,html</doclint>
                 </configuration>
-            </plugin>
-            <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-gpg-plugin</artifactId>
-                <version>3.2.7</version>
-                <executions>
-                    <execution>
-                        <id>sign-artifacts</id>
-                        <phase>verify</phase>
-                        <goals>
-                            <goal>sign</goal>
-                        </goals>
-                    </execution>
-                </executions>
             </plugin>
             <plugin>
                 <groupId>com.github.spotbugs</groupId>
@@ -162,11 +201,7 @@
                                 <rule>
                                     <element>PACKAGE</element>
                                     <excludes>
-                                        <exclude>com.zsubera.jpa.autoconfigure</exclude>
-                                        <exclude>com.zsubera.jpa.annotation</exclude>
-                                        <exclude>com.zsubera.jpa.entity</exclude>
-                                        <exclude>com.zsubera.jpa.exception</exclude>
-                                        <exclude>com.zsubera.jpa.repository</exclude>
+                                        <exclude>com.zsubera.jpa.entity.BaseEntity</exclude>
                                     </excludes>
                                     <limits>
                                         <limit>
@@ -181,6 +216,40 @@
                     </execution>
                 </executions>
             </plugin>
+            <!-- OWASP Dependency Vulnerability Scanner -->
+            <plugin>
+                <groupId>org.owasp</groupId>
+                <artifactId>dependency-check-maven</artifactId>
+                <version>${owasp-dependency-check.version}</version>
+                <configuration>
+                    <failBuildOnCVSS>7</failBuildOnCVSS>
+                    <formats>
+                        <format>HTML</format>
+                        <format>JSON</format>
+                    </formats>
+                </configuration>
+                <executions>
+                    <execution>
+                        <goals>
+                            <goal>check</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+            <!-- Code formatter (Spotless) -->
+            <plugin>
+                <groupId>com.diffplug.spotless</groupId>
+                <artifactId>spotless-maven-plugin</artifactId>
+                <version>${spotless.version}</version>
+                <configuration>
+                    <java>
+                        <googleJavaFormat/>
+                        <removeUnusedImports/>
+                        <trimTrailingWhitespace/>
+                        <endWithNewline/>
+                    </java>
+                </configuration>
+            </plugin>
         </plugins>
     </build>
 
@@ -189,6 +258,21 @@
             <id>central-release</id>
             <build>
                 <plugins>
+                    <!-- GPG signing — only active during central-release profile -->
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-gpg-plugin</artifactId>
+                        <version>3.2.7</version>
+                        <executions>
+                            <execution>
+                                <id>sign-artifacts</id>
+                                <phase>verify</phase>
+                                <goals>
+                                    <goal>sign</goal>
+                                </goals>
+                            </execution>
+                        </executions>
+                    </plugin>
                     <plugin>
                         <groupId>org.sonatype.central</groupId>
                         <artifactId>central-publishing-maven-plugin</artifactId>

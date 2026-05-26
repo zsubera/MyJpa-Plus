@@ -40,11 +40,17 @@ public sealed interface ConditionNode
         public final String fieldName;
         public final Object value;
         public final Op op;
+        public final char escapeChar;
 
         public SimpleNode(String fieldName, Object value, Op op) {
+            this(fieldName, value, op, '\0');
+        }
+
+        public SimpleNode(String fieldName, Object value, Op op, char escapeChar) {
             this.fieldName = fieldName;
             this.value = value;
             this.op = op;
+            this.escapeChar = escapeChar;
         }
 
         @Override

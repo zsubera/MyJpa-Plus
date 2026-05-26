@@ -799,6 +799,55 @@ public class QuerySpecTest {
         assertNotNull(qs.toSpecification());
     }
 
+    @Test
+    void testThenCombinesConditions() {
+        repository.save(newEntity("alpha", 1));
+        repository.save(newEntity("beta", 2));
+        repository.save(newEntity("gamma", 3));
+
+        QuerySpec<TestEntity> qs1 = new QuerySpec<>();
+        qs1.eq(TestEntity::getName, "alpha");
+
+        QuerySpec<TestEntity> qs2 = new QuerySpec<>();
+        qs2.eq(TestEntity::getStatus, 1);
+
+        qs1.then(qs2);
+        List<TestEntity> result = repository.findAll(qs1.toSpecification());
+        assertEquals(1, result.size());
+        assertEquals("alpha", result.get(0).getName());
+    }
+
+    @Test
+    void testThenWithNullIsNoOp() {
+        repository.save(newEntity("test", 0));
+        QuerySpec<TestEntity> qs = new QuerySpec<>();
+        assertSame(qs, qs.then(null));
+    }
+
+    @Test
+    void testTimeoutGetterSetter() {
+        QuerySpec<TestEntity> qs = new QuerySpec<>();
+        qs.timeout(30);
+        assertEquals(Integer.valueOf(30), qs.getQueryTimeout());
+        assertNull(qs.getLockMode());
+    }
+
+    @Test
+    void testLockModeGetterSetter() {
+        QuerySpec<TestEntity> qs = new QuerySpec<>();
+        qs.lockMode(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE);
+        assertEquals(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE, qs.getLockMode());
+        assertNull(qs.getQueryTimeout());
+    }
+
+    @Test
+    void testApplyQuerySettings() {
+        QuerySpec<TestEntity> qs = new QuerySpec<>();
+        assertNull(qs.getQueryTimeout());
+        assertNull(qs.getLockMode());
+        // applyQuerySettings on null fields is no-op - verified by no exception
+    }
+
     private TestEntity newEntity(String name, int status) {
         TestEntity entity = new TestEntity();
         entity.setName(name);

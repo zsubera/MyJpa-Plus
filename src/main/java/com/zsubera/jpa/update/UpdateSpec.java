@@ -8,6 +8,7 @@ import jakarta.persistence.criteria.CriteriaBuilder;
 import jakarta.persistence.criteria.CriteriaUpdate;
 import jakarta.persistence.criteria.Predicate;
 import jakarta.persistence.criteria.Root;
+import org.springframework.lang.Nullable;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -49,7 +50,7 @@ public class UpdateSpec<T> extends AbstractBulkOperationSpec<T, UpdateSpec<T>> {
      * @param value the new value (can be null)
      * @return this builder for chaining
      */
-    public UpdateSpec<T> set(SFunction<T, ?> field, Object value) {
+    public UpdateSpec<T> set(SFunction<T, ?> field, @Nullable Object value) {
         if (field == null) {
             throw new IllegalArgumentException("field must not be null");
         }
@@ -102,9 +103,44 @@ public class UpdateSpec<T> extends AbstractBulkOperationSpec<T, UpdateSpec<T>> {
             update.set(root.get(sc.fieldName), sc.value);
         }
         Predicate[] predicates = buildPredicates(root, cb);
-        if (predicates != null) {
-            update.where(cb.and(predicates));
+        if (predicates == null || predicates.length == 0) {
+            throw new IllegalStateException(
+                    "No WHERE conditions specified for UPDATE operation. " +
+                    "This would update ALL rows in the table. " +
+                    "If unconditional update is intended, use updateAll(EntityManager) instead.");
         }
+        update.where(cb.and(predicates));
         return update;
+    }
+
+    /**
+     * Performs an unconditional UPDATE of all rows for this entity.
+     * <p>
+     * Use with caution — this will update ALL data in the table.
+     *
+     * @param em the EntityManager
+     * @return the number of entities updated
+     */
+    public int updateAll(EntityManager em) {
+        if (setClauses.isEmpty()) {
+            throw new IllegalStateException("At least one set() clause is required");
+        }
+        CriteriaBuilder cb = em.getCriteriaBuilder();
+        CriteriaUpdate<T> update = cb.createCriteriaUpdate(entityClass);
+        Root<T> root = update.from(entityClass);
+        for (SetClause sc : setClauses) {
+            update.set(root.get(sc.fieldName), sc.value);
+        }
+        return em.createQuery(update).executeUpdate();
+    }
+
+    /**
+     * Performs an unconditional UPDATE within a new or existing transaction.
+     *
+     * @param em the EntityManager
+     * @return the number of entities updated
+     */
+    public int updateAllInTransaction(EntityManager em) {
+        return executeInTransaction(em, this::updateAll);
     }
 }

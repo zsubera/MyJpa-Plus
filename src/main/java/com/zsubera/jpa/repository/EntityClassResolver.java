@@ -1,7 +1,9 @@
 package com.zsubera.jpa.repository;
 
+import jakarta.persistence.Id;
 import org.springframework.core.ResolvableType;
 
+import java.lang.reflect.Field;
 import java.util.Arrays;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
@@ -19,6 +21,7 @@ import java.util.concurrent.ConcurrentMap;
 final class EntityClassResolver {
 
     private static final ConcurrentMap<Class<?>, Class<?>> CACHE = new ConcurrentHashMap<>();
+    private static final ConcurrentMap<Class<?>, String> ID_FIELD_CACHE = new ConcurrentHashMap<>();
 
     private EntityClassResolver() {
     }
@@ -48,6 +51,27 @@ final class EntityClassResolver {
     }
 
     /**
+     * Resolves the {@code @Id} field name for the given entity class.
+     * Walks the class hierarchy (including superclasses) to find the field
+     * annotated with {@link Id @Id}. The result is cached per entity class.
+     *
+     * @param entityClass the entity class
+     * @return the ID field name, or {@code "id"} if no {@code @Id} is found
+     */
+    static String resolveIdFieldName(Class<?> entityClass) {
+        return ID_FIELD_CACHE.computeIfAbsent(entityClass, cls -> {
+            for (Class<?> c = cls; c != null && c != Object.class; c = c.getSuperclass()) {
+                for (Field f : c.getDeclaredFields()) {
+                    if (f.isAnnotationPresent(Id.class)) {
+                        return f.getName();
+                    }
+                }
+            }
+            return "id";
+        });
+    }
+
+    /**
      * Attempts to resolve using the standard ResolvableType.as() approach.
      * This works when MyJpaRepository is a direct parent or when
      * Spring's ResolvableType can correctly traverse the hierarchy.
@@ -62,7 +86,7 @@ final class EntityClassResolver {
                     return resolved;
                 }
             }
-        } catch (Exception e) {
+        } catch (IllegalArgumentException | UnsupportedOperationException e) {
             // Fall through to hierarchy traversal
         }
         return null;
@@ -100,15 +124,20 @@ final class EntityClassResolver {
     /**
      * Returns all interfaces implemented by the given class, including
      * those inherited from superclasses and superinterfaces.
+     * Uses iterative BFS with deduplication to avoid recursion and redundant copies.
      */
     private static Class<?>[] getAllInterfaces(Class<?> clazz) {
-        return Arrays.stream(clazz.getInterfaces())
-                .flatMap(iface -> {
-                    Class<?>[] all = getAllInterfaces(iface);
-                    Class<?>[] result = Arrays.copyOf(all, all.length + 1);
-                    result[all.length] = iface;
-                    return Arrays.stream(result);
-                })
-                .toArray(Class<?>[]::new);
+        java.util.Set<Class<?>> seen = new java.util.LinkedHashSet<>();
+        java.util.Deque<Class<?>> queue = new java.util.ArrayDeque<>();
+        queue.add(clazz);
+        while (!queue.isEmpty()) {
+            Class<?> current = queue.poll();
+            for (Class<?> iface : current.getInterfaces()) {
+                if (seen.add(iface)) {
+                    queue.add(iface);
+                }
+            }
+        }
+        return seen.toArray(new Class<?>[0]);
     }
 }

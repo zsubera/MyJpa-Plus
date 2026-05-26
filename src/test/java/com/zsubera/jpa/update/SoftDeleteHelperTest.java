@@ -139,6 +139,25 @@ class SoftDeleteHelperTest {
         assertFalse(SoftDeleteHelper.isSoftDeleted(TestEntity.class, entity));
     }
 
+    @Test
+    void testFindSoftDeleteFieldReturnsFieldNameForAnnotatedEntity() {
+        String fieldName = SoftDeleteHelper.findSoftDeleteField(SoftDeleteTestEntity.class);
+        assertEquals("deleted", fieldName);
+    }
+
+    @Test
+    void testFindSoftDeleteFieldReturnsNullForEntityWithoutAnnotation() {
+        String fieldName = SoftDeleteHelper.findSoftDeleteField(TestEntity.class);
+        assertNull(fieldName);
+    }
+
+    @Test
+    void testFindSoftDeleteFieldIsCached() {
+        String first = SoftDeleteHelper.findSoftDeleteField(SoftDeleteTestEntity.class);
+        String second = SoftDeleteHelper.findSoftDeleteField(SoftDeleteTestEntity.class);
+        assertSame(first, second);
+    }
+
     private TestEntity newEntity(String name, int status) {
         TestEntity entity = new TestEntity();
         entity.setName(name);

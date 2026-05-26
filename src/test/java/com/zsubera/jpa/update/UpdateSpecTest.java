@@ -248,7 +248,7 @@ class UpdateSpecTest {
 
         int count = new UpdateSpec<>(TestEntity.class)
                 .set(TestEntity::getStatus, 99)
-                .execute(em);
+                .updateAll(em);
 
         assertEquals(2, count);
     }

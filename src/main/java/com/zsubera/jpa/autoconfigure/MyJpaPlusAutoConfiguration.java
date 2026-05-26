@@ -18,9 +18,7 @@ import jakarta.persistence.EntityManager;
  * <p>
  * Configuration options (prefix: {@code myjpa-plus}):
  * <ul>
- *   <li>{@code myjpa-plus.soft-delete.enabled} — enable soft-delete support (default: true)</li>
  *   <li>{@code myjpa-plus.soft-delete.auto-filter} — auto-apply soft-delete filters (default: true)</li>
- *   <li>{@code myjpa-plus.logging.enabled} — enable debug logging (default: true)</li>
  * </ul>
  */
 @AutoConfiguration
@@ -34,9 +32,7 @@ public class MyJpaPlusAutoConfiguration {
     public MyJpaPlusAutoConfiguration(MyJpaPlusProperties properties) {
         if (log.isInfoEnabled()) {
             log.info("MyJpa-Plus AutoConfiguration initialized");
-            log.info("  soft-delete.enabled = {}", properties.getSoftDelete().isEnabled());
             log.info("  soft-delete.auto-filter = {}", properties.getSoftDelete().isAutoFilter());
-            log.info("  logging.enabled = {}", properties.getLogging().isEnabled());
         }
     }
 }

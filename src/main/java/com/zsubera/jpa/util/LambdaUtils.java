@@ -61,7 +61,8 @@ public final class LambdaUtils {
         if (methodName.startsWith("get") && methodName.length() > 3) {
             return Introspector.decapitalize(methodName.substring(3));
         }
-        if (methodName.startsWith("is") && methodName.length() > 2) {
+        if (methodName.startsWith("is") && methodName.length() > 2
+                && Character.isUpperCase(methodName.charAt(2))) {
             return Introspector.decapitalize(methodName.substring(2));
         }
         return methodName;

@@ -102,7 +102,9 @@ public final class EntityGraphHelper<T> {
                 return combined;
             });
         } else {
-            attributePaths.put(attributePath, new String[0]);
+            // Use merge instead of put to preserve existing subpaths
+            // e.g. add("roles.permissions") then add("roles") should keep "permissions"
+            attributePaths.merge(attributePath, new String[0], (old, val) -> old);
         }
         return this;
     }
@@ -164,6 +166,23 @@ public final class EntityGraphHelper<T> {
      * @param em the EntityManager to create the graph from
      * @return the built entity graph
      */
+    /**
+     * Recursively adds attribute nodes to a subgraph, splitting multi-level
+     * paths like "b.c.d" into nested subgraphs.
+     */
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    private void addAttributeNodeRecursive(Subgraph<Object> subgraph, String path) {
+        int dotIndex = path.indexOf('.');
+        if (dotIndex > 0) {
+            String root = path.substring(0, dotIndex);
+            String remaining = path.substring(dotIndex + 1);
+            Subgraph<Object> nested = subgraph.addSubgraph(root);
+            addAttributeNodeRecursive(nested, remaining);
+        } else {
+            subgraph.addAttributeNodes(path);
+        }
+    }
+
     @SuppressWarnings({"unchecked", "rawtypes"})
     public EntityGraph<T> buildGraph(EntityManager em) {
         EntityGraph<T> graph = em.createEntityGraph(entityClass);
@@ -177,7 +196,8 @@ public final class EntityGraphHelper<T> {
             } else {
                 Subgraph<Object> subgraph = graph.addSubgraph(attributeName);
                 for (String subpath : subpaths) {
-                    subgraph.addAttributeNodes(subpath);
+                    // Support multi-level nested paths like "b.c.d"
+                    addAttributeNodeRecursive(subgraph, subpath);
                 }
             }
         }

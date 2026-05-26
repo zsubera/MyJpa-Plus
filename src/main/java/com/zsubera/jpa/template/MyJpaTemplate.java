@@ -60,26 +60,26 @@ public class MyJpaTemplate {
     private EntityManager entityManager;
 
     /**
-     * Creates an {@link UpdateSpec} for the given entity class,
-     * pre-configured with the injected {@link EntityManager}.
-     * Call {@link UpdateSpec#execute()} to run the update.
+     * Creates an {@link UpdateSpec} for the given entity class.
+     * The {@link EntityManager} is provided at execution time via
+     * {@link #execute(UpdateSpec)}.
      *
      * @param entityClass the entity class to update
      * @param <T>         the entity type
-     * @return a new UpdateSpec
+     * @return a new UpdateSpec (not yet bound to an EntityManager)
      */
     public <T> UpdateSpec<T> update(Class<T> entityClass) {
         return new UpdateSpec<>(entityClass);
     }
 
     /**
-     * Creates a {@link DeleteSpec} for the given entity class,
-     * pre-configured with the injected {@link EntityManager}.
-     * Call {@link DeleteSpec#execute()} to run the delete.
+     * Creates a {@link DeleteSpec} for the given entity class.
+     * The {@link EntityManager} is provided at execution time via
+     * {@link #execute(DeleteSpec)}.
      *
      * @param entityClass the entity class to delete from
      * @param <T>         the entity type
-     * @return a new DeleteSpec
+     * @return a new DeleteSpec (not yet bound to an EntityManager)
      */
     public <T> DeleteSpec<T> delete(Class<T> entityClass) {
         return new DeleteSpec<>(entityClass);
@@ -97,7 +97,16 @@ public class MyJpaTemplate {
      */
     @Transactional(readOnly = true)
     public <T> List<T> findAll(Class<T> entityClass, QuerySpec<T> spec) {
-        return find(entityClass, spec.toSpecification());
+        CriteriaBuilder cb = entityManager.getCriteriaBuilder();
+        CriteriaQuery<T> cq = cb.createQuery(entityClass);
+        Root<T> root = cq.from(entityClass);
+        jakarta.persistence.criteria.Predicate predicate = spec.toPredicate(root, cq, cb);
+        if (predicate != null) {
+            cq.where(predicate);
+        }
+        TypedQuery<T> query = entityManager.createQuery(cq);
+        spec.applyQuerySettings(query);
+        return query.getResultList();
     }
 
     /**
@@ -131,7 +140,55 @@ public class MyJpaTemplate {
      */
     @Transactional(readOnly = true)
     public <T> Page<T> findAll(Class<T> entityClass, QuerySpec<T> spec, Pageable pageable) {
-        return findPage(entityClass, spec.toSpecification(), pageable);
+        return findPageInternal(entityClass, spec.toSpecification(), pageable, spec);
+    }
+
+    private <T> Page<T> findPageInternal(Class<T> entityClass, Specification<T> spec,
+                                          Pageable pageable, QuerySpec<T> querySpec) {
+        CriteriaBuilder cb = entityManager.getCriteriaBuilder();
+
+        if (pageable.isUnpaged()) {
+            CriteriaQuery<T> cq = cb.createQuery(entityClass);
+            Root<T> root = cq.from(entityClass);
+            jakarta.persistence.criteria.Predicate predicate = spec.toPredicate(root, cq, cb);
+            if (predicate != null) {
+                cq.where(predicate);
+            }
+            TypedQuery<T> typedQuery = entityManager.createQuery(cq);
+            querySpec.applyQuerySettings(typedQuery);
+            List<T> allContent = typedQuery.getResultList();
+            return new PageImpl<>(allContent);
+        }
+
+        CriteriaQuery<Long> countCq = cb.createQuery(Long.class);
+        Root<T> countRoot = countCq.from(entityClass);
+        countCq.select(cb.count(countRoot));
+        jakarta.persistence.criteria.Predicate countPredicate = spec.toPredicate(countRoot, null, cb);
+        if (countPredicate != null) {
+            countCq.where(countPredicate);
+        }
+        long total = entityManager.createQuery(countCq).getSingleResult();
+
+        CriteriaQuery<T> cq = cb.createQuery(entityClass);
+        Root<T> root = cq.from(entityClass);
+        jakarta.persistence.criteria.Predicate predicate = spec.toPredicate(root, cq, cb);
+        if (predicate != null) {
+            cq.where(predicate);
+        }
+        if (pageable.getSort().isSorted()) {
+            cq.orderBy(pageable.getSort().stream()
+                    .map(order -> order.isAscending()
+                            ? cb.asc(root.get(order.getProperty()))
+                            : cb.desc(root.get(order.getProperty())))
+                    .toList());
+        }
+        TypedQuery<T> query = entityManager.createQuery(cq);
+        query.setFirstResult((int) pageable.getOffset());
+        query.setMaxResults(pageable.getPageSize());
+        querySpec.applyQuerySettings(query);
+        List<T> content = query.getResultList();
+
+        return new PageImpl<>(content, pageable, total);
     }
 
     /**
@@ -147,11 +204,25 @@ public class MyJpaTemplate {
     public <T> Page<T> findPage(Class<T> entityClass, Specification<T> spec, Pageable pageable) {
         CriteriaBuilder cb = entityManager.getCriteriaBuilder();
 
-        // Count query
+        // Handle Pageable.unpaged() — return all results without count/distinct pollution
+        if (pageable.isUnpaged()) {
+            CriteriaQuery<T> cq = cb.createQuery(entityClass);
+            Root<T> root = cq.from(entityClass);
+            jakarta.persistence.criteria.Predicate predicate = spec.toPredicate(root, cq, cb);
+            if (predicate != null) {
+                cq.where(predicate);
+            }
+            List<T> allContent = entityManager.createQuery(cq).getResultList();
+            return new PageImpl<>(allContent);
+        }
+
+        // Count query — pass null CriteriaQuery to avoid distinct/groupBy/orderBy
+        // side effects from spec.toPredicate() leaking into the count query.
+        // The returned Predicate is used only for WHERE filtering.
         CriteriaQuery<Long> countCq = cb.createQuery(Long.class);
         Root<T> countRoot = countCq.from(entityClass);
         countCq.select(cb.count(countRoot));
-        jakarta.persistence.criteria.Predicate countPredicate = spec.toPredicate(countRoot, countCq, cb);
+        jakarta.persistence.criteria.Predicate countPredicate = spec.toPredicate(countRoot, null, cb);
         if (countPredicate != null) {
             countCq.where(countPredicate);
         }

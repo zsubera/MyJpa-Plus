@@ -178,6 +178,27 @@ class ConditionBuilderValidationTest {
         assertEquals(1, result.size());
     }
 
+    @Test
+    void testConditionalNotInCollectionFalseSkipsCondition() {
+        repository.save(newEntity("hello", 0));
+        QuerySpec<TestEntity> qs = new QuerySpec<>();
+        qs.notIn(false, TestEntity::getName, java.util.Arrays.asList("hello", "world"));
+        List<TestEntity> result = repository.findAll(qs.toSpecification());
+        assertEquals(1, result.size());
+    }
+
+    @Test
+    void testConditionalNotInCollectionTrueAppliesCondition() {
+        repository.save(newEntity("alpha", 0));
+        repository.save(newEntity("beta", 0));
+        repository.save(newEntity("gamma", 0));
+        QuerySpec<TestEntity> qs = new QuerySpec<>();
+        qs.notIn(true, TestEntity::getName, java.util.Arrays.asList("alpha", "beta"));
+        List<TestEntity> result = repository.findAll(qs.toSpecification());
+        assertEquals(1, result.size());
+        assertEquals("gamma", result.get(0).getName());
+    }
+
     private TestEntity newEntity(String name, int status) {
         TestEntity entity = new TestEntity();
         entity.setName(name);

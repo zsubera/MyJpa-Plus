@@ -21,11 +21,27 @@ jobs:
           java-version: ${{ matrix.java }}
           distribution: 'temurin'
           cache: maven
+      - name: Check code formatting
+        run: mvn spotless:check --batch-mode --no-transfer-progress
       - name: Build and verify
-        run: mvn clean verify --batch-mode --no-transfer-progress -Dgpg.skip=true
+        run: mvn clean verify --batch-mode --no-transfer-progress -Dgpg.skip=true -Dgroups='!integration'
+
+  integration:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: 17
+          distribution: 'temurin'
+          cache: maven
+      - name: Run PostgreSQL + MySQL integration tests
+        run: mvn test --batch-mode --no-transfer-progress -Dgpg.skip=true -Dgroups=integration
 
   release-deploy:
-    needs: build
+    needs: [build, integration]
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     steps:

@@ -101,10 +101,13 @@ public interface MyJpaRepository<T, ID> extends JpaRepository<T, ID>, JpaSpecifi
 
     /**
      * Finds a single non-soft-deleted entity by ID.
+     * Uses a query-level filter to avoid fetching deleted entities.
      */
     default Optional<T> findNotDeletedById(ID id) {
-        return findById(id).filter(entity ->
-                !SoftDeleteHelper.isSoftDeleted(getEntityClass(), entity));
+        Class<T> entityClass = getEntityClass();
+        String idFieldName = EntityClassResolver.resolveIdFieldName(entityClass);
+        return findOne(SoftDeleteHelper.isNotDeleted(entityClass).and(
+                (root, query, cb) -> cb.equal(root.get(idFieldName), id)));
     }
 
     /**
@@ -112,6 +115,13 @@ public interface MyJpaRepository<T, ID> extends JpaRepository<T, ID>, JpaSpecifi
      */
     default long countNotDeleted(Specification<T> spec) {
         return count(spec.and(SoftDeleteHelper.isNotDeleted(getEntityClass())));
+    }
+
+    /**
+     * Counts all non-soft-deleted entities without additional conditions.
+     */
+    default long countNotDeleted() {
+        return count(SoftDeleteHelper.isNotDeleted(getEntityClass()));
     }
 
     /**

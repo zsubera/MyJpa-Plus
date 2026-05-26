@@ -1,0 +1,10 @@
+{
+  "properties": [
+    {
+      "name": "myjpa-plus.soft-delete.auto-filter",
+      "type": "java.lang.Boolean",
+      "description": "Enable automatic soft-delete filtering for entities annotated with @SoftDelete. When true, the SoftDeleteFilterBean component is registered and provides transparent soft-delete filtering for Specifications.",
+      "defaultValue": true
+    }
+  ]
+}

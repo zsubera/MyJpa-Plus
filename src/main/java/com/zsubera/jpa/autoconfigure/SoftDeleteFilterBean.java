@@ -9,11 +9,9 @@ import org.springframework.beans.factory.InitializingBean;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Component;
 
-import java.lang.reflect.Field;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
-import java.util.concurrent.CopyOnWriteArrayList;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
+import org.springframework.lang.Nullable;
 
 /**
  * Auto-filter bean that enables transparent soft-delete filtering.
@@ -33,26 +31,34 @@ import java.util.concurrent.CopyOnWriteArrayList;
  * in configuration (default).
  */
 @Component
+@ConditionalOnProperty(prefix = "myjpa-plus.soft-delete", name = "auto-filter", havingValue = "true", matchIfMissing = true)
+@EnableConfigurationProperties(MyJpaPlusProperties.class)
 public class SoftDeleteFilterBean implements InitializingBean {
 
     private static final Logger log = LoggerFactory.getLogger(SoftDeleteFilterBean.class);
 
-    private final List<Class<?>> softDeleteEntities = new CopyOnWriteArrayList<>();
+    private final MyJpaPlusProperties properties;
+
+    public SoftDeleteFilterBean(MyJpaPlusProperties properties) {
+        this.properties = properties;
+    }
 
     @Override
     public void afterPropertiesSet() {
-        // Scan for entity classes with @SoftDelete is done dynamically
-        // when apply() is called, cached for performance
-        log.debug("SoftDeleteFilterBean initialized");
+        if (log.isDebugEnabled()) {
+            log.debug("SoftDeleteFilterBean initialized (auto-filter={})",
+                    properties.getSoftDelete().isAutoFilter());
+        }
     }
 
     /**
      * Registers an entity class for auto-filtering.
-     * Called by custom repository implementations.
+     * Delegates to {@link SoftDeleteHelper} which caches the result
+     * (both positive and negative) to avoid repeated scanning.
      */
     public void registerEntity(Class<?> entityClass) {
-        if (!softDeleteEntities.contains(entityClass) && hasSoftDeleteField(entityClass)) {
-            softDeleteEntities.add(entityClass);
+        SoftDeleteHelper.findSoftDeleteField(entityClass);
+        if (log.isDebugEnabled()) {
             log.debug("Registered {} for soft-delete auto-filtering", entityClass.getSimpleName());
         }
     }
@@ -68,7 +74,7 @@ public class SoftDeleteFilterBean implements InitializingBean {
      *         or the original specification if the entity has no soft-delete field
      */
     @SuppressWarnings("unchecked")
-    public <T> Specification<T> apply(Specification<T> spec, Class<T> entityClass) {
+    public <T> Specification<T> apply(@Nullable Specification<T> spec, Class<T> entityClass) {
         if (hasSoftDeleteField(entityClass)) {
             Specification<T> notDeleted = SoftDeleteHelper.isNotDeleted(entityClass);
             return spec == null ? notDeleted : spec.and(notDeleted);
@@ -78,27 +84,10 @@ public class SoftDeleteFilterBean implements InitializingBean {
 
     /**
      * Checks whether the given entity class has a {@link SoftDelete @SoftDelete} field.
+     * Delegates to {@link SoftDeleteHelper#findSoftDeleteField(Class)} which caches
+     * positive and negative results internally.
      */
     public boolean hasSoftDeleteField(Class<?> entityClass) {
-        return softDeleteEntities.contains(entityClass) || scanForSoftDelete(entityClass);
-    }
-
-    private boolean scanForSoftDelete(Class<?> entityClass) {
-        for (Field field : getAllFields(entityClass)) {
-            if (field.isAnnotationPresent(SoftDelete.class)) {
-                softDeleteEntities.add(entityClass);
-                return true;
-            }
-        }
-        return false;
-    }
-
-    private List<Field> getAllFields(Class<?> clazz) {
-        List<Field> fields = new ArrayList<>();
-        while (clazz != null && clazz != Object.class) {
-            fields.addAll(Arrays.asList(clazz.getDeclaredFields()));
-            clazz = clazz.getSuperclass();
-        }
-        return fields;
+        return SoftDeleteHelper.findSoftDeleteField(entityClass) != null;
     }
 }

@@ -5,6 +5,8 @@ import com.zsubera.jpa.util.LambdaUtils;
 import jakarta.persistence.criteria.CriteriaBuilder;
 import jakarta.persistence.criteria.Path;
 import jakarta.persistence.criteria.Predicate;
+import org.springframework.lang.Nullable;
+import static com.zsubera.jpa.spec.PredicateHelper.escapeLikeWildcards;
 
 import java.util.Collection;
 import java.util.List;
@@ -57,7 +59,7 @@ public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> {
      * @return this builder for chaining
      * @throws IllegalArgumentException if {@code field} is null
      */
-    default SELF eq(SFunction<E, ?> field, Object value) {
+    default SELF eq(SFunction<E, ?> field, @Nullable Object value) {
         if (field == null) {
             throw new IllegalArgumentException("field must not be null");
         }
@@ -73,7 +75,7 @@ public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> {
      * Adds a not-equal condition: {@code field != value}.
      * If {@code value} is null, generates {@code field IS NOT NULL}.
      */
-    default SELF ne(SFunction<E, ?> field, Object value) {
+    default SELF ne(SFunction<E, ?> field, @Nullable Object value) {
         if (field == null) {
             throw new IllegalArgumentException("field must not be null");
         }
@@ -175,7 +177,8 @@ public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> {
         if (value == null) {
             throw new IllegalArgumentException("value must not be null");
         }
-        conditions().add(new ConditionNode.SimpleNode(fieldName(field), value + "%", ConditionNode.Op.LIKE));
+        conditions().add(new ConditionNode.SimpleNode(fieldName(field),
+                escapeLikeWildcards(value) + "%", ConditionNode.Op.LIKE, PredicateHelper.LIKE_ESCAPE_CHAR));
         return self();
     }
 
@@ -188,7 +191,8 @@ public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> {
         if (value == null) {
             throw new IllegalArgumentException("value must not be null");
         }
-        conditions().add(new ConditionNode.SimpleNode(fieldName(field), "%" + value, ConditionNode.Op.LIKE));
+        conditions().add(new ConditionNode.SimpleNode(fieldName(field),
+                "%" + escapeLikeWildcards(value), ConditionNode.Op.LIKE, PredicateHelper.LIKE_ESCAPE_CHAR));
         return self();
     }
 
@@ -201,7 +205,8 @@ public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> {
         if (value == null) {
             throw new IllegalArgumentException("value must not be null");
         }
-        conditions().add(new ConditionNode.SimpleNode(fieldName(field), "%" + value + "%", ConditionNode.Op.LIKE));
+        conditions().add(new ConditionNode.SimpleNode(fieldName(field),
+                "%" + escapeLikeWildcards(value) + "%", ConditionNode.Op.LIKE, PredicateHelper.LIKE_ESCAPE_CHAR));
         return self();
     }
 
@@ -343,7 +348,7 @@ public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> {
      * Case-insensitive equality: {@code UPPER(field) = UPPER(value)}.
      * Useful for case-insensitive username/email lookups.
      */
-    default SELF eqIgnoreCase(SFunction<E, ?> field, String value) {
+    default SELF eqIgnoreCase(SFunction<E, ?> field, @Nullable String value) {
         if (field == null) {
             throw new IllegalArgumentException("field must not be null");
         }
@@ -441,14 +446,14 @@ public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> {
     /**
      * Adds an equality condition only if {@code condition} is true.
      */
-    default SELF eq(boolean condition, SFunction<E, ?> field, Object value) {
+    default SELF eq(boolean condition, SFunction<E, ?> field, @Nullable Object value) {
         return condition ? eq(field, value) : self();
     }
 
     /**
      * Adds a not-equal condition only if {@code condition} is true.
      */
-    default SELF ne(boolean condition, SFunction<E, ?> field, Object value) {
+    default SELF ne(boolean condition, SFunction<E, ?> field, @Nullable Object value) {
         return condition ? ne(field, value) : self();
     }
 
@@ -533,6 +538,13 @@ public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> {
      * Adds a NOT IN condition only if {@code condition} is true.
      */
     default SELF notIn(boolean condition, SFunction<E, ?> field, Object... values) {
+        return condition ? notIn(field, values) : self();
+    }
+
+    /**
+     * Adds a NOT IN condition with a Collection only if {@code condition} is true.
+     */
+    default SELF notIn(boolean condition, SFunction<E, ?> field, Collection<?> values) {
         return condition ? notIn(field, values) : self();
     }
 

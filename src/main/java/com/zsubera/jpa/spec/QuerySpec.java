@@ -8,9 +8,13 @@ import org.slf4j.LoggerFactory;
 import org.springframework.data.jpa.domain.Specification;
 
 import jakarta.persistence.criteria.*;
+import jakarta.persistence.LockModeType;
+import jakarta.persistence.TypedQuery;
 import java.util.*;
 import java.util.function.BiFunction;
 import java.util.function.Consumer;
+import org.springframework.data.domain.Sort;
+import org.springframework.lang.Nullable;
 
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 
@@ -50,6 +54,8 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
     private final List<String> groupByFields = new ArrayList<>();
     private final List<BiFunction<Path<T>, CriteriaBuilder, Predicate>> havingConditions = new ArrayList<>();
     private final List<ConditionNode.OrderNode> orderNodes = new ArrayList<>();
+    private Integer queryTimeout;
+    private LockModeType lockMode;
 
     List<ConditionNode> currentGroup() {
         return groupStack.isEmpty() ? conditions : groupStack.peek();
@@ -58,6 +64,65 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
     @Override
     public List<ConditionNode> conditions() {
         return currentGroup();
+    }
+
+    /**
+     * Exposes the ordering defined on this QuerySpec as a Spring Data {@link Sort}.
+     * Returns {@link Sort#unsorted()} if no ordering has been set.
+     * <p>
+     * This allows {@link com.zsubera.jpa.util.PageableHelper} and other utilities
+     * to merge QuerySpec ordering with external sorts.
+     */
+    public Sort getSort() {
+        if (orderNodes.isEmpty()) {
+            return Sort.unsorted();
+        }
+        List<Sort.Order> orders = new ArrayList<>();
+        for (ConditionNode.OrderNode node : orderNodes) {
+            orders.add(node.asc ? Sort.Order.asc(node.fieldName) : Sort.Order.desc(node.fieldName));
+        }
+        return Sort.by(orders);
+    }
+
+    /**
+     * Sets a query timeout in seconds for the generated query.
+     * Applied by {@link #applyQuerySettings(TypedQuery)} and
+     * {@link com.zsubera.jpa.template.MyJpaTemplate}.
+     */
+    public QuerySpec<T> timeout(int seconds) {
+        this.queryTimeout = seconds;
+        return this;
+    }
+
+    public Integer getQueryTimeout() {
+        return queryTimeout;
+    }
+
+    /**
+     * Sets a pessimistic lock mode for the generated query.
+     * Applied by {@link #applyQuerySettings(TypedQuery)} and
+     * {@link com.zsubera.jpa.template.MyJpaTemplate}.
+     */
+    public QuerySpec<T> lockMode(LockModeType lockMode) {
+        this.lockMode = lockMode;
+        return this;
+    }
+
+    public LockModeType getLockMode() {
+        return lockMode;
+    }
+
+    /**
+     * Applies the configured query timeout and lock mode to the given
+     * {@link TypedQuery}. Called automatically by {@link com.zsubera.jpa.template.MyJpaTemplate}.
+     */
+    public void applyQuerySettings(TypedQuery<?> query) {
+        if (queryTimeout != null) {
+            query.setHint("jakarta.persistence.query.timeout", queryTimeout * 1000);
+        }
+        if (lockMode != null) {
+            query.setLockMode(lockMode);
+        }
     }
 
     public QuerySpec<T> distinct() {
@@ -299,7 +364,7 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
     /**
      * Combines this QuerySpec with an external {@link Specification} using AND.
      */
-    public Specification<T> toSpecification(Specification<T> external) {
+    public Specification<T> toSpecification(@Nullable Specification<T> external) {
         if (external == null) {
             return this;
         }
@@ -307,7 +372,9 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
     }
 
     /**
-     * Combines this QuerySpec with another QuerySpec using AND.
+     * Combines this QuerySpec with another using AND and returns a new
+     * combined {@link Specification}. Use {@link #then(QuerySpec)} to
+     * combine conditions while retaining the QuerySpec type for further chaining.
      */
     public Specification<T> and(QuerySpec<T> other) {
         if (other == null) {
@@ -317,7 +384,28 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
     }
 
     /**
-     * Combines this QuerySpec with another QuerySpec using OR.
+     * Merges another QuerySpec's conditions into this one using AND semantics.
+     * The other spec's conditions, grouping, ordering, and distinct flag
+     * are appended to this spec, preserving the QuerySpec type for chaining.
+     */
+    @SuppressWarnings("unchecked")
+    public QuerySpec<T> then(QuerySpec<T> other) {
+        if (other == null) {
+            return this;
+        }
+        this.conditions.addAll(other.conditions);
+        if (other.distinct) {
+            this.distinct = true;
+        }
+        this.groupByFields.addAll(other.groupByFields);
+        this.havingConditions.addAll(other.havingConditions);
+        this.orderNodes.addAll(other.orderNodes);
+        return this;
+    }
+
+    /**
+     * Combines this QuerySpec with another using OR and returns a new
+     * combined {@link Specification}.
      */
     public Specification<T> or(QuerySpec<T> other) {
         if (other == null) {
@@ -333,29 +421,31 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
             log.debug("QuerySpec: building predicate for {} with {} conditions, {} order nodes, distinct={}",
                     root.getModel().getName(), conditions.size(), orderNodes.size(), distinct);
         }
-        if (distinct) {
-            query.distinct(true);
-        }
-        if (!groupByFields.isEmpty()) {
-            List<Path<?>> paths = new ArrayList<>();
-            for (String field : groupByFields) {
-                paths.add(root.get(field));
+        if (query != null) {
+            if (distinct) {
+                query.distinct(true);
             }
-            query.groupBy(paths.toArray(new Expression[0]));
-            for (BiFunction<Path<T>, CriteriaBuilder, Predicate> having : havingConditions) {
-                query.having(having.apply(root, cb));
-            }
-        }
-        if (!orderNodes.isEmpty()) {
-            List<jakarta.persistence.criteria.Order> orders = new ArrayList<>();
-            for (ConditionNode.OrderNode node : orderNodes) {
-                if (node.asc) {
-                    orders.add(cb.asc(root.get(node.fieldName)));
-                } else {
-                    orders.add(cb.desc(root.get(node.fieldName)));
+            if (!groupByFields.isEmpty()) {
+                List<Path<?>> paths = new ArrayList<>();
+                for (String field : groupByFields) {
+                    paths.add(root.get(field));
+                }
+                query.groupBy(paths.toArray(new Expression[0]));
+                for (BiFunction<Path<T>, CriteriaBuilder, Predicate> having : havingConditions) {
+                    query.having(having.apply(root, cb));
                 }
             }
-            query.orderBy(orders);
+            if (!orderNodes.isEmpty()) {
+                List<jakarta.persistence.criteria.Order> orders = new ArrayList<>();
+                for (ConditionNode.OrderNode node : orderNodes) {
+                    if (node.asc) {
+                        orders.add(cb.asc(root.get(node.fieldName)));
+                    } else {
+                        orders.add(cb.desc(root.get(node.fieldName)));
+                    }
+                }
+                query.orderBy(orders);
+            }
         }
         Map<String, Join<?, ?>> joinCache = new LinkedHashMap<>();
         List<Predicate> predicates = new ArrayList<>();
@@ -422,8 +512,14 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
             case LE:
                 return cb.lessThanOrEqualTo((Expression<Comparable>) fieldPath, (Comparable) node.value);
             case LIKE:
+                if (node.escapeChar != '\0') {
+                    return cb.like(fieldPath.as(String.class), (String) node.value, node.escapeChar);
+                }
                 return cb.like(fieldPath.as(String.class), (String) node.value);
             case NOT_LIKE:
+                if (node.escapeChar != '\0') {
+                    return cb.notLike(fieldPath.as(String.class), (String) node.value, node.escapeChar);
+                }
                 return cb.notLike(fieldPath.as(String.class), (String) node.value);
             case EQ_IGNORE_CASE:
                 return cb.equal(cb.upper(fieldPath.as(String.class)), ((String) node.value).toUpperCase());
@@ -545,6 +641,10 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
 
     @SuppressWarnings("unchecked")
     private <S> Predicate resolveExists(ConditionNode.ExistsNode<S> node, Path<?> outerPath, CriteriaQuery<?> query, CriteriaBuilder cb) {
+        if (query == null) {
+            CriteriaQuery<?> tempQuery = cb.createQuery();
+            return resolveExists(node, outerPath, tempQuery, cb);
+        }
         jakarta.persistence.criteria.Subquery<S> subquery = query.subquery(node.subEntity);
         Root<S> subRoot = subquery.from(node.subEntity);
         Root<?> correlatedOuter = subquery.correlate((Root<?>) outerPath);
