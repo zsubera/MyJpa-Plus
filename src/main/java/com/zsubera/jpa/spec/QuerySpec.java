@@ -1,7 +1,10 @@
 package com.zsubera.jpa.spec;
 
+import com.zsubera.jpa.util.InClauseBuilder;
 import com.zsubera.jpa.util.LambdaUtils;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.data.jpa.domain.Specification;
 
 import jakarta.persistence.criteria.*;
@@ -39,12 +42,14 @@ import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 @SuppressFBWarnings("SE_BAD_FIELD")
 public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, QuerySpec<T>> {
 
+    private static final Logger log = LoggerFactory.getLogger(QuerySpec.class);
+
     private final List<ConditionNode> conditions = new ArrayList<>();
     private final Deque<List<ConditionNode>> groupStack = new ArrayDeque<>();
     private boolean distinct = false;
     private final List<String> groupByFields = new ArrayList<>();
     private final List<BiFunction<Path<T>, CriteriaBuilder, Predicate>> havingConditions = new ArrayList<>();
-    private final List<OrderNode> orderNodes = new ArrayList<>();
+    private final List<ConditionNode.OrderNode> orderNodes = new ArrayList<>();
 
     List<ConditionNode> currentGroup() {
         return groupStack.isEmpty() ? conditions : groupStack.peek();
@@ -57,6 +62,9 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
 
     public QuerySpec<T> distinct() {
         this.distinct = true;
+        if (log.isDebugEnabled()) {
+            log.debug("QuerySpec: DISTINCT enabled");
+        }
         return this;
     }
 
@@ -68,6 +76,9 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
         for (SFunction<T, ?> f : fields) {
             groupByFields.add(LambdaUtils.getPropertyName(f));
         }
+        if (log.isDebugEnabled()) {
+            log.debug("QuerySpec: GROUP BY {}", groupByFields);
+        }
         return this;
     }
 
@@ -77,6 +88,9 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
      */
     public QuerySpec<T> having(BiFunction<Path<T>, CriteriaBuilder, Predicate> condition) {
         havingConditions.add(condition);
+        if (log.isDebugEnabled()) {
+            log.debug("QuerySpec: HAVING condition added ({} total)", havingConditions.size());
+        }
         return this;
     }
 
@@ -92,7 +106,10 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
     @SafeVarargs
     public final QuerySpec<T> orderByAsc(SFunction<T, ?>... fields) {
         for (SFunction<T, ?> f : fields) {
-            orderNodes.add(new OrderNode(LambdaUtils.getPropertyName(f), true));
+            orderNodes.add(new ConditionNode.OrderNode(LambdaUtils.getPropertyName(f), true));
+        }
+        if (log.isDebugEnabled()) {
+            log.debug("QuerySpec: ORDER BY ASC {}", Arrays.toString(fields));
         }
         return this;
     }
@@ -107,35 +124,28 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
     @SafeVarargs
     public final QuerySpec<T> orderByDesc(SFunction<T, ?>... fields) {
         for (SFunction<T, ?> f : fields) {
-            orderNodes.add(new OrderNode(LambdaUtils.getPropertyName(f), false));
+            orderNodes.add(new ConditionNode.OrderNode(LambdaUtils.getPropertyName(f), false));
+        }
+        if (log.isDebugEnabled()) {
+            log.debug("QuerySpec: ORDER BY DESC {}", Arrays.toString(fields));
         }
         return this;
     }
 
     /**
-     * Adds an INNER JOIN on the given relationship field. Use the returned
-     * {@link JoinGroup} to add conditions on the joined entity, then call
-     * {@link JoinGroup#endJoin()} to return to this QuerySpec.
-     *
-     * @param field a method reference to the relationship, e.g. {@code Order::getCustomer}
-     * @param <J>   the joined entity type
-     * @return a JoinGroup for building conditions on the joined entity
+     * Adds an INNER JOIN on the given relationship field.
      */
     public <J> JoinGroup<T, J> join(SFunction<T, ?> field) {
-        JoinNode joinNode = new JoinNode(LambdaUtils.getPropertyName(field), JoinType.INNER);
+        ConditionNode.JoinNode joinNode = new ConditionNode.JoinNode(LambdaUtils.getPropertyName(field), ConditionNode.JoinType.INNER);
         currentGroup().add(joinNode);
         return new JoinGroup<>(this, joinNode);
     }
 
     /**
      * Adds a LEFT JOIN on the given relationship field.
-     *
-     * @param field a method reference to the relationship
-     * @param <J>   the joined entity type
-     * @return a JoinGroup for building conditions on the joined entity
      */
     public <J> JoinGroup<T, J> leftJoin(SFunction<T, ?> field) {
-        JoinNode joinNode = new JoinNode(LambdaUtils.getPropertyName(field), JoinType.LEFT);
+        ConditionNode.JoinNode joinNode = new ConditionNode.JoinNode(LambdaUtils.getPropertyName(field), ConditionNode.JoinType.LEFT);
         currentGroup().add(joinNode);
         return new JoinGroup<>(this, joinNode);
     }
@@ -144,7 +154,7 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
      * Adds a FETCH JOIN to eagerly load the given relationship.
      */
     public <J> JoinGroup<T, J> fetchJoin(SFunction<T, ?> field) {
-        JoinNode joinNode = new JoinNode(LambdaUtils.getPropertyName(field), JoinType.FETCH);
+        ConditionNode.JoinNode joinNode = new ConditionNode.JoinNode(LambdaUtils.getPropertyName(field), ConditionNode.JoinType.FETCH);
         currentGroup().add(joinNode);
         return new JoinGroup<>(this, joinNode);
     }
@@ -153,46 +163,32 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
      * Adds a LEFT FETCH JOIN.
      */
     public <J> JoinGroup<T, J> leftFetchJoin(SFunction<T, ?> field) {
-        JoinNode joinNode = new JoinNode(LambdaUtils.getPropertyName(field), JoinType.LEFT_FETCH);
+        ConditionNode.JoinNode joinNode = new ConditionNode.JoinNode(LambdaUtils.getPropertyName(field), ConditionNode.JoinType.LEFT_FETCH);
         currentGroup().add(joinNode);
         return new JoinGroup<>(this, joinNode);
     }
 
     /**
      * Adds an EXISTS subquery condition.
-     *
-     * @param subEntity the subquery entity class
-     * @param config    a consumer to configure the {@link SubQuerySpec}
-     * @param <S>       the subquery entity type
-     * @return this QuerySpec for chaining
      */
     public <S> QuerySpec<T> exists(Class<S> subEntity, Consumer<SubQuerySpec<S>> config) {
-        currentGroup().add(new ExistsNode<>(subEntity, config, false));
+        currentGroup().add(new ConditionNode.ExistsNode<>(subEntity, config, false));
         return this;
     }
 
     /**
      * Adds a NOT EXISTS subquery condition.
-     *
-     * @param subEntity the subquery entity class
-     * @param config    a consumer to configure the {@link SubQuerySpec}
-     * @param <S>       the subquery entity type
-     * @return this QuerySpec for chaining
      */
     public <S> QuerySpec<T> notExists(Class<S> subEntity, Consumer<SubQuerySpec<S>> config) {
-        currentGroup().add(new ExistsNode<>(subEntity, config, true));
+        currentGroup().add(new ConditionNode.ExistsNode<>(subEntity, config, true));
         return this;
     }
 
     /**
-     * Opens an OR group. Subsequent conditions added via the returned
-     * {@link OrGroup} will be joined with OR instead of AND.
-     * Call {@link OrGroup#endOr()} to close the group.
-     *
-     * @return an OrGroup for building OR conditions
+     * Opens an OR group.
      */
     public OrGroup<T> or() {
-        OrNode orNode = new OrNode();
+        ConditionNode.OrNode orNode = new ConditionNode.OrNode();
         currentGroup().add(orNode);
         groupStack.push(orNode.nodes);
         return new OrGroup<>(this);
@@ -213,17 +209,9 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
 
     /**
      * Builds an OR group with a consumer, automatically closing it.
-     * Equivalent to calling {@code or()...endOr()} without the risk of forgetting endOr().
-     *
-     * <pre>{@code
-     * qs.or(g -> g.eq(User::getRole, "ADMIN").eq(User::getRole, "MODERATOR"));
-     * }</pre>
-     *
-     * @param config consumer to configure the OrGroup
-     * @return this QuerySpec for chaining
      */
     public QuerySpec<T> or(Consumer<OrGroup<T>> config) {
-        OrNode orNode = new OrNode();
+        ConditionNode.OrNode orNode = new ConditionNode.OrNode();
         currentGroup().add(orNode);
         groupStack.push(orNode.nodes);
         config.accept(new OrGroup<>(this));
@@ -233,15 +221,9 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
 
     /**
      * Builds a JOIN with a consumer, automatically closing it.
-     * Equivalent to {@code join(field)...endJoin()} without the risk of forgetting endJoin().
-     *
-     * @param field  a method reference to the relationship
-     * @param config consumer to configure the JoinGroup
-     * @param <J>    the joined entity type
-     * @return this QuerySpec for chaining
      */
     public <J> QuerySpec<T> join(SFunction<T, ?> field, Consumer<JoinGroup<T, J>> config) {
-        JoinNode joinNode = new JoinNode(LambdaUtils.getPropertyName(field), JoinType.INNER);
+        ConditionNode.JoinNode joinNode = new ConditionNode.JoinNode(LambdaUtils.getPropertyName(field), ConditionNode.JoinType.INNER);
         currentGroup().add(joinNode);
         config.accept(new JoinGroup<>(this, joinNode));
         return this;
@@ -249,14 +231,39 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
 
     /**
      * Builds a LEFT JOIN with a consumer, automatically closing it.
+     */
+    public <J> QuerySpec<T> leftJoin(SFunction<T, ?> field, Consumer<JoinGroup<T, J>> config) {
+        ConditionNode.JoinNode joinNode = new ConditionNode.JoinNode(LambdaUtils.getPropertyName(field), ConditionNode.JoinType.LEFT);
+        currentGroup().add(joinNode);
+        config.accept(new JoinGroup<>(this, joinNode));
+        return this;
+    }
+
+    /**
+     * Builds a FETCH JOIN with a consumer, automatically closing it.
      *
      * @param field  a method reference to the relationship
      * @param config consumer to configure the JoinGroup
      * @param <J>    the joined entity type
      * @return this QuerySpec for chaining
      */
-    public <J> QuerySpec<T> leftJoin(SFunction<T, ?> field, Consumer<JoinGroup<T, J>> config) {
-        JoinNode joinNode = new JoinNode(LambdaUtils.getPropertyName(field), JoinType.LEFT);
+    public <J> QuerySpec<T> fetchJoin(SFunction<T, ?> field, Consumer<JoinGroup<T, J>> config) {
+        ConditionNode.JoinNode joinNode = new ConditionNode.JoinNode(LambdaUtils.getPropertyName(field), ConditionNode.JoinType.FETCH);
+        currentGroup().add(joinNode);
+        config.accept(new JoinGroup<>(this, joinNode));
+        return this;
+    }
+
+    /**
+     * Builds a LEFT FETCH JOIN with a consumer, automatically closing it.
+     *
+     * @param field  a method reference to the relationship
+     * @param config consumer to configure the JoinGroup
+     * @param <J>    the joined entity type
+     * @return this QuerySpec for chaining
+     */
+    public <J> QuerySpec<T> leftFetchJoin(SFunction<T, ?> field, Consumer<JoinGroup<T, J>> config) {
+        ConditionNode.JoinNode joinNode = new ConditionNode.JoinNode(LambdaUtils.getPropertyName(field), ConditionNode.JoinType.LEFT_FETCH);
         currentGroup().add(joinNode);
         config.accept(new JoinGroup<>(this, joinNode));
         return this;
@@ -264,24 +271,10 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
 
     /**
      * Adds a NOT group that negates the combined conditions.
-     * Conditions inside are AND-ed together, then the entire group is negated,
-     * producing {@code NOT(A AND B)} = {@code NOT A OR NOT B}.
-     *
-     * <pre>{@code
-     * qs.not(g -> g.eq(Entity::getStatus, "DELETED"));
-     * // Single condition: NOT(status = 'DELETED')
-     *
-     * qs.not(g -> g.eq(User::getStatus, "ACTIVE").gt(User::getAge, 18));
-     * // Multiple conditions: NOT(status = 'ACTIVE' AND age > 18)
-     * // Equivalent to: status != 'ACTIVE' OR age <= 18
-     * }</pre>
-     *
-     * @param config consumer to configure the negated group (conditions inside are AND-ed)
-     * @return this QuerySpec for chaining
      */
     public QuerySpec<T> not(Consumer<OrGroup<T>> config) {
-        AndNode andNode = new AndNode();
-        NegateNode negate = new NegateNode(andNode);
+        ConditionNode.AndNode andNode = new ConditionNode.AndNode();
+        ConditionNode.NegateNode negate = new ConditionNode.NegateNode(andNode);
         currentGroup().add(negate);
         groupStack.push(andNode.nodes);
         config.accept(new OrGroup<>(this));
@@ -298,8 +291,6 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
 
     /**
      * Returns this QuerySpec as a Spring Data {@link Specification}.
-     *
-     * @return this QuerySpec (it implements Specification directly)
      */
     public Specification<T> toSpecification() {
         return this;
@@ -307,9 +298,6 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
 
     /**
      * Combines this QuerySpec with an external {@link Specification} using AND.
-     *
-     * @param external an external Specification, may be null
-     * @return the combined Specification
      */
     public Specification<T> toSpecification(Specification<T> external) {
         if (external == null) {
@@ -318,9 +306,33 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
         return this.and(external);
     }
 
+    /**
+     * Combines this QuerySpec with another QuerySpec using AND.
+     */
+    public Specification<T> and(QuerySpec<T> other) {
+        if (other == null) {
+            return this;
+        }
+        return this.and(other.toSpecification());
+    }
+
+    /**
+     * Combines this QuerySpec with another QuerySpec using OR.
+     */
+    public Specification<T> or(QuerySpec<T> other) {
+        if (other == null) {
+            return this;
+        }
+        return this.or(other.toSpecification());
+    }
+
     @Override
     public Predicate toPredicate(Root<T> root, CriteriaQuery<?> query, CriteriaBuilder cb) {
         validateCleanState();
+        if (log.isDebugEnabled()) {
+            log.debug("QuerySpec: building predicate for {} with {} conditions, {} order nodes, distinct={}",
+                    root.getModel().getName(), conditions.size(), orderNodes.size(), distinct);
+        }
         if (distinct) {
             query.distinct(true);
         }
@@ -336,7 +348,7 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
         }
         if (!orderNodes.isEmpty()) {
             List<jakarta.persistence.criteria.Order> orders = new ArrayList<>();
-            for (OrderNode node : orderNodes) {
+            for (ConditionNode.OrderNode node : orderNodes) {
                 if (node.asc) {
                     orders.add(cb.asc(root.get(node.fieldName)));
                 } else {
@@ -353,44 +365,48 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
                 predicates.add(p);
             }
         }
-        return predicates.isEmpty() ? cb.conjunction() : cb.and(predicates.toArray(new Predicate[0]));
+        Predicate result = predicates.isEmpty() ? cb.conjunction() : cb.and(predicates.toArray(new Predicate[0]));
+        if (log.isDebugEnabled()) {
+            log.debug("QuerySpec: predicate built with {} conditions", predicates.size());
+        }
+        return result;
     }
 
     private Predicate resolveNode(ConditionNode node, Path<?> path, CriteriaQuery<?> query,
                                    CriteriaBuilder cb, Map<String, Join<?, ?>> joinCache, String pathPrefix) {
-        if (node instanceof SimpleNode) {
-            return resolveSimple((SimpleNode) node, path, cb);
+        if (node instanceof ConditionNode.SimpleNode) {
+            return resolveSimple((ConditionNode.SimpleNode) node, path, cb);
         }
-        if (node instanceof JoinNode) {
-            return resolveJoin((JoinNode) node, path, query, cb, joinCache, pathPrefix);
+        if (node instanceof ConditionNode.JoinNode) {
+            return resolveJoin((ConditionNode.JoinNode) node, path, query, cb, joinCache, pathPrefix);
         }
-        if (node instanceof OrNode) {
-            return resolveOr((OrNode) node, path, query, cb, joinCache, pathPrefix);
+        if (node instanceof ConditionNode.OrNode) {
+            return resolveOr((ConditionNode.OrNode) node, path, query, cb, joinCache, pathPrefix);
         }
-        if (node instanceof AndNode) {
-            return resolveAnd((AndNode) node, path, query, cb, joinCache, pathPrefix);
+        if (node instanceof ConditionNode.AndNode) {
+            return resolveAnd((ConditionNode.AndNode) node, path, query, cb, joinCache, pathPrefix);
         }
-        if (node instanceof MultiLikeNode) {
-            return resolveMultiLike((MultiLikeNode) node, path, cb);
+        if (node instanceof ConditionNode.MultiLikeNode) {
+            return resolveMultiLike((ConditionNode.MultiLikeNode) node, path, cb);
         }
-        if (node instanceof CollectionNode) {
-            return resolveCollection((CollectionNode) node, path, cb);
+        if (node instanceof ConditionNode.CollectionNode) {
+            return resolveCollection((ConditionNode.CollectionNode) node, path, cb);
         }
-        if (node instanceof ExistsNode) {
-            return resolveExists((ExistsNode<?>) node, path, query, cb);
+        if (node instanceof ConditionNode.ExistsNode) {
+            return resolveExists((ConditionNode.ExistsNode<?>) node, path, query, cb);
         }
-        if (node instanceof RawNode) {
-            return ((RawNode) node).fn.apply(path, cb);
+        if (node instanceof ConditionNode.RawNode) {
+            return ((ConditionNode.RawNode) node).fn.apply(path, cb);
         }
-        if (node instanceof NegateNode) {
-            Predicate inner = resolveNode(((NegateNode) node).inner, path, query, cb, joinCache, pathPrefix);
+        if (node instanceof ConditionNode.NegateNode) {
+            Predicate inner = resolveNode(((ConditionNode.NegateNode) node).inner, path, query, cb, joinCache, pathPrefix);
             return inner != null ? cb.not(inner) : null;
         }
         throw new IllegalArgumentException("Unknown ConditionNode type: " + node.getClass().getName());
     }
 
     @SuppressWarnings({"unchecked", "rawtypes"})
-    private Predicate resolveSimple(SimpleNode node, Path<?> path, CriteriaBuilder cb) {
+    private Predicate resolveSimple(ConditionNode.SimpleNode node, Path<?> path, CriteriaBuilder cb) {
         Path<?> fieldPath = path.get(node.fieldName);
         switch (node.op) {
             case EQ:
@@ -418,30 +434,16 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
             case IS_NOT_NULL:
                 return cb.isNotNull(fieldPath);
             case IN: {
-                CriteriaBuilder.In<Object> in = cb.in(fieldPath);
                 if (node.value instanceof Collection) {
-                    for (Object v : (Collection<?>) node.value) {
-                        in.value(v);
-                    }
-                } else {
-                    for (Object v : (Object[]) node.value) {
-                        in.value(v);
-                    }
+                    return InClauseBuilder.in(cb, fieldPath, (Collection<?>) node.value);
                 }
-                return in;
+                return InClauseBuilder.in(cb, fieldPath, (Object[]) node.value);
             }
             case NOT_IN: {
-                CriteriaBuilder.In<Object> in = cb.in(fieldPath);
                 if (node.value instanceof Collection) {
-                    for (Object v : (Collection<?>) node.value) {
-                        in.value(v);
-                    }
-                } else {
-                    for (Object v : (Object[]) node.value) {
-                        in.value(v);
-                    }
+                    return InClauseBuilder.notIn(cb, fieldPath, (Collection<?>) node.value);
                 }
-                return cb.not(in);
+                return InClauseBuilder.notIn(cb, fieldPath, (Object[]) node.value);
             }
             case BETWEEN: {
                 Comparable<?>[] range = (Comparable<?>[]) node.value;
@@ -459,14 +461,14 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
     }
 
     @SuppressWarnings({"unchecked", "rawtypes"})
-    private Predicate resolveJoin(JoinNode node, Path<?> path, CriteriaQuery<?> query,
+    private Predicate resolveJoin(ConditionNode.JoinNode node, Path<?> path, CriteriaQuery<?> query,
                                    CriteriaBuilder cb, Map<String, Join<?, ?>> joinCache, String pathPrefix) {
         String fullPath = (pathPrefix != null && !pathPrefix.isEmpty() ? pathPrefix + "." : "") + node.fieldName;
 
         Join<?, ?> join = joinCache.computeIfAbsent(fullPath, k -> {
-            boolean isFetch = node.joinType == JoinType.FETCH || node.joinType == JoinType.LEFT_FETCH;
+            boolean isFetch = node.joinType == ConditionNode.JoinType.FETCH || node.joinType == ConditionNode.JoinType.LEFT_FETCH;
             jakarta.persistence.criteria.JoinType jt =
-                    (node.joinType == JoinType.LEFT || node.joinType == JoinType.LEFT_FETCH)
+                    (node.joinType == ConditionNode.JoinType.LEFT || node.joinType == ConditionNode.JoinType.LEFT_FETCH)
                             ? jakarta.persistence.criteria.JoinType.LEFT
                             : jakarta.persistence.criteria.JoinType.INNER;
             if (isFetch) {
@@ -487,7 +489,7 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
                 : cb.and(innerPredicates.toArray(new Predicate[0]));
     }
 
-    private Predicate resolveOr(OrNode node, Path<?> path, CriteriaQuery<?> query,
+    private Predicate resolveOr(ConditionNode.OrNode node, Path<?> path, CriteriaQuery<?> query,
                                  CriteriaBuilder cb, Map<String, Join<?, ?>> joinCache, String pathPrefix) {
         List<Predicate> childPredicates = new ArrayList<>();
         for (ConditionNode child : node.nodes) {
@@ -505,7 +507,7 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
         return cb.or(childPredicates.toArray(new Predicate[0]));
     }
 
-    private Predicate resolveAnd(AndNode node, Path<?> path, CriteriaQuery<?> query,
+    private Predicate resolveAnd(ConditionNode.AndNode node, Path<?> path, CriteriaQuery<?> query,
                                   CriteriaBuilder cb, Map<String, Join<?, ?>> joinCache, String pathPrefix) {
         List<Predicate> childPredicates = new ArrayList<>();
         for (ConditionNode child : node.nodes) {
@@ -523,7 +525,7 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
         return cb.and(childPredicates.toArray(new Predicate[0]));
     }
 
-    private Predicate resolveMultiLike(MultiLikeNode node, Path<?> path, CriteriaBuilder cb) {
+    private Predicate resolveMultiLike(ConditionNode.MultiLikeNode node, Path<?> path, CriteriaBuilder cb) {
         List<Predicate> likes = new ArrayList<>();
         String pattern = "%" + node.keyword + "%";
         for (String fieldName : node.fieldNames) {
@@ -533,16 +535,16 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
     }
 
     @SuppressWarnings("unchecked")
-    private Predicate resolveCollection(CollectionNode node, Path<?> path, CriteriaBuilder cb) {
+    private Predicate resolveCollection(ConditionNode.CollectionNode node, Path<?> path, CriteriaBuilder cb) {
         Path<?> fieldPath = path.get(node.fieldName);
-        if (node.op == CollectionOp.IS_EMPTY) {
+        if (node.op == ConditionNode.CollectionOp.IS_EMPTY) {
             return cb.isEmpty((Expression<Collection<?>>) (Expression<?>) fieldPath);
         }
         return cb.isNotEmpty((Expression<Collection<?>>) (Expression<?>) fieldPath);
     }
 
     @SuppressWarnings("unchecked")
-    private <S> Predicate resolveExists(ExistsNode<S> node, Path<?> outerPath, CriteriaQuery<?> query, CriteriaBuilder cb) {
+    private <S> Predicate resolveExists(ConditionNode.ExistsNode<S> node, Path<?> outerPath, CriteriaQuery<?> query, CriteriaBuilder cb) {
         jakarta.persistence.criteria.Subquery<S> subquery = query.subquery(node.subEntity);
         Root<S> subRoot = subquery.from(node.subEntity);
         Root<?> correlatedOuter = subquery.correlate((Root<?>) outerPath);
@@ -553,121 +555,5 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
             subquery.select(subRoot);
         }
         return node.negate ? cb.not(cb.exists(subquery)) : cb.exists(subquery);
-    }
-
-    enum Op {EQ, NE, GT, GE, LT, LE, LIKE, NOT_LIKE, IN, NOT_IN, BETWEEN, NOT_BETWEEN, IS_NULL, IS_NOT_NULL, EQ_IGNORE_CASE, LIKE_IGNORE_CASE}
-
-    enum JoinType {INNER, LEFT, FETCH, LEFT_FETCH}
-
-    enum CollectionOp {IS_EMPTY, IS_NOT_EMPTY}
-
-    sealed interface ConditionNode
-            permits SimpleNode, JoinNode, OrNode, AndNode, MultiLikeNode, CollectionNode, ExistsNode, RawNode, NegateNode {
-    }
-
-    static final class SimpleNode implements ConditionNode {
-        final String fieldName;
-        final Object value;
-        final Op op;
-
-        SimpleNode(String fieldName, Object value, Op op) {
-            this.fieldName = fieldName;
-            this.value = value;
-            this.op = op;
-        }
-
-        @Override
-        public String toString() {
-            return "SimpleNode[" + fieldName + " " + op + " " + value + "]";
-        }
-    }
-
-    static final class JoinNode implements ConditionNode {
-        final String fieldName;
-        final JoinType joinType;
-        final List<ConditionNode> innerConditions = new ArrayList<>();
-
-        JoinNode(String fieldName, JoinType joinType) {
-            this.fieldName = fieldName;
-            this.joinType = joinType;
-        }
-
-        @Override
-        public String toString() {
-            return "JoinNode[" + joinType + " " + fieldName + " conditions=" + innerConditions + "]";
-        }
-    }
-
-    static final class OrNode implements ConditionNode {
-        final List<ConditionNode> nodes = new ArrayList<>();
-
-        @Override
-        public String toString() {
-            return "OrNode" + nodes;
-        }
-    }
-
-    static final class AndNode implements ConditionNode {
-        final List<ConditionNode> nodes = new ArrayList<>();
-
-        @Override
-        public String toString() {
-            return "AndNode" + nodes;
-        }
-    }
-
-    static final class MultiLikeNode implements ConditionNode {
-        final String keyword;
-        final String[] fieldNames;
-
-        MultiLikeNode(String keyword, String[] fieldNames) {
-            this.keyword = keyword;
-            this.fieldNames = fieldNames;
-        }
-    }
-
-    static final class CollectionNode implements ConditionNode {
-        final String fieldName;
-        final CollectionOp op;
-
-        CollectionNode(String fieldName, CollectionOp op) {
-            this.fieldName = fieldName;
-            this.op = op;
-        }
-    }
-
-    static final class ExistsNode<S> implements ConditionNode {
-        final Class<S> subEntity;
-        final Consumer<SubQuerySpec<S>> config;
-        final boolean negate;
-
-        ExistsNode(Class<S> subEntity, Consumer<SubQuerySpec<S>> config, boolean negate) {
-            this.subEntity = subEntity;
-            this.config = config;
-            this.negate = negate;
-        }
-    }
-
-    static final class RawNode implements ConditionNode {
-        final BiFunction<Path<?>, CriteriaBuilder, Predicate> fn;
-        RawNode(BiFunction<Path<?>, CriteriaBuilder, Predicate> fn) {
-            this.fn = fn;
-        }
-    }
-
-    static final class NegateNode implements ConditionNode {
-        final ConditionNode inner;
-        NegateNode(ConditionNode inner) {
-            this.inner = inner;
-        }
-    }
-
-    static final class OrderNode {
-        final String fieldName;
-        final boolean asc;
-        OrderNode(String fieldName, boolean asc) {
-            this.fieldName = fieldName;
-            this.asc = asc;
-        }
     }
 }

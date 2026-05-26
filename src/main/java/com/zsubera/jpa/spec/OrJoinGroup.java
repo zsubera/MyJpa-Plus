@@ -5,17 +5,17 @@ import java.util.List;
 public class OrJoinGroup<T, J> implements ConditionBuilder<J, OrJoinGroup<T, J>> {
 
     private final QuerySpec<T> root;
-    private final QuerySpec.JoinNode joinNode;
-    private final QuerySpec.OrNode orNode;
+    private final ConditionNode.JoinNode joinNode;
+    private final ConditionNode.OrNode orNode;
 
-    OrJoinGroup(QuerySpec<T> root, QuerySpec.JoinNode joinNode, QuerySpec.OrNode orNode) {
+    OrJoinGroup(QuerySpec<T> root, ConditionNode.JoinNode joinNode, ConditionNode.OrNode orNode) {
         this.root = root;
         this.joinNode = joinNode;
         this.orNode = orNode;
     }
 
     @Override
-    public List<QuerySpec.ConditionNode> conditions() {
+    public List<ConditionNode> conditions() {
         return orNode.nodes;
     }
 

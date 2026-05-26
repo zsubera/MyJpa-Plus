@@ -16,27 +16,27 @@ public class OrGroup<T> implements ConditionBuilder<T, OrGroup<T>> {
     }
 
     @Override
-    public List<QuerySpec.ConditionNode> conditions() {
+    public List<ConditionNode> conditions() {
         return root.currentGroup();
     }
 
     @SuppressWarnings("unchecked")
-    private <J> JoinGroup<T, J> internalJoin(SFunction<T, ?> field, QuerySpec.JoinType joinType) {
-        QuerySpec.JoinNode joinNode = new QuerySpec.JoinNode(LambdaUtils.getPropertyName(field), joinType);
+    private <J> JoinGroup<T, J> internalJoin(SFunction<T, ?> field, ConditionNode.JoinType joinType) {
+        ConditionNode.JoinNode joinNode = new ConditionNode.JoinNode(LambdaUtils.getPropertyName(field), joinType);
         root.currentGroup().add(joinNode);
         return new JoinGroup<>(root, joinNode);
     }
 
     public <J> JoinGroup<T, J> join(SFunction<T, ?> field) {
-        return internalJoin(field, QuerySpec.JoinType.INNER);
+        return internalJoin(field, ConditionNode.JoinType.INNER);
     }
 
     public <J> JoinGroup<T, J> leftJoin(SFunction<T, ?> field) {
-        return internalJoin(field, QuerySpec.JoinType.LEFT);
+        return internalJoin(field, ConditionNode.JoinType.LEFT);
     }
 
     public OrGroup<T> or() {
-        QuerySpec.OrNode nested = new QuerySpec.OrNode();
+        ConditionNode.OrNode nested = new ConditionNode.OrNode();
         root.currentGroup().add(nested);
         root.pushGroupStack(nested.nodes);
         return new OrGroup<>(root);
@@ -52,7 +52,7 @@ public class OrGroup<T> implements ConditionBuilder<T, OrGroup<T>> {
      * Self-closing OR: builds a nested OR group with a consumer, then returns to this OrGroup.
      */
     public OrGroup<T> or(Consumer<OrGroup<T>> config) {
-        QuerySpec.OrNode nested = new QuerySpec.OrNode();
+        ConditionNode.OrNode nested = new ConditionNode.OrNode();
         root.currentGroup().add(nested);
         root.pushGroupStack(nested.nodes);
         config.accept(new OrGroup<>(root));
@@ -64,7 +64,7 @@ public class OrGroup<T> implements ConditionBuilder<T, OrGroup<T>> {
      * Self-closing JOIN inside OR group.
      */
     public <J> OrGroup<T> join(SFunction<T, ?> field, Consumer<JoinGroup<T, J>> config) {
-        QuerySpec.JoinNode joinNode = new QuerySpec.JoinNode(LambdaUtils.getPropertyName(field), QuerySpec.JoinType.INNER);
+        ConditionNode.JoinNode joinNode = new ConditionNode.JoinNode(LambdaUtils.getPropertyName(field), ConditionNode.JoinType.INNER);
         root.currentGroup().add(joinNode);
         config.accept(new JoinGroup<>(root, joinNode));
         return this;
@@ -74,7 +74,7 @@ public class OrGroup<T> implements ConditionBuilder<T, OrGroup<T>> {
      * Self-closing LEFT JOIN inside OR group.
      */
     public <J> OrGroup<T> leftJoin(SFunction<T, ?> field, Consumer<JoinGroup<T, J>> config) {
-        QuerySpec.JoinNode joinNode = new QuerySpec.JoinNode(LambdaUtils.getPropertyName(field), QuerySpec.JoinType.LEFT);
+        ConditionNode.JoinNode joinNode = new ConditionNode.JoinNode(LambdaUtils.getPropertyName(field), ConditionNode.JoinType.LEFT);
         root.currentGroup().add(joinNode);
         config.accept(new JoinGroup<>(root, joinNode));
         return this;
