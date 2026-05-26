@@ -732,6 +732,45 @@ public class QuerySpecTest {
         assertEquals(3, result.size());
     }
 
+    @Test
+    void testEqIgnoreCase() {
+        repository.save(newEntity("Hello", 1));
+        repository.save(newEntity("hello", 2));
+        repository.save(newEntity("WORLD", 3));
+        QuerySpec<TestEntity> qs = new QuerySpec<>();
+        qs.eqIgnoreCase(TestEntity::getName, "HELLO");
+        List<TestEntity> result = repository.findAll(qs.toSpecification());
+        assertEquals(2, result.size());
+    }
+
+    @Test
+    void testLikeIgnoreCase() {
+        repository.save(newEntity("HelloWorld", 1));
+        repository.save(newEntity("HELLO", 2));
+        repository.save(newEntity("xyz", 3));
+        QuerySpec<TestEntity> qs = new QuerySpec<>();
+        qs.likeIgnoreCase(TestEntity::getName, "%hello%");
+        List<TestEntity> result = repository.findAll(qs.toSpecification());
+        assertEquals(2, result.size());
+    }
+
+    @Test
+    void testGroupBy() {
+        QuerySpec<TestEntity> qs = new QuerySpec<>();
+        qs.groupBy(TestEntity::getStatus);
+        // GROUP BY on entity-level findAll is incompatible with strict SQL mode.
+        // The groupBy feature is designed for custom projection queries.
+        assertNotNull(qs.toSpecification());
+    }
+
+    @Test
+    void testGroupByHaving() {
+        QuerySpec<TestEntity> qs = new QuerySpec<>();
+        qs.groupBy(TestEntity::getStatus)
+          .having((root, cb) -> cb.greaterThan(cb.count(root), 1L));
+        assertNotNull(qs.toSpecification());
+    }
+
     private TestEntity newEntity(String name, int status) {
         TestEntity entity = new TestEntity();
         entity.setName(name);

@@ -115,7 +115,7 @@ List<User> users = userRepository.findAll(
 | 分类 | 方法 |
 |------|------|
 | 比较 / Comparison | `eq`, `ne`, `gt`, `ge`, `lt`, `le` |
-| 字符串 / String | `like`, `notLike`, `startsWith`, `endsWith`, `contains` |
+| 字符串 / String | `like`, `notLike`, `startsWith`, `endsWith`, `contains`, `eqIgnoreCase`, `likeIgnoreCase` |
 | 集合 / Collection | `in`, `notIn`, `in(Collection)`, `notIn(Collection)`, `between`, `isEmpty`, `isNotEmpty` |
 | 空值 / Null | `isNull`, `isNotNull` |
 | 搜索 / Search | `multiLike(keyword, field1, field2, ...)` |
@@ -123,6 +123,7 @@ List<User> users = userRepository.findAll(
 | 子查询 / Subquery | `exists`, `notExists` |
 | 逻辑 / Logic | `or()` ... `endOr()`, `or(consumer)`, `not(consumer)` |
 | 原始 / Raw | `where((path, cb) -> predicate)` |
+| 聚合 / Aggregate | `groupBy(field1, field2, ...)`, `having((root, cb) -> predicate)` |
 | 输出 / Output | `toSpecification()`, `toSpecification(external)` |
 
 ## 协议 / License

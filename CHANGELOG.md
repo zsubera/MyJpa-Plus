@@ -3,21 +3,36 @@
 ## [Unreleased]
 
 ### Added
-- Spring Boot 3.x / Jakarta EE 9+ support (Java 17)
-- `ConditionBuilder` interface to eliminate code duplication
-- Input validation on all builder methods
-- Apache 2.0 license
-- CI workflow with GitHub Actions
-- JavaDoc for `QuerySpec` and `ConditionBuilder`
+- `eqIgnoreCase` / `likeIgnoreCase` — case-insensitive string conditions (UPPER-based)
+- `groupBy(SFunction...)` — GROUP BY clause support
+- `having(BiFunction)` — HAVING clause support for aggregated queries
+- `where(BiFunction)` — raw Predicate injection as escape hatch
+- `not(Consumer)` — negative condition group
+- `startsWith` / `endsWith` / `contains` — convenience LIKE methods
+- `in(Collection)` / `notIn(Collection)` overloads
+- Consumer-mode `or(Consumer)` / `join(field, Consumer)` / `leftJoin(field, Consumer)`
+- Spring Boot Auto-Configuration
+- Subquery correlation support via `correlate(root)`
+- `LambdaUtils` property name caching (by implClass + methodName)
+- Empty values validation on `in` / `notIn`
+- `eq(field, null)` auto-converts to `IS NULL`
+- `endOr()` throws `IllegalStateException` when mismatched
 
 ### Fixed
-- `SubQuerySpec` conditions now properly AND together instead of overwriting
+- `SubQuerySpec` conditions no longer overwrite each other
+- `select()` no longer silently overridden by `resolveExists`
+- `resolveSimple` handles Collection values in IN/NOT_IN
 
-### Removed
-- `PageDatatable` (jQuery DataTables helper — out of scope)
-- `resolver` package (Spring MVC argument resolvers — out of scope)
-- `lazy` package (Jackson Hibernate serializers — out of scope)
-- `spring-boot-starter-web`, `jackson-databind`, `javax.servlet-api` dependencies
+### Changed
+- `ConditionNode` → sealed interface; all implementations are `final`
+- SpotBugs threshold set to Medium
+- JaCoCo coverage minimum 60% (autoconfigure excluded)
+- doclint enabled (`reference,html`)
+
+### Infrastructure
+- GitHub Actions CI (JDK 17/21 matrix + release deployment on v* tags)
+- Dependabot for automated dependency updates
+- CODE_OF_CONDUCT, ISSUE_TEMPLATE, PR_TEMPLATE, .editorconfig
 
 ## [1.0.0] - 2022-04-01 (original jpa-extensions fork)
 
