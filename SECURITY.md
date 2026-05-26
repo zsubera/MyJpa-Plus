@@ -1,20 +1,20 @@
-# Security Policy
+# 安全策略
 
-## Supported Versions
+## 支持的版本
 
-| Version | Supported          |
-|---------|--------------------|
-| 0.0.x   | :white_check_mark: |
+| 版本   | 支持状态           |
+|--------|--------------------|
+| 0.0.x  | :white_check_mark: |
 
-## Reporting a Vulnerability
+## 报告漏洞
 
-Please report security vulnerabilities via the GitHub issue tracker or email the project maintainers at the address in the POM developer section.
+请通过 GitHub issue 跟踪器报告安全漏洞，或发送邮件至 POM 开发者信息中的地址联系项目维护者。
 
-## Dependencies
+## 依赖项
 
-This project has minimal dependencies:
+本项目依赖极简：
 
-- **Spring Boot 3.x** (optional, compile scope) — Framework providing JPA Criteria API
-- **H2 Database** (test scope only) — In-memory database for integration tests
+- **Spring Boot 3.x**（可选，compile 作用域）— 提供 JPA Criteria API 的框架
+- **H2 Database**（仅 test 作用域）— 用于集成测试的内存数据库
 
-No runtime dependencies on web frameworks, logging libraries, or serialization libraries.
+无任何 Web 框架、日志库或序列化库的运行时依赖。

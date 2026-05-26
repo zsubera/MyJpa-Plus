@@ -1,20 +1,17 @@
-# Contributor Covenant Code of Conduct
+# 贡献者公约行为准则
 
-## Our Pledge
+## 我们的承诺
 
-We as members, contributors, and leaders pledge to make participation in our
-community a harassment-free experience for everyone.
+作为成员、贡献者和领导者，我们承诺让社区参与成为对所有人来说无骚扰的体验。
 
-## Our Standards
+## 我们的标准
 
-Examples of behavior that contributes to a positive environment:
-- Using welcoming and inclusive language
-- Being respectful of differing viewpoints and experiences
-- Gracefully accepting constructive criticism
-- Focusing on what is best for the community
+有助于营造积极环境的行为示例：
+- 使用热情友好的语言
+- 尊重不同的观点和经验
+- 优雅地接受建设性批评
+- 专注于对社区最有利的事情
 
-## Enforcement
+## 执行
 
-Instances of abusive, harassing, or otherwise unacceptable behavior may be
-reported to the project maintainers. All complaints will be reviewed and
-investigated promptly and fairly.
+如有任何侮辱性、骚扰或其他不可接受的行为，可向项目维护者举报。所有投诉将得到及时公正的审查和处理。

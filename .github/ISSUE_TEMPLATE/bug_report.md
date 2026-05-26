@@ -1,20 +1,20 @@
-name: Bug report
-about: Create a report to help us improve
+name: 缺陷报告
+about: 创建报告以帮助我们改进
 title: "[BUG] "
 labels: bug
 assignees: ''
 ---
 
-**Describe the bug**
-A clear and concise description of what the bug is.
+**描述问题**
+清晰简洁地描述问题是什么。
 
-**To Reproduce**
-Steps to reproduce the behavior, preferably with code.
+**复现步骤**
+复现该行为的步骤，最好附上代码。
 
-**Expected behavior**
-A clear description of what you expected to happen.
+**预期行为**
+清晰描述你期望发生的事情。
 
-**Environment:**
-- Java version:
-- Spring Boot version:
-- MyJpa-Plus version:
+**环境信息：**
+- Java 版本：
+- Spring Boot 版本：
+- MyJpa-Plus 版本：

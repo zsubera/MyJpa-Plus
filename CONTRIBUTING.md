@@ -1,6 +1,6 @@
-# Contributing
+# 贡献指南
 
-## Development Setup
+## 开发环境搭建
 
 - JDK 17+
 - Maven 3.8+
@@ -11,34 +11,34 @@ cd myjpa-plus
 ./mvnw compile
 ```
 
-## Building
+## 构建
 
 ```bash
 ./mvnw clean verify
 ```
 
-## Running Tests
+## 运行测试
 
 ```bash
 ./mvnw test
 ```
 
-## Code Style
+## 代码风格
 
-- Use method references (`Entity::getField`) for type safety — never hardcode field name strings
-- Add null validation on public API parameters
-- Follow existing package structure: `com.zsubera.jpa.spec`
-- All condition methods belong in `ConditionBuilder` interface as defaults
+- 使用方法引用（`Entity::getField`）确保类型安全 — 切勿硬编码字段名字符串
+- 为公开 API 参数添加 null 校验
+- 遵循现有包结构：`com.zsubera.jpa.spec`
+- 所有条件方法应作为默认方法归属于 `ConditionBuilder` 接口
 
-## Adding a New Operator
+## 添加新运算符
 
-1. Add enum value to `QuerySpec.Op`
-2. Add a default method in `ConditionBuilder<E, SELF>`
-3. Add a case in `QuerySpec.resolveSimple()`
-4. Add tests in `QuerySpecTest`
+1. 在 `QuerySpec.Op` 中添加枚举值
+2. 在 `ConditionBuilder<E, SELF>` 中添加默认方法
+3. 在 `QuerySpec.resolveSimple()` 中添加对应的 case
+4. 在 `QuerySpecTest` 中添加测试
 
-## Pull Request Checklist
+## Pull Request 检查清单
 
-- [ ] Build passes: `./mvnw clean verify`
-- [ ] New tests added for new functionality
-- [ ] CHANGELOG.md updated
+- [ ] 构建通过：`./mvnw clean verify`
+- [ ] 为新增功能添加了测试
+- [ ] 已更新 CHANGELOG.md

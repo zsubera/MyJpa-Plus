@@ -1,15 +1,13 @@
 # MyJpa-Plus
 
 [![Maven Central](https://img.shields.io/maven-central/v/io.github.zsubera/myjpa-plus)](https://central.sonatype.com/artifact/io.github.zsubera/myjpa-plus)
-[![Build Status](https://img.shields.io/github/actions/workflow/status/zsubera/myjpa-plus/ci.yml)](https://github.com/zsubera/MyJpa-Plus/actions)
-[![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
+[![构建状态](https://img.shields.io/github/actions/workflow/status/zsubera/myjpa-plus/ci.yml)](https://github.com/zsubera/MyJpa-Plus/actions)
+[![许可证](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 [![JDK](https://img.shields.io/badge/JDK-17%2B-green.svg)](https://adoptium.net)
 
 基于 Lambda 表达式的类型安全 JPA 动态查询构建器，专为 Spring Data JPA 设计。
 
-*A type-safe JPA Criteria query builder with a lambda-based fluent API for Spring Data JPA.*
-
-## 特性 / Features
+## 特性
 
 - **Lambda 类型安全** — 使用方法引用（`Entity::getField`）替代硬编码字段名字符串
 - **流式 API** — 可链式调用的 AND / OR 条件组合
@@ -24,13 +22,13 @@
 - **原始 Predicate 注入** — `where((path, cb) -> cb.and(...))` 兜底方案
 - **Consumer 模式** — `or(g -> ...)` / `join(field, g -> ...)` 自动关闭，告别 begin/end 遗漏
 
-## 环境要求 / Requirements
+## 环境要求
 
 - Java 17+
 - Spring Boot 3.x
 - Spring Data JPA
 
-## 安装 / Installation
+## 安装
 
 ```xml
 <dependency>
@@ -40,7 +38,7 @@
 </dependency>
 ```
 
-## 快速开始 / Quick Start
+## 快速开始
 
 ```java
 // 简单等值查询（null 值自动转为 IS NULL）
@@ -110,22 +108,22 @@ List<User> users = userRepository.findAll(
 );
 ```
 
-## API 一览 / API Overview
+## API 一览
 
 | 分类 | 方法 |
 |------|------|
-| 比较 / Comparison | `eq`, `ne`, `gt`, `ge`, `lt`, `le` |
-| 字符串 / String | `like`, `notLike`, `startsWith`, `endsWith`, `contains`, `eqIgnoreCase`, `likeIgnoreCase` |
-| 集合 / Collection | `in`, `notIn`, `in(Collection)`, `notIn(Collection)`, `between`, `isEmpty`, `isNotEmpty` |
-| 空值 / Null | `isNull`, `isNotNull` |
-| 搜索 / Search | `multiLike(keyword, field1, field2, ...)` |
-| 连接 / Join | `join(field)`, `leftJoin(field)`, `join(field, consumer)`, `leftJoin(field, consumer)` |
-| 子查询 / Subquery | `exists`, `notExists` |
-| 逻辑 / Logic | `or()` ... `endOr()`, `or(consumer)`, `not(consumer)` |
-| 原始 / Raw | `where((path, cb) -> predicate)` |
-| 聚合 / Aggregate | `groupBy(field1, field2, ...)`, `having((root, cb) -> predicate)` |
-| 输出 / Output | `toSpecification()`, `toSpecification(external)` |
+| 比较 | `eq`, `ne`, `gt`, `ge`, `lt`, `le` |
+| 字符串 | `like`, `notLike`, `startsWith`, `endsWith`, `contains`, `eqIgnoreCase`, `likeIgnoreCase` |
+| 集合 | `in`, `notIn`, `in(Collection)`, `notIn(Collection)`, `between`, `isEmpty`, `isNotEmpty` |
+| 空值 | `isNull`, `isNotNull` |
+| 搜索 | `multiLike(keyword, field1, field2, ...)` |
+| 连接 | `join(field)`, `leftJoin(field)`, `join(field, consumer)`, `leftJoin(field, consumer)` |
+| 子查询 | `exists`, `notExists` |
+| 逻辑 | `or()` ... `endOr()`, `or(consumer)`, `not(consumer)` |
+| 原始 | `where((path, cb) -> predicate)` |
+| 聚合 | `groupBy(field1, field2, ...)`, `having((root, cb) -> predicate)` |
+| 输出 | `toSpecification()`, `toSpecification(external)` |
 
-## 协议 / License
+## 协议
 
 Apache 2.0 — 详见 [LICENSE](./LICENSE)

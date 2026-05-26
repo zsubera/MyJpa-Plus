@@ -68,7 +68,7 @@ public abstract class AbstractBulkOperationSpec<T, SELF extends AbstractBulkOper
      * @param operation the operation to execute
      * @return the number of affected rows
      */
-    protected int executeInTransaction(EntityManager em, java.util.function.Function<EntityManager, Integer> operation) {
+    protected int executeInTransaction(EntityManager em, Function<EntityManager, Integer> operation) {
         EntityTransaction tx = em.getTransaction();
         boolean isNewTransaction = !tx.isActive();
         if (isNewTransaction) {
@@ -80,6 +80,15 @@ public abstract class AbstractBulkOperationSpec<T, SELF extends AbstractBulkOper
                 tx.commit();
             }
             return result;
+        } catch (RuntimeException e) {
+            if (isNewTransaction && tx.isActive()) {
+                try {
+                    tx.rollback();
+                } catch (Exception rollbackEx) {
+                    e.addSuppressed(rollbackEx);
+                }
+            }
+            throw e;
         } catch (Exception e) {
             if (isNewTransaction && tx.isActive()) {
                 try {
@@ -88,7 +97,7 @@ public abstract class AbstractBulkOperationSpec<T, SELF extends AbstractBulkOper
                     e.addSuppressed(rollbackEx);
                 }
             }
-            throw (RuntimeException)e;
+            throw new RuntimeException("Bulk operation failed", e);
         }
     }
 
@@ -332,6 +341,7 @@ public abstract class AbstractBulkOperationSpec<T, SELF extends AbstractBulkOper
         return self();
     }
 
+    @SuppressWarnings("unchecked")
     public SELF where(Function<Root<T>, Predicate> condition) {
         if (condition == null) {
             throw new IllegalArgumentException("condition must not be null");

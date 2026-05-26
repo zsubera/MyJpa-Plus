@@ -105,11 +105,11 @@ class SoftDeleteHelperTest {
     }
 
     @Test
-    void testFieldCacheReturnsConsistentResults() {
+    void testSpecCacheReturnsSameInstance() {
         Specification<SoftDeleteTestEntity> spec1 = SoftDeleteHelper.isNotDeleted(SoftDeleteTestEntity.class);
         Specification<SoftDeleteTestEntity> spec2 = SoftDeleteHelper.isNotDeleted(SoftDeleteTestEntity.class);
 
-        assertSame(spec1.getClass(), spec2.getClass());
+        assertSame(spec1, spec2);
     }
 
     @Test

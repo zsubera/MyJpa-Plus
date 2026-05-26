@@ -1,47 +1,58 @@
-# MyJpa-Plus Changelog
+# MyJpa-Plus 更新日志
 
-## [Unreleased]
+## [0.1.0-SNAPSHOT] - 2026-05-26
 
-### Added
-- `eqIgnoreCase` / `likeIgnoreCase` — case-insensitive string conditions (UPPER-based)
-- `groupBy(SFunction...)` — GROUP BY clause support
-- `having(BiFunction)` — HAVING clause support for aggregated queries
-- `where(BiFunction)` — raw Predicate injection as escape hatch
-- `not(Consumer)` — negative condition group
-- `startsWith` / `endsWith` / `contains` — convenience LIKE methods
-- `in(Collection)` / `notIn(Collection)` overloads
-- Consumer-mode `or(Consumer)` / `join(field, Consumer)` / `leftJoin(field, Consumer)`
-- Spring Boot Auto-Configuration
-- Subquery correlation support via `correlate(root)`
-- `LambdaUtils` property name caching (by implClass + methodName)
-- Empty values validation on `in` / `notIn`
-- `eq(field, null)` auto-converts to `IS NULL`
-- `endOr()` throws `IllegalStateException` when mismatched
+### 破坏性变更
+- **`DeleteSpec` 现在要求显式指定 WHERE 条件。** 在不带任何条件的情况下调用 `execute()` 或 `toDelete()` 会抛出 `IllegalStateException`。请使用新的 `deleteAll(EntityManager)` 进行无条件删除。
+- **修复了 `resolveOr()` 空分组的语义：** 之前返回 `cb.conjunction()`（1=1），现在返回 `cb.disjunction()`（1=0），语义上更加正确。
 
-### Fixed
-- `SubQuerySpec` conditions no longer overwrite each other
-- `select()` no longer silently overridden by `resolveExists`
-- `resolveSimple` handles Collection values in IN/NOT_IN
+### 新增
+- `eqIgnoreCase` / `likeIgnoreCase` — 不区分大小写的字符串条件（基于 UPPER）
+- `groupBy(SFunction...)` — 支持 GROUP BY 子句
+- `having(BiFunction)` — 支持聚合查询的 HAVING 子句
+- `where(BiFunction)` — 原始 Predicate 注入，作为兜底方案
+- `not(Consumer)` — 否定条件组
+- `startsWith` / `endsWith` / `contains` — 便捷的 LIKE 方法
+- `in(Collection)` / `notIn(Collection)` 重载
+- Consumer 模式：`or(Consumer)` / `join(field, Consumer)` / `leftJoin(field, Consumer)`
+- Spring Boot 自动配置
+- 通过 `correlate(root)` 支持子查询关联
+- `SubQuerySpec.correlatedEq()` — 类型化关联 Predicate 构建器
+- `LambdaUtils` 属性名缓存（按 implClass + methodName）
+- `in` / `notIn` 的空值校验
+- `eq(field, null)` 自动转换为 `IS NULL`
+- `endOr()` 在调用不匹配时抛出 `IllegalStateException`
+- `DeleteSpec.deleteAll(EntityManager)` / `deleteAllInTransaction(EntityManager)` — 安全的无条件删除
+- SoftDeleteHelper Specification 缓存（按 entityClass）
 
-### Changed
-- `ConditionNode` → sealed interface; all implementations are `final`
-- SpotBugs threshold set to Medium
-- JaCoCo coverage minimum 60% (autoconfigure excluded)
-- doclint enabled (`reference,html`)
+### 修复
+- `SubQuerySpec` 条件不再互相覆盖
+- `select()` 不再被 `resolveExists` 静默覆盖
+- `resolveSimple` 正确处理 IN/NOT_IN 中的 Collection 值
+- `SoftDeleteHelper.findSoftDeleteField()` 的竞态条件（get + computeIfAbsent）
+- `AbstractBulkOperationSpec.executeInTransaction()` 现在捕获 `Exception`（而非仅 `RuntimeException`）
 
-### Infrastructure
-- GitHub Actions CI (JDK 17/21 matrix + release deployment on v* tags)
-- Dependabot for automated dependency updates
-- CODE_OF_CONDUCT, ISSUE_TEMPLATE, PR_TEMPLATE, .editorconfig
+### 变更
+- `ConditionNode` → sealed 接口；所有实现类均为 `final`
+- SpotBugs 阈值设为 Medium
+- JaCoCo 覆盖率最低 60%（排除 autoconfigure）
+- 启用 doclint（`reference,html`）
+- 版本从 `0.0.1` 升级至 `0.1.0-SNAPSHOT`（语义化版本）
+- POM `<name>` 从 `MyJpa-Plus` 修正为 `myjpa-plus`
 
-## [1.0.0] - 2022-04-01 (original jpa-extensions fork)
+### 基础设施
+- GitHub Actions CI（JDK 17/21 矩阵 + v* 标签触发发布部署）
+- Dependabot 自动依赖更新
+- CODE_OF_CONDUCT、ISSUE_TEMPLATE、PR_TEMPLATE、.editorconfig
 
-### Initial Release
-- Type-safe JPA `Specification` builder with lambda-based API
-- `QuerySpec<T>`: eq, ne, gt, ge, lt, le, like, notLike, in, notIn, between, isNull, isNotNull
-- JOIN support: `join()`, `leftJoin()` with `JoinGroup`
-- OR groups: `or()` with `OrGroup`, nested within joins with `OrJoinGroup`
-- EXISTS subqueries with `SubQuerySpec`
-- Multi-field LIKE search via `multiLike`
-- Spring MVC argument resolvers: `@SearchParam`, `@ListParam`
-- Jackson serializers for Hibernate lazy proxies
+## [0.0.1] - 2026-05-20（原始 jpa-extensions 分支）
+
+### 初始发布
+- 基于 Lambda API 的类型安全 JPA `Specification` 构建器
+- `QuerySpec<T>`：eq, ne, gt, ge, lt, le, like, notLike, in, notIn, between, isNull, isNotNull
+- JOIN 支持：`join()`、`leftJoin()` 配合 `JoinGroup`
+- OR 分组：`or()` 配合 `OrGroup`，在连接中嵌套使用 `OrJoinGroup`
+- EXISTS 子查询配合 `SubQuerySpec`
+- 通过 `multiLike` 实现多字段 LIKE 搜索
+- Spring MVC 参数解析器：`@SearchParam`、`@ListParam`
+- 针对 Hibernate 延迟代理的 Jackson 序列化器

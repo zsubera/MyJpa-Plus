@@ -1,9 +1,9 @@
-## Summary
+## 概述
 
-Brief description of the changes.
+请简要描述本次变更。
 
-## Checklist
+## 检查清单
 
-- [ ] Tests pass: `mvn test -Dgpg.skip=true`
-- [ ] New tests added for new functionality
-- [ ] Javadoc updated for public API changes
+- [ ] 测试通过：`mvn test -Dgpg.skip=true`
+- [ ] 为新增功能添加了测试
+- [ ] 为公开 API 变更更新了 Javadoc

@@ -91,8 +91,15 @@ public final class SoftDeleteHelper {
     }
 
     /**
-     * Builds a {@link QuerySpec} with the soft-delete condition pre-applied.
-     * The result is cached per entity class.
+     * Builds a new {@link QuerySpec} with the soft-delete condition pre-applied.
+     * <p>
+     * Note: Unlike {@link #isNotDeleted(Class)} which caches the result,
+     * this method creates a new {@code QuerySpec} instance on each call
+     * because {@code QuerySpec} is mutable and not safe for sharing.
+     *
+     * @param entityClass the entity class
+     * @param <T> the entity type
+     * @return a new QuerySpec with the soft-delete condition applied
      */
     @SuppressWarnings("unchecked")
     public static <T> QuerySpec<T> notDeletedQuery(Class<T> entityClass) {
