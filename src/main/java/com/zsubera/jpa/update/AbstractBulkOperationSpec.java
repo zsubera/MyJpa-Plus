@@ -3,6 +3,7 @@ package com.zsubera.jpa.update;
 import com.zsubera.jpa.spec.PredicateHelper;
 import com.zsubera.jpa.spec.SFunction;
 import com.zsubera.jpa.util.LambdaUtils;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.EntityTransaction;
 import jakarta.persistence.criteria.CriteriaBuilder;
@@ -10,7 +11,6 @@ import jakarta.persistence.criteria.Predicate;
 import jakarta.persistence.criteria.Root;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.List;
 import java.util.function.BiFunction;
 import java.util.function.Consumer;
@@ -135,6 +135,7 @@ public abstract class AbstractBulkOperationSpec<
         implements BulkConditionNode {}
 
     /** An OR group of child nodes. */
+    @SuppressFBWarnings({"EI_EXPOSE_REP", "EI_EXPOSE_REP2"})
     record OrNode(List<BulkConditionNode> children) implements BulkConditionNode {}
 
     /** A NOT wrapper around a child node. */
@@ -162,7 +163,7 @@ public abstract class AbstractBulkOperationSpec<
   public SELF or(Consumer<OrConditionBuilder<T, SELF>> config) {
     List<BulkConditionNode> children = new ArrayList<>();
     config.accept(new OrConditionBuilder<>(self(), children));
-    conditionNodes.add(new BulkConditionNode.OrNode(Collections.unmodifiableList(children)));
+    conditionNodes.add(new BulkConditionNode.OrNode(List.copyOf(children)));
     return self();
   }
 
@@ -184,7 +185,7 @@ public abstract class AbstractBulkOperationSpec<
     BulkConditionNode combined =
         children.size() == 1
             ? children.get(0)
-            : new BulkConditionNode.OrNode(Collections.unmodifiableList(children));
+            : new BulkConditionNode.OrNode(List.copyOf(children));
     conditionNodes.add(new BulkConditionNode.NotNode(combined));
     return self();
   }
