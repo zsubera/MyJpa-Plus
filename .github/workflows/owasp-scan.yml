@@ -17,6 +17,6 @@ jobs:
           distribution: 'temurin'
           cache: maven
       - name: Run OWASP dependency check
-        run: mvn verify --batch-mode --no-transfer-progress -Dgpg.skip=true -DskipTests -Dgroups='!integration'
+        run: mvn dependency-check:check --batch-mode --no-transfer-progress
         env:
           NVD_API_KEY: ${{ secrets.NVD_API_KEY }}
