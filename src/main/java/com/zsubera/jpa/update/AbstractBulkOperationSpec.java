@@ -166,10 +166,10 @@ public abstract class AbstractBulkOperationSpec<
   }
 
   /**
-   * Adds a NOT group of conditions. The combined conditions inside the consumer
-   * will be negated.
-   * <p>
-   * Example:
+   * Adds a NOT group of conditions. The combined conditions inside the consumer will be negated.
+   *
+   * <p>Example:
+   *
    * <pre>{@code
    * new DeleteSpec<>(User.class)
    *     .not(o -> o.eq(User::getStatus, "ACTIVE"))
