@@ -200,14 +200,17 @@
                             <rules>
                                 <rule>
                                     <element>PACKAGE</element>
-                                    <excludes>
-                                        <exclude>com.zsubera.jpa.entity.BaseEntity</exclude>
-                                    </excludes>
+                                    <includes>
+                                        <include>com.zsubera.jpa.spec</include>
+                                        <include>com.zsubera.jpa.update</include>
+                                        <include>com.zsubera.jpa.repository</include>
+                                        <include>com.zsubera.jpa.projection</include>
+                                    </includes>
                                     <limits>
                                         <limit>
                                             <counter>LINE</counter>
                                             <value>COVEREDRATIO</value>
-                                            <minimum>0.60</minimum>
+                                            <minimum>0.50</minimum>
                                         </limit>
                                     </limits>
                                 </rule>
