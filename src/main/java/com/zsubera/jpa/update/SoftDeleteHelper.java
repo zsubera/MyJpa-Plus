@@ -11,8 +11,10 @@ import jakarta.persistence.criteria.Predicate;
 import jakarta.persistence.criteria.Root;
 
 import java.lang.reflect.Field;
+import java.util.Collections;
+import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Helper for working with {@link SoftDelete @SoftDelete} annotated entities.
@@ -29,7 +31,13 @@ import java.util.concurrent.ConcurrentHashMap;
 public final class SoftDeleteHelper {
 
     private static final int MAX_CACHE_SIZE = 1024;
-    private static final Map<Class<?>, String> FIELD_CACHE = new ConcurrentHashMap<>();
+    private static final Map<Class<?>, String> FIELD_CACHE =
+            Collections.synchronizedMap(new LinkedHashMap<>(MAX_CACHE_SIZE, 0.75f, true) {
+                @Override
+                protected boolean removeEldestEntry(Map.Entry<Class<?>, String> eldest) {
+                    return size() > MAX_CACHE_SIZE;
+                }
+            });
 
     private SoftDeleteHelper() {
     }
@@ -55,7 +63,7 @@ public final class SoftDeleteHelper {
         if (fieldName == null) {
             return (root, query, cb) -> cb.conjunction();
         }
-        return (root, query, cb) -> buildDeleted(cb, root, fieldName, entityClass);
+        return (root, query, cb) -> buildDeleted(cb, root, fieldName);
     }
 
     /**
@@ -79,19 +87,16 @@ public final class SoftDeleteHelper {
         return cb.equal(path.get(fieldName), false);
     }
 
-    private static Predicate buildDeleted(CriteriaBuilder cb, Path<?> path, String fieldName, Class<?> entityClass) {
+    private static Predicate buildDeleted(CriteriaBuilder cb, Path<?> path, String fieldName) {
         return cb.equal(path.get(fieldName), true);
     }
 
     private static String findSoftDeleteField(Class<?> entityClass) {
-        String cached = FIELD_CACHE.get(entityClass);
-        if (cached != null) {
-            return cached;
+        String result = FIELD_CACHE.get(entityClass);
+        if (result != null) {
+            return result.isEmpty() ? null : result;
         }
-        if (FIELD_CACHE.size() >= MAX_CACHE_SIZE) {
-            FIELD_CACHE.clear();
-        }
-        return FIELD_CACHE.computeIfAbsent(entityClass, cls -> {
+        result = FIELD_CACHE.computeIfAbsent(entityClass, cls -> {
             for (Field field : getAllFields(cls)) {
                 if (field.isAnnotationPresent(SoftDelete.class)) {
                     field.setAccessible(true);
@@ -100,6 +105,7 @@ public final class SoftDeleteHelper {
             }
             return "";
         });
+        return result.isEmpty() ? null : result;
     }
 
     private static Field getField(Class<?> entityClass, String fieldName) {
@@ -114,8 +120,32 @@ public final class SoftDeleteHelper {
         }
     }
 
-    private static java.util.List<Field> getAllFields(Class<?> clazz) {
-        java.util.List<Field> fields = new java.util.ArrayList<>();
+    /**
+     * Checks whether the given entity is marked as soft-deleted.
+     *
+     * @param entityClass the entity class
+     * @param entity the entity instance
+     * @return true if the entity is soft-deleted, false otherwise
+     */
+    public static <T> boolean isSoftDeleted(Class<T> entityClass, T entity) {
+        String fieldName = findSoftDeleteField(entityClass);
+        if (fieldName == null) {
+            return false;
+        }
+        Field field = getField(entityClass, fieldName);
+        if (field == null) {
+            return false;
+        }
+        field.setAccessible(true);
+        try {
+            return Boolean.TRUE.equals(field.get(entity));
+        } catch (ReflectiveOperationException e) {
+            return false;
+        }
+    }
+
+    private static List<Field> getAllFields(Class<?> clazz) {
+        List<Field> fields = new java.util.ArrayList<>();
         while (clazz != null && clazz != Object.class) {
             for (Field field : clazz.getDeclaredFields()) {
                 fields.add(field);

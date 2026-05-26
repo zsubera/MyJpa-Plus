@@ -312,6 +312,111 @@ class UpdateSpecTest {
                 new UpdateSpec<>(TestEntity.class).between(TestEntity::getStatus, 10, 1));
     }
 
+    @Test
+    void testUpdateNotLike() {
+        repository.save(newEntity("hello", 1));
+        repository.save(newEntity("world", 1));
+        int count = new UpdateSpec<>(TestEntity.class)
+                .set(TestEntity::getStatus, 99)
+                .notLike(TestEntity::getName, "%hello%")
+                .execute(em);
+        assertEquals(1, count);
+    }
+
+    @Test
+    void testUpdateStartsWith() {
+        repository.save(newEntity("hello", 1));
+        repository.save(newEntity("world", 1));
+        int count = new UpdateSpec<>(TestEntity.class)
+                .set(TestEntity::getStatus, 99)
+                .startsWith(TestEntity::getName, "hel")
+                .execute(em);
+        assertEquals(1, count);
+    }
+
+    @Test
+    void testUpdateEndsWith() {
+        repository.save(newEntity("ending", 1));
+        repository.save(newEntity("start", 1));
+        int count = new UpdateSpec<>(TestEntity.class)
+                .set(TestEntity::getStatus, 99)
+                .endsWith(TestEntity::getName, "ing")
+                .execute(em);
+        assertEquals(1, count);
+    }
+
+    @Test
+    void testUpdateContains() {
+        repository.save(newEntity("abc", 1));
+        repository.save(newEntity("xyz", 1));
+        int count = new UpdateSpec<>(TestEntity.class)
+                .set(TestEntity::getStatus, 99)
+                .contains(TestEntity::getName, "ab")
+                .execute(em);
+        assertEquals(1, count);
+    }
+
+    @Test
+    void testUpdateEqIgnoreCase() {
+        repository.save(newEntity("Hello", 1));
+        repository.save(newEntity("WORLD", 1));
+        int count = new UpdateSpec<>(TestEntity.class)
+                .set(TestEntity::getStatus, 99)
+                .eqIgnoreCase(TestEntity::getName, "HELLO")
+                .execute(em);
+        assertEquals(1, count);
+    }
+
+    @Test
+    void testUpdateLikeIgnoreCase() {
+        repository.save(newEntity("HelloWorld", 1));
+        repository.save(newEntity("xyz", 1));
+        int count = new UpdateSpec<>(TestEntity.class)
+                .set(TestEntity::getStatus, 99)
+                .likeIgnoreCase(TestEntity::getName, "%hello%")
+                .execute(em);
+        assertEquals(1, count);
+    }
+
+    @Test
+    void testUpdateNotIn() {
+        repository.save(newEntity("a", 1));
+        repository.save(newEntity("b", 2));
+        repository.save(newEntity("c", 3));
+        int count = new UpdateSpec<>(TestEntity.class)
+                .set(TestEntity::getName, "notIn")
+                .notIn(TestEntity::getStatus, 1, 3)
+                .execute(em);
+        assertEquals(1, count);
+        em.clear();
+        TestEntity updated = repository.findAll().stream()
+                .filter(e -> "notIn".equals(e.getName())).findFirst().get();
+        assertEquals(Integer.valueOf(2), updated.getStatus());
+    }
+
+    @Test
+    void testUpdateNotBetween() {
+        repository.save(newEntity("a", 1));
+        repository.save(newEntity("b", 5));
+        repository.save(newEntity("c", 10));
+        int count = new UpdateSpec<>(TestEntity.class)
+                .set(TestEntity::getName, "notBetween")
+                .notBetween(TestEntity::getStatus, 3, 7)
+                .execute(em);
+        assertEquals(2, count);
+    }
+
+    @Test
+    void testUpdateWhere() {
+        repository.save(newEntity("a", 1));
+        repository.save(newEntity("b", 10));
+        int count = new UpdateSpec<>(TestEntity.class)
+                .set(TestEntity::getName, "where")
+                .where(root -> root.get("status").in(1))
+                .execute(em);
+        assertEquals(1, count);
+    }
+
     private TestEntity newEntity(String name, int status) {
         TestEntity entity = new TestEntity();
         entity.setName(name);

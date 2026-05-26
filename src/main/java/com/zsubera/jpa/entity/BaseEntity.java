@@ -5,6 +5,8 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.MappedSuperclass;
+import jakarta.persistence.PrePersist;
+import jakarta.persistence.PreUpdate;
 
 import java.io.Serializable;
 import java.time.Instant;
@@ -33,6 +35,18 @@ public abstract class BaseEntity implements Serializable {
     private Instant createdAt;
 
     private Instant updatedAt;
+
+    @PrePersist
+    protected void prePersist() {
+        Instant now = Instant.now();
+        this.createdAt = now;
+        this.updatedAt = now;
+    }
+
+    @PreUpdate
+    protected void preUpdate() {
+        this.updatedAt = Instant.now();
+    }
 
     public Long getId() {
         return id;

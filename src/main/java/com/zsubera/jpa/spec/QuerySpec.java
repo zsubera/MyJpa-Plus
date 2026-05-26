@@ -82,6 +82,12 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
 
     /**
      * Adds ascending ORDER BY on the given fields.
+     * <p>
+     * <strong>Note:</strong> When using {@code findAll(Specification, Pageable)},
+     * Spring Data will override this ordering with the {@link org.springframework.data.domain.Pageable Pageable}'s
+     * sort. Use {@code findAll(spec, Sort.unsorted())} or
+     * {@link #orderByAsc(SFunction[])} without {@code Pageable} to preserve
+     * the ordering set here.
      */
     @SafeVarargs
     public final QuerySpec<T> orderByAsc(SFunction<T, ?>... fields) {
@@ -93,6 +99,10 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
 
     /**
      * Adds descending ORDER BY on the given fields.
+     * <p>
+     * <strong>Note:</strong> When using {@code findAll(Specification, Pageable)},
+     * Spring Data will override this ordering. See {@link #orderByAsc(SFunction[])}
+     * for details.
      */
     @SafeVarargs
     public final QuerySpec<T> orderByDesc(SFunction<T, ?>... fields) {
@@ -254,21 +264,26 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
 
     /**
      * Adds a NOT group that negates the combined conditions.
-     * Conditions inside are AND-ed together, then the entire group is negated.
+     * Conditions inside are AND-ed together, then the entire group is negated,
+     * producing {@code NOT(A AND B)} = {@code NOT A OR NOT B}.
      *
      * <pre>{@code
      * qs.not(g -> g.eq(Entity::getStatus, "DELETED"));
-     * // Generates: NOT(status = 'DELETED')
+     * // Single condition: NOT(status = 'DELETED')
+     *
+     * qs.not(g -> g.eq(User::getStatus, "ACTIVE").gt(User::getAge, 18));
+     * // Multiple conditions: NOT(status = 'ACTIVE' AND age > 18)
+     * // Equivalent to: status != 'ACTIVE' OR age <= 18
      * }</pre>
      *
-     * @param config consumer to configure the negated group
+     * @param config consumer to configure the negated group (conditions inside are AND-ed)
      * @return this QuerySpec for chaining
      */
     public QuerySpec<T> not(Consumer<OrGroup<T>> config) {
-        OrNode orNode = new OrNode();
-        NegateNode negate = new NegateNode(orNode);
+        AndNode andNode = new AndNode();
+        NegateNode negate = new NegateNode(andNode);
         currentGroup().add(negate);
-        groupStack.push(orNode.nodes);
+        groupStack.push(andNode.nodes);
         config.accept(new OrGroup<>(this));
         groupStack.pop();
         return this;
@@ -351,6 +366,9 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
         }
         if (node instanceof OrNode) {
             return resolveOr((OrNode) node, path, query, cb, joinCache, pathPrefix);
+        }
+        if (node instanceof AndNode) {
+            return resolveAnd((AndNode) node, path, query, cb, joinCache, pathPrefix);
         }
         if (node instanceof MultiLikeNode) {
             return resolveMultiLike((MultiLikeNode) node, path, cb);
@@ -487,6 +505,24 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
         return cb.or(childPredicates.toArray(new Predicate[0]));
     }
 
+    private Predicate resolveAnd(AndNode node, Path<?> path, CriteriaQuery<?> query,
+                                  CriteriaBuilder cb, Map<String, Join<?, ?>> joinCache, String pathPrefix) {
+        List<Predicate> childPredicates = new ArrayList<>();
+        for (ConditionNode child : node.nodes) {
+            Predicate p = resolveNode(child, path, query, cb, joinCache, pathPrefix);
+            if (p != null) {
+                childPredicates.add(p);
+            }
+        }
+        if (childPredicates.isEmpty()) {
+            return cb.conjunction();
+        }
+        if (childPredicates.size() == 1) {
+            return childPredicates.get(0);
+        }
+        return cb.and(childPredicates.toArray(new Predicate[0]));
+    }
+
     private Predicate resolveMultiLike(MultiLikeNode node, Path<?> path, CriteriaBuilder cb) {
         List<Predicate> likes = new ArrayList<>();
         String pattern = "%" + node.keyword + "%";
@@ -526,7 +562,7 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
     enum CollectionOp {IS_EMPTY, IS_NOT_EMPTY}
 
     sealed interface ConditionNode
-            permits SimpleNode, JoinNode, OrNode, MultiLikeNode, CollectionNode, ExistsNode, RawNode, NegateNode {
+            permits SimpleNode, JoinNode, OrNode, AndNode, MultiLikeNode, CollectionNode, ExistsNode, RawNode, NegateNode {
     }
 
     static final class SimpleNode implements ConditionNode {
@@ -568,6 +604,15 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
         @Override
         public String toString() {
             return "OrNode" + nodes;
+        }
+    }
+
+    static final class AndNode implements ConditionNode {
+        final List<ConditionNode> nodes = new ArrayList<>();
+
+        @Override
+        public String toString() {
+            return "AndNode" + nodes;
         }
     }
 

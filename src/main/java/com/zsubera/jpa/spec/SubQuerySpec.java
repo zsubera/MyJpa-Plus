@@ -296,9 +296,10 @@ public class SubQuerySpec<S> {
             String pattern = "%" + keyword + "%";
             List<Predicate> likes = new ArrayList<>();
             for (SFunction<S, ?> field : fields) {
-                if (field != null) {
-                    likes.add(cb.like(root.get(property(field)).as(String.class), pattern));
+                if (field == null) {
+                    throw new IllegalArgumentException("fields must not contain null elements");
                 }
+                likes.add(cb.like(root.get(property(field)).as(String.class), pattern));
             }
             if (!likes.isEmpty()) {
                 predicates.add(likes.size() == 1 ? likes.get(0) : cb.or(likes.toArray(new Predicate[0])));

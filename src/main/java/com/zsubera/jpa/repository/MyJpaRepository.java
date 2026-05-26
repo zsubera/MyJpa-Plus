@@ -1,5 +1,7 @@
 package com.zsubera.jpa.repository;
 
+import com.zsubera.jpa.update.SoftDeleteHelper;
+
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
@@ -61,4 +63,65 @@ public interface MyJpaRepository<T, ID> extends JpaRepository<T, ID>, JpaSpecifi
      * Checks whether any entity matches the given {@link Specification}.
      */
     boolean exists(Specification<T> spec);
+
+    /**
+     * Finds all non-soft-deleted entities matching the given {@link Specification}.
+     * Automatically applies the soft-delete filter if the entity has a
+     * {@link com.zsubera.jpa.annotation.SoftDelete @SoftDelete} annotated field.
+     *
+     * @param spec additional filtering specification
+     * @return list of non-deleted entities matching the specification
+     */
+    default List<T> findNotDeletedAll(Specification<T> spec) {
+        return findAll(spec.and(SoftDeleteHelper.isNotDeleted(getEntityClass())));
+    }
+
+    /**
+     * Finds all non-soft-deleted entities without additional conditions.
+     *
+     * @return list of all non-deleted entities
+     */
+    default List<T> findNotDeletedAll() {
+        return findAll(SoftDeleteHelper.isNotDeleted(getEntityClass()));
+    }
+
+    /**
+     * Finds all non-soft-deleted entities matching the specification with pagination.
+     */
+    default Page<T> findNotDeletedAll(Specification<T> spec, Pageable pageable) {
+        return findAll(spec.and(SoftDeleteHelper.isNotDeleted(getEntityClass())), pageable);
+    }
+
+    /**
+     * Finds a single non-soft-deleted entity matching the specification.
+     */
+    default Optional<T> findNotDeletedOne(Specification<T> spec) {
+        return findOne(spec.and(SoftDeleteHelper.isNotDeleted(getEntityClass())));
+    }
+
+    /**
+     * Finds a single non-soft-deleted entity by ID.
+     */
+    default Optional<T> findNotDeletedById(ID id) {
+        return findById(id).filter(entity ->
+                !SoftDeleteHelper.isSoftDeleted(getEntityClass(), entity));
+    }
+
+    /**
+     * Counts non-soft-deleted entities matching the specification.
+     */
+    default long countNotDeleted(Specification<T> spec) {
+        return count(spec.and(SoftDeleteHelper.isNotDeleted(getEntityClass())));
+    }
+
+    /**
+     * Returns the domain class associated with this repository.
+     * The result is cached per repository class to avoid repeated reflection.
+     *
+     * @return the entity class
+     */
+    @SuppressWarnings("unchecked")
+    private Class<T> getEntityClass() {
+        return EntityClassResolver.resolve(getClass());
+    }
 }

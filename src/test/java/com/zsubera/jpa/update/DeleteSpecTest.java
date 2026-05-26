@@ -235,6 +235,107 @@ class DeleteSpecTest {
                 new DeleteSpec<>(TestEntity.class).between(TestEntity::getStatus, 10, 1));
     }
 
+    @Test
+    void testDeleteNotLike() {
+        repository.save(newEntity("hello", 1));
+        repository.save(newEntity("world", 1));
+        int count = new DeleteSpec<>(TestEntity.class)
+                .notLike(TestEntity::getName, "%hello%")
+                .execute(em);
+        assertEquals(1, count);
+        assertEquals("hello", repository.findAll().get(0).getName());
+    }
+
+    @Test
+    void testDeleteStartsWith() {
+        repository.save(newEntity("hello", 1));
+        repository.save(newEntity("world", 1));
+        int count = new DeleteSpec<>(TestEntity.class)
+                .startsWith(TestEntity::getName, "hel")
+                .execute(em);
+        assertEquals(1, count);
+        assertEquals("world", repository.findAll().get(0).getName());
+    }
+
+    @Test
+    void testDeleteEndsWith() {
+        repository.save(newEntity("ending", 1));
+        repository.save(newEntity("start", 1));
+        int count = new DeleteSpec<>(TestEntity.class)
+                .endsWith(TestEntity::getName, "ing")
+                .execute(em);
+        assertEquals(1, count);
+        assertEquals("start", repository.findAll().get(0).getName());
+    }
+
+    @Test
+    void testDeleteContains() {
+        repository.save(newEntity("abc", 1));
+        repository.save(newEntity("xyz", 1));
+        int count = new DeleteSpec<>(TestEntity.class)
+                .contains(TestEntity::getName, "ab")
+                .execute(em);
+        assertEquals(1, count);
+        assertEquals("xyz", repository.findAll().get(0).getName());
+    }
+
+    @Test
+    void testDeleteEqIgnoreCase() {
+        repository.save(newEntity("Hello", 1));
+        repository.save(newEntity("WORLD", 1));
+        int count = new DeleteSpec<>(TestEntity.class)
+                .eqIgnoreCase(TestEntity::getName, "HELLO")
+                .execute(em);
+        assertEquals(1, count);
+        assertEquals("WORLD", repository.findAll().get(0).getName());
+    }
+
+    @Test
+    void testDeleteLikeIgnoreCase() {
+        repository.save(newEntity("HelloWorld", 1));
+        repository.save(newEntity("xyz", 1));
+        int count = new DeleteSpec<>(TestEntity.class)
+                .likeIgnoreCase(TestEntity::getName, "%hello%")
+                .execute(em);
+        assertEquals(1, count);
+        assertEquals("xyz", repository.findAll().get(0).getName());
+    }
+
+    @Test
+    void testDeleteNotIn() {
+        repository.save(newEntity("a", 1));
+        repository.save(newEntity("b", 2));
+        repository.save(newEntity("c", 3));
+        int count = new DeleteSpec<>(TestEntity.class)
+                .notIn(TestEntity::getStatus, 1, 3)
+                .execute(em);
+        assertEquals(1, count);
+        assertEquals(2, repository.findAll().size());
+    }
+
+    @Test
+    void testDeleteNotBetween() {
+        repository.save(newEntity("a", 1));
+        repository.save(newEntity("b", 5));
+        repository.save(newEntity("c", 10));
+        int count = new DeleteSpec<>(TestEntity.class)
+                .notBetween(TestEntity::getStatus, 3, 7)
+                .execute(em);
+        assertEquals(2, count);
+        assertEquals(1, repository.findAll().size());
+    }
+
+    @Test
+    void testDeleteWhere() {
+        repository.save(newEntity("a", 1));
+        repository.save(newEntity("b", 10));
+        int count = new DeleteSpec<>(TestEntity.class)
+                .where(root -> root.get("status").in(1))
+                .execute(em);
+        assertEquals(1, count);
+        assertEquals("b", repository.findAll().get(0).getName());
+    }
+
     private TestEntity newEntity(String name, int status) {
         TestEntity entity = new TestEntity();
         entity.setName(name);

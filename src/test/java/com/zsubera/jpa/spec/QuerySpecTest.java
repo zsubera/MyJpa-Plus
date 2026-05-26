@@ -674,6 +674,34 @@ public class QuerySpecTest {
     }
 
     @Test
+    void testNotMultiConditionAndSemantics() {
+        // NOT(name = 'a' AND status > 3) = name != 'a' OR status <= 3
+        repository.save(newEntity("a", 5));  // name='a', status>3  -> excluded
+        repository.save(newEntity("a", 1));  // name='a', status<=3 -> included (status<=3)
+        repository.save(newEntity("b", 5));  // name!='a', status>3 -> included (name!='a')
+        repository.save(newEntity("b", 1));  // name!='a', status<=3 -> included (name!='a')
+        QuerySpec<TestEntity> qs = new QuerySpec<>();
+        qs.not(g -> g.eq(TestEntity::getName, "a").gt(TestEntity::getStatus, 3));
+        List<TestEntity> result = repository.findAll(qs.toSpecification());
+        assertEquals(3, result.size());
+    }
+
+    @Test
+    void testNotMultiConditionAndSemanticsAllExcluded() {
+        // NOT(name = 'a' AND status > 0) where all entities have status > 0
+        repository.save(newEntity("a", 1));
+        repository.save(newEntity("a", 2));
+        repository.save(newEntity("b", 3));
+        QuerySpec<TestEntity> qs = new QuerySpec<>();
+        qs.not(g -> g.eq(TestEntity::getName, "a").gt(TestEntity::getStatus, 0));
+        // name='a' AND status>0: matches a1, a2 -> excluded
+        // name='b' is NOT matching (name!='a') -> included
+        List<TestEntity> result = repository.findAll(qs.toSpecification());
+        assertEquals(1, result.size());
+        assertEquals("b", result.get(0).getName());
+    }
+
+    @Test
     void testWhereRawPredicate() {
         repository.save(newEntity("low", 1));
         repository.save(newEntity("mid", 5));
