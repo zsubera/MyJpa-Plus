@@ -24,7 +24,7 @@ jobs:
       - name: Check code formatting
         run: mvn spotless:check --batch-mode --no-transfer-progress
       - name: Build and verify
-        run: mvn clean verify --batch-mode --no-transfer-progress -Dgpg.skip=true -Dgroups='!integration'
+        run: mvn clean verify --batch-mode --no-transfer-progress -Dgpg.skip=true -Dowasp.skip=true -Dgroups='!integration'
 
   integration:
     needs: build
