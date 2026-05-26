@@ -1,12 +1,12 @@
 package com.zsubera.jpa.update;
 
+import com.zsubera.jpa.spec.PredicateHelper;
 import com.zsubera.jpa.spec.SFunction;
 import com.zsubera.jpa.util.LambdaUtils;
 
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.EntityTransaction;
 import jakarta.persistence.criteria.CriteriaBuilder;
-import jakarta.persistence.criteria.Expression;
 import jakarta.persistence.criteria.Predicate;
 import jakarta.persistence.criteria.Root;
 
@@ -21,6 +21,8 @@ import java.util.function.Function;
  * ({@link UpdateSpec} and {@link DeleteSpec}).
  * <p>
  * Provides common condition methods using deferred lambda evaluation.
+ * Predicate construction is delegated to {@link PredicateHelper}
+ * to share logic with other components.
  *
  * @param <T> the entity type
  * @param <SELF> the concrete builder type for fluent chaining
@@ -115,21 +117,13 @@ public abstract class AbstractBulkOperationSpec<T, SELF extends AbstractBulkOper
 
     public SELF eq(SFunction<T, ?> field, Object value) {
         String name = property(field);
-        if (value == null) {
-            conditionFunctions.add((root, cb) -> cb.isNull(root.get(name)));
-        } else {
-            conditionFunctions.add((root, cb) -> cb.equal(root.get(name), value));
-        }
+        conditionFunctions.add((root, cb) -> PredicateHelper.eq(root, name, value, cb));
         return self();
     }
 
     public SELF ne(SFunction<T, ?> field, Object value) {
         String name = property(field);
-        if (value == null) {
-            conditionFunctions.add((root, cb) -> cb.isNotNull(root.get(name)));
-        } else {
-            conditionFunctions.add((root, cb) -> cb.notEqual(root.get(name), value));
-        }
+        conditionFunctions.add((root, cb) -> PredicateHelper.ne(root, name, value, cb));
         return self();
     }
 
@@ -139,7 +133,7 @@ public abstract class AbstractBulkOperationSpec<T, SELF extends AbstractBulkOper
             throw new IllegalArgumentException("value must not be null");
         }
         String name = property(field);
-        conditionFunctions.add((root, cb) -> cb.greaterThan((Expression) root.get(name), (Comparable) value));
+        conditionFunctions.add((root, cb) -> PredicateHelper.gt(root, name, value, cb));
         return self();
     }
 
@@ -149,7 +143,7 @@ public abstract class AbstractBulkOperationSpec<T, SELF extends AbstractBulkOper
             throw new IllegalArgumentException("value must not be null");
         }
         String name = property(field);
-        conditionFunctions.add((root, cb) -> cb.greaterThanOrEqualTo((Expression) root.get(name), (Comparable) value));
+        conditionFunctions.add((root, cb) -> PredicateHelper.ge(root, name, value, cb));
         return self();
     }
 
@@ -159,7 +153,7 @@ public abstract class AbstractBulkOperationSpec<T, SELF extends AbstractBulkOper
             throw new IllegalArgumentException("value must not be null");
         }
         String name = property(field);
-        conditionFunctions.add((root, cb) -> cb.lessThan((Expression) root.get(name), (Comparable) value));
+        conditionFunctions.add((root, cb) -> PredicateHelper.lt(root, name, value, cb));
         return self();
     }
 
@@ -169,7 +163,7 @@ public abstract class AbstractBulkOperationSpec<T, SELF extends AbstractBulkOper
             throw new IllegalArgumentException("value must not be null");
         }
         String name = property(field);
-        conditionFunctions.add((root, cb) -> cb.lessThanOrEqualTo((Expression) root.get(name), (Comparable) value));
+        conditionFunctions.add((root, cb) -> PredicateHelper.le(root, name, value, cb));
         return self();
     }
 
@@ -178,7 +172,7 @@ public abstract class AbstractBulkOperationSpec<T, SELF extends AbstractBulkOper
             throw new IllegalArgumentException("value must not be null");
         }
         String name = property(field);
-        conditionFunctions.add((root, cb) -> cb.like(root.get(name).as(String.class), value));
+        conditionFunctions.add((root, cb) -> PredicateHelper.like(root, name, value, cb));
         return self();
     }
 
@@ -187,7 +181,7 @@ public abstract class AbstractBulkOperationSpec<T, SELF extends AbstractBulkOper
             throw new IllegalArgumentException("value must not be null");
         }
         String name = property(field);
-        conditionFunctions.add((root, cb) -> cb.notLike(root.get(name).as(String.class), value));
+        conditionFunctions.add((root, cb) -> PredicateHelper.notLike(root, name, value, cb));
         return self();
     }
 
@@ -196,7 +190,7 @@ public abstract class AbstractBulkOperationSpec<T, SELF extends AbstractBulkOper
             throw new IllegalArgumentException("value must not be null");
         }
         String name = property(field);
-        conditionFunctions.add((root, cb) -> cb.like(root.get(name).as(String.class), value + "%"));
+        conditionFunctions.add((root, cb) -> PredicateHelper.startsWith(root, name, value, cb));
         return self();
     }
 
@@ -205,7 +199,7 @@ public abstract class AbstractBulkOperationSpec<T, SELF extends AbstractBulkOper
             throw new IllegalArgumentException("value must not be null");
         }
         String name = property(field);
-        conditionFunctions.add((root, cb) -> cb.like(root.get(name).as(String.class), "%" + value));
+        conditionFunctions.add((root, cb) -> PredicateHelper.endsWith(root, name, value, cb));
         return self();
     }
 
@@ -214,17 +208,13 @@ public abstract class AbstractBulkOperationSpec<T, SELF extends AbstractBulkOper
             throw new IllegalArgumentException("value must not be null");
         }
         String name = property(field);
-        conditionFunctions.add((root, cb) -> cb.like(root.get(name).as(String.class), "%" + value + "%"));
+        conditionFunctions.add((root, cb) -> PredicateHelper.contains(root, name, value, cb));
         return self();
     }
 
     public SELF eqIgnoreCase(SFunction<T, ?> field, String value) {
         String name = property(field);
-        if (value == null) {
-            conditionFunctions.add((root, cb) -> cb.isNull(root.get(name)));
-        } else {
-            conditionFunctions.add((root, cb) -> cb.equal(cb.upper(root.get(name).as(String.class)), value.toUpperCase()));
-        }
+        conditionFunctions.add((root, cb) -> PredicateHelper.eqIgnoreCase(root, name, value, cb));
         return self();
     }
 
@@ -233,7 +223,7 @@ public abstract class AbstractBulkOperationSpec<T, SELF extends AbstractBulkOper
             throw new IllegalArgumentException("value must not be null");
         }
         String name = property(field);
-        conditionFunctions.add((root, cb) -> cb.like(cb.upper(root.get(name).as(String.class)), value.toUpperCase()));
+        conditionFunctions.add((root, cb) -> PredicateHelper.likeIgnoreCase(root, name, value, cb));
         return self();
     }
 
@@ -242,13 +232,7 @@ public abstract class AbstractBulkOperationSpec<T, SELF extends AbstractBulkOper
         if (values == null || values.length == 0) {
             throw new IllegalArgumentException("values must not be empty");
         }
-        conditionFunctions.add((root, cb) -> {
-            CriteriaBuilder.In<Object> in = cb.in(root.get(name));
-            for (Object v : values) {
-                in.value(v);
-            }
-            return in;
-        });
+        conditionFunctions.add((root, cb) -> PredicateHelper.in(root, name, values, cb));
         return self();
     }
 
@@ -257,13 +241,7 @@ public abstract class AbstractBulkOperationSpec<T, SELF extends AbstractBulkOper
         if (values == null || values.length == 0) {
             throw new IllegalArgumentException("values must not be empty");
         }
-        conditionFunctions.add((root, cb) -> {
-            CriteriaBuilder.In<Object> in = cb.in(root.get(name));
-            for (Object v : values) {
-                in.value(v);
-            }
-            return cb.not(in);
-        });
+        conditionFunctions.add((root, cb) -> PredicateHelper.notIn(root, name, values, cb));
         return self();
     }
 
@@ -272,13 +250,7 @@ public abstract class AbstractBulkOperationSpec<T, SELF extends AbstractBulkOper
         if (values == null || values.isEmpty()) {
             throw new IllegalArgumentException("values must not be empty");
         }
-        conditionFunctions.add((root, cb) -> {
-            CriteriaBuilder.In<Object> in = cb.in(root.get(name));
-            for (Object v : values) {
-                in.value(v);
-            }
-            return in;
-        });
+        conditionFunctions.add((root, cb) -> PredicateHelper.in(root, name, values, cb));
         return self();
     }
 
@@ -287,13 +259,7 @@ public abstract class AbstractBulkOperationSpec<T, SELF extends AbstractBulkOper
         if (values == null || values.isEmpty()) {
             throw new IllegalArgumentException("values must not be empty");
         }
-        conditionFunctions.add((root, cb) -> {
-            CriteriaBuilder.In<Object> in = cb.in(root.get(name));
-            for (Object v : values) {
-                in.value(v);
-            }
-            return cb.not(in);
-        });
+        conditionFunctions.add((root, cb) -> PredicateHelper.notIn(root, name, values, cb));
         return self();
     }
 
@@ -309,7 +275,7 @@ public abstract class AbstractBulkOperationSpec<T, SELF extends AbstractBulkOper
             throw new IllegalArgumentException("start must not be greater than end");
         }
         String name = property(field);
-        conditionFunctions.add((root, cb) -> cb.between((Expression) root.get(name), (Comparable) start, (Comparable) end));
+        conditionFunctions.add((root, cb) -> PredicateHelper.between(root, name, start, end, cb));
         return self();
     }
 
@@ -325,19 +291,19 @@ public abstract class AbstractBulkOperationSpec<T, SELF extends AbstractBulkOper
             throw new IllegalArgumentException("start must not be greater than end");
         }
         String name = property(field);
-        conditionFunctions.add((root, cb) -> cb.not(cb.between((Expression) root.get(name), (Comparable) start, (Comparable) end)));
+        conditionFunctions.add((root, cb) -> PredicateHelper.notBetween(root, name, start, end, cb));
         return self();
     }
 
     public SELF isNull(SFunction<T, ?> field) {
         String name = property(field);
-        conditionFunctions.add((root, cb) -> cb.isNull(root.get(name)));
+        conditionFunctions.add((root, cb) -> PredicateHelper.isNull(root, name, cb));
         return self();
     }
 
     public SELF isNotNull(SFunction<T, ?> field) {
         String name = property(field);
-        conditionFunctions.add((root, cb) -> cb.isNotNull(root.get(name)));
+        conditionFunctions.add((root, cb) -> PredicateHelper.isNotNull(root, name, cb));
         return self();
     }
 

@@ -19,13 +19,12 @@ import java.util.List;
  * correlated outer query root for building correlation predicates.
  * <p>
  * <strong>Design note:</strong> Unlike {@link ConditionBuilder}, which uses deferred
- * evaluation (building a tree of {@link QuerySpec.ConditionNode} resolved at query
+ * evaluation (building a tree of {@link ConditionNode} resolved at query
  * execution time), {@code SubQuerySpec} uses <em>eager</em> evaluation — each
  * condition method immediately creates a JPA {@link jakarta.persistence.criteria.Predicate}
  * and adds it to an internal list. This is necessary because subqueries must be fully
- * constructed before the outer query is built. As a result, the condition methods
- * here intentionally duplicate those in {@code ConditionBuilder} rather than
- * inheriting them.
+ * constructed before the outer query is built. Predicate construction is delegated
+ * to {@link PredicateHelper} to share logic with other components.
  * <p>
  * Usage via {@link QuerySpec#exists(Class, java.util.function.Consumer)}
  * or {@link QuerySpec#notExists(Class, java.util.function.Consumer)}.
@@ -106,51 +105,45 @@ public class SubQuerySpec<S> {
 
     /** Adds an equality condition on the subquery entity. */
     public SubQuerySpec<S> eq(SFunction<S, ?> field, Object value) {
-        String name = property(field);
-        predicates.add(value == null ? cb.isNull(root.get(name)) : cb.equal(root.get(name), value));
+        predicates.add(PredicateHelper.eq(root, property(field), value, cb));
         return this;
     }
 
     /** Adds a not-equal condition on the subquery entity. */
     public SubQuerySpec<S> ne(SFunction<S, ?> field, Object value) {
-        String name = property(field);
-        predicates.add(value == null ? cb.isNotNull(root.get(name)) : cb.notEqual(root.get(name), value));
+        predicates.add(PredicateHelper.ne(root, property(field), value, cb));
         return this;
     }
 
-    @SuppressWarnings({"unchecked", "rawtypes"})
     public SubQuerySpec<S> gt(SFunction<S, ?> field, Comparable<?> value) {
         if (value == null) {
             throw new IllegalArgumentException("value must not be null");
         }
-        predicates.add(cb.greaterThan((Expression) root.get(property(field)), (Comparable) value));
+        predicates.add(PredicateHelper.gt(root, property(field), value, cb));
         return this;
     }
 
-    @SuppressWarnings({"unchecked", "rawtypes"})
     public SubQuerySpec<S> ge(SFunction<S, ?> field, Comparable<?> value) {
         if (value == null) {
             throw new IllegalArgumentException("value must not be null");
         }
-        predicates.add(cb.greaterThanOrEqualTo((Expression) root.get(property(field)), (Comparable) value));
+        predicates.add(PredicateHelper.ge(root, property(field), value, cb));
         return this;
     }
 
-    @SuppressWarnings({"unchecked", "rawtypes"})
     public SubQuerySpec<S> lt(SFunction<S, ?> field, Comparable<?> value) {
         if (value == null) {
             throw new IllegalArgumentException("value must not be null");
         }
-        predicates.add(cb.lessThan((Expression) root.get(property(field)), (Comparable) value));
+        predicates.add(PredicateHelper.lt(root, property(field), value, cb));
         return this;
     }
 
-    @SuppressWarnings({"unchecked", "rawtypes"})
     public SubQuerySpec<S> le(SFunction<S, ?> field, Comparable<?> value) {
         if (value == null) {
             throw new IllegalArgumentException("value must not be null");
         }
-        predicates.add(cb.lessThanOrEqualTo((Expression) root.get(property(field)), (Comparable) value));
+        predicates.add(PredicateHelper.le(root, property(field), value, cb));
         return this;
     }
 
@@ -160,7 +153,7 @@ public class SubQuerySpec<S> {
         if (value == null) {
             throw new IllegalArgumentException("value must not be null");
         }
-        predicates.add(cb.like(root.get(property(field)).as(String.class), value));
+        predicates.add(PredicateHelper.like(root, property(field), value, cb));
         return this;
     }
 
@@ -168,7 +161,7 @@ public class SubQuerySpec<S> {
         if (value == null) {
             throw new IllegalArgumentException("value must not be null");
         }
-        predicates.add(cb.notLike(root.get(property(field)).as(String.class), value));
+        predicates.add(PredicateHelper.notLike(root, property(field), value, cb));
         return this;
     }
 
@@ -176,7 +169,7 @@ public class SubQuerySpec<S> {
         if (value == null) {
             throw new IllegalArgumentException("value must not be null");
         }
-        predicates.add(cb.like(root.get(property(field)).as(String.class), value + "%"));
+        predicates.add(PredicateHelper.startsWith(root, property(field), value, cb));
         return this;
     }
 
@@ -184,7 +177,7 @@ public class SubQuerySpec<S> {
         if (value == null) {
             throw new IllegalArgumentException("value must not be null");
         }
-        predicates.add(cb.like(root.get(property(field)).as(String.class), "%" + value));
+        predicates.add(PredicateHelper.endsWith(root, property(field), value, cb));
         return this;
     }
 
@@ -192,13 +185,12 @@ public class SubQuerySpec<S> {
         if (value == null) {
             throw new IllegalArgumentException("value must not be null");
         }
-        predicates.add(cb.like(root.get(property(field)).as(String.class), "%" + value + "%"));
+        predicates.add(PredicateHelper.contains(root, property(field), value, cb));
         return this;
     }
 
     // ---- Collection operators ----
 
-    @SuppressWarnings({"unchecked", "rawtypes"})
     public SubQuerySpec<S> between(SFunction<S, ?> field, Comparable<?> start, Comparable<?> end) {
         if (start == null) {
             throw new IllegalArgumentException("start must not be null");
@@ -206,88 +198,61 @@ public class SubQuerySpec<S> {
         if (end == null) {
             throw new IllegalArgumentException("end must not be null");
         }
-        if (((Comparable) start).compareTo(end) > 0) {
+        @SuppressWarnings({"unchecked", "rawtypes"})
+        int cmp = ((java.lang.Comparable) start).compareTo(end);
+        if (cmp > 0) {
             throw new IllegalArgumentException("start must not be greater than end");
         }
-        predicates.add(cb.between((Expression) root.get(property(field)), (Comparable) start, (Comparable) end));
+        predicates.add(PredicateHelper.between(root, property(field), start, end, cb));
         return this;
     }
 
-    @SuppressWarnings({"unchecked", "rawtypes"})
     public SubQuerySpec<S> in(SFunction<S, ?> field, Object... values) {
-        String name = property(field);
         if (values == null || values.length == 0) {
             throw new IllegalArgumentException("values must not be empty");
         }
-        CriteriaBuilder.In<Object> in = cb.in(root.get(name));
-        for (Object v : values) {
-            in.value(v);
-        }
-        predicates.add(in);
+        predicates.add(PredicateHelper.in(root, property(field), values, cb));
         return this;
     }
 
-    @SuppressWarnings({"unchecked", "rawtypes"})
     public SubQuerySpec<S> notIn(SFunction<S, ?> field, Object... values) {
-        String name = property(field);
         if (values == null || values.length == 0) {
             throw new IllegalArgumentException("values must not be empty");
         }
-        CriteriaBuilder.In<Object> in = cb.in(root.get(name));
-        for (Object v : values) {
-            in.value(v);
-        }
-        predicates.add(cb.not(in));
+        predicates.add(PredicateHelper.notIn(root, property(field), values, cb));
         return this;
     }
 
-    @SuppressWarnings({"unchecked", "rawtypes"})
     public SubQuerySpec<S> in(SFunction<S, ?> field, Collection<?> values) {
-        String name = property(field);
         if (values == null || values.isEmpty()) {
             throw new IllegalArgumentException("values must not be empty");
         }
-        CriteriaBuilder.In<Object> in = cb.in(root.get(name));
-        for (Object v : values) {
-            in.value(v);
-        }
-        predicates.add(in);
+        predicates.add(PredicateHelper.in(root, property(field), values, cb));
         return this;
     }
 
-    @SuppressWarnings({"unchecked", "rawtypes"})
     public SubQuerySpec<S> notIn(SFunction<S, ?> field, Collection<?> values) {
-        String name = property(field);
         if (values == null || values.isEmpty()) {
             throw new IllegalArgumentException("values must not be empty");
         }
-        CriteriaBuilder.In<Object> in = cb.in(root.get(name));
-        for (Object v : values) {
-            in.value(v);
-        }
-        predicates.add(cb.not(in));
+        predicates.add(PredicateHelper.notIn(root, property(field), values, cb));
         return this;
     }
 
     // ---- Null operators ----
 
     public SubQuerySpec<S> isNull(SFunction<S, ?> field) {
-        predicates.add(cb.isNull(root.get(property(field))));
+        predicates.add(PredicateHelper.isNull(root, property(field), cb));
         return this;
     }
 
     public SubQuerySpec<S> isNotNull(SFunction<S, ?> field) {
-        predicates.add(cb.isNotNull(root.get(property(field))));
+        predicates.add(PredicateHelper.isNotNull(root, property(field), cb));
         return this;
     }
 
     public SubQuerySpec<S> eqIgnoreCase(SFunction<S, ?> field, String value) {
-        String name = property(field);
-        if (value == null) {
-            predicates.add(cb.isNull(root.get(name)));
-        } else {
-            predicates.add(cb.equal(cb.upper(root.get(name).as(String.class)), value.toUpperCase()));
-        }
+        predicates.add(PredicateHelper.eqIgnoreCase(root, property(field), value, cb));
         return this;
     }
 
@@ -295,21 +260,19 @@ public class SubQuerySpec<S> {
         if (value == null) {
             throw new IllegalArgumentException("value must not be null");
         }
-        predicates.add(cb.like(cb.upper(root.get(property(field)).as(String.class)), value.toUpperCase()));
+        predicates.add(PredicateHelper.likeIgnoreCase(root, property(field), value, cb));
         return this;
     }
 
     // ---- Collection empty checks ----
 
-    @SuppressWarnings("unchecked")
     public SubQuerySpec<S> isEmpty(SFunction<S, ?> field) {
-        predicates.add(cb.isEmpty((Expression<java.util.Collection<?>>) (Expression<?>) root.get(property(field))));
+        predicates.add(PredicateHelper.isEmpty(root, property(field), cb));
         return this;
     }
 
-    @SuppressWarnings("unchecked")
     public SubQuerySpec<S> isNotEmpty(SFunction<S, ?> field) {
-        predicates.add(cb.isNotEmpty((Expression<java.util.Collection<?>>) (Expression<?>) root.get(property(field))));
+        predicates.add(PredicateHelper.isNotEmpty(root, property(field), cb));
         return this;
     }
 
@@ -324,7 +287,7 @@ public class SubQuerySpec<S> {
                 if (field == null) {
                     throw new IllegalArgumentException("fields must not contain null elements");
                 }
-                likes.add(cb.like(root.get(property(field)).as(String.class), pattern));
+                likes.add(PredicateHelper.like(root, property(field), pattern, cb));
             }
             if (!likes.isEmpty()) {
                 predicates.add(likes.size() == 1 ? likes.get(0) : cb.or(likes.toArray(new Predicate[0])));

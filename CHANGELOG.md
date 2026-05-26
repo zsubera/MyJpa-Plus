@@ -33,6 +33,7 @@
 - `AbstractBulkOperationSpec.executeInTransaction()` 现在捕获 `Exception`（而非仅 `RuntimeException`）
 
 ### 变更
+- **消除了条件方法的三层重复：** 创建 `PredicateHelper` 共享工具类，`SubQuerySpec` 和 `AbstractBulkOperationSpec` 统一委托给 `PredicateHelper` 构建 Predicate，消除了约 200 行重复的条件构建逻辑。`ConditionBuilder`（延迟 AST 节点）保持独立不变。
 - `ConditionNode` → sealed 接口；所有实现类均为 `final`
 - SpotBugs 阈值设为 Medium
 - JaCoCo 覆盖率最低 60%（排除 autoconfigure）
