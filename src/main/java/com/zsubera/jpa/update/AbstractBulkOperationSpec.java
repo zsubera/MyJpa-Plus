@@ -175,7 +175,7 @@ public abstract class AbstractBulkOperationSpec<
    *     .not(o -> o.eq(User::getStatus, "ACTIVE"))
    *     .execute();
    * // WHERE NOT (status = 'ACTIVE')
-   * }</>
+   * }</pre>
    */
   public SELF not(Consumer<OrConditionBuilder<T, SELF>> config) {
     List<BulkConditionNode> children = new ArrayList<>();
