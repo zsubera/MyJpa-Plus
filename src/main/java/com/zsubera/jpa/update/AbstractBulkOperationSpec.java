@@ -54,22 +54,41 @@ public abstract class AbstractBulkOperationSpec<T, SELF extends AbstractBulkOper
      * @return the number of affected rows
      */
     public int executeInTransaction(EntityManager em) {
+        return executeInTransaction(em, this::doExecute);
+    }
+
+    /**
+     * Executes the given operation within a new transaction if none is active,
+     * otherwise executes within the current transaction.
+     * <p>
+     * This overload allows subclasses to execute custom operations
+     * (e.g., unconditional deleteAll) with proper transaction management.
+     *
+     * @param em        the EntityManager
+     * @param operation the operation to execute
+     * @return the number of affected rows
+     */
+    protected int executeInTransaction(EntityManager em, java.util.function.Function<EntityManager, Integer> operation) {
         EntityTransaction tx = em.getTransaction();
         boolean isNewTransaction = !tx.isActive();
         if (isNewTransaction) {
             tx.begin();
         }
         try {
-            int result = doExecute(em);
+            int result = operation.apply(em);
             if (isNewTransaction) {
                 tx.commit();
             }
             return result;
-        } catch (RuntimeException e) {
+        } catch (Exception e) {
             if (isNewTransaction && tx.isActive()) {
-                tx.rollback();
+                try {
+                    tx.rollback();
+                } catch (Exception rollbackEx) {
+                    e.addSuppressed(rollbackEx);
+                }
             }
-            throw e;
+            throw (RuntimeException)e;
         }
     }
 
@@ -313,7 +332,6 @@ public abstract class AbstractBulkOperationSpec<T, SELF extends AbstractBulkOper
         return self();
     }
 
-    @SuppressWarnings("unchecked")
     public SELF where(Function<Root<T>, Predicate> condition) {
         if (condition == null) {
             throw new IllegalArgumentException("condition must not be null");

@@ -179,12 +179,22 @@ class DeleteSpecTest {
     }
 
     @Test
-    void testDeleteNoConditionsDeletesAll() {
+    void testDeleteNoConditionsThrowsException() {
+        repository.save(newEntity("a", 1));
+        repository.save(newEntity("b", 2));
+
+        assertThrows(IllegalStateException.class, () ->
+                new DeleteSpec<>(TestEntity.class)
+                        .execute(em));
+    }
+
+    @Test
+    void testDeleteAll() {
         repository.save(newEntity("a", 1));
         repository.save(newEntity("b", 2));
 
         int count = new DeleteSpec<>(TestEntity.class)
-                .execute(em);
+                .deleteAll(em);
 
         assertEquals(2, count);
         assertTrue(repository.findAll().isEmpty());

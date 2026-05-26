@@ -70,6 +70,31 @@ public class SubQuerySpec<S> {
         return (Root<T>) correlatedRoot;
     }
 
+    /**
+     * Adds an equality correlation condition between the outer query and the subquery.
+     * <p>
+     * This is the most common pattern for correlated subqueries, e.g.:
+     * <pre>{@code
+     * qs.exists(Order.class, sub -> sub
+     *     .correlatedEq(Customer::getId, Order::getCustomerId)
+     *     .gt(Order::getAmount, 1000)
+     * );
+     * }</pre>
+     * generates: {@code EXISTS (SELECT 1 FROM orders WHERE customer.id = orders.customer_id AND amount > 1000)}
+     *
+     * @param outerField the field on the outer entity (e.g., Customer::getId)
+     * @param subField   the corresponding field on the subquery entity (e.g., Order::getCustomerId)
+     * @param <T>        the outer entity type
+     * @return this SubQuerySpec for chaining
+     */
+    public <T> SubQuerySpec<S> correlatedEq(SFunction<T, ?> outerField, SFunction<S, ?> subField) {
+        predicates.add(cb.equal(
+                correlatedRoot.get(LambdaUtils.getPropertyName(outerField)),
+                root.get(LambdaUtils.getPropertyName(subField))
+        ));
+        return this;
+    }
+
     private String property(SFunction<S, ?> field) {
         if (field == null) {
             throw new IllegalArgumentException("field must not be null");

@@ -497,7 +497,7 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
             }
         }
         if (childPredicates.isEmpty()) {
-            return cb.conjunction();
+            return cb.disjunction();
         }
         if (childPredicates.size() == 1) {
             return childPredicates.get(0);

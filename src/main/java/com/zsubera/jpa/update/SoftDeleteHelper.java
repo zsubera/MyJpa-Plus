@@ -15,6 +15,9 @@ import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 
 /**
  * Helper for working with {@link SoftDelete @SoftDelete} annotated entities.
@@ -31,6 +34,11 @@ import java.util.Map;
 public final class SoftDeleteHelper {
 
     private static final int MAX_CACHE_SIZE = 1024;
+
+    // Sentinel value for entities without a @SoftDelete field (avoids null in cache)
+    private static final String NO_FIELD_SENTINEL = "\0";
+
+    // Cache: entityClass -> field name (or sentinel for "no field")
     private static final Map<Class<?>, String> FIELD_CACHE =
             Collections.synchronizedMap(new LinkedHashMap<>(MAX_CACHE_SIZE, 0.75f, true) {
                 @Override
@@ -39,6 +47,12 @@ public final class SoftDeleteHelper {
                 }
             });
 
+    // Cache: entityClass -> Specification for isNotDeleted
+    private static final ConcurrentMap<Class<?>, Specification<?>> NOT_DELETED_SPEC_CACHE = new ConcurrentHashMap<>();
+
+    // Cache: entityClass -> Specification for isDeleted
+    private static final ConcurrentMap<Class<?>, Specification<?>> DELETED_SPEC_CACHE = new ConcurrentHashMap<>();
+
     private SoftDeleteHelper() {
     }
 
@@ -46,29 +60,41 @@ public final class SoftDeleteHelper {
      * Returns a {@link Specification} that excludes soft-deleted records.
      * The generated condition is {@code field = false} for {@code Boolean} fields,
      * or {@code field IS NULL} for reference {@code Boolean} fields that use null for "not deleted".
+     * <p>
+     * The result is cached per entity class to avoid creating new lambda instances on every call.
      */
+    @SuppressWarnings("unchecked")
     public static <T> Specification<T> isNotDeleted(Class<T> entityClass) {
-        String fieldName = findSoftDeleteField(entityClass);
-        if (fieldName == null) {
-            return (root, query, cb) -> cb.conjunction();
-        }
-        return (root, query, cb) -> buildNotDeleted(cb, root, fieldName, entityClass);
+        return (Specification<T>) NOT_DELETED_SPEC_CACHE.computeIfAbsent(entityClass, cls -> {
+            String fieldName = findSoftDeleteField(entityClass);
+            if (fieldName == null) {
+                return (Specification<T>) (root, query, cb) -> cb.conjunction();
+            }
+            return (Specification<T>) (root, query, cb) -> buildNotDeleted(cb, root, fieldName, entityClass);
+        });
     }
 
     /**
      * Returns a {@link Specification} that matches only soft-deleted records.
+     * <p>
+     * The result is cached per entity class to avoid creating new lambda instances on every call.
      */
+    @SuppressWarnings("unchecked")
     public static <T> Specification<T> isDeleted(Class<T> entityClass) {
-        String fieldName = findSoftDeleteField(entityClass);
-        if (fieldName == null) {
-            return (root, query, cb) -> cb.conjunction();
-        }
-        return (root, query, cb) -> buildDeleted(cb, root, fieldName);
+        return (Specification<T>) DELETED_SPEC_CACHE.computeIfAbsent(entityClass, cls -> {
+            String fieldName = findSoftDeleteField(entityClass);
+            if (fieldName == null) {
+                return (Specification<T>) (root, query, cb) -> cb.conjunction();
+            }
+            return (Specification<T>) (root, query, cb) -> buildDeleted(cb, root, fieldName);
+        });
     }
 
     /**
      * Builds a {@link QuerySpec} with the soft-delete condition pre-applied.
+     * The result is cached per entity class.
      */
+    @SuppressWarnings("unchecked")
     public static <T> QuerySpec<T> notDeletedQuery(Class<T> entityClass) {
         String fieldName = findSoftDeleteField(entityClass);
         if (fieldName == null) {
@@ -92,20 +118,16 @@ public final class SoftDeleteHelper {
     }
 
     private static String findSoftDeleteField(Class<?> entityClass) {
-        String result = FIELD_CACHE.get(entityClass);
-        if (result != null) {
-            return result.isEmpty() ? null : result;
-        }
-        result = FIELD_CACHE.computeIfAbsent(entityClass, cls -> {
+        String result = FIELD_CACHE.computeIfAbsent(entityClass, cls -> {
             for (Field field : getAllFields(cls)) {
                 if (field.isAnnotationPresent(SoftDelete.class)) {
                     field.setAccessible(true);
                     return field.getName();
                 }
             }
-            return "";
+            return NO_FIELD_SENTINEL;
         });
-        return result.isEmpty() ? null : result;
+        return NO_FIELD_SENTINEL.equals(result) ? null : result;
     }
 
     private static Field getField(Class<?> entityClass, String fieldName) {
