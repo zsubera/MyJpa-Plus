@@ -9,7 +9,7 @@ import java.util.concurrent.ConcurrentHashMap;
 
 public final class LambdaUtils {
 
-    private static final ConcurrentHashMap<SFunction<?, ?>, String> CACHE = new ConcurrentHashMap<>();
+    private static final ConcurrentHashMap<String, String> CACHE = new ConcurrentHashMap<>();
 
     private LambdaUtils() {
     }
@@ -18,21 +18,20 @@ public final class LambdaUtils {
         if (fn == null) {
             throw new IllegalArgumentException("SFunction must not be null");
         }
-        return CACHE.computeIfAbsent(fn, LambdaUtils::resolvePropertyName);
-    }
-
-    private static String resolvePropertyName(SFunction<?, ?> fn) {
         try {
             Method writeReplace = fn.getClass().getDeclaredMethod("writeReplace");
             writeReplace.setAccessible(true);
             SerializedLambda lambda = (SerializedLambda) writeReplace.invoke(fn);
-            String methodName = lambda.getImplMethodName();
-            return methodToProperty(methodName);
-        } catch (Exception e) {
+            String key = lambda.getImplClass() + "#" + lambda.getImplMethodName();
+            return CACHE.computeIfAbsent(key, k -> methodToProperty(lambda.getImplMethodName()));
+        } catch (ReflectiveOperationException e) {
             throw new IllegalArgumentException(
                     "Failed to extract property name from method reference. "
                             + "Ensure you are using a method reference directly (e.g., Entity::getField). "
                             + "Lambda expressions like e -> e.getField() are not supported.", e);
+        } catch (SecurityException e) {
+            throw new IllegalArgumentException(
+                    "Failed to extract property name due to security restriction.", e);
         }
     }
 

@@ -5,6 +5,8 @@ import com.zsubera.jpa.util.LambdaUtils;
 import java.util.List;
 import java.util.function.Consumer;
 
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+
 public class JoinGroup<T, J> implements ConditionBuilder<J, JoinGroup<T, J>> {
 
     private final QuerySpec<T> root;
@@ -48,6 +50,7 @@ public class JoinGroup<T, J> implements ConditionBuilder<J, JoinGroup<T, J>> {
         return this;
     }
 
+    @SuppressFBWarnings("EI_EXPOSE_REP")
     public QuerySpec<T> endJoin() {
         return root;
     }

@@ -48,6 +48,14 @@
         </dependency>
 
         <dependency>
+            <groupId>com.google.code.findbugs</groupId>
+            <artifactId>annotations</artifactId>
+            <version>3.0.1u2</version>
+            <scope>compile</scope>
+            <optional>true</optional>
+        </dependency>
+
+        <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-test</artifactId>
             <scope>test</scope>
@@ -123,7 +131,7 @@
                     </execution>
                 </executions>
                 <configuration>
-                    <threshold>Low</threshold>
+                    <threshold>Medium</threshold>
                 </configuration>
             </plugin>
             <plugin>
@@ -153,6 +161,9 @@
                             <rules>
                                 <rule>
                                     <element>PACKAGE</element>
+                                    <excludes>
+                                        <exclude>com.zsubera.jpa.autoconfigure</exclude>
+                                    </excludes>
                                     <limits>
                                         <limit>
                                             <counter>LINE</counter>

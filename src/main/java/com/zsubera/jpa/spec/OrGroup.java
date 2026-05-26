@@ -5,6 +5,8 @@ import com.zsubera.jpa.util.LambdaUtils;
 import java.util.List;
 import java.util.function.Consumer;
 
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+
 public class OrGroup<T> implements ConditionBuilder<T, OrGroup<T>> {
 
     private final QuerySpec<T> root;
@@ -40,6 +42,7 @@ public class OrGroup<T> implements ConditionBuilder<T, OrGroup<T>> {
         return new OrGroup<>(root);
     }
 
+    @SuppressFBWarnings("EI_EXPOSE_REP")
     public QuerySpec<T> endOr() {
         root.endOr();
         return root;
