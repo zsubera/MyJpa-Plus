@@ -24,6 +24,8 @@ public class MyJpaPlusProperties {
 
   @SuppressFBWarnings("EI_EXPOSE_REP")
   public SoftDelete getSoftDelete() {
+    return softDelete;
+  }
 
   @SuppressFBWarnings("EI_EXPOSE_REP2")
   public void setSoftDelete(SoftDelete softDelete) {
