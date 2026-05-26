@@ -7,20 +7,37 @@ import jakarta.persistence.*;
 @Table(name = "my_jpa_test_entity")
 class MyJpaTestEntity {
 
-    @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long id;
+  @Id
+  @GeneratedValue(strategy = GenerationType.IDENTITY)
+  private Long id;
 
-    private String name;
+  private String name;
 
-    @Column(name = "deleted_flag")
-    @SoftDelete
-    private Boolean deleted = false;
+  @Column(name = "deleted_flag")
+  @SoftDelete
+  private Boolean deleted = false;
 
-    public Long getId() { return id; }
-    public void setId(Long id) { this.id = id; }
-    public String getName() { return name; }
-    public void setName(String name) { this.name = name; }
-    public Boolean getDeleted() { return deleted; }
-    public void setDeleted(Boolean deleted) { this.deleted = deleted; }
+  public Long getId() {
+    return id;
+  }
+
+  public void setId(Long id) {
+    this.id = id;
+  }
+
+  public String getName() {
+    return name;
+  }
+
+  public void setName(String name) {
+    this.name = name;
+  }
+
+  public Boolean getDeleted() {
+    return deleted;
+  }
+
+  public void setDeleted(Boolean deleted) {
+    this.deleted = deleted;
+  }
 }

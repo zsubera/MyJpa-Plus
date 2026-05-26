@@ -2,161 +2,190 @@ package com.zsubera.jpa.spec;
 
 import jakarta.persistence.criteria.CriteriaBuilder;
 import jakarta.persistence.criteria.Predicate;
-
 import java.util.ArrayList;
 import java.util.List;
 import java.util.function.BiFunction;
 import java.util.function.Consumer;
 
 /**
- * Sealed hierarchy of condition node types used by {@link QuerySpec},
- * {@link ConditionBuilder}, and related classes to build deferred
- * {@link jakarta.persistence.criteria.Predicate} trees.
- * <p>
- * Each node represents a single condition or structural element
- * (e.g., simple comparison, JOIN, OR group, subquery, etc.) in the
- * query condition tree, which is resolved at query execution time.
+ * Sealed hierarchy of condition node types used by {@link QuerySpec}, {@link ConditionBuilder}, and
+ * related classes to build deferred {@link jakarta.persistence.criteria.Predicate} trees.
+ *
+ * <p>Each node represents a single condition or structural element (e.g., simple comparison, JOIN,
+ * OR group, subquery, etc.) in the query condition tree, which is resolved at query execution time.
  */
 public sealed interface ConditionNode
-        permits ConditionNode.SimpleNode, ConditionNode.JoinNode, ConditionNode.OrNode,
-        ConditionNode.AndNode, ConditionNode.MultiLikeNode, ConditionNode.CollectionNode,
-        ConditionNode.ExistsNode, ConditionNode.RawNode, ConditionNode.NegateNode {
+    permits ConditionNode.SimpleNode,
+        ConditionNode.JoinNode,
+        ConditionNode.OrNode,
+        ConditionNode.AndNode,
+        ConditionNode.MultiLikeNode,
+        ConditionNode.CollectionNode,
+        ConditionNode.ExistsNode,
+        ConditionNode.RawNode,
+        ConditionNode.NegateNode {
 
-    // ---- Operation enums ----
+  // ---- Operation enums ----
 
-    /** Comparison operators for field-value conditions. */
-    enum Op {EQ, NE, GT, GE, LT, LE, LIKE, NOT_LIKE, IN, NOT_IN, BETWEEN, NOT_BETWEEN, IS_NULL, IS_NOT_NULL, EQ_IGNORE_CASE, LIKE_IGNORE_CASE}
+  /** Comparison operators for field-value conditions. */
+  enum Op {
+    EQ,
+    NE,
+    GT,
+    GE,
+    LT,
+    LE,
+    LIKE,
+    NOT_LIKE,
+    IN,
+    NOT_IN,
+    BETWEEN,
+    NOT_BETWEEN,
+    IS_NULL,
+    IS_NOT_NULL,
+    EQ_IGNORE_CASE,
+    LIKE_IGNORE_CASE
+  }
 
-    /** Join types used in JOIN nodes. */
-    enum JoinType {INNER, LEFT, FETCH, LEFT_FETCH}
+  /** Join types used in JOIN nodes. */
+  enum JoinType {
+    INNER,
+    LEFT,
+    FETCH,
+    LEFT_FETCH
+  }
 
-    /** Collection operations for to-many association checks. */
-    enum CollectionOp {IS_EMPTY, IS_NOT_EMPTY}
+  /** Collection operations for to-many association checks. */
+  enum CollectionOp {
+    IS_EMPTY,
+    IS_NOT_EMPTY
+  }
 
-    // ---- Node types ----
+  // ---- Node types ----
 
-    /** A single field-value comparison condition. */
-    final class SimpleNode implements ConditionNode {
-        public final String fieldName;
-        public final Object value;
-        public final Op op;
-        public final char escapeChar;
+  /** A single field-value comparison condition. */
+  final class SimpleNode implements ConditionNode {
+    public final String fieldName;
+    public final Object value;
+    public final Op op;
+    public final char escapeChar;
 
-        public SimpleNode(String fieldName, Object value, Op op) {
-            this(fieldName, value, op, '\0');
-        }
-
-        public SimpleNode(String fieldName, Object value, Op op, char escapeChar) {
-            this.fieldName = fieldName;
-            this.value = value;
-            this.op = op;
-            this.escapeChar = escapeChar;
-        }
-
-        @Override
-        public String toString() {
-            return "SimpleNode[" + fieldName + " " + op + " " + value + "]";
-        }
+    public SimpleNode(String fieldName, Object value, Op op) {
+      this(fieldName, value, op, '\0');
     }
 
-    /** A JOIN or FETCH JOIN with inner conditions. */
-    final class JoinNode implements ConditionNode {
-        public final String fieldName;
-        public final JoinType joinType;
-        public final List<ConditionNode> innerConditions = new ArrayList<>();
-
-        public JoinNode(String fieldName, JoinType joinType) {
-            this.fieldName = fieldName;
-            this.joinType = joinType;
-        }
-
-        @Override
-        public String toString() {
-            return "JoinNode[" + joinType + " " + fieldName + " conditions=" + innerConditions + "]";
-        }
+    public SimpleNode(String fieldName, Object value, Op op, char escapeChar) {
+      this.fieldName = fieldName;
+      this.value = value;
+      this.op = op;
+      this.escapeChar = escapeChar;
     }
 
-    /** An OR group of conditions. */
-    final class OrNode implements ConditionNode {
-        public final List<ConditionNode> nodes = new ArrayList<>();
+    @Override
+    public String toString() {
+      return "SimpleNode[" + fieldName + " " + op + " " + value + "]";
+    }
+  }
 
-        @Override
-        public String toString() {
-            return "OrNode" + nodes;
-        }
+  /** A JOIN or FETCH JOIN with inner conditions. */
+  final class JoinNode implements ConditionNode {
+    public final String fieldName;
+    public final JoinType joinType;
+    public final List<ConditionNode> innerConditions = new ArrayList<>();
+
+    public JoinNode(String fieldName, JoinType joinType) {
+      this.fieldName = fieldName;
+      this.joinType = joinType;
     }
 
-    /** An AND group of conditions. */
-    final class AndNode implements ConditionNode {
-        public final List<ConditionNode> nodes = new ArrayList<>();
-
-        @Override
-        public String toString() {
-            return "AndNode" + nodes;
-        }
+    @Override
+    public String toString() {
+      return "JoinNode[" + joinType + " " + fieldName + " conditions=" + innerConditions + "]";
     }
+  }
 
-    /** A multi-field LIKE search (keyword matched against multiple fields with OR). */
-    final class MultiLikeNode implements ConditionNode {
-        public final String keyword;
-        public final String[] fieldNames;
+  /** An OR group of conditions. */
+  final class OrNode implements ConditionNode {
+    public final List<ConditionNode> nodes = new ArrayList<>();
 
-        public MultiLikeNode(String keyword, String[] fieldNames) {
-            this.keyword = keyword;
-            this.fieldNames = fieldNames;
-        }
+    @Override
+    public String toString() {
+      return "OrNode" + nodes;
     }
+  }
 
-    /** A collection IS_EMPTY or IS_NOT_EMPTY check. */
-    final class CollectionNode implements ConditionNode {
-        public final String fieldName;
-        public final CollectionOp op;
+  /** An AND group of conditions. */
+  final class AndNode implements ConditionNode {
+    public final List<ConditionNode> nodes = new ArrayList<>();
 
-        public CollectionNode(String fieldName, CollectionOp op) {
-            this.fieldName = fieldName;
-            this.op = op;
-        }
+    @Override
+    public String toString() {
+      return "AndNode" + nodes;
     }
+  }
 
-    /** An EXISTS or NOT EXISTS correlated subquery. */
-    final class ExistsNode<S> implements ConditionNode {
-        public final Class<S> subEntity;
-        public final Consumer<SubQuerySpec<S>> config;
-        public final boolean negate;
+  /** A multi-field LIKE search (keyword matched against multiple fields with OR). */
+  final class MultiLikeNode implements ConditionNode {
+    public final String keyword;
+    public final String[] fieldNames;
 
-        public ExistsNode(Class<S> subEntity, Consumer<SubQuerySpec<S>> config, boolean negate) {
-            this.subEntity = subEntity;
-            this.config = config;
-            this.negate = negate;
-        }
+    public MultiLikeNode(String keyword, String[] fieldNames) {
+      this.keyword = keyword;
+      this.fieldNames = fieldNames;
     }
+  }
 
-    /** A raw predicate function (escape hatch for complex conditions). */
-    final class RawNode implements ConditionNode {
-        public final BiFunction<jakarta.persistence.criteria.Path<?>, CriteriaBuilder, Predicate> fn;
+  /** A collection IS_EMPTY or IS_NOT_EMPTY check. */
+  final class CollectionNode implements ConditionNode {
+    public final String fieldName;
+    public final CollectionOp op;
 
-        public RawNode(BiFunction<jakarta.persistence.criteria.Path<?>, CriteriaBuilder, Predicate> fn) {
-            this.fn = fn;
-        }
+    public CollectionNode(String fieldName, CollectionOp op) {
+      this.fieldName = fieldName;
+      this.op = op;
     }
+  }
 
-    /** A negated group node: NOT(inner conditions). */
-    final class NegateNode implements ConditionNode {
-        public final ConditionNode inner;
+  /** An EXISTS or NOT EXISTS correlated subquery. */
+  final class ExistsNode<S> implements ConditionNode {
+    public final Class<S> subEntity;
+    public final Consumer<SubQuerySpec<S>> config;
+    public final boolean negate;
 
-        public NegateNode(ConditionNode inner) {
-            this.inner = inner;
-        }
+    public ExistsNode(Class<S> subEntity, Consumer<SubQuerySpec<S>> config, boolean negate) {
+      this.subEntity = subEntity;
+      this.config = config;
+      this.negate = negate;
     }
+  }
 
-    /** Order node for ORDER BY clauses. */
-    final class OrderNode {
-        public final String fieldName;
-        public final boolean asc;
+  /** A raw predicate function (escape hatch for complex conditions). */
+  final class RawNode implements ConditionNode {
+    public final BiFunction<jakarta.persistence.criteria.Path<?>, CriteriaBuilder, Predicate> fn;
 
-        public OrderNode(String fieldName, boolean asc) {
-            this.fieldName = fieldName;
-            this.asc = asc;
-        }
+    public RawNode(
+        BiFunction<jakarta.persistence.criteria.Path<?>, CriteriaBuilder, Predicate> fn) {
+      this.fn = fn;
     }
+  }
+
+  /** A negated group node: NOT(inner conditions). */
+  final class NegateNode implements ConditionNode {
+    public final ConditionNode inner;
+
+    public NegateNode(ConditionNode inner) {
+      this.inner = inner;
+    }
+  }
+
+  /** Order node for ORDER BY clauses. */
+  final class OrderNode {
+    public final String fieldName;
+    public final boolean asc;
+
+    public OrderNode(String fieldName, boolean asc) {
+      this.fieldName = fieldName;
+      this.asc = asc;
+    }
+  }
 }

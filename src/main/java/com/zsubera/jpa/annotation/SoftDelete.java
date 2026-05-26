@@ -8,22 +8,24 @@ import java.lang.annotation.Target;
 
 /**
  * Marks an entity field as the soft-delete flag.
- * <p>
- * This annotation marks a field as indicating whether an entity has been
- * soft-deleted. The field should be of type {@code Boolean} or {@code boolean},
- * where {@code true} means "deleted" and {@code false} (or {@code null}) means "not deleted".
- * <p>
- * <strong>Note:</strong> This annotation does NOT automatically inject WHERE conditions
- * into all queries. To filter out soft-deleted records, you must explicitly use
- * the helper methods provided by the library:
+ *
+ * <p>This annotation marks a field as indicating whether an entity has been soft-deleted. The field
+ * should be of type {@code Boolean} or {@code boolean}, where {@code true} means "deleted" and
+ * {@code false} (or {@code null}) means "not deleted".
+ *
+ * <p><strong>Note:</strong> This annotation does NOT automatically inject WHERE conditions into all
+ * queries. To filter out soft-deleted records, you must explicitly use the helper methods provided
+ * by the library:
+ *
  * <ul>
- *   <li>{@code repository.findNotDeletedAll()} — find all non-deleted entities</li>
- *   <li>{@code repository.findNotDeletedAll(spec)} — with additional filtering</li>
- *   <li>{@code SoftDeleteHelper.isNotDeleted(entityClass)} — get a {@code Specification} filter</li>
- *   <li>{@code SoftDeleteHelper.notDeletedQuery(entityClass)} — build a {@code QuerySpec} with filter</li>
+ *   <li>{@code repository.findNotDeletedAll()} — find all non-deleted entities
+ *   <li>{@code repository.findNotDeletedAll(spec)} — with additional filtering
+ *   <li>{@code SoftDeleteHelper.isNotDeleted(entityClass)} — get a {@code Specification} filter
+ *   <li>{@code SoftDeleteHelper.notDeletedQuery(entityClass)} — build a {@code QuerySpec} with
+ *       filter
  * </ul>
- * <p>
- * Example usage:
+ *
+ * <p>Example usage:
  *
  * <pre>{@code
  * @Entity
@@ -46,5 +48,4 @@ import java.lang.annotation.Target;
 @Documented
 @Target(ElementType.FIELD)
 @Retention(RetentionPolicy.RUNTIME)
-public @interface SoftDelete {
-}
+public @interface SoftDelete {}
