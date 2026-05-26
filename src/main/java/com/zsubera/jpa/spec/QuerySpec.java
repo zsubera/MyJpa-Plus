@@ -9,6 +9,8 @@ import java.util.*;
 import java.util.function.BiFunction;
 import java.util.function.Consumer;
 
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+
 /**
  * A type-safe, lambda-based builder for JPA {@link Specification} queries.
  * <p>
@@ -30,6 +32,7 @@ import java.util.function.Consumer;
  *
  * @param <T> the root entity type being queried
  */
+@SuppressFBWarnings("SE_BAD_FIELD")
 public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, QuerySpec<T>> {
 
     private final List<ConditionNode> conditions = new ArrayList<>();
@@ -37,6 +40,7 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
     private boolean distinct = false;
     private final List<String> groupByFields = new ArrayList<>();
     private final List<BiFunction<Path<T>, CriteriaBuilder, Predicate>> havingConditions = new ArrayList<>();
+    private final List<OrderNode> orderNodes = new ArrayList<>();
 
     List<ConditionNode> currentGroup() {
         return groupStack.isEmpty() ? conditions : groupStack.peek();
@@ -73,6 +77,28 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
     }
 
     /**
+     * Adds ascending ORDER BY on the given fields.
+     */
+    @SafeVarargs
+    public final QuerySpec<T> orderByAsc(SFunction<T, ?>... fields) {
+        for (SFunction<T, ?> f : fields) {
+            orderNodes.add(new OrderNode(LambdaUtils.getPropertyName(f), true));
+        }
+        return this;
+    }
+
+    /**
+     * Adds descending ORDER BY on the given fields.
+     */
+    @SafeVarargs
+    public final QuerySpec<T> orderByDesc(SFunction<T, ?>... fields) {
+        for (SFunction<T, ?> f : fields) {
+            orderNodes.add(new OrderNode(LambdaUtils.getPropertyName(f), false));
+        }
+        return this;
+    }
+
+    /**
      * Adds an INNER JOIN on the given relationship field. Use the returned
      * {@link JoinGroup} to add conditions on the joined entity, then call
      * {@link JoinGroup#endJoin()} to return to this QuerySpec.
@@ -96,6 +122,24 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
      */
     public <J> JoinGroup<T, J> leftJoin(SFunction<T, ?> field) {
         JoinNode joinNode = new JoinNode(LambdaUtils.getPropertyName(field), JoinType.LEFT);
+        currentGroup().add(joinNode);
+        return new JoinGroup<>(this, joinNode);
+    }
+
+    /**
+     * Adds a FETCH JOIN to eagerly load the given relationship.
+     */
+    public <J> JoinGroup<T, J> fetchJoin(SFunction<T, ?> field) {
+        JoinNode joinNode = new JoinNode(LambdaUtils.getPropertyName(field), JoinType.FETCH);
+        currentGroup().add(joinNode);
+        return new JoinGroup<>(this, joinNode);
+    }
+
+    /**
+     * Adds a LEFT FETCH JOIN.
+     */
+    public <J> JoinGroup<T, J> leftFetchJoin(SFunction<T, ?> field) {
+        JoinNode joinNode = new JoinNode(LambdaUtils.getPropertyName(field), JoinType.LEFT_FETCH);
         currentGroup().add(joinNode);
         return new JoinGroup<>(this, joinNode);
     }
@@ -252,7 +296,7 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
         if (external == null) {
             return this;
         }
-        return external.and(this);
+        return this.and(external);
     }
 
     @Override
@@ -270,6 +314,17 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
             for (BiFunction<Path<T>, CriteriaBuilder, Predicate> having : havingConditions) {
                 query.having(having.apply(root, cb));
             }
+        }
+        if (!orderNodes.isEmpty()) {
+            List<jakarta.persistence.criteria.Order> orders = new ArrayList<>();
+            for (OrderNode node : orderNodes) {
+                if (node.asc) {
+                    orders.add(cb.asc(root.get(node.fieldName)));
+                } else {
+                    orders.add(cb.desc(root.get(node.fieldName)));
+                }
+            }
+            query.orderBy(orders);
         }
         Map<String, Join<?, ?>> joinCache = new LinkedHashMap<>();
         List<Predicate> predicates = new ArrayList<>();
@@ -371,6 +426,11 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
                 return cb.between((Expression<Comparable>) fieldPath,
                         (Comparable) range[0], (Comparable) range[1]);
             }
+            case NOT_BETWEEN: {
+                Comparable<?>[] range = (Comparable<?>[]) node.value;
+                return cb.not(cb.between((Expression<Comparable>) fieldPath,
+                        (Comparable) range[0], (Comparable) range[1]));
+            }
             default:
                 return cb.conjunction();
         }
@@ -382,10 +442,14 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
         String fullPath = (pathPrefix != null && !pathPrefix.isEmpty() ? pathPrefix + "." : "") + node.fieldName;
 
         Join<?, ?> join = joinCache.computeIfAbsent(fullPath, k -> {
+            boolean isFetch = node.joinType == JoinType.FETCH || node.joinType == JoinType.LEFT_FETCH;
             jakarta.persistence.criteria.JoinType jt =
-                    node.joinType == JoinType.LEFT
+                    (node.joinType == JoinType.LEFT || node.joinType == JoinType.LEFT_FETCH)
                             ? jakarta.persistence.criteria.JoinType.LEFT
                             : jakarta.persistence.criteria.JoinType.INNER;
+            if (isFetch) {
+                return (Join<?, ?>) ((From<?, ?>) path).fetch(node.fieldName, jt);
+            }
             return ((From<?, ?>) path).join(node.fieldName, jt);
         });
 
@@ -451,9 +515,9 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
         return node.negate ? cb.not(cb.exists(subquery)) : cb.exists(subquery);
     }
 
-    enum Op {EQ, NE, GT, GE, LT, LE, LIKE, NOT_LIKE, IN, NOT_IN, BETWEEN, IS_NULL, IS_NOT_NULL, EQ_IGNORE_CASE, LIKE_IGNORE_CASE}
+    enum Op {EQ, NE, GT, GE, LT, LE, LIKE, NOT_LIKE, IN, NOT_IN, BETWEEN, NOT_BETWEEN, IS_NULL, IS_NOT_NULL, EQ_IGNORE_CASE, LIKE_IGNORE_CASE}
 
-    enum JoinType {INNER, LEFT}
+    enum JoinType {INNER, LEFT, FETCH, LEFT_FETCH}
 
     enum CollectionOp {IS_EMPTY, IS_NOT_EMPTY}
 
@@ -546,6 +610,15 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
         final ConditionNode inner;
         NegateNode(ConditionNode inner) {
             this.inner = inner;
+        }
+    }
+
+    static final class OrderNode {
+        final String fieldName;
+        final boolean asc;
+        OrderNode(String fieldName, boolean asc) {
+            this.fieldName = fieldName;
+            this.asc = asc;
         }
     }
 }

@@ -28,12 +28,14 @@ import java.util.function.BiFunction;
  */
 public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> {
 
-    /**
-     * Returns the mutable list to which condition nodes are appended.
-     *
-     * @return the active condition node list for the current builder context
-     */
     List<QuerySpec.ConditionNode> conditions();
+
+    private String fieldName(SFunction<E, ?> field) {
+        if (field == null) {
+            throw new IllegalArgumentException("field must not be null");
+        }
+        return LambdaUtils.getPropertyName(field);
+    }
 
     /**
      * Casts {@code this} to the concrete builder type for method chaining.
@@ -87,10 +89,7 @@ public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> {
      * Adds a greater-than condition: {@code field > value}.
      */
     default SELF gt(SFunction<E, ?> field, Comparable<?> value) {
-        if (field == null) {
-            throw new IllegalArgumentException("field must not be null");
-        }
-        conditions().add(new QuerySpec.SimpleNode(LambdaUtils.getPropertyName(field), value, QuerySpec.Op.GT));
+        conditions().add(new QuerySpec.SimpleNode(fieldName(field), value, QuerySpec.Op.GT));
         return self();
     }
 
@@ -98,10 +97,7 @@ public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> {
      * Adds a greater-than-or-equal condition: {@code field >= value}.
      */
     default SELF ge(SFunction<E, ?> field, Comparable<?> value) {
-        if (field == null) {
-            throw new IllegalArgumentException("field must not be null");
-        }
-        conditions().add(new QuerySpec.SimpleNode(LambdaUtils.getPropertyName(field), value, QuerySpec.Op.GE));
+        conditions().add(new QuerySpec.SimpleNode(fieldName(field), value, QuerySpec.Op.GE));
         return self();
     }
 
@@ -109,10 +105,7 @@ public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> {
      * Adds a less-than condition: {@code field < value}.
      */
     default SELF lt(SFunction<E, ?> field, Comparable<?> value) {
-        if (field == null) {
-            throw new IllegalArgumentException("field must not be null");
-        }
-        conditions().add(new QuerySpec.SimpleNode(LambdaUtils.getPropertyName(field), value, QuerySpec.Op.LT));
+        conditions().add(new QuerySpec.SimpleNode(fieldName(field), value, QuerySpec.Op.LT));
         return self();
     }
 
@@ -120,10 +113,7 @@ public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> {
      * Adds a less-than-or-equal condition: {@code field <= value}.
      */
     default SELF le(SFunction<E, ?> field, Comparable<?> value) {
-        if (field == null) {
-            throw new IllegalArgumentException("field must not be null");
-        }
-        conditions().add(new QuerySpec.SimpleNode(LambdaUtils.getPropertyName(field), value, QuerySpec.Op.LE));
+        conditions().add(new QuerySpec.SimpleNode(fieldName(field), value, QuerySpec.Op.LE));
         return self();
     }
 
@@ -134,10 +124,7 @@ public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> {
      * The caller is responsible for including wildcards (e.g. {@code "%keyword%"}).
      */
     default SELF like(SFunction<E, ?> field, String value) {
-        if (field == null) {
-            throw new IllegalArgumentException("field must not be null");
-        }
-        conditions().add(new QuerySpec.SimpleNode(LambdaUtils.getPropertyName(field), value, QuerySpec.Op.LIKE));
+        conditions().add(new QuerySpec.SimpleNode(fieldName(field), value, QuerySpec.Op.LIKE));
         return self();
     }
 
@@ -145,10 +132,7 @@ public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> {
      * Adds a NOT LIKE condition: {@code field NOT LIKE value}.
      */
     default SELF notLike(SFunction<E, ?> field, String value) {
-        if (field == null) {
-            throw new IllegalArgumentException("field must not be null");
-        }
-        conditions().add(new QuerySpec.SimpleNode(LambdaUtils.getPropertyName(field), value, QuerySpec.Op.NOT_LIKE));
+        conditions().add(new QuerySpec.SimpleNode(fieldName(field), value, QuerySpec.Op.NOT_LIKE));
         return self();
     }
 
@@ -156,10 +140,7 @@ public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> {
      * Adds a LIKE condition for prefix matching: {@code field LIKE 'value%'}.
      */
     default SELF startsWith(SFunction<E, ?> field, String value) {
-        if (field == null) {
-            throw new IllegalArgumentException("field must not be null");
-        }
-        conditions().add(new QuerySpec.SimpleNode(LambdaUtils.getPropertyName(field), value + "%", QuerySpec.Op.LIKE));
+        conditions().add(new QuerySpec.SimpleNode(fieldName(field), value + "%", QuerySpec.Op.LIKE));
         return self();
     }
 
@@ -167,10 +148,7 @@ public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> {
      * Adds a LIKE condition for suffix matching: {@code field LIKE '%value'}.
      */
     default SELF endsWith(SFunction<E, ?> field, String value) {
-        if (field == null) {
-            throw new IllegalArgumentException("field must not be null");
-        }
-        conditions().add(new QuerySpec.SimpleNode(LambdaUtils.getPropertyName(field), "%" + value, QuerySpec.Op.LIKE));
+        conditions().add(new QuerySpec.SimpleNode(fieldName(field), "%" + value, QuerySpec.Op.LIKE));
         return self();
     }
 
@@ -178,10 +156,7 @@ public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> {
      * Adds a LIKE condition for substring matching: {@code field LIKE '%value%'}.
      */
     default SELF contains(SFunction<E, ?> field, String value) {
-        if (field == null) {
-            throw new IllegalArgumentException("field must not be null");
-        }
-        conditions().add(new QuerySpec.SimpleNode(LambdaUtils.getPropertyName(field), "%" + value + "%", QuerySpec.Op.LIKE));
+        conditions().add(new QuerySpec.SimpleNode(fieldName(field), "%" + value + "%", QuerySpec.Op.LIKE));
         return self();
     }
 
@@ -262,11 +237,17 @@ public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> {
      * @return this builder for chaining
      */
     default SELF between(SFunction<E, ?> field, Comparable<?> start, Comparable<?> end) {
-        if (field == null) {
-            throw new IllegalArgumentException("field must not be null");
-        }
-        conditions().add(new QuerySpec.SimpleNode(LambdaUtils.getPropertyName(field),
+        conditions().add(new QuerySpec.SimpleNode(fieldName(field),
                 new Comparable<?>[]{start, end}, QuerySpec.Op.BETWEEN));
+        return self();
+    }
+
+    /**
+     * Adds a NOT BETWEEN condition: {@code field NOT BETWEEN start AND end}.
+     */
+    default SELF notBetween(SFunction<E, ?> field, Comparable<?> start, Comparable<?> end) {
+        conditions().add(new QuerySpec.SimpleNode(fieldName(field),
+                new Comparable<?>[]{start, end}, QuerySpec.Op.NOT_BETWEEN));
         return self();
     }
 
@@ -276,10 +257,7 @@ public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> {
      * Adds an IS NULL condition: {@code field IS NULL}.
      */
     default SELF isNull(SFunction<E, ?> field) {
-        if (field == null) {
-            throw new IllegalArgumentException("field must not be null");
-        }
-        conditions().add(new QuerySpec.SimpleNode(LambdaUtils.getPropertyName(field), null, QuerySpec.Op.IS_NULL));
+        conditions().add(new QuerySpec.SimpleNode(fieldName(field), null, QuerySpec.Op.IS_NULL));
         return self();
     }
 
@@ -287,10 +265,7 @@ public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> {
      * Adds an IS NOT NULL condition: {@code field IS NOT NULL}.
      */
     default SELF isNotNull(SFunction<E, ?> field) {
-        if (field == null) {
-            throw new IllegalArgumentException("field must not be null");
-        }
-        conditions().add(new QuerySpec.SimpleNode(LambdaUtils.getPropertyName(field), null, QuerySpec.Op.IS_NOT_NULL));
+        conditions().add(new QuerySpec.SimpleNode(fieldName(field), null, QuerySpec.Op.IS_NOT_NULL));
         return self();
     }
 
@@ -313,10 +288,7 @@ public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> {
      * Case-insensitive LIKE: {@code UPPER(field) LIKE UPPER('%value%')}.
      */
     default SELF likeIgnoreCase(SFunction<E, ?> field, String value) {
-        if (field == null) {
-            throw new IllegalArgumentException("field must not be null");
-        }
-        conditions().add(new QuerySpec.SimpleNode(LambdaUtils.getPropertyName(field), value, QuerySpec.Op.LIKE_IGNORE_CASE));
+        conditions().add(new QuerySpec.SimpleNode(fieldName(field), value, QuerySpec.Op.LIKE_IGNORE_CASE));
         return self();
     }
 
@@ -330,7 +302,7 @@ public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> {
         if (field == null) {
             throw new IllegalArgumentException("field must not be null");
         }
-        conditions().add(new QuerySpec.CollectionNode(LambdaUtils.getPropertyName(field), QuerySpec.CollectionOp.IS_EMPTY));
+        conditions().add(new QuerySpec.CollectionNode(fieldName(field), QuerySpec.CollectionOp.IS_EMPTY));
         return self();
     }
 
@@ -341,7 +313,7 @@ public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> {
         if (field == null) {
             throw new IllegalArgumentException("field must not be null");
         }
-        conditions().add(new QuerySpec.CollectionNode(LambdaUtils.getPropertyName(field), QuerySpec.CollectionOp.IS_NOT_EMPTY));
+        conditions().add(new QuerySpec.CollectionNode(fieldName(field), QuerySpec.CollectionOp.IS_NOT_EMPTY));
         return self();
     }
 
