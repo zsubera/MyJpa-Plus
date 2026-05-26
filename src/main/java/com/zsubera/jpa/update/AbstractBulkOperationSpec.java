@@ -10,6 +10,7 @@ import jakarta.persistence.criteria.Predicate;
 import jakarta.persistence.criteria.Root;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.List;
 import java.util.function.BiFunction;
 import java.util.function.Consumer;
@@ -134,11 +135,7 @@ public abstract class AbstractBulkOperationSpec<
         implements BulkConditionNode {}
 
     /** An OR group of child nodes. */
-    record OrNode(List<BulkConditionNode> children) implements BulkConditionNode {
-      OrNode {
-        children = List.copyOf(children);
-      }
-    }
+    record OrNode(List<BulkConditionNode> children) implements BulkConditionNode {}
 
     /** A NOT wrapper around a child node. */
     record NotNode(BulkConditionNode child) implements BulkConditionNode {}
@@ -165,7 +162,7 @@ public abstract class AbstractBulkOperationSpec<
   public SELF or(Consumer<OrConditionBuilder<T, SELF>> config) {
     List<BulkConditionNode> children = new ArrayList<>();
     config.accept(new OrConditionBuilder<>(self(), children));
-    conditionNodes.add(new BulkConditionNode.OrNode(children));
+    conditionNodes.add(new BulkConditionNode.OrNode(Collections.unmodifiableList(children)));
     return self();
   }
 
@@ -185,7 +182,9 @@ public abstract class AbstractBulkOperationSpec<
     List<BulkConditionNode> children = new ArrayList<>();
     config.accept(new OrConditionBuilder<>(self(), children));
     BulkConditionNode combined =
-        children.size() == 1 ? children.get(0) : new BulkConditionNode.OrNode(children);
+        children.size() == 1
+            ? children.get(0)
+            : new BulkConditionNode.OrNode(Collections.unmodifiableList(children));
     conditionNodes.add(new BulkConditionNode.NotNode(combined));
     return self();
   }
