@@ -211,6 +211,21 @@ public class SubQuerySpec<S> {
         return this;
     }
 
+    public SubQuerySpec<S> eqIgnoreCase(SFunction<S, ?> field, String value) {
+        String name = property(field);
+        if (value == null) {
+            predicates.add(cb.isNull(root.get(name)));
+        } else {
+            predicates.add(cb.equal(cb.upper(root.get(name).as(String.class)), value.toUpperCase()));
+        }
+        return this;
+    }
+
+    public SubQuerySpec<S> likeIgnoreCase(SFunction<S, ?> field, String value) {
+        predicates.add(cb.like(cb.upper(root.get(property(field)).as(String.class)), value.toUpperCase()));
+        return this;
+    }
+
     // ---- Collection empty checks ----
 
     @SuppressWarnings("unchecked")

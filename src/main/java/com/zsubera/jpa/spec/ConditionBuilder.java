@@ -294,6 +294,32 @@ public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> {
         return self();
     }
 
+    /**
+     * Case-insensitive equality: {@code UPPER(field) = UPPER(value)}.
+     * Useful for case-insensitive username/email lookups.
+     */
+    default SELF eqIgnoreCase(SFunction<E, ?> field, String value) {
+        if (field == null) {
+            throw new IllegalArgumentException("field must not be null");
+        }
+        if (value == null) {
+            return isNull(field);
+        }
+        conditions().add(new QuerySpec.SimpleNode(LambdaUtils.getPropertyName(field), value, QuerySpec.Op.EQ_IGNORE_CASE));
+        return self();
+    }
+
+    /**
+     * Case-insensitive LIKE: {@code UPPER(field) LIKE UPPER('%value%')}.
+     */
+    default SELF likeIgnoreCase(SFunction<E, ?> field, String value) {
+        if (field == null) {
+            throw new IllegalArgumentException("field must not be null");
+        }
+        conditions().add(new QuerySpec.SimpleNode(LambdaUtils.getPropertyName(field), value, QuerySpec.Op.LIKE_IGNORE_CASE));
+        return self();
+    }
+
     // ---- Collection empty checks ----
 
     /**

@@ -300,6 +300,10 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
                 return cb.like(fieldPath.as(String.class), (String) node.value);
             case NOT_LIKE:
                 return cb.notLike(fieldPath.as(String.class), (String) node.value);
+            case EQ_IGNORE_CASE:
+                return cb.equal(cb.upper(fieldPath.as(String.class)), ((String) node.value).toUpperCase());
+            case LIKE_IGNORE_CASE:
+                return cb.like(cb.upper(fieldPath.as(String.class)), ((String) node.value).toUpperCase());
             case IS_NULL:
                 return cb.isNull(fieldPath);
             case IS_NOT_NULL:
@@ -415,7 +419,7 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
         return node.negate ? cb.not(cb.exists(subquery)) : cb.exists(subquery);
     }
 
-    enum Op {EQ, NE, GT, GE, LT, LE, LIKE, NOT_LIKE, IN, NOT_IN, BETWEEN, IS_NULL, IS_NOT_NULL}
+    enum Op {EQ, NE, GT, GE, LT, LE, LIKE, NOT_LIKE, IN, NOT_IN, BETWEEN, IS_NULL, IS_NOT_NULL, EQ_IGNORE_CASE, LIKE_IGNORE_CASE}
 
     enum JoinType {INNER, LEFT}
 
