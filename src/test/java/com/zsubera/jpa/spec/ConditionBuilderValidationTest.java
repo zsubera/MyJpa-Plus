@@ -318,13 +318,15 @@ class ConditionBuilderValidationTest {
   @Test
   void testNotBetweenNullStartThrowsException() {
     QuerySpec<TestEntity> qs = new QuerySpec<>();
-    assertThrows(IllegalArgumentException.class, () -> qs.notBetween(TestEntity::getStatus, null, 5));
+    assertThrows(
+        IllegalArgumentException.class, () -> qs.notBetween(TestEntity::getStatus, null, 5));
   }
 
   @Test
   void testNotBetweenNullEndThrowsException() {
     QuerySpec<TestEntity> qs = new QuerySpec<>();
-    assertThrows(IllegalArgumentException.class, () -> qs.notBetween(TestEntity::getStatus, 1, null));
+    assertThrows(
+        IllegalArgumentException.class, () -> qs.notBetween(TestEntity::getStatus, 1, null));
   }
 
   @Test

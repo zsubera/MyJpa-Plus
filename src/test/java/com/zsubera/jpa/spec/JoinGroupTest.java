@@ -356,8 +356,7 @@ class JoinGroupTest {
     repository.save(child);
 
     QuerySpec<TestEntity> qs = new QuerySpec<>();
-    qs.<ParentEntity>leftJoin(
-        TestEntity::getParent, j -> j.eq(ParentEntity::getCategory, "admin"));
+    qs.<ParentEntity>leftJoin(TestEntity::getParent, j -> j.eq(ParentEntity::getCategory, "admin"));
     List<TestEntity> result = repository.findAll(qs.toSpecification());
     assertEquals(1, result.size());
   }

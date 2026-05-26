@@ -1,10 +1,13 @@
 package com.zsubera.jpa.template;
 
+import static org.junit.jupiter.api.Assertions.*;
+
 import com.zsubera.jpa.spec.QuerySpec;
 import com.zsubera.jpa.spec.TestEntity;
 import com.zsubera.jpa.spec.TestEntityRepository;
 import com.zsubera.jpa.update.DeleteSpec;
 import com.zsubera.jpa.update.UpdateSpec;
+import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
@@ -17,10 +20,6 @@ import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
 import org.springframework.test.context.ContextConfiguration;
-
-import java.util.List;
-
-import static org.junit.jupiter.api.Assertions.*;
 
 @DataJpaTest
 @ContextConfiguration(classes = MyJpaTemplateTest.TestConfig.class)
@@ -139,7 +138,10 @@ class MyJpaTemplateTest {
     repository.save(e);
 
     UpdateSpec<TestEntity> spec =
-        template.update(TestEntity.class).set(TestEntity::getName, "new").eq(TestEntity::getName, "old");
+        template
+            .update(TestEntity.class)
+            .set(TestEntity::getName, "new")
+            .eq(TestEntity::getName, "old");
     int count = template.execute(spec);
     assertEquals(1, count);
   }

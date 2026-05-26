@@ -880,7 +880,8 @@ public class QuerySpecTest {
     repository.save(child);
 
     QuerySpec<TestEntity> qs = new QuerySpec<>();
-    qs.<ParentEntity>fetchJoin(TestEntity::getParent, j -> j.eq(ParentEntity::getCategory, "admin"));
+    qs.<ParentEntity>fetchJoin(
+        TestEntity::getParent, j -> j.eq(ParentEntity::getCategory, "admin"));
     List<TestEntity> result = repository.findAll(qs.toSpecification());
     assertEquals(1, result.size());
   }
@@ -888,7 +889,8 @@ public class QuerySpecTest {
   @Test
   void testLeftFetchJoinWithConsumer() {
     QuerySpec<TestEntity> qs = new QuerySpec<>();
-    qs.<ParentEntity>leftFetchJoin(TestEntity::getParent, j -> j.eq(ParentEntity::getCategory, "admin"));
+    qs.<ParentEntity>leftFetchJoin(
+        TestEntity::getParent, j -> j.eq(ParentEntity::getCategory, "admin"));
     assertNotNull(qs.toSpecification());
   }
 

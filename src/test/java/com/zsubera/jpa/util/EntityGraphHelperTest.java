@@ -2,7 +2,6 @@ package com.zsubera.jpa.util;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-import com.zsubera.jpa.spec.ParentEntity;
 import com.zsubera.jpa.spec.TestApplication;
 import com.zsubera.jpa.spec.TestEntity;
 import jakarta.persistence.EntityGraph;
@@ -11,7 +10,6 @@ import jakarta.persistence.PersistenceContext;
 import jakarta.persistence.TypedQuery;
 import jakarta.persistence.criteria.CriteriaBuilder;
 import jakarta.persistence.criteria.CriteriaQuery;
-import jakarta.persistence.criteria.Root;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;

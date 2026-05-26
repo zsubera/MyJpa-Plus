@@ -424,10 +424,16 @@ class SubQuerySpecTest {
     repository.save(child);
 
     QuerySpec<ParentEntity> qs = new QuerySpec<>();
-    qs.exists(TestEntity.class, sub ->
-        sub.where(r -> em.getCriteriaBuilder().equal(
-                r.get("parent").get("id"), sub.<ParentEntity>correlated().get("id")))
-            .gt(TestEntity::getStatus, 3));
+    qs.exists(
+        TestEntity.class,
+        sub ->
+            sub.where(
+                    r ->
+                        em.getCriteriaBuilder()
+                            .equal(
+                                r.get("parent").get("id"),
+                                sub.<ParentEntity>correlated().get("id")))
+                .gt(TestEntity::getStatus, 3));
     List<ParentEntity> result = parentRepository.findAll(qs.toSpecification());
     assertEquals(1, result.size());
   }
@@ -475,8 +481,9 @@ class SubQuerySpecTest {
     repository.save(child);
 
     QuerySpec<ParentEntity> qs = new QuerySpec<>();
-    qs.exists(TestEntity.class, sub ->
-        sub.notIn(TestEntity::getStatus, java.util.Arrays.asList(99, 100)));
+    qs.exists(
+        TestEntity.class,
+        sub -> sub.notIn(TestEntity::getStatus, java.util.Arrays.asList(99, 100)));
     List<ParentEntity> result = parentRepository.findAll(qs.toSpecification());
     assertEquals(1, result.size());
   }
@@ -498,10 +505,14 @@ class SubQuerySpecTest {
     em.flush();
 
     QuerySpec<ParentEntity> qs = new QuerySpec<>();
-    qs.exists(ParentEntity.class, sub ->
-        sub.where(r -> em.getCriteriaBuilder().equal(
-                r.get("id"), sub.<ParentEntity>correlated().get("id")))
-            .isEmpty(ParentEntity::getChildren));
+    qs.exists(
+        ParentEntity.class,
+        sub ->
+            sub.where(
+                    r ->
+                        em.getCriteriaBuilder()
+                            .equal(r.get("id"), sub.<ParentEntity>correlated().get("id")))
+                .isEmpty(ParentEntity::getChildren));
     List<ParentEntity> result = parentRepository.findAll(qs.toSpecification());
     assertEquals(1, result.size());
     assertEquals("empty", result.get(0).getCategory());
@@ -524,10 +535,14 @@ class SubQuerySpecTest {
     em.flush();
 
     QuerySpec<ParentEntity> qs = new QuerySpec<>();
-    qs.exists(ParentEntity.class, sub ->
-        sub.where(r -> em.getCriteriaBuilder().equal(
-                r.get("id"), sub.<ParentEntity>correlated().get("id")))
-            .isNotEmpty(ParentEntity::getChildren));
+    qs.exists(
+        ParentEntity.class,
+        sub ->
+            sub.where(
+                    r ->
+                        em.getCriteriaBuilder()
+                            .equal(r.get("id"), sub.<ParentEntity>correlated().get("id")))
+                .isNotEmpty(ParentEntity::getChildren));
     List<ParentEntity> result = parentRepository.findAll(qs.toSpecification());
     assertEquals(1, result.size());
     assertEquals("hasChild", result.get(0).getCategory());
@@ -547,7 +562,8 @@ class SubQuerySpecTest {
     RuntimeException ex =
         assertThrows(RuntimeException.class, () -> parentRepository.findAll(qs.toSpecification()));
     assertTrue(
-        ex.getCause() instanceof IllegalArgumentException || ex instanceof IllegalArgumentException);
+        ex.getCause() instanceof IllegalArgumentException
+            || ex instanceof IllegalArgumentException);
   }
 
   @Test
@@ -557,7 +573,8 @@ class SubQuerySpecTest {
     RuntimeException ex =
         assertThrows(RuntimeException.class, () -> parentRepository.findAll(qs.toSpecification()));
     assertTrue(
-        ex.getCause() instanceof IllegalArgumentException || ex instanceof IllegalArgumentException);
+        ex.getCause() instanceof IllegalArgumentException
+            || ex instanceof IllegalArgumentException);
   }
 
   private TestEntity newEntity(String name, int status) {
