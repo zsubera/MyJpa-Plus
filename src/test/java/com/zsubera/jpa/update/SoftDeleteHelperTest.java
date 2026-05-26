@@ -159,6 +159,23 @@ class SoftDeleteHelperTest {
     assertSame(first, second);
   }
 
+  @Test
+  void testIsSoftDeletedOnNullDeletedValue() {
+    SoftDeleteTestEntity entity = new SoftDeleteTestEntity();
+    entity.setName("nullDeleted");
+    entity.setDeleted(null);
+    repository.save(entity);
+
+    assertFalse(SoftDeleteHelper.isSoftDeleted(SoftDeleteTestEntity.class, entity));
+  }
+
+  @Test
+  void testFindSoftDeleteFieldOnInvalidEntityDoesNotThrow() {
+    // Should return null gracefully, not throw
+    String fieldName = SoftDeleteHelper.findSoftDeleteField(Object.class);
+    assertNull(fieldName);
+  }
+
   private TestEntity newEntity(String name, int status) {
     TestEntity entity = new TestEntity();
     entity.setName(name);

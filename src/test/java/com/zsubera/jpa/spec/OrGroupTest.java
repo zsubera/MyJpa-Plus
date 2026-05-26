@@ -228,6 +228,61 @@ class OrGroupTest {
     assertEquals(3, result.size());
   }
 
+  @Test
+  void testOrGroupWithJoin() {
+    ParentEntity admin = new ParentEntity();
+    admin.setCategory("admin");
+    admin.setLevel(10);
+    em.persist(admin);
+    ParentEntity user = new ParentEntity();
+    user.setCategory("user");
+    user.setLevel(5);
+    em.persist(user);
+    TestEntity c1 = newEntity("c1", 0);
+    c1.setParent(admin);
+    repository.save(c1);
+    TestEntity c2 = newEntity("c2", 0);
+    c2.setParent(user);
+    repository.save(c2);
+
+    QuerySpec<TestEntity> qs = new QuerySpec<>();
+    qs.or(
+        outer ->
+            outer
+                .eq(TestEntity::getStatus, 99)
+                .<ParentEntity>join(
+                    TestEntity::getParent, j -> j.eq(ParentEntity::getCategory, "admin")));
+    List<TestEntity> result = repository.findAll(qs.toSpecification());
+    assertEquals(1, result.size());
+  }
+
+  @Test
+  void testOrGroupWithLeftJoin() {
+    ParentEntity admin = new ParentEntity();
+    admin.setCategory("admin");
+    admin.setLevel(10);
+    em.persist(admin);
+    TestEntity orphan = newEntity("orphan", 0);
+    orphan.setParent(null);
+    repository.save(orphan);
+    TestEntity child = newEntity("child", 0);
+    child.setParent(admin);
+    repository.save(child);
+
+    QuerySpec<TestEntity> qs = new QuerySpec<>();
+    OrGroup<TestEntity> og = qs.or();
+    JoinGroup<TestEntity, ParentEntity> jg = og.leftJoin(TestEntity::getParent);
+    OrJoinGroup<TestEntity, ParentEntity> ojg = jg.or();
+    ojg.eq(ParentEntity::getCategory, "admin");
+    ojg.isNull(ParentEntity::getCategory);
+    jg = ojg.endOr();
+    jg.endJoin();
+    og.endOr();
+
+    List<TestEntity> result = repository.findAll(qs.toSpecification());
+    assertEquals(2, result.size());
+  }
+
   private TestEntity newEntity(String name, int status) {
     TestEntity entity = new TestEntity();
     entity.setName(name);

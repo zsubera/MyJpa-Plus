@@ -329,6 +329,39 @@ class JoinGroupTest {
     assertEquals(2, result.size());
   }
 
+  @Test
+  void testJoinGroupByConsumerApi() {
+    ParentEntity parent = new ParentEntity();
+    parent.setCategory("admin");
+    parent.setLevel(5);
+    em.persist(parent);
+    TestEntity child = newEntity("c1", 0);
+    child.setParent(parent);
+    repository.save(child);
+
+    QuerySpec<TestEntity> qs = new QuerySpec<>();
+    qs.<ParentEntity>join(TestEntity::getParent, j -> j.eq(ParentEntity::getCategory, "admin"));
+    List<TestEntity> result = repository.findAll(qs.toSpecification());
+    assertEquals(1, result.size());
+  }
+
+  @Test
+  void testJoinGroupLeftJoinConsumerApi() {
+    ParentEntity parent = new ParentEntity();
+    parent.setCategory("admin");
+    parent.setLevel(5);
+    em.persist(parent);
+    TestEntity child = newEntity("c1", 0);
+    child.setParent(parent);
+    repository.save(child);
+
+    QuerySpec<TestEntity> qs = new QuerySpec<>();
+    qs.<ParentEntity>leftJoin(
+        TestEntity::getParent, j -> j.eq(ParentEntity::getCategory, "admin"));
+    List<TestEntity> result = repository.findAll(qs.toSpecification());
+    assertEquals(1, result.size());
+  }
+
   private TestEntity newEntity(String name, int status) {
     TestEntity entity = new TestEntity();
     entity.setName(name);

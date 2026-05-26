@@ -413,6 +413,153 @@ class SubQuerySpecTest {
             || ex instanceof IllegalArgumentException);
   }
 
+  @Test
+  void testExistsWithCorrelatedEq() {
+    ParentEntity p = new ParentEntity();
+    p.setCategory("admin");
+    p.setLevel(10);
+    em.persist(p);
+    TestEntity child = newEntity("child", 5);
+    child.setParent(p);
+    repository.save(child);
+
+    QuerySpec<ParentEntity> qs = new QuerySpec<>();
+    qs.exists(TestEntity.class, sub ->
+        sub.where(r -> em.getCriteriaBuilder().equal(
+                r.get("parent").get("id"), sub.<ParentEntity>correlated().get("id")))
+            .gt(TestEntity::getStatus, 3));
+    List<ParentEntity> result = parentRepository.findAll(qs.toSpecification());
+    assertEquals(1, result.size());
+  }
+
+  @Test
+  void testExistsWithNeOperator() {
+    ParentEntity p = new ParentEntity();
+    p.setCategory("cat");
+    p.setLevel(10);
+    em.persist(p);
+    TestEntity child = newEntity("c1", 1);
+    child.setParent(p);
+    repository.save(child);
+
+    QuerySpec<ParentEntity> qs = new QuerySpec<>();
+    qs.exists(TestEntity.class, sub -> sub.ne(TestEntity::getStatus, 99));
+    List<ParentEntity> result = parentRepository.findAll(qs.toSpecification());
+    assertEquals(1, result.size());
+  }
+
+  @Test
+  void testExistsWithNotInOperator() {
+    ParentEntity p = new ParentEntity();
+    p.setCategory("cat");
+    p.setLevel(10);
+    em.persist(p);
+    TestEntity child = newEntity("c1", 1);
+    child.setParent(p);
+    repository.save(child);
+
+    QuerySpec<ParentEntity> qs = new QuerySpec<>();
+    qs.exists(TestEntity.class, sub -> sub.notIn(TestEntity::getStatus, 99, 100));
+    List<ParentEntity> result = parentRepository.findAll(qs.toSpecification());
+    assertEquals(1, result.size());
+  }
+
+  @Test
+  void testExistsWithNotInCollectionOperator() {
+    ParentEntity p = new ParentEntity();
+    p.setCategory("cat");
+    p.setLevel(10);
+    em.persist(p);
+    TestEntity child = newEntity("c1", 1);
+    child.setParent(p);
+    repository.save(child);
+
+    QuerySpec<ParentEntity> qs = new QuerySpec<>();
+    qs.exists(TestEntity.class, sub ->
+        sub.notIn(TestEntity::getStatus, java.util.Arrays.asList(99, 100)));
+    List<ParentEntity> result = parentRepository.findAll(qs.toSpecification());
+    assertEquals(1, result.size());
+  }
+
+  @Test
+  void testExistsWithIsEmptyOperator() {
+    ParentEntity p = new ParentEntity();
+    p.setCategory("empty");
+    p.setLevel(1);
+    em.persist(p);
+
+    ParentEntity q = new ParentEntity();
+    q.setCategory("hasChild");
+    q.setLevel(2);
+    em.persist(q);
+    TestEntity child = newEntity("kid", 0);
+    child.setParent(q);
+    repository.save(child);
+    em.flush();
+
+    QuerySpec<ParentEntity> qs = new QuerySpec<>();
+    qs.exists(ParentEntity.class, sub ->
+        sub.where(r -> em.getCriteriaBuilder().equal(
+                r.get("id"), sub.<ParentEntity>correlated().get("id")))
+            .isEmpty(ParentEntity::getChildren));
+    List<ParentEntity> result = parentRepository.findAll(qs.toSpecification());
+    assertEquals(1, result.size());
+    assertEquals("empty", result.get(0).getCategory());
+  }
+
+  @Test
+  void testExistsWithIsNotEmptyOperator() {
+    ParentEntity p = new ParentEntity();
+    p.setCategory("empty");
+    p.setLevel(1);
+    em.persist(p);
+
+    ParentEntity q = new ParentEntity();
+    q.setCategory("hasChild");
+    q.setLevel(2);
+    em.persist(q);
+    TestEntity child = newEntity("kid", 0);
+    child.setParent(q);
+    repository.save(child);
+    em.flush();
+
+    QuerySpec<ParentEntity> qs = new QuerySpec<>();
+    qs.exists(ParentEntity.class, sub ->
+        sub.where(r -> em.getCriteriaBuilder().equal(
+                r.get("id"), sub.<ParentEntity>correlated().get("id")))
+            .isNotEmpty(ParentEntity::getChildren));
+    List<ParentEntity> result = parentRepository.findAll(qs.toSpecification());
+    assertEquals(1, result.size());
+    assertEquals("hasChild", result.get(0).getCategory());
+  }
+
+  @Test
+  void testSubQueryMultiLikeWithNullKeywordNoOp() {
+    QuerySpec<ParentEntity> qs = new QuerySpec<>();
+    qs.exists(TestEntity.class, sub -> sub.multiLike(null, TestEntity::getName));
+    assertNotNull(qs.toSpecification());
+  }
+
+  @Test
+  void testSubQueryInNullValuesThrowsException() {
+    QuerySpec<ParentEntity> qs = new QuerySpec<>();
+    qs.exists(TestEntity.class, sub -> sub.in(TestEntity::getStatus, (Object[]) null));
+    RuntimeException ex =
+        assertThrows(RuntimeException.class, () -> parentRepository.findAll(qs.toSpecification()));
+    assertTrue(
+        ex.getCause() instanceof IllegalArgumentException || ex instanceof IllegalArgumentException);
+  }
+
+  @Test
+  void testSubQueryNotInNullValuesThrowsException() {
+    QuerySpec<ParentEntity> qs = new QuerySpec<>();
+    qs.exists(TestEntity.class, sub -> sub.notIn(TestEntity::getStatus, (Object[]) null));
+    RuntimeException ex =
+        assertThrows(RuntimeException.class, () -> parentRepository.findAll(qs.toSpecification()));
+    assertTrue(
+        ex.getCause() instanceof IllegalArgumentException || ex instanceof IllegalArgumentException);
+  }
+
   private TestEntity newEntity(String name, int status) {
     TestEntity entity = new TestEntity();
     entity.setName(name);

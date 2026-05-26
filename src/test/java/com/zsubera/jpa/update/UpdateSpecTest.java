@@ -438,6 +438,68 @@ class UpdateSpecTest {
     assertEquals(1, count);
   }
 
+  @Test
+  void testUpdateOrGroup() {
+    repository.save(newEntity("alpha", 1));
+    repository.save(newEntity("beta", 2));
+    repository.save(newEntity("gamma", 3));
+    int count =
+        new UpdateSpec<>(TestEntity.class)
+            .set(TestEntity::getStatus, 99)
+            .or(o -> o.eq(TestEntity::getName, "alpha").eq(TestEntity::getName, "beta"))
+            .execute(em);
+    assertEquals(2, count);
+  }
+
+  @Test
+  void testUpdateNotGroup() {
+    repository.save(newEntity("a", 1));
+    repository.save(newEntity("b", 2));
+    int count =
+        new UpdateSpec<>(TestEntity.class)
+            .set(TestEntity::getStatus, 99)
+            .not(o -> o.eq(TestEntity::getName, "a"))
+            .execute(em);
+    assertEquals(1, count);
+  }
+
+  @Test
+  void testUpdateInWithCollection() {
+    repository.save(newEntity("x", 1));
+    repository.save(newEntity("y", 2));
+    repository.save(newEntity("z", 3));
+    int count =
+        new UpdateSpec<>(TestEntity.class)
+            .set(TestEntity::getName, "updated")
+            .in(TestEntity::getName, java.util.Arrays.asList("x", "z"))
+            .execute(em);
+    assertEquals(2, count);
+  }
+
+  @Test
+  void testUpdateNotInWithCollection() {
+    repository.save(newEntity("x", 1));
+    repository.save(newEntity("y", 2));
+    repository.save(newEntity("z", 3));
+    int count =
+        new UpdateSpec<>(TestEntity.class)
+            .set(TestEntity::getName, "updated")
+            .notIn(TestEntity::getName, java.util.Arrays.asList("x", "z"))
+            .execute(em);
+    assertEquals(1, count);
+  }
+
+  @Test
+  void testUpdateUpdateAllInTransaction() {
+    repository.save(newEntity("old1", 1));
+    repository.save(newEntity("old2", 2));
+    int count =
+        new UpdateSpec<>(TestEntity.class)
+            .set(TestEntity::getStatus, 99)
+            .updateAllInTransaction(em);
+    assertEquals(2, count);
+  }
+
   private TestEntity newEntity(String name, int status) {
     TestEntity entity = new TestEntity();
     entity.setName(name);

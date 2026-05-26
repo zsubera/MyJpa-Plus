@@ -307,6 +307,63 @@ class DeleteSpecTest {
     assertEquals("b", repository.findAll().get(0).getName());
   }
 
+  @Test
+  void testDeleteOrGroup() {
+    repository.save(newEntity("alpha", 1));
+    repository.save(newEntity("beta", 2));
+    repository.save(newEntity("gamma", 3));
+    int count =
+        new DeleteSpec<>(TestEntity.class)
+            .or(o -> o.eq(TestEntity::getName, "alpha").eq(TestEntity::getName, "beta"))
+            .execute(em);
+    assertEquals(2, count);
+    assertEquals(1, repository.count());
+  }
+
+  @Test
+  void testDeleteNotGroup() {
+    repository.save(newEntity("a", 1));
+    repository.save(newEntity("b", 2));
+    int count =
+        new DeleteSpec<>(TestEntity.class).not(o -> o.eq(TestEntity::getName, "a")).execute(em);
+    assertEquals(1, count);
+    assertEquals("a", repository.findAll().get(0).getName());
+  }
+
+  @Test
+  void testDeleteInWithCollection() {
+    repository.save(newEntity("x", 1));
+    repository.save(newEntity("y", 2));
+    repository.save(newEntity("z", 3));
+    int count =
+        new DeleteSpec<>(TestEntity.class)
+            .in(TestEntity::getName, java.util.Arrays.asList("x", "z"))
+            .execute(em);
+    assertEquals(2, count);
+  }
+
+  @Test
+  void testDeleteNotInWithCollection() {
+    repository.save(newEntity("x", 1));
+    repository.save(newEntity("y", 2));
+    repository.save(newEntity("z", 3));
+    int count =
+        new DeleteSpec<>(TestEntity.class)
+            .notIn(TestEntity::getName, java.util.Arrays.asList("x", "z"))
+            .execute(em);
+    assertEquals(1, count);
+    assertEquals("x", repository.findAll().get(0).getName());
+  }
+
+  @Test
+  void testDeleteDeleteAllInTransaction() {
+    repository.save(newEntity("a", 1));
+    repository.save(newEntity("b", 2));
+    int count = new DeleteSpec<>(TestEntity.class).deleteAllInTransaction(em);
+    assertEquals(2, count);
+    assertEquals(0, repository.count());
+  }
+
   private TestEntity newEntity(String name, int status) {
     TestEntity entity = new TestEntity();
     entity.setName(name);

@@ -836,6 +836,133 @@ public class QuerySpecTest {
     // applyQuerySettings on null fields is no-op - verified by no exception
   }
 
+  @Test
+  void testNotBetweenIntegration() {
+    for (int i = 1; i <= 10; i++) {
+      repository.save(newEntity("item" + i, i));
+    }
+    QuerySpec<TestEntity> qs = new QuerySpec<>();
+    qs.notBetween(TestEntity::getStatus, 3, 7);
+    List<TestEntity> result = repository.findAll(qs.toSpecification());
+    assertEquals(5, result.size());
+  }
+
+  @Test
+  void testFetchJoin() {
+    ParentEntity parent = new ParentEntity();
+    parent.setCategory("cat");
+    parent.setLevel(1);
+    em.persist(parent);
+    TestEntity child = newEntity("c1", 0);
+    child.setParent(parent);
+    repository.save(child);
+
+    QuerySpec<TestEntity> qs = new QuerySpec<>();
+    qs.fetchJoin(TestEntity::getParent);
+    assertNotNull(qs.toSpecification());
+  }
+
+  @Test
+  void testLeftFetchJoin() {
+    QuerySpec<TestEntity> qs = new QuerySpec<>();
+    qs.leftFetchJoin(TestEntity::getParent);
+    assertNotNull(qs.toSpecification());
+  }
+
+  @Test
+  void testFetchJoinWithConsumer() {
+    ParentEntity parent = new ParentEntity();
+    parent.setCategory("admin");
+    parent.setLevel(5);
+    em.persist(parent);
+    TestEntity child = newEntity("child", 0);
+    child.setParent(parent);
+    repository.save(child);
+
+    QuerySpec<TestEntity> qs = new QuerySpec<>();
+    qs.<ParentEntity>fetchJoin(TestEntity::getParent, j -> j.eq(ParentEntity::getCategory, "admin"));
+    List<TestEntity> result = repository.findAll(qs.toSpecification());
+    assertEquals(1, result.size());
+  }
+
+  @Test
+  void testLeftFetchJoinWithConsumer() {
+    QuerySpec<TestEntity> qs = new QuerySpec<>();
+    qs.<ParentEntity>leftFetchJoin(TestEntity::getParent, j -> j.eq(ParentEntity::getCategory, "admin"));
+    assertNotNull(qs.toSpecification());
+  }
+
+  @Test
+  void testOrderByAscIntegration() {
+    repository.save(newEntity("b", 2));
+    repository.save(newEntity("a", 1));
+    repository.save(newEntity("c", 3));
+    QuerySpec<TestEntity> qs = new QuerySpec<>();
+    qs.orderByAsc(TestEntity::getName);
+    List<TestEntity> result = repository.findAll(qs.toSpecification());
+    assertEquals("a", result.get(0).getName());
+    assertEquals("b", result.get(1).getName());
+    assertEquals("c", result.get(2).getName());
+  }
+
+  @Test
+  void testOrderByDescIntegration() {
+    repository.save(newEntity("b", 2));
+    repository.save(newEntity("a", 1));
+    repository.save(newEntity("c", 3));
+    QuerySpec<TestEntity> qs = new QuerySpec<>();
+    qs.orderByDesc(TestEntity::getName);
+    List<TestEntity> result = repository.findAll(qs.toSpecification());
+    assertEquals("c", result.get(0).getName());
+    assertEquals("b", result.get(1).getName());
+    assertEquals("a", result.get(2).getName());
+  }
+
+  @Test
+  void testGetSort() {
+    QuerySpec<TestEntity> qs = new QuerySpec<>();
+    assertFalse(qs.getSort().isSorted());
+    qs.orderByAsc(TestEntity::getName);
+    assertTrue(qs.getSort().isSorted());
+  }
+
+  @Test
+  void testAndWithOtherQuerySpec() {
+    repository.save(newEntity("match", 1));
+    repository.save(newEntity("match", 2));
+    repository.save(newEntity("other", 3));
+    QuerySpec<TestEntity> qs1 = new QuerySpec<>();
+    qs1.eq(TestEntity::getName, "match");
+    QuerySpec<TestEntity> qs2 = new QuerySpec<>();
+    qs2.eq(TestEntity::getStatus, 1);
+    Specification<TestEntity> combined = qs1.and(qs2);
+    List<TestEntity> result = repository.findAll(combined);
+    assertEquals(1, result.size());
+  }
+
+  @Test
+  void testOrWithOtherQuerySpec() {
+    repository.save(newEntity("alpha", 1));
+    repository.save(newEntity("beta", 2));
+    repository.save(newEntity("gamma", 3));
+    QuerySpec<TestEntity> qs1 = new QuerySpec<>();
+    qs1.eq(TestEntity::getName, "alpha");
+    QuerySpec<TestEntity> qs2 = new QuerySpec<>();
+    qs2.eq(TestEntity::getName, "beta");
+    Specification<TestEntity> combined = qs1.or(qs2);
+    List<TestEntity> result = repository.findAll(combined);
+    assertEquals(2, result.size());
+  }
+
+  @Test
+  void testApplyQuerySettingsWithBothTimeoutAndLockMode() {
+    QuerySpec<TestEntity> qs = new QuerySpec<>();
+    qs.timeout(10);
+    qs.lockMode(jakarta.persistence.LockModeType.PESSIMISTIC_READ);
+    assertNotNull(qs.getQueryTimeout());
+    assertNotNull(qs.getLockMode());
+  }
+
   private TestEntity newEntity(String name, int status) {
     TestEntity entity = new TestEntity();
     entity.setName(name);
