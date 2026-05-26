@@ -198,6 +198,9 @@ public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> {
         if (field == null) {
             throw new IllegalArgumentException("field must not be null");
         }
+        if (values == null || values.length == 0) {
+            throw new IllegalArgumentException("values must not be empty");
+        }
         conditions().add(new QuerySpec.SimpleNode(LambdaUtils.getPropertyName(field), values, QuerySpec.Op.IN));
         return self();
     }
@@ -208,6 +211,9 @@ public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> {
     default SELF notIn(SFunction<E, ?> field, Object... values) {
         if (field == null) {
             throw new IllegalArgumentException("field must not be null");
+        }
+        if (values == null || values.length == 0) {
+            throw new IllegalArgumentException("values must not be empty");
         }
         conditions().add(new QuerySpec.SimpleNode(LambdaUtils.getPropertyName(field), values, QuerySpec.Op.NOT_IN));
         return self();
@@ -225,6 +231,9 @@ public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> {
         if (field == null) {
             throw new IllegalArgumentException("field must not be null");
         }
+        if (values == null || values.isEmpty()) {
+            throw new IllegalArgumentException("values must not be empty");
+        }
         conditions().add(new QuerySpec.SimpleNode(LambdaUtils.getPropertyName(field), values, QuerySpec.Op.IN));
         return self();
     }
@@ -236,6 +245,9 @@ public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> {
     default SELF notIn(SFunction<E, ?> field, Collection<?> values) {
         if (field == null) {
             throw new IllegalArgumentException("field must not be null");
+        }
+        if (values == null || values.isEmpty()) {
+            throw new IllegalArgumentException("values must not be empty");
         }
         conditions().add(new QuerySpec.SimpleNode(LambdaUtils.getPropertyName(field), values, QuerySpec.Op.NOT_IN));
         return self();

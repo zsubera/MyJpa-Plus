@@ -5,8 +5,11 @@ import com.zsubera.jpa.spec.SFunction;
 import java.beans.Introspector;
 import java.lang.invoke.SerializedLambda;
 import java.lang.reflect.Method;
+import java.util.concurrent.ConcurrentHashMap;
 
 public final class LambdaUtils {
+
+    private static final ConcurrentHashMap<SFunction<?, ?>, String> CACHE = new ConcurrentHashMap<>();
 
     private LambdaUtils() {
     }
@@ -15,6 +18,10 @@ public final class LambdaUtils {
         if (fn == null) {
             throw new IllegalArgumentException("SFunction must not be null");
         }
+        return CACHE.computeIfAbsent(fn, LambdaUtils::resolvePropertyName);
+    }
+
+    private static String resolvePropertyName(SFunction<?, ?> fn) {
         try {
             Method writeReplace = fn.getClass().getDeclaredMethod("writeReplace");
             writeReplace.setAccessible(true);

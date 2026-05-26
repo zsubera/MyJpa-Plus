@@ -145,7 +145,11 @@ public class SubQuerySpec<S> {
 
     @SuppressWarnings({"unchecked", "rawtypes"})
     public SubQuerySpec<S> in(SFunction<S, ?> field, Object... values) {
-        CriteriaBuilder.In<Object> in = cb.in(root.get(property(field)));
+        String name = property(field);
+        if (values == null || values.length == 0) {
+            throw new IllegalArgumentException("values must not be empty");
+        }
+        CriteriaBuilder.In<Object> in = cb.in(root.get(name));
         for (Object v : values) {
             in.value(v);
         }
@@ -155,7 +159,11 @@ public class SubQuerySpec<S> {
 
     @SuppressWarnings({"unchecked", "rawtypes"})
     public SubQuerySpec<S> notIn(SFunction<S, ?> field, Object... values) {
-        CriteriaBuilder.In<Object> in = cb.in(root.get(property(field)));
+        String name = property(field);
+        if (values == null || values.length == 0) {
+            throw new IllegalArgumentException("values must not be empty");
+        }
+        CriteriaBuilder.In<Object> in = cb.in(root.get(name));
         for (Object v : values) {
             in.value(v);
         }
@@ -165,7 +173,11 @@ public class SubQuerySpec<S> {
 
     @SuppressWarnings({"unchecked", "rawtypes"})
     public SubQuerySpec<S> in(SFunction<S, ?> field, Collection<?> values) {
-        CriteriaBuilder.In<Object> in = cb.in(root.get(property(field)));
+        String name = property(field);
+        if (values == null || values.isEmpty()) {
+            throw new IllegalArgumentException("values must not be empty");
+        }
+        CriteriaBuilder.In<Object> in = cb.in(root.get(name));
         for (Object v : values) {
             in.value(v);
         }
@@ -175,7 +187,11 @@ public class SubQuerySpec<S> {
 
     @SuppressWarnings({"unchecked", "rawtypes"})
     public SubQuerySpec<S> notIn(SFunction<S, ?> field, Collection<?> values) {
-        CriteriaBuilder.In<Object> in = cb.in(root.get(property(field)));
+        String name = property(field);
+        if (values == null || values.isEmpty()) {
+            throw new IllegalArgumentException("values must not be empty");
+        }
+        CriteriaBuilder.In<Object> in = cb.in(root.get(name));
         for (Object v : values) {
             in.value(v);
         }

@@ -1,5 +1,10 @@
 # MyJpa-Plus
 
+[![Maven Central](https://img.shields.io/maven-central/v/io.github.zsubera/myjpa-plus)](https://central.sonatype.com/artifact/io.github.zsubera/myjpa-plus)
+[![Build Status](https://img.shields.io/github/actions/workflow/status/zsubera/myjpa-plus/ci.yml)](https://github.com/zsubera/MyJpa-Plus/actions)
+[![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
+[![JDK](https://img.shields.io/badge/JDK-17%2B-green.svg)](https://adoptium.net)
+
 基于 Lambda 表达式的类型安全 JPA 动态查询构建器，专为 Spring Data JPA 设计。
 
 *A type-safe JPA Criteria query builder with a lambda-based fluent API for Spring Data JPA.*

@@ -340,6 +340,7 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
         }
     }
 
+    @SuppressWarnings({"unchecked", "rawtypes"})
     private Predicate resolveJoin(JoinNode node, Path<?> path, CriteriaQuery<?> query,
                                    CriteriaBuilder cb, Map<String, Join<?, ?>> joinCache, String pathPrefix) {
         String fullPath = (pathPrefix != null && !pathPrefix.isEmpty() ? pathPrefix + "." : "") + node.fieldName;

@@ -94,7 +94,7 @@
                     </execution>
                 </executions>
                 <configuration>
-                    <doclint>none</doclint>
+                    <doclint>reference,html</doclint>
                 </configuration>
             </plugin>
             <plugin>
