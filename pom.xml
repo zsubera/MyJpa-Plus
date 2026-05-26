@@ -170,7 +170,9 @@
                     </execution>
                 </executions>
                 <configuration>
+                    <effort>Default</effort>
                     <threshold>Medium</threshold>
+                    <maxHeap>1024</maxHeap>
                 </configuration>
             </plugin>
             <plugin>
