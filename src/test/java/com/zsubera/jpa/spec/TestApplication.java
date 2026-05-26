@@ -7,5 +7,5 @@ import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
 @SpringBootApplication
 @EntityScan(basePackageClasses = TestApplication.class)
 @EnableJpaRepositories(basePackageClasses = TestApplication.class)
-class TestApplication {
+public class TestApplication {
 }

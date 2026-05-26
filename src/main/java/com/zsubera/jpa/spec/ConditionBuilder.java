@@ -87,32 +87,52 @@ public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> {
 
     /**
      * Adds a greater-than condition: {@code field > value}.
+     *
+     * @throws IllegalArgumentException if {@code field} or {@code value} is null
      */
     default SELF gt(SFunction<E, ?> field, Comparable<?> value) {
+        if (value == null) {
+            throw new IllegalArgumentException("value must not be null");
+        }
         conditions().add(new QuerySpec.SimpleNode(fieldName(field), value, QuerySpec.Op.GT));
         return self();
     }
 
     /**
      * Adds a greater-than-or-equal condition: {@code field >= value}.
+     *
+     * @throws IllegalArgumentException if {@code field} or {@code value} is null
      */
     default SELF ge(SFunction<E, ?> field, Comparable<?> value) {
+        if (value == null) {
+            throw new IllegalArgumentException("value must not be null");
+        }
         conditions().add(new QuerySpec.SimpleNode(fieldName(field), value, QuerySpec.Op.GE));
         return self();
     }
 
     /**
      * Adds a less-than condition: {@code field < value}.
+     *
+     * @throws IllegalArgumentException if {@code field} or {@code value} is null
      */
     default SELF lt(SFunction<E, ?> field, Comparable<?> value) {
+        if (value == null) {
+            throw new IllegalArgumentException("value must not be null");
+        }
         conditions().add(new QuerySpec.SimpleNode(fieldName(field), value, QuerySpec.Op.LT));
         return self();
     }
 
     /**
      * Adds a less-than-or-equal condition: {@code field <= value}.
+     *
+     * @throws IllegalArgumentException if {@code field} or {@code value} is null
      */
     default SELF le(SFunction<E, ?> field, Comparable<?> value) {
+        if (value == null) {
+            throw new IllegalArgumentException("value must not be null");
+        }
         conditions().add(new QuerySpec.SimpleNode(fieldName(field), value, QuerySpec.Op.LE));
         return self();
     }
@@ -122,40 +142,65 @@ public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> {
     /**
      * Adds a LIKE condition: {@code field LIKE value}.
      * The caller is responsible for including wildcards (e.g. {@code "%keyword%"}).
+     *
+     * @throws IllegalArgumentException if {@code field} or {@code value} is null
      */
     default SELF like(SFunction<E, ?> field, String value) {
+        if (value == null) {
+            throw new IllegalArgumentException("value must not be null");
+        }
         conditions().add(new QuerySpec.SimpleNode(fieldName(field), value, QuerySpec.Op.LIKE));
         return self();
     }
 
     /**
      * Adds a NOT LIKE condition: {@code field NOT LIKE value}.
+     *
+     * @throws IllegalArgumentException if {@code field} or {@code value} is null
      */
     default SELF notLike(SFunction<E, ?> field, String value) {
+        if (value == null) {
+            throw new IllegalArgumentException("value must not be null");
+        }
         conditions().add(new QuerySpec.SimpleNode(fieldName(field), value, QuerySpec.Op.NOT_LIKE));
         return self();
     }
 
     /**
      * Adds a LIKE condition for prefix matching: {@code field LIKE 'value%'}.
+     *
+     * @throws IllegalArgumentException if {@code field} or {@code value} is null
      */
     default SELF startsWith(SFunction<E, ?> field, String value) {
+        if (value == null) {
+            throw new IllegalArgumentException("value must not be null");
+        }
         conditions().add(new QuerySpec.SimpleNode(fieldName(field), value + "%", QuerySpec.Op.LIKE));
         return self();
     }
 
     /**
      * Adds a LIKE condition for suffix matching: {@code field LIKE '%value'}.
+     *
+     * @throws IllegalArgumentException if {@code field} or {@code value} is null
      */
     default SELF endsWith(SFunction<E, ?> field, String value) {
+        if (value == null) {
+            throw new IllegalArgumentException("value must not be null");
+        }
         conditions().add(new QuerySpec.SimpleNode(fieldName(field), "%" + value, QuerySpec.Op.LIKE));
         return self();
     }
 
     /**
      * Adds a LIKE condition for substring matching: {@code field LIKE '%value%'}.
+     *
+     * @throws IllegalArgumentException if {@code field} or {@code value} is null
      */
     default SELF contains(SFunction<E, ?> field, String value) {
+        if (value == null) {
+            throw new IllegalArgumentException("value must not be null");
+        }
         conditions().add(new QuerySpec.SimpleNode(fieldName(field), "%" + value + "%", QuerySpec.Op.LIKE));
         return self();
     }
@@ -235,8 +280,20 @@ public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> {
      * @param start the lower bound (inclusive)
      * @param end   the upper bound (inclusive)
      * @return this builder for chaining
+     * @throws IllegalArgumentException if {@code field}, {@code start}, or {@code end} is null,
+     *         or if start is greater than end
      */
+    @SuppressWarnings({"unchecked", "rawtypes"})
     default SELF between(SFunction<E, ?> field, Comparable<?> start, Comparable<?> end) {
+        if (start == null) {
+            throw new IllegalArgumentException("start must not be null");
+        }
+        if (end == null) {
+            throw new IllegalArgumentException("end must not be null");
+        }
+        if (((Comparable) start).compareTo(end) > 0) {
+            throw new IllegalArgumentException("start must not be greater than end");
+        }
         conditions().add(new QuerySpec.SimpleNode(fieldName(field),
                 new Comparable<?>[]{start, end}, QuerySpec.Op.BETWEEN));
         return self();
@@ -244,8 +301,21 @@ public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> {
 
     /**
      * Adds a NOT BETWEEN condition: {@code field NOT BETWEEN start AND end}.
+     *
+     * @throws IllegalArgumentException if {@code field}, {@code start}, or {@code end} is null,
+     *         or if start is greater than end
      */
+    @SuppressWarnings({"unchecked", "rawtypes"})
     default SELF notBetween(SFunction<E, ?> field, Comparable<?> start, Comparable<?> end) {
+        if (start == null) {
+            throw new IllegalArgumentException("start must not be null");
+        }
+        if (end == null) {
+            throw new IllegalArgumentException("end must not be null");
+        }
+        if (((Comparable) start).compareTo(end) > 0) {
+            throw new IllegalArgumentException("start must not be greater than end");
+        }
         conditions().add(new QuerySpec.SimpleNode(fieldName(field),
                 new Comparable<?>[]{start, end}, QuerySpec.Op.NOT_BETWEEN));
         return self();
@@ -286,8 +356,13 @@ public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> {
 
     /**
      * Case-insensitive LIKE: {@code UPPER(field) LIKE UPPER('%value%')}.
+     *
+     * @throws IllegalArgumentException if {@code field} or {@code value} is null
      */
     default SELF likeIgnoreCase(SFunction<E, ?> field, String value) {
+        if (value == null) {
+            throw new IllegalArgumentException("value must not be null");
+        }
         conditions().add(new QuerySpec.SimpleNode(fieldName(field), value, QuerySpec.Op.LIKE_IGNORE_CASE));
         return self();
     }
@@ -345,13 +420,135 @@ public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> {
      */
     @SuppressWarnings("unchecked")
     default SELF multiLike(String keyword, SFunction<E, ?>... fields) {
+        if (fields == null) {
+            throw new IllegalArgumentException("fields must not be null");
+        }
         if (keyword != null && !keyword.isEmpty() && fields.length > 0) {
             String[] fieldNames = new String[fields.length];
             for (int i = 0; i < fields.length; i++) {
+                if (fields[i] == null) {
+                    throw new IllegalArgumentException("fields[" + i + "] must not be null");
+                }
                 fieldNames[i] = LambdaUtils.getPropertyName(fields[i]);
             }
             conditions().add(new QuerySpec.MultiLikeNode(keyword, fieldNames));
         }
         return self();
+    }
+
+    // ---- Conditional convenience methods ----
+
+    /**
+     * Adds an equality condition only if {@code condition} is true.
+     */
+    default SELF eq(boolean condition, SFunction<E, ?> field, Object value) {
+        return condition ? eq(field, value) : self();
+    }
+
+    /**
+     * Adds a not-equal condition only if {@code condition} is true.
+     */
+    default SELF ne(boolean condition, SFunction<E, ?> field, Object value) {
+        return condition ? ne(field, value) : self();
+    }
+
+    /**
+     * Adds a greater-than condition only if {@code condition} is true.
+     */
+    default SELF gt(boolean condition, SFunction<E, ?> field, Comparable<?> value) {
+        return condition ? gt(field, value) : self();
+    }
+
+    /**
+     * Adds a greater-than-or-equal condition only if {@code condition} is true.
+     */
+    default SELF ge(boolean condition, SFunction<E, ?> field, Comparable<?> value) {
+        return condition ? ge(field, value) : self();
+    }
+
+    /**
+     * Adds a less-than condition only if {@code condition} is true.
+     */
+    default SELF lt(boolean condition, SFunction<E, ?> field, Comparable<?> value) {
+        return condition ? lt(field, value) : self();
+    }
+
+    /**
+     * Adds a less-than-or-equal condition only if {@code condition} is true.
+     */
+    default SELF le(boolean condition, SFunction<E, ?> field, Comparable<?> value) {
+        return condition ? le(field, value) : self();
+    }
+
+    /**
+     * Adds a LIKE condition only if {@code condition} is true.
+     */
+    default SELF like(boolean condition, SFunction<E, ?> field, String value) {
+        return condition ? like(field, value) : self();
+    }
+
+    /**
+     * Adds a NOT LIKE condition only if {@code condition} is true.
+     */
+    default SELF notLike(boolean condition, SFunction<E, ?> field, String value) {
+        return condition ? notLike(field, value) : self();
+    }
+
+    /**
+     * Adds a startsWith condition only if {@code condition} is true.
+     */
+    default SELF startsWith(boolean condition, SFunction<E, ?> field, String value) {
+        return condition ? startsWith(field, value) : self();
+    }
+
+    /**
+     * Adds an endsWith condition only if {@code condition} is true.
+     */
+    default SELF endsWith(boolean condition, SFunction<E, ?> field, String value) {
+        return condition ? endsWith(field, value) : self();
+    }
+
+    /**
+     * Adds a contains condition only if {@code condition} is true.
+     */
+    default SELF contains(boolean condition, SFunction<E, ?> field, String value) {
+        return condition ? contains(field, value) : self();
+    }
+
+    /**
+     * Adds an IN condition only if {@code condition} is true.
+     */
+    default SELF in(boolean condition, SFunction<E, ?> field, Object... values) {
+        return condition ? in(field, values) : self();
+    }
+
+    /**
+     * Adds an IN condition with a Collection only if {@code condition} is true.
+     */
+    default SELF in(boolean condition, SFunction<E, ?> field, Collection<?> values) {
+        return condition ? in(field, values) : self();
+    }
+
+    /**
+     * Adds a NOT IN condition only if {@code condition} is true.
+     */
+    default SELF notIn(boolean condition, SFunction<E, ?> field, Object... values) {
+        return condition ? notIn(field, values) : self();
+    }
+
+    /**
+     * Adds a BETWEEN condition only if {@code condition} is true.
+     */
+    default SELF between(boolean condition, SFunction<E, ?> field, Comparable<?> start, Comparable<?> end) {
+        return condition ? between(field, start, end) : self();
+    }
+
+    /**
+     * Adds a multi-field LIKE search only if {@code keyword} is not null and not empty.
+     * This overload is always conditional on the keyword being non-blank.
+     */
+    @SuppressWarnings("unchecked")
+    default SELF multiLike(boolean condition, String keyword, SFunction<E, ?>... fields) {
+        return condition ? multiLike(keyword, fields) : self();
     }
 }

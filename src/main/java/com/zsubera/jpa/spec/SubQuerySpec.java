@@ -95,24 +95,36 @@ public class SubQuerySpec<S> {
 
     @SuppressWarnings({"unchecked", "rawtypes"})
     public SubQuerySpec<S> gt(SFunction<S, ?> field, Comparable<?> value) {
+        if (value == null) {
+            throw new IllegalArgumentException("value must not be null");
+        }
         predicates.add(cb.greaterThan((Expression) root.get(property(field)), (Comparable) value));
         return this;
     }
 
     @SuppressWarnings({"unchecked", "rawtypes"})
     public SubQuerySpec<S> ge(SFunction<S, ?> field, Comparable<?> value) {
+        if (value == null) {
+            throw new IllegalArgumentException("value must not be null");
+        }
         predicates.add(cb.greaterThanOrEqualTo((Expression) root.get(property(field)), (Comparable) value));
         return this;
     }
 
     @SuppressWarnings({"unchecked", "rawtypes"})
     public SubQuerySpec<S> lt(SFunction<S, ?> field, Comparable<?> value) {
+        if (value == null) {
+            throw new IllegalArgumentException("value must not be null");
+        }
         predicates.add(cb.lessThan((Expression) root.get(property(field)), (Comparable) value));
         return this;
     }
 
     @SuppressWarnings({"unchecked", "rawtypes"})
     public SubQuerySpec<S> le(SFunction<S, ?> field, Comparable<?> value) {
+        if (value == null) {
+            throw new IllegalArgumentException("value must not be null");
+        }
         predicates.add(cb.lessThanOrEqualTo((Expression) root.get(property(field)), (Comparable) value));
         return this;
     }
@@ -120,26 +132,41 @@ public class SubQuerySpec<S> {
     // ---- String operators ----
 
     public SubQuerySpec<S> like(SFunction<S, ?> field, String value) {
+        if (value == null) {
+            throw new IllegalArgumentException("value must not be null");
+        }
         predicates.add(cb.like(root.get(property(field)).as(String.class), value));
         return this;
     }
 
     public SubQuerySpec<S> notLike(SFunction<S, ?> field, String value) {
+        if (value == null) {
+            throw new IllegalArgumentException("value must not be null");
+        }
         predicates.add(cb.notLike(root.get(property(field)).as(String.class), value));
         return this;
     }
 
     public SubQuerySpec<S> startsWith(SFunction<S, ?> field, String value) {
+        if (value == null) {
+            throw new IllegalArgumentException("value must not be null");
+        }
         predicates.add(cb.like(root.get(property(field)).as(String.class), value + "%"));
         return this;
     }
 
     public SubQuerySpec<S> endsWith(SFunction<S, ?> field, String value) {
+        if (value == null) {
+            throw new IllegalArgumentException("value must not be null");
+        }
         predicates.add(cb.like(root.get(property(field)).as(String.class), "%" + value));
         return this;
     }
 
     public SubQuerySpec<S> contains(SFunction<S, ?> field, String value) {
+        if (value == null) {
+            throw new IllegalArgumentException("value must not be null");
+        }
         predicates.add(cb.like(root.get(property(field)).as(String.class), "%" + value + "%"));
         return this;
     }
@@ -148,6 +175,15 @@ public class SubQuerySpec<S> {
 
     @SuppressWarnings({"unchecked", "rawtypes"})
     public SubQuerySpec<S> between(SFunction<S, ?> field, Comparable<?> start, Comparable<?> end) {
+        if (start == null) {
+            throw new IllegalArgumentException("start must not be null");
+        }
+        if (end == null) {
+            throw new IllegalArgumentException("end must not be null");
+        }
+        if (((Comparable) start).compareTo(end) > 0) {
+            throw new IllegalArgumentException("start must not be greater than end");
+        }
         predicates.add(cb.between((Expression) root.get(property(field)), (Comparable) start, (Comparable) end));
         return this;
     }
@@ -231,6 +267,9 @@ public class SubQuerySpec<S> {
     }
 
     public SubQuerySpec<S> likeIgnoreCase(SFunction<S, ?> field, String value) {
+        if (value == null) {
+            throw new IllegalArgumentException("value must not be null");
+        }
         predicates.add(cb.like(cb.upper(root.get(property(field)).as(String.class)), value.toUpperCase()));
         return this;
     }

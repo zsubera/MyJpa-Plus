@@ -9,6 +9,7 @@ import java.util.concurrent.ConcurrentHashMap;
 
 public final class LambdaUtils {
 
+    private static final int MAX_CACHE_SIZE = 1024;
     private static final ConcurrentHashMap<String, String> CACHE = new ConcurrentHashMap<>();
 
     private LambdaUtils() {
@@ -23,6 +24,13 @@ public final class LambdaUtils {
             writeReplace.setAccessible(true);
             SerializedLambda lambda = (SerializedLambda) writeReplace.invoke(fn);
             String key = lambda.getImplClass() + "#" + lambda.getImplMethodName();
+            String cached = CACHE.get(key);
+            if (cached != null) {
+                return cached;
+            }
+            if (CACHE.size() >= MAX_CACHE_SIZE) {
+                CACHE.clear();
+            }
             return CACHE.computeIfAbsent(key, k -> methodToProperty(lambda.getImplMethodName()));
         } catch (ReflectiveOperationException e) {
             throw new IllegalArgumentException(
@@ -33,6 +41,14 @@ public final class LambdaUtils {
             throw new IllegalArgumentException(
                     "Failed to extract property name due to security restriction.", e);
         }
+    }
+
+    static int cacheSize() {
+        return CACHE.size();
+    }
+
+    static void clearCache() {
+        CACHE.clear();
     }
 
     private static String methodToProperty(String methodName) {

@@ -163,6 +163,10 @@
                                     <element>PACKAGE</element>
                                     <excludes>
                                         <exclude>com.zsubera.jpa.autoconfigure</exclude>
+                                        <exclude>com.zsubera.jpa.annotation</exclude>
+                                        <exclude>com.zsubera.jpa.entity</exclude>
+                                        <exclude>com.zsubera.jpa.exception</exclude>
+                                        <exclude>com.zsubera.jpa.repository</exclude>
                                     </excludes>
                                     <limits>
                                         <limit>

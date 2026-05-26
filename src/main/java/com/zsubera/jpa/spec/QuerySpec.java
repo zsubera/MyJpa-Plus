@@ -19,6 +19,10 @@ import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
  * collection operations, JOINs, EXISTS subqueries, and arbitrarily nested
  * AND/OR groups.
  * <p>
+ * <strong>This class is mutable and not thread-safe.</strong>
+ * Instances should not be shared across threads.
+ * Create a new {@code QuerySpec} per query operation.
+ * <p>
  * Example:
  * <pre>{@code
  * new QuerySpec<User>()
