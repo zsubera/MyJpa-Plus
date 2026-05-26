@@ -134,7 +134,11 @@ public abstract class AbstractBulkOperationSpec<
         implements BulkConditionNode {}
 
     /** An OR group of child nodes. */
-    record OrNode(List<BulkConditionNode> children) implements BulkConditionNode {}
+    record OrNode(List<BulkConditionNode> children) implements BulkConditionNode {
+      OrNode {
+        children = List.copyOf(children);
+      }
+    }
 
     /** A NOT wrapper around a child node. */
     record NotNode(BulkConditionNode child) implements BulkConditionNode {}

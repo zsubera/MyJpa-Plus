@@ -1,5 +1,6 @@
 package com.zsubera.jpa.autoconfigure;
 
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 /**
@@ -21,10 +22,10 @@ public class MyJpaPlusProperties {
   /** Soft-delete related configuration. */
   private SoftDelete softDelete = new SoftDelete();
 
+  @SuppressFBWarnings("EI_EXPOSE_REP")
   public SoftDelete getSoftDelete() {
-    return softDelete;
-  }
 
+  @SuppressFBWarnings("EI_EXPOSE_REP2")
   public void setSoftDelete(SoftDelete softDelete) {
     this.softDelete = softDelete;
   }

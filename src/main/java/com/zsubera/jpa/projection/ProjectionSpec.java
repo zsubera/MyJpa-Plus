@@ -181,8 +181,8 @@ public class ProjectionSpec<T> {
     CriteriaQuery<Tuple> query = cb.createTupleQuery();
     Root<T> root = query.from(entityClass);
 
-    // Apply joins
-    Map<String, Join<?, ?>> joinMap = resolveJoins(root, cb);
+    // Apply joins (side effects on root)
+    resolveJoins(root, cb);
 
     // Apply selections
     List<jakarta.persistence.criteria.Selection<?>> selectionList = new ArrayList<>();

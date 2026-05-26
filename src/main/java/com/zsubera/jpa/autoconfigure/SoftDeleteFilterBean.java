@@ -2,6 +2,7 @@ package com.zsubera.jpa.autoconfigure;
 
 import com.zsubera.jpa.annotation.SoftDelete;
 import com.zsubera.jpa.update.SoftDeleteHelper;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.InitializingBean;
@@ -42,6 +43,7 @@ public class SoftDeleteFilterBean implements InitializingBean {
 
   private final MyJpaPlusProperties properties;
 
+  @SuppressFBWarnings("EI_EXPOSE_REP2")
   public SoftDeleteFilterBean(MyJpaPlusProperties properties) {
     this.properties = properties;
   }
