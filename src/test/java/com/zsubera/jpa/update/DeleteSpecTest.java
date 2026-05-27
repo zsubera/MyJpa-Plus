@@ -564,6 +564,130 @@ class DeleteSpecTest {
             () -> new DeleteSpec<>(TestEntity.class).notBetween(TestEntity::getStatus, 10, 1));
     }
 
+    @Test
+    void testDeleteOrGroupGtNullThrowsException() {
+        assertThrows(IllegalArgumentException.class,
+            () -> new DeleteSpec<>(TestEntity.class).or(o -> o.gt(TestEntity::getStatus, null)));
+    }
+
+    @Test
+    void testDeleteOrGroupGeNullThrowsException() {
+        assertThrows(IllegalArgumentException.class,
+            () -> new DeleteSpec<>(TestEntity.class).or(o -> o.ge(TestEntity::getStatus, null)));
+    }
+
+    @Test
+    void testDeleteOrGroupLtNullThrowsException() {
+        assertThrows(IllegalArgumentException.class,
+            () -> new DeleteSpec<>(TestEntity.class).or(o -> o.lt(TestEntity::getStatus, null)));
+    }
+
+    @Test
+    void testDeleteOrGroupLeNullThrowsException() {
+        assertThrows(IllegalArgumentException.class,
+            () -> new DeleteSpec<>(TestEntity.class).or(o -> o.le(TestEntity::getStatus, null)));
+    }
+
+    @Test
+    void testDeleteOrGroupLikeNullThrowsException() {
+        assertThrows(IllegalArgumentException.class,
+            () -> new DeleteSpec<>(TestEntity.class).or(o -> o.like(TestEntity::getName, null)));
+    }
+
+    @Test
+    void testDeleteOrGroupNotLikeNullThrowsException() {
+        assertThrows(IllegalArgumentException.class,
+            () -> new DeleteSpec<>(TestEntity.class).or(o -> o.notLike(TestEntity::getName, null)));
+    }
+
+    @Test
+    void testDeleteOrGroupStartsWithNullThrowsException() {
+        assertThrows(IllegalArgumentException.class,
+            () -> new DeleteSpec<>(TestEntity.class).or(o -> o.startsWith(TestEntity::getName, null)));
+    }
+
+    @Test
+    void testDeleteOrGroupEndsWithNullThrowsException() {
+        assertThrows(IllegalArgumentException.class,
+            () -> new DeleteSpec<>(TestEntity.class).or(o -> o.endsWith(TestEntity::getName, null)));
+    }
+
+    @Test
+    void testDeleteOrGroupContainsNullThrowsException() {
+        assertThrows(IllegalArgumentException.class,
+            () -> new DeleteSpec<>(TestEntity.class).or(o -> o.contains(TestEntity::getName, null)));
+    }
+
+    @Test
+    void testDeleteOrGroupLikeIgnoreCaseNullThrowsException() {
+        assertThrows(IllegalArgumentException.class,
+            () -> new DeleteSpec<>(TestEntity.class).or(o -> o.likeIgnoreCase(TestEntity::getName, null)));
+    }
+
+    @Test
+    void testDeleteOrGroupInEmptyThrowsException() {
+        assertThrows(IllegalArgumentException.class,
+            () -> new DeleteSpec<>(TestEntity.class).or(o -> o.in(TestEntity::getStatus)));
+    }
+
+    @Test
+    void testDeleteOrGroupNotInEmptyThrowsException() {
+        assertThrows(IllegalArgumentException.class,
+            () -> new DeleteSpec<>(TestEntity.class).or(o -> o.notIn(TestEntity::getStatus)));
+    }
+
+    @Test
+    void testDeleteOrGroupBetweenNullStartThrowsException() {
+        assertThrows(IllegalArgumentException.class,
+            () -> new DeleteSpec<>(TestEntity.class).or(o -> o.between(TestEntity::getStatus, null, 5)));
+    }
+
+    @Test
+    void testDeleteOrGroupBetweenNullEndThrowsException() {
+        assertThrows(IllegalArgumentException.class,
+            () -> new DeleteSpec<>(TestEntity.class).or(o -> o.between(TestEntity::getStatus, 1, null)));
+    }
+
+    @Test
+    void testDeleteOrGroupNotBetweenNullStartThrowsException() {
+        assertThrows(IllegalArgumentException.class,
+            () -> new DeleteSpec<>(TestEntity.class).or(o -> o.notBetween(TestEntity::getStatus, null, 5)));
+    }
+
+    @Test
+    void testDeleteOrGroupNotBetweenNullEndThrowsException() {
+        assertThrows(IllegalArgumentException.class,
+            () -> new DeleteSpec<>(TestEntity.class).or(o -> o.notBetween(TestEntity::getStatus, 1, null)));
+    }
+
+    @Test
+    void testDeleteOrGroupWithMultipleConditions() {
+        repository.save(newEntity("a", 1));
+        repository.save(newEntity("b", 10));
+        repository.save(newEntity("c", 5));
+        int count = new DeleteSpec<>(TestEntity.class)
+            .or(o -> o.gt(TestEntity::getStatus, 8).lt(TestEntity::getStatus, 3)).execute(em);
+        assertEquals(2, count);
+    }
+
+    @Test
+    void testDeleteNotGroupWithMultipleConditions() {
+        repository.save(newEntity("a", 1));
+        repository.save(newEntity("b", 10));
+        repository.save(newEntity("c", 5));
+        // NOT(status > 3 OR status < 8) = status <= 3 AND status >= 8 -> no match
+        // Actually: NOT(cond1 OR cond2) = NOT(cond1) AND NOT(cond2)
+        // NOT(>3) = <=3, NOT(<8) = >=8 -> <=3 AND >=8 -> no entity matches
+        int count = new DeleteSpec<>(TestEntity.class)
+            .not(o -> o.gt(TestEntity::getStatus, 3).lt(TestEntity::getStatus, 8)).execute(em);
+        assertEquals(0, count);
+    }
+
+    @Test
+    void testDeleteNullFieldThrowsException() {
+        assertThrows(IllegalArgumentException.class, () -> new DeleteSpec<>(TestEntity.class).eq(null, "value"));
+    }
+
     private TestEntity newEntity(String name, int status) {
         TestEntity entity = new TestEntity();
         entity.setName(name);

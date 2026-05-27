@@ -150,14 +150,51 @@ class EntityGraphHelperTest {
 
     @Test
     void testDotPathHandlingMergesSubpaths() {
-        // adding "parent" after "parent" (via dot) should keep the subpath
-        // First add parent with no subpaths, then add a subpath - it should be kept
         EntityGraphHelper<TestEntity> helper = EntityGraphHelper.forEntity(TestEntity.class).add("parent");
-
-        // Adding "parent" where dot is found as root, no subpath actually
-        // The merge behavior: when add("parent") is called after "parent" was already
-        // added (with or without subpaths), should be a no-op
         EntityGraph<TestEntity> graph = helper.buildGraph(em);
         assertNotNull(graph);
+    }
+
+    @Test
+    void testDotPathCreatesSubgraph() {
+        EntityGraphHelper<TestEntity> helper = EntityGraphHelper.forEntity(TestEntity.class).add("parent.category");
+        EntityGraph<TestEntity> graph = helper.buildGraph(em);
+        assertNotNull(graph);
+        assertFalse(graph.getAttributeNodes().isEmpty());
+    }
+
+    @Test
+    void testMultipleDotPathsMerged() {
+        EntityGraphHelper<TestEntity> helper =
+            EntityGraphHelper.forEntity(TestEntity.class).add("parent.category").add("parent.level");
+        EntityGraph<TestEntity> graph = helper.buildGraph(em);
+        assertNotNull(graph);
+    }
+
+    @Test
+    void testVarargsWithDotPaths() {
+        EntityGraphHelper<TestEntity> helper =
+            EntityGraphHelper.forEntity(TestEntity.class).add("parent.category", "name");
+        EntityGraph<TestEntity> graph = helper.buildGraph(em);
+        assertNotNull(graph);
+        assertEquals(2, graph.getAttributeNodes().size());
+    }
+
+    @Test
+    void testAddSameRootThenSubpathMerges() {
+        EntityGraphHelper<TestEntity> helper =
+            EntityGraphHelper.forEntity(TestEntity.class).add("parent").add("parent.category");
+        EntityGraph<TestEntity> graph = helper.buildGraph(em);
+        assertNotNull(graph);
+    }
+
+    @Test
+    void testLoadGraphWithMultipleAttributes() {
+        EntityGraphHelper<TestEntity> helper =
+            EntityGraphHelper.forEntity(TestEntity.class).loadGraph().add("parent").add("name");
+        Map<String, Object> hints = helper.toHints(em);
+        assertNotNull(hints.get("jakarta.persistence.loadgraph"));
+        EntityGraph<TestEntity> graph = helper.buildGraph(em);
+        assertEquals(2, graph.getAttributeNodes().size());
     }
 }

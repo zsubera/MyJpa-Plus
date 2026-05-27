@@ -107,4 +107,51 @@ class BaseEntityTest {
         entity.setUpdatedAt(now);
         assertEquals(now, entity.getUpdatedAt());
     }
+
+    @Test
+    void prePersist_setsCreatedAtAndUpdatedAt() {
+        ConcreteEntity entity = new ConcreteEntity();
+        entity.prePersist();
+        assertNotNull(entity.getCreatedAt());
+        assertNotNull(entity.getUpdatedAt());
+        assertEquals(entity.getCreatedAt(), entity.getUpdatedAt());
+    }
+
+    @Test
+    void preUpdate_updatesUpdatedAt() {
+        ConcreteEntity entity = new ConcreteEntity();
+        entity.prePersist();
+        Instant originalCreatedAt = entity.getCreatedAt();
+        Instant originalUpdatedAt = entity.getUpdatedAt();
+        entity.preUpdate();
+        assertNotNull(entity.getUpdatedAt());
+        assertEquals(originalCreatedAt, entity.getCreatedAt());
+        assertFalse(entity.getUpdatedAt().isBefore(originalUpdatedAt));
+    }
+
+    @Test
+    void equals_differentSubclassWithSameId_returnsTrue() {
+        ConcreteEntity entity1 = new ConcreteEntity();
+        entity1.assignId(1L);
+        ConcreteEntity entity2 = new ConcreteEntity();
+        entity2.assignId(1L);
+        assertTrue(entity1.equals(entity2));
+        assertTrue(entity2.equals(entity1));
+    }
+
+    @Test
+    void equals_bothIdsNull_returnsFalse() {
+        ConcreteEntity entity1 = new ConcreteEntity();
+        ConcreteEntity entity2 = new ConcreteEntity();
+        assertFalse(entity1.equals(entity2));
+    }
+
+    @Test
+    void hashCode_sameIdConsistent() {
+        ConcreteEntity entity = new ConcreteEntity();
+        entity.assignId(42L);
+        int h1 = entity.hashCode();
+        int h2 = entity.hashCode();
+        assertEquals(h1, h2);
+    }
 }

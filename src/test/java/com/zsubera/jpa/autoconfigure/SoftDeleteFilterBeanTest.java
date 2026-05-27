@@ -62,4 +62,15 @@ class SoftDeleteFilterBeanTest {
         filterBean.registerEntity(SoftDeleteTestEntity.class);
         assertTrue(filterBean.hasSoftDeleteField(SoftDeleteTestEntity.class));
     }
+
+    @Test
+    void testAfterPropertiesSetDoesNotThrow() {
+        assertDoesNotThrow(() -> filterBean.afterPropertiesSet());
+    }
+
+    @Test
+    void testRegisterEntityWithoutSoftDeleteDoesNotThrow() {
+        assertDoesNotThrow(() -> filterBean.registerEntity(TestEntity.class));
+        assertFalse(filterBean.hasSoftDeleteField(TestEntity.class));
+    }
 }

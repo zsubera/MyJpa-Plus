@@ -538,6 +538,150 @@ class SubQuerySpecTest {
     }
 
     @Test
+    void testSubQueryInEmptyArrayThrowsException() {
+        QuerySpec<ParentEntity> qs = new QuerySpec<>();
+        qs.exists(TestEntity.class, sub -> sub.in(TestEntity::getStatus, new Object[0]));
+        RuntimeException ex =
+            assertThrows(RuntimeException.class, () -> parentRepository.findAll(qs.toSpecification()));
+        assertTrue(ex.getCause() instanceof IllegalArgumentException || ex instanceof IllegalArgumentException);
+    }
+
+    @Test
+    void testSubQueryNotInEmptyArrayThrowsException() {
+        QuerySpec<ParentEntity> qs = new QuerySpec<>();
+        qs.exists(TestEntity.class, sub -> sub.notIn(TestEntity::getStatus, new Object[0]));
+        RuntimeException ex =
+            assertThrows(RuntimeException.class, () -> parentRepository.findAll(qs.toSpecification()));
+        assertTrue(ex.getCause() instanceof IllegalArgumentException || ex instanceof IllegalArgumentException);
+    }
+
+    @Test
+    void testSubQueryInEmptyCollectionThrowsException() {
+        QuerySpec<ParentEntity> qs = new QuerySpec<>();
+        qs.exists(TestEntity.class, sub -> sub.in(TestEntity::getStatus, java.util.Collections.emptyList()));
+        RuntimeException ex =
+            assertThrows(RuntimeException.class, () -> parentRepository.findAll(qs.toSpecification()));
+        assertTrue(ex.getCause() instanceof IllegalArgumentException || ex instanceof IllegalArgumentException);
+    }
+
+    @Test
+    void testSubQueryNotInEmptyCollectionThrowsException() {
+        QuerySpec<ParentEntity> qs = new QuerySpec<>();
+        qs.exists(TestEntity.class, sub -> sub.notIn(TestEntity::getStatus, java.util.Collections.emptyList()));
+        RuntimeException ex =
+            assertThrows(RuntimeException.class, () -> parentRepository.findAll(qs.toSpecification()));
+        assertTrue(ex.getCause() instanceof IllegalArgumentException || ex instanceof IllegalArgumentException);
+    }
+
+    @Test
+    void testSubQueryBetweenNullEndThrowsException() {
+        QuerySpec<ParentEntity> qs = new QuerySpec<>();
+        qs.exists(TestEntity.class, sub -> sub.between(TestEntity::getStatus, 1, null));
+        RuntimeException ex =
+            assertThrows(RuntimeException.class, () -> parentRepository.findAll(qs.toSpecification()));
+        assertTrue(ex.getCause() instanceof IllegalArgumentException || ex instanceof IllegalArgumentException);
+    }
+
+    @Test
+    void testSubQueryNotBetweenNullEndThrowsException() {
+        QuerySpec<ParentEntity> qs = new QuerySpec<>();
+        qs.exists(TestEntity.class, sub -> sub.notBetween(TestEntity::getStatus, 1, null));
+        RuntimeException ex =
+            assertThrows(RuntimeException.class, () -> parentRepository.findAll(qs.toSpecification()));
+        assertTrue(ex.getCause() instanceof IllegalArgumentException || ex instanceof IllegalArgumentException);
+    }
+
+    @Test
+    void testSubQueryNotLikeNullValueThrowsException() {
+        QuerySpec<ParentEntity> qs = new QuerySpec<>();
+        qs.exists(TestEntity.class, sub -> sub.notLike(TestEntity::getName, null));
+        RuntimeException ex =
+            assertThrows(RuntimeException.class, () -> parentRepository.findAll(qs.toSpecification()));
+        assertTrue(ex.getCause() instanceof IllegalArgumentException || ex instanceof IllegalArgumentException);
+    }
+
+    @Test
+    void testSubQueryStartsWithNullValueThrowsException() {
+        QuerySpec<ParentEntity> qs = new QuerySpec<>();
+        qs.exists(TestEntity.class, sub -> sub.startsWith(TestEntity::getName, null));
+        RuntimeException ex =
+            assertThrows(RuntimeException.class, () -> parentRepository.findAll(qs.toSpecification()));
+        assertTrue(ex.getCause() instanceof IllegalArgumentException || ex instanceof IllegalArgumentException);
+    }
+
+    @Test
+    void testSubQueryEndsWithNullValueThrowsException() {
+        QuerySpec<ParentEntity> qs = new QuerySpec<>();
+        qs.exists(TestEntity.class, sub -> sub.endsWith(TestEntity::getName, null));
+        RuntimeException ex =
+            assertThrows(RuntimeException.class, () -> parentRepository.findAll(qs.toSpecification()));
+        assertTrue(ex.getCause() instanceof IllegalArgumentException || ex instanceof IllegalArgumentException);
+    }
+
+    @Test
+    void testSubQueryContainsNullValueThrowsException() {
+        QuerySpec<ParentEntity> qs = new QuerySpec<>();
+        qs.exists(TestEntity.class, sub -> sub.contains(TestEntity::getName, null));
+        RuntimeException ex =
+            assertThrows(RuntimeException.class, () -> parentRepository.findAll(qs.toSpecification()));
+        assertTrue(ex.getCause() instanceof IllegalArgumentException || ex instanceof IllegalArgumentException);
+    }
+
+    @Test
+    void testSubQueryGtNullValueThrowsException() {
+        QuerySpec<ParentEntity> qs = new QuerySpec<>();
+        qs.exists(TestEntity.class, sub -> sub.gt(TestEntity::getStatus, null));
+        RuntimeException ex =
+            assertThrows(RuntimeException.class, () -> parentRepository.findAll(qs.toSpecification()));
+        assertTrue(ex.getCause() instanceof IllegalArgumentException || ex instanceof IllegalArgumentException);
+    }
+
+    @Test
+    void testSubQueryGeNullValueThrowsException() {
+        QuerySpec<ParentEntity> qs = new QuerySpec<>();
+        qs.exists(TestEntity.class, sub -> sub.ge(TestEntity::getStatus, null));
+        RuntimeException ex =
+            assertThrows(RuntimeException.class, () -> parentRepository.findAll(qs.toSpecification()));
+        assertTrue(ex.getCause() instanceof IllegalArgumentException || ex instanceof IllegalArgumentException);
+    }
+
+    @Test
+    void testSubQueryLtNullValueThrowsException() {
+        QuerySpec<ParentEntity> qs = new QuerySpec<>();
+        qs.exists(TestEntity.class, sub -> sub.lt(TestEntity::getStatus, null));
+        RuntimeException ex =
+            assertThrows(RuntimeException.class, () -> parentRepository.findAll(qs.toSpecification()));
+        assertTrue(ex.getCause() instanceof IllegalArgumentException || ex instanceof IllegalArgumentException);
+    }
+
+    @Test
+    void testSubQueryLeNullValueThrowsException() {
+        QuerySpec<ParentEntity> qs = new QuerySpec<>();
+        qs.exists(TestEntity.class, sub -> sub.le(TestEntity::getStatus, null));
+        RuntimeException ex =
+            assertThrows(RuntimeException.class, () -> parentRepository.findAll(qs.toSpecification()));
+        assertTrue(ex.getCause() instanceof IllegalArgumentException || ex instanceof IllegalArgumentException);
+    }
+
+    @Test
+    void testSubQueryNullFieldThrowsException() {
+        QuerySpec<ParentEntity> qs = new QuerySpec<>();
+        qs.exists(TestEntity.class, sub -> sub.eq(null, "value"));
+        RuntimeException ex =
+            assertThrows(RuntimeException.class, () -> parentRepository.findAll(qs.toSpecification()));
+        assertTrue(ex.getCause() instanceof IllegalArgumentException || ex instanceof IllegalArgumentException);
+    }
+
+    @Test
+    void testSubQueryMultiLikeWithNullFieldThrowsException() {
+        QuerySpec<ParentEntity> qs = new QuerySpec<>();
+        qs.exists(TestEntity.class, sub -> sub.multiLike("test", (SFunction<TestEntity, ?>)null));
+        RuntimeException ex =
+            assertThrows(RuntimeException.class, () -> parentRepository.findAll(qs.toSpecification()));
+        assertTrue(ex.getCause() instanceof IllegalArgumentException || ex instanceof IllegalArgumentException);
+    }
+
+    @Test
     void testExistsWithInCollectionVarargs() {
         ParentEntity p = new ParentEntity();
         p.setCategory("cat");

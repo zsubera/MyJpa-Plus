@@ -75,4 +75,24 @@ class MyJpaPlusAutoConfigurationTest {
         MyJpaTemplate template = configuration.myJpaTemplate(properties);
         assertNotNull(template);
     }
+
+    @Test
+    void properties_topLevel_setSoftDelete() {
+        MyJpaPlusProperties properties = new MyJpaPlusProperties();
+        MyJpaPlusProperties.SoftDelete sd = new MyJpaPlusProperties.SoftDelete();
+        sd.setAutoFilter(false);
+        properties.setSoftDelete(sd);
+        assertFalse(properties.getSoftDelete().isAutoFilter());
+    }
+
+    @Test
+    void properties_topLevel_setQuery() {
+        MyJpaPlusProperties properties = new MyJpaPlusProperties();
+        MyJpaPlusProperties.Query q = new MyJpaPlusProperties.Query();
+        q.setMaxResults(500);
+        q.setDeepPaginationOffsetThreshold(1000);
+        properties.setQuery(q);
+        assertEquals(500, properties.getQuery().getMaxResults());
+        assertEquals(1000, properties.getQuery().getDeepPaginationOffsetThreshold());
+    }
 }

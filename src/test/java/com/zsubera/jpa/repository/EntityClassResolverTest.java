@@ -45,4 +45,47 @@ class EntityClassResolverTest {
         Class<MyJpaTestEntity> second = EntityClassResolver.resolve(MyJpaTestRepository.class);
         assertSame(first, second);
     }
+
+    @Test
+    void testResolveReturnsNullForNonMyJpaRepository() {
+        Class<?> result = EntityClassResolver.resolve(NonMyJpaRepository.class);
+        assertNull(result);
+    }
+
+    @Test
+    void testResolveThroughIntermediateInterface() {
+        Class<IndirectEntity> result = EntityClassResolver.resolve(IndirectRepo.class);
+        assertEquals(IndirectEntity.class, result);
+    }
+
+    @Test
+    void testResolveIsCachedForIndirectRepo() {
+        Class<IndirectEntity> first = EntityClassResolver.resolve(IndirectRepo.class);
+        Class<IndirectEntity> second = EntityClassResolver.resolve(IndirectRepo.class);
+        assertSame(first, second);
+    }
+
+    private interface NonMyJpaRepository {
+        void dummy();
+    }
+
+    @jakarta.persistence.Entity
+    @jakarta.persistence.Table(name = "indirect_entity")
+    static class IndirectEntity {
+        @jakarta.persistence.Id
+        @jakarta.persistence.GeneratedValue(strategy = jakarta.persistence.GenerationType.IDENTITY)
+        private Long id;
+
+        public Long getId() {
+            return id;
+        }
+
+        public void setId(Long id) {
+            this.id = id;
+        }
+    }
+
+    interface BaseRepo<T, ID> extends MyJpaRepository<T, ID> {}
+
+    interface IndirectRepo extends BaseRepo<IndirectEntity, Long> {}
 }

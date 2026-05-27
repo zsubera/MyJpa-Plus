@@ -298,6 +298,53 @@ class OrGroupTest {
         assertEquals(1, result.size());
     }
 
+    @Test
+    void testOrGroupJoinConsumer() {
+        ParentEntity admin = new ParentEntity();
+        admin.setCategory("admin");
+        admin.setLevel(10);
+        em.persist(admin);
+        TestEntity child = newEntity("child", 0);
+        child.setParent(admin);
+        repository.save(child);
+
+        QuerySpec<TestEntity> qs = new QuerySpec<>();
+        qs.or(og -> og.<ParentEntity>join(TestEntity::getParent, j -> j.eq(ParentEntity::getCategory, "admin")));
+        List<TestEntity> result = repository.findAll(qs.toSpecification());
+        assertEquals(1, result.size());
+    }
+
+    @Test
+    void testOrGroupLeftJoinConsumer() {
+        ParentEntity admin = new ParentEntity();
+        admin.setCategory("admin");
+        admin.setLevel(10);
+        em.persist(admin);
+        TestEntity orphan = newEntity("orphan", 0);
+        orphan.setParent(null);
+        repository.save(orphan);
+        TestEntity child = newEntity("child", 0);
+        child.setParent(admin);
+        repository.save(child);
+
+        QuerySpec<TestEntity> qs = new QuerySpec<>();
+        qs.or(og -> og.<ParentEntity>leftJoin(TestEntity::getParent,
+            j -> j.or(oj -> oj.eq(ParentEntity::getCategory, "admin").isNull(ParentEntity::getCategory))));
+        List<TestEntity> result = repository.findAll(qs.toSpecification());
+        assertEquals(2, result.size());
+    }
+
+    @Test
+    void testOrGroupNotBetween() {
+        repository.save(newEntity("a", 1));
+        repository.save(newEntity("b", 5));
+        repository.save(newEntity("c", 10));
+        QuerySpec<TestEntity> qs = new QuerySpec<>();
+        qs.or().notBetween(TestEntity::getStatus, 3, 7).endOr();
+        List<TestEntity> result = repository.findAll(qs.toSpecification());
+        assertEquals(2, result.size());
+    }
+
     private TestEntity newEntity(String name, int status) {
         TestEntity entity = new TestEntity();
         entity.setName(name);
