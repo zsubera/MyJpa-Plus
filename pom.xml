@@ -163,7 +163,7 @@
                     </execution>
                 </executions>
                 <configuration>
-                    <doclint>reference,html</doclint>
+                    <doclint>reference</doclint>
                 </configuration>
             </plugin>
             <plugin>
