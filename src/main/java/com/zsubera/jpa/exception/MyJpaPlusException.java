@@ -1,9 +1,6 @@
 package com.zsubera.jpa.exception;
 
-/**
- * MyJpa-Plus 库的基础异常类。所有库特定的异常都继承此类，
- * 允许使用者通过捕获单一类型来处理所有库错误。
- */
+/** MyJpa-Plus 库的基础异常类。所有库特定的异常都继承此类， 允许使用者通过捕获单一类型来处理所有库错误。 */
 public class MyJpaPlusException extends RuntimeException {
 
   /**

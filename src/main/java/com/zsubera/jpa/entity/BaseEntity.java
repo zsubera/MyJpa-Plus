@@ -25,8 +25,7 @@ import java.util.Objects;
  *
  * <p>开箱即用地提供 {@code id}、{@code createdAt} 和 {@code updatedAt} 字段。
  *
- * <p>{@code equals} 和 {@code hashCode} 在 {@code id} 非空（已持久化实体）时基于 {@code id} 字段，
- * 否则回退到对象标识比较。
+ * <p>{@code equals} 和 {@code hashCode} 在 {@code id} 非空（已持久化实体）时基于 {@code id} 字段， 否则回退到对象标识比较。
  */
 @MappedSuperclass
 public abstract class BaseEntity implements Serializable {

@@ -12,8 +12,7 @@ import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.repository.NoRepositoryBean;
 
 /**
- * 基础仓库接口，结合了 {@link JpaRepository} 和 {@link JpaSpecificationExecutor}，
- * 使消费者只需扩展单个接口即可使用。
+ * 基础仓库接口，结合了 {@link JpaRepository} 和 {@link JpaSpecificationExecutor}， 使消费者只需扩展单个接口即可使用。
  *
  * <p>添加了直接接受 {@code QuerySpec} 的便捷重载方法：
  *
@@ -26,7 +25,7 @@ import org.springframework.data.repository.NoRepositoryBean;
  * );
  * }</pre>
  *
- * @param <T>  实体类型
+ * @param <T> 实体类型
  * @param <ID> 实体ID类型
  */
 @NoRepositoryBean
@@ -43,7 +42,7 @@ public interface MyJpaRepository<T, ID> extends JpaRepository<T, ID>, JpaSpecifi
   /**
    * 分页查找所有匹配给定 {@link Specification} 的实体。
    *
-   * @param spec     查询规格说明
+   * @param spec 查询规格说明
    * @param pageable 分页参数
    * @return 包含匹配实体的分页结果
    */
@@ -83,9 +82,8 @@ public interface MyJpaRepository<T, ID> extends JpaRepository<T, ID>, JpaSpecifi
   boolean exists(Specification<T> spec);
 
   /**
-   * 查找所有匹配给定 {@link Specification} 且未被软删除的实体。
-   * 如果实体具有 {@link com.zsubera.jpa.annotation.SoftDelete @SoftDelete} 注解的字段，
-   * 则自动应用软删除过滤器。
+   * 查找所有匹配给定 {@link Specification} 且未被软删除的实体。 如果实体具有 {@link
+   * com.zsubera.jpa.annotation.SoftDelete @SoftDelete} 注解的字段， 则自动应用软删除过滤器。
    *
    * @param spec 附加过滤规格说明（可以为 null）
    * @return 匹配规格说明的未删除实体列表
@@ -110,7 +108,7 @@ public interface MyJpaRepository<T, ID> extends JpaRepository<T, ID>, JpaSpecifi
   /**
    * 分页查找所有匹配给定规格说明且未被软删除的实体。
    *
-   * @param spec     附加过滤规格说明（可以为 null）
+   * @param spec 附加过滤规格说明（可以为 null）
    * @param pageable 分页参数
    * @return 包含未删除实体的分页结果
    */
@@ -137,8 +135,7 @@ public interface MyJpaRepository<T, ID> extends JpaRepository<T, ID>, JpaSpecifi
   }
 
   /**
-   * 根据ID查找单个未被软删除的实体。
-   * 使用查询级过滤器避免获取已删除的实体。
+   * 根据ID查找单个未被软删除的实体。 使用查询级过滤器避免获取已删除的实体。
    *
    * @param id 实体ID
    * @return 匹配实体的 Optional 包装

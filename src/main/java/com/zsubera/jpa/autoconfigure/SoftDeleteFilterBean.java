@@ -15,8 +15,8 @@ import org.springframework.stereotype.Component;
 /**
  * 自动过滤 Bean，用于实现透明的软删除过滤。
  *
- * <p>当 {@code myjpa-plus.soft-delete.auto-filter} 启用时，此 Bean 会跟踪所有带有
- * {@link SoftDelete @SoftDelete} 注解的实体类，并提供自动应用软删除过滤器的机制。
+ * <p>当 {@code myjpa-plus.soft-delete.auto-filter} 启用时，此 Bean 会跟踪所有带有 {@link SoftDelete @SoftDelete}
+ * 注解的实体类，并提供自动应用软删除过滤器的机制。
  *
  * <p>在 Repository 中的用法：
  *
@@ -55,10 +55,7 @@ public class SoftDeleteFilterBean implements InitializingBean {
     }
   }
 
-  /**
-   * 注册实体类以进行自动过滤。委托给 {@link SoftDeleteHelper}，该类会缓存结果（包括正向和负向结果）
-   * 以避免重复扫描。
-   */
+  /** 注册实体类以进行自动过滤。委托给 {@link SoftDeleteHelper}，该类会缓存结果（包括正向和负向结果） 以避免重复扫描。 */
   public void registerEntity(Class<?> entityClass) {
     SoftDeleteHelper.findSoftDeleteField(entityClass);
     if (log.isDebugEnabled()) {
@@ -84,8 +81,8 @@ public class SoftDeleteFilterBean implements InitializingBean {
   }
 
   /**
-   * 检查给定的实体类是否具有 {@link SoftDelete @SoftDelete} 字段。委托给
-   * {@link SoftDeleteHelper#findSoftDeleteField(Class)}，该方法内部会缓存正向和负向的结果。
+   * 检查给定的实体类是否具有 {@link SoftDelete @SoftDelete} 字段。委托给 {@link
+   * SoftDeleteHelper#findSoftDeleteField(Class)}，该方法内部会缓存正向和负向的结果。
    */
   public boolean hasSoftDeleteField(Class<?> entityClass) {
     return SoftDeleteHelper.findSoftDeleteField(entityClass) != null;

@@ -18,11 +18,10 @@ import org.springframework.lang.Nullable;
 /**
  * 基于 Lambda 的类型安全 JPA {@link Specification} 查询构建器。
  *
- * <p>使用方法引用（如 {@code Entity::getField}）代替硬编码的属性名字符串。支持等值比较、
- * 范围比较、字符串匹配、集合操作、JOIN、EXISTS 子查询以及任意嵌套的 AND/OR 条件组。
+ * <p>使用方法引用（如 {@code Entity::getField}）代替硬编码的属性名字符串。支持等值比较、 范围比较、字符串匹配、集合操作、JOIN、EXISTS 子查询以及任意嵌套的
+ * AND/OR 条件组。
  *
- * <p><strong>此类是可变的且非线程安全。</strong>实例不应在多线程间共享。
- * 每次查询操作应创建新的 {@code QuerySpec} 实例。
+ * <p><strong>此类是可变的且非线程安全。</strong>实例不应在多线程间共享。 每次查询操作应创建新的 {@code QuerySpec} 实例。
  *
  * <p>示例：
  *
@@ -73,11 +72,9 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
   }
 
   /**
-   * 将此 QuerySpec 上定义的排序暴露为 Spring Data {@link Sort} 对象。
-   * 如果未设置排序，则返回 {@link Sort#unsorted()}。
+   * 将此 QuerySpec 上定义的排序暴露为 Spring Data {@link Sort} 对象。 如果未设置排序，则返回 {@link Sort#unsorted()}。
    *
-   * <p>此方法允许 {@link com.zsubera.jpa.util.PageableHelper} 和其他工具类
-   * 将 QuerySpec 排序与外部排序进行合并。
+   * <p>此方法允许 {@link com.zsubera.jpa.util.PageableHelper} 和其他工具类 将 QuerySpec 排序与外部排序进行合并。
    *
    * @return 排序对象
    */
@@ -93,8 +90,8 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
   }
 
   /**
-   * 设置生成查询的超时时间（秒）。
-   * 由 {@link #applyQuerySettings(TypedQuery)} 和 {@link com.zsubera.jpa.template.MyJpaTemplate} 应用。
+   * 设置生成查询的超时时间（秒）。 由 {@link #applyQuerySettings(TypedQuery)} 和 {@link
+   * com.zsubera.jpa.template.MyJpaTemplate} 应用。
    *
    * @param seconds 超时时间（秒）
    * @return 当前 QuerySpec 实例，支持链式调用
@@ -114,8 +111,8 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
   }
 
   /**
-   * 设置生成查询的悲观锁模式。
-   * 由 {@link #applyQuerySettings(TypedQuery)} 和 {@link com.zsubera.jpa.template.MyJpaTemplate} 应用。
+   * 设置生成查询的悲观锁模式。 由 {@link #applyQuerySettings(TypedQuery)} 和 {@link
+   * com.zsubera.jpa.template.MyJpaTemplate} 应用。
    *
    * @param lockMode 锁模式类型
    * @return 当前 QuerySpec 实例，支持链式调用
@@ -135,8 +132,7 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
   }
 
   /**
-   * 将配置的查询超时和锁模式应用到给定的 {@link TypedQuery}。
-   * 由 {@link com.zsubera.jpa.template.MyJpaTemplate} 自动调用。
+   * 将配置的查询超时和锁模式应用到给定的 {@link TypedQuery}。 由 {@link com.zsubera.jpa.template.MyJpaTemplate} 自动调用。
    *
    * @param query 要应用设置的 TypedQuery
    */
@@ -180,8 +176,7 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
   }
 
   /**
-   * 添加 HAVING 条件，与 {@link #groupBy} 配合使用。
-   * 该函数在执行时接收查询根对象和 CriteriaBuilder。
+   * 添加 HAVING 条件，与 {@link #groupBy} 配合使用。 该函数在执行时接收查询根对象和 CriteriaBuilder。
    *
    * @param condition HAVING 条件函数
    * @return 当前 QuerySpec 实例，支持链式调用
@@ -197,10 +192,9 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
   /**
    * 添加升序 ORDER BY 排序。
    *
-   * <p><strong>注意：</strong>当使用 {@code findAll(Specification, Pageable)} 时，Spring Data
-   * 会使用 {@link org.springframework.data.domain.Pageable Pageable} 的排序覆盖此处的排序。
-   * 使用 {@code findAll(spec, Sort.unsorted())} 或不带 {@code Pageable} 的 {@link #orderByAsc(SFunction[])}
-   * 以保留此处设置的排序。
+   * <p><strong>注意：</strong>当使用 {@code findAll(Specification, Pageable)} 时，Spring Data 会使用 {@link
+   * org.springframework.data.domain.Pageable Pageable} 的排序覆盖此处的排序。 使用 {@code findAll(spec,
+   * Sort.unsorted())} 或不带 {@code Pageable} 的 {@link #orderByAsc(SFunction[])} 以保留此处设置的排序。
    *
    * @param fields 要排序的字段方法引用
    * @return 当前 QuerySpec 实例，支持链式调用
@@ -219,8 +213,8 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
   /**
    * 添加降序 ORDER BY 排序。
    *
-   * <p><strong>注意：</strong>当使用 {@code findAll(Specification, Pageable)} 时，Spring Data
-   * 会覆盖此处的排序。详见 {@link #orderByAsc(SFunction[])}。
+   * <p><strong>注意：</strong>当使用 {@code findAll(Specification, Pageable)} 时，Spring Data 会覆盖此处的排序。详见
+   * {@link #orderByAsc(SFunction[])}。
    *
    * @param fields 要排序的字段方法引用
    * @return 当前 QuerySpec 实例，支持链式调用
@@ -489,8 +483,8 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
   }
 
   /**
-   * 将此 QuerySpec 与另一个 QuerySpec 使用 AND 组合，返回新的组合 {@link Specification}。
-   * 使用 {@link #then(QuerySpec)} 可在保留 QuerySpec 类型的同时组合条件以支持链式调用。
+   * 将此 QuerySpec 与另一个 QuerySpec 使用 AND 组合，返回新的组合 {@link Specification}。 使用 {@link #then(QuerySpec)}
+   * 可在保留 QuerySpec 类型的同时组合条件以支持链式调用。
    *
    * @param other 另一个 QuerySpec 实例
    * @return 组合后的 Specification 实例
@@ -503,9 +497,8 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
   }
 
   /**
-   * 将另一个 QuerySpec 的条件以 AND 语义合并到当前实例。
-   * 另一个 spec 的条件、分组、排序和 distinct 标志将追加到当前 spec，
-   * 保留 QuerySpec 类型以支持链式调用。
+   * 将另一个 QuerySpec 的条件以 AND 语义合并到当前实例。 另一个 spec 的条件、分组、排序和 distinct 标志将追加到当前 spec， 保留 QuerySpec
+   * 类型以支持链式调用。
    *
    * @param other 另一个 QuerySpec 实例
    * @return 当前 QuerySpec 实例，支持链式调用

@@ -7,7 +7,6 @@ import jakarta.persistence.criteria.Path;
 import jakarta.persistence.criteria.Predicate;
 import java.lang.reflect.Field;
 import java.util.List;
-import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import org.springframework.data.jpa.domain.Specification;
@@ -15,11 +14,9 @@ import org.springframework.data.jpa.domain.Specification;
 /**
  * 软删除实体辅助工具类。
  *
- * <p>用于处理带有 {@link SoftDelete @SoftDelete} 注解的实体，提供自动过滤软删除记录的
- * {@link Specification} 实例。
+ * <p>用于处理带有 {@link SoftDelete @SoftDelete} 注解的实体，提供自动过滤软删除记录的 {@link Specification} 实例。
  *
- * <p>所有缓存均使用 {@link ConcurrentHashMap} 实现线程安全访问。由于实体类数量在实际应用中
- * 有限，无需 LRU 淘汰策略。
+ * <p>所有缓存均使用 {@link ConcurrentHashMap} 实现线程安全访问。由于实体类数量在实际应用中 有限，无需 LRU 淘汰策略。
  *
  * <p>使用示例：
  *
@@ -56,8 +53,8 @@ public final class SoftDeleteHelper {
   /**
    * 返回排除软删除记录的 {@link Specification}。
    *
-   * <p>对于 {@code Boolean} 类型字段，生成条件为 {@code field = false}；对于引用类型
-   * {@code Boolean} 字段（使用 null 表示"未删除"），生成条件为 {@code field IS NULL}。
+   * <p>对于 {@code Boolean} 类型字段，生成条件为 {@code field = false}；对于引用类型 {@code Boolean} 字段（使用 null
+   * 表示"未删除"），生成条件为 {@code field IS NULL}。
    *
    * <p>结果按实体类缓存，避免每次调用创建新的 lambda 实例。
    *
@@ -106,8 +103,8 @@ public final class SoftDeleteHelper {
   /**
    * 构建预应用软删除条件的新 {@link QuerySpec}。
    *
-   * <p>注意：与缓存结果的 {@link #isNotDeleted(Class)} 不同，此方法每次调用都会创建新的
-   * {@code QuerySpec} 实例，因为 {@code QuerySpec} 是可变的，不适合共享。
+   * <p>注意：与缓存结果的 {@link #isNotDeleted(Class)} 不同，此方法每次调用都会创建新的 {@code QuerySpec} 实例，因为 {@code
+   * QuerySpec} 是可变的，不适合共享。
    *
    * @param entityClass 实体类
    * @param <T> 实体类型

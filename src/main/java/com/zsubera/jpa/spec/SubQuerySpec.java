@@ -14,13 +14,13 @@ import java.util.List;
  *
  * <p>提供子查询实体的条件方法，并可访问关联的外部查询根以构建关联谓词。
  *
- * <p><strong>设计说明：</strong>与 {@link ConditionBuilder} 使用延迟求值（构建在查询执行时解析的
- * {@link ConditionNode} 树）不同，{@code SubQuerySpec} 使用<em>即时</em>求值——每个条件方法立即创建
- * JPA {@link jakarta.persistence.criteria.Predicate} 并添加到内部列表中。这是必要的，因为子查询必须在
- * 外部查询构建之前完全构造完成。谓词构造委托给 {@link PredicateHelper} 以与其他组件共享逻辑。
+ * <p><strong>设计说明：</strong>与 {@link ConditionBuilder} 使用延迟求值（构建在查询执行时解析的 {@link ConditionNode}
+ * 树）不同，{@code SubQuerySpec} 使用<em>即时</em>求值——每个条件方法立即创建 JPA {@link
+ * jakarta.persistence.criteria.Predicate} 并添加到内部列表中。这是必要的，因为子查询必须在 外部查询构建之前完全构造完成。谓词构造委托给 {@link
+ * PredicateHelper} 以与其他组件共享逻辑。
  *
- * <p>通过 {@link QuerySpec#exists(Class, java.util.function.Consumer)} 或
- * {@link QuerySpec#notExists(Class, java.util.function.Consumer)} 使用。
+ * <p>通过 {@link QuerySpec#exists(Class, java.util.function.Consumer)} 或 {@link
+ * QuerySpec#notExists(Class, java.util.function.Consumer)} 使用。
  *
  * @param <S> 子查询实体类型
  */
@@ -51,8 +51,7 @@ public class SubQuerySpec<S> {
   }
 
   /**
-   * 返回关联的外部查询根，用于构建关联谓词。在 {@link #where(java.util.function.Function)} 中使用
-   * 以引用外部实体。
+   * 返回关联的外部查询根，用于构建关联谓词。在 {@link #where(java.util.function.Function)} 中使用 以引用外部实体。
    *
    * @param <T> 外部实体类型
    * @return 外部查询 {@link Root}
@@ -74,8 +73,8 @@ public class SubQuerySpec<S> {
    * );
    * }</pre>
    *
-   * 生成：{@code EXISTS (SELECT 1 FROM orders WHERE customer.id = orders.customer_id AND
-   * amount > 1000)}
+   * 生成：{@code EXISTS (SELECT 1 FROM orders WHERE customer.id = orders.customer_id AND amount >
+   * 1000)}
    *
    * @param outerField 外部实体的字段（例如 Customer::getId）
    * @param subField 子查询实体的对应字段（例如 Order::getCustomerId）
@@ -501,8 +500,7 @@ public class SubQuerySpec<S> {
   }
 
   /**
-   * 使用子查询根和 CriteriaBuilder 添加原始谓词。作为复杂条件或关联谓词的扩展机制。
-   * 要引用外部查询根，请使用 {@link #correlated()}。
+   * 使用子查询根和 CriteriaBuilder 添加原始谓词。作为复杂条件或关联谓词的扩展机制。 要引用外部查询根，请使用 {@link #correlated()}。
    *
    * <pre>{@code
    * qs.exists(Child.class, sub -> sub

@@ -28,6 +28,7 @@ import org.springframework.transaction.annotation.Transactional;
  * 只需注入此模板即可使用其方法。
  *
  * <p><strong>生产安全：</strong>此模板为生产环境强制执行安全限制：
+ *
  * <ul>
  *   <li>{@link #findAll} 和 {@link #find} 方法有可配置的最大行数限制
  *   <li>深度分页（大 offset）会触发警告日志
@@ -70,8 +71,7 @@ public class MyJpaTemplate {
   @PersistenceContext private EntityManager entityManager;
 
   /**
-   * 创建指定实体类型的 {@link UpdateSpec}。{@link EntityManager} 将在执行时通过 {@link
-   * #execute(UpdateSpec)} 提供。
+   * 创建指定实体类型的 {@link UpdateSpec}。{@link EntityManager} 将在执行时通过 {@link #execute(UpdateSpec)} 提供。
    *
    * @param entityClass 要更新的实体类
    * @param <T> 实体类型
@@ -82,8 +82,7 @@ public class MyJpaTemplate {
   }
 
   /**
-   * 创建指定实体类型的 {@link DeleteSpec}。{@link EntityManager} 将在执行时通过 {@link
-   * #execute(DeleteSpec)} 提供。
+   * 创建指定实体类型的 {@link DeleteSpec}。{@link EntityManager} 将在执行时通过 {@link #execute(DeleteSpec)} 提供。
    *
    * @param entityClass 要删除的实体类
    * @param <T> 实体类型
@@ -98,9 +97,8 @@ public class MyJpaTemplate {
   /**
    * 查找匹配给定 {@link QuerySpec} 的所有实体。
    *
-   * <p><strong>生产说明：</strong>此方法将结果限制为 {@link #MAX_RESULTS} 行。使用 {@link
-   * #findAll(Class, QuerySpec, int)} 指定自定义限制，或使用 {@link #findAllStream(Class,
-   * QuerySpec)} 进行无界流式查询。
+   * <p><strong>生产说明：</strong>此方法将结果限制为 {@link #MAX_RESULTS} 行。使用 {@link #findAll(Class, QuerySpec,
+   * int)} 指定自定义限制，或使用 {@link #findAllStream(Class, QuerySpec)} 进行无界流式查询。
    *
    * @param entityClass 实体类
    * @param spec 查询规范
@@ -163,10 +161,7 @@ public class MyJpaTemplate {
    */
   @Transactional(readOnly = true)
   public <T> List<T> findAll(
-      Class<T> entityClass,
-      QuerySpec<T> spec,
-      EntityGraphHelper<T> entityGraph,
-      int maxResults) {
+      Class<T> entityClass, QuerySpec<T> spec, EntityGraphHelper<T> entityGraph, int maxResults) {
     CriteriaBuilder cb = entityManager.getCriteriaBuilder();
     CriteriaQuery<T> cq = cb.createQuery(entityClass);
     Root<T> root = cq.from(entityClass);
@@ -186,8 +181,8 @@ public class MyJpaTemplate {
   /**
    * 流式查询匹配给定 {@link QuerySpec} 的所有实体。适用于处理大数据集而无需将所有数据加载到内存。
    *
-   * <p><strong>重要：</strong>返回的 Stream 使用后必须关闭（例如使用 try-with-resources）。
-   * 底层的 EntityManager 和事务必须在 Stream 处理的整个期间保持活动状态。
+   * <p><strong>重要：</strong>返回的 Stream 使用后必须关闭（例如使用 try-with-resources）。 底层的 EntityManager 和事务必须在
+   * Stream 处理的整个期间保持活动状态。
    *
    * <pre>{@code
    * try (Stream<User> stream = jpa.findAllStream(User.class, spec)) {
@@ -461,8 +456,7 @@ public class MyJpaTemplate {
   }
 
   /**
-   * 分批执行批量更新。对于大型更新更安全，因为它会分别提交每批数据，
-   * 避免长时间运行的事务和过度的锁竞争。
+   * 分批执行批量更新。对于大型更新更安全，因为它会分别提交每批数据， 避免长时间运行的事务和过度的锁竞争。
    *
    * @param spec 要执行的 UpdateSpec
    * @param batchSize 每批更新的行数
@@ -481,7 +475,9 @@ public class MyJpaTemplate {
         entityManager.clear();
         if (log.isDebugEnabled()) {
           log.debug(
-              "Batch update: {} rows updated in this batch (total: {})", batchUpdated, totalUpdated);
+              "Batch update: {} rows updated in this batch (total: {})",
+              batchUpdated,
+              totalUpdated);
         }
       }
     } while (batchUpdated >= batchSize);
@@ -489,8 +485,7 @@ public class MyJpaTemplate {
   }
 
   /**
-   * 分批执行批量删除。对于大型删除更安全，因为它会分别提交每批数据，
-   * 避免长时间运行的事务和过度的锁竞争。
+   * 分批执行批量删除。对于大型删除更安全，因为它会分别提交每批数据， 避免长时间运行的事务和过度的锁竞争。
    *
    * @param spec 要执行的 DeleteSpec
    * @param batchSize 每批删除的行数
@@ -509,7 +504,9 @@ public class MyJpaTemplate {
         entityManager.clear();
         if (log.isDebugEnabled()) {
           log.debug(
-              "Batch delete: {} rows deleted in this batch (total: {})", batchDeleted, totalDeleted);
+              "Batch delete: {} rows deleted in this batch (total: {})",
+              batchDeleted,
+              totalDeleted);
         }
       }
     } while (batchDeleted >= batchSize);

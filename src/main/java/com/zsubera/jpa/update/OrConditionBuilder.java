@@ -12,7 +12,8 @@ import java.util.function.BiFunction;
 /**
  * 批量操作（{@link UpdateSpec} 和 {@link DeleteSpec}）中 OR 条件组的构建器。
  *
- * <p>通过此构建器添加的所有条件将以 OR 方式组合。由 {@link AbstractBulkOperationSpec#or(java.util.function.Consumer)} 隐式创建。
+ * <p>通过此构建器添加的所有条件将以 OR 方式组合。由 {@link AbstractBulkOperationSpec#or(java.util.function.Consumer)}
+ * 隐式创建。
  *
  * @param <T> 实体类型
  * @param <SELF> 父构建器类型

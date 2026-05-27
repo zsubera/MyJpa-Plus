@@ -8,11 +8,10 @@ import java.util.function.BiFunction;
 import java.util.function.Consumer;
 
 /**
- * 条件节点类型的密封层次结构，由 {@link QuerySpec}、{@link ConditionBuilder} 及相关类使用，
- * 用于构建延迟执行的 {@link jakarta.persistence.criteria.Predicate} 树。
+ * 条件节点类型的密封层次结构，由 {@link QuerySpec}、{@link ConditionBuilder} 及相关类使用， 用于构建延迟执行的 {@link
+ * jakarta.persistence.criteria.Predicate} 树。
  *
- * <p>每个节点表示查询条件树中的一个条件或结构元素（例如，简单比较、JOIN、OR 组、子查询等），
- * 在查询执行时进行解析。
+ * <p>每个节点表示查询条件树中的一个条件或结构元素（例如，简单比较、JOIN、OR 组、子查询等）， 在查询执行时进行解析。
  */
 public sealed interface ConditionNode
     permits ConditionNode.SimpleNode,

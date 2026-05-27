@@ -9,9 +9,8 @@ import org.springframework.core.ResolvableType;
 /**
  * 从仓库接口解析实体类类型参数，支持通过中间接口的间接继承。
  *
- * <p>处理类似以下情况：{@code interface UserRepo extends CustomBase<User, Long>}，其中{@code
- * CustomBase<T, ID> extends MyJpaRepository<T, ID>}，通过遍历整个接口层次结构来找到绑定到
- * {@link MyJpaRepository}类型参数的实际类型参数。
+ * <p>处理类似以下情况：{@code interface UserRepo extends CustomBase<User, Long>}，其中{@code CustomBase<T, ID>
+ * extends MyJpaRepository<T, ID>}，通过遍历整个接口层次结构来找到绑定到 {@link MyJpaRepository}类型参数的实际类型参数。
  */
 final class EntityClassResolver {
 
@@ -46,8 +45,7 @@ final class EntityClassResolver {
   }
 
   /**
-   * 为给定实体类解析{@code @Id}字段名。遍历类层次结构（包括超类）以找到使用{@link Id @Id}注解的字段。
-   * 结果按实体类缓存。
+   * 为给定实体类解析{@code @Id}字段名。遍历类层次结构（包括超类）以找到使用{@link Id @Id}注解的字段。 结果按实体类缓存。
    *
    * @param entityClass 实体类
    * @return ID字段名，如果未找到{@code @Id}则返回{@code "id"}
@@ -67,10 +65,7 @@ final class EntityClassResolver {
         });
   }
 
-  /**
-   * 尝试使用标准的ResolvableType.as()方法进行解析。当MyJpaRepository是直接父接口或
-   * Spring的ResolvableType能正确遍历层次结构时有效。
-   */
+  /** 尝试使用标准的ResolvableType.as()方法进行解析。当MyJpaRepository是直接父接口或 Spring的ResolvableType能正确遍历层次结构时有效。 */
   private static Class<?> tryDirectResolution(Class<?> repositoryClass) {
     try {
       ResolvableType type = ResolvableType.forClass(repositoryClass).as(MyJpaRepository.class);
@@ -112,9 +107,7 @@ final class EntityClassResolver {
     return null;
   }
 
-  /**
-   * 返回给定类实现的所有接口，包括从超类和超级接口继承的接口。使用带去重的迭代BFS以避免递归和冗余复制。
-   */
+  /** 返回给定类实现的所有接口，包括从超类和超级接口继承的接口。使用带去重的迭代BFS以避免递归和冗余复制。 */
   private static Class<?>[] getAllInterfaces(Class<?> clazz) {
     java.util.Set<Class<?>> seen = new java.util.LinkedHashSet<>();
     java.util.Deque<Class<?>> queue = new java.util.ArrayDeque<>();

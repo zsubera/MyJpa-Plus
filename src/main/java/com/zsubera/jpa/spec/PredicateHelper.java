@@ -10,15 +10,13 @@ import java.util.Collection;
 /**
  * JPA {@link Predicate} 构建的共享工具类。
  *
- * <p>提供即时构建 {@link Predicate} 的静态方法，供需要直接构建谓词的组件使用
- * （而非通过延迟执行的 {@link ConditionNode} 树）。
+ * <p>提供即时构建 {@link Predicate} 的静态方法，供需要直接构建谓词的组件使用 （而非通过延迟执行的 {@link ConditionNode} 树）。
  *
- * <p>主要使用者包括 {@link SubQuerySpec}（即时构建）和
- * {@link com.zsubera.jpa.update.AbstractBulkOperationSpec AbstractBulkOperationSpec}（延迟包装），
- * 消除了约 200 行重复的条件构建逻辑。
+ * <p>主要使用者包括 {@link SubQuerySpec}（即时构建）和 {@link com.zsubera.jpa.update.AbstractBulkOperationSpec
+ * AbstractBulkOperationSpec}（延迟包装）， 消除了约 200 行重复的条件构建逻辑。
  *
- * <p>所有方法接收 {@link Path}、字段名、比较值和 {@link CriteriaBuilder}，
- * 返回完整构建的 {@link Predicate}。参数的空值校验和范围校验由调用方负责。
+ * <p>所有方法接收 {@link Path}、字段名、比较值和 {@link CriteriaBuilder}， 返回完整构建的 {@link
+ * Predicate}。参数的空值校验和范围校验由调用方负责。
  *
  * <p>内部工具类——不建议应用代码直接使用。
  *
@@ -257,8 +255,7 @@ public final class PredicateHelper {
   /**
    * 构建忽略大小写的等于谓词。
    *
-   * <p>通过 {@code UPPER()} 函数将双方转换为大写后比较。
-   * 当值为 null 时，自动转换为 IS NULL 判断。
+   * <p>通过 {@code UPPER()} 函数将双方转换为大写后比较。 当值为 null 时，自动转换为 IS NULL 判断。
    *
    * @param path 实体路径
    * @param fieldName 字段名

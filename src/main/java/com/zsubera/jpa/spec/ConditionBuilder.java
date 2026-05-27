@@ -14,8 +14,8 @@ import org.springframework.lang.Nullable;
 /**
  * 构建类型安全 JPA 查询条件的通用接口，使用 lambda 方法引用。
  *
- * <p>实现类通过 {@link #conditions()} 提供目标条件列表。所有条件方法都是 {@code default} 方法，
- * 创建 {@link ConditionNode} 条目并追加到该列表中。
+ * <p>实现类通过 {@link #conditions()} 提供目标条件列表。所有条件方法都是 {@code default} 方法， 创建 {@link ConditionNode}
+ * 条目并追加到该列表中。
  *
  * <p>自类型参数 {@code SELF} 支持流式链式调用，使每个方法返回具体的构建器类型而非接口类型。
  *
@@ -187,8 +187,7 @@ public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> {
   }
 
   /**
-   * 添加带自动通配符转义的 LIKE 条件：{@code field LIKE '%value%'}。
-   * 值中的 {@code %} 或 {@code _} 字符会被转义，作为字面量处理。
+   * 添加带自动通配符转义的 LIKE 条件：{@code field LIKE '%value%'}。 值中的 {@code %} 或 {@code _} 字符会被转义，作为字面量处理。
    *
    * @param field 实体属性的方法引用
    * @param value 要匹配的原始字符串值
@@ -389,8 +388,8 @@ public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> {
    * @param start 下界（包含）
    * @param end 上界（包含）
    * @return 当前构建器以支持链式调用
-   * @throws IllegalArgumentException 如果 {@code field}、{@code start} 或 {@code end} 为 null，
-   *     或者 start 大于 end
+   * @throws IllegalArgumentException 如果 {@code field}、{@code start} 或 {@code end} 为 null， 或者 start
+   *     大于 end
    */
   @SuppressWarnings({"unchecked", "rawtypes"})
   default SELF between(SFunction<E, ?> field, Comparable<?> start, Comparable<?> end) {
@@ -424,8 +423,8 @@ public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> {
    * @param start 下界（包含）
    * @param end 上界（包含）
    * @return 当前构建器以支持链式调用
-   * @throws IllegalArgumentException 如果 {@code field}、{@code start} 或 {@code end} 为 null，
-   *     或者 start 大于 end
+   * @throws IllegalArgumentException 如果 {@code field}、{@code start} 或 {@code end} 为 null， 或者 start
+   *     大于 end
    */
   @SuppressWarnings({"unchecked", "rawtypes"})
   default SELF notBetween(SFunction<E, ?> field, Comparable<?> start, Comparable<?> end) {
@@ -474,8 +473,7 @@ public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> {
   }
 
   /**
-   * 添加不区分大小写的等值条件：{@code UPPER(field) = UPPER(value)}。
-   * 适用于不区分大小写的用户名/邮箱查找。
+   * 添加不区分大小写的等值条件：{@code UPPER(field) = UPPER(value)}。 适用于不区分大小写的用户名/邮箱查找。
    *
    * @param field 实体属性的方法引用
    * @param value 要比较的字符串值，如果为 null 则生成 IS NULL 条件
@@ -554,8 +552,8 @@ public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> {
   }
 
   /**
-   * 添加原始 {@link Predicate} 条件，使用当前实体 {@link Path} 和 {@link CriteriaBuilder}。
-   * 这是处理构建器 API 未覆盖条件的扩展方法。
+   * 添加原始 {@link Predicate} 条件，使用当前实体 {@link Path} 和 {@link CriteriaBuilder}。 这是处理构建器 API
+   * 未覆盖条件的扩展方法。
    *
    * @param fn 接收实体路径和条件构建器的函数，返回谓词
    * @return 当前构建器以支持链式调用

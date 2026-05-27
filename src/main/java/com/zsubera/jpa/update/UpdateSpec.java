@@ -16,11 +16,10 @@ import org.springframework.lang.Nullable;
 /**
  * JPA {@link CriteriaUpdate} 批量更新操作的类型安全构建器。
  *
- * <p>允许使用 Lambda 方法引用构建类型安全的 UPDATE 查询。条件以延迟函数形式存储，
- * 在执行时才进行解析。
+ * <p>允许使用 Lambda 方法引用构建类型安全的 UPDATE 查询。条件以延迟函数形式存储， 在执行时才进行解析。
  *
- * <p><strong>事务要求：</strong>{@link #execute(EntityManager)} 需要活动事务。
- * 可使用 {@link #executeInTransaction(EntityManager)} 进行自动事务管理。
+ * <p><strong>事务要求：</strong>{@link #execute(EntityManager)} 需要活动事务。 可使用 {@link
+ * #executeInTransaction(EntityManager)} 进行自动事务管理。
  *
  * <p>示例：
  *

@@ -13,8 +13,7 @@ import org.slf4j.LoggerFactory;
 /**
  * 用于与 {@link QuerySpec} 配合动态构建和应用 JPA {@link EntityGraph} 抓取策略的辅助类。
  *
- * <p>JPA {@link EntityGraph} 允许声明式地指定查询时需要急切加载的关联关系，
- * 提供了 {@code FETCH JOIN} 的替代方案，并支持在多个查询间复用。
+ * <p>JPA {@link EntityGraph} 允许声明式地指定查询时需要急切加载的关联关系， 提供了 {@code FETCH JOIN} 的替代方案，并支持在多个查询间复用。
  *
  * <p>使用示例：
  *

@@ -9,11 +9,10 @@ import java.lang.annotation.Target;
 /**
  * 将实体字段标记为软删除标志。
  *
- * <p>此注解标记一个字段用于指示实体是否已被软删除。该字段应为 {@code Boolean} 或 {@code boolean} 类型，
- * 其中 {@code true} 表示"已删除"，{@code false}（或 {@code null}）表示"未删除"。
+ * <p>此注解标记一个字段用于指示实体是否已被软删除。该字段应为 {@code Boolean} 或 {@code boolean} 类型， 其中 {@code true}
+ * 表示"已删除"，{@code false}（或 {@code null}）表示"未删除"。
  *
- * <p><strong>注意：</strong>此注解不会自动向所有查询注入 WHERE 条件。要过滤掉软删除的记录，
- * 必须显式使用库提供的辅助方法：
+ * <p><strong>注意：</strong>此注解不会自动向所有查询注入 WHERE 条件。要过滤掉软删除的记录， 必须显式使用库提供的辅助方法：
  *
  * <ul>
  *   <li>{@code repository.findNotDeletedAll()} — 查找所有未删除的实体

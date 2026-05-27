@@ -157,26 +157,18 @@ public abstract class AbstractBulkOperationSpec<
    * Sealed node type for bulk operation condition trees. Supports AND (default), OR, NOT, and leaf
    * predicate nodes.
    */
-  /**
-   * 批量操作条件树的密封节点类型。支持 AND（默认）、OR、NOT 和叶子谓词节点。
-   */
+  /** 批量操作条件树的密封节点类型。支持 AND（默认）、OR、NOT 和叶子谓词节点。 */
   @SuppressWarnings("unchecked")
   sealed interface BulkConditionNode {
-    /**
-     * 叶子谓词函数节点。
-     */
+    /** 叶子谓词函数节点。 */
     record LeafNode(BiFunction<Root<?>, CriteriaBuilder, Predicate> fn)
         implements BulkConditionNode {}
 
-    /**
-     * OR 子节点组。
-     */
+    /** OR 子节点组。 */
     @SuppressFBWarnings({"EI_EXPOSE_REP", "EI_EXPOSE_REP2"})
     record OrNode(List<BulkConditionNode> children) implements BulkConditionNode {}
 
-    /**
-     * NOT 包装节点。
-     */
+    /** NOT 包装节点。 */
     record NotNode(BulkConditionNode child) implements BulkConditionNode {}
   }
 

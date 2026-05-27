@@ -20,8 +20,8 @@ import org.springframework.data.domain.Pageable;
 /**
  * DTO 投影查询的类型安全构建器。
  *
- * <p>从实体中选择特定字段，并以 {@link Tuple} 或通过 {@code CriteriaBuilder.construct()} 
- * 返回自定义 DTO 的形式返回结果。支持 JOIN 关联、ORDER BY 排序和分页查询。
+ * <p>从实体中选择特定字段，并以 {@link Tuple} 或通过 {@code CriteriaBuilder.construct()} 返回自定义 DTO 的形式返回结果。支持 JOIN
+ * 关联、ORDER BY 排序和分页查询。
  *
  * <p>使用示例：
  *
@@ -47,9 +47,7 @@ public class ProjectionSpec<T> {
   private final List<OrderSpec> orderSpecs = new ArrayList<>();
   private Class<?> dtoClass;
 
-  /**
-   * 描述 JOIN 子句的内部记录类。
-   */
+  /** 描述 JOIN 子句的内部记录类。 */
   private static final class JoinSpec {
     final String fieldName;
     final Consumer<?> config;
@@ -65,8 +63,7 @@ public class ProjectionSpec<T> {
   /**
    * JOIN 目标实体的嵌套条件构建器。
    *
-   * <p>提供类似于 {@link com.zsubera.jpa.spec.ConditionBuilder} 的 API，
-   * 用于在 JOIN 子句中添加 ON 条件。
+   * <p>提供类似于 {@link com.zsubera.jpa.spec.ConditionBuilder} 的 API， 用于在 JOIN 子句中添加 ON 条件。
    *
    * @param <E> JOIN 目标实体类型
    */
@@ -185,23 +182,30 @@ public class ProjectionSpec<T> {
      * 投影 JOIN 条件的内部条件节点接口。
      *
      * <p>使用 sealed 接口和 record 实现，支持多种条件类型：
+     *
      * <ul>
-     *   <li>{@link Eq} - 等于条件</li>
-     *   <li>{@link Ne} - 不等于条件</li>
-     *   <li>{@link Like} - 模糊匹配条件</li>
-     *   <li>{@link Gt} - 大于条件</li>
-     *   <li>{@link Lt} - 小于条件</li>
-     *   <li>{@link IsNull} - IS NULL 条件</li>
-     *   <li>{@link IsNotNull} - IS NOT NULL 条件</li>
+     *   <li>{@link Eq} - 等于条件
+     *   <li>{@link Ne} - 不等于条件
+     *   <li>{@link Like} - 模糊匹配条件
+     *   <li>{@link Gt} - 大于条件
+     *   <li>{@link Lt} - 小于条件
+     *   <li>{@link IsNull} - IS NULL 条件
+     *   <li>{@link IsNotNull} - IS NOT NULL 条件
      * </ul>
      */
     sealed interface ConditionNode {
       record Eq(String fieldName, Object value) implements ConditionNode {}
+
       record Ne(String fieldName, Object value) implements ConditionNode {}
+
       record Like(String fieldName, String value) implements ConditionNode {}
+
       record Gt(String fieldName, Comparable<?> value) implements ConditionNode {}
+
       record Lt(String fieldName, Comparable<?> value) implements ConditionNode {}
+
       record IsNull(String fieldName) implements ConditionNode {}
+
       record IsNotNull(String fieldName) implements ConditionNode {}
     }
 

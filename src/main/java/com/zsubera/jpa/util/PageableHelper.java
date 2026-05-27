@@ -34,8 +34,8 @@ public final class PageableHelper {
   private PageableHelper() {}
 
   /**
-   * 创建一个没有排序的 {@link PageRequest}，保留 {@link Specification} 上设置的任何排序
-   * （例如来自 {@link QuerySpec#orderByAsc}）。
+   * 创建一个没有排序的 {@link PageRequest}，保留 {@link Specification} 上设置的任何排序 （例如来自 {@link
+   * QuerySpec#orderByAsc}）。
    *
    * @param page 从零开始的页码索引
    * @param size 每页大小
@@ -46,8 +46,8 @@ public final class PageableHelper {
   }
 
   /**
-   * 将 {@link Pageable} 的排序与 {@link QuerySpec} 的排序合并。QuerySpec 排序优先级更高，
-   * 然后追加 Pageable 排序。这允许将 QuerySpec 的内置排序与动态分页排序相结合。
+   * 将 {@link Pageable} 的排序与 {@link QuerySpec} 的排序合并。QuerySpec 排序优先级更高， 然后追加 Pageable 排序。这允许将
+   * QuerySpec 的内置排序与动态分页排序相结合。
    *
    * <p>如果 QuerySpec 没有排序，则使用 Pageable 排序。
    *
@@ -76,9 +76,8 @@ public final class PageableHelper {
   }
 
   /**
-   * 返回一个带有显式排序的 {@link Pageable}，以覆盖任何 QuerySpec 排序。当与
-   * {@code findAll(spec, pageable)} 一起使用时，将应用此 pageable 的排序，而不是
-   * {@link QuerySpec} 中定义的任何排序。
+   * 返回一个带有显式排序的 {@link Pageable}，以覆盖任何 QuerySpec 排序。当与 {@code findAll(spec, pageable)} 一起使用时，将应用此
+   * pageable 的排序，而不是 {@link QuerySpec} 中定义的任何排序。
    *
    * @param page 从零开始的页码索引
    * @param size 每页大小

@@ -11,8 +11,8 @@ import org.springframework.context.annotation.ComponentScan;
 /**
  * MyJpa-Plus 的自动配置类。
  *
- * <p>当 Spring Data JPA 和 {@link EntityManager} 在类路径上时自动激活。
- * 通过组件扫描注册所有 MyJpa-Plus 的 Bean，并启用 {@link MyJpaPlusProperties} 进行外部配置。
+ * <p>当 Spring Data JPA 和 {@link EntityManager} 在类路径上时自动激活。 通过组件扫描注册所有 MyJpa-Plus 的 Bean，并启用 {@link
+ * MyJpaPlusProperties} 进行外部配置。
  *
  * <p>配置选项（前缀：{@code myjpa-plus}）：
  *

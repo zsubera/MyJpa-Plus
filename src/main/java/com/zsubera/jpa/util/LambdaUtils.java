@@ -11,10 +11,10 @@ import java.util.concurrent.ConcurrentMap;
 /**
  * Lambda 工具类，用于从方法引用中提取实体属性名称。
  *
- * <p>支持将 {@code Entity::getField} 形式的方法引用转换为 {@code "field"} 形式的属性名称，
- * 用于 JPA Criteria API 的动态查询构建。
+ * <p>支持将 {@code Entity::getField} 形式的方法引用转换为 {@code "field"} 形式的属性名称， 用于 JPA Criteria API 的动态查询构建。
  *
  * <p>使用示例：
+ *
  * <pre>{@code
  * String name = LambdaUtils.getPropertyName(User::getName);
  * // 返回 "name"
@@ -67,9 +67,7 @@ public final class LambdaUtils {
     return CACHE.size();
   }
 
-  /**
-   * 清空缓存。
-   */
+  /** 清空缓存。 */
   static void clearCache() {
     CACHE.clear();
   }
