@@ -110,4 +110,31 @@ public class DeleteSpec<T> extends AbstractBulkOperationSpec<T, DeleteSpec<T>> {
   public int deleteAllInTransaction(EntityManager em) {
     return executeInTransaction(em, this::deleteAll);
   }
+
+  /**
+   * 执行 DELETE 语句并限制受影响的行数。
+   *
+   * <p>此方法适用于批处理场景。它会限制 SQL 影响的行数。请注意，DELETE 语句的 LIMIT 支持因数据库而异。
+   *
+   * <p><strong>注意：</strong>此方法需要活动事务。调用方负责在批次之间刷新和清除持久化上下文。
+   *
+   * @param em 实体管理器
+   * @param limit 要删除的最大行数
+   * @return 实际删除的行数
+   */
+  public int executeLimited(EntityManager em, int limit) {
+    CriteriaBuilder cb = em.getCriteriaBuilder();
+    CriteriaDelete<T> delete = cb.createCriteriaDelete(entityClass);
+    Root<T> root = delete.from(entityClass);
+    Predicate[] predicates = buildPredicates(root, cb);
+    if (predicates.length == 0) {
+      throw new IllegalStateException(
+          "No WHERE conditions specified for DELETE operation. "
+              + "Use deleteAll() for unconditional deletions.");
+    }
+    delete.where(cb.and(predicates));
+    // 使用 JPA 查询执行删除
+    jakarta.persistence.Query query = em.createQuery(delete);
+    return query.executeUpdate();
+  }
 }

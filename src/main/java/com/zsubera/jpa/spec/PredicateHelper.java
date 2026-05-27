@@ -1,5 +1,6 @@
 package com.zsubera.jpa.spec;
 
+import com.zsubera.jpa.util.InClauseBuilder;
 import jakarta.persistence.criteria.CriteriaBuilder;
 import jakarta.persistence.criteria.Expression;
 import jakarta.persistence.criteria.Path;
@@ -295,42 +296,38 @@ public final class PredicateHelper {
   /**
    * 构建 IN 谓词（数组形式）。
    *
+   * <p>如果值的数量超过 {@link InClauseBuilder#MAX_IN_CLAUSE_SIZE}，会自动分批处理。
+   *
    * @param path 实体路径
    * @param fieldName 字段名
    * @param values 值数组
    * @param cb CriteriaBuilder 实例
    * @return IN 谓词
    */
-  @SuppressWarnings({"unchecked", "rawtypes"})
   public static Predicate in(Path<?> path, String fieldName, Object[] values, CriteriaBuilder cb) {
-    CriteriaBuilder.In<Object> in = cb.in(path.get(fieldName));
-    for (Object v : values) {
-      in.value(v);
-    }
-    return in;
+    return InClauseBuilder.in(cb, path.get(fieldName), values);
   }
 
   /**
    * 构建 NOT IN 谓词（数组形式）。
    *
+   * <p>如果值的数量超过 {@link InClauseBuilder#MAX_IN_CLAUSE_SIZE}，会自动分批处理。
+   *
    * @param path 实体路径
    * @param fieldName 字段名
    * @param values 值数组
    * @param cb CriteriaBuilder 实例
    * @return NOT IN 谓词
    */
-  @SuppressWarnings({"unchecked", "rawtypes"})
   public static Predicate notIn(
       Path<?> path, String fieldName, Object[] values, CriteriaBuilder cb) {
-    CriteriaBuilder.In<Object> in = cb.in(path.get(fieldName));
-    for (Object v : values) {
-      in.value(v);
-    }
-    return cb.not(in);
+    return InClauseBuilder.notIn(cb, path.get(fieldName), values);
   }
 
   /**
    * 构建 IN 谓词（集合形式）。
+   *
+   * <p>如果值的数量超过 {@link InClauseBuilder#MAX_IN_CLAUSE_SIZE}，会自动分批处理。
    *
    * @param path 实体路径
    * @param fieldName 字段名
@@ -338,18 +335,15 @@ public final class PredicateHelper {
    * @param cb CriteriaBuilder 实例
    * @return IN 谓词
    */
-  @SuppressWarnings({"unchecked", "rawtypes"})
   public static Predicate in(
       Path<?> path, String fieldName, Collection<?> values, CriteriaBuilder cb) {
-    CriteriaBuilder.In<Object> in = cb.in(path.get(fieldName));
-    for (Object v : values) {
-      in.value(v);
-    }
-    return in;
+    return InClauseBuilder.in(cb, path.get(fieldName), values);
   }
 
   /**
    * 构建 NOT IN 谓词（集合形式）。
+   *
+   * <p>如果值的数量超过 {@link InClauseBuilder#MAX_IN_CLAUSE_SIZE}，会自动分批处理。
    *
    * @param path 实体路径
    * @param fieldName 字段名
@@ -357,14 +351,9 @@ public final class PredicateHelper {
    * @param cb CriteriaBuilder 实例
    * @return NOT IN 谓词
    */
-  @SuppressWarnings({"unchecked", "rawtypes"})
   public static Predicate notIn(
       Path<?> path, String fieldName, Collection<?> values, CriteriaBuilder cb) {
-    CriteriaBuilder.In<Object> in = cb.in(path.get(fieldName));
-    for (Object v : values) {
-      in.value(v);
-    }
-    return cb.not(in);
+    return InClauseBuilder.notIn(cb, path.get(fieldName), values);
   }
 
   // ==================== 范围运算符 ====================

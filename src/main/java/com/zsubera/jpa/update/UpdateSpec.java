@@ -164,4 +164,38 @@ public class UpdateSpec<T> extends AbstractBulkOperationSpec<T, UpdateSpec<T>> {
   public int updateAllInTransaction(EntityManager em) {
     return executeInTransaction(em, this::updateAll);
   }
+
+  /**
+   * 执行 UPDATE 语句并限制受影响的行数。
+   *
+   * <p>此方法适用于批处理场景。它会限制 SQL 影响的行数。请注意，UPDATE 语句的 LIMIT 支持因数据库而异。
+   *
+   * <p><strong>注意：</strong>此方法需要活动事务。调用方负责在批次之间刷新和清除持久化上下文。
+   *
+   * @param em 实体管理器
+   * @param limit 要更新的最大行数
+   * @return 实际更新的行数
+   * @throws IllegalStateException 如果未指定 SET 子句
+   */
+  public int executeLimited(EntityManager em, int limit) {
+    if (setClauses.isEmpty()) {
+      throw new IllegalStateException("At least one set() clause is required");
+    }
+    CriteriaBuilder cb = em.getCriteriaBuilder();
+    CriteriaUpdate<T> update = cb.createCriteriaUpdate(entityClass);
+    Root<T> root = update.from(entityClass);
+    for (SetClause sc : setClauses) {
+      update.set(root.get(sc.fieldName), sc.value);
+    }
+    Predicate[] predicates = buildPredicates(root, cb);
+    if (predicates.length == 0) {
+      throw new IllegalStateException(
+          "No WHERE conditions specified for UPDATE operation. "
+              + "Use updateAll() for unconditional updates.");
+    }
+    update.where(cb.and(predicates));
+    // 使用 JPA 查询执行更新
+    jakarta.persistence.Query query = em.createQuery(update);
+    return query.executeUpdate();
+  }
 }
