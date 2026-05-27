@@ -26,23 +26,20 @@ import java.lang.annotation.Target;
  * <p>
  * 使用示例：
  *
- * <pre>
- * {
- *     &#64;code
- *     &#64;Entity
- *     public class Product {
- *         @SoftDelete
- *         private Boolean deleted = false;
- *     }
- *
- *     // 使用 MyJpaRepository 方法查询：
- *     List<Product> active = repository.findNotDeletedAll();
- *
- *     // 或直接使用 SoftDeleteHelper：
- *     Specification<Product> spec = SoftDeleteHelper.isNotDeleted(Product.class);
- *     List<Product> active = repository.findAll(spec.and(otherCondition));
+ * <pre>{@code
+ * @Entity
+ * public class Product {
+ *     @SoftDelete
+ *     private Boolean deleted = false;
  * }
- * </pre>
+ *
+ * // 使用 MyJpaRepository 方法查询：
+ * List<Product> active = repository.findNotDeletedAll();
+ *
+ * // 或直接使用 SoftDeleteHelper：
+ * Specification<Product> spec = SoftDeleteHelper.isNotDeleted(Product.class);
+ * List<Product> active = repository.findAll(spec.and(otherCondition));
+ * }</pre>
  *
  * @see com.zsubera.jpa.repository.MyJpaRepository
  * @see com.zsubera.jpa.update.SoftDeleteHelper
