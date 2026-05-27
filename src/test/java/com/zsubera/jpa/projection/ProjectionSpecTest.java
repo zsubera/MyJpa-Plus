@@ -183,6 +183,260 @@ class ProjectionSpecTest {
         assertEquals(2, page.getContent().size());
     }
 
+    @Test
+    void testJoinGroupNe() {
+        com.zsubera.jpa.spec.ParentEntity p1 = new com.zsubera.jpa.spec.ParentEntity();
+        p1.setCategory("admin");
+        p1.setLevel(10);
+        testEntityManager.persistAndFlush(p1);
+
+        TestEntity child = new TestEntity();
+        child.setName("child1");
+        child.setStatus(0);
+        child.setParent(p1);
+        testEntityManager.persistAndFlush(child);
+
+        List<Tuple> results =
+            new ProjectionSpec<>(TestEntity.class)
+                .select(
+                    TestEntity::getName)
+                .join(TestEntity::getParent,
+                    (com.zsubera.jpa.projection.ProjectionSpec.JoinGroup<com.zsubera.jpa.spec.ParentEntity> j) -> j
+                        .ne(com.zsubera.jpa.spec.ParentEntity::getCategory, "user"))
+                .toTupleQuery(em).getResultList();
+
+        assertEquals(1, results.size());
+    }
+
+    @Test
+    void testJoinGroupLike() {
+        com.zsubera.jpa.spec.ParentEntity p1 = new com.zsubera.jpa.spec.ParentEntity();
+        p1.setCategory("admin");
+        p1.setLevel(10);
+        testEntityManager.persistAndFlush(p1);
+
+        TestEntity child = new TestEntity();
+        child.setName("child1");
+        child.setStatus(0);
+        child.setParent(p1);
+        testEntityManager.persistAndFlush(child);
+
+        List<Tuple> results = new ProjectionSpec<>(TestEntity.class)
+            .select(
+                TestEntity::getName)
+            .join(TestEntity::getParent,
+                (com.zsubera.jpa.projection.ProjectionSpec.JoinGroup<com.zsubera.jpa.spec.ParentEntity> j) -> j
+                    .like(com.zsubera.jpa.spec.ParentEntity::getCategory, "%adm%"))
+            .toTupleQuery(em).getResultList();
+
+        assertEquals(1, results.size());
+    }
+
+    @Test
+    void testJoinGroupGt() {
+        com.zsubera.jpa.spec.ParentEntity p1 = new com.zsubera.jpa.spec.ParentEntity();
+        p1.setCategory("admin");
+        p1.setLevel(10);
+        testEntityManager.persistAndFlush(p1);
+
+        TestEntity child = new TestEntity();
+        child.setName("child1");
+        child.setStatus(0);
+        child.setParent(p1);
+        testEntityManager.persistAndFlush(child);
+
+        List<Tuple> results = new ProjectionSpec<>(TestEntity.class).select(TestEntity::getName)
+            .join(TestEntity::getParent,
+                (com.zsubera.jpa.projection.ProjectionSpec.JoinGroup<com.zsubera.jpa.spec.ParentEntity> j) -> j
+                    .gt(com.zsubera.jpa.spec.ParentEntity::getLevel, 5))
+            .toTupleQuery(em).getResultList();
+
+        assertEquals(1, results.size());
+    }
+
+    @Test
+    void testJoinGroupLt() {
+        com.zsubera.jpa.spec.ParentEntity p1 = new com.zsubera.jpa.spec.ParentEntity();
+        p1.setCategory("admin");
+        p1.setLevel(10);
+        testEntityManager.persistAndFlush(p1);
+
+        TestEntity child = new TestEntity();
+        child.setName("child1");
+        child.setStatus(0);
+        child.setParent(p1);
+        testEntityManager.persistAndFlush(child);
+
+        List<Tuple> results = new ProjectionSpec<>(TestEntity.class).select(TestEntity::getName)
+            .join(TestEntity::getParent,
+                (com.zsubera.jpa.projection.ProjectionSpec.JoinGroup<com.zsubera.jpa.spec.ParentEntity> j) -> j
+                    .lt(com.zsubera.jpa.spec.ParentEntity::getLevel, 20))
+            .toTupleQuery(em).getResultList();
+
+        assertEquals(1, results.size());
+    }
+
+    @Test
+    void testJoinGroupIsNull() {
+        TestEntity orphan = new TestEntity();
+        orphan.setName("orphan");
+        orphan.setStatus(0);
+        orphan.setParent(null);
+        testEntityManager.persistAndFlush(orphan);
+
+        List<Tuple> results = new ProjectionSpec<>(TestEntity.class).select(TestEntity::getName)
+            .leftJoin(TestEntity::getParent,
+                (com.zsubera.jpa.projection.ProjectionSpec.JoinGroup<com.zsubera.jpa.spec.ParentEntity> j) -> j
+                    .isNull(com.zsubera.jpa.spec.ParentEntity::getCategory))
+            .toTupleQuery(em).getResultList();
+
+        assertEquals(1, results.size());
+    }
+
+    @Test
+    void testJoinGroupIsNotNull() {
+        com.zsubera.jpa.spec.ParentEntity p1 = new com.zsubera.jpa.spec.ParentEntity();
+        p1.setCategory("admin");
+        p1.setLevel(10);
+        testEntityManager.persistAndFlush(p1);
+
+        TestEntity child = new TestEntity();
+        child.setName("child1");
+        child.setStatus(0);
+        child.setParent(p1);
+        testEntityManager.persistAndFlush(child);
+
+        List<Tuple> results =
+            new ProjectionSpec<>(TestEntity.class)
+                .select(
+                    TestEntity::getName)
+                .join(TestEntity::getParent,
+                    (com.zsubera.jpa.projection.ProjectionSpec.JoinGroup<com.zsubera.jpa.spec.ParentEntity> j) -> j
+                        .isNotNull(com.zsubera.jpa.spec.ParentEntity::getCategory))
+                .toTupleQuery(em).getResultList();
+
+        assertEquals(1, results.size());
+    }
+
+    @Test
+    void testLeftJoin() {
+        com.zsubera.jpa.spec.ParentEntity p1 = new com.zsubera.jpa.spec.ParentEntity();
+        p1.setCategory("admin");
+        p1.setLevel(10);
+        testEntityManager.persistAndFlush(p1);
+
+        TestEntity child = new TestEntity();
+        child.setName("child1");
+        child.setStatus(0);
+        child.setParent(p1);
+        testEntityManager.persistAndFlush(child);
+
+        TestEntity orphan = new TestEntity();
+        orphan.setName("orphan");
+        orphan.setStatus(0);
+        orphan.setParent(null);
+        testEntityManager.persistAndFlush(orphan);
+
+        List<Tuple> results = new ProjectionSpec<>(TestEntity.class).select(TestEntity::getName)
+            .leftJoin(TestEntity::getParent,
+                (com.zsubera.jpa.projection.ProjectionSpec.JoinGroup<com.zsubera.jpa.spec.ParentEntity> j) -> j
+                    .eq(com.zsubera.jpa.spec.ParentEntity::getCategory, "admin"))
+            .where(q -> q.isNotNull(TestEntity::getParent)).toTupleQuery(em).getResultList();
+
+        assertEquals(1, results.size());
+    }
+
+    @Test
+    void testToTupleQueryReturnsTypedQuery() {
+        TestEntity entity = new TestEntity();
+        entity.setName("typed");
+        entity.setStatus(1);
+        testEntityManager.persistAndFlush(entity);
+
+        jakarta.persistence.TypedQuery<Tuple> query =
+            new ProjectionSpec<>(TestEntity.class).select(TestEntity::getName).toTupleQuery(em);
+
+        assertNotNull(query);
+        List<Tuple> results = query.getResultList();
+        assertEquals(1, results.size());
+    }
+
+    @Test
+    void testToDtoQueryReturnsTypedQuery() {
+        TestEntity entity = new TestEntity();
+        entity.setName("dtoTyped");
+        entity.setStatus(42);
+        testEntityManager.persistAndFlush(entity);
+
+        jakarta.persistence.TypedQuery<NameStatusDto> query = new ProjectionSpec<>(TestEntity.class)
+            .select(TestEntity::getName).select(TestEntity::getStatus).asDto(NameStatusDto.class).toDtoQuery(em);
+
+        assertNotNull(query);
+        List<NameStatusDto> results = query.getResultList();
+        assertEquals(1, results.size());
+    }
+
+    @Test
+    void testCombinationJoinWhereOrderByPagination() {
+        com.zsubera.jpa.spec.ParentEntity p1 = new com.zsubera.jpa.spec.ParentEntity();
+        p1.setCategory("admin");
+        p1.setLevel(10);
+        testEntityManager.persistAndFlush(p1);
+
+        for (int i = 0; i < 5; i++) {
+            TestEntity child = new TestEntity();
+            child.setName("combo" + i);
+            child.setStatus(i);
+            child.setParent(p1);
+            testEntityManager.persistAndFlush(child);
+        }
+
+        Page<Tuple> page = new ProjectionSpec<>(TestEntity.class).select(TestEntity::getName)
+            .join(TestEntity::getParent,
+                (com.zsubera.jpa.projection.ProjectionSpec.JoinGroup<com.zsubera.jpa.spec.ParentEntity> j) -> j
+                    .eq(com.zsubera.jpa.spec.ParentEntity::getCategory, "admin"))
+            .where(q -> q.ge(TestEntity::getStatus, 0)).orderByAsc(TestEntity::getName)
+            .findPage(em, PageRequest.of(0, 3));
+
+        assertEquals(5, page.getTotalElements());
+        assertEquals(3, page.getContent().size());
+    }
+
+    @Test
+    void testJoinGroupLikeNullValueThrowsException() {
+        assertThrows(IllegalArgumentException.class, () -> {
+            new ProjectionSpec<>(TestEntity.class)
+                .select(
+                    TestEntity::getName)
+                .join(TestEntity::getParent,
+                    (com.zsubera.jpa.projection.ProjectionSpec.JoinGroup<com.zsubera.jpa.spec.ParentEntity> j) -> j
+                        .like(com.zsubera.jpa.spec.ParentEntity::getCategory, null))
+                .toTupleQuery(em).getResultList();
+        });
+    }
+
+    @Test
+    void testJoinGroupGtNullValueThrowsException() {
+        assertThrows(IllegalArgumentException.class, () -> {
+            new ProjectionSpec<>(TestEntity.class).select(TestEntity::getName)
+                .join(TestEntity::getParent,
+                    (com.zsubera.jpa.projection.ProjectionSpec.JoinGroup<com.zsubera.jpa.spec.ParentEntity> j) -> j
+                        .gt(com.zsubera.jpa.spec.ParentEntity::getLevel, null))
+                .toTupleQuery(em).getResultList();
+        });
+    }
+
+    @Test
+    void testJoinGroupLtNullValueThrowsException() {
+        assertThrows(IllegalArgumentException.class, () -> {
+            new ProjectionSpec<>(TestEntity.class).select(TestEntity::getName)
+                .join(TestEntity::getParent,
+                    (com.zsubera.jpa.projection.ProjectionSpec.JoinGroup<com.zsubera.jpa.spec.ParentEntity> j) -> j
+                        .lt(com.zsubera.jpa.spec.ParentEntity::getLevel, null))
+                .toTupleQuery(em).getResultList();
+        });
+    }
+
     public static class NameStatusDto {
         public final String name;
         public final int status;

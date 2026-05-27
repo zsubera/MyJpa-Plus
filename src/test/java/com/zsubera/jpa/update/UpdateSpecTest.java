@@ -403,6 +403,246 @@ class UpdateSpecTest {
         assertEquals(2, count);
     }
 
+    @Test
+    void testUpdateToUpdate() {
+        repository.save(newEntity("target", 1));
+        UpdateSpec<TestEntity> spec =
+            new UpdateSpec<>(TestEntity.class).set(TestEntity::getStatus, 99).eq(TestEntity::getName, "target");
+        jakarta.persistence.criteria.CriteriaUpdate<TestEntity> cu = spec.toUpdate(em);
+        assertNotNull(cu);
+    }
+
+    @Test
+    void testUpdateToUpdateNoSetClausesThrowsException() {
+        UpdateSpec<TestEntity> spec = new UpdateSpec<>(TestEntity.class).eq(TestEntity::getName, "target");
+        assertThrows(IllegalStateException.class, () -> spec.toUpdate(em));
+    }
+
+    @Test
+    void testUpdateExecuteLimited() {
+        for (int i = 0; i < 5; i++) {
+            repository.save(newEntity("lim" + i, 0));
+        }
+        int count = new UpdateSpec<>(TestEntity.class).set(TestEntity::getStatus, 1).eq(TestEntity::getStatus, 0)
+            .executeLimited(em, 3);
+        assertEquals(3, count);
+        em.clear();
+        long updated = repository.findAll().stream().filter(e -> e.getStatus() == 1).count();
+        assertEquals(3, updated);
+    }
+
+    @Test
+    void testUpdateExecuteLimitedNoConditionsThrowsException() {
+        repository.save(newEntity("a", 1));
+        assertThrows(IllegalStateException.class,
+            () -> new UpdateSpec<>(TestEntity.class).set(TestEntity::getStatus, 99).executeLimited(em, 10));
+    }
+
+    @Test
+    void testUpdateExecuteLimitedInvalidLimitThrowsException() {
+        repository.save(newEntity("a", 1));
+        assertThrows(IllegalArgumentException.class, () -> new UpdateSpec<>(TestEntity.class)
+            .set(TestEntity::getStatus, 1).eq(TestEntity::getStatus, 0).executeLimited(em, 0));
+    }
+
+    @Test
+    void testUpdateExecuteInTransaction() {
+        repository.save(newEntity("tx1", 1));
+        int count = new UpdateSpec<>(TestEntity.class).set(TestEntity::getStatus, 99).eq(TestEntity::getStatus, 1)
+            .executeInTransaction(em);
+        assertEquals(1, count);
+    }
+
+    @Test
+    void testUpdateOrGroupNe() {
+        repository.save(newEntity("a", 1));
+        repository.save(newEntity("b", 2));
+        repository.save(newEntity("c", 3));
+        int count = new UpdateSpec<>(TestEntity.class).set(TestEntity::getStatus, 99)
+            .or(o -> o.ne(TestEntity::getName, "a")).execute(em);
+        assertEquals(2, count);
+    }
+
+    @Test
+    void testUpdateOrGroupGt() {
+        repository.save(newEntity("a", 1));
+        repository.save(newEntity("b", 10));
+        int count = new UpdateSpec<>(TestEntity.class).set(TestEntity::getStatus, 99)
+            .or(o -> o.gt(TestEntity::getStatus, 5)).execute(em);
+        assertEquals(1, count);
+    }
+
+    @Test
+    void testUpdateOrGroupGe() {
+        repository.save(newEntity("a", 1));
+        repository.save(newEntity("b", 5));
+        int count = new UpdateSpec<>(TestEntity.class).set(TestEntity::getStatus, 99)
+            .or(o -> o.ge(TestEntity::getStatus, 5)).execute(em);
+        assertEquals(1, count);
+    }
+
+    @Test
+    void testUpdateOrGroupLt() {
+        repository.save(newEntity("a", 1));
+        repository.save(newEntity("b", 10));
+        int count = new UpdateSpec<>(TestEntity.class).set(TestEntity::getStatus, 99)
+            .or(o -> o.lt(TestEntity::getStatus, 5)).execute(em);
+        assertEquals(1, count);
+    }
+
+    @Test
+    void testUpdateOrGroupLe() {
+        repository.save(newEntity("a", 1));
+        repository.save(newEntity("b", 10));
+        int count = new UpdateSpec<>(TestEntity.class).set(TestEntity::getStatus, 99)
+            .or(o -> o.le(TestEntity::getStatus, 1)).execute(em);
+        assertEquals(1, count);
+    }
+
+    @Test
+    void testUpdateOrGroupLike() {
+        repository.save(newEntity("hello", 1));
+        repository.save(newEntity("world", 2));
+        int count = new UpdateSpec<>(TestEntity.class).set(TestEntity::getStatus, 99)
+            .or(o -> o.like(TestEntity::getName, "%hel%")).execute(em);
+        assertEquals(1, count);
+    }
+
+    @Test
+    void testUpdateOrGroupNotLike() {
+        repository.save(newEntity("hello", 1));
+        repository.save(newEntity("world", 2));
+        int count = new UpdateSpec<>(TestEntity.class).set(TestEntity::getStatus, 99)
+            .or(o -> o.notLike(TestEntity::getName, "%hel%")).execute(em);
+        assertEquals(1, count);
+    }
+
+    @Test
+    void testUpdateOrGroupStartsWith() {
+        repository.save(newEntity("hello", 1));
+        repository.save(newEntity("world", 2));
+        int count = new UpdateSpec<>(TestEntity.class).set(TestEntity::getStatus, 99)
+            .or(o -> o.startsWith(TestEntity::getName, "hel")).execute(em);
+        assertEquals(1, count);
+    }
+
+    @Test
+    void testUpdateOrGroupEndsWith() {
+        repository.save(newEntity("ending", 1));
+        repository.save(newEntity("start", 2));
+        int count = new UpdateSpec<>(TestEntity.class).set(TestEntity::getStatus, 99)
+            .or(o -> o.endsWith(TestEntity::getName, "ing")).execute(em);
+        assertEquals(1, count);
+    }
+
+    @Test
+    void testUpdateOrGroupContains() {
+        repository.save(newEntity("abc", 1));
+        repository.save(newEntity("xyz", 2));
+        int count = new UpdateSpec<>(TestEntity.class).set(TestEntity::getStatus, 99)
+            .or(o -> o.contains(TestEntity::getName, "ab")).execute(em);
+        assertEquals(1, count);
+    }
+
+    @Test
+    void testUpdateOrGroupEqIgnoreCase() {
+        repository.save(newEntity("Hello", 1));
+        repository.save(newEntity("world", 2));
+        int count = new UpdateSpec<>(TestEntity.class).set(TestEntity::getStatus, 99)
+            .or(o -> o.eqIgnoreCase(TestEntity::getName, "HELLO")).execute(em);
+        assertEquals(1, count);
+    }
+
+    @Test
+    void testUpdateOrGroupLikeIgnoreCase() {
+        repository.save(newEntity("HelloWorld", 1));
+        repository.save(newEntity("xyz", 2));
+        int count = new UpdateSpec<>(TestEntity.class).set(TestEntity::getStatus, 99)
+            .or(o -> o.likeIgnoreCase(TestEntity::getName, "%hello%")).execute(em);
+        assertEquals(1, count);
+    }
+
+    @Test
+    void testUpdateOrGroupIn() {
+        repository.save(newEntity("a", 1));
+        repository.save(newEntity("b", 2));
+        repository.save(newEntity("c", 3));
+        int count = new UpdateSpec<>(TestEntity.class).set(TestEntity::getStatus, 99)
+            .or(o -> o.in(TestEntity::getStatus, 1, 3)).execute(em);
+        assertEquals(2, count);
+    }
+
+    @Test
+    void testUpdateOrGroupNotIn() {
+        repository.save(newEntity("a", 1));
+        repository.save(newEntity("b", 2));
+        repository.save(newEntity("c", 3));
+        int count = new UpdateSpec<>(TestEntity.class).set(TestEntity::getStatus, 99)
+            .or(o -> o.notIn(TestEntity::getStatus, 1, 3)).execute(em);
+        assertEquals(1, count);
+    }
+
+    @Test
+    void testUpdateOrGroupIsNull() {
+        repository.save(newEntity("named", 1));
+        TestEntity nullName = new TestEntity();
+        nullName.setName(null);
+        nullName.setStatus(99);
+        em.persist(nullName);
+        em.flush();
+        int count = new UpdateSpec<>(TestEntity.class).set(TestEntity::getStatus, 0)
+            .or(o -> o.isNull(TestEntity::getName)).execute(em);
+        assertEquals(1, count);
+    }
+
+    @Test
+    void testUpdateOrGroupIsNotNull() {
+        repository.save(newEntity("named", 1));
+        TestEntity nullName = new TestEntity();
+        nullName.setName(null);
+        nullName.setStatus(99);
+        em.persist(nullName);
+        em.flush();
+        int count = new UpdateSpec<>(TestEntity.class).set(TestEntity::getStatus, 0)
+            .or(o -> o.isNotNull(TestEntity::getName)).execute(em);
+        assertEquals(1, count);
+    }
+
+    @Test
+    void testUpdateOrGroupBetween() {
+        repository.save(newEntity("a", 1));
+        repository.save(newEntity("b", 5));
+        repository.save(newEntity("c", 10));
+        int count = new UpdateSpec<>(TestEntity.class).set(TestEntity::getStatus, 99)
+            .or(o -> o.between(TestEntity::getStatus, 1, 5)).execute(em);
+        assertEquals(2, count);
+    }
+
+    @Test
+    void testUpdateOrGroupNotBetween() {
+        repository.save(newEntity("a", 1));
+        repository.save(newEntity("b", 5));
+        repository.save(newEntity("c", 10));
+        int count = new UpdateSpec<>(TestEntity.class).set(TestEntity::getStatus, 99)
+            .or(o -> o.notBetween(TestEntity::getStatus, 3, 7)).execute(em);
+        assertEquals(2, count);
+    }
+
+    @Test
+    void testUpdateNotGroupNe() {
+        repository.save(newEntity("a", 1));
+        repository.save(newEntity("b", 2));
+        int count = new UpdateSpec<>(TestEntity.class).set(TestEntity::getStatus, 99)
+            .not(o -> o.ne(TestEntity::getName, "a")).execute(em);
+        assertEquals(1, count);
+    }
+
+    @Test
+    void testUpdateNotBetweenInvalidRangeThrowsException() {
+        assertThrows(IllegalArgumentException.class, () -> new UpdateSpec<>(TestEntity.class)
+            .set(TestEntity::getStatus, 1).notBetween(TestEntity::getStatus, 10, 1));
+    }
+
     private TestEntity newEntity(String name, int status) {
         TestEntity entity = new TestEntity();
         entity.setName(name);

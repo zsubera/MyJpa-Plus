@@ -278,6 +278,26 @@ class OrGroupTest {
         assertEquals(2, result.size());
     }
 
+    @Test
+    void testOrGroupRawLike() {
+        repository.save(newEntity("hello", 0));
+        repository.save(newEntity("world", 0));
+        QuerySpec<TestEntity> qs = new QuerySpec<>();
+        qs.or(g -> g.rawLike(TestEntity::getName, "hel"));
+        List<TestEntity> result = repository.findAll(qs.toSpecification());
+        assertEquals(1, result.size());
+    }
+
+    @Test
+    void testOrGroupRawLikeEscapesWildcard() {
+        repository.save(newEntity("100%", 0));
+        repository.save(newEntity("100x", 0));
+        QuerySpec<TestEntity> qs = new QuerySpec<>();
+        qs.or(g -> g.rawLike(TestEntity::getName, "100%"));
+        List<TestEntity> result = repository.findAll(qs.toSpecification());
+        assertEquals(1, result.size());
+    }
+
     private TestEntity newEntity(String name, int status) {
         TestEntity entity = new TestEntity();
         entity.setName(name);

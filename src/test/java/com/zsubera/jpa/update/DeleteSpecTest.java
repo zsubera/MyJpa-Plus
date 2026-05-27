@@ -347,6 +347,223 @@ class DeleteSpecTest {
         assertEquals(0, repository.count());
     }
 
+    @Test
+    void testDeleteToDelete() {
+        repository.save(newEntity("target", 1));
+        DeleteSpec<TestEntity> spec = new DeleteSpec<>(TestEntity.class).eq(TestEntity::getName, "target");
+        jakarta.persistence.criteria.CriteriaDelete<TestEntity> cd = spec.toDelete(em);
+        assertNotNull(cd);
+    }
+
+    @Test
+    void testDeleteToDeleteNoConditionsThrowsException() {
+        DeleteSpec<TestEntity> spec = new DeleteSpec<>(TestEntity.class);
+        assertThrows(IllegalStateException.class, () -> spec.toDelete(em));
+    }
+
+    @Test
+    void testDeleteExecuteLimited() {
+        for (int i = 0; i < 5; i++) {
+            repository.save(newEntity("lim" + i, 0));
+        }
+        int count = new DeleteSpec<>(TestEntity.class).eq(TestEntity::getStatus, 0).executeLimited(em, 3);
+        assertEquals(3, count);
+        em.clear();
+        assertEquals(2, repository.count());
+    }
+
+    @Test
+    void testDeleteExecuteLimitedNoConditionsThrowsException() {
+        repository.save(newEntity("a", 1));
+        assertThrows(IllegalStateException.class, () -> new DeleteSpec<>(TestEntity.class).executeLimited(em, 10));
+    }
+
+    @Test
+    void testDeleteExecuteLimitedInvalidLimitThrowsException() {
+        repository.save(newEntity("a", 1));
+        assertThrows(IllegalArgumentException.class,
+            () -> new DeleteSpec<>(TestEntity.class).eq(TestEntity::getStatus, 0).executeLimited(em, 0));
+    }
+
+    @Test
+    void testDeleteExecuteInTransaction() {
+        repository.save(newEntity("tx1", 1));
+        int count = new DeleteSpec<>(TestEntity.class).eq(TestEntity::getStatus, 1).executeInTransaction(em);
+        assertEquals(1, count);
+    }
+
+    @Test
+    void testDeleteOrGroupNe() {
+        repository.save(newEntity("a", 1));
+        repository.save(newEntity("b", 2));
+        int count = new DeleteSpec<>(TestEntity.class).or(o -> o.ne(TestEntity::getName, "a")).execute(em);
+        assertEquals(1, count);
+    }
+
+    @Test
+    void testDeleteOrGroupGt() {
+        repository.save(newEntity("a", 1));
+        repository.save(newEntity("b", 10));
+        int count = new DeleteSpec<>(TestEntity.class).or(o -> o.gt(TestEntity::getStatus, 5)).execute(em);
+        assertEquals(1, count);
+    }
+
+    @Test
+    void testDeleteOrGroupGe() {
+        repository.save(newEntity("a", 1));
+        repository.save(newEntity("b", 5));
+        int count = new DeleteSpec<>(TestEntity.class).or(o -> o.ge(TestEntity::getStatus, 5)).execute(em);
+        assertEquals(1, count);
+    }
+
+    @Test
+    void testDeleteOrGroupLt() {
+        repository.save(newEntity("a", 1));
+        repository.save(newEntity("b", 10));
+        int count = new DeleteSpec<>(TestEntity.class).or(o -> o.lt(TestEntity::getStatus, 5)).execute(em);
+        assertEquals(1, count);
+    }
+
+    @Test
+    void testDeleteOrGroupLe() {
+        repository.save(newEntity("a", 1));
+        repository.save(newEntity("b", 10));
+        int count = new DeleteSpec<>(TestEntity.class).or(o -> o.le(TestEntity::getStatus, 1)).execute(em);
+        assertEquals(1, count);
+    }
+
+    @Test
+    void testDeleteOrGroupLike() {
+        repository.save(newEntity("hello", 1));
+        repository.save(newEntity("world", 2));
+        int count = new DeleteSpec<>(TestEntity.class).or(o -> o.like(TestEntity::getName, "%hel%")).execute(em);
+        assertEquals(1, count);
+    }
+
+    @Test
+    void testDeleteOrGroupNotLike() {
+        repository.save(newEntity("hello", 1));
+        repository.save(newEntity("world", 2));
+        int count = new DeleteSpec<>(TestEntity.class).or(o -> o.notLike(TestEntity::getName, "%hel%")).execute(em);
+        assertEquals(1, count);
+    }
+
+    @Test
+    void testDeleteOrGroupStartsWith() {
+        repository.save(newEntity("hello", 1));
+        repository.save(newEntity("world", 2));
+        int count = new DeleteSpec<>(TestEntity.class).or(o -> o.startsWith(TestEntity::getName, "hel")).execute(em);
+        assertEquals(1, count);
+    }
+
+    @Test
+    void testDeleteOrGroupEndsWith() {
+        repository.save(newEntity("ending", 1));
+        repository.save(newEntity("start", 2));
+        int count = new DeleteSpec<>(TestEntity.class).or(o -> o.endsWith(TestEntity::getName, "ing")).execute(em);
+        assertEquals(1, count);
+    }
+
+    @Test
+    void testDeleteOrGroupContains() {
+        repository.save(newEntity("abc", 1));
+        repository.save(newEntity("xyz", 2));
+        int count = new DeleteSpec<>(TestEntity.class).or(o -> o.contains(TestEntity::getName, "ab")).execute(em);
+        assertEquals(1, count);
+    }
+
+    @Test
+    void testDeleteOrGroupEqIgnoreCase() {
+        repository.save(newEntity("Hello", 1));
+        repository.save(newEntity("world", 2));
+        int count =
+            new DeleteSpec<>(TestEntity.class).or(o -> o.eqIgnoreCase(TestEntity::getName, "HELLO")).execute(em);
+        assertEquals(1, count);
+    }
+
+    @Test
+    void testDeleteOrGroupLikeIgnoreCase() {
+        repository.save(newEntity("HelloWorld", 1));
+        repository.save(newEntity("xyz", 2));
+        int count =
+            new DeleteSpec<>(TestEntity.class).or(o -> o.likeIgnoreCase(TestEntity::getName, "%hello%")).execute(em);
+        assertEquals(1, count);
+    }
+
+    @Test
+    void testDeleteOrGroupIn() {
+        repository.save(newEntity("a", 1));
+        repository.save(newEntity("b", 2));
+        repository.save(newEntity("c", 3));
+        int count = new DeleteSpec<>(TestEntity.class).or(o -> o.in(TestEntity::getStatus, 1, 3)).execute(em);
+        assertEquals(2, count);
+    }
+
+    @Test
+    void testDeleteOrGroupNotIn() {
+        repository.save(newEntity("a", 1));
+        repository.save(newEntity("b", 2));
+        repository.save(newEntity("c", 3));
+        int count = new DeleteSpec<>(TestEntity.class).or(o -> o.notIn(TestEntity::getStatus, 1, 3)).execute(em);
+        assertEquals(1, count);
+    }
+
+    @Test
+    void testDeleteOrGroupIsNull() {
+        repository.save(newEntity("named", 1));
+        TestEntity nullName = new TestEntity();
+        nullName.setName(null);
+        nullName.setStatus(99);
+        em.persist(nullName);
+        em.flush();
+        int count = new DeleteSpec<>(TestEntity.class).or(o -> o.isNull(TestEntity::getName)).execute(em);
+        assertEquals(1, count);
+    }
+
+    @Test
+    void testDeleteOrGroupIsNotNull() {
+        repository.save(newEntity("named", 1));
+        TestEntity nullName = new TestEntity();
+        nullName.setName(null);
+        nullName.setStatus(99);
+        em.persist(nullName);
+        em.flush();
+        int count = new DeleteSpec<>(TestEntity.class).or(o -> o.isNotNull(TestEntity::getName)).execute(em);
+        assertEquals(1, count);
+    }
+
+    @Test
+    void testDeleteOrGroupBetween() {
+        repository.save(newEntity("a", 1));
+        repository.save(newEntity("b", 5));
+        repository.save(newEntity("c", 10));
+        int count = new DeleteSpec<>(TestEntity.class).or(o -> o.between(TestEntity::getStatus, 1, 5)).execute(em);
+        assertEquals(2, count);
+    }
+
+    @Test
+    void testDeleteOrGroupNotBetween() {
+        repository.save(newEntity("a", 1));
+        repository.save(newEntity("b", 5));
+        repository.save(newEntity("c", 10));
+        int count = new DeleteSpec<>(TestEntity.class).or(o -> o.notBetween(TestEntity::getStatus, 3, 7)).execute(em);
+        assertEquals(2, count);
+    }
+
+    @Test
+    void testDeleteNotGroupNe() {
+        repository.save(newEntity("a", 1));
+        repository.save(newEntity("b", 2));
+        int count = new DeleteSpec<>(TestEntity.class).not(o -> o.ne(TestEntity::getName, "a")).execute(em);
+        assertEquals(1, count);
+    }
+
+    @Test
+    void testDeleteNotBetweenInvalidRangeThrowsException() {
+        assertThrows(IllegalArgumentException.class,
+            () -> new DeleteSpec<>(TestEntity.class).notBetween(TestEntity::getStatus, 10, 1));
+    }
+
     private TestEntity newEntity(String name, int status) {
         TestEntity entity = new TestEntity();
         entity.setName(name);

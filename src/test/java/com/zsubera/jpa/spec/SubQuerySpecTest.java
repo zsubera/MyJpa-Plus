@@ -537,6 +537,38 @@ class SubQuerySpecTest {
         assertTrue(ex.getCause() instanceof IllegalArgumentException || ex instanceof IllegalArgumentException);
     }
 
+    @Test
+    void testExistsWithInCollectionVarargs() {
+        ParentEntity p = new ParentEntity();
+        p.setCategory("cat");
+        p.setLevel(10);
+        em.persist(p);
+        TestEntity child = newEntity("c1", 2);
+        child.setParent(p);
+        repository.save(child);
+
+        QuerySpec<ParentEntity> qs = new QuerySpec<>();
+        qs.exists(TestEntity.class, sub -> sub.in(TestEntity::getStatus, 1, 2, 3));
+        List<ParentEntity> result = parentRepository.findAll(qs.toSpecification());
+        assertEquals(1, result.size());
+    }
+
+    @Test
+    void testExistsWithNotInCollectionVarargs() {
+        ParentEntity p = new ParentEntity();
+        p.setCategory("cat");
+        p.setLevel(10);
+        em.persist(p);
+        TestEntity child = newEntity("c1", 2);
+        child.setParent(p);
+        repository.save(child);
+
+        QuerySpec<ParentEntity> qs = new QuerySpec<>();
+        qs.exists(TestEntity.class, sub -> sub.notIn(TestEntity::getStatus, 99, 100));
+        List<ParentEntity> result = parentRepository.findAll(qs.toSpecification());
+        assertEquals(1, result.size());
+    }
+
     private TestEntity newEntity(String name, int status) {
         TestEntity entity = new TestEntity();
         entity.setName(name);

@@ -349,6 +349,12 @@ class ConditionBuilderValidationTest {
         assertThrows(IllegalArgumentException.class, () -> qs.where(null));
     }
 
+    @Test
+    void testRawLikeNullValueThrowsException() {
+        QuerySpec<TestEntity> qs = new QuerySpec<>();
+        assertThrows(IllegalArgumentException.class, () -> qs.rawLike(TestEntity::getName, null));
+    }
+
     private TestEntity newEntity(String name, int status) {
         TestEntity entity = new TestEntity();
         entity.setName(name);

@@ -960,6 +960,98 @@ public class QuerySpecTest {
         assertNotNull(qs.getLockMode());
     }
 
+    @Test
+    void testRawLike() {
+        repository.save(newEntity("hello", 0));
+        repository.save(newEntity("world", 0));
+        repository.save(newEntity("hel%lo", 0));
+        QuerySpec<TestEntity> qs = new QuerySpec<>();
+        qs.rawLike(TestEntity::getName, "hel");
+        List<TestEntity> result = repository.findAll(qs.toSpecification());
+        assertEquals(2, result.size());
+    }
+
+    @Test
+    void testRawLikeEscapesWildcard() {
+        repository.save(newEntity("100%", 0));
+        repository.save(newEntity("100x", 0));
+        QuerySpec<TestEntity> qs = new QuerySpec<>();
+        qs.rawLike(TestEntity::getName, "100%");
+        List<TestEntity> result = repository.findAll(qs.toSpecification());
+        assertEquals(1, result.size());
+        assertEquals("100%", result.get(0).getName());
+    }
+
+    @Test
+    void testRawLikeEscapesUnderscore() {
+        repository.save(newEntity("a_b", 0));
+        repository.save(newEntity("axb", 0));
+        QuerySpec<TestEntity> qs = new QuerySpec<>();
+        qs.rawLike(TestEntity::getName, "a_b");
+        List<TestEntity> result = repository.findAll(qs.toSpecification());
+        assertEquals(1, result.size());
+        assertEquals("a_b", result.get(0).getName());
+    }
+
+    @Test
+    void testNestedOrThreeLevels() {
+        repository.save(newEntity("a", 1));
+        repository.save(newEntity("b", 2));
+        repository.save(newEntity("c", 3));
+        repository.save(newEntity("d", 4));
+        QuerySpec<TestEntity> qs = new QuerySpec<>();
+        qs.or(outer -> outer.eq(TestEntity::getStatus, 1)
+            .or(mid -> mid.eq(TestEntity::getStatus, 2).or(inner -> inner.eq(TestEntity::getStatus, 3))));
+        List<TestEntity> result = repository.findAll(qs.toSpecification());
+        assertEquals(3, result.size());
+    }
+
+    @Test
+    void testGroupByMultipleFields() {
+        repository.save(newEntity("a", 1));
+        repository.save(newEntity("a", 1));
+        repository.save(newEntity("b", 2));
+        QuerySpec<TestEntity> qs = new QuerySpec<>();
+        qs.groupBy(TestEntity::getName, TestEntity::getStatus);
+        assertNotNull(qs.toSpecification());
+    }
+
+    @Test
+    void testGroupByHavingWithPredicate() {
+        QuerySpec<TestEntity> qs = new QuerySpec<>();
+        qs.groupBy(TestEntity::getStatus).having((root, cb) -> cb.greaterThan(cb.count(root.get("name")), 0L));
+        assertNotNull(qs.toSpecification());
+    }
+
+    @Test
+    void testMixedJoinTypes() {
+        ParentEntity p1 = new ParentEntity();
+        p1.setCategory("admin");
+        p1.setLevel(10);
+        em.persist(p1);
+
+        TestEntity child = newEntity("child", 0);
+        child.setParent(p1);
+        repository.save(child);
+
+        QuerySpec<TestEntity> qs = new QuerySpec<>();
+        qs.<ParentEntity>join(TestEntity::getParent, j -> j.eq(ParentEntity::getCategory, "admin"));
+        qs.<ParentEntity>leftJoin(TestEntity::getParent, j -> j.gt(ParentEntity::getLevel, 0));
+        List<TestEntity> result = repository.findAll(qs.toSpecification());
+        assertEquals(1, result.size());
+    }
+
+    @Test
+    void testNotBetween() {
+        for (int i = 1; i <= 10; i++) {
+            repository.save(newEntity("item" + i, i));
+        }
+        QuerySpec<TestEntity> qs = new QuerySpec<>();
+        qs.notBetween(TestEntity::getStatus, 4, 7);
+        List<TestEntity> result = repository.findAll(qs.toSpecification());
+        assertEquals(6, result.size());
+    }
+
     private TestEntity newEntity(String name, int status) {
         TestEntity entity = new TestEntity();
         entity.setName(name);

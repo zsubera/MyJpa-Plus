@@ -362,6 +362,85 @@ class JoinGroupTest {
         assertEquals(1, result.size());
     }
 
+    @Test
+    void testJoinGroupRawLike() {
+        ParentEntity parent = new ParentEntity();
+        parent.setCategory("admin");
+        parent.setLevel(10);
+        em.persist(parent);
+
+        TestEntity child = newEntity("hello", 0);
+        child.setParent(parent);
+        repository.save(child);
+
+        QuerySpec<TestEntity> qs = new QuerySpec<>();
+        JoinGroup<TestEntity, ParentEntity> jg = qs.join(TestEntity::getParent);
+        jg.rawLike(ParentEntity::getCategory, "adm");
+        jg.endJoin();
+        List<TestEntity> result = repository.findAll(qs.toSpecification());
+        assertEquals(1, result.size());
+    }
+
+    @Test
+    void testJoinGroupNestedJoin() {
+        ParentEntity parent = new ParentEntity();
+        parent.setCategory("admin");
+        parent.setLevel(10);
+        em.persist(parent);
+
+        TestEntity child = newEntity("child", 0);
+        child.setParent(parent);
+        repository.save(child);
+
+        QuerySpec<TestEntity> qs = new QuerySpec<>();
+        qs.<ParentEntity>join(TestEntity::getParent,
+            j -> j.eq(ParentEntity::getCategory, "admin").eq(ParentEntity::getLevel, 10));
+        List<TestEntity> result = repository.findAll(qs.toSpecification());
+        assertEquals(1, result.size());
+    }
+
+    @Test
+    void testJoinGroupNestedJoinReturnJoin() {
+        ParentEntity parent = new ParentEntity();
+        parent.setCategory("admin");
+        parent.setLevel(10);
+        em.persist(parent);
+
+        TestEntity child = newEntity("child", 0);
+        child.setParent(parent);
+        repository.save(child);
+
+        QuerySpec<TestEntity> qs = new QuerySpec<>();
+        JoinGroup<TestEntity, ParentEntity> jg = qs.join(TestEntity::getParent);
+        JoinGroup<TestEntity, TestEntity> j2 = jg.join(ParentEntity::getChildren);
+        j2.eq(TestEntity::getName, "child");
+        j2.endJoin();
+        jg.endJoin();
+        List<TestEntity> result = repository.findAll(qs.toSpecification());
+        assertEquals(1, result.size());
+    }
+
+    @Test
+    void testJoinGroupNestedLeftJoinReturnJoin() {
+        ParentEntity parent = new ParentEntity();
+        parent.setCategory("admin");
+        parent.setLevel(10);
+        em.persist(parent);
+
+        TestEntity child = newEntity("child", 0);
+        child.setParent(parent);
+        repository.save(child);
+
+        QuerySpec<TestEntity> qs = new QuerySpec<>();
+        JoinGroup<TestEntity, ParentEntity> jg = qs.join(TestEntity::getParent);
+        JoinGroup<TestEntity, TestEntity> j2 = jg.leftJoin(ParentEntity::getChildren);
+        j2.eq(TestEntity::getName, "child");
+        j2.endJoin();
+        jg.endJoin();
+        List<TestEntity> result = repository.findAll(qs.toSpecification());
+        assertEquals(1, result.size());
+    }
+
     private TestEntity newEntity(String name, int status) {
         TestEntity entity = new TestEntity();
         entity.setName(name);
