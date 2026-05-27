@@ -476,7 +476,6 @@ public class SubQuerySpec<S> {
      * @return 当前 SubQuerySpec 实例，支持链式调用
      * @throws IllegalArgumentException 如果 fields 中包含 null 元素
      */
-    @SuppressWarnings("unchecked")
     public SubQuerySpec<S> multiLike(String keyword, SFunction<S, ?>... fields) {
         if (keyword != null && !keyword.isEmpty() && fields != null && fields.length > 0) {
             String pattern = "%" + PredicateHelper.escapeLikeWildcards(keyword) + "%";

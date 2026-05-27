@@ -69,7 +69,6 @@ public class SoftDeleteFilterBean implements InitializingBean {
      * @param <T> 实体类型
      * @return 应用软删除过滤器后的组合 Specification，如果实体没有软删除字段则返回原始 Specification
      */
-    @SuppressWarnings("unchecked")
     public <T> Specification<T> apply(@Nullable Specification<T> spec, Class<T> entityClass) {
         if (hasSoftDeleteField(entityClass)) {
             Specification<T> notDeleted = SoftDeleteHelper.isNotDeleted(entityClass);

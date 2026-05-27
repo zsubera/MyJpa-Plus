@@ -125,7 +125,6 @@ public final class EntityGraphHelper<T> {
      * @param <R> the query result type
      * @return the same query with the entity graph hint applied
      */
-    @SuppressWarnings({"unchecked", "rawtypes"})
     public <R> TypedQuery<R> apply(TypedQuery<R> query, EntityManager em) {
         if (attributePaths.isEmpty()) {
             return query;
@@ -155,21 +154,11 @@ public final class EntityGraphHelper<T> {
     }
 
     /**
-     * Builds and returns the JPA {@link EntityGraph}.
-     *
-     * @param em the EntityManager to create the graph from
-     * @return the built entity graph
-     */
-    /**
-     * Recursively adds attribute nodes to a subgraph, splitting multi-level paths like "b.c.d" into nested subgraphs.
-     */
-    /**
      * 递归添加属性节点到子图，支持多级嵌套路径如 "b.c.d"。
      *
      * @param subgraph 子图
      * @param path 属性路径
      */
-    @SuppressWarnings({"unchecked", "rawtypes"})
     private void addAttributeNodeRecursive(Subgraph<Object> subgraph, String path) {
         int dotIndex = path.indexOf('.');
         if (dotIndex > 0) {
@@ -188,7 +177,6 @@ public final class EntityGraphHelper<T> {
      * @param em 用于创建图的 EntityManager
      * @return 构建的实体图
      */
-    @SuppressWarnings({"unchecked", "rawtypes"})
     public EntityGraph<T> buildGraph(EntityManager em) {
         EntityGraph<T> graph = em.createEntityGraph(entityClass);
 

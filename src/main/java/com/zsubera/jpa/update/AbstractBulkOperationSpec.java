@@ -132,13 +132,6 @@ public abstract class AbstractBulkOperationSpec<T, SELF extends AbstractBulkOper
     }
 
     /**
-     * Executes the bulk operation. Requires an active transaction in the underlying {@link EntityManager}.
-     *
-     * @param em the EntityManager
-     * @return the number of affected rows
-     * @throws jakarta.persistence.TransactionRequiredException if no transaction is active
-     */
-    /**
      * 执行批量操作。要求底层 {@link EntityManager} 中存在活动事务。
      *
      * @param em 实体管理器
@@ -155,11 +148,7 @@ public abstract class AbstractBulkOperationSpec<T, SELF extends AbstractBulkOper
      */
     protected abstract int doExecute(EntityManager em);
 
-    /**
-     * Sealed node type for bulk operation condition trees. Supports AND (default), OR, NOT, and leaf predicate nodes.
-     */
     /** 批量操作条件树的密封节点类型。支持 AND（默认）、OR、NOT 和叶子谓词节点。 */
-    @SuppressWarnings("unchecked")
     sealed interface BulkConditionNode {
         /** 叶子谓词函数节点。 */
         record LeafNode(BiFunction<Root<?>, CriteriaBuilder, Predicate> fn) implements BulkConditionNode {
@@ -253,7 +242,6 @@ public abstract class AbstractBulkOperationSpec<T, SELF extends AbstractBulkOper
      * @return 当前构建器实例
      * @throws IllegalArgumentException 如果 value 为 null
      */
-    @SuppressWarnings({"unchecked", "rawtypes"})
     public SELF gt(SFunction<T, ?> field, Comparable<?> value) {
         if (value == null) {
             throw new IllegalArgumentException("value must not be null");
@@ -271,7 +259,6 @@ public abstract class AbstractBulkOperationSpec<T, SELF extends AbstractBulkOper
      * @return 当前构建器实例
      * @throws IllegalArgumentException 如果 value 为 null
      */
-    @SuppressWarnings({"unchecked", "rawtypes"})
     public SELF ge(SFunction<T, ?> field, Comparable<?> value) {
         if (value == null) {
             throw new IllegalArgumentException("value must not be null");
@@ -289,7 +276,6 @@ public abstract class AbstractBulkOperationSpec<T, SELF extends AbstractBulkOper
      * @return 当前构建器实例
      * @throws IllegalArgumentException 如果 value 为 null
      */
-    @SuppressWarnings({"unchecked", "rawtypes"})
     public SELF lt(SFunction<T, ?> field, Comparable<?> value) {
         if (value == null) {
             throw new IllegalArgumentException("value must not be null");
@@ -307,7 +293,6 @@ public abstract class AbstractBulkOperationSpec<T, SELF extends AbstractBulkOper
      * @return 当前构建器实例
      * @throws IllegalArgumentException 如果 value 为 null
      */
-    @SuppressWarnings({"unchecked", "rawtypes"})
     public SELF le(SFunction<T, ?> field, Comparable<?> value) {
         if (value == null) {
             throw new IllegalArgumentException("value must not be null");
@@ -581,7 +566,6 @@ public abstract class AbstractBulkOperationSpec<T, SELF extends AbstractBulkOper
      * @return 当前构建器实例
      * @throws IllegalArgumentException 如果 condition 为 null
      */
-    @SuppressWarnings("unchecked")
     public SELF where(Function<Root<T>, Predicate> condition) {
         if (condition == null) {
             throw new IllegalArgumentException("condition must not be null");

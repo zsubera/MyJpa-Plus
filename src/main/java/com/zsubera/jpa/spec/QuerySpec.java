@@ -13,6 +13,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
+import org.springframework.lang.NonNull;
 import org.springframework.lang.Nullable;
 
 /**
@@ -492,7 +493,6 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
      * @param other 另一个 QuerySpec 实例
      * @return 当前 QuerySpec 实例，支持链式调用
      */
-    @SuppressWarnings("unchecked")
     public QuerySpec<T> then(QuerySpec<T> other) {
         if (other == null) {
             return this;
@@ -529,7 +529,7 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
      * @return 生成的 Predicate
      */
     @Override
-    public Predicate toPredicate(Root<T> root, CriteriaQuery<?> query, CriteriaBuilder cb) {
+    public Predicate toPredicate(@NonNull Root<T> root, @Nullable CriteriaQuery<?> query, @NonNull CriteriaBuilder cb) {
         validateCleanState();
         if (log.isDebugEnabled()) {
             log.debug("QuerySpec: building predicate for {} with {} conditions, {} order nodes, distinct={}",
@@ -814,9 +814,9 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
     private Predicate resolveCollection(ConditionNode.CollectionNode node, Path<?> path, CriteriaBuilder cb) {
         Path<?> fieldPath = path.get(node.fieldName);
         if (node.op == ConditionNode.CollectionOp.IS_EMPTY) {
-            return cb.isEmpty((Expression<Collection<?>>)(Expression<?>)fieldPath);
+            return cb.isEmpty((Expression<Collection<?>>)fieldPath);
         }
-        return cb.isNotEmpty((Expression<Collection<?>>)(Expression<?>)fieldPath);
+        return cb.isNotEmpty((Expression<Collection<?>>)fieldPath);
     }
 
     /**

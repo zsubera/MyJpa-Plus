@@ -23,7 +23,6 @@ public class OrGroup<T> implements ConditionBuilder<T, OrGroup<T>> {
         return root.currentGroup();
     }
 
-    @SuppressWarnings("unchecked")
     private <J> JoinGroup<T, J> internalJoin(SFunction<T, ?> field, ConditionNode.JoinType joinType) {
         ConditionNode.JoinNode joinNode = new ConditionNode.JoinNode(LambdaUtils.getPropertyName(field), joinType);
         root.currentGroup().add(joinNode);

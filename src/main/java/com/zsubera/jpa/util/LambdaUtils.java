@@ -29,7 +29,7 @@ public final class LambdaUtils {
 
     /** LRU 缓存，线程安全，达到最大容量时自动淘汰最久未使用的条目。 */
     private static final Map<String, String> CACHE =
-        Collections.synchronizedMap(new LinkedHashMap<String, String>(MAX_CACHE_SIZE * 4 / 3 + 1, 0.75f, true) {
+        Collections.synchronizedMap(new LinkedHashMap<>(MAX_CACHE_SIZE * 4 / 3 + 1, 0.75f, true) {
             @Override
             protected boolean removeEldestEntry(Map.Entry<String, String> eldest) {
                 return size() > MAX_CACHE_SIZE;

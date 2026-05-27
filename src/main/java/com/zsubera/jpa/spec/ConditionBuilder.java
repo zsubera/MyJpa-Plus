@@ -739,7 +739,6 @@ public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> {
      * @param fields 一个或多个字符串属性的方法引用
      * @return 当前构建器以支持链式调用
      */
-    @SuppressWarnings("unchecked")
     default SELF multiLike(boolean condition, String keyword, SFunction<E, ?>... fields) {
         return condition ? multiLike(keyword, fields) : self();
     }

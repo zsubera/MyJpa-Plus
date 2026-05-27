@@ -97,7 +97,7 @@ public final class PredicateHelper {
      */
     @SuppressWarnings({"unchecked", "rawtypes"})
     public static Predicate gt(Path<?> path, String fieldName, Comparable<?> value, CriteriaBuilder cb) {
-        return cb.greaterThan((Expression)path.get(fieldName), (Comparable)value);
+        return cb.greaterThan(path.get(fieldName), (Comparable)value);
     }
 
     /**
@@ -111,7 +111,7 @@ public final class PredicateHelper {
      */
     @SuppressWarnings({"unchecked", "rawtypes"})
     public static Predicate ge(Path<?> path, String fieldName, Comparable<?> value, CriteriaBuilder cb) {
-        return cb.greaterThanOrEqualTo((Expression)path.get(fieldName), (Comparable)value);
+        return cb.greaterThanOrEqualTo(path.get(fieldName), (Comparable)value);
     }
 
     /**
@@ -125,7 +125,7 @@ public final class PredicateHelper {
      */
     @SuppressWarnings({"unchecked", "rawtypes"})
     public static Predicate lt(Path<?> path, String fieldName, Comparable<?> value, CriteriaBuilder cb) {
-        return cb.lessThan((Expression)path.get(fieldName), (Comparable)value);
+        return cb.lessThan(path.get(fieldName), (Comparable)value);
     }
 
     /**
@@ -139,7 +139,7 @@ public final class PredicateHelper {
      */
     @SuppressWarnings({"unchecked", "rawtypes"})
     public static Predicate le(Path<?> path, String fieldName, Comparable<?> value, CriteriaBuilder cb) {
-        return cb.lessThanOrEqualTo((Expression)path.get(fieldName), (Comparable)value);
+        return cb.lessThanOrEqualTo(path.get(fieldName), (Comparable)value);
     }
 
     // ==================== 字符串运算符 ====================
@@ -363,7 +363,7 @@ public final class PredicateHelper {
     @SuppressWarnings({"unchecked", "rawtypes"})
     public static Predicate between(Path<?> path, String fieldName, Comparable<?> start, Comparable<?> end,
         CriteriaBuilder cb) {
-        return cb.between((Expression)path.get(fieldName), (Comparable)start, (Comparable)end);
+        return cb.between(path.get(fieldName), (Comparable)start, (Comparable)end);
     }
 
     /**
@@ -379,7 +379,7 @@ public final class PredicateHelper {
     @SuppressWarnings({"unchecked", "rawtypes"})
     public static Predicate notBetween(Path<?> path, String fieldName, Comparable<?> start, Comparable<?> end,
         CriteriaBuilder cb) {
-        return cb.not(cb.between((Expression)path.get(fieldName), (Comparable)start, (Comparable)end));
+        return cb.not(cb.between(path.get(fieldName), (Comparable)start, (Comparable)end));
     }
 
     // ==================== NULL 运算符 ====================
