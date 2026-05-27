@@ -7,27 +7,25 @@ import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
 
 /**
- * Utility class for seamless integration between {@link QuerySpec} / {@link Specification} and
- * Spring Data's {@link Pageable}.
+ * 用于在 {@link QuerySpec} / {@link Specification} 和 Spring Data 的 {@link Pageable} 之间实现无缝集成的工具类。
  *
- * <p>By default, when using {@code findAll(Specification, Pageable)}, Spring Data overrides any
- * ordering set via {@link QuerySpec#orderByAsc} / {@link QuerySpec#orderByDesc} with the sort order
- * from the {@link Pageable}. This helper provides methods to resolve this conflict.
+ * <p>默认情况下，使用 {@code findAll(Specification, Pageable)} 时，Spring Data 会使用 {@link Pageable} 中的排序顺序
+ * 覆盖通过 {@link QuerySpec#orderByAsc} / {@link QuerySpec#orderByDesc} 设置的任何排序。此帮助类提供了解决此冲突的方法。
  *
- * <p>Example:
+ * <p>示例：
  *
  * <pre>{@code
- * // Without PageableHelper — Pageable sort overrides QuerySpec ordering:
+ * // 不使用 PageableHelper — Pageable 排序覆盖 QuerySpec 排序：
  * Page<User> page = repository.findAll(
  *     new QuerySpec<User>().eq(User::getStatus, "ACTIVE").orderByAsc(User::getName),
  *     PageRequest.of(0, 20)
  * );
  *
- * // With PageableHelper — explicitly control which takes precedence:
+ * // 使用 PageableHelper — 明确控制优先级：
  * Page<User> page = repository.findAll(spec, PageableHelper.unsorted(0, 20));
- * // QuerySpec ordering is preserved
+ * // 保留 QuerySpec 排序
  *
- * // Or merge Pageable sort with QuerySpec:
+ * // 或者将 Pageable 排序与 QuerySpec 合并：
  * Pageable merged = PageableHelper.merge(PageRequest.of(0, 20, Sort.by("id")), spec);
  * }</pre>
  */
@@ -36,27 +34,26 @@ public final class PageableHelper {
   private PageableHelper() {}
 
   /**
-   * Creates a {@link PageRequest} with no sort, preserving any ordering set on the {@link
-   * Specification} (e.g., from {@link QuerySpec#orderByAsc}).
+   * 创建一个没有排序的 {@link PageRequest}，保留 {@link Specification} 上设置的任何排序
+   * （例如来自 {@link QuerySpec#orderByAsc}）。
    *
-   * @param page zero-based page index
-   * @param size page size
-   * @return a Pageable with no sort
+   * @param page 从零开始的页码索引
+   * @param size 每页大小
+   * @return 没有排序的 Pageable
    */
   public static Pageable unsorted(int page, int size) {
     return PageRequest.of(page, size, Sort.unsorted());
   }
 
   /**
-   * Merges a {@link Pageable}'s sort with the ordering from a {@link QuerySpec}. QuerySpec ordering
-   * comes first (higher priority), then the Pageable sort is appended. This allows combining
-   * QuerySpec's built-in ordering with dynamic pagination sort.
+   * 将 {@link Pageable} 的排序与 {@link QuerySpec} 的排序合并。QuerySpec 排序优先级更高，
+   * 然后追加 Pageable 排序。这允许将 QuerySpec 的内置排序与动态分页排序相结合。
    *
-   * <p>If the QuerySpec has no ordering, the Pageable sort is used as-is.
+   * <p>如果 QuerySpec 没有排序，则使用 Pageable 排序。
    *
-   * @param pageable the pageable with potential sort
-   * @param querySpec the QuerySpec with potentially built-in ordering
-   * @return a new Pageable that combines both orderings (QuerySpec first, Pageable second)
+   * @param pageable 带有潜在排序的 pageable
+   * @param querySpec 带有潜在内置排序的 QuerySpec
+   * @return 一个组合了两种排序的新 Pageable（QuerySpec 排序在前，Pageable 排序在后）
    */
   public static Pageable merge(Pageable pageable, QuerySpec<?> querySpec) {
     if (pageable == null) {
@@ -79,14 +76,14 @@ public final class PageableHelper {
   }
 
   /**
-   * Returns a {@link Pageable} with explicit sort to override any QuerySpec ordering. When used
-   * with {@code findAll(spec, pageable)}, the sort from this pageable will be applied instead of
-   * any ordering defined in the {@link QuerySpec}.
+   * 返回一个带有显式排序的 {@link Pageable}，以覆盖任何 QuerySpec 排序。当与
+   * {@code findAll(spec, pageable)} 一起使用时，将应用此 pageable 的排序，而不是
+   * {@link QuerySpec} 中定义的任何排序。
    *
-   * @param page zero-based page index
-   * @param size page size
-   * @param sort the sort to apply
-   * @return a Pageable with the given sort
+   * @param page 从零开始的页码索引
+   * @param size 每页大小
+   * @param sort 要应用的排序
+   * @return 带有给定排序的 Pageable
    */
   public static Pageable sorted(int page, int size, Sort sort) {
     return PageRequest.of(page, size, sort);

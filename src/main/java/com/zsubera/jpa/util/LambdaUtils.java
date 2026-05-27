@@ -5,24 +5,37 @@ import com.zsubera.jpa.spec.SFunction;
 import java.beans.Introspector;
 import java.lang.invoke.SerializedLambda;
 import java.lang.reflect.Method;
-import java.util.Collections;
-import java.util.LinkedHashMap;
-import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 
+/**
+ * Lambda 工具类，用于从方法引用中提取实体属性名称。
+ *
+ * <p>支持将 {@code Entity::getField} 形式的方法引用转换为 {@code "field"} 形式的属性名称，
+ * 用于 JPA Criteria API 的动态查询构建。
+ *
+ * <p>使用示例：
+ * <pre>{@code
+ * String name = LambdaUtils.getPropertyName(User::getName);
+ * // 返回 "name"
+ * }</pre>
+ */
 public final class LambdaUtils {
 
   private static final int MAX_CACHE_SIZE = 1024;
-  private static final Map<String, String> CACHE =
-      Collections.synchronizedMap(
-          new LinkedHashMap<>(MAX_CACHE_SIZE, 0.75f, true) {
-            @Override
-            protected boolean removeEldestEntry(Map.Entry<String, String> eldest) {
-              return size() > MAX_CACHE_SIZE;
-            }
-          });
+  private static final ConcurrentMap<String, String> CACHE = new ConcurrentHashMap<>();
 
   private LambdaUtils() {}
 
+  /**
+   * 从方法引用中提取属性名称。
+   *
+   * @param <T> 实体类型
+   * @param fn 实体属性的方法引用
+   * @return 属性名称
+   * @throws IllegalArgumentException 如果 fn 为 null
+   * @throws MyJpaPlusException 如果无法从方法引用中提取属性名称
+   */
   public static <T> String getPropertyName(SFunction<T, ?> fn) {
     if (fn == null) {
       throw new IllegalArgumentException("SFunction must not be null");
@@ -32,10 +45,6 @@ public final class LambdaUtils {
       writeReplace.setAccessible(true);
       SerializedLambda lambda = (SerializedLambda) writeReplace.invoke(fn);
       String key = lambda.getImplClass() + "#" + lambda.getImplMethodName();
-      String cached = CACHE.get(key);
-      if (cached != null) {
-        return cached;
-      }
       return CACHE.computeIfAbsent(key, k -> methodToProperty(lambda.getImplMethodName()));
     } catch (ReflectiveOperationException e) {
       throw new MyJpaPlusException(
@@ -49,14 +58,28 @@ public final class LambdaUtils {
     }
   }
 
+  /**
+   * 获取缓存大小。
+   *
+   * @return 缓存中的条目数量
+   */
   static int cacheSize() {
     return CACHE.size();
   }
 
+  /**
+   * 清空缓存。
+   */
   static void clearCache() {
     CACHE.clear();
   }
 
+  /**
+   * 将方法名转换为属性名。
+   *
+   * @param methodName 方法名
+   * @return 属性名
+   */
   private static String methodToProperty(String methodName) {
     if (methodName.startsWith("get") && methodName.length() > 3) {
       return Introspector.decapitalize(methodName.substring(3));

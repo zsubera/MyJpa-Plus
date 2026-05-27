@@ -20,13 +20,12 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * Convenience template for executing MyJpa-Plus queries and bulk operations with automatic {@link
- * EntityManager} injection.
+ * MyJpa-Plus 便捷模板类，用于执行查询和批量操作，自动注入 {@link EntityManager}。
  *
- * <p>This eliminates the need to manually pass an {@code EntityManager} to {@link UpdateSpec} and
- * {@link DeleteSpec}. Simply inject this template and use its methods.
+ * <p>使用此类无需手动向 {@link UpdateSpec} 和 {@link DeleteSpec} 传递 {@code EntityManager}。
+ * 只需注入此模板并使用其方法即可。
  *
- * <p>Example:
+ * <p>使用示例：
  *
  * <pre>{@code
  * &#64;Autowired
@@ -47,6 +46,11 @@ import org.springframework.transaction.annotation.Transactional;
  *     );
  * }
  * }</pre>
+ *
+ * @author MyJpa-Plus
+ * @see UpdateSpec
+ * @see DeleteSpec
+ * @see QuerySpec
  */
 @Component
 public class MyJpaTemplate {
@@ -56,24 +60,24 @@ public class MyJpaTemplate {
   @PersistenceContext private EntityManager entityManager;
 
   /**
-   * Creates an {@link UpdateSpec} for the given entity class. The {@link EntityManager} is provided
-   * at execution time via {@link #execute(UpdateSpec)}.
+   * 创建指定实体类的 {@link UpdateSpec}。
+   * {@link EntityManager} 将在执行时通过 {@link #execute(UpdateSpec)} 自动提供。
    *
-   * @param entityClass the entity class to update
-   * @param <T> the entity type
-   * @return a new UpdateSpec (not yet bound to an EntityManager)
+   * @param entityClass 要更新的实体类
+   * @param <T> 实体类型
+   * @return 新的 UpdateSpec 实例（尚未绑定 EntityManager）
    */
   public <T> UpdateSpec<T> update(Class<T> entityClass) {
     return new UpdateSpec<>(entityClass);
   }
 
   /**
-   * Creates a {@link DeleteSpec} for the given entity class. The {@link EntityManager} is provided
-   * at execution time via {@link #execute(DeleteSpec)}.
+   * 创建指定实体类的 {@link DeleteSpec}。
+   * {@link EntityManager} 将在执行时通过 {@link #execute(DeleteSpec)} 自动提供。
    *
-   * @param entityClass the entity class to delete from
-   * @param <T> the entity type
-   * @return a new DeleteSpec (not yet bound to an EntityManager)
+   * @param entityClass 要删除的实体类
+   * @param <T> 实体类型
+   * @return 新的 DeleteSpec 实例（尚未绑定 EntityManager）
    */
   public <T> DeleteSpec<T> delete(Class<T> entityClass) {
     return new DeleteSpec<>(entityClass);
@@ -82,12 +86,12 @@ public class MyJpaTemplate {
   // ---- Query methods ----
 
   /**
-   * Finds all entities of the given type matching the given {@link QuerySpec}.
+   * 根据 {@link QuerySpec} 查询指定类型的所有匹配实体。
    *
-   * @param entityClass the entity class
-   * @param spec the QuerySpec
-   * @param <T> the entity type
-   * @return list of matching entities
+   * @param entityClass 实体类
+   * @param spec 查询规格
+   * @param <T> 实体类型
+   * @return 匹配实体列表
    */
   @Transactional(readOnly = true)
   public <T> List<T> findAll(Class<T> entityClass, QuerySpec<T> spec) {
@@ -104,12 +108,12 @@ public class MyJpaTemplate {
   }
 
   /**
-   * Finds all entities of the given type matching the given {@link Specification}.
+   * 根据 {@link Specification} 查询指定类型的所有匹配实体。
    *
-   * @param entityClass the entity class
-   * @param spec the Specification
-   * @param <T> the entity type
-   * @return list of matching entities
+   * @param entityClass 实体类
+   * @param spec Spring Data JPA 规格
+   * @param <T> 实体类型
+   * @return 匹配实体列表
    */
   @Transactional(readOnly = true)
   public <T> List<T> find(Class<T> entityClass, Specification<T> spec) {
@@ -124,13 +128,13 @@ public class MyJpaTemplate {
   }
 
   /**
-   * Finds a page of entities of the given type matching the given {@link QuerySpec}.
+   * 根据 {@link QuerySpec} 分页查询指定类型的匹配实体。
    *
-   * @param entityClass the entity class
-   * @param spec the QuerySpec
-   * @param pageable pagination information
-   * @param <T> the entity type
-   * @return a Page of matching entities
+   * @param entityClass 实体类
+   * @param spec 查询规格
+   * @param pageable 分页信息
+   * @param <T> 实体类型
+   * @return 匹配实体的分页结果
    */
   @Transactional(readOnly = true)
   public <T> Page<T> findAll(Class<T> entityClass, QuerySpec<T> spec, Pageable pageable) {
@@ -180,6 +184,9 @@ public class MyJpaTemplate {
               .toList());
     }
     TypedQuery<T> query = entityManager.createQuery(cq);
+    if (pageable.getOffset() > Integer.MAX_VALUE) {
+      throw new IllegalArgumentException("Offset too large: " + pageable.getOffset());
+    }
     query.setFirstResult((int) pageable.getOffset());
     query.setMaxResults(pageable.getPageSize());
     querySpec.applyQuerySettings(query);
@@ -189,13 +196,13 @@ public class MyJpaTemplate {
   }
 
   /**
-   * Finds a page of entities of the given type matching the given {@link Specification}.
+   * 根据 {@link Specification} 分页查询指定类型的匹配实体。
    *
-   * @param entityClass the entity class
-   * @param spec the Specification
-   * @param pageable pagination information
-   * @param <T> the entity type
-   * @return a Page of matching entities
+   * @param entityClass 实体类
+   * @param spec Spring Data JPA 规格
+   * @param pageable 分页信息
+   * @param <T> 实体类型
+   * @return 匹配实体的分页结果
    */
   @Transactional(readOnly = true)
   public <T> Page<T> findPage(Class<T> entityClass, Specification<T> spec, Pageable pageable) {
@@ -243,6 +250,9 @@ public class MyJpaTemplate {
               .toList());
     }
     TypedQuery<T> query = entityManager.createQuery(cq);
+    if (pageable.getOffset() > Integer.MAX_VALUE) {
+      throw new IllegalArgumentException("Offset too large: " + pageable.getOffset());
+    }
     query.setFirstResult((int) pageable.getOffset());
     query.setMaxResults(pageable.getPageSize());
     List<T> content = query.getResultList();
@@ -251,11 +261,11 @@ public class MyJpaTemplate {
   }
 
   /**
-   * Executes a bulk update with the given {@link UpdateSpec}.
+   * 执行批量更新操作。
    *
-   * @param spec the UpdateSpec to execute
-   * @param <T> the entity type
-   * @return the number of affected rows
+   * @param spec 要执行的 UpdateSpec
+   * @param <T> 实体类型
+   * @return 受影响的行数
    */
   @Transactional
   public <T> int execute(UpdateSpec<T> spec) {
@@ -263,11 +273,11 @@ public class MyJpaTemplate {
   }
 
   /**
-   * Executes a bulk delete with the given {@link DeleteSpec}.
+   * 执行批量删除操作。
    *
-   * @param spec the DeleteSpec to execute
-   * @param <T> the entity type
-   * @return the number of affected rows
+   * @param spec 要执行的 DeleteSpec
+   * @param <T> 实体类型
+   * @return 受影响的行数
    */
   @Transactional
   public <T> int execute(DeleteSpec<T> spec) {

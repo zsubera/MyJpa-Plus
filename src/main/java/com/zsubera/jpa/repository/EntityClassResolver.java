@@ -7,12 +7,11 @@ import java.util.concurrent.ConcurrentMap;
 import org.springframework.core.ResolvableType;
 
 /**
- * Resolves the entity class type parameter from a repository interface, supporting indirect
- * inheritance through intermediate interfaces.
+ * 从仓库接口解析实体类类型参数，支持通过中间接口的间接继承。
  *
- * <p>Handles cases like: {@code interface UserRepo extends CustomBase<User, Long>} where {@code
- * CustomBase<T, ID> extends MyJpaRepository<T, ID>} by traversing the entire interface hierarchy to
- * find the actual type arguments bound to {@link MyJpaRepository}'s type parameters.
+ * <p>处理类似以下情况：{@code interface UserRepo extends CustomBase<User, Long>}，其中{@code
+ * CustomBase<T, ID> extends MyJpaRepository<T, ID>}，通过遍历整个接口层次结构来找到绑定到
+ * {@link MyJpaRepository}类型参数的实际类型参数。
  */
 final class EntityClassResolver {
 
@@ -22,15 +21,13 @@ final class EntityClassResolver {
   private EntityClassResolver() {}
 
   /**
-   * Resolves the entity class (first type parameter {@code T}) from the given repository interface
-   * class.
+   * 从给定的仓库接口类解析实体类（第一个类型参数{@code T}）。
    *
-   * <p>Supports both direct and indirect inheritance of {@link MyJpaRepository}. The result is
-   * cached per repository class to avoid repeated reflection.
+   * <p>支持{@link MyJpaRepository}的直接和间接继承。结果按仓库类缓存以避免重复反射。
    *
-   * @param repositoryClass the repository interface class
-   * @param <T> the entity type
-   * @return the entity class, or {@code null} if it cannot be resolved
+   * @param repositoryClass 仓库接口类
+   * @param <T> 实体类型
+   * @return 实体类，如果无法解析则返回{@code null}
    */
   @SuppressWarnings("unchecked")
   static <T> Class<T> resolve(Class<?> repositoryClass) {
@@ -49,12 +46,11 @@ final class EntityClassResolver {
   }
 
   /**
-   * Resolves the {@code @Id} field name for the given entity class. Walks the class hierarchy
-   * (including superclasses) to find the field annotated with {@link Id @Id}. The result is cached
-   * per entity class.
+   * 为给定实体类解析{@code @Id}字段名。遍历类层次结构（包括超类）以找到使用{@link Id @Id}注解的字段。
+   * 结果按实体类缓存。
    *
-   * @param entityClass the entity class
-   * @return the ID field name, or {@code "id"} if no {@code @Id} is found
+   * @param entityClass 实体类
+   * @return ID字段名，如果未找到{@code @Id}则返回{@code "id"}
    */
   static String resolveIdFieldName(Class<?> entityClass) {
     return ID_FIELD_CACHE.computeIfAbsent(
@@ -72,9 +68,8 @@ final class EntityClassResolver {
   }
 
   /**
-   * Attempts to resolve using the standard ResolvableType.as() approach. This works when
-   * MyJpaRepository is a direct parent or when Spring's ResolvableType can correctly traverse the
-   * hierarchy.
+   * 尝试使用标准的ResolvableType.as()方法进行解析。当MyJpaRepository是直接父接口或
+   * Spring的ResolvableType能正确遍历层次结构时有效。
    */
   private static Class<?> tryDirectResolution(Class<?> repositoryClass) {
     try {
@@ -92,11 +87,9 @@ final class EntityClassResolver {
   }
 
   /**
-   * Traverses the full interface hierarchy to find the actual type arguments bound to {@link
-   * MyJpaRepository}'s type parameters.
+   * 遍历整个接口层次结构以找到绑定到{@link MyJpaRepository}类型参数的实际类型参数。
    *
-   * <p>For each interface in the hierarchy, resolves the type variable mappings until reaching
-   * MyJpaRepository.
+   * <p>对于层次结构中的每个接口，解析类型变量映射直到到达MyJpaRepository。
    */
   private static Class<?> resolveThroughHierarchy(Class<?> repositoryClass) {
     // Find the interface that directly extends MyJpaRepository
@@ -120,9 +113,7 @@ final class EntityClassResolver {
   }
 
   /**
-   * Returns all interfaces implemented by the given class, including those inherited from
-   * superclasses and superinterfaces. Uses iterative BFS with deduplication to avoid recursion and
-   * redundant copies.
+   * 返回给定类实现的所有接口，包括从超类和超级接口继承的接口。使用带去重的迭代BFS以避免递归和冗余复制。
    */
   private static Class<?>[] getAllInterfaces(Class<?> clazz) {
     java.util.Set<Class<?>> seen = new java.util.LinkedHashSet<>();

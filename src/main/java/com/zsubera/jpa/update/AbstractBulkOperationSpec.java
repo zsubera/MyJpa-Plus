@@ -1,5 +1,6 @@
 package com.zsubera.jpa.update;
 
+import com.zsubera.jpa.exception.MyJpaPlusException;
 import com.zsubera.jpa.spec.PredicateHelper;
 import com.zsubera.jpa.spec.SFunction;
 import com.zsubera.jpa.util.LambdaUtils;
@@ -19,14 +20,12 @@ import org.springframework.lang.Nullable;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 /**
- * Abstract base for type-safe JPA bulk operation builders ({@link UpdateSpec} and {@link
- * DeleteSpec}).
+ * JPA 批量操作构建器（{@link UpdateSpec} 和 {@link DeleteSpec}）的抽象基类。
  *
- * <p>Provides common condition methods using deferred lambda evaluation. Predicate construction is
- * delegated to {@link PredicateHelper} to share logic with other components.
+ * <p>使用延迟 Lambda 求值提供通用条件方法。谓词构造委托给 {@link PredicateHelper} 以与其他组件共享逻辑。
  *
- * @param <T> the entity type
- * @param <SELF> the concrete builder type for fluent chaining
+ * @param <T> 实体类型
+ * @param <SELF> 具体构建器类型，用于流式链式调用
  */
 public abstract class AbstractBulkOperationSpec<
     T, SELF extends AbstractBulkOperationSpec<T, SELF>> {
@@ -34,15 +33,32 @@ public abstract class AbstractBulkOperationSpec<
   protected final Class<T> entityClass;
   protected final List<BulkConditionNode> conditionNodes = new ArrayList<>();
 
+  /**
+   * 构造函数，初始化实体类类型。
+   *
+   * @param entityClass 实体类类型
+   */
   protected AbstractBulkOperationSpec(Class<T> entityClass) {
     this.entityClass = entityClass;
   }
 
+  /**
+   * 返回当前构建器实例，用于链式调用。
+   *
+   * @return 当前构建器实例
+   */
   @SuppressWarnings("unchecked")
   protected SELF self() {
     return (SELF) this;
   }
 
+  /**
+   * 从 Lambda 方法引用中提取属性名称。
+   *
+   * @param field 实体属性的 Lambda 方法引用
+   * @return 属性名称
+   * @throws IllegalArgumentException 如果 field 为 null
+   */
   protected String property(SFunction<T, ?> field) {
     if (field == null) {
       throw new IllegalArgumentException("field must not be null");
@@ -108,7 +124,7 @@ public abstract class AbstractBulkOperationSpec<
           e.addSuppressed(rollbackEx);
         }
       }
-      throw new RuntimeException("Bulk operation failed", e);
+      throw new MyJpaPlusException("Bulk operation failed", e);
     }
   }
 
@@ -120,25 +136,47 @@ public abstract class AbstractBulkOperationSpec<
    * @return the number of affected rows
    * @throws jakarta.persistence.TransactionRequiredException if no transaction is active
    */
+  /**
+   * 执行批量操作。要求底层 {@link EntityManager} 中存在活动事务。
+   *
+   * @param em 实体管理器
+   * @return 受影响的行数
+   * @throws jakarta.persistence.TransactionRequiredException 如果没有活动事务
+   */
   public abstract int execute(EntityManager em);
 
+  /**
+   * 执行实际的批量操作逻辑，由子类实现。
+   *
+   * @param em 实体管理器
+   * @return 受影响的行数
+   */
   protected abstract int doExecute(EntityManager em);
 
   /**
    * Sealed node type for bulk operation condition trees. Supports AND (default), OR, NOT, and leaf
    * predicate nodes.
    */
+  /**
+   * 批量操作条件树的密封节点类型。支持 AND（默认）、OR、NOT 和叶子谓词节点。
+   */
   @SuppressWarnings("unchecked")
   sealed interface BulkConditionNode {
-    /** A leaf predicate function. */
+    /**
+     * 叶子谓词函数节点。
+     */
     record LeafNode(BiFunction<Root<?>, CriteriaBuilder, Predicate> fn)
         implements BulkConditionNode {}
 
-    /** An OR group of child nodes. */
+    /**
+     * OR 子节点组。
+     */
     @SuppressFBWarnings({"EI_EXPOSE_REP", "EI_EXPOSE_REP2"})
     record OrNode(List<BulkConditionNode> children) implements BulkConditionNode {}
 
-    /** A NOT wrapper around a child node. */
+    /**
+     * NOT 包装节点。
+     */
     record NotNode(BulkConditionNode child) implements BulkConditionNode {}
   }
 
@@ -190,18 +228,40 @@ public abstract class AbstractBulkOperationSpec<
     return self();
   }
 
+  /**
+   * 添加等于条件：{@code field = value}。
+   *
+   * @param field 实体属性引用
+   * @param value 比较值
+   * @return 当前构建器实例
+   */
   public SELF eq(SFunction<T, ?> field, @Nullable Object value) {
     String name = property(field);
     conditionNodes.add(leaf((root, cb) -> PredicateHelper.eq(root, name, value, cb)));
     return self();
   }
 
+  /**
+   * 添加不等于条件：{@code field != value}。
+   *
+   * @param field 实体属性引用
+   * @param value 比较值
+   * @return 当前构建器实例
+   */
   public SELF ne(SFunction<T, ?> field, @Nullable Object value) {
     String name = property(field);
     conditionNodes.add(leaf((root, cb) -> PredicateHelper.ne(root, name, value, cb)));
     return self();
   }
 
+  /**
+   * 添加大于条件：{@code field > value}。
+   *
+   * @param field 实体属性引用
+   * @param value 比较值
+   * @return 当前构建器实例
+   * @throws IllegalArgumentException 如果 value 为 null
+   */
   @SuppressWarnings({"unchecked", "rawtypes"})
   public SELF gt(SFunction<T, ?> field, Comparable<?> value) {
     if (value == null) {
@@ -212,6 +272,14 @@ public abstract class AbstractBulkOperationSpec<
     return self();
   }
 
+  /**
+   * 添加大于等于条件：{@code field >= value}。
+   *
+   * @param field 实体属性引用
+   * @param value 比较值
+   * @return 当前构建器实例
+   * @throws IllegalArgumentException 如果 value 为 null
+   */
   @SuppressWarnings({"unchecked", "rawtypes"})
   public SELF ge(SFunction<T, ?> field, Comparable<?> value) {
     if (value == null) {
@@ -222,6 +290,14 @@ public abstract class AbstractBulkOperationSpec<
     return self();
   }
 
+  /**
+   * 添加小于条件：{@code field < value}。
+   *
+   * @param field 实体属性引用
+   * @param value 比较值
+   * @return 当前构建器实例
+   * @throws IllegalArgumentException 如果 value 为 null
+   */
   @SuppressWarnings({"unchecked", "rawtypes"})
   public SELF lt(SFunction<T, ?> field, Comparable<?> value) {
     if (value == null) {
@@ -232,6 +308,14 @@ public abstract class AbstractBulkOperationSpec<
     return self();
   }
 
+  /**
+   * 添加小于等于条件：{@code field <= value}。
+   *
+   * @param field 实体属性引用
+   * @param value 比较值
+   * @return 当前构建器实例
+   * @throws IllegalArgumentException 如果 value 为 null
+   */
   @SuppressWarnings({"unchecked", "rawtypes"})
   public SELF le(SFunction<T, ?> field, Comparable<?> value) {
     if (value == null) {
@@ -242,6 +326,14 @@ public abstract class AbstractBulkOperationSpec<
     return self();
   }
 
+  /**
+   * 添加 LIKE 条件：{@code field LIKE value}。
+   *
+   * @param field 实体属性引用
+   * @param value 匹配模式
+   * @return 当前构建器实例
+   * @throws IllegalArgumentException 如果 value 为 null
+   */
   public SELF like(SFunction<T, ?> field, String value) {
     if (value == null) {
       throw new IllegalArgumentException("value must not be null");
@@ -251,6 +343,14 @@ public abstract class AbstractBulkOperationSpec<
     return self();
   }
 
+  /**
+   * 添加 NOT LIKE 条件：{@code field NOT LIKE value}。
+   *
+   * @param field 实体属性引用
+   * @param value 匹配模式
+   * @return 当前构建器实例
+   * @throws IllegalArgumentException 如果 value 为 null
+   */
   public SELF notLike(SFunction<T, ?> field, String value) {
     if (value == null) {
       throw new IllegalArgumentException("value must not be null");
@@ -260,6 +360,14 @@ public abstract class AbstractBulkOperationSpec<
     return self();
   }
 
+  /**
+   * 添加前缀匹配条件：{@code field LIKE 'value%'}。
+   *
+   * @param field 实体属性引用
+   * @param value 前缀值
+   * @return 当前构建器实例
+   * @throws IllegalArgumentException 如果 value 为 null
+   */
   public SELF startsWith(SFunction<T, ?> field, String value) {
     if (value == null) {
       throw new IllegalArgumentException("value must not be null");
@@ -269,6 +377,14 @@ public abstract class AbstractBulkOperationSpec<
     return self();
   }
 
+  /**
+   * 添加后缀匹配条件：{@code field LIKE '%value'}。
+   *
+   * @param field 实体属性引用
+   * @param value 后缀值
+   * @return 当前构建器实例
+   * @throws IllegalArgumentException 如果 value 为 null
+   */
   public SELF endsWith(SFunction<T, ?> field, String value) {
     if (value == null) {
       throw new IllegalArgumentException("value must not be null");
@@ -278,6 +394,14 @@ public abstract class AbstractBulkOperationSpec<
     return self();
   }
 
+  /**
+   * 添加包含条件：{@code field LIKE '%value%'}。
+   *
+   * @param field 实体属性引用
+   * @param value 包含的值
+   * @return 当前构建器实例
+   * @throws IllegalArgumentException 如果 value 为 null
+   */
   public SELF contains(SFunction<T, ?> field, String value) {
     if (value == null) {
       throw new IllegalArgumentException("value must not be null");
@@ -287,12 +411,27 @@ public abstract class AbstractBulkOperationSpec<
     return self();
   }
 
+  /**
+   * 添加忽略大小写的等于条件：{@code UPPER(field) = UPPER(value)}。
+   *
+   * @param field 实体属性引用
+   * @param value 比较值
+   * @return 当前构建器实例
+   */
   public SELF eqIgnoreCase(SFunction<T, ?> field, String value) {
     String name = property(field);
     conditionNodes.add(leaf((root, cb) -> PredicateHelper.eqIgnoreCase(root, name, value, cb)));
     return self();
   }
 
+  /**
+   * 添加忽略大小写的 LIKE 条件：{@code UPPER(field) LIKE UPPER(value)}。
+   *
+   * @param field 实体属性引用
+   * @param value 匹配模式
+   * @return 当前构建器实例
+   * @throws IllegalArgumentException 如果 value 为 null
+   */
   public SELF likeIgnoreCase(SFunction<T, ?> field, String value) {
     if (value == null) {
       throw new IllegalArgumentException("value must not be null");
@@ -302,6 +441,14 @@ public abstract class AbstractBulkOperationSpec<
     return self();
   }
 
+  /**
+   * 添加 IN 条件：{@code field IN (values)}。
+   *
+   * @param field 实体属性引用
+   * @param values 值数组
+   * @return 当前构建器实例
+   * @throws IllegalArgumentException 如果 values 为 null 或空
+   */
   public SELF in(SFunction<T, ?> field, Object... values) {
     String name = property(field);
     if (values == null || values.length == 0) {
@@ -311,6 +458,14 @@ public abstract class AbstractBulkOperationSpec<
     return self();
   }
 
+  /**
+   * 添加 NOT IN 条件：{@code field NOT IN (values)}。
+   *
+   * @param field 实体属性引用
+   * @param values 值数组
+   * @return 当前构建器实例
+   * @throws IllegalArgumentException 如果 values 为 null 或空
+   */
   public SELF notIn(SFunction<T, ?> field, Object... values) {
     String name = property(field);
     if (values == null || values.length == 0) {
@@ -320,6 +475,14 @@ public abstract class AbstractBulkOperationSpec<
     return self();
   }
 
+  /**
+   * 添加 IN 条件：{@code field IN (values)}。
+   *
+   * @param field 实体属性引用
+   * @param values 值集合
+   * @return 当前构建器实例
+   * @throws IllegalArgumentException 如果 values 为 null 或空
+   */
   public SELF in(SFunction<T, ?> field, Collection<?> values) {
     String name = property(field);
     if (values == null || values.isEmpty()) {
@@ -329,6 +492,14 @@ public abstract class AbstractBulkOperationSpec<
     return self();
   }
 
+  /**
+   * 添加 NOT IN 条件：{@code field NOT IN (values)}。
+   *
+   * @param field 实体属性引用
+   * @param values 值集合
+   * @return 当前构建器实例
+   * @throws IllegalArgumentException 如果 values 为 null 或空
+   */
   public SELF notIn(SFunction<T, ?> field, Collection<?> values) {
     String name = property(field);
     if (values == null || values.isEmpty()) {
@@ -338,6 +509,15 @@ public abstract class AbstractBulkOperationSpec<
     return self();
   }
 
+  /**
+   * 添加 BETWEEN 条件：{@code field BETWEEN start AND end}。
+   *
+   * @param field 实体属性引用
+   * @param start 范围起始值
+   * @param end 范围结束值
+   * @return 当前构建器实例
+   * @throws IllegalArgumentException 如果 start 或 end 为 null，或 start 大于 end
+   */
   @SuppressWarnings({"unchecked", "rawtypes"})
   public SELF between(SFunction<T, ?> field, Comparable<?> start, Comparable<?> end) {
     if (start == null) {
@@ -354,6 +534,15 @@ public abstract class AbstractBulkOperationSpec<
     return self();
   }
 
+  /**
+   * 添加 NOT BETWEEN 条件：{@code field NOT BETWEEN start AND end}。
+   *
+   * @param field 实体属性引用
+   * @param start 范围起始值
+   * @param end 范围结束值
+   * @return 当前构建器实例
+   * @throws IllegalArgumentException 如果 start 或 end 为 null，或 start 大于 end
+   */
   @SuppressWarnings({"unchecked", "rawtypes"})
   public SELF notBetween(SFunction<T, ?> field, Comparable<?> start, Comparable<?> end) {
     if (start == null) {
@@ -370,18 +559,37 @@ public abstract class AbstractBulkOperationSpec<
     return self();
   }
 
+  /**
+   * 添加 IS NULL 条件：{@code field IS NULL}。
+   *
+   * @param field 实体属性引用
+   * @return 当前构建器实例
+   */
   public SELF isNull(SFunction<T, ?> field) {
     String name = property(field);
     conditionNodes.add(leaf((root, cb) -> PredicateHelper.isNull(root, name, cb)));
     return self();
   }
 
+  /**
+   * 添加 IS NOT NULL 条件：{@code field IS NOT NULL}。
+   *
+   * @param field 实体属性引用
+   * @return 当前构建器实例
+   */
   public SELF isNotNull(SFunction<T, ?> field) {
     String name = property(field);
     conditionNodes.add(leaf((root, cb) -> PredicateHelper.isNotNull(root, name, cb)));
     return self();
   }
 
+  /**
+   * 添加自定义条件。
+   *
+   * @param condition 自定义条件函数，接收 Root 返回 Predicate
+   * @return 当前构建器实例
+   * @throws IllegalArgumentException 如果 condition 为 null
+   */
   @SuppressWarnings("unchecked")
   public SELF where(Function<Root<T>, Predicate> condition) {
     if (condition == null) {
@@ -391,6 +599,14 @@ public abstract class AbstractBulkOperationSpec<
     return self();
   }
 
+  /**
+   * 解析条件节点为 JPA Predicate。
+   *
+   * @param node 条件节点
+   * @param root 查询根对象
+   * @param cb 条件构建器
+   * @return 解析后的 Predicate
+   */
   @SuppressWarnings({"unchecked", "rawtypes"})
   private Predicate resolveNode(BulkConditionNode node, Root<T> root, CriteriaBuilder cb) {
     if (node instanceof BulkConditionNode.LeafNode l) {
@@ -417,9 +633,16 @@ public abstract class AbstractBulkOperationSpec<
         "Unknown BulkConditionNode type: " + node.getClass().getName());
   }
 
+  /**
+   * 构建所有条件节点的 Predicate 数组。
+   *
+   * @param root 查询根对象
+   * @param cb 条件构建器
+   * @return Predicate 数组
+   */
   protected Predicate[] buildPredicates(Root<T> root, CriteriaBuilder cb) {
     if (conditionNodes.isEmpty()) {
-      return null;
+      return new Predicate[0];
     }
     List<Predicate> predicates = new ArrayList<>();
     for (BulkConditionNode node : conditionNodes) {

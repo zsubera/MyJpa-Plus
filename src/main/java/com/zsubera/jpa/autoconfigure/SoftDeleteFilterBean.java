@@ -13,22 +13,20 @@ import org.springframework.lang.Nullable;
 import org.springframework.stereotype.Component;
 
 /**
- * Auto-filter bean that enables transparent soft-delete filtering.
+ * 自动过滤 Bean，用于实现透明的软删除过滤。
  *
- * <p>When {@code myjpa-plus.soft-delete.auto-filter} is enabled, this bean tracks all entity
- * classes with {@link SoftDelete @SoftDelete} annotations and provides a mechanism to automatically
- * apply soft-delete filters.
+ * <p>当 {@code myjpa-plus.soft-delete.auto-filter} 启用时，此 Bean 会跟踪所有带有
+ * {@link SoftDelete @SoftDelete} 注解的实体类，并提供自动应用软删除过滤器的机制。
  *
- * <p>Usage in repositories:
+ * <p>在 Repository 中的用法：
  *
  * <pre>{@code
- * // Apply auto-filter to any query
+ * // 对任意查询应用自动过滤
  * Specification<User> spec = userQuerySpec();
  * Specification<User> filtered = softDeleteFilterBean.apply(spec, User.class);
  * }</pre>
  *
- * <p>The bean is automatically activated when {@code auto-filter: true} is set in configuration
- * (default).
+ * <p>当配置中设置 {@code auto-filter: true} 时（默认值），此 Bean 会自动激活。
  */
 @Component
 @ConditionalOnProperty(
@@ -58,8 +56,8 @@ public class SoftDeleteFilterBean implements InitializingBean {
   }
 
   /**
-   * Registers an entity class for auto-filtering. Delegates to {@link SoftDeleteHelper} which
-   * caches the result (both positive and negative) to avoid repeated scanning.
+   * 注册实体类以进行自动过滤。委托给 {@link SoftDeleteHelper}，该类会缓存结果（包括正向和负向结果）
+   * 以避免重复扫描。
    */
   public void registerEntity(Class<?> entityClass) {
     SoftDeleteHelper.findSoftDeleteField(entityClass);
@@ -69,14 +67,12 @@ public class SoftDeleteFilterBean implements InitializingBean {
   }
 
   /**
-   * Applies the soft-delete filter to the given specification if the entity has a {@link
-   * SoftDelete @SoftDelete} annotated field.
+   * 如果实体具有 {@link SoftDelete @SoftDelete} 注解的字段，则对给定的 Specification 应用软删除过滤器。
    *
-   * @param spec the original specification
-   * @param entityClass the entity class
-   * @param <T> the entity type
-   * @return the combined specification with soft-delete filter applied, or the original
-   *     specification if the entity has no soft-delete field
+   * @param spec 原始的 Specification
+   * @param entityClass 实体类
+   * @param <T> 实体类型
+   * @return 应用软删除过滤器后的组合 Specification，如果实体没有软删除字段则返回原始 Specification
    */
   @SuppressWarnings("unchecked")
   public <T> Specification<T> apply(@Nullable Specification<T> spec, Class<T> entityClass) {
@@ -88,9 +84,8 @@ public class SoftDeleteFilterBean implements InitializingBean {
   }
 
   /**
-   * Checks whether the given entity class has a {@link SoftDelete @SoftDelete} field. Delegates to
-   * {@link SoftDeleteHelper#findSoftDeleteField(Class)} which caches positive and negative results
-   * internally.
+   * 检查给定的实体类是否具有 {@link SoftDelete @SoftDelete} 字段。委托给
+   * {@link SoftDeleteHelper#findSoftDeleteField(Class)}，该方法内部会缓存正向和负向的结果。
    */
   public boolean hasSoftDeleteField(Class<?> entityClass) {
     return SoftDeleteHelper.findSoftDeleteField(entityClass) != null;

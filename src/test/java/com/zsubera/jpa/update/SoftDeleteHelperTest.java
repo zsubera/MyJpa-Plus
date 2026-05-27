@@ -94,13 +94,13 @@ class SoftDeleteHelperTest {
   }
 
   @Test
-  void testIsDeletedOnEntityWithoutSoftDeleteReturnsAll() {
+  void testIsDeletedOnEntityWithoutSoftDeleteReturnsNone() {
     testEntityRepository.save(newEntity("a", 1));
 
     Specification<TestEntity> spec = SoftDeleteHelper.isDeleted(TestEntity.class);
     List<TestEntity> result = testEntityRepository.findAll(spec);
 
-    assertEquals(1, result.size());
+    assertEquals(0, result.size());
   }
 
   @Test

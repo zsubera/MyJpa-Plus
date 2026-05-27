@@ -4,11 +4,11 @@ import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 /**
- * Configuration properties for MyJpa-Plus.
+ * MyJpa-Plus 的配置属性。
  *
- * <p>Prefix: {@code myjpa-plus}
+ * <p>前缀：{@code myjpa-plus}
  *
- * <p>Example application.yml:
+ * <p>application.yml 配置示例：
  *
  * <pre>{@code
  * myjpa-plus:
@@ -19,7 +19,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 @ConfigurationProperties(prefix = "myjpa-plus")
 public class MyJpaPlusProperties {
 
-  /** Soft-delete related configuration. */
+  /** 软删除相关配置。 */
   private SoftDelete softDelete = new SoftDelete();
 
   @SuppressFBWarnings("EI_EXPOSE_REP")
@@ -34,9 +34,9 @@ public class MyJpaPlusProperties {
 
   public static class SoftDelete {
     /**
-     * Whether to automatically apply soft-delete filters to all queries. When enabled, entities
-     * with a {@link com.zsubera.jpa.annotation.SoftDelete @SoftDelete} field will be automatically
-     * filtered to exclude soft-deleted records. Default: {@code true}
+     * 是否自动对所有查询应用软删除过滤器。启用后，带有
+     * {@link com.zsubera.jpa.annotation.SoftDelete @SoftDelete} 字段的实体将自动过滤掉
+     * 已软删除的记录。默认值：{@code true}
      */
     private boolean autoFilter = true;
 

@@ -5,18 +5,19 @@ import jakarta.persistence.criteria.CriteriaBuilder;
 import jakarta.persistence.criteria.CriteriaDelete;
 import jakarta.persistence.criteria.Predicate;
 import jakarta.persistence.criteria.Root;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
- * Type-safe builder for JPA {@link CriteriaDelete} bulk delete operations.
+ * JPA {@link CriteriaDelete} 批量删除操作的类型安全构建器。
  *
- * <p>Allows building type-safe DELETE queries using lambda method references. Conditions are stored
- * as deferred functions and resolved at execution time.
+ * <p>允许使用 Lambda 方法引用构建类型安全的 DELETE 查询。条件以延迟函数形式存储，
+ * 在执行时才进行解析。
  *
- * <p><strong>Transaction requirement:</strong> {@link #execute(EntityManager)} requires an active
- * transaction. Use {@link #executeInTransaction(EntityManager)} for automatic transaction
- * management.
+ * <p><strong>事务要求：</strong>{@link #execute(EntityManager)} 需要活动事务。
+ * 可使用 {@link #executeInTransaction(EntityManager)} 进行自动事务管理。
  *
- * <p>Example:
+ * <p>示例：
  *
  * <pre>{@code
  * int deleted = new DeleteSpec<>(User.class)
@@ -25,23 +26,30 @@ import jakarta.persistence.criteria.Root;
  *     .executeInTransaction(entityManager);
  * }</pre>
  *
- * @param <T> the entity type to delete
+ * @param <T> 要删除的实体类型
  */
 public class DeleteSpec<T> extends AbstractBulkOperationSpec<T, DeleteSpec<T>> {
 
+  private static final Logger log = LoggerFactory.getLogger(DeleteSpec.class);
+
+  /**
+   * 创建指定实体类型的删除规范构建器。
+   *
+   * @param entityClass 要删除的实体类
+   * @throws IllegalArgumentException 如果 entityClass 为 null
+   */
   public DeleteSpec(Class<T> entityClass) {
     super(entityClass);
   }
 
   /**
-   * Executes the DELETE statement and returns the number of affected rows.
+   * 执行 DELETE 语句并返回受影响的行数。
    *
-   * <p><strong>Requires an active transaction.</strong> Consider using {@link
-   * #executeInTransaction(EntityManager)} instead.
+   * <p><strong>需要活动事务。</strong>建议使用 {@link #executeInTransaction(EntityManager)}。
    *
-   * @param em the EntityManager
-   * @return the number of entities deleted
-   * @throws jakarta.persistence.TransactionRequiredException if no transaction is active
+   * @param em 实体管理器
+   * @return 删除的实体数量
+   * @throws jakarta.persistence.TransactionRequiredException 如果没有活动事务
    */
   @Override
   public int execute(EntityManager em) {
@@ -54,17 +62,18 @@ public class DeleteSpec<T> extends AbstractBulkOperationSpec<T, DeleteSpec<T>> {
   }
 
   /**
-   * Builds the {@link CriteriaDelete} without executing it.
+   * 构建 {@link CriteriaDelete} 对象但不执行。
    *
-   * @throws IllegalStateException if no conditions have been added. Use {@link
-   *     #deleteAll(EntityManager)} for unconditional deletion.
+   * @param em 实体管理器
+   * @return 构建的 CriteriaDelete 对象
+   * @throws IllegalStateException 如果没有添加任何条件。可使用 {@link #deleteAll(EntityManager)} 进行无条件删除
    */
   public CriteriaDelete<T> toDelete(EntityManager em) {
     CriteriaBuilder cb = em.getCriteriaBuilder();
     CriteriaDelete<T> delete = cb.createCriteriaDelete(entityClass);
     Root<T> root = delete.from(entityClass);
     Predicate[] predicates = buildPredicates(root, cb);
-    if (predicates == null || predicates.length == 0) {
+    if (predicates.length == 0) {
       throw new IllegalStateException(
           "No WHERE conditions specified for DELETE operation. "
               + "This would delete ALL rows in the table. "
@@ -75,14 +84,17 @@ public class DeleteSpec<T> extends AbstractBulkOperationSpec<T, DeleteSpec<T>> {
   }
 
   /**
-   * Performs an unconditional DELETE of all rows for this entity.
+   * 执行无条件删除，删除该实体的所有行。
    *
-   * <p>Use with caution — this will delete ALL data in the table.
+   * <p>谨慎使用 — 此操作将删除表中的所有数据。
    *
-   * @param em the EntityManager
-   * @return the number of entities deleted
+   * @param em 实体管理器
+   * @return 删除的实体数量
    */
   public int deleteAll(EntityManager em) {
+    log.warn(
+        "WARNING: Executing unconditional DELETE on {} — this will affect ALL rows!",
+        entityClass.getSimpleName());
     CriteriaBuilder cb = em.getCriteriaBuilder();
     CriteriaDelete<T> delete = cb.createCriteriaDelete(entityClass);
     delete.from(entityClass);
@@ -90,10 +102,10 @@ public class DeleteSpec<T> extends AbstractBulkOperationSpec<T, DeleteSpec<T>> {
   }
 
   /**
-   * Performs an unconditional DELETE within a new or existing transaction.
+   * 在新事务或现有事务中执行无条件删除。
    *
-   * @param em the EntityManager
-   * @return the number of entities deleted
+   * @param em 实体管理器
+   * @return 删除的实体数量
    */
   public int deleteAllInTransaction(EntityManager em) {
     return executeInTransaction(em, this::deleteAll);

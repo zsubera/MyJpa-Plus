@@ -18,12 +18,12 @@ import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
 
 /**
- * Type-safe builder for DTO projection queries.
+ * DTO 投影查询的类型安全构建器。
  *
- * <p>Selects specific fields from an entity and returns them as {@link Tuple} or as a custom DTO
- * via {@code CriteriaBuilder.construct()}. Supports JOIN associations, ORDER BY, and pagination.
+ * <p>从实体中选择特定字段，并以 {@link Tuple} 或通过 {@code CriteriaBuilder.construct()} 
+ * 返回自定义 DTO 的形式返回结果。支持 JOIN 关联、ORDER BY 排序和分页查询。
  *
- * <p>Example:
+ * <p>使用示例：
  *
  * <pre>{@code
  * List<Tuple> results = new ProjectionSpec<>(User.class)
@@ -36,7 +36,7 @@ import org.springframework.data.domain.Pageable;
  *     .getResultList();
  * }</pre>
  *
- * @param <T> the root entity type
+ * @param <T> 根实体类型
  */
 public class ProjectionSpec<T> {
 
@@ -47,7 +47,9 @@ public class ProjectionSpec<T> {
   private final List<OrderSpec> orderSpecs = new ArrayList<>();
   private Class<?> dtoClass;
 
-  /** Internal record describing a JOIN clause. */
+  /**
+   * 描述 JOIN 子句的内部记录类。
+   */
   private static final class JoinSpec {
     final String fieldName;
     final Consumer<?> config;
@@ -61,8 +63,12 @@ public class ProjectionSpec<T> {
   }
 
   /**
-   * Builder for nested conditions on a JOIN target. Mirrors the {@link
-   * com.zsubera.jpa.spec.ConditionBuilder} API.
+   * JOIN 目标实体的嵌套条件构建器。
+   *
+   * <p>提供类似于 {@link com.zsubera.jpa.spec.ConditionBuilder} 的 API，
+   * 用于在 JOIN 子句中添加 ON 条件。
+   *
+   * @param <E> JOIN 目标实体类型
    */
   public static final class JoinGroup<E> {
 
@@ -75,6 +81,11 @@ public class ProjectionSpec<T> {
     }
 
     /**
+     * 添加等于条件。
+     *
+     * @param field 实体属性的方法引用
+     * @param value 比较的值
+     * @return 当前 JoinGroup 实例，支持链式调用
      * @see com.zsubera.jpa.spec.ConditionBuilder#eq(SFunction, Object)
      */
     public JoinGroup<E> eq(SFunction<E, ?> field, Object value) {
@@ -82,32 +93,163 @@ public class ProjectionSpec<T> {
       return this;
     }
 
-    /** Internal condition node for projection join conditions. */
-    sealed interface ConditionNode {
-      record Eq(String fieldName, Object value) implements ConditionNode {}
+    /**
+     * 添加不等于条件。
+     *
+     * @param field 实体属性的方法引用
+     * @param value 比较的值
+     * @return 当前 JoinGroup 实例，支持链式调用
+     * @see com.zsubera.jpa.spec.ConditionBuilder#ne(SFunction, Object)
+     */
+    public JoinGroup<E> ne(SFunction<E, ?> field, Object value) {
+      conditions.add(new ConditionNode.Ne(LambdaUtils.getPropertyName(field), value));
+      return this;
     }
 
+    /**
+     * 添加 LIKE 模糊匹配条件。
+     *
+     * @param field 实体属性的方法引用
+     * @param value 匹配模式，不能为 null
+     * @return 当前 JoinGroup 实例，支持链式调用
+     * @throws IllegalArgumentException 如果 value 为 null
+     * @see com.zsubera.jpa.spec.ConditionBuilder#like(SFunction, String)
+     */
+    public JoinGroup<E> like(SFunction<E, ?> field, String value) {
+      if (value == null) {
+        throw new IllegalArgumentException("value must not be null");
+      }
+      conditions.add(new ConditionNode.Like(LambdaUtils.getPropertyName(field), value));
+      return this;
+    }
+
+    /**
+     * 添加大于条件。
+     *
+     * @param field 实体属性的方法引用
+     * @param value 比较的值，不能为 null
+     * @return 当前 JoinGroup 实例，支持链式调用
+     * @throws IllegalArgumentException 如果 value 为 null
+     * @see com.zsubera.jpa.spec.ConditionBuilder#gt(SFunction, Comparable)
+     */
+    public JoinGroup<E> gt(SFunction<E, ?> field, Comparable<?> value) {
+      if (value == null) {
+        throw new IllegalArgumentException("value must not be null");
+      }
+      conditions.add(new ConditionNode.Gt(LambdaUtils.getPropertyName(field), value));
+      return this;
+    }
+
+    /**
+     * 添加小于条件。
+     *
+     * @param field 实体属性的方法引用
+     * @param value 比较的值，不能为 null
+     * @return 当前 JoinGroup 实例，支持链式调用
+     * @throws IllegalArgumentException 如果 value 为 null
+     * @see com.zsubera.jpa.spec.ConditionBuilder#lt(SFunction, Comparable)
+     */
+    public JoinGroup<E> lt(SFunction<E, ?> field, Comparable<?> value) {
+      if (value == null) {
+        throw new IllegalArgumentException("value must not be null");
+      }
+      conditions.add(new ConditionNode.Lt(LambdaUtils.getPropertyName(field), value));
+      return this;
+    }
+
+    /**
+     * 添加 IS NULL 条件。
+     *
+     * @param field 实体属性的方法引用
+     * @return 当前 JoinGroup 实例，支持链式调用
+     * @see com.zsubera.jpa.spec.ConditionBuilder#isNull(SFunction)
+     */
+    public JoinGroup<E> isNull(SFunction<E, ?> field) {
+      conditions.add(new ConditionNode.IsNull(LambdaUtils.getPropertyName(field)));
+      return this;
+    }
+
+    /**
+     * 添加 IS NOT NULL 条件。
+     *
+     * @param field 实体属性的方法引用
+     * @return 当前 JoinGroup 实例，支持链式调用
+     * @see com.zsubera.jpa.spec.ConditionBuilder#isNotNull(SFunction)
+     */
+    public JoinGroup<E> isNotNull(SFunction<E, ?> field) {
+      conditions.add(new ConditionNode.IsNotNull(LambdaUtils.getPropertyName(field)));
+      return this;
+    }
+
+    /**
+     * 投影 JOIN 条件的内部条件节点接口。
+     *
+     * <p>使用 sealed 接口和 record 实现，支持多种条件类型：
+     * <ul>
+     *   <li>{@link Eq} - 等于条件</li>
+     *   <li>{@link Ne} - 不等于条件</li>
+     *   <li>{@link Like} - 模糊匹配条件</li>
+     *   <li>{@link Gt} - 大于条件</li>
+     *   <li>{@link Lt} - 小于条件</li>
+     *   <li>{@link IsNull} - IS NULL 条件</li>
+     *   <li>{@link IsNotNull} - IS NOT NULL 条件</li>
+     * </ul>
+     */
+    sealed interface ConditionNode {
+      record Eq(String fieldName, Object value) implements ConditionNode {}
+      record Ne(String fieldName, Object value) implements ConditionNode {}
+      record Like(String fieldName, String value) implements ConditionNode {}
+      record Gt(String fieldName, Comparable<?> value) implements ConditionNode {}
+      record Lt(String fieldName, Comparable<?> value) implements ConditionNode {}
+      record IsNull(String fieldName) implements ConditionNode {}
+      record IsNotNull(String fieldName) implements ConditionNode {}
+    }
+
+    /**
+     * 获取所有条件节点列表。
+     *
+     * @return 条件节点列表
+     */
     List<ConditionNode> getConditions() {
       return conditions;
     }
   }
 
-  /** Internal record describing an ORDER BY clause. */
+  /**
+   * 描述 ORDER BY 子句的内部记录类。
+   *
+   * @param fieldName 字段名称
+   * @param asc 是否升序排列
+   */
   private record OrderSpec(String fieldName, boolean asc) {}
 
+  /**
+   * 创建投影查询构建器实例。
+   *
+   * @param entityClass 要查询的实体类
+   */
   public ProjectionSpec(Class<T> entityClass) {
     this.entityClass = entityClass;
   }
 
-  /** Adds a field to the SELECT clause. */
+  /**
+   * 向 SELECT 子句添加要查询的字段。
+   *
+   * @param field 实体属性的方法引用
+   * @return 当前 ProjectionSpec 实例，支持链式调用
+   */
   public ProjectionSpec<T> select(SFunction<T, ?> field) {
     selections.put(LambdaUtils.getPropertyName(field), field);
     return this;
   }
 
   /**
-   * Specifies a DTO class for constructor-based projection. The DTO must have a constructor whose
-   * parameters match the order and types of the selected fields.
+   * 指定用于构造函数投影的 DTO 类。
+   *
+   * <p>DTO 必须有一个构造函数，其参数顺序和类型与选定的字段匹配。
+   *
+   * @param dtoClass DTO 类
+   * @return 当前 ProjectionSpec 实例，支持链式调用
    */
   public ProjectionSpec<T> asDto(Class<?> dtoClass) {
     this.dtoClass = dtoClass;
@@ -115,13 +257,12 @@ public class ProjectionSpec<T> {
   }
 
   /**
-   * Adds an INNER JOIN on the given relationship field with optional conditions on the joined
-   * entity.
+   * 添加 INNER JOIN 关联查询，可对关联实体设置条件。
    *
-   * @param field a method reference to a to-one relationship
-   * @param config consumer to add conditions on the joined entity
-   * @param <E> the joined entity type
-   * @return this ProjectionSpec for chaining
+   * @param field 一对多或一对一关系的方法引用
+   * @param config 用于配置 JOIN 条件的消费者函数
+   * @param <E> JOIN 目标实体类型
+   * @return 当前 ProjectionSpec 实例，支持链式调用
    */
   public <E> ProjectionSpec<T> join(SFunction<T, ?> field, Consumer<JoinGroup<E>> config) {
     joins.add(new JoinSpec(LambdaUtils.getPropertyName(field), config, false));
@@ -129,12 +270,14 @@ public class ProjectionSpec<T> {
   }
 
   /**
-   * Adds a LEFT JOIN on the given relationship field with optional conditions on the joined entity.
+   * 添加 LEFT JOIN 关联查询，可对关联实体设置条件。
    *
-   * @param field a method reference to a to-one relationship
-   * @param config consumer to add conditions on the joined entity
-   * @param <E> the joined entity type
-   * @return this ProjectionSpec for chaining
+   * <p>LEFT JOIN 会返回左表的所有记录，即使右表中没有匹配的记录。
+   *
+   * @param field 一对多或一对一关系的方法引用
+   * @param config 用于配置 JOIN 条件的消费者函数
+   * @param <E> JOIN 目标实体类型
+   * @return 当前 ProjectionSpec 实例，支持链式调用
    */
   public <E> ProjectionSpec<T> leftJoin(SFunction<T, ?> field, Consumer<JoinGroup<E>> config) {
     joins.add(new JoinSpec(LambdaUtils.getPropertyName(field), config, true));
@@ -142,10 +285,10 @@ public class ProjectionSpec<T> {
   }
 
   /**
-   * Adds ascending ORDER BY on the given field.
+   * 添加升序排序规则。
    *
-   * @param field a method reference to the entity property
-   * @return this ProjectionSpec for chaining
+   * @param field 实体属性的方法引用
+   * @return 当前 ProjectionSpec 实例，支持链式调用
    */
   public ProjectionSpec<T> orderByAsc(SFunction<T, ?> field) {
     orderSpecs.add(new OrderSpec(LambdaUtils.getPropertyName(field), true));
@@ -153,29 +296,43 @@ public class ProjectionSpec<T> {
   }
 
   /**
-   * Adds descending ORDER BY on the given field.
+   * 添加降序排序规则。
    *
-   * @param field a method reference to the entity property
-   * @return this ProjectionSpec for chaining
+   * @param field 实体属性的方法引用
+   * @return 当前 ProjectionSpec 实例，支持链式调用
    */
   public ProjectionSpec<T> orderByDesc(SFunction<T, ?> field) {
     orderSpecs.add(new OrderSpec(LambdaUtils.getPropertyName(field), false));
     return this;
   }
 
-  /** Adds WHERE conditions to the projection query. */
+  /**
+   * 添加 WHERE 查询条件。
+   *
+   * @param config 用于配置查询条件的消费者函数
+   * @return 当前 ProjectionSpec 实例，支持链式调用
+   */
   public ProjectionSpec<T> where(Consumer<QuerySpec<T>> config) {
     config.accept(querySpec);
     return this;
   }
 
-  /** Access the underlying {@link QuerySpec} directly for chaining. */
+  /**
+   * 直接访问底层的 {@link QuerySpec} 以进行链式调用。
+   *
+   * @return 底层的 QuerySpec 实例
+   */
   @SuppressFBWarnings("EI_EXPOSE_REP")
   public QuerySpec<T> conditions() {
     return querySpec;
   }
 
-  /** Builds and returns a {@link TypedQuery} with {@link Tuple} results. */
+  /**
+   * 构建并返回以 {@link Tuple} 为结果类型的类型安全查询。
+   *
+   * @param em JPA 实体管理器
+   * @return 返回 Tuple 结果的 TypedQuery 实例
+   */
   public TypedQuery<Tuple> toTupleQuery(EntityManager em) {
     CriteriaBuilder cb = em.getCriteriaBuilder();
     CriteriaQuery<Tuple> query = cb.createTupleQuery();
@@ -201,8 +358,14 @@ public class ProjectionSpec<T> {
   }
 
   /**
-   * Builds and returns a {@link TypedQuery} with DTO results. Requires {@link #asDto(Class)} to be
-   * called first.
+   * 构建并返回以 DTO 为结果类型的类型安全查询。
+   *
+   * <p>必须先调用 {@link #asDto(Class)} 方法指定 DTO 类。
+   *
+   * @param em JPA 实体管理器
+   * @param <R> DTO 结果类型
+   * @return 返回 DTO 结果的 TypedQuery 实例
+   * @throws IllegalStateException 如果未调用 {@link #asDto(Class)} 方法
    */
   @SuppressWarnings("unchecked")
   public <R> TypedQuery<R> toDtoQuery(EntityManager em) {
@@ -236,14 +399,23 @@ public class ProjectionSpec<T> {
   }
 
   /**
-   * Finds a page of projection results.
+   * 分页查询投影结果。
    *
-   * @param em the EntityManager
-   * @param pageable the pagination information
-   * @return a page of projection results
+   * @param em JPA 实体管理器
+   * @param pageable 分页信息
+   * @return 分页投影结果
+   * @throws IllegalArgumentException 如果分页偏移量过大
    */
   public Page<Tuple> findPage(EntityManager em, Pageable pageable) {
     CriteriaBuilder cb = em.getCriteriaBuilder();
+
+    // Handle unpaged
+    if (pageable.isUnpaged()) {
+      TypedQuery<Tuple> query = toTupleQuery(em);
+      List<Tuple> allContent = query.getResultList();
+      return new PageImpl<>(allContent);
+    }
+
     // Count query
     CriteriaQuery<Long> countQuery = cb.createQuery(Long.class);
     Root<T> countRoot = countQuery.from(entityClass);
@@ -253,6 +425,9 @@ public class ProjectionSpec<T> {
 
     // Data query
     TypedQuery<Tuple> query = toTupleQuery(em);
+    if (pageable.getOffset() > Integer.MAX_VALUE) {
+      throw new IllegalArgumentException("Offset too large: " + pageable.getOffset());
+    }
     query.setFirstResult((int) pageable.getOffset());
     query.setMaxResults(pageable.getPageSize());
     List<Tuple> content = query.getResultList();
@@ -260,6 +435,13 @@ public class ProjectionSpec<T> {
     return new PageImpl<>(content, pageable, total);
   }
 
+  /**
+   * 解析并应用所有 JOIN 子句。
+   *
+   * @param root 查询根实体
+   * @param cb CriteriaBuilder 实例
+   * @return JOIN 映射关系
+   */
   @SuppressWarnings({"unchecked", "rawtypes"})
   private Map<String, Join<?, ?>> resolveJoins(Root<T> root, CriteriaBuilder cb) {
     Map<String, Join<?, ?>> joinMap = new LinkedHashMap<>();
@@ -275,15 +457,44 @@ public class ProjectionSpec<T> {
       Consumer<JoinGroup<Object>> cfg = (Consumer<JoinGroup<Object>>) js.config;
       JoinGroup<Object> group = JoinGroup.create();
       cfg.accept(group);
+      List<Predicate> onPredicates = new ArrayList<>();
       for (JoinGroup.ConditionNode node : group.getConditions()) {
         if (node instanceof JoinGroup.ConditionNode.Eq eq) {
-          join.on(cb.equal(join.get(eq.fieldName()), eq.value()));
+          onPredicates.add(cb.equal(join.get(eq.fieldName()), eq.value()));
+        } else if (node instanceof JoinGroup.ConditionNode.Ne ne) {
+          onPredicates.add(cb.notEqual(join.get(ne.fieldName()), ne.value()));
+        } else if (node instanceof JoinGroup.ConditionNode.Like like) {
+          onPredicates.add(cb.like(join.get(like.fieldName()).as(String.class), like.value()));
+        } else if (node instanceof JoinGroup.ConditionNode.Gt gt) {
+          @SuppressWarnings("unchecked")
+          Expression<Comparable<Object>> gtExpr =
+              (Expression<Comparable<Object>>) (Expression<?>) join.get(gt.fieldName());
+          onPredicates.add(cb.greaterThan(gtExpr, (Comparable<Object>) gt.value()));
+        } else if (node instanceof JoinGroup.ConditionNode.Lt lt) {
+          @SuppressWarnings("unchecked")
+          Expression<Comparable<Object>> ltExpr =
+              (Expression<Comparable<Object>>) (Expression<?>) join.get(lt.fieldName());
+          onPredicates.add(cb.lessThan(ltExpr, (Comparable<Object>) lt.value()));
+        } else if (node instanceof JoinGroup.ConditionNode.IsNull isNull) {
+          onPredicates.add(cb.isNull(join.get(isNull.fieldName())));
+        } else if (node instanceof JoinGroup.ConditionNode.IsNotNull isNotNull) {
+          onPredicates.add(cb.isNotNull(join.get(isNotNull.fieldName())));
         }
+      }
+      if (!onPredicates.isEmpty()) {
+        join.on(cb.and(onPredicates.toArray(new Predicate[0])));
       }
     }
     return joinMap;
   }
 
+  /**
+   * 应用 WHERE 查询条件。
+   *
+   * @param root 查询根实体
+   * @param query CriteriaQuery 实例
+   * @param cb CriteriaBuilder 实例
+   */
   @SuppressWarnings({"unchecked", "rawtypes"})
   private void applyPredicate(Root<T> root, CriteriaQuery<?> query, CriteriaBuilder cb) {
     jakarta.persistence.criteria.Predicate predicate =
@@ -293,6 +504,13 @@ public class ProjectionSpec<T> {
     }
   }
 
+  /**
+   * 应用 ORDER BY 排序规则。
+   *
+   * @param root 查询根实体
+   * @param cb CriteriaBuilder 实例
+   * @param query CriteriaQuery 实例
+   */
   private void applyOrderBy(Root<T> root, CriteriaBuilder cb, CriteriaQuery<?> query) {
     if (!orderSpecs.isEmpty()) {
       List<jakarta.persistence.criteria.Order> orders = new ArrayList<>();

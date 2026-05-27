@@ -5,6 +5,11 @@ import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import java.util.List;
 import java.util.function.Consumer;
 
+/**
+ * OR 条件组构建器，用于在 {@link QuerySpec} 中构建 OR 条件。
+ *
+ * @param <T> 实体类型
+ */
 public class OrGroup<T> implements ConditionBuilder<T, OrGroup<T>> {
 
   private final QuerySpec<T> root;
@@ -47,7 +52,7 @@ public class OrGroup<T> implements ConditionBuilder<T, OrGroup<T>> {
     return root;
   }
 
-  /** Self-closing OR: builds a nested OR group with a consumer, then returns to this OrGroup. */
+  /** 自动关闭的 OR：构建嵌套 OR 组，然后返回到当前 OrGroup。 */
   public OrGroup<T> or(Consumer<OrGroup<T>> config) {
     ConditionNode.OrNode nested = new ConditionNode.OrNode();
     root.currentGroup().add(nested);
@@ -57,7 +62,7 @@ public class OrGroup<T> implements ConditionBuilder<T, OrGroup<T>> {
     return this;
   }
 
-  /** Self-closing JOIN inside OR group. */
+  /** OR 组内自动关闭的 JOIN。 */
   public <J> OrGroup<T> join(SFunction<T, ?> field, Consumer<JoinGroup<T, J>> config) {
     ConditionNode.JoinNode joinNode =
         new ConditionNode.JoinNode(
@@ -67,7 +72,7 @@ public class OrGroup<T> implements ConditionBuilder<T, OrGroup<T>> {
     return this;
   }
 
-  /** Self-closing LEFT JOIN inside OR group. */
+  /** OR 组内自动关闭的 LEFT JOIN。 */
   public <J> OrGroup<T> leftJoin(SFunction<T, ?> field, Consumer<JoinGroup<T, J>> config) {
     ConditionNode.JoinNode joinNode =
         new ConditionNode.JoinNode(LambdaUtils.getPropertyName(field), ConditionNode.JoinType.LEFT);

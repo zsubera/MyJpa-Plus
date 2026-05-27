@@ -2,6 +2,12 @@ package com.zsubera.jpa.spec;
 
 import java.util.List;
 
+/**
+ * JOIN 内的 OR 条件组构建器，用于在 {@link JoinGroup} 中构建 OR 条件。
+ *
+ * @param <T> 根实体类型
+ * @param <J> JOIN 实体类型
+ */
 public class OrJoinGroup<T, J> implements ConditionBuilder<J, OrJoinGroup<T, J>> {
 
   private final QuerySpec<T> root;

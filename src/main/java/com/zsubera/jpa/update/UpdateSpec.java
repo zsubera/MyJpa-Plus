@@ -9,19 +9,20 @@ import jakarta.persistence.criteria.Predicate;
 import jakarta.persistence.criteria.Root;
 import java.util.ArrayList;
 import java.util.List;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.lang.Nullable;
 
 /**
- * Type-safe builder for JPA {@link CriteriaUpdate} bulk update operations.
+ * JPA {@link CriteriaUpdate} 批量更新操作的类型安全构建器。
  *
- * <p>Allows building type-safe UPDATE queries using lambda method references. Conditions are stored
- * as deferred functions and resolved at execution time.
+ * <p>允许使用 Lambda 方法引用构建类型安全的 UPDATE 查询。条件以延迟函数形式存储，
+ * 在执行时才进行解析。
  *
- * <p><strong>Transaction requirement:</strong> {@link #execute(EntityManager)} requires an active
- * transaction. Use {@link #executeInTransaction(EntityManager)} for automatic transaction
- * management.
+ * <p><strong>事务要求：</strong>{@link #execute(EntityManager)} 需要活动事务。
+ * 可使用 {@link #executeInTransaction(EntityManager)} 进行自动事务管理。
  *
- * <p>Example:
+ * <p>示例：
  *
  * <pre>{@code
  * int updated = new UpdateSpec<>(User.class)
@@ -30,24 +31,33 @@ import org.springframework.lang.Nullable;
  *     .executeInTransaction(entityManager);
  * }</pre>
  *
- * @param <T> the entity type to update
+ * @param <T> 要更新的实体类型
  */
 public class UpdateSpec<T> extends AbstractBulkOperationSpec<T, UpdateSpec<T>> {
+
+  private static final Logger log = LoggerFactory.getLogger(UpdateSpec.class);
 
   private final List<SetClause> setClauses = new ArrayList<>();
 
   private record SetClause(String fieldName, Object value) {}
 
+  /**
+   * 创建指定实体类型的更新规范构建器。
+   *
+   * @param entityClass 要更新的实体类
+   * @throws IllegalArgumentException 如果 entityClass 为 null
+   */
   public UpdateSpec(Class<T> entityClass) {
     super(entityClass);
   }
 
   /**
-   * Sets a field to a given value in the UPDATE clause.
+   * 在 UPDATE 子句中设置字段值。
    *
-   * @param field a method reference to the entity property
-   * @param value the new value (can be null)
-   * @return this builder for chaining
+   * @param field 实体属性的方法引用
+   * @param value 新值（可为 null）
+   * @return 当前构建器实例，支持链式调用
+   * @throws IllegalArgumentException 如果 field 为 null
    */
   public UpdateSpec<T> set(SFunction<T, ?> field, @Nullable Object value) {
     if (field == null) {
@@ -57,7 +67,14 @@ public class UpdateSpec<T> extends AbstractBulkOperationSpec<T, UpdateSpec<T>> {
     return this;
   }
 
-  /** Sets a field to a given value only if {@code condition} is true. */
+  /**
+   * 仅当条件为 true 时，在 UPDATE 子句中设置字段值。
+   *
+   * @param condition 执行条件
+   * @param field 实体属性的方法引用
+   * @param value 新值
+   * @return 当前构建器实例，支持链式调用
+   */
   public UpdateSpec<T> set(boolean condition, SFunction<T, ?> field, Object value) {
     if (condition) {
       set(field, value);
@@ -66,15 +83,14 @@ public class UpdateSpec<T> extends AbstractBulkOperationSpec<T, UpdateSpec<T>> {
   }
 
   /**
-   * Executes the UPDATE statement and returns the number of affected rows.
+   * 执行 UPDATE 语句并返回受影响的行数。
    *
-   * <p><strong>Requires an active transaction.</strong> Consider using {@link
-   * #executeInTransaction(EntityManager)} instead.
+   * <p><strong>需要活动事务。</strong>建议使用 {@link #executeInTransaction(EntityManager)}。
    *
-   * @param em the EntityManager
-   * @return the number of entities updated
-   * @throws IllegalStateException if no SET clauses were specified
-   * @throws jakarta.persistence.TransactionRequiredException if no transaction is active
+   * @param em 实体管理器
+   * @return 更新的实体数量
+   * @throws IllegalStateException 如果未指定 SET 子句
+   * @throws jakarta.persistence.TransactionRequiredException 如果没有活动事务
    */
   @Override
   public int execute(EntityManager em) {
@@ -86,7 +102,13 @@ public class UpdateSpec<T> extends AbstractBulkOperationSpec<T, UpdateSpec<T>> {
     return execute(em);
   }
 
-  /** Builds the {@link CriteriaUpdate} without executing it. */
+  /**
+   * 构建 {@link CriteriaUpdate} 对象但不执行。
+   *
+   * @param em 实体管理器
+   * @return 构建的 CriteriaUpdate 对象
+   * @throws IllegalStateException 如果未指定 SET 子句或没有 WHERE 条件
+   */
   public CriteriaUpdate<T> toUpdate(EntityManager em) {
     if (setClauses.isEmpty()) {
       throw new IllegalStateException("At least one set() clause is required");
@@ -98,7 +120,7 @@ public class UpdateSpec<T> extends AbstractBulkOperationSpec<T, UpdateSpec<T>> {
       update.set(root.get(sc.fieldName), sc.value);
     }
     Predicate[] predicates = buildPredicates(root, cb);
-    if (predicates == null || predicates.length == 0) {
+    if (predicates.length == 0) {
       throw new IllegalStateException(
           "No WHERE conditions specified for UPDATE operation. "
               + "This would update ALL rows in the table. "
@@ -109,17 +131,21 @@ public class UpdateSpec<T> extends AbstractBulkOperationSpec<T, UpdateSpec<T>> {
   }
 
   /**
-   * Performs an unconditional UPDATE of all rows for this entity.
+   * 执行无条件更新，更新该实体的所有行。
    *
-   * <p>Use with caution — this will update ALL data in the table.
+   * <p>谨慎使用 — 此操作将更新表中的所有数据。
    *
-   * @param em the EntityManager
-   * @return the number of entities updated
+   * @param em 实体管理器
+   * @return 更新的实体数量
+   * @throws IllegalStateException 如果未指定 SET 子句
    */
   public int updateAll(EntityManager em) {
     if (setClauses.isEmpty()) {
       throw new IllegalStateException("At least one set() clause is required");
     }
+    log.warn(
+        "WARNING: Executing unconditional UPDATE on {} — this will affect ALL rows!",
+        entityClass.getSimpleName());
     CriteriaBuilder cb = em.getCriteriaBuilder();
     CriteriaUpdate<T> update = cb.createCriteriaUpdate(entityClass);
     Root<T> root = update.from(entityClass);
@@ -130,10 +156,10 @@ public class UpdateSpec<T> extends AbstractBulkOperationSpec<T, UpdateSpec<T>> {
   }
 
   /**
-   * Performs an unconditional UPDATE within a new or existing transaction.
+   * 在新事务或现有事务中执行无条件更新。
    *
-   * @param em the EntityManager
-   * @return the number of entities updated
+   * @param em 实体管理器
+   * @return 更新的实体数量
    */
   public int updateAllInTransaction(EntityManager em) {
     return executeInTransaction(em, this::updateAll);

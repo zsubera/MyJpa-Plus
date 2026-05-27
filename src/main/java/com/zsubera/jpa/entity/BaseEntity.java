@@ -12,9 +12,9 @@ import java.time.Instant;
 import java.util.Objects;
 
 /**
- * Base entity with common audit and identity fields.
+ * 包含通用审计和标识字段的基础实体。
  *
- * <p>Extend this class to avoid repeating boilerplate fields:
+ * <p>继承此类可避免重复编写样板字段：
  *
  * <pre>{@code
  * @Entity
@@ -23,10 +23,10 @@ import java.util.Objects;
  * }
  * }</pre>
  *
- * <p>Provides {@code id}, {@code createdAt}, and {@code updatedAt} out of the box.
+ * <p>开箱即用地提供 {@code id}、{@code createdAt} 和 {@code updatedAt} 字段。
  *
- * <p>{@code equals} and {@code hashCode} are based on the {@code id} field when non-null (persisted
- * entities), otherwise fall back to identity comparison.
+ * <p>{@code equals} 和 {@code hashCode} 在 {@code id} 非空（已持久化实体）时基于 {@code id} 字段，
+ * 否则回退到对象标识比较。
  */
 @MappedSuperclass
 public abstract class BaseEntity implements Serializable {

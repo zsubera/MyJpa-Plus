@@ -9,16 +9,15 @@ import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.context.annotation.ComponentScan;
 
 /**
- * Auto-configuration for MyJpa-Plus.
+ * MyJpa-Plus 的自动配置类。
  *
- * <p>Automatically activates when Spring Data JPA and {@link EntityManager} are on the classpath.
- * Registers all MyJpa-Plus beans via component scanning and enables {@link MyJpaPlusProperties} for
- * external configuration.
+ * <p>当 Spring Data JPA 和 {@link EntityManager} 在类路径上时自动激活。
+ * 通过组件扫描注册所有 MyJpa-Plus 的 Bean，并启用 {@link MyJpaPlusProperties} 进行外部配置。
  *
- * <p>Configuration options (prefix: {@code myjpa-plus}):
+ * <p>配置选项（前缀：{@code myjpa-plus}）：
  *
  * <ul>
- *   <li>{@code myjpa-plus.soft-delete.auto-filter} — auto-apply soft-delete filters (default: true)
+ *   <li>{@code myjpa-plus.soft-delete.auto-filter} — 自动应用软删除过滤器（默认：true）
  * </ul>
  */
 @AutoConfiguration

@@ -8,11 +8,11 @@ import java.util.function.BiFunction;
 import java.util.function.Consumer;
 
 /**
- * Sealed hierarchy of condition node types used by {@link QuerySpec}, {@link ConditionBuilder}, and
- * related classes to build deferred {@link jakarta.persistence.criteria.Predicate} trees.
+ * 条件节点类型的密封层次结构，由 {@link QuerySpec}、{@link ConditionBuilder} 及相关类使用，
+ * 用于构建延迟执行的 {@link jakarta.persistence.criteria.Predicate} 树。
  *
- * <p>Each node represents a single condition or structural element (e.g., simple comparison, JOIN,
- * OR group, subquery, etc.) in the query condition tree, which is resolved at query execution time.
+ * <p>每个节点表示查询条件树中的一个条件或结构元素（例如，简单比较、JOIN、OR 组、子查询等），
+ * 在查询执行时进行解析。
  */
 public sealed interface ConditionNode
     permits ConditionNode.SimpleNode,
@@ -27,7 +27,7 @@ public sealed interface ConditionNode
 
   // ---- Operation enums ----
 
-  /** Comparison operators for field-value conditions. */
+  /** 字段-值条件的比较运算符。 */
   enum Op {
     EQ,
     NE,
@@ -47,7 +47,7 @@ public sealed interface ConditionNode
     LIKE_IGNORE_CASE
   }
 
-  /** Join types used in JOIN nodes. */
+  /** JOIN 节点中使用的连接类型。 */
   enum JoinType {
     INNER,
     LEFT,
@@ -55,7 +55,7 @@ public sealed interface ConditionNode
     LEFT_FETCH
   }
 
-  /** Collection operations for to-many association checks. */
+  /** 用于多值关联检查的集合操作。 */
   enum CollectionOp {
     IS_EMPTY,
     IS_NOT_EMPTY
@@ -63,7 +63,7 @@ public sealed interface ConditionNode
 
   // ---- Node types ----
 
-  /** A single field-value comparison condition. */
+  /** 单个字段-值比较条件。 */
   final class SimpleNode implements ConditionNode {
     public final String fieldName;
     public final Object value;
@@ -87,7 +87,7 @@ public sealed interface ConditionNode
     }
   }
 
-  /** A JOIN or FETCH JOIN with inner conditions. */
+  /** 带有内部条件的 JOIN 或 FETCH JOIN。 */
   final class JoinNode implements ConditionNode {
     public final String fieldName;
     public final JoinType joinType;
@@ -104,7 +104,7 @@ public sealed interface ConditionNode
     }
   }
 
-  /** An OR group of conditions. */
+  /** 条件的 OR 组。 */
   final class OrNode implements ConditionNode {
     public final List<ConditionNode> nodes = new ArrayList<>();
 
@@ -114,7 +114,7 @@ public sealed interface ConditionNode
     }
   }
 
-  /** An AND group of conditions. */
+  /** 条件的 AND 组。 */
   final class AndNode implements ConditionNode {
     public final List<ConditionNode> nodes = new ArrayList<>();
 
@@ -124,7 +124,7 @@ public sealed interface ConditionNode
     }
   }
 
-  /** A multi-field LIKE search (keyword matched against multiple fields with OR). */
+  /** 多字段 LIKE 搜索（关键字通过 OR 与多个字段匹配）。 */
   final class MultiLikeNode implements ConditionNode {
     public final String keyword;
     public final String[] fieldNames;
@@ -135,7 +135,7 @@ public sealed interface ConditionNode
     }
   }
 
-  /** A collection IS_EMPTY or IS_NOT_EMPTY check. */
+  /** 集合 IS_EMPTY 或 IS_NOT_EMPTY 检查。 */
   final class CollectionNode implements ConditionNode {
     public final String fieldName;
     public final CollectionOp op;
@@ -146,7 +146,7 @@ public sealed interface ConditionNode
     }
   }
 
-  /** An EXISTS or NOT EXISTS correlated subquery. */
+  /** EXISTS 或 NOT EXISTS 关联子查询。 */
   final class ExistsNode<S> implements ConditionNode {
     public final Class<S> subEntity;
     public final Consumer<SubQuerySpec<S>> config;
@@ -159,7 +159,7 @@ public sealed interface ConditionNode
     }
   }
 
-  /** A raw predicate function (escape hatch for complex conditions). */
+  /** 原始谓词函数（复杂条件的应急方案）。 */
   final class RawNode implements ConditionNode {
     public final BiFunction<jakarta.persistence.criteria.Path<?>, CriteriaBuilder, Predicate> fn;
 
@@ -169,7 +169,7 @@ public sealed interface ConditionNode
     }
   }
 
-  /** A negated group node: NOT(inner conditions). */
+  /** 取反组节点：NOT（内部条件）。 */
   final class NegateNode implements ConditionNode {
     public final ConditionNode inner;
 
@@ -178,7 +178,7 @@ public sealed interface ConditionNode
     }
   }
 
-  /** Order node for ORDER BY clauses. */
+  /** ORDER BY 子句的排序节点。 */
   final class OrderNode {
     public final String fieldName;
     public final boolean asc;

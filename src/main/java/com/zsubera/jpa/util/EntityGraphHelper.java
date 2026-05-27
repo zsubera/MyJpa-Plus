@@ -11,22 +11,20 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * Helper for building and applying JPA {@link EntityGraph} fetch strategies dynamically with {@link
- * QuerySpec}.
+ * 用于与 {@link QuerySpec} 配合动态构建和应用 JPA {@link EntityGraph} 抓取策略的辅助类。
  *
- * <p>JPA {@link EntityGraph}s allow declarative specification of which associations to fetch
- * eagerly at query time, providing an alternative to {@code FETCH JOIN} with support for reuse
- * across queries.
+ * <p>JPA {@link EntityGraph} 允许声明式地指定查询时需要急切加载的关联关系，
+ * 提供了 {@code FETCH JOIN} 的替代方案，并支持在多个查询间复用。
  *
- * <p>Example:
+ * <p>使用示例：
  *
  * <pre>{@code
- * // Create an entity graph that fetches 'roles' and 'roles.permissions'
+ * // 创建一个抓取 'roles' 和 'roles.permissions' 的实体图
  * EntityGraphHelper<User> graph = EntityGraphHelper.forEntity(User.class)
  *     .add("roles")
  *     .add("roles", "permissions");
  *
- * // Build hints for repository invocation:
+ * // 为仓库调用构建查询提示：
  * Map<String, Object> hints = graph.toHints(entityManager);
  * List<User> users = repository.findAll(spec, hints);
  * }</pre>
@@ -35,10 +33,10 @@ public final class EntityGraphHelper<T> {
 
   private static final Logger log = LoggerFactory.getLogger(EntityGraphHelper.class);
 
-  /** JPA hint key for javax.persistence.fetchgraph. */
+  /** JPA 查询提示键，用于 fetchgraph 模式。 */
   public static final String HINT_FETCHGRAPH = "jakarta.persistence.fetchgraph";
 
-  /** JPA hint key for javax.persistence.loadgraph. */
+  /** JPA 查询提示键，用于 loadgraph 模式。 */
   public static final String HINT_LOADGRAPH = "jakarta.persistence.loadgraph";
 
   private final Class<T> entityClass;
@@ -173,6 +171,12 @@ public final class EntityGraphHelper<T> {
    * Recursively adds attribute nodes to a subgraph, splitting multi-level paths like "b.c.d" into
    * nested subgraphs.
    */
+  /**
+   * 递归添加属性节点到子图，支持多级嵌套路径如 "b.c.d"。
+   *
+   * @param subgraph 子图
+   * @param path 属性路径
+   */
   @SuppressWarnings({"unchecked", "rawtypes"})
   private void addAttributeNodeRecursive(Subgraph<Object> subgraph, String path) {
     int dotIndex = path.indexOf('.');
@@ -186,6 +190,12 @@ public final class EntityGraphHelper<T> {
     }
   }
 
+  /**
+   * 构建并返回 JPA {@link EntityGraph}。
+   *
+   * @param em 用于创建图的 EntityManager
+   * @return 构建的实体图
+   */
   @SuppressWarnings({"unchecked", "rawtypes"})
   public EntityGraph<T> buildGraph(EntityManager em) {
     EntityGraph<T> graph = em.createEntityGraph(entityClass);
@@ -216,12 +226,14 @@ public final class EntityGraphHelper<T> {
   }
 
   /**
-   * Returns the JPA hint key for the current graph type.
+   * 返回当前图类型的 JPA 提示键。
    *
    * <ul>
-   *   <li>FETCH graph: {@code jakarta.persistence.fetchgraph}
-   *   <li>LOAD graph: {@code jakarta.persistence.loadgraph}
+   *   <li>FETCH 图: {@code jakarta.persistence.fetchgraph}
+   *   <li>LOAD 图: {@code jakarta.persistence.loadgraph}
    * </ul>
+   *
+   * @return JPA 提示键
    */
   public String getHintName() {
     return loadGraphType ? HINT_LOADGRAPH : HINT_FETCHGRAPH;
