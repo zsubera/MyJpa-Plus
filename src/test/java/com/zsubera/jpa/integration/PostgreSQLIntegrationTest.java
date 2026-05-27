@@ -21,102 +21,103 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 class PostgreSQLIntegrationTest {
 
-  @Container
-  static PostgreSQLContainer<?> postgres =
-      new PostgreSQLContainer<>("postgres:16-alpine")
-          .withDatabaseName("myjpa_test")
-          .withUsername("test")
-          .withPassword("test");
+    @Container
+    static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:16-alpine")
+            .withDatabaseName("myjpa_test")
+            .withUsername("test")
+            .withPassword("test");
 
-  @DynamicPropertySource
-  static void configureProperties(DynamicPropertyRegistry registry) {
-    registry.add("spring.datasource.url", postgres::getJdbcUrl);
-    registry.add("spring.datasource.username", postgres::getUsername);
-    registry.add("spring.datasource.password", postgres::getPassword);
-    registry.add("spring.jpa.database-platform", () -> "org.hibernate.dialect.PostgreSQLDialect");
-    registry.add("spring.jpa.hibernate.ddl-auto", () -> "create-drop");
-  }
+    @DynamicPropertySource
+    static void configureProperties(DynamicPropertyRegistry registry) {
+        registry.add("spring.datasource.url", postgres::getJdbcUrl);
+        registry.add("spring.datasource.username", postgres::getUsername);
+        registry.add("spring.datasource.password", postgres::getPassword);
+        registry.add("spring.jpa.database-platform", () -> "org.hibernate.dialect.PostgreSQLDialect");
+        registry.add("spring.jpa.hibernate.ddl-auto", () -> "create-drop");
+    }
 
-  @Autowired private PgTestEntityRepository repository;
+    @Autowired
+    private PgTestEntityRepository repository;
 
-  @Autowired private PgParentEntityRepository parentRepository;
+    @Autowired
+    private PgParentEntityRepository parentRepository;
 
-  @Test
-  void testSimpleEqOnPostgreSQL() {
-    PgTestEntity entity = new PgTestEntity();
-    entity.setName("hello");
-    entity.setStatus(1);
-    repository.save(entity);
+    @Test
+    void testSimpleEqOnPostgreSQL() {
+        PgTestEntity entity = new PgTestEntity();
+        entity.setName("hello");
+        entity.setStatus(1);
+        repository.save(entity);
 
-    QuerySpec<PgTestEntity> qs = new QuerySpec<>();
-    qs.eq(PgTestEntity::getName, "hello");
-    List<PgTestEntity> result = repository.findAll(qs.toSpecification());
-    assertEquals(1, result.size());
-    assertEquals("hello", result.get(0).getName());
-  }
+        QuerySpec<PgTestEntity> qs = new QuerySpec<>();
+        qs.eq(PgTestEntity::getName, "hello");
+        List<PgTestEntity> result = repository.findAll(qs.toSpecification());
+        assertEquals(1, result.size());
+        assertEquals("hello", result.get(0).getName());
+    }
 
-  @Test
-  void testStartsWithOnPostgreSQL() {
-    PgTestEntity e1 = new PgTestEntity();
-    e1.setName("hello_world");
-    e1.setStatus(0);
-    repository.save(e1);
+    @Test
+    void testStartsWithOnPostgreSQL() {
+        PgTestEntity e1 = new PgTestEntity();
+        e1.setName("hello_world");
+        e1.setStatus(0);
+        repository.save(e1);
 
-    PgTestEntity e2 = new PgTestEntity();
-    e2.setName("hello_test%");
-    e2.setStatus(0);
-    repository.save(e2);
+        PgTestEntity e2 = new PgTestEntity();
+        e2.setName("hello_test%");
+        e2.setStatus(0);
+        repository.save(e2);
 
-    PgTestEntity e3 = new PgTestEntity();
-    e3.setName("other");
-    e3.setStatus(0);
-    repository.save(e3);
+        PgTestEntity e3 = new PgTestEntity();
+        e3.setName("other");
+        e3.setStatus(0);
+        repository.save(e3);
 
-    QuerySpec<PgTestEntity> qs = new QuerySpec<>();
-    qs.startsWith(PgTestEntity::getName, "hello");
-    List<PgTestEntity> result = repository.findAll(qs.toSpecification());
-    assertEquals(2, result.size());
-  }
+        QuerySpec<PgTestEntity> qs = new QuerySpec<>();
+        qs.startsWith(PgTestEntity::getName, "hello");
+        List<PgTestEntity> result = repository.findAll(qs.toSpecification());
+        assertEquals(2, result.size());
+    }
 
-  @Test
-  void testContainsWithSpecialCharsOnPostgreSQL() {
-    PgTestEntity e1 = new PgTestEntity();
-    e1.setName("test%_value");
-    e1.setStatus(0);
-    repository.save(e1);
+    @Test
+    void testContainsWithSpecialCharsOnPostgreSQL() {
+        PgTestEntity e1 = new PgTestEntity();
+        e1.setName("test%_value");
+        e1.setStatus(0);
+        repository.save(e1);
 
-    PgTestEntity e2 = new PgTestEntity();
-    e2.setName("test%_other");
-    e2.setStatus(0);
-    repository.save(e2);
+        PgTestEntity e2 = new PgTestEntity();
+        e2.setName("test%_other");
+        e2.setStatus(0);
+        repository.save(e2);
 
-    PgTestEntity e3 = new PgTestEntity();
-    e3.setName("normal");
-    e3.setStatus(0);
-    repository.save(e3);
+        PgTestEntity e3 = new PgTestEntity();
+        e3.setName("normal");
+        e3.setStatus(0);
+        repository.save(e3);
 
-    QuerySpec<PgTestEntity> qs = new QuerySpec<>();
-    qs.contains(PgTestEntity::getName, "%_");
-    List<PgTestEntity> result = repository.findAll(qs.toSpecification());
-    assertEquals(2, result.size());
-  }
+        QuerySpec<PgTestEntity> qs = new QuerySpec<>();
+        qs.contains(PgTestEntity::getName, "%_");
+        List<PgTestEntity> result = repository.findAll(qs.toSpecification());
+        assertEquals(2, result.size());
+    }
 
-  @Test
-  void testLikeEscapeDoesNotMatchWildcard() {
-    PgTestEntity e1 = new PgTestEntity();
-    e1.setName("hello_world");
-    e1.setStatus(0);
-    repository.save(e1);
+    @Test
+    void testLikeEscapeDoesNotMatchWildcard() {
+        PgTestEntity e1 = new PgTestEntity();
+        e1.setName("hello_world");
+        e1.setStatus(0);
+        repository.save(e1);
 
-    PgTestEntity e2 = new PgTestEntity();
-    e2.setName("helloXworld");
-    e2.setStatus(0);
-    repository.save(e2);
+        PgTestEntity e2 = new PgTestEntity();
+        e2.setName("helloXworld");
+        e2.setStatus(0);
+        repository.save(e2);
 
-    QuerySpec<PgTestEntity> qs = new QuerySpec<>();
-    qs.contains(PgTestEntity::getName, "_wor");
-    List<PgTestEntity> result = repository.findAll(qs.toSpecification());
-    assertEquals(1, result.size());
-    assertEquals("hello_world", result.get(0).getName());
-  }
+        QuerySpec<PgTestEntity> qs = new QuerySpec<>();
+        qs.contains(PgTestEntity::getName, "_wor");
+        List<PgTestEntity> result = repository.findAll(qs.toSpecification());
+        assertEquals(1, result.size());
+        assertEquals("hello_world", result.get(0).getName());
+    }
 }

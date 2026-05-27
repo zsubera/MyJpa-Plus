@@ -31,30 +31,30 @@ import org.springframework.context.annotation.ComponentScan;
 @ComponentScan(basePackages = "com.zsubera.jpa")
 public class MyJpaPlusAutoConfiguration {
 
-  private static final Logger log = LoggerFactory.getLogger(MyJpaPlusAutoConfiguration.class);
+    private static final Logger log = LoggerFactory.getLogger(MyJpaPlusAutoConfiguration.class);
 
-  public MyJpaPlusAutoConfiguration(MyJpaPlusProperties properties) {
-    if (log.isInfoEnabled()) {
-      log.info("MyJpa-Plus AutoConfiguration initialized");
-      log.info("  soft-delete.auto-filter = {}", properties.getSoftDelete().isAutoFilter());
-      log.info("  query.max-results = {}", properties.getQuery().getMaxResults());
-      log.info(
-          "  query.deep-pagination-offset-threshold = {}",
-          properties.getQuery().getDeepPaginationOffsetThreshold());
+    public MyJpaPlusAutoConfiguration(MyJpaPlusProperties properties) {
+        if (log.isInfoEnabled()) {
+            log.info("MyJpa-Plus AutoConfiguration initialized");
+            log.info(
+                    "  soft-delete.auto-filter = {}", properties.getSoftDelete().isAutoFilter());
+            log.info("  query.max-results = {}", properties.getQuery().getMaxResults());
+            log.info(
+                    "  query.deep-pagination-offset-threshold = {}",
+                    properties.getQuery().getDeepPaginationOffsetThreshold());
+        }
     }
-  }
 
-  /**
-   * 创建配置了自定义参数的 MyJpaTemplate Bean。
-   *
-   * @param properties 配置属性
-   * @return MyJpaTemplate 实例
-   */
-  @Bean
-  @ConditionalOnMissingBean(MyJpaTemplate.class)
-  public MyJpaTemplate myJpaTemplate(MyJpaPlusProperties properties) {
-    return new MyJpaTemplate(
-        properties.getQuery().getMaxResults(),
-        properties.getQuery().getDeepPaginationOffsetThreshold());
-  }
+    /**
+     * 创建配置了自定义参数的 MyJpaTemplate Bean。
+     *
+     * @param properties 配置属性
+     * @return MyJpaTemplate 实例
+     */
+    @Bean
+    @ConditionalOnMissingBean(MyJpaTemplate.class)
+    public MyJpaTemplate myJpaTemplate(MyJpaPlusProperties properties) {
+        return new MyJpaTemplate(
+                properties.getQuery().getMaxResults(), properties.getQuery().getDeepPaginationOffsetThreshold());
+    }
 }

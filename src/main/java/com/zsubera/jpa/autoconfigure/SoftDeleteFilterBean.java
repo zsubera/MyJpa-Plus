@@ -30,61 +30,61 @@ import org.springframework.stereotype.Component;
  */
 @Component
 @ConditionalOnProperty(
-    prefix = "myjpa-plus.soft-delete",
-    name = "auto-filter",
-    havingValue = "true",
-    matchIfMissing = true)
+        prefix = "myjpa-plus.soft-delete",
+        name = "auto-filter",
+        havingValue = "true",
+        matchIfMissing = true)
 @EnableConfigurationProperties(MyJpaPlusProperties.class)
 public class SoftDeleteFilterBean implements InitializingBean {
 
-  private static final Logger log = LoggerFactory.getLogger(SoftDeleteFilterBean.class);
+    private static final Logger log = LoggerFactory.getLogger(SoftDeleteFilterBean.class);
 
-  private final MyJpaPlusProperties properties;
+    private final MyJpaPlusProperties properties;
 
-  @SuppressFBWarnings("EI_EXPOSE_REP2")
-  public SoftDeleteFilterBean(MyJpaPlusProperties properties) {
-    this.properties = properties;
-  }
-
-  @Override
-  public void afterPropertiesSet() {
-    if (log.isDebugEnabled()) {
-      log.debug(
-          "SoftDeleteFilterBean initialized (auto-filter={})",
-          properties.getSoftDelete().isAutoFilter());
+    @SuppressFBWarnings("EI_EXPOSE_REP2")
+    public SoftDeleteFilterBean(MyJpaPlusProperties properties) {
+        this.properties = properties;
     }
-  }
 
-  /** 注册实体类以进行自动过滤。委托给 {@link SoftDeleteHelper}，该类会缓存结果（包括正向和负向结果） 以避免重复扫描。 */
-  public void registerEntity(Class<?> entityClass) {
-    SoftDeleteHelper.findSoftDeleteField(entityClass);
-    if (log.isDebugEnabled()) {
-      log.debug("Registered {} for soft-delete auto-filtering", entityClass.getSimpleName());
+    @Override
+    public void afterPropertiesSet() {
+        if (log.isDebugEnabled()) {
+            log.debug(
+                    "SoftDeleteFilterBean initialized (auto-filter={})",
+                    properties.getSoftDelete().isAutoFilter());
+        }
     }
-  }
 
-  /**
-   * 如果实体具有 {@link SoftDelete @SoftDelete} 注解的字段，则对给定的 Specification 应用软删除过滤器。
-   *
-   * @param spec 原始的 Specification
-   * @param entityClass 实体类
-   * @param <T> 实体类型
-   * @return 应用软删除过滤器后的组合 Specification，如果实体没有软删除字段则返回原始 Specification
-   */
-  @SuppressWarnings("unchecked")
-  public <T> Specification<T> apply(@Nullable Specification<T> spec, Class<T> entityClass) {
-    if (hasSoftDeleteField(entityClass)) {
-      Specification<T> notDeleted = SoftDeleteHelper.isNotDeleted(entityClass);
-      return spec == null ? notDeleted : spec.and(notDeleted);
+    /** 注册实体类以进行自动过滤。委托给 {@link SoftDeleteHelper}，该类会缓存结果（包括正向和负向结果） 以避免重复扫描。 */
+    public void registerEntity(Class<?> entityClass) {
+        SoftDeleteHelper.findSoftDeleteField(entityClass);
+        if (log.isDebugEnabled()) {
+            log.debug("Registered {} for soft-delete auto-filtering", entityClass.getSimpleName());
+        }
     }
-    return spec;
-  }
 
-  /**
-   * 检查给定的实体类是否具有 {@link SoftDelete @SoftDelete} 字段。委托给 {@link
-   * SoftDeleteHelper#findSoftDeleteField(Class)}，该方法内部会缓存正向和负向的结果。
-   */
-  public boolean hasSoftDeleteField(Class<?> entityClass) {
-    return SoftDeleteHelper.findSoftDeleteField(entityClass) != null;
-  }
+    /**
+     * 如果实体具有 {@link SoftDelete @SoftDelete} 注解的字段，则对给定的 Specification 应用软删除过滤器。
+     *
+     * @param spec 原始的 Specification
+     * @param entityClass 实体类
+     * @param <T> 实体类型
+     * @return 应用软删除过滤器后的组合 Specification，如果实体没有软删除字段则返回原始 Specification
+     */
+    @SuppressWarnings("unchecked")
+    public <T> Specification<T> apply(@Nullable Specification<T> spec, Class<T> entityClass) {
+        if (hasSoftDeleteField(entityClass)) {
+            Specification<T> notDeleted = SoftDeleteHelper.isNotDeleted(entityClass);
+            return spec == null ? notDeleted : spec.and(notDeleted);
+        }
+        return spec;
+    }
+
+    /**
+     * 检查给定的实体类是否具有 {@link SoftDelete @SoftDelete} 字段。委托给 {@link
+     * SoftDeleteHelper#findSoftDeleteField(Class)}，该方法内部会缓存正向和负向的结果。
+     */
+    public boolean hasSoftDeleteField(Class<?> entityClass) {
+        return SoftDeleteHelper.findSoftDeleteField(entityClass) != null;
+    }
 }

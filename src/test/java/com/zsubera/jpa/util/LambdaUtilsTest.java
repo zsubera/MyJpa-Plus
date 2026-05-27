@@ -6,54 +6,54 @@ import org.junit.jupiter.api.Test;
 
 class LambdaUtilsTest {
 
-  @Test
-  void shouldExtractPropertyFromGetter() {
-    String prop = LambdaUtils.getPropertyName(TestBean::getName);
-    assertEquals("name", prop);
-  }
-
-  @Test
-  void shouldExtractPropertyFromBooleanIs() {
-    String prop = LambdaUtils.getPropertyName(TestBean::isActive);
-    assertEquals("active", prop);
-  }
-
-  @Test
-  void shouldExtractPropertyFromPlainGetter() {
-    String prop = LambdaUtils.getPropertyName(TestBean::getStatus);
-    assertEquals("status", prop);
-  }
-
-  @Test
-  void shouldThrowOnNullFunction() {
-    assertThrows(IllegalArgumentException.class, () -> LambdaUtils.getPropertyName(null));
-  }
-
-  @Test
-  void shouldDecapitalizeGetterName() {
-    assertEquals("status", LambdaUtils.getPropertyName(TestBean::getStatus));
-  }
-
-  static class TestBean {
-    private String name;
-    private boolean active;
-    private int status;
-    private String id;
-
-    public String getName() {
-      return name;
+    @Test
+    void shouldExtractPropertyFromGetter() {
+        String prop = LambdaUtils.getPropertyName(TestBean::getName);
+        assertEquals("name", prop);
     }
 
-    public boolean isActive() {
-      return active;
+    @Test
+    void shouldExtractPropertyFromBooleanIs() {
+        String prop = LambdaUtils.getPropertyName(TestBean::isActive);
+        assertEquals("active", prop);
     }
 
-    public int getStatus() {
-      return status;
+    @Test
+    void shouldExtractPropertyFromPlainGetter() {
+        String prop = LambdaUtils.getPropertyName(TestBean::getStatus);
+        assertEquals("status", prop);
     }
 
-    public String getId() {
-      return id;
+    @Test
+    void shouldThrowOnNullFunction() {
+        assertThrows(IllegalArgumentException.class, () -> LambdaUtils.getPropertyName(null));
     }
-  }
+
+    @Test
+    void shouldDecapitalizeGetterName() {
+        assertEquals("status", LambdaUtils.getPropertyName(TestBean::getStatus));
+    }
+
+    static class TestBean {
+        private String name;
+        private boolean active;
+        private int status;
+        private String id;
+
+        public String getName() {
+            return name;
+        }
+
+        public boolean isActive() {
+            return active;
+        }
+
+        public int getStatus() {
+            return status;
+        }
+
+        public String getId() {
+            return id;
+        }
+    }
 }

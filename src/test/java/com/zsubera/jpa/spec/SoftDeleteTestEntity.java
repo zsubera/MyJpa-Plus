@@ -7,35 +7,36 @@ import jakarta.persistence.*;
 @Table(name = "soft_delete_test_entity")
 public class SoftDeleteTestEntity {
 
-  @Id
-  @GeneratedValue(strategy = GenerationType.IDENTITY)
-  private Long id;
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
 
-  private String name;
+    private String name;
 
-  @SoftDelete private Boolean deleted = false;
+    @SoftDelete
+    private Boolean deleted = false;
 
-  public Long getId() {
-    return id;
-  }
+    public Long getId() {
+        return id;
+    }
 
-  public void setId(Long id) {
-    this.id = id;
-  }
+    public void setId(Long id) {
+        this.id = id;
+    }
 
-  public String getName() {
-    return name;
-  }
+    public String getName() {
+        return name;
+    }
 
-  public void setName(String name) {
-    this.name = name;
-  }
+    public void setName(String name) {
+        this.name = name;
+    }
 
-  public Boolean getDeleted() {
-    return deleted;
-  }
+    public Boolean getDeleted() {
+        return deleted;
+    }
 
-  public void setDeleted(Boolean deleted) {
-    this.deleted = deleted;
-  }
+    public void setDeleted(Boolean deleted) {
+        this.deleted = deleted;
+    }
 }

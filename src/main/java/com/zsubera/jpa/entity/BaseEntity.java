@@ -30,72 +30,72 @@ import java.util.Objects;
 @MappedSuperclass
 public abstract class BaseEntity implements Serializable {
 
-  @Id
-  @GeneratedValue(strategy = GenerationType.IDENTITY)
-  private Long id;
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
 
-  @Column(updatable = false)
-  private Instant createdAt;
+    @Column(updatable = false)
+    private Instant createdAt;
 
-  private Instant updatedAt;
+    private Instant updatedAt;
 
-  @PrePersist
-  protected void prePersist() {
-    Instant now = Instant.now();
-    this.createdAt = now;
-    this.updatedAt = now;
-  }
-
-  @PreUpdate
-  protected void preUpdate() {
-    this.updatedAt = Instant.now();
-  }
-
-  public Long getId() {
-    return id;
-  }
-
-  protected void setId(Long id) {
-    this.id = id;
-  }
-
-  public Instant getCreatedAt() {
-    return createdAt;
-  }
-
-  public void setCreatedAt(Instant createdAt) {
-    this.createdAt = createdAt;
-  }
-
-  public Instant getUpdatedAt() {
-    return updatedAt;
-  }
-
-  public void setUpdatedAt(Instant updatedAt) {
-    this.updatedAt = updatedAt;
-  }
-
-  @Override
-  public boolean equals(Object o) {
-    if (this == o) {
-      return true;
+    @PrePersist
+    protected void prePersist() {
+        Instant now = Instant.now();
+        this.createdAt = now;
+        this.updatedAt = now;
     }
-    if (!(o instanceof BaseEntity that)) {
-      return false;
-    }
-    // Use id-based comparison only if both entities are persisted (id != null).
-    // Otherwise fall back to identity comparison.
-    Long id = getId();
-    Long thatId = that.getId();
-    if (id != null && thatId != null) {
-      return Objects.equals(id, thatId);
-    }
-    return false;
-  }
 
-  @Override
-  public int hashCode() {
-    Long id = getId();
-    return id != null ? Objects.hashCode(id) : super.hashCode();
-  }
+    @PreUpdate
+    protected void preUpdate() {
+        this.updatedAt = Instant.now();
+    }
+
+    public Long getId() {
+        return id;
+    }
+
+    protected void setId(Long id) {
+        this.id = id;
+    }
+
+    public Instant getCreatedAt() {
+        return createdAt;
+    }
+
+    public void setCreatedAt(Instant createdAt) {
+        this.createdAt = createdAt;
+    }
+
+    public Instant getUpdatedAt() {
+        return updatedAt;
+    }
+
+    public void setUpdatedAt(Instant updatedAt) {
+        this.updatedAt = updatedAt;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) {
+            return true;
+        }
+        if (!(o instanceof BaseEntity that)) {
+            return false;
+        }
+        // Use id-based comparison only if both entities are persisted (id != null).
+        // Otherwise fall back to identity comparison.
+        Long id = getId();
+        Long thatId = that.getId();
+        if (id != null && thatId != null) {
+            return Objects.equals(id, thatId);
+        }
+        return false;
+    }
+
+    @Override
+    public int hashCode() {
+        Long id = getId();
+        return id != null ? Objects.hashCode(id) : super.hashCode();
+    }
 }

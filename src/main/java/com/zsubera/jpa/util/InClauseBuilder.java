@@ -21,156 +21,155 @@ import org.slf4j.LoggerFactory;
  */
 public final class InClauseBuilder {
 
-  private static final Logger log = LoggerFactory.getLogger(InClauseBuilder.class);
+    private static final Logger log = LoggerFactory.getLogger(InClauseBuilder.class);
 
-  /** 单个 IN 子句中的最大参数数量。此值为保守值，支持所有主流数据库（Oracle 限制为 1000）。 */
-  public static final int MAX_IN_CLAUSE_SIZE = 1000;
+    /** 单个 IN 子句中的最大参数数量。此值为保守值，支持所有主流数据库（Oracle 限制为 1000）。 */
+    public static final int MAX_IN_CLAUSE_SIZE = 1000;
 
-  private InClauseBuilder() {}
+    private InClauseBuilder() {}
 
-  /**
-   * 构建 {@code IN} 谓词：{@code field IN (values)}。
-   *
-   * <p>如果值的数量超过 {@link #MAX_IN_CLAUSE_SIZE}，IN 子句会自动拆分为多个 OR 连接的批次： {@code field IN (1..1000) OR
-   * field IN (1001..2000) OR ...}
-   *
-   * @param cb CriteriaBuilder 实例
-   * @param path 字段路径
-   * @param values 要匹配的值（数组形式）
-   * @return IN 谓词
-   * @throws IllegalArgumentException 如果 values 为 null 或空
-   */
-  public static Predicate in(CriteriaBuilder cb, Path<?> path, Object... values) {
-    if (values == null || values.length == 0) {
-      throw new IllegalArgumentException("values must not be empty");
+    /**
+     * 构建 {@code IN} 谓词：{@code field IN (values)}。
+     *
+     * <p>如果值的数量超过 {@link #MAX_IN_CLAUSE_SIZE}，IN 子句会自动拆分为多个 OR 连接的批次： {@code field IN (1..1000) OR
+     * field IN (1001..2000) OR ...}
+     *
+     * @param cb CriteriaBuilder 实例
+     * @param path 字段路径
+     * @param values 要匹配的值（数组形式）
+     * @return IN 谓词
+     * @throws IllegalArgumentException 如果 values 为 null 或空
+     */
+    public static Predicate in(CriteriaBuilder cb, Path<?> path, Object... values) {
+        if (values == null || values.length == 0) {
+            throw new IllegalArgumentException("values must not be empty");
+        }
+        if (values.length <= MAX_IN_CLAUSE_SIZE) {
+            return buildSingleIn(cb, path, values);
+        }
+        return buildBatchedIn(cb, path, Arrays.asList(values));
     }
-    if (values.length <= MAX_IN_CLAUSE_SIZE) {
-      return buildSingleIn(cb, path, values);
-    }
-    return buildBatchedIn(cb, path, Arrays.asList(values));
-  }
 
-  /**
-   * 构建 {@code IN} 谓词：{@code field IN (values)}。
-   *
-   * <p>如果值的数量超过 {@link #MAX_IN_CLAUSE_SIZE}，IN 子句会自动拆分为多个 OR 连接的批次。
-   *
-   * @param cb CriteriaBuilder 实例
-   * @param path 字段路径
-   * @param values 要匹配的值（集合形式）
-   * @return IN 谓词
-   * @throws IllegalArgumentException 如果 values 为 null 或空
-   */
-  public static Predicate in(CriteriaBuilder cb, Path<?> path, Collection<?> values) {
-    if (values == null || values.isEmpty()) {
-      throw new IllegalArgumentException("values must not be empty");
+    /**
+     * 构建 {@code IN} 谓词：{@code field IN (values)}。
+     *
+     * <p>如果值的数量超过 {@link #MAX_IN_CLAUSE_SIZE}，IN 子句会自动拆分为多个 OR 连接的批次。
+     *
+     * @param cb CriteriaBuilder 实例
+     * @param path 字段路径
+     * @param values 要匹配的值（集合形式）
+     * @return IN 谓词
+     * @throws IllegalArgumentException 如果 values 为 null 或空
+     */
+    public static Predicate in(CriteriaBuilder cb, Path<?> path, Collection<?> values) {
+        if (values == null || values.isEmpty()) {
+            throw new IllegalArgumentException("values must not be empty");
+        }
+        if (values.size() <= MAX_IN_CLAUSE_SIZE) {
+            return buildSingleIn(cb, path, values);
+        }
+        return buildBatchedIn(cb, path, values);
     }
-    if (values.size() <= MAX_IN_CLAUSE_SIZE) {
-      return buildSingleIn(cb, path, values);
-    }
-    return buildBatchedIn(cb, path, values);
-  }
 
-  /**
-   * 构建 {@code NOT IN} 谓词：{@code field NOT IN (values)}。
-   *
-   * <p>如果值的数量超过 {@link #MAX_IN_CLAUSE_SIZE}，NOT IN 子句会自动拆分为多个 AND NOT 连接的批次。
-   *
-   * @param cb CriteriaBuilder 实例
-   * @param path 字段路径
-   * @param values 要匹配的值（数组形式）
-   * @return NOT IN 谓词
-   * @throws IllegalArgumentException 如果 values 为 null 或空
-   */
-  public static Predicate notIn(CriteriaBuilder cb, Path<?> path, Object... values) {
-    if (values == null || values.length == 0) {
-      throw new IllegalArgumentException("values must not be empty");
+    /**
+     * 构建 {@code NOT IN} 谓词：{@code field NOT IN (values)}。
+     *
+     * <p>如果值的数量超过 {@link #MAX_IN_CLAUSE_SIZE}，NOT IN 子句会自动拆分为多个 AND NOT 连接的批次。
+     *
+     * @param cb CriteriaBuilder 实例
+     * @param path 字段路径
+     * @param values 要匹配的值（数组形式）
+     * @return NOT IN 谓词
+     * @throws IllegalArgumentException 如果 values 为 null 或空
+     */
+    public static Predicate notIn(CriteriaBuilder cb, Path<?> path, Object... values) {
+        if (values == null || values.length == 0) {
+            throw new IllegalArgumentException("values must not be empty");
+        }
+        if (values.length <= MAX_IN_CLAUSE_SIZE) {
+            return cb.not(buildSingleIn(cb, path, values));
+        }
+        return buildBatchedNotIn(cb, path, Arrays.asList(values));
     }
-    if (values.length <= MAX_IN_CLAUSE_SIZE) {
-      return cb.not(buildSingleIn(cb, path, values));
-    }
-    return buildBatchedNotIn(cb, path, Arrays.asList(values));
-  }
 
-  /**
-   * 构建 {@code NOT IN} 谓词：{@code field NOT IN (values)}。
-   *
-   * <p>如果值的数量超过 {@link #MAX_IN_CLAUSE_SIZE}，NOT IN 子句会自动拆分为多个 AND NOT 连接的批次。
-   *
-   * @param cb CriteriaBuilder 实例
-   * @param path 字段路径
-   * @param values 要匹配的值（集合形式）
-   * @return NOT IN 谓词
-   * @throws IllegalArgumentException 如果 values 为 null 或空
-   */
-  public static Predicate notIn(CriteriaBuilder cb, Path<?> path, Collection<?> values) {
-    if (values == null || values.isEmpty()) {
-      throw new IllegalArgumentException("values must not be empty");
+    /**
+     * 构建 {@code NOT IN} 谓词：{@code field NOT IN (values)}。
+     *
+     * <p>如果值的数量超过 {@link #MAX_IN_CLAUSE_SIZE}，NOT IN 子句会自动拆分为多个 AND NOT 连接的批次。
+     *
+     * @param cb CriteriaBuilder 实例
+     * @param path 字段路径
+     * @param values 要匹配的值（集合形式）
+     * @return NOT IN 谓词
+     * @throws IllegalArgumentException 如果 values 为 null 或空
+     */
+    public static Predicate notIn(CriteriaBuilder cb, Path<?> path, Collection<?> values) {
+        if (values == null || values.isEmpty()) {
+            throw new IllegalArgumentException("values must not be empty");
+        }
+        if (values.size() <= MAX_IN_CLAUSE_SIZE) {
+            return cb.not(buildSingleIn(cb, path, values));
+        }
+        return buildBatchedNotIn(cb, path, values);
     }
-    if (values.size() <= MAX_IN_CLAUSE_SIZE) {
-      return cb.not(buildSingleIn(cb, path, values));
-    }
-    return buildBatchedNotIn(cb, path, values);
-  }
 
-  private static Predicate buildSingleIn(CriteriaBuilder cb, Path<?> path, Object[] values) {
-    CriteriaBuilder.In<Object> in = cb.in(path);
-    for (Object v : values) {
-      in.value(v);
+    private static Predicate buildSingleIn(CriteriaBuilder cb, Path<?> path, Object[] values) {
+        CriteriaBuilder.In<Object> in = cb.in(path);
+        for (Object v : values) {
+            in.value(v);
+        }
+        return in;
     }
-    return in;
-  }
 
-  private static Predicate buildSingleIn(CriteriaBuilder cb, Path<?> path, Collection<?> values) {
-    CriteriaBuilder.In<Object> in = cb.in(path);
-    for (Object v : values) {
-      in.value(v);
+    private static Predicate buildSingleIn(CriteriaBuilder cb, Path<?> path, Collection<?> values) {
+        CriteriaBuilder.In<Object> in = cb.in(path);
+        for (Object v : values) {
+            in.value(v);
+        }
+        return in;
     }
-    return in;
-  }
 
-  private static Predicate buildBatchedIn(CriteriaBuilder cb, Path<?> path, Collection<?> values) {
-    if (log.isDebugEnabled()) {
-      log.debug(
-          "IN clause has {} values, exceeding limit of {}. Splitting into batches.",
-          values.size(),
-          MAX_IN_CLAUSE_SIZE);
+    private static Predicate buildBatchedIn(CriteriaBuilder cb, Path<?> path, Collection<?> values) {
+        if (log.isDebugEnabled()) {
+            log.debug(
+                    "IN clause has {} values, exceeding limit of {}. Splitting into batches.",
+                    values.size(),
+                    MAX_IN_CLAUSE_SIZE);
+        }
+        List<Predicate> batchPredicates = new ArrayList<>();
+        List<Object> batch = new ArrayList<>();
+        for (Object v : values) {
+            batch.add(v);
+            if (batch.size() >= MAX_IN_CLAUSE_SIZE) {
+                batchPredicates.add(buildSingleIn(cb, path, batch));
+                batch = new ArrayList<>();
+            }
+        }
+        if (!batch.isEmpty()) {
+            batchPredicates.add(buildSingleIn(cb, path, batch));
+        }
+        return cb.or(batchPredicates.toArray(new Predicate[0]));
     }
-    List<Predicate> batchPredicates = new ArrayList<>();
-    List<Object> batch = new ArrayList<>();
-    for (Object v : values) {
-      batch.add(v);
-      if (batch.size() >= MAX_IN_CLAUSE_SIZE) {
-        batchPredicates.add(buildSingleIn(cb, path, batch));
-        batch = new ArrayList<>();
-      }
-    }
-    if (!batch.isEmpty()) {
-      batchPredicates.add(buildSingleIn(cb, path, batch));
-    }
-    return cb.or(batchPredicates.toArray(new Predicate[0]));
-  }
 
-  private static Predicate buildBatchedNotIn(
-      CriteriaBuilder cb, Path<?> path, Collection<?> values) {
-    if (log.isDebugEnabled()) {
-      log.debug(
-          "NOT IN clause has {} values, exceeding limit of {}. Splitting into batches.",
-          values.size(),
-          MAX_IN_CLAUSE_SIZE);
+    private static Predicate buildBatchedNotIn(CriteriaBuilder cb, Path<?> path, Collection<?> values) {
+        if (log.isDebugEnabled()) {
+            log.debug(
+                    "NOT IN clause has {} values, exceeding limit of {}. Splitting into batches.",
+                    values.size(),
+                    MAX_IN_CLAUSE_SIZE);
+        }
+        List<Predicate> batchPredicates = new ArrayList<>();
+        List<Object> batch = new ArrayList<>();
+        for (Object v : values) {
+            batch.add(v);
+            if (batch.size() >= MAX_IN_CLAUSE_SIZE) {
+                batchPredicates.add(cb.not(buildSingleIn(cb, path, batch)));
+                batch = new ArrayList<>();
+            }
+        }
+        if (!batch.isEmpty()) {
+            batchPredicates.add(cb.not(buildSingleIn(cb, path, batch)));
+        }
+        return cb.and(batchPredicates.toArray(new Predicate[0]));
     }
-    List<Predicate> batchPredicates = new ArrayList<>();
-    List<Object> batch = new ArrayList<>();
-    for (Object v : values) {
-      batch.add(v);
-      if (batch.size() >= MAX_IN_CLAUSE_SIZE) {
-        batchPredicates.add(cb.not(buildSingleIn(cb, path, batch)));
-        batch = new ArrayList<>();
-      }
-    }
-    if (!batch.isEmpty()) {
-      batchPredicates.add(cb.not(buildSingleIn(cb, path, batch)));
-    }
-    return cb.and(batchPredicates.toArray(new Predicate[0]));
-  }
 }

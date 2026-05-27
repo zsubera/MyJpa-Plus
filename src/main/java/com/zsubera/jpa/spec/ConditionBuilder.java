@@ -26,785 +26,745 @@ import org.springframework.lang.Nullable;
  */
 public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> {
 
-  /**
-   * 获取当前条件列表。
-   *
-   * @return 条件节点列表
-   */
-  List<ConditionNode> conditions();
+    /**
+     * 获取当前条件列表。
+     *
+     * @return 条件节点列表
+     */
+    List<ConditionNode> conditions();
 
-  private String fieldName(SFunction<E, ?> field) {
-    if (field == null) {
-      throw new IllegalArgumentException("field must not be null");
-    }
-    return LambdaUtils.getPropertyName(field);
-  }
-
-  /**
-   * 将 {@code this} 转换为具体的构建器类型以支持方法链式调用。
-   *
-   * @return {@code this} 转换为 {@code SELF} 类型
-   */
-  @SuppressWarnings("unchecked")
-  default SELF self() {
-    return (SELF) this;
-  }
-
-  // ---- 比较运算符 ----
-
-  /**
-   * 添加等值条件：{@code field = value}。如果 {@code value} 为 null，则生成 {@code field IS NULL}。
-   *
-   * @param field 实体属性的方法引用
-   * @param value 要比较的值
-   * @return 当前构建器以支持链式调用
-   * @throws IllegalArgumentException 如果 {@code field} 为 null
-   */
-  default SELF eq(SFunction<E, ?> field, @Nullable Object value) {
-    if (field == null) {
-      throw new IllegalArgumentException("field must not be null");
-    }
-    if (value == null) {
-      conditions()
-          .add(
-              new ConditionNode.SimpleNode(
-                  LambdaUtils.getPropertyName(field), null, ConditionNode.Op.IS_NULL));
-    } else {
-      conditions()
-          .add(
-              new ConditionNode.SimpleNode(
-                  LambdaUtils.getPropertyName(field), value, ConditionNode.Op.EQ));
-    }
-    return self();
-  }
-
-  /**
-   * 添加不等条件：{@code field != value}。如果 {@code value} 为 null，则生成 {@code field IS NOT NULL}。
-   *
-   * @param field 实体属性的方法引用
-   * @param value 要比较的值
-   * @return 当前构建器以支持链式调用
-   * @throws IllegalArgumentException 如果 {@code field} 为 null
-   */
-  default SELF ne(SFunction<E, ?> field, @Nullable Object value) {
-    if (field == null) {
-      throw new IllegalArgumentException("field must not be null");
-    }
-    if (value == null) {
-      conditions()
-          .add(
-              new ConditionNode.SimpleNode(
-                  LambdaUtils.getPropertyName(field), null, ConditionNode.Op.IS_NOT_NULL));
-    } else {
-      conditions()
-          .add(
-              new ConditionNode.SimpleNode(
-                  LambdaUtils.getPropertyName(field), value, ConditionNode.Op.NE));
-    }
-    return self();
-  }
-
-  /**
-   * 添加大于条件：{@code field > value}。
-   *
-   * @param field 实体属性的方法引用
-   * @param value 要比较的值
-   * @return 当前构建器以支持链式调用
-   * @throws IllegalArgumentException 如果 {@code field} 或 {@code value} 为 null
-   */
-  default SELF gt(SFunction<E, ?> field, Comparable<?> value) {
-    if (value == null) {
-      throw new IllegalArgumentException("value must not be null");
-    }
-    conditions().add(new ConditionNode.SimpleNode(fieldName(field), value, ConditionNode.Op.GT));
-    return self();
-  }
-
-  /**
-   * 添加大于等于条件：{@code field >= value}。
-   *
-   * @param field 实体属性的方法引用
-   * @param value 要比较的值
-   * @return 当前构建器以支持链式调用
-   * @throws IllegalArgumentException 如果 {@code field} 或 {@code value} 为 null
-   */
-  default SELF ge(SFunction<E, ?> field, Comparable<?> value) {
-    if (value == null) {
-      throw new IllegalArgumentException("value must not be null");
-    }
-    conditions().add(new ConditionNode.SimpleNode(fieldName(field), value, ConditionNode.Op.GE));
-    return self();
-  }
-
-  /**
-   * 添加小于条件：{@code field < value}。
-   *
-   * @param field 实体属性的方法引用
-   * @param value 要比较的值
-   * @return 当前构建器以支持链式调用
-   * @throws IllegalArgumentException 如果 {@code field} 或 {@code value} 为 null
-   */
-  default SELF lt(SFunction<E, ?> field, Comparable<?> value) {
-    if (value == null) {
-      throw new IllegalArgumentException("value must not be null");
-    }
-    conditions().add(new ConditionNode.SimpleNode(fieldName(field), value, ConditionNode.Op.LT));
-    return self();
-  }
-
-  /**
-   * 添加小于等于条件：{@code field <= value}。
-   *
-   * @param field 实体属性的方法引用
-   * @param value 要比较的值
-   * @return 当前构建器以支持链式调用
-   * @throws IllegalArgumentException 如果 {@code field} 或 {@code value} 为 null
-   */
-  default SELF le(SFunction<E, ?> field, Comparable<?> value) {
-    if (value == null) {
-      throw new IllegalArgumentException("value must not be null");
-    }
-    conditions().add(new ConditionNode.SimpleNode(fieldName(field), value, ConditionNode.Op.LE));
-    return self();
-  }
-
-  // ---- 字符串运算符 ----
-
-  /**
-   * 添加 LIKE 条件：{@code field LIKE value}。调用者需要自行包含通配符（例如 {@code "%keyword%"}）。
-   *
-   * @param field 实体属性的方法引用
-   * @param value 匹配模式的字符串值
-   * @return 当前构建器以支持链式调用
-   * @throws IllegalArgumentException 如果 {@code field} 或 {@code value} 为 null
-   */
-  default SELF like(SFunction<E, ?> field, String value) {
-    if (value == null) {
-      throw new IllegalArgumentException("value must not be null");
-    }
-    conditions().add(new ConditionNode.SimpleNode(fieldName(field), value, ConditionNode.Op.LIKE));
-    return self();
-  }
-
-  /**
-   * 添加带自动通配符转义的 LIKE 条件：{@code field LIKE '%value%'}。 值中的 {@code %} 或 {@code _} 字符会被转义，作为字面量处理。
-   *
-   * @param field 实体属性的方法引用
-   * @param value 要匹配的原始字符串值
-   * @return 当前构建器以支持链式调用
-   * @throws IllegalArgumentException 如果 {@code field} 或 {@code value} 为 null
-   */
-  default SELF rawLike(SFunction<E, ?> field, String value) {
-    if (value == null) {
-      throw new IllegalArgumentException("value must not be null");
-    }
-    conditions()
-        .add(
-            new ConditionNode.SimpleNode(
-                fieldName(field),
-                "%" + escapeLikeWildcards(value) + "%",
-                ConditionNode.Op.LIKE,
-                PredicateHelper.LIKE_ESCAPE_CHAR));
-    return self();
-  }
-
-  /**
-   * 添加 NOT LIKE 条件：{@code field NOT LIKE value}。
-   *
-   * @param field 实体属性的方法引用
-   * @param value 匹配模式的字符串值
-   * @return 当前构建器以支持链式调用
-   * @throws IllegalArgumentException 如果 {@code field} 或 {@code value} 为 null
-   */
-  default SELF notLike(SFunction<E, ?> field, String value) {
-    if (value == null) {
-      throw new IllegalArgumentException("value must not be null");
-    }
-    conditions()
-        .add(new ConditionNode.SimpleNode(fieldName(field), value, ConditionNode.Op.NOT_LIKE));
-    return self();
-  }
-
-  /**
-   * 添加前缀匹配 LIKE 条件：{@code field LIKE 'value%'}。
-   *
-   * @param field 实体属性的方法引用
-   * @param value 前缀字符串值
-   * @return 当前构建器以支持链式调用
-   * @throws IllegalArgumentException 如果 {@code field} 或 {@code value} 为 null
-   */
-  default SELF startsWith(SFunction<E, ?> field, String value) {
-    if (value == null) {
-      throw new IllegalArgumentException("value must not be null");
-    }
-    conditions()
-        .add(
-            new ConditionNode.SimpleNode(
-                fieldName(field),
-                escapeLikeWildcards(value) + "%",
-                ConditionNode.Op.LIKE,
-                PredicateHelper.LIKE_ESCAPE_CHAR));
-    return self();
-  }
-
-  /**
-   * 添加后缀匹配 LIKE 条件：{@code field LIKE '%value'}。
-   *
-   * @param field 实体属性的方法引用
-   * @param value 后缀字符串值
-   * @return 当前构建器以支持链式调用
-   * @throws IllegalArgumentException 如果 {@code field} 或 {@code value} 为 null
-   */
-  default SELF endsWith(SFunction<E, ?> field, String value) {
-    if (value == null) {
-      throw new IllegalArgumentException("value must not be null");
-    }
-    conditions()
-        .add(
-            new ConditionNode.SimpleNode(
-                fieldName(field),
-                "%" + escapeLikeWildcards(value),
-                ConditionNode.Op.LIKE,
-                PredicateHelper.LIKE_ESCAPE_CHAR));
-    return self();
-  }
-
-  /**
-   * 添加包含匹配 LIKE 条件：{@code field LIKE '%value%'}。
-   *
-   * @param field 实体属性的方法引用
-   * @param value 要包含的子字符串值
-   * @return 当前构建器以支持链式调用
-   * @throws IllegalArgumentException 如果 {@code field} 或 {@code value} 为 null
-   */
-  default SELF contains(SFunction<E, ?> field, String value) {
-    if (value == null) {
-      throw new IllegalArgumentException("value must not be null");
-    }
-    conditions()
-        .add(
-            new ConditionNode.SimpleNode(
-                fieldName(field),
-                "%" + escapeLikeWildcards(value) + "%",
-                ConditionNode.Op.LIKE,
-                PredicateHelper.LIKE_ESCAPE_CHAR));
-    return self();
-  }
-
-  // ---- 集合运算符 ----
-
-  /**
-   * 添加 IN 条件：{@code field IN (values)}。
-   *
-   * @param field 实体属性的方法引用
-   * @param values 值集合
-   * @return 当前构建器以支持链式调用
-   * @throws IllegalArgumentException 如果 {@code field} 为 null 或 {@code values} 为空
-   */
-  default SELF in(SFunction<E, ?> field, Object... values) {
-    if (field == null) {
-      throw new IllegalArgumentException("field must not be null");
-    }
-    if (values == null || values.length == 0) {
-      throw new IllegalArgumentException("values must not be empty");
-    }
-    conditions()
-        .add(
-            new ConditionNode.SimpleNode(
-                LambdaUtils.getPropertyName(field), values, ConditionNode.Op.IN));
-    return self();
-  }
-
-  /**
-   * 添加 NOT IN 条件：{@code field NOT IN (values)}。
-   *
-   * @param field 实体属性的方法引用
-   * @param values 值集合
-   * @return 当前构建器以支持链式调用
-   * @throws IllegalArgumentException 如果 {@code field} 为 null 或 {@code values} 为空
-   */
-  default SELF notIn(SFunction<E, ?> field, Object... values) {
-    if (field == null) {
-      throw new IllegalArgumentException("field must not be null");
-    }
-    if (values == null || values.length == 0) {
-      throw new IllegalArgumentException("values must not be empty");
-    }
-    conditions()
-        .add(
-            new ConditionNode.SimpleNode(
-                LambdaUtils.getPropertyName(field), values, ConditionNode.Op.NOT_IN));
-    return self();
-  }
-
-  /**
-   * 添加使用 {@link Collection} 的 IN 条件：{@code field IN (values)}。
-   *
-   * @param field 实体属性的方法引用
-   * @param values 值的集合
-   * @return 当前构建器以支持链式调用
-   * @throws IllegalArgumentException 如果 {@code field} 为 null 或 {@code values} 为空
-   */
-  default SELF in(SFunction<E, ?> field, Collection<?> values) {
-    if (field == null) {
-      throw new IllegalArgumentException("field must not be null");
-    }
-    if (values == null || values.isEmpty()) {
-      throw new IllegalArgumentException("values must not be empty");
-    }
-    conditions()
-        .add(
-            new ConditionNode.SimpleNode(
-                LambdaUtils.getPropertyName(field), values, ConditionNode.Op.IN));
-    return self();
-  }
-
-  /**
-   * 添加使用 {@link Collection} 的 NOT IN 条件：{@code field NOT IN (values)}。
-   *
-   * @param field 实体属性的方法引用
-   * @param values 值的集合
-   * @return 当前构建器以支持链式调用
-   * @throws IllegalArgumentException 如果 {@code field} 为 null 或 {@code values} 为空
-   */
-  default SELF notIn(SFunction<E, ?> field, Collection<?> values) {
-    if (field == null) {
-      throw new IllegalArgumentException("field must not be null");
-    }
-    if (values == null || values.isEmpty()) {
-      throw new IllegalArgumentException("values must not be empty");
-    }
-    conditions()
-        .add(
-            new ConditionNode.SimpleNode(
-                LambdaUtils.getPropertyName(field), values, ConditionNode.Op.NOT_IN));
-    return self();
-  }
-
-  /**
-   * 添加 BETWEEN 条件：{@code field BETWEEN start AND end}。
-   *
-   * @param field 实体属性的方法引用
-   * @param start 下界（包含）
-   * @param end 上界（包含）
-   * @return 当前构建器以支持链式调用
-   * @throws IllegalArgumentException 如果 {@code field}、{@code start} 或 {@code end} 为 null， 或者 start
-   *     大于 end
-   */
-  @SuppressWarnings({"unchecked", "rawtypes"})
-  default SELF between(SFunction<E, ?> field, Comparable<?> start, Comparable<?> end) {
-    if (start == null) {
-      throw new IllegalArgumentException("start must not be null");
-    }
-    if (end == null) {
-      throw new IllegalArgumentException("end must not be null");
-    }
-    if (start.getClass() != end.getClass()) {
-      throw new IllegalArgumentException(
-          "start and end must be of the same type, but got "
-              + start.getClass().getName()
-              + " and "
-              + end.getClass().getName());
-    }
-    if (((Comparable) start).compareTo(end) > 0) {
-      throw new IllegalArgumentException("start must not be greater than end");
-    }
-    conditions()
-        .add(
-            new ConditionNode.SimpleNode(
-                fieldName(field), new Comparable<?>[] {start, end}, ConditionNode.Op.BETWEEN));
-    return self();
-  }
-
-  /**
-   * 添加 NOT BETWEEN 条件：{@code field NOT BETWEEN start AND end}。
-   *
-   * @param field 实体属性的方法引用
-   * @param start 下界（包含）
-   * @param end 上界（包含）
-   * @return 当前构建器以支持链式调用
-   * @throws IllegalArgumentException 如果 {@code field}、{@code start} 或 {@code end} 为 null， 或者 start
-   *     大于 end
-   */
-  @SuppressWarnings({"unchecked", "rawtypes"})
-  default SELF notBetween(SFunction<E, ?> field, Comparable<?> start, Comparable<?> end) {
-    if (start == null) {
-      throw new IllegalArgumentException("start must not be null");
-    }
-    if (end == null) {
-      throw new IllegalArgumentException("end must not be null");
-    }
-    if (((Comparable) start).compareTo(end) > 0) {
-      throw new IllegalArgumentException("start must not be greater than end");
-    }
-    conditions()
-        .add(
-            new ConditionNode.SimpleNode(
-                fieldName(field), new Comparable<?>[] {start, end}, ConditionNode.Op.NOT_BETWEEN));
-    return self();
-  }
-
-  // ---- 空值运算符 ----
-
-  /**
-   * 添加 IS NULL 条件：{@code field IS NULL}。
-   *
-   * @param field 实体属性的方法引用
-   * @return 当前构建器以支持链式调用
-   * @throws IllegalArgumentException 如果 {@code field} 为 null
-   */
-  default SELF isNull(SFunction<E, ?> field) {
-    conditions()
-        .add(new ConditionNode.SimpleNode(fieldName(field), null, ConditionNode.Op.IS_NULL));
-    return self();
-  }
-
-  /**
-   * 添加 IS NOT NULL 条件：{@code field IS NOT NULL}。
-   *
-   * @param field 实体属性的方法引用
-   * @return 当前构建器以支持链式调用
-   * @throws IllegalArgumentException 如果 {@code field} 为 null
-   */
-  default SELF isNotNull(SFunction<E, ?> field) {
-    conditions()
-        .add(new ConditionNode.SimpleNode(fieldName(field), null, ConditionNode.Op.IS_NOT_NULL));
-    return self();
-  }
-
-  /**
-   * 添加不区分大小写的等值条件：{@code UPPER(field) = UPPER(value)}。 适用于不区分大小写的用户名/邮箱查找。
-   *
-   * @param field 实体属性的方法引用
-   * @param value 要比较的字符串值，如果为 null 则生成 IS NULL 条件
-   * @return 当前构建器以支持链式调用
-   * @throws IllegalArgumentException 如果 {@code field} 为 null
-   */
-  default SELF eqIgnoreCase(SFunction<E, ?> field, @Nullable String value) {
-    if (field == null) {
-      throw new IllegalArgumentException("field must not be null");
-    }
-    if (value == null) {
-      return isNull(field);
-    }
-    conditions()
-        .add(
-            new ConditionNode.SimpleNode(
-                LambdaUtils.getPropertyName(field), value, ConditionNode.Op.EQ_IGNORE_CASE));
-    return self();
-  }
-
-  /**
-   * 添加不区分大小写的 LIKE 条件：{@code UPPER(field) LIKE UPPER('%value%')}。
-   *
-   * @param field 实体属性的方法引用
-   * @param value 匹配模式的字符串值
-   * @return 当前构建器以支持链式调用
-   * @throws IllegalArgumentException 如果 {@code field} 或 {@code value} 为 null
-   */
-  default SELF likeIgnoreCase(SFunction<E, ?> field, String value) {
-    if (value == null) {
-      throw new IllegalArgumentException("value must not be null");
-    }
-    conditions()
-        .add(
-            new ConditionNode.SimpleNode(
-                fieldName(field), value, ConditionNode.Op.LIKE_IGNORE_CASE));
-    return self();
-  }
-
-  // ---- 集合空值检查 ----
-
-  /**
-   * 添加 IS EMPTY 条件，用于一对多关联。适用于 {@code @OneToMany} 或 {@code @ManyToMany} 字段。
-   *
-   * @param field 实体属性的方法引用
-   * @return 当前构建器以支持链式调用
-   * @throws IllegalArgumentException 如果 {@code field} 为 null
-   */
-  default SELF isEmpty(SFunction<E, ?> field) {
-    if (field == null) {
-      throw new IllegalArgumentException("field must not be null");
-    }
-    conditions()
-        .add(
-            new ConditionNode.CollectionNode(
-                fieldName(field), ConditionNode.CollectionOp.IS_EMPTY));
-    return self();
-  }
-
-  /**
-   * 添加 IS NOT EMPTY 条件，用于一对多关联。
-   *
-   * @param field 实体属性的方法引用
-   * @return 当前构建器以支持链式调用
-   * @throws IllegalArgumentException 如果 {@code field} 为 null
-   */
-  default SELF isNotEmpty(SFunction<E, ?> field) {
-    if (field == null) {
-      throw new IllegalArgumentException("field must not be null");
-    }
-    conditions()
-        .add(
-            new ConditionNode.CollectionNode(
-                fieldName(field), ConditionNode.CollectionOp.IS_NOT_EMPTY));
-    return self();
-  }
-
-  /**
-   * 添加原始 {@link Predicate} 条件，使用当前实体 {@link Path} 和 {@link CriteriaBuilder}。 这是处理构建器 API
-   * 未覆盖条件的扩展方法。
-   *
-   * @param fn 接收实体路径和条件构建器的函数，返回谓词
-   * @return 当前构建器以支持链式调用
-   * @throws IllegalArgumentException 如果 {@code fn} 为 null
-   */
-  @SuppressWarnings("unchecked")
-  default SELF where(BiFunction<Path<E>, CriteriaBuilder, Predicate> fn) {
-    if (fn == null) {
-      throw new IllegalArgumentException("fn must not be null");
-    }
-    conditions()
-        .add(
-            new ConditionNode.RawNode(
-                (BiFunction<Path<?>, CriteriaBuilder, Predicate>) (Object) fn));
-    return self();
-  }
-
-  // ---- 多字段搜索 ----
-
-  /**
-   * 添加多字段 LIKE 搜索。关键字被包装为 {@code %keyword%} 并与每个给定字段匹配，使用 OR 连接。
-   *
-   * @param keyword 搜索关键字
-   * @param fields 一个或多个字符串属性的方法引用
-   * @return 当前构建器以支持链式调用
-   * @throws IllegalArgumentException 如果 {@code fields} 为 null 或包含 null 元素
-   */
-  @SuppressWarnings("unchecked")
-  default SELF multiLike(String keyword, SFunction<E, ?>... fields) {
-    if (fields == null) {
-      throw new IllegalArgumentException("fields must not be null");
-    }
-    if (keyword != null && !keyword.isEmpty() && fields.length > 0) {
-      String[] fieldNames = new String[fields.length];
-      for (int i = 0; i < fields.length; i++) {
-        if (fields[i] == null) {
-          throw new IllegalArgumentException("fields[" + i + "] must not be null");
+    private String fieldName(SFunction<E, ?> field) {
+        if (field == null) {
+            throw new IllegalArgumentException("field must not be null");
         }
-        fieldNames[i] = LambdaUtils.getPropertyName(fields[i]);
-      }
-      conditions().add(new ConditionNode.MultiLikeNode(keyword, fieldNames));
+        return LambdaUtils.getPropertyName(field);
     }
-    return self();
-  }
 
-  // ---- 条件便捷方法 ----
+    /**
+     * 将 {@code this} 转换为具体的构建器类型以支持方法链式调用。
+     *
+     * @return {@code this} 转换为 {@code SELF} 类型
+     */
+    @SuppressWarnings("unchecked")
+    default SELF self() {
+        return (SELF) this;
+    }
 
-  /**
-   * 仅在 {@code condition} 为 true 时添加等值条件。
-   *
-   * @param condition 是否添加条件的标志
-   * @param field 实体属性的方法引用
-   * @param value 要比较的值
-   * @return 当前构建器以支持链式调用
-   */
-  default SELF eq(boolean condition, SFunction<E, ?> field, @Nullable Object value) {
-    return condition ? eq(field, value) : self();
-  }
+    // ---- 比较运算符 ----
 
-  /**
-   * 仅在 {@code condition} 为 true 时添加不等条件。
-   *
-   * @param condition 是否添加条件的标志
-   * @param field 实体属性的方法引用
-   * @param value 要比较的值
-   * @return 当前构建器以支持链式调用
-   */
-  default SELF ne(boolean condition, SFunction<E, ?> field, @Nullable Object value) {
-    return condition ? ne(field, value) : self();
-  }
+    /**
+     * 添加等值条件：{@code field = value}。如果 {@code value} 为 null，则生成 {@code field IS NULL}。
+     *
+     * @param field 实体属性的方法引用
+     * @param value 要比较的值
+     * @return 当前构建器以支持链式调用
+     * @throws IllegalArgumentException 如果 {@code field} 为 null
+     */
+    default SELF eq(SFunction<E, ?> field, @Nullable Object value) {
+        if (field == null) {
+            throw new IllegalArgumentException("field must not be null");
+        }
+        if (value == null) {
+            conditions()
+                    .add(new ConditionNode.SimpleNode(
+                            LambdaUtils.getPropertyName(field), null, ConditionNode.Op.IS_NULL));
+        } else {
+            conditions()
+                    .add(new ConditionNode.SimpleNode(LambdaUtils.getPropertyName(field), value, ConditionNode.Op.EQ));
+        }
+        return self();
+    }
 
-  /**
-   * 仅在 {@code condition} 为 true 时添加大于条件。
-   *
-   * @param condition 是否添加条件的标志
-   * @param field 实体属性的方法引用
-   * @param value 要比较的值
-   * @return 当前构建器以支持链式调用
-   */
-  default SELF gt(boolean condition, SFunction<E, ?> field, Comparable<?> value) {
-    return condition ? gt(field, value) : self();
-  }
+    /**
+     * 添加不等条件：{@code field != value}。如果 {@code value} 为 null，则生成 {@code field IS NOT NULL}。
+     *
+     * @param field 实体属性的方法引用
+     * @param value 要比较的值
+     * @return 当前构建器以支持链式调用
+     * @throws IllegalArgumentException 如果 {@code field} 为 null
+     */
+    default SELF ne(SFunction<E, ?> field, @Nullable Object value) {
+        if (field == null) {
+            throw new IllegalArgumentException("field must not be null");
+        }
+        if (value == null) {
+            conditions()
+                    .add(new ConditionNode.SimpleNode(
+                            LambdaUtils.getPropertyName(field), null, ConditionNode.Op.IS_NOT_NULL));
+        } else {
+            conditions()
+                    .add(new ConditionNode.SimpleNode(LambdaUtils.getPropertyName(field), value, ConditionNode.Op.NE));
+        }
+        return self();
+    }
 
-  /**
-   * 仅在 {@code condition} 为 true 时添加大于等于条件。
-   *
-   * @param condition 是否添加条件的标志
-   * @param field 实体属性的方法引用
-   * @param value 要比较的值
-   * @return 当前构建器以支持链式调用
-   */
-  default SELF ge(boolean condition, SFunction<E, ?> field, Comparable<?> value) {
-    return condition ? ge(field, value) : self();
-  }
+    /**
+     * 添加大于条件：{@code field > value}。
+     *
+     * @param field 实体属性的方法引用
+     * @param value 要比较的值
+     * @return 当前构建器以支持链式调用
+     * @throws IllegalArgumentException 如果 {@code field} 或 {@code value} 为 null
+     */
+    default SELF gt(SFunction<E, ?> field, Comparable<?> value) {
+        if (value == null) {
+            throw new IllegalArgumentException("value must not be null");
+        }
+        conditions().add(new ConditionNode.SimpleNode(fieldName(field), value, ConditionNode.Op.GT));
+        return self();
+    }
 
-  /**
-   * 仅在 {@code condition} 为 true 时添加小于条件。
-   *
-   * @param condition 是否添加条件的标志
-   * @param field 实体属性的方法引用
-   * @param value 要比较的值
-   * @return 当前构建器以支持链式调用
-   */
-  default SELF lt(boolean condition, SFunction<E, ?> field, Comparable<?> value) {
-    return condition ? lt(field, value) : self();
-  }
+    /**
+     * 添加大于等于条件：{@code field >= value}。
+     *
+     * @param field 实体属性的方法引用
+     * @param value 要比较的值
+     * @return 当前构建器以支持链式调用
+     * @throws IllegalArgumentException 如果 {@code field} 或 {@code value} 为 null
+     */
+    default SELF ge(SFunction<E, ?> field, Comparable<?> value) {
+        if (value == null) {
+            throw new IllegalArgumentException("value must not be null");
+        }
+        conditions().add(new ConditionNode.SimpleNode(fieldName(field), value, ConditionNode.Op.GE));
+        return self();
+    }
 
-  /**
-   * 仅在 {@code condition} 为 true 时添加小于等于条件。
-   *
-   * @param condition 是否添加条件的标志
-   * @param field 实体属性的方法引用
-   * @param value 要比较的值
-   * @return 当前构建器以支持链式调用
-   */
-  default SELF le(boolean condition, SFunction<E, ?> field, Comparable<?> value) {
-    return condition ? le(field, value) : self();
-  }
+    /**
+     * 添加小于条件：{@code field < value}。
+     *
+     * @param field 实体属性的方法引用
+     * @param value 要比较的值
+     * @return 当前构建器以支持链式调用
+     * @throws IllegalArgumentException 如果 {@code field} 或 {@code value} 为 null
+     */
+    default SELF lt(SFunction<E, ?> field, Comparable<?> value) {
+        if (value == null) {
+            throw new IllegalArgumentException("value must not be null");
+        }
+        conditions().add(new ConditionNode.SimpleNode(fieldName(field), value, ConditionNode.Op.LT));
+        return self();
+    }
 
-  /**
-   * 仅在 {@code condition} 为 true 时添加 LIKE 条件。
-   *
-   * @param condition 是否添加条件的标志
-   * @param field 实体属性的方法引用
-   * @param value 匹配模式的字符串值
-   * @return 当前构建器以支持链式调用
-   */
-  default SELF like(boolean condition, SFunction<E, ?> field, String value) {
-    return condition ? like(field, value) : self();
-  }
+    /**
+     * 添加小于等于条件：{@code field <= value}。
+     *
+     * @param field 实体属性的方法引用
+     * @param value 要比较的值
+     * @return 当前构建器以支持链式调用
+     * @throws IllegalArgumentException 如果 {@code field} 或 {@code value} 为 null
+     */
+    default SELF le(SFunction<E, ?> field, Comparable<?> value) {
+        if (value == null) {
+            throw new IllegalArgumentException("value must not be null");
+        }
+        conditions().add(new ConditionNode.SimpleNode(fieldName(field), value, ConditionNode.Op.LE));
+        return self();
+    }
 
-  /**
-   * 仅在 {@code condition} 为 true 时添加 NOT LIKE 条件。
-   *
-   * @param condition 是否添加条件的标志
-   * @param field 实体属性的方法引用
-   * @param value 匹配模式的字符串值
-   * @return 当前构建器以支持链式调用
-   */
-  default SELF notLike(boolean condition, SFunction<E, ?> field, String value) {
-    return condition ? notLike(field, value) : self();
-  }
+    // ---- 字符串运算符 ----
 
-  /**
-   * 仅在 {@code condition} 为 true 时添加前缀匹配条件。
-   *
-   * @param condition 是否添加条件的标志
-   * @param field 实体属性的方法引用
-   * @param value 前缀字符串值
-   * @return 当前构建器以支持链式调用
-   */
-  default SELF startsWith(boolean condition, SFunction<E, ?> field, String value) {
-    return condition ? startsWith(field, value) : self();
-  }
+    /**
+     * 添加 LIKE 条件：{@code field LIKE value}。调用者需要自行包含通配符（例如 {@code "%keyword%"}）。
+     *
+     * @param field 实体属性的方法引用
+     * @param value 匹配模式的字符串值
+     * @return 当前构建器以支持链式调用
+     * @throws IllegalArgumentException 如果 {@code field} 或 {@code value} 为 null
+     */
+    default SELF like(SFunction<E, ?> field, String value) {
+        if (value == null) {
+            throw new IllegalArgumentException("value must not be null");
+        }
+        conditions().add(new ConditionNode.SimpleNode(fieldName(field), value, ConditionNode.Op.LIKE));
+        return self();
+    }
 
-  /**
-   * 仅在 {@code condition} 为 true 时添加后缀匹配条件。
-   *
-   * @param condition 是否添加条件的标志
-   * @param field 实体属性的方法引用
-   * @param value 后缀字符串值
-   * @return 当前构建器以支持链式调用
-   */
-  default SELF endsWith(boolean condition, SFunction<E, ?> field, String value) {
-    return condition ? endsWith(field, value) : self();
-  }
+    /**
+     * 添加带自动通配符转义的 LIKE 条件：{@code field LIKE '%value%'}。 值中的 {@code %} 或 {@code _} 字符会被转义，作为字面量处理。
+     *
+     * @param field 实体属性的方法引用
+     * @param value 要匹配的原始字符串值
+     * @return 当前构建器以支持链式调用
+     * @throws IllegalArgumentException 如果 {@code field} 或 {@code value} 为 null
+     */
+    default SELF rawLike(SFunction<E, ?> field, String value) {
+        if (value == null) {
+            throw new IllegalArgumentException("value must not be null");
+        }
+        conditions()
+                .add(new ConditionNode.SimpleNode(
+                        fieldName(field),
+                        "%" + escapeLikeWildcards(value) + "%",
+                        ConditionNode.Op.LIKE,
+                        PredicateHelper.LIKE_ESCAPE_CHAR));
+        return self();
+    }
 
-  /**
-   * 仅在 {@code condition} 为 true 时添加包含匹配条件。
-   *
-   * @param condition 是否添加条件的标志
-   * @param field 实体属性的方法引用
-   * @param value 要包含的子字符串值
-   * @return 当前构建器以支持链式调用
-   */
-  default SELF contains(boolean condition, SFunction<E, ?> field, String value) {
-    return condition ? contains(field, value) : self();
-  }
+    /**
+     * 添加 NOT LIKE 条件：{@code field NOT LIKE value}。
+     *
+     * @param field 实体属性的方法引用
+     * @param value 匹配模式的字符串值
+     * @return 当前构建器以支持链式调用
+     * @throws IllegalArgumentException 如果 {@code field} 或 {@code value} 为 null
+     */
+    default SELF notLike(SFunction<E, ?> field, String value) {
+        if (value == null) {
+            throw new IllegalArgumentException("value must not be null");
+        }
+        conditions().add(new ConditionNode.SimpleNode(fieldName(field), value, ConditionNode.Op.NOT_LIKE));
+        return self();
+    }
 
-  /**
-   * 仅在 {@code condition} 为 true 时添加 IN 条件。
-   *
-   * @param condition 是否添加条件的标志
-   * @param field 实体属性的方法引用
-   * @param values 值集合
-   * @return 当前构建器以支持链式调用
-   */
-  default SELF in(boolean condition, SFunction<E, ?> field, Object... values) {
-    return condition ? in(field, values) : self();
-  }
+    /**
+     * 添加前缀匹配 LIKE 条件：{@code field LIKE 'value%'}。
+     *
+     * @param field 实体属性的方法引用
+     * @param value 前缀字符串值
+     * @return 当前构建器以支持链式调用
+     * @throws IllegalArgumentException 如果 {@code field} 或 {@code value} 为 null
+     */
+    default SELF startsWith(SFunction<E, ?> field, String value) {
+        if (value == null) {
+            throw new IllegalArgumentException("value must not be null");
+        }
+        conditions()
+                .add(new ConditionNode.SimpleNode(
+                        fieldName(field),
+                        escapeLikeWildcards(value) + "%",
+                        ConditionNode.Op.LIKE,
+                        PredicateHelper.LIKE_ESCAPE_CHAR));
+        return self();
+    }
 
-  /**
-   * 仅在 {@code condition} 为 true 时添加使用 Collection 的 IN 条件。
-   *
-   * @param condition 是否添加条件的标志
-   * @param field 实体属性的方法引用
-   * @param values 值的集合
-   * @return 当前构建器以支持链式调用
-   */
-  default SELF in(boolean condition, SFunction<E, ?> field, Collection<?> values) {
-    return condition ? in(field, values) : self();
-  }
+    /**
+     * 添加后缀匹配 LIKE 条件：{@code field LIKE '%value'}。
+     *
+     * @param field 实体属性的方法引用
+     * @param value 后缀字符串值
+     * @return 当前构建器以支持链式调用
+     * @throws IllegalArgumentException 如果 {@code field} 或 {@code value} 为 null
+     */
+    default SELF endsWith(SFunction<E, ?> field, String value) {
+        if (value == null) {
+            throw new IllegalArgumentException("value must not be null");
+        }
+        conditions()
+                .add(new ConditionNode.SimpleNode(
+                        fieldName(field),
+                        "%" + escapeLikeWildcards(value),
+                        ConditionNode.Op.LIKE,
+                        PredicateHelper.LIKE_ESCAPE_CHAR));
+        return self();
+    }
 
-  /**
-   * 仅在 {@code condition} 为 true 时添加 NOT IN 条件。
-   *
-   * @param condition 是否添加条件的标志
-   * @param field 实体属性的方法引用
-   * @param values 值集合
-   * @return 当前构建器以支持链式调用
-   */
-  default SELF notIn(boolean condition, SFunction<E, ?> field, Object... values) {
-    return condition ? notIn(field, values) : self();
-  }
+    /**
+     * 添加包含匹配 LIKE 条件：{@code field LIKE '%value%'}。
+     *
+     * @param field 实体属性的方法引用
+     * @param value 要包含的子字符串值
+     * @return 当前构建器以支持链式调用
+     * @throws IllegalArgumentException 如果 {@code field} 或 {@code value} 为 null
+     */
+    default SELF contains(SFunction<E, ?> field, String value) {
+        if (value == null) {
+            throw new IllegalArgumentException("value must not be null");
+        }
+        conditions()
+                .add(new ConditionNode.SimpleNode(
+                        fieldName(field),
+                        "%" + escapeLikeWildcards(value) + "%",
+                        ConditionNode.Op.LIKE,
+                        PredicateHelper.LIKE_ESCAPE_CHAR));
+        return self();
+    }
 
-  /**
-   * 仅在 {@code condition} 为 true 时添加使用 Collection 的 NOT IN 条件。
-   *
-   * @param condition 是否添加条件的标志
-   * @param field 实体属性的方法引用
-   * @param values 值的集合
-   * @return 当前构建器以支持链式调用
-   */
-  default SELF notIn(boolean condition, SFunction<E, ?> field, Collection<?> values) {
-    return condition ? notIn(field, values) : self();
-  }
+    // ---- 集合运算符 ----
 
-  /**
-   * 仅在 {@code condition} 为 true 时添加 BETWEEN 条件。
-   *
-   * @param condition 是否添加条件的标志
-   * @param field 实体属性的方法引用
-   * @param start 下界（包含）
-   * @param end 上界（包含）
-   * @return 当前构建器以支持链式调用
-   */
-  default SELF between(
-      boolean condition, SFunction<E, ?> field, Comparable<?> start, Comparable<?> end) {
-    return condition ? between(field, start, end) : self();
-  }
+    /**
+     * 添加 IN 条件：{@code field IN (values)}。
+     *
+     * @param field 实体属性的方法引用
+     * @param values 值集合
+     * @return 当前构建器以支持链式调用
+     * @throws IllegalArgumentException 如果 {@code field} 为 null 或 {@code values} 为空
+     */
+    default SELF in(SFunction<E, ?> field, Object... values) {
+        if (field == null) {
+            throw new IllegalArgumentException("field must not be null");
+        }
+        if (values == null || values.length == 0) {
+            throw new IllegalArgumentException("values must not be empty");
+        }
+        conditions().add(new ConditionNode.SimpleNode(LambdaUtils.getPropertyName(field), values, ConditionNode.Op.IN));
+        return self();
+    }
 
-  /**
-   * 仅在 {@code condition} 为 true 时添加多字段 LIKE 搜索。
-   *
-   * @param condition 是否添加条件的标志
-   * @param keyword 搜索关键字
-   * @param fields 一个或多个字符串属性的方法引用
-   * @return 当前构建器以支持链式调用
-   */
-  @SuppressWarnings("unchecked")
-  default SELF multiLike(boolean condition, String keyword, SFunction<E, ?>... fields) {
-    return condition ? multiLike(keyword, fields) : self();
-  }
+    /**
+     * 添加 NOT IN 条件：{@code field NOT IN (values)}。
+     *
+     * @param field 实体属性的方法引用
+     * @param values 值集合
+     * @return 当前构建器以支持链式调用
+     * @throws IllegalArgumentException 如果 {@code field} 为 null 或 {@code values} 为空
+     */
+    default SELF notIn(SFunction<E, ?> field, Object... values) {
+        if (field == null) {
+            throw new IllegalArgumentException("field must not be null");
+        }
+        if (values == null || values.length == 0) {
+            throw new IllegalArgumentException("values must not be empty");
+        }
+        conditions()
+                .add(new ConditionNode.SimpleNode(LambdaUtils.getPropertyName(field), values, ConditionNode.Op.NOT_IN));
+        return self();
+    }
+
+    /**
+     * 添加使用 {@link Collection} 的 IN 条件：{@code field IN (values)}。
+     *
+     * @param field 实体属性的方法引用
+     * @param values 值的集合
+     * @return 当前构建器以支持链式调用
+     * @throws IllegalArgumentException 如果 {@code field} 为 null 或 {@code values} 为空
+     */
+    default SELF in(SFunction<E, ?> field, Collection<?> values) {
+        if (field == null) {
+            throw new IllegalArgumentException("field must not be null");
+        }
+        if (values == null || values.isEmpty()) {
+            throw new IllegalArgumentException("values must not be empty");
+        }
+        conditions().add(new ConditionNode.SimpleNode(LambdaUtils.getPropertyName(field), values, ConditionNode.Op.IN));
+        return self();
+    }
+
+    /**
+     * 添加使用 {@link Collection} 的 NOT IN 条件：{@code field NOT IN (values)}。
+     *
+     * @param field 实体属性的方法引用
+     * @param values 值的集合
+     * @return 当前构建器以支持链式调用
+     * @throws IllegalArgumentException 如果 {@code field} 为 null 或 {@code values} 为空
+     */
+    default SELF notIn(SFunction<E, ?> field, Collection<?> values) {
+        if (field == null) {
+            throw new IllegalArgumentException("field must not be null");
+        }
+        if (values == null || values.isEmpty()) {
+            throw new IllegalArgumentException("values must not be empty");
+        }
+        conditions()
+                .add(new ConditionNode.SimpleNode(LambdaUtils.getPropertyName(field), values, ConditionNode.Op.NOT_IN));
+        return self();
+    }
+
+    /**
+     * 添加 BETWEEN 条件：{@code field BETWEEN start AND end}。
+     *
+     * @param field 实体属性的方法引用
+     * @param start 下界（包含）
+     * @param end 上界（包含）
+     * @return 当前构建器以支持链式调用
+     * @throws IllegalArgumentException 如果 {@code field}、{@code start} 或 {@code end} 为 null， 或者 start
+     *     大于 end
+     */
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    default SELF between(SFunction<E, ?> field, Comparable<?> start, Comparable<?> end) {
+        if (start == null) {
+            throw new IllegalArgumentException("start must not be null");
+        }
+        if (end == null) {
+            throw new IllegalArgumentException("end must not be null");
+        }
+        if (start.getClass() != end.getClass()) {
+            throw new IllegalArgumentException("start and end must be of the same type, but got "
+                    + start.getClass().getName()
+                    + " and "
+                    + end.getClass().getName());
+        }
+        if (((Comparable) start).compareTo(end) > 0) {
+            throw new IllegalArgumentException("start must not be greater than end");
+        }
+        conditions()
+                .add(new ConditionNode.SimpleNode(
+                        fieldName(field), new Comparable<?>[] {start, end}, ConditionNode.Op.BETWEEN));
+        return self();
+    }
+
+    /**
+     * 添加 NOT BETWEEN 条件：{@code field NOT BETWEEN start AND end}。
+     *
+     * @param field 实体属性的方法引用
+     * @param start 下界（包含）
+     * @param end 上界（包含）
+     * @return 当前构建器以支持链式调用
+     * @throws IllegalArgumentException 如果 {@code field}、{@code start} 或 {@code end} 为 null， 或者 start
+     *     大于 end
+     */
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    default SELF notBetween(SFunction<E, ?> field, Comparable<?> start, Comparable<?> end) {
+        if (start == null) {
+            throw new IllegalArgumentException("start must not be null");
+        }
+        if (end == null) {
+            throw new IllegalArgumentException("end must not be null");
+        }
+        if (((Comparable) start).compareTo(end) > 0) {
+            throw new IllegalArgumentException("start must not be greater than end");
+        }
+        conditions()
+                .add(new ConditionNode.SimpleNode(
+                        fieldName(field), new Comparable<?>[] {start, end}, ConditionNode.Op.NOT_BETWEEN));
+        return self();
+    }
+
+    // ---- 空值运算符 ----
+
+    /**
+     * 添加 IS NULL 条件：{@code field IS NULL}。
+     *
+     * @param field 实体属性的方法引用
+     * @return 当前构建器以支持链式调用
+     * @throws IllegalArgumentException 如果 {@code field} 为 null
+     */
+    default SELF isNull(SFunction<E, ?> field) {
+        conditions().add(new ConditionNode.SimpleNode(fieldName(field), null, ConditionNode.Op.IS_NULL));
+        return self();
+    }
+
+    /**
+     * 添加 IS NOT NULL 条件：{@code field IS NOT NULL}。
+     *
+     * @param field 实体属性的方法引用
+     * @return 当前构建器以支持链式调用
+     * @throws IllegalArgumentException 如果 {@code field} 为 null
+     */
+    default SELF isNotNull(SFunction<E, ?> field) {
+        conditions().add(new ConditionNode.SimpleNode(fieldName(field), null, ConditionNode.Op.IS_NOT_NULL));
+        return self();
+    }
+
+    /**
+     * 添加不区分大小写的等值条件：{@code UPPER(field) = UPPER(value)}。 适用于不区分大小写的用户名/邮箱查找。
+     *
+     * @param field 实体属性的方法引用
+     * @param value 要比较的字符串值，如果为 null 则生成 IS NULL 条件
+     * @return 当前构建器以支持链式调用
+     * @throws IllegalArgumentException 如果 {@code field} 为 null
+     */
+    default SELF eqIgnoreCase(SFunction<E, ?> field, @Nullable String value) {
+        if (field == null) {
+            throw new IllegalArgumentException("field must not be null");
+        }
+        if (value == null) {
+            return isNull(field);
+        }
+        conditions()
+                .add(new ConditionNode.SimpleNode(
+                        LambdaUtils.getPropertyName(field), value, ConditionNode.Op.EQ_IGNORE_CASE));
+        return self();
+    }
+
+    /**
+     * 添加不区分大小写的 LIKE 条件：{@code UPPER(field) LIKE UPPER('%value%')}。
+     *
+     * @param field 实体属性的方法引用
+     * @param value 匹配模式的字符串值
+     * @return 当前构建器以支持链式调用
+     * @throws IllegalArgumentException 如果 {@code field} 或 {@code value} 为 null
+     */
+    default SELF likeIgnoreCase(SFunction<E, ?> field, String value) {
+        if (value == null) {
+            throw new IllegalArgumentException("value must not be null");
+        }
+        conditions().add(new ConditionNode.SimpleNode(fieldName(field), value, ConditionNode.Op.LIKE_IGNORE_CASE));
+        return self();
+    }
+
+    // ---- 集合空值检查 ----
+
+    /**
+     * 添加 IS EMPTY 条件，用于一对多关联。适用于 {@code @OneToMany} 或 {@code @ManyToMany} 字段。
+     *
+     * @param field 实体属性的方法引用
+     * @return 当前构建器以支持链式调用
+     * @throws IllegalArgumentException 如果 {@code field} 为 null
+     */
+    default SELF isEmpty(SFunction<E, ?> field) {
+        if (field == null) {
+            throw new IllegalArgumentException("field must not be null");
+        }
+        conditions().add(new ConditionNode.CollectionNode(fieldName(field), ConditionNode.CollectionOp.IS_EMPTY));
+        return self();
+    }
+
+    /**
+     * 添加 IS NOT EMPTY 条件，用于一对多关联。
+     *
+     * @param field 实体属性的方法引用
+     * @return 当前构建器以支持链式调用
+     * @throws IllegalArgumentException 如果 {@code field} 为 null
+     */
+    default SELF isNotEmpty(SFunction<E, ?> field) {
+        if (field == null) {
+            throw new IllegalArgumentException("field must not be null");
+        }
+        conditions().add(new ConditionNode.CollectionNode(fieldName(field), ConditionNode.CollectionOp.IS_NOT_EMPTY));
+        return self();
+    }
+
+    /**
+     * 添加原始 {@link Predicate} 条件，使用当前实体 {@link Path} 和 {@link CriteriaBuilder}。 这是处理构建器 API
+     * 未覆盖条件的扩展方法。
+     *
+     * @param fn 接收实体路径和条件构建器的函数，返回谓词
+     * @return 当前构建器以支持链式调用
+     * @throws IllegalArgumentException 如果 {@code fn} 为 null
+     */
+    @SuppressWarnings("unchecked")
+    default SELF where(BiFunction<Path<E>, CriteriaBuilder, Predicate> fn) {
+        if (fn == null) {
+            throw new IllegalArgumentException("fn must not be null");
+        }
+        conditions().add(new ConditionNode.RawNode((BiFunction<Path<?>, CriteriaBuilder, Predicate>) (Object) fn));
+        return self();
+    }
+
+    // ---- 多字段搜索 ----
+
+    /**
+     * 添加多字段 LIKE 搜索。关键字被包装为 {@code %keyword%} 并与每个给定字段匹配，使用 OR 连接。
+     *
+     * @param keyword 搜索关键字
+     * @param fields 一个或多个字符串属性的方法引用
+     * @return 当前构建器以支持链式调用
+     * @throws IllegalArgumentException 如果 {@code fields} 为 null 或包含 null 元素
+     */
+    @SuppressWarnings("unchecked")
+    default SELF multiLike(String keyword, SFunction<E, ?>... fields) {
+        if (fields == null) {
+            throw new IllegalArgumentException("fields must not be null");
+        }
+        if (keyword != null && !keyword.isEmpty() && fields.length > 0) {
+            String[] fieldNames = new String[fields.length];
+            for (int i = 0; i < fields.length; i++) {
+                if (fields[i] == null) {
+                    throw new IllegalArgumentException("fields[" + i + "] must not be null");
+                }
+                fieldNames[i] = LambdaUtils.getPropertyName(fields[i]);
+            }
+            conditions().add(new ConditionNode.MultiLikeNode(keyword, fieldNames));
+        }
+        return self();
+    }
+
+    // ---- 条件便捷方法 ----
+
+    /**
+     * 仅在 {@code condition} 为 true 时添加等值条件。
+     *
+     * @param condition 是否添加条件的标志
+     * @param field 实体属性的方法引用
+     * @param value 要比较的值
+     * @return 当前构建器以支持链式调用
+     */
+    default SELF eq(boolean condition, SFunction<E, ?> field, @Nullable Object value) {
+        return condition ? eq(field, value) : self();
+    }
+
+    /**
+     * 仅在 {@code condition} 为 true 时添加不等条件。
+     *
+     * @param condition 是否添加条件的标志
+     * @param field 实体属性的方法引用
+     * @param value 要比较的值
+     * @return 当前构建器以支持链式调用
+     */
+    default SELF ne(boolean condition, SFunction<E, ?> field, @Nullable Object value) {
+        return condition ? ne(field, value) : self();
+    }
+
+    /**
+     * 仅在 {@code condition} 为 true 时添加大于条件。
+     *
+     * @param condition 是否添加条件的标志
+     * @param field 实体属性的方法引用
+     * @param value 要比较的值
+     * @return 当前构建器以支持链式调用
+     */
+    default SELF gt(boolean condition, SFunction<E, ?> field, Comparable<?> value) {
+        return condition ? gt(field, value) : self();
+    }
+
+    /**
+     * 仅在 {@code condition} 为 true 时添加大于等于条件。
+     *
+     * @param condition 是否添加条件的标志
+     * @param field 实体属性的方法引用
+     * @param value 要比较的值
+     * @return 当前构建器以支持链式调用
+     */
+    default SELF ge(boolean condition, SFunction<E, ?> field, Comparable<?> value) {
+        return condition ? ge(field, value) : self();
+    }
+
+    /**
+     * 仅在 {@code condition} 为 true 时添加小于条件。
+     *
+     * @param condition 是否添加条件的标志
+     * @param field 实体属性的方法引用
+     * @param value 要比较的值
+     * @return 当前构建器以支持链式调用
+     */
+    default SELF lt(boolean condition, SFunction<E, ?> field, Comparable<?> value) {
+        return condition ? lt(field, value) : self();
+    }
+
+    /**
+     * 仅在 {@code condition} 为 true 时添加小于等于条件。
+     *
+     * @param condition 是否添加条件的标志
+     * @param field 实体属性的方法引用
+     * @param value 要比较的值
+     * @return 当前构建器以支持链式调用
+     */
+    default SELF le(boolean condition, SFunction<E, ?> field, Comparable<?> value) {
+        return condition ? le(field, value) : self();
+    }
+
+    /**
+     * 仅在 {@code condition} 为 true 时添加 LIKE 条件。
+     *
+     * @param condition 是否添加条件的标志
+     * @param field 实体属性的方法引用
+     * @param value 匹配模式的字符串值
+     * @return 当前构建器以支持链式调用
+     */
+    default SELF like(boolean condition, SFunction<E, ?> field, String value) {
+        return condition ? like(field, value) : self();
+    }
+
+    /**
+     * 仅在 {@code condition} 为 true 时添加 NOT LIKE 条件。
+     *
+     * @param condition 是否添加条件的标志
+     * @param field 实体属性的方法引用
+     * @param value 匹配模式的字符串值
+     * @return 当前构建器以支持链式调用
+     */
+    default SELF notLike(boolean condition, SFunction<E, ?> field, String value) {
+        return condition ? notLike(field, value) : self();
+    }
+
+    /**
+     * 仅在 {@code condition} 为 true 时添加前缀匹配条件。
+     *
+     * @param condition 是否添加条件的标志
+     * @param field 实体属性的方法引用
+     * @param value 前缀字符串值
+     * @return 当前构建器以支持链式调用
+     */
+    default SELF startsWith(boolean condition, SFunction<E, ?> field, String value) {
+        return condition ? startsWith(field, value) : self();
+    }
+
+    /**
+     * 仅在 {@code condition} 为 true 时添加后缀匹配条件。
+     *
+     * @param condition 是否添加条件的标志
+     * @param field 实体属性的方法引用
+     * @param value 后缀字符串值
+     * @return 当前构建器以支持链式调用
+     */
+    default SELF endsWith(boolean condition, SFunction<E, ?> field, String value) {
+        return condition ? endsWith(field, value) : self();
+    }
+
+    /**
+     * 仅在 {@code condition} 为 true 时添加包含匹配条件。
+     *
+     * @param condition 是否添加条件的标志
+     * @param field 实体属性的方法引用
+     * @param value 要包含的子字符串值
+     * @return 当前构建器以支持链式调用
+     */
+    default SELF contains(boolean condition, SFunction<E, ?> field, String value) {
+        return condition ? contains(field, value) : self();
+    }
+
+    /**
+     * 仅在 {@code condition} 为 true 时添加 IN 条件。
+     *
+     * @param condition 是否添加条件的标志
+     * @param field 实体属性的方法引用
+     * @param values 值集合
+     * @return 当前构建器以支持链式调用
+     */
+    default SELF in(boolean condition, SFunction<E, ?> field, Object... values) {
+        return condition ? in(field, values) : self();
+    }
+
+    /**
+     * 仅在 {@code condition} 为 true 时添加使用 Collection 的 IN 条件。
+     *
+     * @param condition 是否添加条件的标志
+     * @param field 实体属性的方法引用
+     * @param values 值的集合
+     * @return 当前构建器以支持链式调用
+     */
+    default SELF in(boolean condition, SFunction<E, ?> field, Collection<?> values) {
+        return condition ? in(field, values) : self();
+    }
+
+    /**
+     * 仅在 {@code condition} 为 true 时添加 NOT IN 条件。
+     *
+     * @param condition 是否添加条件的标志
+     * @param field 实体属性的方法引用
+     * @param values 值集合
+     * @return 当前构建器以支持链式调用
+     */
+    default SELF notIn(boolean condition, SFunction<E, ?> field, Object... values) {
+        return condition ? notIn(field, values) : self();
+    }
+
+    /**
+     * 仅在 {@code condition} 为 true 时添加使用 Collection 的 NOT IN 条件。
+     *
+     * @param condition 是否添加条件的标志
+     * @param field 实体属性的方法引用
+     * @param values 值的集合
+     * @return 当前构建器以支持链式调用
+     */
+    default SELF notIn(boolean condition, SFunction<E, ?> field, Collection<?> values) {
+        return condition ? notIn(field, values) : self();
+    }
+
+    /**
+     * 仅在 {@code condition} 为 true 时添加 BETWEEN 条件。
+     *
+     * @param condition 是否添加条件的标志
+     * @param field 实体属性的方法引用
+     * @param start 下界（包含）
+     * @param end 上界（包含）
+     * @return 当前构建器以支持链式调用
+     */
+    default SELF between(boolean condition, SFunction<E, ?> field, Comparable<?> start, Comparable<?> end) {
+        return condition ? between(field, start, end) : self();
+    }
+
+    /**
+     * 仅在 {@code condition} 为 true 时添加多字段 LIKE 搜索。
+     *
+     * @param condition 是否添加条件的标志
+     * @param keyword 搜索关键字
+     * @param fields 一个或多个字符串属性的方法引用
+     * @return 当前构建器以支持链式调用
+     */
+    @SuppressWarnings("unchecked")
+    default SELF multiLike(boolean condition, String keyword, SFunction<E, ?>... fields) {
+        return condition ? multiLike(keyword, fields) : self();
+    }
 }

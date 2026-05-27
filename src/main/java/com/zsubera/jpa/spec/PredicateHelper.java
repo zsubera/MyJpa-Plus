@@ -25,420 +25,399 @@ import java.util.Collection;
  */
 public final class PredicateHelper {
 
-  /** LIKE 通配符转义字符：反斜杠。 */
-  public static final char LIKE_ESCAPE_CHAR = '\\';
+    /** LIKE 通配符转义字符：反斜杠。 */
+    public static final char LIKE_ESCAPE_CHAR = '\\';
 
-  /** 私有构造函数，防止实例化。 */
-  private PredicateHelper() {}
+    /** 私有构造函数，防止实例化。 */
+    private PredicateHelper() {}
 
-  /**
-   * 转义 LIKE 模式中的 SQL 通配符（{@code %}、{@code _}）。
-   *
-   * <p>防止用户输入包含 {@code %} 或 {@code _} 的值时意外匹配到不相关的行。
-   *
-   * @param input 原始字符串值（可以为 null）
-   * @return 转义后的字符串，如果输入为 null 则返回 null
-   */
-  public static String escapeLikeWildcards(String input) {
-    if (input == null) {
-      return null;
+    /**
+     * 转义 LIKE 模式中的 SQL 通配符（{@code %}、{@code _}）。
+     *
+     * <p>防止用户输入包含 {@code %} 或 {@code _} 的值时意外匹配到不相关的行。
+     *
+     * @param input 原始字符串值（可以为 null）
+     * @return 转义后的字符串，如果输入为 null 则返回 null
+     */
+    public static String escapeLikeWildcards(String input) {
+        if (input == null) {
+            return null;
+        }
+        return input.replace("\\", "\\\\").replace("_", "\\_").replace("%", "\\%");
     }
-    return input.replace("\\", "\\\\").replace("_", "\\_").replace("%", "\\%");
-  }
 
-  // ==================== 比较运算符 ====================
+    // ==================== 比较运算符 ====================
 
-  /**
-   * 构建等于（=）谓词。
-   *
-   * <p>当值为 null 时，自动转换为 IS NULL 判断。
-   *
-   * @param path 实体路径
-   * @param fieldName 字段名
-   * @param value 比较值（可以为 null）
-   * @param cb CriteriaBuilder 实例
-   * @return 等于谓词
-   */
-  public static Predicate eq(Path<?> path, String fieldName, Object value, CriteriaBuilder cb) {
-    Path<?> fp = path.get(fieldName);
-    return value == null ? cb.isNull(fp) : cb.equal(fp, value);
-  }
-
-  /**
-   * 构建不等于（&lt;&gt;）谓词。
-   *
-   * <p>当值为 null 时，自动转换为 IS NOT NULL 判断。
-   *
-   * @param path 实体路径
-   * @param fieldName 字段名
-   * @param value 比较值（可以为 null）
-   * @param cb CriteriaBuilder 实例
-   * @return 不等于谓词
-   */
-  public static Predicate ne(Path<?> path, String fieldName, Object value, CriteriaBuilder cb) {
-    Path<?> fp = path.get(fieldName);
-    return value == null ? cb.isNotNull(fp) : cb.notEqual(fp, value);
-  }
-
-  /**
-   * 构建大于（&gt;）谓词。
-   *
-   * @param path 实体路径
-   * @param fieldName 字段名
-   * @param value 比较值
-   * @param cb CriteriaBuilder 实例
-   * @return 大于谓词
-   */
-  @SuppressWarnings({"unchecked", "rawtypes"})
-  public static Predicate gt(
-      Path<?> path, String fieldName, Comparable<?> value, CriteriaBuilder cb) {
-    return cb.greaterThan((Expression) path.get(fieldName), (Comparable) value);
-  }
-
-  /**
-   * 构建大于等于（&gt;=）谓词。
-   *
-   * @param path 实体路径
-   * @param fieldName 字段名
-   * @param value 比较值
-   * @param cb CriteriaBuilder 实例
-   * @return 大于等于谓词
-   */
-  @SuppressWarnings({"unchecked", "rawtypes"})
-  public static Predicate ge(
-      Path<?> path, String fieldName, Comparable<?> value, CriteriaBuilder cb) {
-    return cb.greaterThanOrEqualTo((Expression) path.get(fieldName), (Comparable) value);
-  }
-
-  /**
-   * 构建小于（&lt;）谓词。
-   *
-   * @param path 实体路径
-   * @param fieldName 字段名
-   * @param value 比较值
-   * @param cb CriteriaBuilder 实例
-   * @return 小于谓词
-   */
-  @SuppressWarnings({"unchecked", "rawtypes"})
-  public static Predicate lt(
-      Path<?> path, String fieldName, Comparable<?> value, CriteriaBuilder cb) {
-    return cb.lessThan((Expression) path.get(fieldName), (Comparable) value);
-  }
-
-  /**
-   * 构建小于等于（&lt;=）谓词。
-   *
-   * @param path 实体路径
-   * @param fieldName 字段名
-   * @param value 比较值
-   * @param cb CriteriaBuilder 实例
-   * @return 小于等于谓词
-   */
-  @SuppressWarnings({"unchecked", "rawtypes"})
-  public static Predicate le(
-      Path<?> path, String fieldName, Comparable<?> value, CriteriaBuilder cb) {
-    return cb.lessThanOrEqualTo((Expression) path.get(fieldName), (Comparable) value);
-  }
-
-  // ==================== 字符串运算符 ====================
-
-  /**
-   * 构建 LIKE 谓词。
-   *
-   * @param path 实体路径
-   * @param fieldName 字段名
-   * @param value LIKE 模式字符串
-   * @param cb CriteriaBuilder 实例
-   * @return LIKE 谓词
-   */
-  public static Predicate like(Path<?> path, String fieldName, String value, CriteriaBuilder cb) {
-    return cb.like(path.get(fieldName).as(String.class), value);
-  }
-
-  /**
-   * 构建带转义字符的 LIKE 谓词。
-   *
-   * @param path 实体路径
-   * @param fieldName 字段名
-   * @param value LIKE 模式字符串
-   * @param cb CriteriaBuilder 实例
-   * @param escapeChar 转义字符
-   * @return LIKE 谓词
-   */
-  public static Predicate like(
-      Path<?> path, String fieldName, String value, CriteriaBuilder cb, char escapeChar) {
-    return cb.like(path.get(fieldName).as(String.class), value, escapeChar);
-  }
-
-  /**
-   * 构建 NOT LIKE 谓词。
-   *
-   * @param path 实体路径
-   * @param fieldName 字段名
-   * @param value LIKE 模式字符串
-   * @param cb CriteriaBuilder 实例
-   * @return NOT LIKE 谓词
-   */
-  public static Predicate notLike(
-      Path<?> path, String fieldName, String value, CriteriaBuilder cb) {
-    return cb.notLike(path.get(fieldName).as(String.class), value);
-  }
-
-  /**
-   * 构建带转义字符的 NOT LIKE 谓词。
-   *
-   * @param path 实体路径
-   * @param fieldName 字段名
-   * @param value LIKE 模式字符串
-   * @param cb CriteriaBuilder 实例
-   * @param escapeChar 转义字符
-   * @return NOT LIKE 谓词
-   */
-  public static Predicate notLike(
-      Path<?> path, String fieldName, String value, CriteriaBuilder cb, char escapeChar) {
-    return cb.notLike(path.get(fieldName).as(String.class), value, escapeChar);
-  }
-
-  /**
-   * 构建前缀匹配（LIKE 'value%'）谓词。
-   *
-   * <p>自动转义值中的通配符字符。
-   *
-   * @param path 实体路径
-   * @param fieldName 字段名
-   * @param value 前缀字符串
-   * @param cb CriteriaBuilder 实例
-   * @return 前缀匹配谓词
-   */
-  public static Predicate startsWith(
-      Path<?> path, String fieldName, String value, CriteriaBuilder cb) {
-    return cb.like(
-        path.get(fieldName).as(String.class), escapeLikeWildcards(value) + "%", LIKE_ESCAPE_CHAR);
-  }
-
-  /**
-   * 构建后缀匹配（LIKE '%value'）谓词。
-   *
-   * <p>自动转义值中的通配符字符。
-   *
-   * @param path 实体路径
-   * @param fieldName 字段名
-   * @param value 后缀字符串
-   * @param cb CriteriaBuilder 实例
-   * @return 后缀匹配谓词
-   */
-  public static Predicate endsWith(
-      Path<?> path, String fieldName, String value, CriteriaBuilder cb) {
-    return cb.like(
-        path.get(fieldName).as(String.class), "%" + escapeLikeWildcards(value), LIKE_ESCAPE_CHAR);
-  }
-
-  /**
-   * 构建包含匹配（LIKE '%value%'）谓词。
-   *
-   * <p>自动转义值中的通配符字符。
-   *
-   * @param path 实体路径
-   * @param fieldName 字段名
-   * @param value 要包含的字符串
-   * @param cb CriteriaBuilder 实例
-   * @return 包含匹配谓词
-   */
-  public static Predicate contains(
-      Path<?> path, String fieldName, String value, CriteriaBuilder cb) {
-    return cb.like(
-        path.get(fieldName).as(String.class),
-        "%" + escapeLikeWildcards(value) + "%",
-        LIKE_ESCAPE_CHAR);
-  }
-
-  /**
-   * 构建忽略大小写的等于谓词。
-   *
-   * <p>通过 {@code UPPER()} 函数将双方转换为大写后比较。 当值为 null 时，自动转换为 IS NULL 判断。
-   *
-   * @param path 实体路径
-   * @param fieldName 字段名
-   * @param value 比较值（可以为 null）
-   * @param cb CriteriaBuilder 实例
-   * @return 忽略大小写的等于谓词
-   */
-  public static Predicate eqIgnoreCase(
-      Path<?> path, String fieldName, String value, CriteriaBuilder cb) {
-    Path<?> fp = path.get(fieldName);
-    if (value == null) {
-      return cb.isNull(fp);
+    /**
+     * 构建等于（=）谓词。
+     *
+     * <p>当值为 null 时，自动转换为 IS NULL 判断。
+     *
+     * @param path 实体路径
+     * @param fieldName 字段名
+     * @param value 比较值（可以为 null）
+     * @param cb CriteriaBuilder 实例
+     * @return 等于谓词
+     */
+    public static Predicate eq(Path<?> path, String fieldName, Object value, CriteriaBuilder cb) {
+        Path<?> fp = path.get(fieldName);
+        return value == null ? cb.isNull(fp) : cb.equal(fp, value);
     }
-    return cb.equal(cb.upper(fp.as(String.class)), value.toUpperCase());
-  }
 
-  /**
-   * 构建忽略大小写的 LIKE 谓词。
-   *
-   * <p>通过 {@code UPPER()} 函数将双方转换为大写后进行 LIKE 匹配。
-   *
-   * @param path 实体路径
-   * @param fieldName 字段名
-   * @param value LIKE 模式字符串（应已包含大写形式）
-   * @param cb CriteriaBuilder 实例
-   * @return 忽略大小写的 LIKE 谓词
-   */
-  public static Predicate likeIgnoreCase(
-      Path<?> path, String fieldName, String value, CriteriaBuilder cb) {
-    return cb.like(cb.upper(path.get(fieldName).as(String.class)), value.toUpperCase());
-  }
+    /**
+     * 构建不等于（&lt;&gt;）谓词。
+     *
+     * <p>当值为 null 时，自动转换为 IS NOT NULL 判断。
+     *
+     * @param path 实体路径
+     * @param fieldName 字段名
+     * @param value 比较值（可以为 null）
+     * @param cb CriteriaBuilder 实例
+     * @return 不等于谓词
+     */
+    public static Predicate ne(Path<?> path, String fieldName, Object value, CriteriaBuilder cb) {
+        Path<?> fp = path.get(fieldName);
+        return value == null ? cb.isNotNull(fp) : cb.notEqual(fp, value);
+    }
 
-  // ==================== 集合运算符 ====================
+    /**
+     * 构建大于（&gt;）谓词。
+     *
+     * @param path 实体路径
+     * @param fieldName 字段名
+     * @param value 比较值
+     * @param cb CriteriaBuilder 实例
+     * @return 大于谓词
+     */
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    public static Predicate gt(Path<?> path, String fieldName, Comparable<?> value, CriteriaBuilder cb) {
+        return cb.greaterThan((Expression) path.get(fieldName), (Comparable) value);
+    }
 
-  /**
-   * 构建 IN 谓词（数组形式）。
-   *
-   * <p>如果值的数量超过 {@link InClauseBuilder#MAX_IN_CLAUSE_SIZE}，会自动分批处理。
-   *
-   * @param path 实体路径
-   * @param fieldName 字段名
-   * @param values 值数组
-   * @param cb CriteriaBuilder 实例
-   * @return IN 谓词
-   */
-  public static Predicate in(Path<?> path, String fieldName, Object[] values, CriteriaBuilder cb) {
-    return InClauseBuilder.in(cb, path.get(fieldName), values);
-  }
+    /**
+     * 构建大于等于（&gt;=）谓词。
+     *
+     * @param path 实体路径
+     * @param fieldName 字段名
+     * @param value 比较值
+     * @param cb CriteriaBuilder 实例
+     * @return 大于等于谓词
+     */
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    public static Predicate ge(Path<?> path, String fieldName, Comparable<?> value, CriteriaBuilder cb) {
+        return cb.greaterThanOrEqualTo((Expression) path.get(fieldName), (Comparable) value);
+    }
 
-  /**
-   * 构建 NOT IN 谓词（数组形式）。
-   *
-   * <p>如果值的数量超过 {@link InClauseBuilder#MAX_IN_CLAUSE_SIZE}，会自动分批处理。
-   *
-   * @param path 实体路径
-   * @param fieldName 字段名
-   * @param values 值数组
-   * @param cb CriteriaBuilder 实例
-   * @return NOT IN 谓词
-   */
-  public static Predicate notIn(
-      Path<?> path, String fieldName, Object[] values, CriteriaBuilder cb) {
-    return InClauseBuilder.notIn(cb, path.get(fieldName), values);
-  }
+    /**
+     * 构建小于（&lt;）谓词。
+     *
+     * @param path 实体路径
+     * @param fieldName 字段名
+     * @param value 比较值
+     * @param cb CriteriaBuilder 实例
+     * @return 小于谓词
+     */
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    public static Predicate lt(Path<?> path, String fieldName, Comparable<?> value, CriteriaBuilder cb) {
+        return cb.lessThan((Expression) path.get(fieldName), (Comparable) value);
+    }
 
-  /**
-   * 构建 IN 谓词（集合形式）。
-   *
-   * <p>如果值的数量超过 {@link InClauseBuilder#MAX_IN_CLAUSE_SIZE}，会自动分批处理。
-   *
-   * @param path 实体路径
-   * @param fieldName 字段名
-   * @param values 值集合
-   * @param cb CriteriaBuilder 实例
-   * @return IN 谓词
-   */
-  public static Predicate in(
-      Path<?> path, String fieldName, Collection<?> values, CriteriaBuilder cb) {
-    return InClauseBuilder.in(cb, path.get(fieldName), values);
-  }
+    /**
+     * 构建小于等于（&lt;=）谓词。
+     *
+     * @param path 实体路径
+     * @param fieldName 字段名
+     * @param value 比较值
+     * @param cb CriteriaBuilder 实例
+     * @return 小于等于谓词
+     */
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    public static Predicate le(Path<?> path, String fieldName, Comparable<?> value, CriteriaBuilder cb) {
+        return cb.lessThanOrEqualTo((Expression) path.get(fieldName), (Comparable) value);
+    }
 
-  /**
-   * 构建 NOT IN 谓词（集合形式）。
-   *
-   * <p>如果值的数量超过 {@link InClauseBuilder#MAX_IN_CLAUSE_SIZE}，会自动分批处理。
-   *
-   * @param path 实体路径
-   * @param fieldName 字段名
-   * @param values 值集合
-   * @param cb CriteriaBuilder 实例
-   * @return NOT IN 谓词
-   */
-  public static Predicate notIn(
-      Path<?> path, String fieldName, Collection<?> values, CriteriaBuilder cb) {
-    return InClauseBuilder.notIn(cb, path.get(fieldName), values);
-  }
+    // ==================== 字符串运算符 ====================
 
-  // ==================== 范围运算符 ====================
+    /**
+     * 构建 LIKE 谓词。
+     *
+     * @param path 实体路径
+     * @param fieldName 字段名
+     * @param value LIKE 模式字符串
+     * @param cb CriteriaBuilder 实例
+     * @return LIKE 谓词
+     */
+    public static Predicate like(Path<?> path, String fieldName, String value, CriteriaBuilder cb) {
+        return cb.like(path.get(fieldName).as(String.class), value);
+    }
 
-  /**
-   * 构建 BETWEEN 谓词。
-   *
-   * @param path 实体路径
-   * @param fieldName 字段名
-   * @param start 范围起始值（包含）
-   * @param end 范围结束值（包含）
-   * @param cb CriteriaBuilder 实例
-   * @return BETWEEN 谓词
-   */
-  @SuppressWarnings({"unchecked", "rawtypes"})
-  public static Predicate between(
-      Path<?> path, String fieldName, Comparable<?> start, Comparable<?> end, CriteriaBuilder cb) {
-    return cb.between((Expression) path.get(fieldName), (Comparable) start, (Comparable) end);
-  }
+    /**
+     * 构建带转义字符的 LIKE 谓词。
+     *
+     * @param path 实体路径
+     * @param fieldName 字段名
+     * @param value LIKE 模式字符串
+     * @param cb CriteriaBuilder 实例
+     * @param escapeChar 转义字符
+     * @return LIKE 谓词
+     */
+    public static Predicate like(Path<?> path, String fieldName, String value, CriteriaBuilder cb, char escapeChar) {
+        return cb.like(path.get(fieldName).as(String.class), value, escapeChar);
+    }
 
-  /**
-   * 构建 NOT BETWEEN 谓词。
-   *
-   * @param path 实体路径
-   * @param fieldName 字段名
-   * @param start 范围起始值（包含）
-   * @param end 范围结束值（包含）
-   * @param cb CriteriaBuilder 实例
-   * @return NOT BETWEEN 谓词
-   */
-  @SuppressWarnings({"unchecked", "rawtypes"})
-  public static Predicate notBetween(
-      Path<?> path, String fieldName, Comparable<?> start, Comparable<?> end, CriteriaBuilder cb) {
-    return cb.not(
-        cb.between((Expression) path.get(fieldName), (Comparable) start, (Comparable) end));
-  }
+    /**
+     * 构建 NOT LIKE 谓词。
+     *
+     * @param path 实体路径
+     * @param fieldName 字段名
+     * @param value LIKE 模式字符串
+     * @param cb CriteriaBuilder 实例
+     * @return NOT LIKE 谓词
+     */
+    public static Predicate notLike(Path<?> path, String fieldName, String value, CriteriaBuilder cb) {
+        return cb.notLike(path.get(fieldName).as(String.class), value);
+    }
 
-  // ==================== NULL 运算符 ====================
+    /**
+     * 构建带转义字符的 NOT LIKE 谓词。
+     *
+     * @param path 实体路径
+     * @param fieldName 字段名
+     * @param value LIKE 模式字符串
+     * @param cb CriteriaBuilder 实例
+     * @param escapeChar 转义字符
+     * @return NOT LIKE 谓词
+     */
+    public static Predicate notLike(Path<?> path, String fieldName, String value, CriteriaBuilder cb, char escapeChar) {
+        return cb.notLike(path.get(fieldName).as(String.class), value, escapeChar);
+    }
 
-  /**
-   * 构建 IS NULL 谓词。
-   *
-   * @param path 实体路径
-   * @param fieldName 字段名
-   * @param cb CriteriaBuilder 实例
-   * @return IS NULL 谓词
-   */
-  public static Predicate isNull(Path<?> path, String fieldName, CriteriaBuilder cb) {
-    return cb.isNull(path.get(fieldName));
-  }
+    /**
+     * 构建前缀匹配（LIKE 'value%'）谓词。
+     *
+     * <p>自动转义值中的通配符字符。
+     *
+     * @param path 实体路径
+     * @param fieldName 字段名
+     * @param value 前缀字符串
+     * @param cb CriteriaBuilder 实例
+     * @return 前缀匹配谓词
+     */
+    public static Predicate startsWith(Path<?> path, String fieldName, String value, CriteriaBuilder cb) {
+        return cb.like(path.get(fieldName).as(String.class), escapeLikeWildcards(value) + "%", LIKE_ESCAPE_CHAR);
+    }
 
-  /**
-   * 构建 IS NOT NULL 谓词。
-   *
-   * @param path 实体路径
-   * @param fieldName 字段名
-   * @param cb CriteriaBuilder 实例
-   * @return IS NOT NULL 谓词
-   */
-  public static Predicate isNotNull(Path<?> path, String fieldName, CriteriaBuilder cb) {
-    return cb.isNotNull(path.get(fieldName));
-  }
+    /**
+     * 构建后缀匹配（LIKE '%value'）谓词。
+     *
+     * <p>自动转义值中的通配符字符。
+     *
+     * @param path 实体路径
+     * @param fieldName 字段名
+     * @param value 后缀字符串
+     * @param cb CriteriaBuilder 实例
+     * @return 后缀匹配谓词
+     */
+    public static Predicate endsWith(Path<?> path, String fieldName, String value, CriteriaBuilder cb) {
+        return cb.like(path.get(fieldName).as(String.class), "%" + escapeLikeWildcards(value), LIKE_ESCAPE_CHAR);
+    }
 
-  // ==================== 集合空值检查 ====================
+    /**
+     * 构建包含匹配（LIKE '%value%'）谓词。
+     *
+     * <p>自动转义值中的通配符字符。
+     *
+     * @param path 实体路径
+     * @param fieldName 字段名
+     * @param value 要包含的字符串
+     * @param cb CriteriaBuilder 实例
+     * @return 包含匹配谓词
+     */
+    public static Predicate contains(Path<?> path, String fieldName, String value, CriteriaBuilder cb) {
+        return cb.like(path.get(fieldName).as(String.class), "%" + escapeLikeWildcards(value) + "%", LIKE_ESCAPE_CHAR);
+    }
 
-  /**
-   * 构建集合为空（IS EMPTY）谓词。
-   *
-   * @param path 实体路径
-   * @param fieldName 字段名
-   * @param cb CriteriaBuilder 实例
-   * @return 集合为空谓词
-   */
-  @SuppressWarnings("unchecked")
-  public static Predicate isEmpty(Path<?> path, String fieldName, CriteriaBuilder cb) {
-    return cb.isEmpty((Expression<java.util.Collection<?>>) (Expression<?>) path.get(fieldName));
-  }
+    /**
+     * 构建忽略大小写的等于谓词。
+     *
+     * <p>通过 {@code UPPER()} 函数将双方转换为大写后比较。 当值为 null 时，自动转换为 IS NULL 判断。
+     *
+     * @param path 实体路径
+     * @param fieldName 字段名
+     * @param value 比较值（可以为 null）
+     * @param cb CriteriaBuilder 实例
+     * @return 忽略大小写的等于谓词
+     */
+    public static Predicate eqIgnoreCase(Path<?> path, String fieldName, String value, CriteriaBuilder cb) {
+        Path<?> fp = path.get(fieldName);
+        if (value == null) {
+            return cb.isNull(fp);
+        }
+        return cb.equal(cb.upper(fp.as(String.class)), value.toUpperCase());
+    }
 
-  /**
-   * 构建集合不为空（IS NOT EMPTY）谓词。
-   *
-   * @param path 实体路径
-   * @param fieldName 字段名
-   * @param cb CriteriaBuilder 实例
-   * @return 集合不为空谓词
-   */
-  @SuppressWarnings("unchecked")
-  public static Predicate isNotEmpty(Path<?> path, String fieldName, CriteriaBuilder cb) {
-    return cb.isNotEmpty((Expression<java.util.Collection<?>>) (Expression<?>) path.get(fieldName));
-  }
+    /**
+     * 构建忽略大小写的 LIKE 谓词。
+     *
+     * <p>通过 {@code UPPER()} 函数将双方转换为大写后进行 LIKE 匹配。
+     *
+     * @param path 实体路径
+     * @param fieldName 字段名
+     * @param value LIKE 模式字符串（应已包含大写形式）
+     * @param cb CriteriaBuilder 实例
+     * @return 忽略大小写的 LIKE 谓词
+     */
+    public static Predicate likeIgnoreCase(Path<?> path, String fieldName, String value, CriteriaBuilder cb) {
+        return cb.like(cb.upper(path.get(fieldName).as(String.class)), value.toUpperCase());
+    }
+
+    // ==================== 集合运算符 ====================
+
+    /**
+     * 构建 IN 谓词（数组形式）。
+     *
+     * <p>如果值的数量超过 {@link InClauseBuilder#MAX_IN_CLAUSE_SIZE}，会自动分批处理。
+     *
+     * @param path 实体路径
+     * @param fieldName 字段名
+     * @param values 值数组
+     * @param cb CriteriaBuilder 实例
+     * @return IN 谓词
+     */
+    public static Predicate in(Path<?> path, String fieldName, Object[] values, CriteriaBuilder cb) {
+        return InClauseBuilder.in(cb, path.get(fieldName), values);
+    }
+
+    /**
+     * 构建 NOT IN 谓词（数组形式）。
+     *
+     * <p>如果值的数量超过 {@link InClauseBuilder#MAX_IN_CLAUSE_SIZE}，会自动分批处理。
+     *
+     * @param path 实体路径
+     * @param fieldName 字段名
+     * @param values 值数组
+     * @param cb CriteriaBuilder 实例
+     * @return NOT IN 谓词
+     */
+    public static Predicate notIn(Path<?> path, String fieldName, Object[] values, CriteriaBuilder cb) {
+        return InClauseBuilder.notIn(cb, path.get(fieldName), values);
+    }
+
+    /**
+     * 构建 IN 谓词（集合形式）。
+     *
+     * <p>如果值的数量超过 {@link InClauseBuilder#MAX_IN_CLAUSE_SIZE}，会自动分批处理。
+     *
+     * @param path 实体路径
+     * @param fieldName 字段名
+     * @param values 值集合
+     * @param cb CriteriaBuilder 实例
+     * @return IN 谓词
+     */
+    public static Predicate in(Path<?> path, String fieldName, Collection<?> values, CriteriaBuilder cb) {
+        return InClauseBuilder.in(cb, path.get(fieldName), values);
+    }
+
+    /**
+     * 构建 NOT IN 谓词（集合形式）。
+     *
+     * <p>如果值的数量超过 {@link InClauseBuilder#MAX_IN_CLAUSE_SIZE}，会自动分批处理。
+     *
+     * @param path 实体路径
+     * @param fieldName 字段名
+     * @param values 值集合
+     * @param cb CriteriaBuilder 实例
+     * @return NOT IN 谓词
+     */
+    public static Predicate notIn(Path<?> path, String fieldName, Collection<?> values, CriteriaBuilder cb) {
+        return InClauseBuilder.notIn(cb, path.get(fieldName), values);
+    }
+
+    // ==================== 范围运算符 ====================
+
+    /**
+     * 构建 BETWEEN 谓词。
+     *
+     * @param path 实体路径
+     * @param fieldName 字段名
+     * @param start 范围起始值（包含）
+     * @param end 范围结束值（包含）
+     * @param cb CriteriaBuilder 实例
+     * @return BETWEEN 谓词
+     */
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    public static Predicate between(
+            Path<?> path, String fieldName, Comparable<?> start, Comparable<?> end, CriteriaBuilder cb) {
+        return cb.between((Expression) path.get(fieldName), (Comparable) start, (Comparable) end);
+    }
+
+    /**
+     * 构建 NOT BETWEEN 谓词。
+     *
+     * @param path 实体路径
+     * @param fieldName 字段名
+     * @param start 范围起始值（包含）
+     * @param end 范围结束值（包含）
+     * @param cb CriteriaBuilder 实例
+     * @return NOT BETWEEN 谓词
+     */
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    public static Predicate notBetween(
+            Path<?> path, String fieldName, Comparable<?> start, Comparable<?> end, CriteriaBuilder cb) {
+        return cb.not(cb.between((Expression) path.get(fieldName), (Comparable) start, (Comparable) end));
+    }
+
+    // ==================== NULL 运算符 ====================
+
+    /**
+     * 构建 IS NULL 谓词。
+     *
+     * @param path 实体路径
+     * @param fieldName 字段名
+     * @param cb CriteriaBuilder 实例
+     * @return IS NULL 谓词
+     */
+    public static Predicate isNull(Path<?> path, String fieldName, CriteriaBuilder cb) {
+        return cb.isNull(path.get(fieldName));
+    }
+
+    /**
+     * 构建 IS NOT NULL 谓词。
+     *
+     * @param path 实体路径
+     * @param fieldName 字段名
+     * @param cb CriteriaBuilder 实例
+     * @return IS NOT NULL 谓词
+     */
+    public static Predicate isNotNull(Path<?> path, String fieldName, CriteriaBuilder cb) {
+        return cb.isNotNull(path.get(fieldName));
+    }
+
+    // ==================== 集合空值检查 ====================
+
+    /**
+     * 构建集合为空（IS EMPTY）谓词。
+     *
+     * @param path 实体路径
+     * @param fieldName 字段名
+     * @param cb CriteriaBuilder 实例
+     * @return 集合为空谓词
+     */
+    @SuppressWarnings("unchecked")
+    public static Predicate isEmpty(Path<?> path, String fieldName, CriteriaBuilder cb) {
+        return cb.isEmpty((Expression<java.util.Collection<?>>) (Expression<?>) path.get(fieldName));
+    }
+
+    /**
+     * 构建集合不为空（IS NOT EMPTY）谓词。
+     *
+     * @param path 实体路径
+     * @param fieldName 字段名
+     * @param cb CriteriaBuilder 实例
+     * @return 集合不为空谓词
+     */
+    @SuppressWarnings("unchecked")
+    public static Predicate isNotEmpty(Path<?> path, String fieldName, CriteriaBuilder cb) {
+        return cb.isNotEmpty((Expression<java.util.Collection<?>>) (Expression<?>) path.get(fieldName));
+    }
 }
