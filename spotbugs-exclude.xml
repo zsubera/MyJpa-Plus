@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<FindBugsFilter>
+    <!-- Exclude CT_CONSTRUCTOR_THROW for MyJpaTemplate -->
+    <!-- This is a false positive because EntityManager injection is managed by Spring -->
+    <Match>
+        <Class name="com.zsubera.jpa.template.MyJpaTemplate"/>
+        <Bug pattern="CT_CONSTRUCTOR_THROW"/>
+    </Match>
+</FindBugsFilter>

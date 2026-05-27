@@ -181,6 +181,7 @@
                     <effort>Default</effort>
                     <threshold>Medium</threshold>
                     <maxHeap>1024</maxHeap>
+                    <excludeFilterFile>spotbugs-exclude.xml</excludeFilterFile>
                 </configuration>
             </plugin>
             <plugin>

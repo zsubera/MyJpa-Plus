@@ -1,9 +1,11 @@
 package com.zsubera.jpa.update;
 
+import com.zsubera.jpa.repository.EntityClassResolver;
 import com.zsubera.jpa.spec.SFunction;
 import com.zsubera.jpa.util.LambdaUtils;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.criteria.CriteriaBuilder;
+import jakarta.persistence.criteria.CriteriaQuery;
 import jakarta.persistence.criteria.CriteriaUpdate;
 import jakarta.persistence.criteria.Predicate;
 import jakarta.persistence.criteria.Root;
@@ -180,21 +182,36 @@ public class UpdateSpec<T> extends AbstractBulkOperationSpec<T, UpdateSpec<T>> {
     if (setClauses.isEmpty()) {
       throw new IllegalStateException("At least one set() clause is required");
     }
-    CriteriaBuilder cb = em.getCriteriaBuilder();
-    CriteriaUpdate<T> update = cb.createCriteriaUpdate(entityClass);
-    Root<T> root = update.from(entityClass);
-    for (SetClause sc : setClauses) {
-      update.set(root.get(sc.fieldName), sc.value);
+    if (limit <= 0) {
+      throw new IllegalArgumentException("limit must be positive");
     }
-    Predicate[] predicates = buildPredicates(root, cb);
+    CriteriaBuilder cb = em.getCriteriaBuilder();
+
+    // Step 1: 查询符合条件的ID列表（带LIMIT）
+    String idFieldName = EntityClassResolver.resolveIdFieldName(entityClass);
+    CriteriaQuery<?> idQuery = cb.createQuery();
+    Root<T> idRoot = idQuery.from(entityClass);
+    idQuery.select(idRoot.get(idFieldName));
+    Predicate[] predicates = buildPredicates(idRoot, cb);
     if (predicates.length == 0) {
       throw new IllegalStateException(
           "No WHERE conditions specified for UPDATE operation. "
               + "Use updateAll() for unconditional updates.");
     }
-    update.where(cb.and(predicates));
-    // 使用 JPA 查询执行更新
-    jakarta.persistence.Query query = em.createQuery(update);
-    return query.executeUpdate();
+    idQuery.where(cb.and(predicates));
+    List<?> ids = em.createQuery(idQuery).setMaxResults(limit).getResultList();
+
+    if (ids.isEmpty()) {
+      return 0;
+    }
+
+    // Step 2: 用ID列表执行更新
+    CriteriaUpdate<T> update = cb.createCriteriaUpdate(entityClass);
+    Root<T> updateRoot = update.from(entityClass);
+    for (SetClause sc : setClauses) {
+      update.set(updateRoot.get(sc.fieldName), sc.value);
+    }
+    update.where(updateRoot.get(idFieldName).in(ids));
+    return em.createQuery(update).executeUpdate();
   }
 }

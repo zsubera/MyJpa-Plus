@@ -4,6 +4,7 @@ import com.zsubera.jpa.spec.QuerySpec;
 import com.zsubera.jpa.update.DeleteSpec;
 import com.zsubera.jpa.update.UpdateSpec;
 import com.zsubera.jpa.util.EntityGraphHelper;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
 import jakarta.persistence.TypedQuery;
@@ -18,7 +19,6 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
-import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
@@ -56,19 +56,75 @@ import org.springframework.transaction.annotation.Transactional;
  *     );
  * }
  * }</pre>
+ *
+ * <p>配置示例（application.yml）：
+ *
+ * <pre>{@code
+ * myjpa-plus:
+ *   query:
+ *     max-results: 50000
+ *     deep-pagination-offset-threshold: 500000
+ * }</pre>
  */
-@Component
 public class MyJpaTemplate {
 
   private static final Logger log = LoggerFactory.getLogger(MyJpaTemplate.class);
 
   /** {@link #findAll} 和 {@link #find} 方法返回的默认最大行数。 */
-  public static final int MAX_RESULTS = 10000;
+  public static final int DEFAULT_MAX_RESULTS = 10000;
 
   /** 深度分页的 offset 阈值，超过此值会记录警告日志。 */
-  public static final int DEEP_PAGINATION_OFFSET_THRESHOLD = 100000;
+  public static final int DEFAULT_DEEP_PAGINATION_OFFSET_THRESHOLD = 100000;
 
   @PersistenceContext private EntityManager entityManager;
+
+  private int maxResults = DEFAULT_MAX_RESULTS;
+  private int deepPaginationOffsetThreshold = DEFAULT_DEEP_PAGINATION_OFFSET_THRESHOLD;
+
+  /**
+   * 创建 MyJpaTemplate 实例，使用默认配置。
+   */
+  public MyJpaTemplate() {
+    // 使用默认值
+  }
+
+  /**
+   * 创建配置了自定义参数的 MyJpaTemplate 实例。
+   * 参数验证在 {@link #setMaxResults(int)} 和 {@link #setDeepPaginationOffsetThreshold(int)} 中进行。
+   *
+   * @param maxResults 最大返回行数
+   * @param deepPaginationOffsetThreshold 深度分页警告阈值
+   */
+  public MyJpaTemplate(int maxResults, int deepPaginationOffsetThreshold) {
+    this.maxResults = maxResults;
+    this.deepPaginationOffsetThreshold = deepPaginationOffsetThreshold;
+  }
+
+  /**
+   * 设置最大返回行数。
+   *
+   * @param maxResults 最大返回行数
+   * @throws IllegalArgumentException 如果值不是正数
+   */
+  public void setMaxResults(int maxResults) {
+    if (maxResults <= 0) {
+      throw new IllegalArgumentException("maxResults must be positive");
+    }
+    this.maxResults = maxResults;
+  }
+
+  /**
+   * 设置深度分页警告阈值。
+   *
+   * @param deepPaginationOffsetThreshold 深度分页警告阈值
+   * @throws IllegalArgumentException 如果值不是正数
+   */
+  public void setDeepPaginationOffsetThreshold(int deepPaginationOffsetThreshold) {
+    if (deepPaginationOffsetThreshold <= 0) {
+      throw new IllegalArgumentException("deepPaginationOffsetThreshold must be positive");
+    }
+    this.deepPaginationOffsetThreshold = deepPaginationOffsetThreshold;
+  }
 
   /**
    * 创建指定实体类型的 {@link UpdateSpec}。{@link EntityManager} 将在执行时通过 {@link #execute(UpdateSpec)} 提供。
@@ -97,17 +153,17 @@ public class MyJpaTemplate {
   /**
    * 查找匹配给定 {@link QuerySpec} 的所有实体。
    *
-   * <p><strong>生产说明：</strong>此方法将结果限制为 {@link #MAX_RESULTS} 行。使用 {@link #findAll(Class, QuerySpec,
+   * <p><strong>生产说明：</strong>此方法将结果限制为可配置的最大行数（默认 {@value #DEFAULT_MAX_RESULTS}）。使用 {@link #findAll(Class, QuerySpec,
    * int)} 指定自定义限制，或使用 {@link #findAllStream(Class, QuerySpec)} 进行无界流式查询。
    *
    * @param entityClass 实体类
    * @param spec 查询规范
    * @param <T> 实体类型
-   * @return 匹配实体列表（限制为 MAX_RESULTS）
+   * @return 匹配实体列表（限制为最大行数）
    */
   @Transactional(readOnly = true)
   public <T> List<T> findAll(Class<T> entityClass, QuerySpec<T> spec) {
-    return findAll(entityClass, spec, MAX_RESULTS);
+    return findAll(entityClass, spec, this.maxResults);
   }
 
   /**
@@ -146,7 +202,7 @@ public class MyJpaTemplate {
   @Transactional(readOnly = true)
   public <T> List<T> findAll(
       Class<T> entityClass, QuerySpec<T> spec, EntityGraphHelper<T> entityGraph) {
-    return findAll(entityClass, spec, entityGraph, MAX_RESULTS);
+    return findAll(entityClass, spec, entityGraph, this.maxResults);
   }
 
   /**
@@ -243,11 +299,11 @@ public class MyJpaTemplate {
    * @param entityClass 实体类
    * @param spec 查询规范
    * @param <T> 实体类型
-   * @return 匹配实体列表（限制为 MAX_RESULTS）
+   * @return 匹配实体列表（限制为最大行数）
    */
   @Transactional(readOnly = true)
   public <T> List<T> find(Class<T> entityClass, Specification<T> spec) {
-    return find(entityClass, spec, MAX_RESULTS);
+    return find(entityClass, spec, this.maxResults);
   }
 
   /**
@@ -295,7 +351,7 @@ public class MyJpaTemplate {
       log.warn(
           "Pageable.unpaged() used with findPageInternal - returning all results up to {} limit. "
               + "Consider using findAll() with explicit maxResults or findAllStream() for large datasets.",
-          MAX_RESULTS);
+          this.maxResults);
       CriteriaQuery<T> cq = cb.createQuery(entityClass);
       Root<T> root = cq.from(entityClass);
       jakarta.persistence.criteria.Predicate predicate = spec.toPredicate(root, cq, cb);
@@ -303,14 +359,14 @@ public class MyJpaTemplate {
         cq.where(predicate);
       }
       TypedQuery<T> typedQuery = entityManager.createQuery(cq);
-      typedQuery.setMaxResults(MAX_RESULTS);
+      typedQuery.setMaxResults(this.maxResults);
       querySpec.applyQuerySettings(typedQuery);
       List<T> allContent = typedQuery.getResultList();
       return new PageImpl<>(allContent);
     }
 
     // 深度分页警告
-    if (pageable.getOffset() > DEEP_PAGINATION_OFFSET_THRESHOLD) {
+    if (pageable.getOffset() > this.deepPaginationOffsetThreshold) {
       log.warn(
           "Deep pagination detected (offset={}). This may cause slow queries. "
               + "Consider using keyset pagination for better performance.",
@@ -372,7 +428,7 @@ public class MyJpaTemplate {
       log.warn(
           "Pageable.unpaged() used with findPage - returning all results up to {} limit. "
               + "Consider using find() with explicit maxResults or findAllStream() for large datasets.",
-          MAX_RESULTS);
+          this.maxResults);
       CriteriaQuery<T> cq = cb.createQuery(entityClass);
       Root<T> root = cq.from(entityClass);
       jakarta.persistence.criteria.Predicate predicate = spec.toPredicate(root, cq, cb);
@@ -380,13 +436,13 @@ public class MyJpaTemplate {
         cq.where(predicate);
       }
       TypedQuery<T> query = entityManager.createQuery(cq);
-      query.setMaxResults(MAX_RESULTS);
+      query.setMaxResults(this.maxResults);
       List<T> allContent = query.getResultList();
       return new PageImpl<>(allContent);
     }
 
     // 深度分页警告
-    if (pageable.getOffset() > DEEP_PAGINATION_OFFSET_THRESHOLD) {
+    if (pageable.getOffset() > this.deepPaginationOffsetThreshold) {
       log.warn(
           "Deep pagination detected (offset={}). This may cause slow queries. "
               + "Consider using keyset pagination for better performance.",

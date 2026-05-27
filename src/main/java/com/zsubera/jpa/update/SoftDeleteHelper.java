@@ -9,6 +9,8 @@ import java.lang.reflect.Field;
 import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.data.jpa.domain.Specification;
 
 /**
@@ -31,7 +33,8 @@ import org.springframework.data.jpa.domain.Specification;
  */
 public final class SoftDeleteHelper {
 
-  private static final int MAX_FIELD_CACHE_SIZE = 1024;
+  private static final int MAX_CACHE_SIZE = 1024;
+  private static final Logger log = org.slf4j.LoggerFactory.getLogger(SoftDeleteHelper.class);
 
   // Sentinel value for entities without a @SoftDelete field (avoids null in cache)
   private static final String NO_FIELD_SENTINEL = "\0";
@@ -143,6 +146,13 @@ public final class SoftDeleteHelper {
    * @return 字段名称，如果未找到 {@code @SoftDelete} 字段则返回 {@code null}
    */
   public static String findSoftDeleteField(Class<?> entityClass) {
+    if (FIELD_CACHE.size() > MAX_CACHE_SIZE) {
+      log.warn(
+          "SoftDeleteHelper field cache size ({}) exceeds limit ({}). "
+              + "This may indicate a class loader leak or excessive entity classes.",
+          FIELD_CACHE.size(),
+          MAX_CACHE_SIZE);
+    }
     String result =
         FIELD_CACHE.computeIfAbsent(
             entityClass,

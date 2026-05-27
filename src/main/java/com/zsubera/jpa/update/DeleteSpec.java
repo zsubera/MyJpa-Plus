@@ -1,10 +1,13 @@
 package com.zsubera.jpa.update;
 
+import com.zsubera.jpa.repository.EntityClassResolver;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.criteria.CriteriaBuilder;
 import jakarta.persistence.criteria.CriteriaDelete;
+import jakarta.persistence.criteria.CriteriaQuery;
 import jakarta.persistence.criteria.Predicate;
 import jakarta.persistence.criteria.Root;
+import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -122,18 +125,33 @@ public class DeleteSpec<T> extends AbstractBulkOperationSpec<T, DeleteSpec<T>> {
    * @return 实际删除的行数
    */
   public int executeLimited(EntityManager em, int limit) {
+    if (limit <= 0) {
+      throw new IllegalArgumentException("limit must be positive");
+    }
     CriteriaBuilder cb = em.getCriteriaBuilder();
-    CriteriaDelete<T> delete = cb.createCriteriaDelete(entityClass);
-    Root<T> root = delete.from(entityClass);
-    Predicate[] predicates = buildPredicates(root, cb);
+
+    // Step 1: 查询符合条件的ID列表（带LIMIT）
+    String idFieldName = EntityClassResolver.resolveIdFieldName(entityClass);
+    CriteriaQuery<?> idQuery = cb.createQuery();
+    Root<T> idRoot = idQuery.from(entityClass);
+    idQuery.select(idRoot.get(idFieldName));
+    Predicate[] predicates = buildPredicates(idRoot, cb);
     if (predicates.length == 0) {
       throw new IllegalStateException(
           "No WHERE conditions specified for DELETE operation. "
               + "Use deleteAll() for unconditional deletions.");
     }
-    delete.where(cb.and(predicates));
-    // 使用 JPA 查询执行删除
-    jakarta.persistence.Query query = em.createQuery(delete);
-    return query.executeUpdate();
+    idQuery.where(cb.and(predicates));
+    List<?> ids = em.createQuery(idQuery).setMaxResults(limit).getResultList();
+
+    if (ids.isEmpty()) {
+      return 0;
+    }
+
+    // Step 2: 用ID列表执行删除
+    CriteriaDelete<T> delete = cb.createCriteriaDelete(entityClass);
+    Root<T> deleteRoot = delete.from(entityClass);
+    delete.where(deleteRoot.get(idFieldName).in(ids));
+    return em.createQuery(delete).executeUpdate();
   }
 }

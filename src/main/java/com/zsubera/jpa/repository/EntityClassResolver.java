@@ -12,7 +12,7 @@ import org.springframework.core.ResolvableType;
  * <p>处理类似以下情况：{@code interface UserRepo extends CustomBase<User, Long>}，其中{@code CustomBase<T, ID>
  * extends MyJpaRepository<T, ID>}，通过遍历整个接口层次结构来找到绑定到 {@link MyJpaRepository}类型参数的实际类型参数。
  */
-final class EntityClassResolver {
+public final class EntityClassResolver {
 
   private static final ConcurrentMap<Class<?>, Class<?>> CACHE = new ConcurrentHashMap<>();
   private static final ConcurrentMap<Class<?>, String> ID_FIELD_CACHE = new ConcurrentHashMap<>();
@@ -50,7 +50,7 @@ final class EntityClassResolver {
    * @param entityClass 实体类
    * @return ID字段名，如果未找到{@code @Id}则返回{@code "id"}
    */
-  static String resolveIdFieldName(Class<?> entityClass) {
+  public static String resolveIdFieldName(Class<?> entityClass) {
     return ID_FIELD_CACHE.computeIfAbsent(
         entityClass,
         cls -> {
