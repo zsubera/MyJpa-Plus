@@ -65,14 +65,10 @@ public class MyJpaPlusProperties {
   }
 
   public static class Query {
-    /**
-     * findAll 和 find 方法返回的默认最大行数。对于1000万用户场景，建议根据实际需求调整。 默认值：{@code 10000}
-     */
+    /** findAll 和 find 方法返回的默认最大行数。对于1000万用户场景，建议根据实际需求调整。 默认值：{@code 10000} */
     private int maxResults = 10000;
 
-    /**
-     * 深度分页的 offset 阈值，超过此值会记录警告日志。 默认值：{@code 100000}
-     */
+    /** 深度分页的 offset 阈值，超过此值会记录警告日志。 默认值：{@code 100000} */
     private int deepPaginationOffsetThreshold = 100000;
 
     public int getMaxResults() {

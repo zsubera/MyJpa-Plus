@@ -4,7 +4,6 @@ import com.zsubera.jpa.spec.QuerySpec;
 import com.zsubera.jpa.update.DeleteSpec;
 import com.zsubera.jpa.update.UpdateSpec;
 import com.zsubera.jpa.util.EntityGraphHelper;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
 import jakarta.persistence.TypedQuery;
@@ -81,16 +80,14 @@ public class MyJpaTemplate {
   private int maxResults = DEFAULT_MAX_RESULTS;
   private int deepPaginationOffsetThreshold = DEFAULT_DEEP_PAGINATION_OFFSET_THRESHOLD;
 
-  /**
-   * 创建 MyJpaTemplate 实例，使用默认配置。
-   */
+  /** 创建 MyJpaTemplate 实例，使用默认配置。 */
   public MyJpaTemplate() {
     // 使用默认值
   }
 
   /**
-   * 创建配置了自定义参数的 MyJpaTemplate 实例。
-   * 参数验证在 {@link #setMaxResults(int)} 和 {@link #setDeepPaginationOffsetThreshold(int)} 中进行。
+   * 创建配置了自定义参数的 MyJpaTemplate 实例。 参数验证在 {@link #setMaxResults(int)} 和 {@link
+   * #setDeepPaginationOffsetThreshold(int)} 中进行。
    *
    * @param maxResults 最大返回行数
    * @param deepPaginationOffsetThreshold 深度分页警告阈值
@@ -153,8 +150,8 @@ public class MyJpaTemplate {
   /**
    * 查找匹配给定 {@link QuerySpec} 的所有实体。
    *
-   * <p><strong>生产说明：</strong>此方法将结果限制为可配置的最大行数（默认 {@value #DEFAULT_MAX_RESULTS}）。使用 {@link #findAll(Class, QuerySpec,
-   * int)} 指定自定义限制，或使用 {@link #findAllStream(Class, QuerySpec)} 进行无界流式查询。
+   * <p><strong>生产说明：</strong>此方法将结果限制为可配置的最大行数（默认 {@value #DEFAULT_MAX_RESULTS}）。使用 {@link
+   * #findAll(Class, QuerySpec, int)} 指定自定义限制，或使用 {@link #findAllStream(Class, QuerySpec)} 进行无界流式查询。
    *
    * @param entityClass 实体类
    * @param spec 查询规范
