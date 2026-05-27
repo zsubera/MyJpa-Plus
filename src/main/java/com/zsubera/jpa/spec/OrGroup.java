@@ -64,7 +64,7 @@ public class OrGroup<T> implements ConditionBuilder<T, OrGroup<T>> {
     /** OR 组内自动关闭的 JOIN。 */
     public <J> OrGroup<T> join(SFunction<T, ?> field, Consumer<JoinGroup<T, J>> config) {
         ConditionNode.JoinNode joinNode =
-                new ConditionNode.JoinNode(LambdaUtils.getPropertyName(field), ConditionNode.JoinType.INNER);
+            new ConditionNode.JoinNode(LambdaUtils.getPropertyName(field), ConditionNode.JoinType.INNER);
         root.currentGroup().add(joinNode);
         config.accept(new JoinGroup<>(root, joinNode));
         return this;
@@ -73,7 +73,7 @@ public class OrGroup<T> implements ConditionBuilder<T, OrGroup<T>> {
     /** OR 组内自动关闭的 LEFT JOIN。 */
     public <J> OrGroup<T> leftJoin(SFunction<T, ?> field, Consumer<JoinGroup<T, J>> config) {
         ConditionNode.JoinNode joinNode =
-                new ConditionNode.JoinNode(LambdaUtils.getPropertyName(field), ConditionNode.JoinType.LEFT);
+            new ConditionNode.JoinNode(LambdaUtils.getPropertyName(field), ConditionNode.JoinType.LEFT);
         root.currentGroup().add(joinNode);
         config.accept(new JoinGroup<>(root, joinNode));
         return this;

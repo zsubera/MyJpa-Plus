@@ -10,15 +10,18 @@ import java.util.Collection;
 /**
  * JPA {@link Predicate} 构建的共享工具类。
  *
- * <p>提供即时构建 {@link Predicate} 的静态方法，供需要直接构建谓词的组件使用 （而非通过延迟执行的 {@link ConditionNode} 树）。
+ * <p>
+ * 提供即时构建 {@link Predicate} 的静态方法，供需要直接构建谓词的组件使用 （而非通过延迟执行的 {@link ConditionNode} 树）。
  *
- * <p>主要使用者包括 {@link SubQuerySpec}（即时构建）和 {@link com.zsubera.jpa.update.AbstractBulkOperationSpec
+ * <p>
+ * 主要使用者包括 {@link SubQuerySpec}（即时构建）和 {@link com.zsubera.jpa.update.AbstractBulkOperationSpec
  * AbstractBulkOperationSpec}（延迟包装）， 消除了约 200 行重复的条件构建逻辑。
  *
- * <p>所有方法接收 {@link Path}、字段名、比较值和 {@link CriteriaBuilder}， 返回完整构建的 {@link
- * Predicate}。参数的空值校验和范围校验由调用方负责。
+ * <p>
+ * 所有方法接收 {@link Path}、字段名、比较值和 {@link CriteriaBuilder}， 返回完整构建的 {@link Predicate}。参数的空值校验和范围校验由调用方负责。
  *
- * <p>内部工具类——不建议应用代码直接使用。
+ * <p>
+ * 内部工具类——不建议应用代码直接使用。
  *
  * @author zsubera
  * @since 1.0
@@ -34,7 +37,8 @@ public final class PredicateHelper {
     /**
      * 转义 LIKE 模式中的 SQL 通配符（{@code %}、{@code _}）。
      *
-     * <p>防止用户输入包含 {@code %} 或 {@code _} 的值时意外匹配到不相关的行。
+     * <p>
+     * 防止用户输入包含 {@code %} 或 {@code _} 的值时意外匹配到不相关的行。
      *
      * @param input 原始字符串值（可以为 null）
      * @return 转义后的字符串，如果输入为 null 则返回 null
@@ -51,7 +55,8 @@ public final class PredicateHelper {
     /**
      * 构建等于（=）谓词。
      *
-     * <p>当值为 null 时，自动转换为 IS NULL 判断。
+     * <p>
+     * 当值为 null 时，自动转换为 IS NULL 判断。
      *
      * @param path 实体路径
      * @param fieldName 字段名
@@ -67,7 +72,8 @@ public final class PredicateHelper {
     /**
      * 构建不等于（&lt;&gt;）谓词。
      *
-     * <p>当值为 null 时，自动转换为 IS NOT NULL 判断。
+     * <p>
+     * 当值为 null 时，自动转换为 IS NOT NULL 判断。
      *
      * @param path 实体路径
      * @param fieldName 字段名
@@ -91,7 +97,7 @@ public final class PredicateHelper {
      */
     @SuppressWarnings({"unchecked", "rawtypes"})
     public static Predicate gt(Path<?> path, String fieldName, Comparable<?> value, CriteriaBuilder cb) {
-        return cb.greaterThan((Expression) path.get(fieldName), (Comparable) value);
+        return cb.greaterThan((Expression)path.get(fieldName), (Comparable)value);
     }
 
     /**
@@ -105,7 +111,7 @@ public final class PredicateHelper {
      */
     @SuppressWarnings({"unchecked", "rawtypes"})
     public static Predicate ge(Path<?> path, String fieldName, Comparable<?> value, CriteriaBuilder cb) {
-        return cb.greaterThanOrEqualTo((Expression) path.get(fieldName), (Comparable) value);
+        return cb.greaterThanOrEqualTo((Expression)path.get(fieldName), (Comparable)value);
     }
 
     /**
@@ -119,7 +125,7 @@ public final class PredicateHelper {
      */
     @SuppressWarnings({"unchecked", "rawtypes"})
     public static Predicate lt(Path<?> path, String fieldName, Comparable<?> value, CriteriaBuilder cb) {
-        return cb.lessThan((Expression) path.get(fieldName), (Comparable) value);
+        return cb.lessThan((Expression)path.get(fieldName), (Comparable)value);
     }
 
     /**
@@ -133,7 +139,7 @@ public final class PredicateHelper {
      */
     @SuppressWarnings({"unchecked", "rawtypes"})
     public static Predicate le(Path<?> path, String fieldName, Comparable<?> value, CriteriaBuilder cb) {
-        return cb.lessThanOrEqualTo((Expression) path.get(fieldName), (Comparable) value);
+        return cb.lessThanOrEqualTo((Expression)path.get(fieldName), (Comparable)value);
     }
 
     // ==================== 字符串运算符 ====================
@@ -195,7 +201,8 @@ public final class PredicateHelper {
     /**
      * 构建前缀匹配（LIKE 'value%'）谓词。
      *
-     * <p>自动转义值中的通配符字符。
+     * <p>
+     * 自动转义值中的通配符字符。
      *
      * @param path 实体路径
      * @param fieldName 字段名
@@ -210,7 +217,8 @@ public final class PredicateHelper {
     /**
      * 构建后缀匹配（LIKE '%value'）谓词。
      *
-     * <p>自动转义值中的通配符字符。
+     * <p>
+     * 自动转义值中的通配符字符。
      *
      * @param path 实体路径
      * @param fieldName 字段名
@@ -225,7 +233,8 @@ public final class PredicateHelper {
     /**
      * 构建包含匹配（LIKE '%value%'）谓词。
      *
-     * <p>自动转义值中的通配符字符。
+     * <p>
+     * 自动转义值中的通配符字符。
      *
      * @param path 实体路径
      * @param fieldName 字段名
@@ -240,7 +249,8 @@ public final class PredicateHelper {
     /**
      * 构建忽略大小写的等于谓词。
      *
-     * <p>通过 {@code UPPER()} 函数将双方转换为大写后比较。 当值为 null 时，自动转换为 IS NULL 判断。
+     * <p>
+     * 通过 {@code UPPER()} 函数将双方转换为大写后比较。 当值为 null 时，自动转换为 IS NULL 判断。
      *
      * @param path 实体路径
      * @param fieldName 字段名
@@ -259,7 +269,8 @@ public final class PredicateHelper {
     /**
      * 构建忽略大小写的 LIKE 谓词。
      *
-     * <p>通过 {@code UPPER()} 函数将双方转换为大写后进行 LIKE 匹配。
+     * <p>
+     * 通过 {@code UPPER()} 函数将双方转换为大写后进行 LIKE 匹配。
      *
      * @param path 实体路径
      * @param fieldName 字段名
@@ -276,7 +287,8 @@ public final class PredicateHelper {
     /**
      * 构建 IN 谓词（数组形式）。
      *
-     * <p>如果值的数量超过 {@link InClauseBuilder#MAX_IN_CLAUSE_SIZE}，会自动分批处理。
+     * <p>
+     * 如果值的数量超过 {@link InClauseBuilder#MAX_IN_CLAUSE_SIZE}，会自动分批处理。
      *
      * @param path 实体路径
      * @param fieldName 字段名
@@ -291,7 +303,8 @@ public final class PredicateHelper {
     /**
      * 构建 NOT IN 谓词（数组形式）。
      *
-     * <p>如果值的数量超过 {@link InClauseBuilder#MAX_IN_CLAUSE_SIZE}，会自动分批处理。
+     * <p>
+     * 如果值的数量超过 {@link InClauseBuilder#MAX_IN_CLAUSE_SIZE}，会自动分批处理。
      *
      * @param path 实体路径
      * @param fieldName 字段名
@@ -306,7 +319,8 @@ public final class PredicateHelper {
     /**
      * 构建 IN 谓词（集合形式）。
      *
-     * <p>如果值的数量超过 {@link InClauseBuilder#MAX_IN_CLAUSE_SIZE}，会自动分批处理。
+     * <p>
+     * 如果值的数量超过 {@link InClauseBuilder#MAX_IN_CLAUSE_SIZE}，会自动分批处理。
      *
      * @param path 实体路径
      * @param fieldName 字段名
@@ -321,7 +335,8 @@ public final class PredicateHelper {
     /**
      * 构建 NOT IN 谓词（集合形式）。
      *
-     * <p>如果值的数量超过 {@link InClauseBuilder#MAX_IN_CLAUSE_SIZE}，会自动分批处理。
+     * <p>
+     * 如果值的数量超过 {@link InClauseBuilder#MAX_IN_CLAUSE_SIZE}，会自动分批处理。
      *
      * @param path 实体路径
      * @param fieldName 字段名
@@ -346,9 +361,9 @@ public final class PredicateHelper {
      * @return BETWEEN 谓词
      */
     @SuppressWarnings({"unchecked", "rawtypes"})
-    public static Predicate between(
-            Path<?> path, String fieldName, Comparable<?> start, Comparable<?> end, CriteriaBuilder cb) {
-        return cb.between((Expression) path.get(fieldName), (Comparable) start, (Comparable) end);
+    public static Predicate between(Path<?> path, String fieldName, Comparable<?> start, Comparable<?> end,
+        CriteriaBuilder cb) {
+        return cb.between((Expression)path.get(fieldName), (Comparable)start, (Comparable)end);
     }
 
     /**
@@ -362,9 +377,9 @@ public final class PredicateHelper {
      * @return NOT BETWEEN 谓词
      */
     @SuppressWarnings({"unchecked", "rawtypes"})
-    public static Predicate notBetween(
-            Path<?> path, String fieldName, Comparable<?> start, Comparable<?> end, CriteriaBuilder cb) {
-        return cb.not(cb.between((Expression) path.get(fieldName), (Comparable) start, (Comparable) end));
+    public static Predicate notBetween(Path<?> path, String fieldName, Comparable<?> start, Comparable<?> end,
+        CriteriaBuilder cb) {
+        return cb.not(cb.between((Expression)path.get(fieldName), (Comparable)start, (Comparable)end));
     }
 
     // ==================== NULL 运算符 ====================
@@ -405,7 +420,7 @@ public final class PredicateHelper {
      */
     @SuppressWarnings("unchecked")
     public static Predicate isEmpty(Path<?> path, String fieldName, CriteriaBuilder cb) {
-        return cb.isEmpty((Expression<java.util.Collection<?>>) (Expression<?>) path.get(fieldName));
+        return cb.isEmpty((Expression<java.util.Collection<?>>)(Expression<?>)path.get(fieldName));
     }
 
     /**
@@ -418,6 +433,6 @@ public final class PredicateHelper {
      */
     @SuppressWarnings("unchecked")
     public static Predicate isNotEmpty(Path<?> path, String fieldName, CriteriaBuilder cb) {
-        return cb.isNotEmpty((Expression<java.util.Collection<?>>) (Expression<?>) path.get(fieldName));
+        return cb.isNotEmpty((Expression<java.util.Collection<?>>)(Expression<?>)path.get(fieldName));
     }
 }

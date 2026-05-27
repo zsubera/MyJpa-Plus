@@ -33,10 +33,8 @@ class ProjectionSpecTest {
         entity.setStatus(1);
         testEntityManager.persistAndFlush(entity);
 
-        List<Tuple> results = new ProjectionSpec<>(TestEntity.class)
-                .select(TestEntity::getName)
-                .toTupleQuery(em)
-                .getResultList();
+        List<Tuple> results =
+            new ProjectionSpec<>(TestEntity.class).select(TestEntity::getName).toTupleQuery(em).getResultList();
 
         assertEquals(1, results.size());
         assertEquals("test", results.get(0).get("name"));
@@ -49,11 +47,8 @@ class ProjectionSpecTest {
         entity.setStatus(42);
         testEntityManager.persistAndFlush(entity);
 
-        List<Tuple> results = new ProjectionSpec<>(TestEntity.class)
-                .select(TestEntity::getName)
-                .select(TestEntity::getStatus)
-                .toTupleQuery(em)
-                .getResultList();
+        List<Tuple> results = new ProjectionSpec<>(TestEntity.class).select(TestEntity::getName)
+            .select(TestEntity::getStatus).toTupleQuery(em).getResultList();
 
         assertEquals(1, results.size());
         Tuple tuple = results.get(0);
@@ -73,11 +68,8 @@ class ProjectionSpecTest {
         e2.setStatus(2);
         testEntityManager.persistAndFlush(e2);
 
-        List<Tuple> results = new ProjectionSpec<>(TestEntity.class)
-                .select(TestEntity::getName)
-                .where(q -> q.eq(TestEntity::getStatus, 1))
-                .toTupleQuery(em)
-                .getResultList();
+        List<Tuple> results = new ProjectionSpec<>(TestEntity.class).select(TestEntity::getName)
+            .where(q -> q.eq(TestEntity::getStatus, 1)).toTupleQuery(em).getResultList();
 
         assertEquals(1, results.size());
         assertEquals("match", results.get(0).get("name"));
@@ -90,12 +82,8 @@ class ProjectionSpecTest {
         entity.setStatus(99);
         testEntityManager.persistAndFlush(entity);
 
-        List<NameStatusDto> results = new ProjectionSpec<>(TestEntity.class)
-                .select(TestEntity::getName)
-                .select(TestEntity::getStatus)
-                .asDto(NameStatusDto.class)
-                .<NameStatusDto>toDtoQuery(em)
-                .getResultList();
+        List<NameStatusDto> results = new ProjectionSpec<>(TestEntity.class).select(TestEntity::getName)
+            .select(TestEntity::getStatus).asDto(NameStatusDto.class).<NameStatusDto>toDtoQuery(em).getResultList();
 
         assertEquals(1, results.size());
         NameStatusDto dto = results.get(0);
@@ -119,11 +107,8 @@ class ProjectionSpecTest {
 
     @Test
     void testTupleQueryNoResults() {
-        List<Tuple> results = new ProjectionSpec<>(TestEntity.class)
-                .select(TestEntity::getName)
-                .where(q -> q.eq(TestEntity::getName, "nonexistent"))
-                .toTupleQuery(em)
-                .getResultList();
+        List<Tuple> results = new ProjectionSpec<>(TestEntity.class).select(TestEntity::getName)
+            .where(q -> q.eq(TestEntity::getName, "nonexistent")).toTupleQuery(em).getResultList();
 
         assertTrue(results.isEmpty());
     }
@@ -139,10 +124,8 @@ class ProjectionSpecTest {
         e2.setStatus(2);
         testEntityManager.persistAndFlush(e2);
 
-        List<Tuple> results = new ProjectionSpec<>(TestEntity.class)
-                .select(TestEntity::getName)
-                .toTupleQuery(em)
-                .getResultList();
+        List<Tuple> results =
+            new ProjectionSpec<>(TestEntity.class).select(TestEntity::getName).toTupleQuery(em).getResultList();
 
         assertEquals(2, results.size());
     }
@@ -158,11 +141,8 @@ class ProjectionSpecTest {
         e2.setStatus(2);
         testEntityManager.persistAndFlush(e2);
 
-        List<Tuple> results = new ProjectionSpec<>(TestEntity.class)
-                .select(TestEntity::getName)
-                .orderByAsc(TestEntity::getName)
-                .toTupleQuery(em)
-                .getResultList();
+        List<Tuple> results = new ProjectionSpec<>(TestEntity.class).select(TestEntity::getName)
+            .orderByAsc(TestEntity::getName).toTupleQuery(em).getResultList();
 
         assertEquals(2, results.size());
         assertEquals("a", results.get(0).get("name"));
@@ -180,11 +160,8 @@ class ProjectionSpecTest {
         e2.setStatus(2);
         testEntityManager.persistAndFlush(e2);
 
-        List<Tuple> results = new ProjectionSpec<>(TestEntity.class)
-                .select(TestEntity::getName)
-                .orderByDesc(TestEntity::getName)
-                .toTupleQuery(em)
-                .getResultList();
+        List<Tuple> results = new ProjectionSpec<>(TestEntity.class).select(TestEntity::getName)
+            .orderByDesc(TestEntity::getName).toTupleQuery(em).getResultList();
 
         assertEquals(2, results.size());
         assertEquals("b", results.get(0).get("name"));
@@ -199,9 +176,8 @@ class ProjectionSpecTest {
             testEntityManager.persistAndFlush(e);
         }
 
-        Page<Tuple> page = new ProjectionSpec<>(TestEntity.class)
-                .select(TestEntity::getName)
-                .findPage(em, PageRequest.of(0, 2));
+        Page<Tuple> page =
+            new ProjectionSpec<>(TestEntity.class).select(TestEntity::getName).findPage(em, PageRequest.of(0, 2));
 
         assertEquals(5, page.getTotalElements());
         assertEquals(2, page.getContent().size());

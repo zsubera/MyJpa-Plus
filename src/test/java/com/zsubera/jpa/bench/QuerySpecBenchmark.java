@@ -24,20 +24,15 @@ public class QuerySpecBenchmark {
 
     @Benchmark
     public void buildSimpleQuery(Blackhole bh) {
-        QuerySpec<BenchEntity> qs =
-                new QuerySpec<BenchEntity>().eq(nameGetter, "test").eq(statusGetter, "ACTIVE");
+        QuerySpec<BenchEntity> qs = new QuerySpec<BenchEntity>().eq(nameGetter, "test").eq(statusGetter, "ACTIVE");
         bh.consume(qs);
     }
 
     @Benchmark
     public void buildComplexQuery(Blackhole bh) {
-        QuerySpec<BenchEntity> qs = new QuerySpec<BenchEntity>()
-                .eq(nameGetter, "test")
-                .like(nameGetter, "%foo%")
-                .or(g -> g.eq(statusGetter, "A").eq(statusGetter, "B"))
-                .in(statusGetter, "A", "B", "C")
-                .between(BenchEntity::getLevel, 1, 10)
-                .startsWith(nameGetter, "prefix");
+        QuerySpec<BenchEntity> qs = new QuerySpec<BenchEntity>().eq(nameGetter, "test").like(nameGetter, "%foo%")
+            .or(g -> g.eq(statusGetter, "A").eq(statusGetter, "B")).in(statusGetter, "A", "B", "C")
+            .between(BenchEntity::getLevel, 1, 10).startsWith(nameGetter, "prefix");
         bh.consume(qs);
     }
 

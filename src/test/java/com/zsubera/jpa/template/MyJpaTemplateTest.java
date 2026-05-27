@@ -98,7 +98,7 @@ class MyJpaTemplateTest {
 
         QuerySpec<TestEntity> qs = new QuerySpec<>();
         Page<TestEntity> page =
-                template.findAll(TestEntity.class, qs, org.springframework.data.domain.Pageable.unpaged());
+            template.findAll(TestEntity.class, qs, org.springframework.data.domain.Pageable.unpaged());
         assertEquals(1, page.getTotalElements());
     }
 
@@ -125,7 +125,7 @@ class MyJpaTemplateTest {
 
         Specification<TestEntity> spec = (root, query, cb) -> cb.conjunction();
         Page<TestEntity> page =
-                template.findPage(TestEntity.class, spec, org.springframework.data.domain.Pageable.unpaged());
+            template.findPage(TestEntity.class, spec, org.springframework.data.domain.Pageable.unpaged());
         assertEquals(1, page.getTotalElements()); // unpaged sets total = content size
         assertEquals(1, page.getContent().size());
     }
@@ -137,9 +137,8 @@ class MyJpaTemplateTest {
         e.setStatus(1);
         repository.save(e);
 
-        UpdateSpec<TestEntity> spec = template.update(TestEntity.class)
-                .set(TestEntity::getName, "new")
-                .eq(TestEntity::getName, "old");
+        UpdateSpec<TestEntity> spec =
+            template.update(TestEntity.class).set(TestEntity::getName, "new").eq(TestEntity::getName, "old");
         int count = template.execute(spec);
         assertEquals(1, count);
     }

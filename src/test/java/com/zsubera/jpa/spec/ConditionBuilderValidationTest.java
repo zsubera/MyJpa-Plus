@@ -114,15 +114,14 @@ class ConditionBuilderValidationTest {
     @Test
     void testMultiLikeNullFieldInArrayThrowsException() {
         QuerySpec<TestEntity> qs = new QuerySpec<>();
-        assertThrows(
-                IllegalArgumentException.class,
-                () -> qs.multiLike("test", TestEntity::getName, (SFunction<TestEntity, String>) null));
+        assertThrows(IllegalArgumentException.class,
+            () -> qs.multiLike("test", TestEntity::getName, (SFunction<TestEntity, String>)null));
     }
 
     @Test
     void testMultiLikeNullFieldsArrayThrowsException() {
         QuerySpec<TestEntity> qs = new QuerySpec<>();
-        assertThrows(IllegalArgumentException.class, () -> qs.multiLike("test", (SFunction<TestEntity, ?>[]) null));
+        assertThrows(IllegalArgumentException.class, () -> qs.multiLike("test", (SFunction<TestEntity, ?>[])null));
     }
 
     @Test

@@ -20,20 +20,16 @@ import org.springframework.data.domain.Pageable;
 /**
  * DTO 投影查询的类型安全构建器。
  *
- * <p>从实体中选择特定字段，并以 {@link Tuple} 或通过 {@code CriteriaBuilder.construct()} 返回自定义 DTO 的形式返回结果。支持 JOIN
- * 关联、ORDER BY 排序和分页查询。
+ * <p>
+ * 从实体中选择特定字段，并以 {@link Tuple} 或通过 {@code CriteriaBuilder.construct()} 返回自定义 DTO 的形式返回结果。支持 JOIN 关联、ORDER BY 排序和分页查询。
  *
- * <p>使用示例：
+ * <p>
+ * 使用示例：
  *
  * <pre>{@code
- * List<Tuple> results = new ProjectionSpec<>(User.class)
- *     .select(User::getName)
- *     .select(User::getEmail)
- *     .join(User::getDepartment, j -> j.eq(Department::getName, "Engineering"))
- *     .orderByAsc(User::getName)
- *     .where(q -> q.eq(User::getStatus, "ACTIVE"))
- *     .toTupleQuery(entityManager)
- *     .getResultList();
+ * List<Tuple> results = new ProjectionSpec<>(User.class).select(User::getName).select(User::getEmail)
+ *     .join(User::getDepartment, j -> j.eq(Department::getName, "Engineering")).orderByAsc(User::getName)
+ *     .where(q -> q.eq(User::getStatus, "ACTIVE")).toTupleQuery(entityManager).getResultList();
  * }</pre>
  *
  * @param <T> 根实体类型
@@ -63,7 +59,8 @@ public class ProjectionSpec<T> {
     /**
      * JOIN 目标实体的嵌套条件构建器。
      *
-     * <p>提供类似于 {@link com.zsubera.jpa.spec.ConditionBuilder} 的 API， 用于在 JOIN 子句中添加 ON 条件。
+     * <p>
+     * 提供类似于 {@link com.zsubera.jpa.spec.ConditionBuilder} 的 API， 用于在 JOIN 子句中添加 ON 条件。
      *
      * @param <E> JOIN 目标实体类型
      */
@@ -181,32 +178,40 @@ public class ProjectionSpec<T> {
         /**
          * 投影 JOIN 条件的内部条件节点接口。
          *
-         * <p>使用 sealed 接口和 record 实现，支持多种条件类型：
+         * <p>
+         * 使用 sealed 接口和 record 实现，支持多种条件类型：
          *
          * <ul>
-         *   <li>{@link Eq} - 等于条件
-         *   <li>{@link Ne} - 不等于条件
-         *   <li>{@link Like} - 模糊匹配条件
-         *   <li>{@link Gt} - 大于条件
-         *   <li>{@link Lt} - 小于条件
-         *   <li>{@link IsNull} - IS NULL 条件
-         *   <li>{@link IsNotNull} - IS NOT NULL 条件
+         * <li>{@link Eq} - 等于条件
+         * <li>{@link Ne} - 不等于条件
+         * <li>{@link Like} - 模糊匹配条件
+         * <li>{@link Gt} - 大于条件
+         * <li>{@link Lt} - 小于条件
+         * <li>{@link IsNull} - IS NULL 条件
+         * <li>{@link IsNotNull} - IS NOT NULL 条件
          * </ul>
          */
         sealed interface ConditionNode {
-            record Eq(String fieldName, Object value) implements ConditionNode {}
+            record Eq(String fieldName, Object value) implements ConditionNode {
+            }
 
-            record Ne(String fieldName, Object value) implements ConditionNode {}
+            record Ne(String fieldName, Object value) implements ConditionNode {
+            }
 
-            record Like(String fieldName, String value) implements ConditionNode {}
+            record Like(String fieldName, String value) implements ConditionNode {
+            }
 
-            record Gt(String fieldName, Comparable<?> value) implements ConditionNode {}
+            record Gt(String fieldName, Comparable<?> value) implements ConditionNode {
+            }
 
-            record Lt(String fieldName, Comparable<?> value) implements ConditionNode {}
+            record Lt(String fieldName, Comparable<?> value) implements ConditionNode {
+            }
 
-            record IsNull(String fieldName) implements ConditionNode {}
+            record IsNull(String fieldName) implements ConditionNode {
+            }
 
-            record IsNotNull(String fieldName) implements ConditionNode {}
+            record IsNotNull(String fieldName) implements ConditionNode {
+            }
         }
 
         /**
@@ -225,7 +230,8 @@ public class ProjectionSpec<T> {
      * @param fieldName 字段名称
      * @param asc 是否升序排列
      */
-    private record OrderSpec(String fieldName, boolean asc) {}
+    private record OrderSpec(String fieldName, boolean asc) {
+    }
 
     /**
      * 创建投影查询构建器实例。
@@ -250,7 +256,8 @@ public class ProjectionSpec<T> {
     /**
      * 指定用于构造函数投影的 DTO 类。
      *
-     * <p>DTO 必须有一个构造函数，其参数顺序和类型与选定的字段匹配。
+     * <p>
+     * DTO 必须有一个构造函数，其参数顺序和类型与选定的字段匹配。
      *
      * @param dtoClass DTO 类
      * @return 当前 ProjectionSpec 实例，支持链式调用
@@ -276,7 +283,8 @@ public class ProjectionSpec<T> {
     /**
      * 添加 LEFT JOIN 关联查询，可对关联实体设置条件。
      *
-     * <p>LEFT JOIN 会返回左表的所有记录，即使右表中没有匹配的记录。
+     * <p>
+     * LEFT JOIN 会返回左表的所有记录，即使右表中没有匹配的记录。
      *
      * @param field 一对多或一对一关系的方法引用
      * @param config 用于配置 JOIN 条件的消费者函数
@@ -364,7 +372,8 @@ public class ProjectionSpec<T> {
     /**
      * 构建并返回以 DTO 为结果类型的类型安全查询。
      *
-     * <p>必须先调用 {@link #asDto(Class)} 方法指定 DTO 类。
+     * <p>
+     * 必须先调用 {@link #asDto(Class)} 方法指定 DTO 类。
      *
      * @param em JPA 实体管理器
      * @param <R> DTO 结果类型
@@ -377,7 +386,7 @@ public class ProjectionSpec<T> {
             throw new IllegalStateException("asDto() must be called before toDtoQuery()");
         }
         CriteriaBuilder cb = em.getCriteriaBuilder();
-        CriteriaQuery<R> query = (CriteriaQuery<R>) cb.createQuery(dtoClass);
+        CriteriaQuery<R> query = (CriteriaQuery<R>)cb.createQuery(dtoClass);
         Root<T> root = query.from(entityClass);
 
         // Apply joins
@@ -388,8 +397,8 @@ public class ProjectionSpec<T> {
         for (String fieldName : selections.keySet()) {
             selectionList.add(root.get(fieldName));
         }
-        query.select((CompoundSelection<R>)
-                cb.construct(dtoClass, selectionList.toArray(new jakarta.persistence.criteria.Selection[0])));
+        query.select((CompoundSelection<R>)cb.construct(dtoClass,
+            selectionList.toArray(new jakarta.persistence.criteria.Selection[0])));
 
         // Apply WHERE
         applyPredicate(root, query, cb);
@@ -430,7 +439,7 @@ public class ProjectionSpec<T> {
         if (pageable.getOffset() > Integer.MAX_VALUE) {
             throw new IllegalArgumentException("Offset too large: " + pageable.getOffset());
         }
-        query.setFirstResult((int) pageable.getOffset());
+        query.setFirstResult((int)pageable.getOffset());
         query.setMaxResults(pageable.getPageSize());
         List<Tuple> content = query.getResultList();
 
@@ -448,13 +457,10 @@ public class ProjectionSpec<T> {
     private Map<String, Join<?, ?>> resolveJoins(Root<T> root, CriteriaBuilder cb) {
         Map<String, Join<?, ?>> joinMap = new LinkedHashMap<>();
         for (JoinSpec js : joins) {
-            Join<?, ?> join = joinMap.computeIfAbsent(
-                    js.fieldName,
-                    k -> js.left
-                            ? root.join(js.fieldName, jakarta.persistence.criteria.JoinType.LEFT)
-                            : root.join(js.fieldName));
+            Join<?, ?> join = joinMap.computeIfAbsent(js.fieldName, k -> js.left
+                ? root.join(js.fieldName, jakarta.persistence.criteria.JoinType.LEFT) : root.join(js.fieldName));
             @SuppressWarnings("unchecked")
-            Consumer<JoinGroup<Object>> cfg = (Consumer<JoinGroup<Object>>) js.config;
+            Consumer<JoinGroup<Object>> cfg = (Consumer<JoinGroup<Object>>)js.config;
             JoinGroup<Object> group = JoinGroup.create();
             cfg.accept(group);
             List<Predicate> onPredicates = new ArrayList<>();
@@ -468,13 +474,13 @@ public class ProjectionSpec<T> {
                 } else if (node instanceof JoinGroup.ConditionNode.Gt gt) {
                     @SuppressWarnings("unchecked")
                     Expression<Comparable<Object>> gtExpr =
-                            (Expression<Comparable<Object>>) (Expression<?>) join.get(gt.fieldName());
-                    onPredicates.add(cb.greaterThan(gtExpr, (Comparable<Object>) gt.value()));
+                        (Expression<Comparable<Object>>)(Expression<?>)join.get(gt.fieldName());
+                    onPredicates.add(cb.greaterThan(gtExpr, (Comparable<Object>)gt.value()));
                 } else if (node instanceof JoinGroup.ConditionNode.Lt lt) {
                     @SuppressWarnings("unchecked")
                     Expression<Comparable<Object>> ltExpr =
-                            (Expression<Comparable<Object>>) (Expression<?>) join.get(lt.fieldName());
-                    onPredicates.add(cb.lessThan(ltExpr, (Comparable<Object>) lt.value()));
+                        (Expression<Comparable<Object>>)(Expression<?>)join.get(lt.fieldName());
+                    onPredicates.add(cb.lessThan(ltExpr, (Comparable<Object>)lt.value()));
                 } else if (node instanceof JoinGroup.ConditionNode.IsNull isNull) {
                     onPredicates.add(cb.isNull(join.get(isNull.fieldName())));
                 } else if (node instanceof JoinGroup.ConditionNode.IsNotNull isNotNull) {
@@ -497,7 +503,7 @@ public class ProjectionSpec<T> {
      */
     @SuppressWarnings({"unchecked", "rawtypes"})
     private void applyPredicate(Root<T> root, CriteriaQuery<?> query, CriteriaBuilder cb) {
-        jakarta.persistence.criteria.Predicate predicate = querySpec.toPredicate(root, (CriteriaQuery) query, cb);
+        jakarta.persistence.criteria.Predicate predicate = querySpec.toPredicate(root, (CriteriaQuery)query, cb);
         if (predicate != null) {
             query.where(predicate);
         }

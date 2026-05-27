@@ -13,15 +13,15 @@ import org.slf4j.LoggerFactory;
 /**
  * 用于与 {@link QuerySpec} 配合动态构建和应用 JPA {@link EntityGraph} 抓取策略的辅助类。
  *
- * <p>JPA {@link EntityGraph} 允许声明式地指定查询时需要急切加载的关联关系， 提供了 {@code FETCH JOIN} 的替代方案，并支持在多个查询间复用。
+ * <p>
+ * JPA {@link EntityGraph} 允许声明式地指定查询时需要急切加载的关联关系， 提供了 {@code FETCH JOIN} 的替代方案，并支持在多个查询间复用。
  *
- * <p>使用示例：
+ * <p>
+ * 使用示例：
  *
  * <pre>{@code
  * // 创建一个抓取 'roles' 和 'roles.permissions' 的实体图
- * EntityGraphHelper<User> graph = EntityGraphHelper.forEntity(User.class)
- *     .add("roles")
- *     .add("roles", "permissions");
+ * EntityGraphHelper<User> graph = EntityGraphHelper.forEntity(User.class).add("roles").add("roles", "permissions");
  *
  * // 为仓库调用构建查询提示：
  * Map<String, Object> hints = graph.toHints(entityManager);
@@ -58,8 +58,8 @@ public final class EntityGraphHelper<T> {
     }
 
     /**
-     * Sets the graph type to LOAD (hints JPA to load the specified attributes eagerly in addition to
-     * any attributes that are already eagerly loaded).
+     * Sets the graph type to LOAD (hints JPA to load the specified attributes eagerly in addition to any attributes
+     * that are already eagerly loaded).
      */
     public EntityGraphHelper<T> loadGraph() {
         this.loadGraphType = true;
@@ -67,8 +67,8 @@ public final class EntityGraphHelper<T> {
     }
 
     /**
-     * Sets the graph type to FETCH (only the specified attributes are fetched eagerly; all others are
-     * loaded lazily). This is the default.
+     * Sets the graph type to FETCH (only the specified attributes are fetched eagerly; all others are loaded lazily).
+     * This is the default.
      */
     public EntityGraphHelper<T> fetchGraph() {
         this.loadGraphType = false;
@@ -139,8 +139,8 @@ public final class EntityGraphHelper<T> {
     }
 
     /**
-     * Converts this entity graph into a map of JPA query hints for use with repository find methods
-     * that accept hints (e.g., via {@code @QueryHints}).
+     * Converts this entity graph into a map of JPA query hints for use with repository find methods that accept hints
+     * (e.g., via {@code @QueryHints}).
      *
      * @param em the EntityManager
      * @return a Map of JPA query hints containing the entity graph
@@ -161,8 +161,7 @@ public final class EntityGraphHelper<T> {
      * @return the built entity graph
      */
     /**
-     * Recursively adds attribute nodes to a subgraph, splitting multi-level paths like "b.c.d" into
-     * nested subgraphs.
+     * Recursively adds attribute nodes to a subgraph, splitting multi-level paths like "b.c.d" into nested subgraphs.
      */
     /**
      * 递归添加属性节点到子图，支持多级嵌套路径如 "b.c.d"。
@@ -209,11 +208,8 @@ public final class EntityGraphHelper<T> {
         }
 
         if (log.isDebugEnabled()) {
-            log.debug(
-                    "Built {} entity graph for {}: {}",
-                    getHintName(),
-                    entityClass.getSimpleName(),
-                    attributePaths.keySet());
+            log.debug("Built {} entity graph for {}: {}", getHintName(), entityClass.getSimpleName(),
+                attributePaths.keySet());
         }
         return graph;
     }
@@ -222,8 +218,8 @@ public final class EntityGraphHelper<T> {
      * 返回当前图类型的 JPA 提示键。
      *
      * <ul>
-     *   <li>FETCH 图: {@code jakarta.persistence.fetchgraph}
-     *   <li>LOAD 图: {@code jakarta.persistence.loadgraph}
+     * <li>FETCH 图: {@code jakarta.persistence.fetchgraph}
+     * <li>LOAD 图: {@code jakarta.persistence.loadgraph}
      * </ul>
      *
      * @return JPA 提示键

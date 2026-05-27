@@ -14,12 +14,14 @@ import org.springframework.lang.Nullable;
 /**
  * 构建类型安全 JPA 查询条件的通用接口，使用 lambda 方法引用。
  *
- * <p>实现类通过 {@link #conditions()} 提供目标条件列表。所有条件方法都是 {@code default} 方法， 创建 {@link ConditionNode}
- * 条目并追加到该列表中。
+ * <p>
+ * 实现类通过 {@link #conditions()} 提供目标条件列表。所有条件方法都是 {@code default} 方法， 创建 {@link ConditionNode} 条目并追加到该列表中。
  *
- * <p>自类型参数 {@code SELF} 支持流式链式调用，使每个方法返回具体的构建器类型而非接口类型。
+ * <p>
+ * 自类型参数 {@code SELF} 支持流式链式调用，使每个方法返回具体的构建器类型而非接口类型。
  *
- * <p>实现类：{@link QuerySpec}、{@link JoinGroup}、{@link OrGroup}、{@link OrJoinGroup}。
+ * <p>
+ * 实现类：{@link QuerySpec}、{@link JoinGroup}、{@link OrGroup}、{@link OrJoinGroup}。
  *
  * @param <E> 条件操作的实体类型
  * @param <SELF> 用于流式链式调用的具体构建器类型
@@ -47,7 +49,7 @@ public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> {
      */
     @SuppressWarnings("unchecked")
     default SELF self() {
-        return (SELF) this;
+        return (SELF)this;
     }
 
     // ---- 比较运算符 ----
@@ -66,11 +68,10 @@ public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> {
         }
         if (value == null) {
             conditions()
-                    .add(new ConditionNode.SimpleNode(
-                            LambdaUtils.getPropertyName(field), null, ConditionNode.Op.IS_NULL));
+                .add(new ConditionNode.SimpleNode(LambdaUtils.getPropertyName(field), null, ConditionNode.Op.IS_NULL));
         } else {
             conditions()
-                    .add(new ConditionNode.SimpleNode(LambdaUtils.getPropertyName(field), value, ConditionNode.Op.EQ));
+                .add(new ConditionNode.SimpleNode(LambdaUtils.getPropertyName(field), value, ConditionNode.Op.EQ));
         }
         return self();
     }
@@ -88,12 +89,11 @@ public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> {
             throw new IllegalArgumentException("field must not be null");
         }
         if (value == null) {
-            conditions()
-                    .add(new ConditionNode.SimpleNode(
-                            LambdaUtils.getPropertyName(field), null, ConditionNode.Op.IS_NOT_NULL));
+            conditions().add(
+                new ConditionNode.SimpleNode(LambdaUtils.getPropertyName(field), null, ConditionNode.Op.IS_NOT_NULL));
         } else {
             conditions()
-                    .add(new ConditionNode.SimpleNode(LambdaUtils.getPropertyName(field), value, ConditionNode.Op.NE));
+                .add(new ConditionNode.SimpleNode(LambdaUtils.getPropertyName(field), value, ConditionNode.Op.NE));
         }
         return self();
     }
@@ -192,12 +192,8 @@ public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> {
         if (value == null) {
             throw new IllegalArgumentException("value must not be null");
         }
-        conditions()
-                .add(new ConditionNode.SimpleNode(
-                        fieldName(field),
-                        "%" + escapeLikeWildcards(value) + "%",
-                        ConditionNode.Op.LIKE,
-                        PredicateHelper.LIKE_ESCAPE_CHAR));
+        conditions().add(new ConditionNode.SimpleNode(fieldName(field), "%" + escapeLikeWildcards(value) + "%",
+            ConditionNode.Op.LIKE, PredicateHelper.LIKE_ESCAPE_CHAR));
         return self();
     }
 
@@ -229,12 +225,8 @@ public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> {
         if (value == null) {
             throw new IllegalArgumentException("value must not be null");
         }
-        conditions()
-                .add(new ConditionNode.SimpleNode(
-                        fieldName(field),
-                        escapeLikeWildcards(value) + "%",
-                        ConditionNode.Op.LIKE,
-                        PredicateHelper.LIKE_ESCAPE_CHAR));
+        conditions().add(new ConditionNode.SimpleNode(fieldName(field), escapeLikeWildcards(value) + "%",
+            ConditionNode.Op.LIKE, PredicateHelper.LIKE_ESCAPE_CHAR));
         return self();
     }
 
@@ -250,12 +242,8 @@ public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> {
         if (value == null) {
             throw new IllegalArgumentException("value must not be null");
         }
-        conditions()
-                .add(new ConditionNode.SimpleNode(
-                        fieldName(field),
-                        "%" + escapeLikeWildcards(value),
-                        ConditionNode.Op.LIKE,
-                        PredicateHelper.LIKE_ESCAPE_CHAR));
+        conditions().add(new ConditionNode.SimpleNode(fieldName(field), "%" + escapeLikeWildcards(value),
+            ConditionNode.Op.LIKE, PredicateHelper.LIKE_ESCAPE_CHAR));
         return self();
     }
 
@@ -271,12 +259,8 @@ public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> {
         if (value == null) {
             throw new IllegalArgumentException("value must not be null");
         }
-        conditions()
-                .add(new ConditionNode.SimpleNode(
-                        fieldName(field),
-                        "%" + escapeLikeWildcards(value) + "%",
-                        ConditionNode.Op.LIKE,
-                        PredicateHelper.LIKE_ESCAPE_CHAR));
+        conditions().add(new ConditionNode.SimpleNode(fieldName(field), "%" + escapeLikeWildcards(value) + "%",
+            ConditionNode.Op.LIKE, PredicateHelper.LIKE_ESCAPE_CHAR));
         return self();
     }
 
@@ -317,7 +301,7 @@ public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> {
             throw new IllegalArgumentException("values must not be empty");
         }
         conditions()
-                .add(new ConditionNode.SimpleNode(LambdaUtils.getPropertyName(field), values, ConditionNode.Op.NOT_IN));
+            .add(new ConditionNode.SimpleNode(LambdaUtils.getPropertyName(field), values, ConditionNode.Op.NOT_IN));
         return self();
     }
 
@@ -356,7 +340,7 @@ public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> {
             throw new IllegalArgumentException("values must not be empty");
         }
         conditions()
-                .add(new ConditionNode.SimpleNode(LambdaUtils.getPropertyName(field), values, ConditionNode.Op.NOT_IN));
+            .add(new ConditionNode.SimpleNode(LambdaUtils.getPropertyName(field), values, ConditionNode.Op.NOT_IN));
         return self();
     }
 
@@ -367,8 +351,7 @@ public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> {
      * @param start 下界（包含）
      * @param end 上界（包含）
      * @return 当前构建器以支持链式调用
-     * @throws IllegalArgumentException 如果 {@code field}、{@code start} 或 {@code end} 为 null， 或者 start
-     *     大于 end
+     * @throws IllegalArgumentException 如果 {@code field}、{@code start} 或 {@code end} 为 null， 或者 start 大于 end
      */
     @SuppressWarnings({"unchecked", "rawtypes"})
     default SELF between(SFunction<E, ?> field, Comparable<?> start, Comparable<?> end) {
@@ -380,16 +363,13 @@ public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> {
         }
         if (start.getClass() != end.getClass()) {
             throw new IllegalArgumentException("start and end must be of the same type, but got "
-                    + start.getClass().getName()
-                    + " and "
-                    + end.getClass().getName());
+                + start.getClass().getName() + " and " + end.getClass().getName());
         }
-        if (((Comparable) start).compareTo(end) > 0) {
+        if (((Comparable)start).compareTo(end) > 0) {
             throw new IllegalArgumentException("start must not be greater than end");
         }
-        conditions()
-                .add(new ConditionNode.SimpleNode(
-                        fieldName(field), new Comparable<?>[] {start, end}, ConditionNode.Op.BETWEEN));
+        conditions().add(
+            new ConditionNode.SimpleNode(fieldName(field), new Comparable<?>[] {start, end}, ConditionNode.Op.BETWEEN));
         return self();
     }
 
@@ -400,8 +380,7 @@ public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> {
      * @param start 下界（包含）
      * @param end 上界（包含）
      * @return 当前构建器以支持链式调用
-     * @throws IllegalArgumentException 如果 {@code field}、{@code start} 或 {@code end} 为 null， 或者 start
-     *     大于 end
+     * @throws IllegalArgumentException 如果 {@code field}、{@code start} 或 {@code end} 为 null， 或者 start 大于 end
      */
     @SuppressWarnings({"unchecked", "rawtypes"})
     default SELF notBetween(SFunction<E, ?> field, Comparable<?> start, Comparable<?> end) {
@@ -411,12 +390,11 @@ public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> {
         if (end == null) {
             throw new IllegalArgumentException("end must not be null");
         }
-        if (((Comparable) start).compareTo(end) > 0) {
+        if (((Comparable)start).compareTo(end) > 0) {
             throw new IllegalArgumentException("start must not be greater than end");
         }
-        conditions()
-                .add(new ConditionNode.SimpleNode(
-                        fieldName(field), new Comparable<?>[] {start, end}, ConditionNode.Op.NOT_BETWEEN));
+        conditions().add(new ConditionNode.SimpleNode(fieldName(field), new Comparable<?>[] {start, end},
+            ConditionNode.Op.NOT_BETWEEN));
         return self();
     }
 
@@ -461,9 +439,8 @@ public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> {
         if (value == null) {
             return isNull(field);
         }
-        conditions()
-                .add(new ConditionNode.SimpleNode(
-                        LambdaUtils.getPropertyName(field), value, ConditionNode.Op.EQ_IGNORE_CASE));
+        conditions().add(
+            new ConditionNode.SimpleNode(LambdaUtils.getPropertyName(field), value, ConditionNode.Op.EQ_IGNORE_CASE));
         return self();
     }
 
@@ -516,8 +493,7 @@ public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> {
     }
 
     /**
-     * 添加原始 {@link Predicate} 条件，使用当前实体 {@link Path} 和 {@link CriteriaBuilder}。 这是处理构建器 API
-     * 未覆盖条件的扩展方法。
+     * 添加原始 {@link Predicate} 条件，使用当前实体 {@link Path} 和 {@link CriteriaBuilder}。 这是处理构建器 API 未覆盖条件的扩展方法。
      *
      * @param fn 接收实体路径和条件构建器的函数，返回谓词
      * @return 当前构建器以支持链式调用
@@ -528,7 +504,7 @@ public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> {
         if (fn == null) {
             throw new IllegalArgumentException("fn must not be null");
         }
-        conditions().add(new ConditionNode.RawNode((BiFunction<Path<?>, CriteriaBuilder, Predicate>) (Object) fn));
+        conditions().add(new ConditionNode.RawNode((BiFunction<Path<?>, CriteriaBuilder, Predicate>)(Object)fn));
         return self();
     }
 

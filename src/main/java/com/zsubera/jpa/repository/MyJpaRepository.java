@@ -14,15 +14,13 @@ import org.springframework.data.repository.NoRepositoryBean;
 /**
  * 基础仓库接口，结合了 {@link JpaRepository} 和 {@link JpaSpecificationExecutor}， 使消费者只需扩展单个接口即可使用。
  *
- * <p>添加了直接接受 {@code QuerySpec} 的便捷重载方法：
+ * <p>
+ * 添加了直接接受 {@code QuerySpec} 的便捷重载方法：
  *
  * <pre>{@code
- * public interface UserRepository extends MyJpaRepository<User, Long> {
- * }
+ * public interface UserRepository extends MyJpaRepository<User, Long> {}
  *
- * List<User> users = repository.findAll(
- *     new QuerySpec<User>().eq(User::getStatus, "ACTIVE")
- * );
+ * List<User> users = repository.findAll(new QuerySpec<User>().eq(User::getStatus, "ACTIVE"));
  * }</pre>
  *
  * @param <T> 实体类型
@@ -82,8 +80,8 @@ public interface MyJpaRepository<T, ID> extends JpaRepository<T, ID>, JpaSpecifi
     boolean exists(Specification<T> spec);
 
     /**
-     * 查找所有匹配给定 {@link Specification} 且未被软删除的实体。 如果实体具有 {@link
-     * com.zsubera.jpa.annotation.SoftDelete @SoftDelete} 注解的字段， 则自动应用软删除过滤器。
+     * 查找所有匹配给定 {@link Specification} 且未被软删除的实体。 如果实体具有 {@link com.zsubera.jpa.annotation.SoftDelete @SoftDelete} 注解的字段，
+     * 则自动应用软删除过滤器。
      *
      * @param spec 附加过滤规格说明（可以为 null）
      * @return 匹配规格说明的未删除实体列表
@@ -143,8 +141,8 @@ public interface MyJpaRepository<T, ID> extends JpaRepository<T, ID>, JpaSpecifi
     default Optional<T> findNotDeletedById(ID id) {
         Class<T> entityClass = getEntityClass();
         String idFieldName = EntityClassResolver.resolveIdFieldName(entityClass);
-        return findOne(SoftDeleteHelper.isNotDeleted(entityClass)
-                .and((root, query, cb) -> cb.equal(root.get(idFieldName), id)));
+        return findOne(
+            SoftDeleteHelper.isNotDeleted(entityClass).and((root, query, cb) -> cb.equal(root.get(idFieldName), id)));
     }
 
     /**
@@ -180,8 +178,7 @@ public interface MyJpaRepository<T, ID> extends JpaRepository<T, ID>, JpaSpecifi
     private Class<T> getEntityClass() {
         Class<T> entityClass = EntityClassResolver.resolve(getClass());
         if (entityClass == null) {
-            throw new IllegalStateException(
-                    "Cannot resolve entity class for repository: " + getClass().getName());
+            throw new IllegalStateException("Cannot resolve entity class for repository: " + getClass().getName());
         }
         return entityClass;
     }

@@ -14,4 +14,4 @@ class PgTestApplication {}
 interface PgTestEntityRepository extends JpaRepository<PgTestEntity, Long>, JpaSpecificationExecutor<PgTestEntity> {}
 
 interface PgParentEntityRepository
-        extends JpaRepository<PgParentEntity, Long>, JpaSpecificationExecutor<PgParentEntity> {}
+    extends JpaRepository<PgParentEntity, Long>, JpaSpecificationExecutor<PgParentEntity> {}

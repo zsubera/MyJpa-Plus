@@ -14,7 +14,8 @@ import java.util.Objects;
 /**
  * 包含通用审计和标识字段的基础实体。
  *
- * <p>继承此类可避免重复编写样板字段：
+ * <p>
+ * 继承此类可避免重复编写样板字段：
  *
  * <pre>{@code
  * @Entity
@@ -23,9 +24,11 @@ import java.util.Objects;
  * }
  * }</pre>
  *
- * <p>开箱即用地提供 {@code id}、{@code createdAt} 和 {@code updatedAt} 字段。
+ * <p>
+ * 开箱即用地提供 {@code id}、{@code createdAt} 和 {@code updatedAt} 字段。
  *
- * <p>{@code equals} 和 {@code hashCode} 在 {@code id} 非空（已持久化实体）时基于 {@code id} 字段， 否则回退到对象标识比较。
+ * <p>
+ * {@code equals} 和 {@code hashCode} 在 {@code id} 非空（已持久化实体）时基于 {@code id} 字段， 否则回退到对象标识比较。
  */
 @MappedSuperclass
 public abstract class BaseEntity implements Serializable {

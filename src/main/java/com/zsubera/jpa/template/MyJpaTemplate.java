@@ -23,40 +23,37 @@ import org.springframework.transaction.annotation.Transactional;
 /**
  * MyJpa-Plus 查询和批量操作的便捷模板，支持自动注入 {@link EntityManager}。
  *
- * <p>使用此模板可以避免手动将 {@code EntityManager} 传递给 {@link UpdateSpec} 和 {@link DeleteSpec}。
- * 只需注入此模板即可使用其方法。
+ * <p>
+ * 使用此模板可以避免手动将 {@code EntityManager} 传递给 {@link UpdateSpec} 和 {@link DeleteSpec}。 只需注入此模板即可使用其方法。
  *
- * <p><strong>生产安全：</strong>此模板为生产环境强制执行安全限制：
+ * <p>
+ * <strong>生产安全：</strong>此模板为生产环境强制执行安全限制：
  *
  * <ul>
- *   <li>{@link #findAll} 和 {@link #find} 方法有可配置的最大行数限制
- *   <li>深度分页（大 offset）会触发警告日志
- *   <li>使用 {@link #findAllStream} 处理大数据集可避免内存问题
+ * <li>{@link #findAll} 和 {@link #find} 方法有可配置的最大行数限制
+ * <li>深度分页（大 offset）会触发警告日志
+ * <li>使用 {@link #findAllStream} 处理大数据集可避免内存问题
  * </ul>
  *
- * <p>示例：
+ * <p>
+ * 示例：
  *
  * <pre>{@code
  * &#64;Autowired
  * private MyJpaTemplate jpa;
  *
  * public void deactivateOldUsers() {
- *     int updated = jpa.update(User.class)
- *         .set(User::getStatus, "INACTIVE")
- *         .lt(User::getLastLogin, cutoffDate)
- *         .execute();
+ *     int updated =
+ *         jpa.update(User.class).set(User::getStatus, "INACTIVE").lt(User::getLastLogin, cutoffDate).execute();
  *
- *     int deleted = jpa.delete(LogEntry.class)
- *         .lt(LogEntry::getTimestamp, oldDate)
- *         .execute();
+ *     int deleted = jpa.delete(LogEntry.class).lt(LogEntry::getTimestamp, oldDate).execute();
  *
- *     List<User> activeUsers = jpa.findAll(
- *         new QuerySpec<User>().eq(User::getStatus, "ACTIVE")
- *     );
+ *     List<User> activeUsers = jpa.findAll(new QuerySpec<User>().eq(User::getStatus, "ACTIVE"));
  * }
  * }</pre>
  *
- * <p>配置示例（application.yml）：
+ * <p>
+ * 配置示例（application.yml）：
  *
  * <pre>{@code
  * myjpa-plus:
@@ -87,8 +84,8 @@ public class MyJpaTemplate {
     }
 
     /**
-     * 创建配置了自定义参数的 MyJpaTemplate 实例。 参数验证在 {@link #setMaxResults(int)} 和 {@link
-     * #setDeepPaginationOffsetThreshold(int)} 中进行。
+     * 创建配置了自定义参数的 MyJpaTemplate 实例。 参数验证在 {@link #setMaxResults(int)} 和 {@link #setDeepPaginationOffsetThreshold(int)}
+     * 中进行。
      *
      * @param maxResults 最大返回行数
      * @param deepPaginationOffsetThreshold 深度分页警告阈值
@@ -151,8 +148,9 @@ public class MyJpaTemplate {
     /**
      * 查找匹配给定 {@link QuerySpec} 的所有实体。
      *
-     * <p><strong>生产说明：</strong>此方法将结果限制为可配置的最大行数（默认 {@value #DEFAULT_MAX_RESULTS}）。使用 {@link
-     * #findAll(Class, QuerySpec, int)} 指定自定义限制，或使用 {@link #findAllStream(Class, QuerySpec)} 进行无界流式查询。
+     * <p>
+     * <strong>生产说明：</strong>此方法将结果限制为可配置的最大行数（默认 {@value #DEFAULT_MAX_RESULTS}）。使用
+     * {@link #findAll(Class, QuerySpec, int)} 指定自定义限制，或使用 {@link #findAllStream(Class, QuerySpec)} 进行无界流式查询。
      *
      * @param entityClass 实体类
      * @param spec 查询规范
@@ -213,8 +211,8 @@ public class MyJpaTemplate {
      * @return 匹配实体列表
      */
     @Transactional(readOnly = true)
-    public <T> List<T> findAll(
-            Class<T> entityClass, QuerySpec<T> spec, EntityGraphHelper<T> entityGraph, int maxResults) {
+    public <T> List<T> findAll(Class<T> entityClass, QuerySpec<T> spec, EntityGraphHelper<T> entityGraph,
+        int maxResults) {
         CriteriaBuilder cb = entityManager.getCriteriaBuilder();
         CriteriaQuery<T> cq = cb.createQuery(entityClass);
         Root<T> root = cq.from(entityClass);
@@ -234,13 +232,12 @@ public class MyJpaTemplate {
     /**
      * 流式查询匹配给定 {@link QuerySpec} 的所有实体。适用于处理大数据集而无需将所有数据加载到内存。
      *
-     * <p><strong>重要：</strong>返回的 Stream 使用后必须关闭（例如使用 try-with-resources）。 底层的 EntityManager 和事务必须在
-     * Stream 处理的整个期间保持活动状态。
+     * <p>
+     * <strong>重要：</strong>返回的 Stream 使用后必须关闭（例如使用 try-with-resources）。 底层的 EntityManager 和事务必须在 Stream 处理的整个期间保持活动状态。
      *
      * <pre>{@code
      * try (Stream<User> stream = jpa.findAllStream(User.class, spec)) {
-     *     stream.filter(u -> u.getAge() > 18)
-     *           .forEach(this::processUser);
+     *     stream.filter(u -> u.getAge() > 18).forEach(this::processUser);
      * }
      * }</pre>
      *
@@ -339,15 +336,15 @@ public class MyJpaTemplate {
         return findPageInternal(entityClass, spec.toSpecification(), pageable, spec);
     }
 
-    private <T> Page<T> findPageInternal(
-            Class<T> entityClass, Specification<T> spec, Pageable pageable, QuerySpec<T> querySpec) {
+    private <T> Page<T> findPageInternal(Class<T> entityClass, Specification<T> spec, Pageable pageable,
+        QuerySpec<T> querySpec) {
         CriteriaBuilder cb = entityManager.getCriteriaBuilder();
 
         if (pageable.isUnpaged()) {
             log.warn(
-                    "Pageable.unpaged() used with findPageInternal - returning all results up to {} limit. "
-                            + "Consider using findAll() with explicit maxResults or findAllStream() for large datasets.",
-                    this.maxResults);
+                "Pageable.unpaged() used with findPageInternal - returning all results up to {} limit. "
+                    + "Consider using findAll() with explicit maxResults or findAllStream() for large datasets.",
+                this.maxResults);
             CriteriaQuery<T> cq = cb.createQuery(entityClass);
             Root<T> root = cq.from(entityClass);
             jakarta.persistence.criteria.Predicate predicate = spec.toPredicate(root, cq, cb);
@@ -363,10 +360,8 @@ public class MyJpaTemplate {
 
         // 深度分页警告
         if (pageable.getOffset() > this.deepPaginationOffsetThreshold) {
-            log.warn(
-                    "Deep pagination detected (offset={}). This may cause slow queries. "
-                            + "Consider using keyset pagination for better performance.",
-                    pageable.getOffset());
+            log.warn("Deep pagination detected (offset={}). This may cause slow queries. "
+                + "Consider using keyset pagination for better performance.", pageable.getOffset());
         }
 
         CriteriaQuery<Long> countCq = cb.createQuery(Long.class);
@@ -385,17 +380,14 @@ public class MyJpaTemplate {
             cq.where(predicate);
         }
         if (pageable.getSort().isSorted()) {
-            cq.orderBy(pageable.getSort().stream()
-                    .map(order -> order.isAscending()
-                            ? cb.asc(root.get(order.getProperty()))
-                            : cb.desc(root.get(order.getProperty())))
-                    .toList());
+            cq.orderBy(pageable.getSort().stream().map(order -> order.isAscending()
+                ? cb.asc(root.get(order.getProperty())) : cb.desc(root.get(order.getProperty()))).toList());
         }
         TypedQuery<T> query = entityManager.createQuery(cq);
         if (pageable.getOffset() > Integer.MAX_VALUE) {
             throw new IllegalArgumentException("Offset 太大: " + pageable.getOffset());
         }
-        query.setFirstResult((int) pageable.getOffset());
+        query.setFirstResult((int)pageable.getOffset());
         query.setMaxResults(pageable.getPageSize());
         querySpec.applyQuerySettings(query);
         List<T> content = query.getResultList();
@@ -419,9 +411,9 @@ public class MyJpaTemplate {
         // 处理 Pageable.unpaged()，添加安全限制
         if (pageable.isUnpaged()) {
             log.warn(
-                    "Pageable.unpaged() used with findPage - returning all results up to {} limit. "
-                            + "Consider using find() with explicit maxResults or findAllStream() for large datasets.",
-                    this.maxResults);
+                "Pageable.unpaged() used with findPage - returning all results up to {} limit. "
+                    + "Consider using find() with explicit maxResults or findAllStream() for large datasets.",
+                this.maxResults);
             CriteriaQuery<T> cq = cb.createQuery(entityClass);
             Root<T> root = cq.from(entityClass);
             jakarta.persistence.criteria.Predicate predicate = spec.toPredicate(root, cq, cb);
@@ -436,10 +428,8 @@ public class MyJpaTemplate {
 
         // 深度分页警告
         if (pageable.getOffset() > this.deepPaginationOffsetThreshold) {
-            log.warn(
-                    "Deep pagination detected (offset={}). This may cause slow queries. "
-                            + "Consider using keyset pagination for better performance.",
-                    pageable.getOffset());
+            log.warn("Deep pagination detected (offset={}). This may cause slow queries. "
+                + "Consider using keyset pagination for better performance.", pageable.getOffset());
         }
 
         // 计数查询
@@ -460,17 +450,14 @@ public class MyJpaTemplate {
             cq.where(predicate);
         }
         if (pageable.getSort().isSorted()) {
-            cq.orderBy(pageable.getSort().stream()
-                    .map(order -> order.isAscending()
-                            ? cb.asc(root.get(order.getProperty()))
-                            : cb.desc(root.get(order.getProperty())))
-                    .toList());
+            cq.orderBy(pageable.getSort().stream().map(order -> order.isAscending()
+                ? cb.asc(root.get(order.getProperty())) : cb.desc(root.get(order.getProperty()))).toList());
         }
         TypedQuery<T> query = entityManager.createQuery(cq);
         if (pageable.getOffset() > Integer.MAX_VALUE) {
             throw new IllegalArgumentException("Offset 太大: " + pageable.getOffset());
         }
-        query.setFirstResult((int) pageable.getOffset());
+        query.setFirstResult((int)pageable.getOffset());
         query.setMaxResults(pageable.getPageSize());
         List<T> content = query.getResultList();
 
@@ -484,7 +471,7 @@ public class MyJpaTemplate {
      * @param <T> 实体类型
      * @return 受影响的行数
      */
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public <T> int execute(UpdateSpec<T> spec) {
         return spec.executeInTransaction(entityManager);
     }
@@ -496,7 +483,7 @@ public class MyJpaTemplate {
      * @param <T> 实体类型
      * @return 受影响的行数
      */
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public <T> int execute(DeleteSpec<T> spec) {
         return spec.executeInTransaction(entityManager);
     }
@@ -509,7 +496,7 @@ public class MyJpaTemplate {
      * @param <T> 实体类型
      * @return 受影响的总行数
      */
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public <T> int executeBatch(UpdateSpec<T> spec, int batchSize) {
         int totalUpdated = 0;
         int batchUpdated;
@@ -535,7 +522,7 @@ public class MyJpaTemplate {
      * @param <T> 实体类型
      * @return 受影响的总行数
      */
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public <T> int executeBatch(DeleteSpec<T> spec, int batchSize) {
         int totalDeleted = 0;
         int batchDeleted;

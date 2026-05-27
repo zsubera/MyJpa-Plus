@@ -9,7 +9,8 @@ import org.springframework.core.ResolvableType;
 /**
  * 从仓库接口解析实体类类型参数，支持通过中间接口的间接继承。
  *
- * <p>处理类似以下情况：{@code interface UserRepo extends CustomBase<User, Long>}，其中{@code CustomBase<T, ID>
+ * <p>
+ * 处理类似以下情况：{@code interface UserRepo extends CustomBase<User, Long>}，其中{@code CustomBase<T, ID>
  * extends MyJpaRepository<T, ID>}，通过遍历整个接口层次结构来找到绑定到 {@link MyJpaRepository}类型参数的实际类型参数。
  */
 public final class EntityClassResolver {
@@ -22,7 +23,8 @@ public final class EntityClassResolver {
     /**
      * 从给定的仓库接口类解析实体类（第一个类型参数{@code T}）。
      *
-     * <p>支持{@link MyJpaRepository}的直接和间接继承。结果按仓库类缓存以避免重复反射。
+     * <p>
+     * 支持{@link MyJpaRepository}的直接和间接继承。结果按仓库类缓存以避免重复反射。
      *
      * @param repositoryClass 仓库接口类
      * @param <T> 实体类型
@@ -30,7 +32,7 @@ public final class EntityClassResolver {
      */
     @SuppressWarnings("unchecked")
     static <T> Class<T> resolve(Class<?> repositoryClass) {
-        return (Class<T>) CACHE.computeIfAbsent(repositoryClass, clz -> {
+        return (Class<T>)CACHE.computeIfAbsent(repositoryClass, clz -> {
             // 1. Try direct resolution first (works for simple cases)
             Class<?> result = tryDirectResolution(clz);
             if (result != null) {
@@ -60,7 +62,9 @@ public final class EntityClassResolver {
         });
     }
 
-    /** 尝试使用标准的ResolvableType.as()方法进行解析。当MyJpaRepository是直接父接口或 Spring的ResolvableType能正确遍历层次结构时有效。 */
+    /**
+     * 尝试使用标准的ResolvableType.as()方法进行解析。当MyJpaRepository是直接父接口或 Spring的ResolvableType能正确遍历层次结构时有效。
+     */
     private static Class<?> tryDirectResolution(Class<?> repositoryClass) {
         try {
             ResolvableType type = ResolvableType.forClass(repositoryClass).as(MyJpaRepository.class);
@@ -79,7 +83,8 @@ public final class EntityClassResolver {
     /**
      * 遍历整个接口层次结构以找到绑定到{@link MyJpaRepository}类型参数的实际类型参数。
      *
-     * <p>对于层次结构中的每个接口，解析类型变量映射直到到达MyJpaRepository。
+     * <p>
+     * 对于层次结构中的每个接口，解析类型变量映射直到到达MyJpaRepository。
      */
     private static Class<?> resolveThroughHierarchy(Class<?> repositoryClass) {
         // Find the interface that directly extends MyJpaRepository
@@ -89,8 +94,7 @@ public final class EntityClassResolver {
                 if (superIface == MyJpaRepository.class) {
                     // Found: iface directly extends MyJpaRepository<T, ID>
                     // Now resolve the type arguments of iface as seen from repositoryClass
-                    ResolvableType ifaceType =
-                            ResolvableType.forClass(repositoryClass).as(iface);
+                    ResolvableType ifaceType = ResolvableType.forClass(repositoryClass).as(iface);
                     if (ifaceType != ResolvableType.NONE && ifaceType.getGenerics().length > 0) {
                         Class<?> resolved = ifaceType.resolveGeneric(0);
                         if (resolved != null && resolved != Object.class) {

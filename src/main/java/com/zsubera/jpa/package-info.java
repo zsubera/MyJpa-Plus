@@ -1,2 +1,1 @@
-@org.springframework.lang.NonNullApi
-package com.zsubera.jpa;
+@org.springframework.lang.NonNullApi package com.zsubera.jpa;

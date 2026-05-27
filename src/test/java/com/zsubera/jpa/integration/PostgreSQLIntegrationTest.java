@@ -23,9 +23,7 @@ class PostgreSQLIntegrationTest {
 
     @Container
     static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:16-alpine")
-            .withDatabaseName("myjpa_test")
-            .withUsername("test")
-            .withPassword("test");
+        .withDatabaseName("myjpa_test").withUsername("test").withPassword("test");
 
     @DynamicPropertySource
     static void configureProperties(DynamicPropertyRegistry registry) {

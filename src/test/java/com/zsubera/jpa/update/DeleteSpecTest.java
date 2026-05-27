@@ -28,9 +28,7 @@ class DeleteSpecTest {
         repository.save(newEntity("deleteMe", 1));
         repository.save(newEntity("keepMe", 1));
 
-        int count = new DeleteSpec<>(TestEntity.class)
-                .eq(TestEntity::getName, "deleteMe")
-                .execute(em);
+        int count = new DeleteSpec<>(TestEntity.class).eq(TestEntity::getName, "deleteMe").execute(em);
 
         assertEquals(1, count);
         List<TestEntity> all = repository.findAll();
@@ -43,8 +41,7 @@ class DeleteSpecTest {
         repository.save(newEntity("a", 1));
         repository.save(newEntity("b", 2));
 
-        int count =
-                new DeleteSpec<>(TestEntity.class).ne(TestEntity::getName, "a").execute(em);
+        int count = new DeleteSpec<>(TestEntity.class).ne(TestEntity::getName, "a").execute(em);
 
         assertEquals(1, count);
         assertEquals("a", repository.findAll().get(0).getName());
@@ -55,8 +52,7 @@ class DeleteSpecTest {
         repository.save(newEntity("low", 1));
         repository.save(newEntity("high", 10));
 
-        int count =
-                new DeleteSpec<>(TestEntity.class).gt(TestEntity::getStatus, 5).execute(em);
+        int count = new DeleteSpec<>(TestEntity.class).gt(TestEntity::getStatus, 5).execute(em);
 
         assertEquals(1, count);
         assertEquals("low", repository.findAll().get(0).getName());
@@ -67,8 +63,7 @@ class DeleteSpecTest {
         repository.save(newEntity("a", 5));
         repository.save(newEntity("b", 3));
 
-        int count =
-                new DeleteSpec<>(TestEntity.class).ge(TestEntity::getStatus, 5).execute(em);
+        int count = new DeleteSpec<>(TestEntity.class).ge(TestEntity::getStatus, 5).execute(em);
 
         assertEquals(1, count);
         assertEquals("b", repository.findAll().get(0).getName());
@@ -79,8 +74,7 @@ class DeleteSpecTest {
         repository.save(newEntity("a", 1));
         repository.save(newEntity("b", 10));
 
-        int count =
-                new DeleteSpec<>(TestEntity.class).lt(TestEntity::getStatus, 5).execute(em);
+        int count = new DeleteSpec<>(TestEntity.class).lt(TestEntity::getStatus, 5).execute(em);
 
         assertEquals(1, count);
         assertEquals("b", repository.findAll().get(0).getName());
@@ -91,8 +85,7 @@ class DeleteSpecTest {
         repository.save(newEntity("a", 3));
         repository.save(newEntity("b", 10));
 
-        int count =
-                new DeleteSpec<>(TestEntity.class).le(TestEntity::getStatus, 3).execute(em);
+        int count = new DeleteSpec<>(TestEntity.class).le(TestEntity::getStatus, 3).execute(em);
 
         assertEquals(1, count);
     }
@@ -102,9 +95,7 @@ class DeleteSpecTest {
         repository.save(newEntity("hello", 1));
         repository.save(newEntity("world", 1));
 
-        int count = new DeleteSpec<>(TestEntity.class)
-                .like(TestEntity::getName, "hel%")
-                .execute(em);
+        int count = new DeleteSpec<>(TestEntity.class).like(TestEntity::getName, "hel%").execute(em);
 
         assertEquals(1, count);
         assertEquals("world", repository.findAll().get(0).getName());
@@ -116,9 +107,7 @@ class DeleteSpecTest {
         repository.save(newEntity("b", 2));
         repository.save(newEntity("c", 3));
 
-        int count = new DeleteSpec<>(TestEntity.class)
-                .in(TestEntity::getStatus, 1, 2)
-                .execute(em);
+        int count = new DeleteSpec<>(TestEntity.class).in(TestEntity::getStatus, 1, 2).execute(em);
 
         assertEquals(2, count);
         assertEquals(1, repository.findAll().size());
@@ -130,9 +119,7 @@ class DeleteSpecTest {
         repository.save(newEntity("b", 5));
         repository.save(newEntity("c", 10));
 
-        int count = new DeleteSpec<>(TestEntity.class)
-                .between(TestEntity::getStatus, 3, 7)
-                .execute(em);
+        int count = new DeleteSpec<>(TestEntity.class).between(TestEntity::getStatus, 3, 7).execute(em);
 
         assertEquals(1, count);
         assertEquals(2, repository.findAll().size());
@@ -147,8 +134,7 @@ class DeleteSpecTest {
         em.persist(nullName);
         em.flush();
 
-        int count =
-                new DeleteSpec<>(TestEntity.class).isNull(TestEntity::getName).execute(em);
+        int count = new DeleteSpec<>(TestEntity.class).isNull(TestEntity::getName).execute(em);
 
         assertEquals(1, count);
         assertEquals(1, repository.findAll().size());
@@ -163,9 +149,7 @@ class DeleteSpecTest {
         em.persist(nullName);
         em.flush();
 
-        int count = new DeleteSpec<>(TestEntity.class)
-                .isNotNull(TestEntity::getName)
-                .execute(em);
+        int count = new DeleteSpec<>(TestEntity.class).isNotNull(TestEntity::getName).execute(em);
 
         assertEquals(1, count);
     }
@@ -198,9 +182,7 @@ class DeleteSpecTest {
         em.persist(nullName);
         em.flush();
 
-        int count = new DeleteSpec<>(TestEntity.class)
-                .eq(TestEntity::getName, (String) null)
-                .execute(em);
+        int count = new DeleteSpec<>(TestEntity.class).eq(TestEntity::getName, (String)null).execute(em);
 
         assertEquals(1, count);
     }
@@ -214,9 +196,7 @@ class DeleteSpecTest {
         em.persist(nullName);
         em.flush();
 
-        int count = new DeleteSpec<>(TestEntity.class)
-                .ne(TestEntity::getName, (String) null)
-                .execute(em);
+        int count = new DeleteSpec<>(TestEntity.class).ne(TestEntity::getName, (String)null).execute(em);
 
         assertEquals(1, count);
         assertNull(repository.findAll().get(0).getName());
@@ -224,23 +204,21 @@ class DeleteSpecTest {
 
     @Test
     void testDeleteGtNullValueThrowsException() {
-        assertThrows(IllegalArgumentException.class, () -> new DeleteSpec<>(TestEntity.class)
-                .gt(TestEntity::getStatus, null));
+        assertThrows(IllegalArgumentException.class,
+            () -> new DeleteSpec<>(TestEntity.class).gt(TestEntity::getStatus, null));
     }
 
     @Test
     void testDeleteBetweenInvalidRangeThrowsException() {
-        assertThrows(IllegalArgumentException.class, () -> new DeleteSpec<>(TestEntity.class)
-                .between(TestEntity::getStatus, 10, 1));
+        assertThrows(IllegalArgumentException.class,
+            () -> new DeleteSpec<>(TestEntity.class).between(TestEntity::getStatus, 10, 1));
     }
 
     @Test
     void testDeleteNotLike() {
         repository.save(newEntity("hello", 1));
         repository.save(newEntity("world", 1));
-        int count = new DeleteSpec<>(TestEntity.class)
-                .notLike(TestEntity::getName, "%hello%")
-                .execute(em);
+        int count = new DeleteSpec<>(TestEntity.class).notLike(TestEntity::getName, "%hello%").execute(em);
         assertEquals(1, count);
         assertEquals("hello", repository.findAll().get(0).getName());
     }
@@ -249,9 +227,7 @@ class DeleteSpecTest {
     void testDeleteStartsWith() {
         repository.save(newEntity("hello", 1));
         repository.save(newEntity("world", 1));
-        int count = new DeleteSpec<>(TestEntity.class)
-                .startsWith(TestEntity::getName, "hel")
-                .execute(em);
+        int count = new DeleteSpec<>(TestEntity.class).startsWith(TestEntity::getName, "hel").execute(em);
         assertEquals(1, count);
         assertEquals("world", repository.findAll().get(0).getName());
     }
@@ -260,9 +236,7 @@ class DeleteSpecTest {
     void testDeleteEndsWith() {
         repository.save(newEntity("ending", 1));
         repository.save(newEntity("start", 1));
-        int count = new DeleteSpec<>(TestEntity.class)
-                .endsWith(TestEntity::getName, "ing")
-                .execute(em);
+        int count = new DeleteSpec<>(TestEntity.class).endsWith(TestEntity::getName, "ing").execute(em);
         assertEquals(1, count);
         assertEquals("start", repository.findAll().get(0).getName());
     }
@@ -271,9 +245,7 @@ class DeleteSpecTest {
     void testDeleteContains() {
         repository.save(newEntity("abc", 1));
         repository.save(newEntity("xyz", 1));
-        int count = new DeleteSpec<>(TestEntity.class)
-                .contains(TestEntity::getName, "ab")
-                .execute(em);
+        int count = new DeleteSpec<>(TestEntity.class).contains(TestEntity::getName, "ab").execute(em);
         assertEquals(1, count);
         assertEquals("xyz", repository.findAll().get(0).getName());
     }
@@ -282,9 +254,7 @@ class DeleteSpecTest {
     void testDeleteEqIgnoreCase() {
         repository.save(newEntity("Hello", 1));
         repository.save(newEntity("WORLD", 1));
-        int count = new DeleteSpec<>(TestEntity.class)
-                .eqIgnoreCase(TestEntity::getName, "HELLO")
-                .execute(em);
+        int count = new DeleteSpec<>(TestEntity.class).eqIgnoreCase(TestEntity::getName, "HELLO").execute(em);
         assertEquals(1, count);
         assertEquals("WORLD", repository.findAll().get(0).getName());
     }
@@ -293,9 +263,7 @@ class DeleteSpecTest {
     void testDeleteLikeIgnoreCase() {
         repository.save(newEntity("HelloWorld", 1));
         repository.save(newEntity("xyz", 1));
-        int count = new DeleteSpec<>(TestEntity.class)
-                .likeIgnoreCase(TestEntity::getName, "%hello%")
-                .execute(em);
+        int count = new DeleteSpec<>(TestEntity.class).likeIgnoreCase(TestEntity::getName, "%hello%").execute(em);
         assertEquals(1, count);
         assertEquals("xyz", repository.findAll().get(0).getName());
     }
@@ -305,9 +273,7 @@ class DeleteSpecTest {
         repository.save(newEntity("a", 1));
         repository.save(newEntity("b", 2));
         repository.save(newEntity("c", 3));
-        int count = new DeleteSpec<>(TestEntity.class)
-                .notIn(TestEntity::getStatus, 1, 3)
-                .execute(em);
+        int count = new DeleteSpec<>(TestEntity.class).notIn(TestEntity::getStatus, 1, 3).execute(em);
         assertEquals(1, count);
         assertEquals(2, repository.findAll().size());
     }
@@ -317,9 +283,7 @@ class DeleteSpecTest {
         repository.save(newEntity("a", 1));
         repository.save(newEntity("b", 5));
         repository.save(newEntity("c", 10));
-        int count = new DeleteSpec<>(TestEntity.class)
-                .notBetween(TestEntity::getStatus, 3, 7)
-                .execute(em);
+        int count = new DeleteSpec<>(TestEntity.class).notBetween(TestEntity::getStatus, 3, 7).execute(em);
         assertEquals(2, count);
         assertEquals(1, repository.findAll().size());
     }
@@ -328,9 +292,7 @@ class DeleteSpecTest {
     void testDeleteWhere() {
         repository.save(newEntity("a", 1));
         repository.save(newEntity("b", 10));
-        int count = new DeleteSpec<>(TestEntity.class)
-                .where(root -> root.get("status").in(1))
-                .execute(em);
+        int count = new DeleteSpec<>(TestEntity.class).where(root -> root.get("status").in(1)).execute(em);
         assertEquals(1, count);
         assertEquals("b", repository.findAll().get(0).getName());
     }
@@ -341,8 +303,7 @@ class DeleteSpecTest {
         repository.save(newEntity("beta", 2));
         repository.save(newEntity("gamma", 3));
         int count = new DeleteSpec<>(TestEntity.class)
-                .or(o -> o.eq(TestEntity::getName, "alpha").eq(TestEntity::getName, "beta"))
-                .execute(em);
+            .or(o -> o.eq(TestEntity::getName, "alpha").eq(TestEntity::getName, "beta")).execute(em);
         assertEquals(2, count);
         assertEquals(1, repository.count());
     }
@@ -351,9 +312,7 @@ class DeleteSpecTest {
     void testDeleteNotGroup() {
         repository.save(newEntity("a", 1));
         repository.save(newEntity("b", 2));
-        int count = new DeleteSpec<>(TestEntity.class)
-                .not(o -> o.eq(TestEntity::getName, "a"))
-                .execute(em);
+        int count = new DeleteSpec<>(TestEntity.class).not(o -> o.eq(TestEntity::getName, "a")).execute(em);
         assertEquals(1, count);
         assertEquals("a", repository.findAll().get(0).getName());
     }
@@ -363,9 +322,8 @@ class DeleteSpecTest {
         repository.save(newEntity("x", 1));
         repository.save(newEntity("y", 2));
         repository.save(newEntity("z", 3));
-        int count = new DeleteSpec<>(TestEntity.class)
-                .in(TestEntity::getName, java.util.Arrays.asList("x", "z"))
-                .execute(em);
+        int count =
+            new DeleteSpec<>(TestEntity.class).in(TestEntity::getName, java.util.Arrays.asList("x", "z")).execute(em);
         assertEquals(2, count);
     }
 
@@ -374,9 +332,8 @@ class DeleteSpecTest {
         repository.save(newEntity("x", 1));
         repository.save(newEntity("y", 2));
         repository.save(newEntity("z", 3));
-        int count = new DeleteSpec<>(TestEntity.class)
-                .notIn(TestEntity::getName, java.util.Arrays.asList("x", "z"))
-                .execute(em);
+        int count = new DeleteSpec<>(TestEntity.class).notIn(TestEntity::getName, java.util.Arrays.asList("x", "z"))
+            .execute(em);
         assertEquals(1, count);
         assertEquals("x", repository.findAll().get(0).getName());
     }

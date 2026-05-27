@@ -36,30 +36,26 @@ class EntityGraphHelperTest {
 
     @Test
     void testLoadGraphChangesHintName() {
-        EntityGraphHelper<TestEntity> helper =
-                EntityGraphHelper.forEntity(TestEntity.class).loadGraph();
+        EntityGraphHelper<TestEntity> helper = EntityGraphHelper.forEntity(TestEntity.class).loadGraph();
         assertEquals("jakarta.persistence.loadgraph", helper.getHintName());
     }
 
     @Test
     void testFetchGraphRestoresHintName() {
-        EntityGraphHelper<TestEntity> helper =
-                EntityGraphHelper.forEntity(TestEntity.class).loadGraph().fetchGraph();
+        EntityGraphHelper<TestEntity> helper = EntityGraphHelper.forEntity(TestEntity.class).loadGraph().fetchGraph();
         assertEquals("jakarta.persistence.fetchgraph", helper.getHintName());
     }
 
     @Test
     void testAddSingleAttribute() {
-        EntityGraphHelper<TestEntity> helper =
-                EntityGraphHelper.forEntity(TestEntity.class).add("parent");
+        EntityGraphHelper<TestEntity> helper = EntityGraphHelper.forEntity(TestEntity.class).add("parent");
         EntityGraph<TestEntity> graph = helper.buildGraph(em);
         assertNotNull(graph);
     }
 
     @Test
     void testAddMultipleAttributesViaVarargs() {
-        EntityGraphHelper<TestEntity> helper =
-                EntityGraphHelper.forEntity(TestEntity.class).add("name", "status");
+        EntityGraphHelper<TestEntity> helper = EntityGraphHelper.forEntity(TestEntity.class).add("name", "status");
         Map<String, Object> hints = helper.toHints(em);
         assertFalse(hints.isEmpty());
         assertEquals(1, hints.size());
@@ -69,7 +65,7 @@ class EntityGraphHelperTest {
     @Test
     void testAddNullPathThrowsException() {
         EntityGraphHelper<TestEntity> helper = EntityGraphHelper.forEntity(TestEntity.class);
-        assertThrows(IllegalArgumentException.class, () -> helper.add((String) null));
+        assertThrows(IllegalArgumentException.class, () -> helper.add((String)null));
     }
 
     @Test
@@ -87,8 +83,7 @@ class EntityGraphHelperTest {
 
     @Test
     void testToHintsWithAttributesReturnsNonEmptyMap() {
-        EntityGraphHelper<TestEntity> helper =
-                EntityGraphHelper.forEntity(TestEntity.class).add("parent");
+        EntityGraphHelper<TestEntity> helper = EntityGraphHelper.forEntity(TestEntity.class).add("parent");
         Map<String, Object> hints = helper.toHints(em);
         assertFalse(hints.isEmpty());
         assertNotNull(hints.get("jakarta.persistence.fetchgraph"));
@@ -109,8 +104,7 @@ class EntityGraphHelperTest {
 
     @Test
     void testApplyWithAttributesReturnsQuery() {
-        EntityGraphHelper<TestEntity> helper =
-                EntityGraphHelper.forEntity(TestEntity.class).add("parent");
+        EntityGraphHelper<TestEntity> helper = EntityGraphHelper.forEntity(TestEntity.class).add("parent");
 
         CriteriaBuilder cb = em.getCriteriaBuilder();
         CriteriaQuery<TestEntity> cq = cb.createQuery(TestEntity.class);
@@ -123,8 +117,7 @@ class EntityGraphHelperTest {
 
     @Test
     void testBuildGraphWithAssociation() {
-        EntityGraphHelper<TestEntity> helper =
-                EntityGraphHelper.forEntity(TestEntity.class).add("parent");
+        EntityGraphHelper<TestEntity> helper = EntityGraphHelper.forEntity(TestEntity.class).add("parent");
         EntityGraph<TestEntity> graph = helper.buildGraph(em);
         assertNotNull(graph);
         assertNotNull(graph.getAttributeNodes());
@@ -133,8 +126,7 @@ class EntityGraphHelperTest {
 
     @Test
     void testBuildGraphWithMultiplePaths() {
-        EntityGraphHelper<TestEntity> helper =
-                EntityGraphHelper.forEntity(TestEntity.class).add("parent").add("name");
+        EntityGraphHelper<TestEntity> helper = EntityGraphHelper.forEntity(TestEntity.class).add("parent").add("name");
         EntityGraph<TestEntity> graph = helper.buildGraph(em);
         assertNotNull(graph);
         assertEquals(2, graph.getAttributeNodes().size());
@@ -142,8 +134,7 @@ class EntityGraphHelperTest {
 
     @Test
     void testBuildGraphWithLoadType() {
-        EntityGraphHelper<TestEntity> helper =
-                EntityGraphHelper.forEntity(TestEntity.class).loadGraph().add("parent");
+        EntityGraphHelper<TestEntity> helper = EntityGraphHelper.forEntity(TestEntity.class).loadGraph().add("parent");
         EntityGraph<TestEntity> graph = helper.buildGraph(em);
         assertNotNull(graph);
         assertEquals("jakarta.persistence.loadgraph", helper.getHintName());
@@ -151,8 +142,7 @@ class EntityGraphHelperTest {
 
     @Test
     void testToHintsWithLoadGraphType() {
-        EntityGraphHelper<TestEntity> helper =
-                EntityGraphHelper.forEntity(TestEntity.class).loadGraph().add("parent");
+        EntityGraphHelper<TestEntity> helper = EntityGraphHelper.forEntity(TestEntity.class).loadGraph().add("parent");
         Map<String, Object> hints = helper.toHints(em);
         assertNotNull(hints.get("jakarta.persistence.loadgraph"));
         assertNull(hints.get("jakarta.persistence.fetchgraph"));
@@ -162,8 +152,7 @@ class EntityGraphHelperTest {
     void testDotPathHandlingMergesSubpaths() {
         // adding "parent" after "parent" (via dot) should keep the subpath
         // First add parent with no subpaths, then add a subpath - it should be kept
-        EntityGraphHelper<TestEntity> helper =
-                EntityGraphHelper.forEntity(TestEntity.class).add("parent");
+        EntityGraphHelper<TestEntity> helper = EntityGraphHelper.forEntity(TestEntity.class).add("parent");
 
         // Adding "parent" where dot is found as root, no subpath actually
         // The merge behavior: when add("parent") is called after "parent" was already

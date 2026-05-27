@@ -34,14 +34,14 @@ public class JoinGroup<T, J> implements ConditionBuilder<J, JoinGroup<T, J>> {
 
     public <J2> JoinGroup<T, J2> join(SFunction<J, ?> field) {
         ConditionNode.JoinNode nestedJoin =
-                new ConditionNode.JoinNode(LambdaUtils.getPropertyName(field), ConditionNode.JoinType.INNER);
+            new ConditionNode.JoinNode(LambdaUtils.getPropertyName(field), ConditionNode.JoinType.INNER);
         joinNode.innerConditions.add(nestedJoin);
         return new JoinGroup<>(root, nestedJoin);
     }
 
     public <J2> JoinGroup<T, J2> leftJoin(SFunction<J, ?> field) {
         ConditionNode.JoinNode nestedJoin =
-                new ConditionNode.JoinNode(LambdaUtils.getPropertyName(field), ConditionNode.JoinType.LEFT);
+            new ConditionNode.JoinNode(LambdaUtils.getPropertyName(field), ConditionNode.JoinType.LEFT);
         joinNode.innerConditions.add(nestedJoin);
         return new JoinGroup<>(root, nestedJoin);
     }

@@ -260,7 +260,10 @@
                 <version>${spotless.version}</version>
                 <configuration>
                     <java>
-                        <palantirJavaFormat/>
+                        <eclipse>
+                            <version>4.31</version>
+                            <file>${project.basedir}/eclipse-codestyle.xml</file>
+                        </eclipse>
                         <removeUnusedImports/>
                         <trimTrailingWhitespace/>
                         <endWithNewline/>

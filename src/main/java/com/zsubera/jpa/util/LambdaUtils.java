@@ -12,9 +12,11 @@ import java.util.Map;
 /**
  * Lambda 工具类，用于从方法引用中提取实体属性名称。
  *
- * <p>支持将 {@code Entity::getField} 形式的方法引用转换为 {@code "field"} 形式的属性名称， 用于 JPA Criteria API 的动态查询构建。
+ * <p>
+ * 支持将 {@code Entity::getField} 形式的方法引用转换为 {@code "field"} 形式的属性名称， 用于 JPA Criteria API 的动态查询构建。
  *
- * <p>使用示例：
+ * <p>
+ * 使用示例：
  *
  * <pre>{@code
  * String name = LambdaUtils.getPropertyName(User::getName);
@@ -27,12 +29,12 @@ public final class LambdaUtils {
 
     /** LRU 缓存，线程安全，达到最大容量时自动淘汰最久未使用的条目。 */
     private static final Map<String, String> CACHE =
-            Collections.synchronizedMap(new LinkedHashMap<String, String>(MAX_CACHE_SIZE * 4 / 3 + 1, 0.75f, true) {
-                @Override
-                protected boolean removeEldestEntry(Map.Entry<String, String> eldest) {
-                    return size() > MAX_CACHE_SIZE;
-                }
-            });
+        Collections.synchronizedMap(new LinkedHashMap<String, String>(MAX_CACHE_SIZE * 4 / 3 + 1, 0.75f, true) {
+            @Override
+            protected boolean removeEldestEntry(Map.Entry<String, String> eldest) {
+                return size() > MAX_CACHE_SIZE;
+            }
+        });
 
     private LambdaUtils() {}
 
@@ -52,15 +54,13 @@ public final class LambdaUtils {
         try {
             Method writeReplace = fn.getClass().getDeclaredMethod("writeReplace");
             writeReplace.setAccessible(true);
-            SerializedLambda lambda = (SerializedLambda) writeReplace.invoke(fn);
+            SerializedLambda lambda = (SerializedLambda)writeReplace.invoke(fn);
             String key = lambda.getImplClass() + "#" + lambda.getImplMethodName();
             return CACHE.computeIfAbsent(key, k -> methodToProperty(lambda.getImplMethodName()));
         } catch (ReflectiveOperationException e) {
-            throw new MyJpaPlusException(
-                    "Failed to extract property name from method reference. "
-                            + "Ensure you are using a method reference directly (e.g., Entity::getField). "
-                            + "Lambda expressions like e -> e.getField() are not supported.",
-                    e);
+            throw new MyJpaPlusException("Failed to extract property name from method reference. "
+                + "Ensure you are using a method reference directly (e.g., Entity::getField). "
+                + "Lambda expressions like e -> e.getField() are not supported.", e);
         } catch (SecurityException e) {
             throw new MyJpaPlusException("Failed to extract property name due to security restriction.", e);
         }

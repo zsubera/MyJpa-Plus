@@ -550,7 +550,7 @@ public class QuerySpecTest {
         nullName.setStatus(99);
         repository.save(nullName);
         QuerySpec<TestEntity> qs = new QuerySpec<>();
-        qs.eq(TestEntity::getName, (String) null);
+        qs.eq(TestEntity::getName, (String)null);
         List<TestEntity> result = repository.findAll(qs.toSpecification());
         assertEquals(1, result.size());
         assertNull(result.get(0).getName());
@@ -564,7 +564,7 @@ public class QuerySpecTest {
         nullName.setStatus(99);
         repository.save(nullName);
         QuerySpec<TestEntity> qs = new QuerySpec<>();
-        qs.ne(TestEntity::getName, (String) null);
+        qs.ne(TestEntity::getName, (String)null);
         List<TestEntity> result = repository.findAll(qs.toSpecification());
         assertEquals(1, result.size());
         assertEquals("hasName", result.get(0).getName());
@@ -644,9 +644,8 @@ public class QuerySpecTest {
         repository.save(child);
 
         QuerySpec<TestEntity> qs = new QuerySpec<>();
-        qs.<ParentEntity>leftJoin(
-                TestEntity::getParent,
-                j -> j.or(oj -> oj.eq(ParentEntity::getCategory, "admin").isNull(ParentEntity::getCategory)));
+        qs.<ParentEntity>leftJoin(TestEntity::getParent,
+            j -> j.or(oj -> oj.eq(ParentEntity::getCategory, "admin").isNull(ParentEntity::getCategory)));
         List<TestEntity> result = repository.findAll(qs.toSpecification());
         assertEquals(2, result.size());
     }
@@ -665,7 +664,7 @@ public class QuerySpecTest {
     @Test
     void testNotMultiConditionAndSemantics() {
         // NOT(name = 'a' AND status > 3) = name != 'a' OR status <= 3
-        repository.save(newEntity("a", 5)); // name='a', status>3  -> excluded
+        repository.save(newEntity("a", 5)); // name='a', status>3 -> excluded
         repository.save(newEntity("a", 1)); // name='a', status<=3 -> included (status<=3)
         repository.save(newEntity("b", 5)); // name!='a', status>3 -> included (name!='a')
         repository.save(newEntity("b", 1)); // name!='a', status<=3 -> included (name!='a')
@@ -742,7 +741,7 @@ public class QuerySpecTest {
         repository.save(newEntity("d", 4));
         QuerySpec<TestEntity> qs = new QuerySpec<>();
         qs.or(outer -> outer.eq(TestEntity::getStatus, 1)
-                .or(inner -> inner.eq(TestEntity::getStatus, 2).eq(TestEntity::getStatus, 3)));
+            .or(inner -> inner.eq(TestEntity::getStatus, 2).eq(TestEntity::getStatus, 3)));
         List<TestEntity> result = repository.findAll(qs.toSpecification());
         assertEquals(3, result.size());
     }

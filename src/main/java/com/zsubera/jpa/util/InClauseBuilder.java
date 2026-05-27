@@ -13,11 +13,13 @@ import org.slf4j.LoggerFactory;
 /**
  * 用于构建 JPA {@code IN} 和 {@code NOT IN} 子句的工具类，消除了重复的 {@code CriteriaBuilder.In} 构建模式。
  *
- * <p>被 {@link com.zsubera.jpa.spec.ConditionBuilder}、{@link com.zsubera.jpa.spec.SubQuerySpec} 和
+ * <p>
+ * 被 {@link com.zsubera.jpa.spec.ConditionBuilder}、{@link com.zsubera.jpa.spec.SubQuerySpec} 和
  * {@link com.zsubera.jpa.update.AbstractBulkOperationSpec} 内部使用，以避免在三个实现中重复相同的 IN 构建逻辑。
  *
- * <p><strong>大型 IN 子句处理：</strong>大多数数据库对 IN 子句中的参数数量有限制 （Oracle: 1000, SQL Server: 2100）。此类会自动将大型
- * IN 子句拆分为多个 OR 连接的批次， 以避免超出这些限制。
+ * <p>
+ * <strong>大型 IN 子句处理：</strong>大多数数据库对 IN 子句中的参数数量有限制 （Oracle: 1000, SQL Server: 2100）。此类会自动将大型 IN 子句拆分为多个 OR 连接的批次，
+ * 以避免超出这些限制。
  */
 public final class InClauseBuilder {
 
@@ -31,7 +33,8 @@ public final class InClauseBuilder {
     /**
      * 构建 {@code IN} 谓词：{@code field IN (values)}。
      *
-     * <p>如果值的数量超过 {@link #MAX_IN_CLAUSE_SIZE}，IN 子句会自动拆分为多个 OR 连接的批次： {@code field IN (1..1000) OR
+     * <p>
+     * 如果值的数量超过 {@link #MAX_IN_CLAUSE_SIZE}，IN 子句会自动拆分为多个 OR 连接的批次： {@code field IN (1..1000) OR
      * field IN (1001..2000) OR ...}
      *
      * @param cb CriteriaBuilder 实例
@@ -53,7 +56,8 @@ public final class InClauseBuilder {
     /**
      * 构建 {@code IN} 谓词：{@code field IN (values)}。
      *
-     * <p>如果值的数量超过 {@link #MAX_IN_CLAUSE_SIZE}，IN 子句会自动拆分为多个 OR 连接的批次。
+     * <p>
+     * 如果值的数量超过 {@link #MAX_IN_CLAUSE_SIZE}，IN 子句会自动拆分为多个 OR 连接的批次。
      *
      * @param cb CriteriaBuilder 实例
      * @param path 字段路径
@@ -74,7 +78,8 @@ public final class InClauseBuilder {
     /**
      * 构建 {@code NOT IN} 谓词：{@code field NOT IN (values)}。
      *
-     * <p>如果值的数量超过 {@link #MAX_IN_CLAUSE_SIZE}，NOT IN 子句会自动拆分为多个 AND NOT 连接的批次。
+     * <p>
+     * 如果值的数量超过 {@link #MAX_IN_CLAUSE_SIZE}，NOT IN 子句会自动拆分为多个 AND NOT 连接的批次。
      *
      * @param cb CriteriaBuilder 实例
      * @param path 字段路径
@@ -95,7 +100,8 @@ public final class InClauseBuilder {
     /**
      * 构建 {@code NOT IN} 谓词：{@code field NOT IN (values)}。
      *
-     * <p>如果值的数量超过 {@link #MAX_IN_CLAUSE_SIZE}，NOT IN 子句会自动拆分为多个 AND NOT 连接的批次。
+     * <p>
+     * 如果值的数量超过 {@link #MAX_IN_CLAUSE_SIZE}，NOT IN 子句会自动拆分为多个 AND NOT 连接的批次。
      *
      * @param cb CriteriaBuilder 实例
      * @param path 字段路径
@@ -131,10 +137,8 @@ public final class InClauseBuilder {
 
     private static Predicate buildBatchedIn(CriteriaBuilder cb, Path<?> path, Collection<?> values) {
         if (log.isDebugEnabled()) {
-            log.debug(
-                    "IN clause has {} values, exceeding limit of {}. Splitting into batches.",
-                    values.size(),
-                    MAX_IN_CLAUSE_SIZE);
+            log.debug("IN clause has {} values, exceeding limit of {}. Splitting into batches.", values.size(),
+                MAX_IN_CLAUSE_SIZE);
         }
         List<Predicate> batchPredicates = new ArrayList<>();
         List<Object> batch = new ArrayList<>();
@@ -153,10 +157,8 @@ public final class InClauseBuilder {
 
     private static Predicate buildBatchedNotIn(CriteriaBuilder cb, Path<?> path, Collection<?> values) {
         if (log.isDebugEnabled()) {
-            log.debug(
-                    "NOT IN clause has {} values, exceeding limit of {}. Splitting into batches.",
-                    values.size(),
-                    MAX_IN_CLAUSE_SIZE);
+            log.debug("NOT IN clause has {} values, exceeding limit of {}. Splitting into batches.", values.size(),
+                MAX_IN_CLAUSE_SIZE);
         }
         List<Predicate> batchPredicates = new ArrayList<>();
         List<Object> batch = new ArrayList<>();

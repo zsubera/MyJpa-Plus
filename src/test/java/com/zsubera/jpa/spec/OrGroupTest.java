@@ -222,7 +222,7 @@ class OrGroupTest {
         repository.save(newEntity("d", 4));
         QuerySpec<TestEntity> qs = new QuerySpec<>();
         qs.or(outer -> outer.eq(TestEntity::getStatus, 1)
-                .or(inner -> inner.eq(TestEntity::getStatus, 2).eq(TestEntity::getStatus, 3)));
+            .or(inner -> inner.eq(TestEntity::getStatus, 2).eq(TestEntity::getStatus, 3)));
         List<TestEntity> result = repository.findAll(qs.toSpecification());
         assertEquals(3, result.size());
     }
@@ -245,8 +245,8 @@ class OrGroupTest {
         repository.save(c2);
 
         QuerySpec<TestEntity> qs = new QuerySpec<>();
-        qs.or(outer -> outer.eq(TestEntity::getStatus, 99)
-                .<ParentEntity>join(TestEntity::getParent, j -> j.eq(ParentEntity::getCategory, "admin")));
+        qs.or(outer -> outer.eq(TestEntity::getStatus, 99).<ParentEntity>join(TestEntity::getParent,
+            j -> j.eq(ParentEntity::getCategory, "admin")));
         List<TestEntity> result = repository.findAll(qs.toSpecification());
         assertEquals(1, result.size());
     }

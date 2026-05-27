@@ -22,10 +22,8 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 class MySQLIntegrationTest {
 
     @Container
-    static MySQLContainer<?> mysql = new MySQLContainer<>("mysql:8.0")
-            .withDatabaseName("myjpa_test")
-            .withUsername("test")
-            .withPassword("test");
+    static MySQLContainer<?> mysql =
+        new MySQLContainer<>("mysql:8.0").withDatabaseName("myjpa_test").withUsername("test").withPassword("test");
 
     @DynamicPropertySource
     static void configureProperties(DynamicPropertyRegistry registry) {

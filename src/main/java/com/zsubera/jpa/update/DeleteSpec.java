@@ -14,17 +14,18 @@ import org.slf4j.LoggerFactory;
 /**
  * JPA {@link CriteriaDelete} 批量删除操作的类型安全构建器。
  *
- * <p>允许使用 Lambda 方法引用构建类型安全的 DELETE 查询。条件以延迟函数形式存储， 在执行时才进行解析。
+ * <p>
+ * 允许使用 Lambda 方法引用构建类型安全的 DELETE 查询。条件以延迟函数形式存储， 在执行时才进行解析。
  *
- * <p><strong>事务要求：</strong>{@link #execute(EntityManager)} 需要活动事务。 可使用 {@link
- * #executeInTransaction(EntityManager)} 进行自动事务管理。
+ * <p>
+ * <strong>事务要求：</strong>{@link #execute(EntityManager)} 需要活动事务。 可使用 {@link #executeInTransaction(EntityManager)}
+ * 进行自动事务管理。
  *
- * <p>示例：
+ * <p>
+ * 示例：
  *
  * <pre>{@code
- * int deleted = new DeleteSpec<>(User.class)
- *     .lt(User::getLastLogin, cutoffDate)
- *     .eq(User::getStatus, "INACTIVE")
+ * int deleted = new DeleteSpec<>(User.class).lt(User::getLastLogin, cutoffDate).eq(User::getStatus, "INACTIVE")
  *     .executeInTransaction(entityManager);
  * }</pre>
  *
@@ -47,7 +48,8 @@ public class DeleteSpec<T> extends AbstractBulkOperationSpec<T, DeleteSpec<T>> {
     /**
      * 执行 DELETE 语句并返回受影响的行数。
      *
-     * <p><strong>需要活动事务。</strong>建议使用 {@link #executeInTransaction(EntityManager)}。
+     * <p>
+     * <strong>需要活动事务。</strong>建议使用 {@link #executeInTransaction(EntityManager)}。
      *
      * @param em 实体管理器
      * @return 删除的实体数量
@@ -76,8 +78,8 @@ public class DeleteSpec<T> extends AbstractBulkOperationSpec<T, DeleteSpec<T>> {
         Root<T> root = delete.from(entityClass);
         Predicate[] predicates = buildPredicates(root, cb);
         if (predicates.length == 0) {
-            throw new IllegalStateException("No WHERE conditions specified for DELETE operation. "
-                    + "This would delete ALL rows in the table. "
+            throw new IllegalStateException(
+                "No WHERE conditions specified for DELETE operation. " + "This would delete ALL rows in the table. "
                     + "If unconditional deletion is intended, use deleteAll(EntityManager) instead.");
         }
         delete.where(cb.and(predicates));
@@ -87,15 +89,15 @@ public class DeleteSpec<T> extends AbstractBulkOperationSpec<T, DeleteSpec<T>> {
     /**
      * 执行无条件删除，删除该实体的所有行。
      *
-     * <p>谨慎使用 — 此操作将删除表中的所有数据。
+     * <p>
+     * 谨慎使用 — 此操作将删除表中的所有数据。
      *
      * @param em 实体管理器
      * @return 删除的实体数量
      */
     public int deleteAll(EntityManager em) {
-        log.warn(
-                "WARNING: Executing unconditional DELETE on {} — this will affect ALL rows!",
-                entityClass.getSimpleName());
+        log.warn("WARNING: Executing unconditional DELETE on {} — this will affect ALL rows!",
+            entityClass.getSimpleName());
         CriteriaBuilder cb = em.getCriteriaBuilder();
         CriteriaDelete<T> delete = cb.createCriteriaDelete(entityClass);
         delete.from(entityClass);
@@ -115,9 +117,11 @@ public class DeleteSpec<T> extends AbstractBulkOperationSpec<T, DeleteSpec<T>> {
     /**
      * 执行 DELETE 语句并限制受影响的行数。
      *
-     * <p>此方法适用于批处理场景。它会限制 SQL 影响的行数。请注意，DELETE 语句的 LIMIT 支持因数据库而异。
+     * <p>
+     * 此方法适用于批处理场景。它会限制 SQL 影响的行数。请注意，DELETE 语句的 LIMIT 支持因数据库而异。
      *
-     * <p><strong>注意：</strong>此方法需要活动事务。调用方负责在批次之间刷新和清除持久化上下文。
+     * <p>
+     * <strong>注意：</strong>此方法需要活动事务。调用方负责在批次之间刷新和清除持久化上下文。
      *
      * @param em 实体管理器
      * @param limit 要删除的最大行数
@@ -137,7 +141,7 @@ public class DeleteSpec<T> extends AbstractBulkOperationSpec<T, DeleteSpec<T>> {
         Predicate[] predicates = buildPredicates(idRoot, cb);
         if (predicates.length == 0) {
             throw new IllegalStateException("No WHERE conditions specified for DELETE operation. "
-                    + "Use deleteAll() for unconditional deletions.");
+                + "Use deleteAll() for unconditional deletions.");
         }
         idQuery.where(cb.and(predicates));
         List<?> ids = em.createQuery(idQuery).setMaxResults(limit).getResultList();

@@ -9,17 +9,17 @@ import org.springframework.data.jpa.domain.Specification;
 /**
  * 用于在 {@link QuerySpec} / {@link Specification} 和 Spring Data 的 {@link Pageable} 之间实现无缝集成的工具类。
  *
- * <p>默认情况下，使用 {@code findAll(Specification, Pageable)} 时，Spring Data 会使用 {@link Pageable} 中的排序顺序
- * 覆盖通过 {@link QuerySpec#orderByAsc} / {@link QuerySpec#orderByDesc} 设置的任何排序。此帮助类提供了解决此冲突的方法。
+ * <p>
+ * 默认情况下，使用 {@code findAll(Specification, Pageable)} 时，Spring Data 会使用 {@link Pageable} 中的排序顺序 覆盖通过
+ * {@link QuerySpec#orderByAsc} / {@link QuerySpec#orderByDesc} 设置的任何排序。此帮助类提供了解决此冲突的方法。
  *
- * <p>示例：
+ * <p>
+ * 示例：
  *
  * <pre>{@code
  * // 不使用 PageableHelper — Pageable 排序覆盖 QuerySpec 排序：
- * Page<User> page = repository.findAll(
- *     new QuerySpec<User>().eq(User::getStatus, "ACTIVE").orderByAsc(User::getName),
- *     PageRequest.of(0, 20)
- * );
+ * Page<User> page = repository.findAll(new QuerySpec<User>().eq(User::getStatus, "ACTIVE").orderByAsc(User::getName),
+ *     PageRequest.of(0, 20));
  *
  * // 使用 PageableHelper — 明确控制优先级：
  * Page<User> page = repository.findAll(spec, PageableHelper.unsorted(0, 20));
@@ -34,8 +34,7 @@ public final class PageableHelper {
     private PageableHelper() {}
 
     /**
-     * 创建一个没有排序的 {@link PageRequest}，保留 {@link Specification} 上设置的任何排序 （例如来自 {@link
-     * QuerySpec#orderByAsc}）。
+     * 创建一个没有排序的 {@link PageRequest}，保留 {@link Specification} 上设置的任何排序 （例如来自 {@link QuerySpec#orderByAsc}）。
      *
      * @param page 从零开始的页码索引
      * @param size 每页大小
@@ -46,10 +45,11 @@ public final class PageableHelper {
     }
 
     /**
-     * 将 {@link Pageable} 的排序与 {@link QuerySpec} 的排序合并。QuerySpec 排序优先级更高， 然后追加 Pageable 排序。这允许将
-     * QuerySpec 的内置排序与动态分页排序相结合。
+     * 将 {@link Pageable} 的排序与 {@link QuerySpec} 的排序合并。QuerySpec 排序优先级更高， 然后追加 Pageable 排序。这允许将 QuerySpec
+     * 的内置排序与动态分页排序相结合。
      *
-     * <p>如果 QuerySpec 没有排序，则使用 Pageable 排序。
+     * <p>
+     * 如果 QuerySpec 没有排序，则使用 Pageable 排序。
      *
      * @param pageable 带有潜在排序的 pageable
      * @param querySpec 带有潜在内置排序的 QuerySpec
@@ -76,8 +76,8 @@ public final class PageableHelper {
     }
 
     /**
-     * 返回一个带有显式排序的 {@link Pageable}，以覆盖任何 QuerySpec 排序。当与 {@code findAll(spec, pageable)} 一起使用时，将应用此
-     * pageable 的排序，而不是 {@link QuerySpec} 中定义的任何排序。
+     * 返回一个带有显式排序的 {@link Pageable}，以覆盖任何 QuerySpec 排序。当与 {@code findAll(spec, pageable)} 一起使用时，将应用此 pageable 的排序，而不是
+     * {@link QuerySpec} 中定义的任何排序。
      *
      * @param page 从零开始的页码索引
      * @param size 每页大小

@@ -15,10 +15,12 @@ import org.springframework.stereotype.Component;
 /**
  * 自动过滤 Bean，用于实现透明的软删除过滤。
  *
- * <p>当 {@code myjpa-plus.soft-delete.auto-filter} 启用时，此 Bean 会跟踪所有带有 {@link SoftDelete @SoftDelete}
+ * <p>
+ * 当 {@code myjpa-plus.soft-delete.auto-filter} 启用时，此 Bean 会跟踪所有带有 {@link SoftDelete @SoftDelete}
  * 注解的实体类，并提供自动应用软删除过滤器的机制。
  *
- * <p>在 Repository 中的用法：
+ * <p>
+ * 在 Repository 中的用法：
  *
  * <pre>{@code
  * // 对任意查询应用自动过滤
@@ -26,14 +28,12 @@ import org.springframework.stereotype.Component;
  * Specification<User> filtered = softDeleteFilterBean.apply(spec, User.class);
  * }</pre>
  *
- * <p>当配置中设置 {@code auto-filter: true} 时（默认值），此 Bean 会自动激活。
+ * <p>
+ * 当配置中设置 {@code auto-filter: true} 时（默认值），此 Bean 会自动激活。
  */
 @Component
-@ConditionalOnProperty(
-        prefix = "myjpa-plus.soft-delete",
-        name = "auto-filter",
-        havingValue = "true",
-        matchIfMissing = true)
+@ConditionalOnProperty(prefix = "myjpa-plus.soft-delete", name = "auto-filter", havingValue = "true",
+    matchIfMissing = true)
 @EnableConfigurationProperties(MyJpaPlusProperties.class)
 public class SoftDeleteFilterBean implements InitializingBean {
 
@@ -49,9 +49,7 @@ public class SoftDeleteFilterBean implements InitializingBean {
     @Override
     public void afterPropertiesSet() {
         if (log.isDebugEnabled()) {
-            log.debug(
-                    "SoftDeleteFilterBean initialized (auto-filter={})",
-                    properties.getSoftDelete().isAutoFilter());
+            log.debug("SoftDeleteFilterBean initialized (auto-filter={})", properties.getSoftDelete().isAutoFilter());
         }
     }
 
@@ -81,8 +79,8 @@ public class SoftDeleteFilterBean implements InitializingBean {
     }
 
     /**
-     * 检查给定的实体类是否具有 {@link SoftDelete @SoftDelete} 字段。委托给 {@link
-     * SoftDeleteHelper#findSoftDeleteField(Class)}，该方法内部会缓存正向和负向的结果。
+     * 检查给定的实体类是否具有 {@link SoftDelete @SoftDelete} 字段。委托给
+     * {@link SoftDeleteHelper#findSoftDeleteField(Class)}，该方法内部会缓存正向和负向的结果。
      */
     public boolean hasSoftDeleteField(Class<?> entityClass) {
         return SoftDeleteHelper.findSoftDeleteField(entityClass) != null;

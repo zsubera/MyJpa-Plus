@@ -18,21 +18,18 @@ import org.springframework.lang.Nullable;
 /**
  * 基于 Lambda 的类型安全 JPA {@link Specification} 查询构建器。
  *
- * <p>使用方法引用（如 {@code Entity::getField}）代替硬编码的属性名字符串。支持等值比较、 范围比较、字符串匹配、集合操作、JOIN、EXISTS 子查询以及任意嵌套的
- * AND/OR 条件组。
+ * <p>
+ * 使用方法引用（如 {@code Entity::getField}）代替硬编码的属性名字符串。支持等值比较、 范围比较、字符串匹配、集合操作、JOIN、EXISTS 子查询以及任意嵌套的 AND/OR 条件组。
  *
- * <p><strong>此类是可变的且非线程安全。</strong>实例不应在多线程间共享。 每次查询操作应创建新的 {@code QuerySpec} 实例。
+ * <p>
+ * <strong>此类是可变的且非线程安全。</strong>实例不应在多线程间共享。 每次查询操作应创建新的 {@code QuerySpec} 实例。
  *
- * <p>示例：
+ * <p>
+ * 示例：
  *
  * <pre>{@code
- * new QuerySpec<User>()
- *     .eq(User::getStatus, "ACTIVE")
- *     .or()
- *         .like(User::getName, "%John%")
- *         .like(User::getEmail, "%john%")
- *     .endOr()
- *     .toSpecification();
+ * new QuerySpec<User>().eq(User::getStatus, "ACTIVE").or().like(User::getName, "%John%").like(User::getEmail, "%john%")
+ *     .endOr().toSpecification();
  * }</pre>
  *
  * @param <T> 被查询的根实体类型
@@ -73,7 +70,8 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
     /**
      * 将此 QuerySpec 上定义的排序暴露为 Spring Data {@link Sort} 对象。 如果未设置排序，则返回 {@link Sort#unsorted()}。
      *
-     * <p>此方法允许 {@link com.zsubera.jpa.util.PageableHelper} 和其他工具类 将 QuerySpec 排序与外部排序进行合并。
+     * <p>
+     * 此方法允许 {@link com.zsubera.jpa.util.PageableHelper} 和其他工具类 将 QuerySpec 排序与外部排序进行合并。
      *
      * @return 排序对象
      */
@@ -89,8 +87,7 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
     }
 
     /**
-     * 设置生成查询的超时时间（秒）。 由 {@link #applyQuerySettings(TypedQuery)} 和 {@link
-     * com.zsubera.jpa.template.MyJpaTemplate} 应用。
+     * 设置生成查询的超时时间（秒）。 由 {@link #applyQuerySettings(TypedQuery)} 和 {@link com.zsubera.jpa.template.MyJpaTemplate} 应用。
      *
      * @param seconds 超时时间（秒）
      * @return 当前 QuerySpec 实例，支持链式调用
@@ -110,8 +107,7 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
     }
 
     /**
-     * 设置生成查询的悲观锁模式。 由 {@link #applyQuerySettings(TypedQuery)} 和 {@link
-     * com.zsubera.jpa.template.MyJpaTemplate} 应用。
+     * 设置生成查询的悲观锁模式。 由 {@link #applyQuerySettings(TypedQuery)} 和 {@link com.zsubera.jpa.template.MyJpaTemplate} 应用。
      *
      * @param lockMode 锁模式类型
      * @return 当前 QuerySpec 实例，支持链式调用
@@ -191,8 +187,9 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
     /**
      * 添加升序 ORDER BY 排序。
      *
-     * <p><strong>注意：</strong>当使用 {@code findAll(Specification, Pageable)} 时，Spring Data 会使用 {@link
-     * org.springframework.data.domain.Pageable Pageable} 的排序覆盖此处的排序。 使用 {@code findAll(spec,
+     * <p>
+     * <strong>注意：</strong>当使用 {@code findAll(Specification, Pageable)} 时，Spring Data 会使用
+     * {@link org.springframework.data.domain.Pageable Pageable} 的排序覆盖此处的排序。 使用 {@code findAll(spec,
      * Sort.unsorted())} 或不带 {@code Pageable} 的 {@link #orderByAsc(SFunction[])} 以保留此处设置的排序。
      *
      * @param fields 要排序的字段方法引用
@@ -212,7 +209,8 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
     /**
      * 添加降序 ORDER BY 排序。
      *
-     * <p><strong>注意：</strong>当使用 {@code findAll(Specification, Pageable)} 时，Spring Data 会覆盖此处的排序。详见
+     * <p>
+     * <strong>注意：</strong>当使用 {@code findAll(Specification, Pageable)} 时，Spring Data 会覆盖此处的排序。详见
      * {@link #orderByAsc(SFunction[])}。
      *
      * @param fields 要排序的字段方法引用
@@ -238,7 +236,7 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
      */
     public <J> JoinGroup<T, J> join(SFunction<T, ?> field) {
         ConditionNode.JoinNode joinNode =
-                new ConditionNode.JoinNode(LambdaUtils.getPropertyName(field), ConditionNode.JoinType.INNER);
+            new ConditionNode.JoinNode(LambdaUtils.getPropertyName(field), ConditionNode.JoinType.INNER);
         currentGroup().add(joinNode);
         return new JoinGroup<>(this, joinNode);
     }
@@ -252,7 +250,7 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
      */
     public <J> JoinGroup<T, J> leftJoin(SFunction<T, ?> field) {
         ConditionNode.JoinNode joinNode =
-                new ConditionNode.JoinNode(LambdaUtils.getPropertyName(field), ConditionNode.JoinType.LEFT);
+            new ConditionNode.JoinNode(LambdaUtils.getPropertyName(field), ConditionNode.JoinType.LEFT);
         currentGroup().add(joinNode);
         return new JoinGroup<>(this, joinNode);
     }
@@ -266,7 +264,7 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
      */
     public <J> JoinGroup<T, J> fetchJoin(SFunction<T, ?> field) {
         ConditionNode.JoinNode joinNode =
-                new ConditionNode.JoinNode(LambdaUtils.getPropertyName(field), ConditionNode.JoinType.FETCH);
+            new ConditionNode.JoinNode(LambdaUtils.getPropertyName(field), ConditionNode.JoinType.FETCH);
         currentGroup().add(joinNode);
         return new JoinGroup<>(this, joinNode);
     }
@@ -280,7 +278,7 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
      */
     public <J> JoinGroup<T, J> leftFetchJoin(SFunction<T, ?> field) {
         ConditionNode.JoinNode joinNode =
-                new ConditionNode.JoinNode(LambdaUtils.getPropertyName(field), ConditionNode.JoinType.LEFT_FETCH);
+            new ConditionNode.JoinNode(LambdaUtils.getPropertyName(field), ConditionNode.JoinType.LEFT_FETCH);
         currentGroup().add(joinNode);
         return new JoinGroup<>(this, joinNode);
     }
@@ -371,7 +369,7 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
      */
     public <J> QuerySpec<T> join(SFunction<T, ?> field, Consumer<JoinGroup<T, J>> config) {
         ConditionNode.JoinNode joinNode =
-                new ConditionNode.JoinNode(LambdaUtils.getPropertyName(field), ConditionNode.JoinType.INNER);
+            new ConditionNode.JoinNode(LambdaUtils.getPropertyName(field), ConditionNode.JoinType.INNER);
         currentGroup().add(joinNode);
         config.accept(new JoinGroup<>(this, joinNode));
         return this;
@@ -387,7 +385,7 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
      */
     public <J> QuerySpec<T> leftJoin(SFunction<T, ?> field, Consumer<JoinGroup<T, J>> config) {
         ConditionNode.JoinNode joinNode =
-                new ConditionNode.JoinNode(LambdaUtils.getPropertyName(field), ConditionNode.JoinType.LEFT);
+            new ConditionNode.JoinNode(LambdaUtils.getPropertyName(field), ConditionNode.JoinType.LEFT);
         currentGroup().add(joinNode);
         config.accept(new JoinGroup<>(this, joinNode));
         return this;
@@ -403,7 +401,7 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
      */
     public <J> QuerySpec<T> fetchJoin(SFunction<T, ?> field, Consumer<JoinGroup<T, J>> config) {
         ConditionNode.JoinNode joinNode =
-                new ConditionNode.JoinNode(LambdaUtils.getPropertyName(field), ConditionNode.JoinType.FETCH);
+            new ConditionNode.JoinNode(LambdaUtils.getPropertyName(field), ConditionNode.JoinType.FETCH);
         currentGroup().add(joinNode);
         config.accept(new JoinGroup<>(this, joinNode));
         return this;
@@ -419,7 +417,7 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
      */
     public <J> QuerySpec<T> leftFetchJoin(SFunction<T, ?> field, Consumer<JoinGroup<T, J>> config) {
         ConditionNode.JoinNode joinNode =
-                new ConditionNode.JoinNode(LambdaUtils.getPropertyName(field), ConditionNode.JoinType.LEFT_FETCH);
+            new ConditionNode.JoinNode(LambdaUtils.getPropertyName(field), ConditionNode.JoinType.LEFT_FETCH);
         currentGroup().add(joinNode);
         config.accept(new JoinGroup<>(this, joinNode));
         return this;
@@ -475,8 +473,8 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
     }
 
     /**
-     * 将此 QuerySpec 与另一个 QuerySpec 使用 AND 组合，返回新的组合 {@link Specification}。 使用 {@link #then(QuerySpec)}
-     * 可在保留 QuerySpec 类型的同时组合条件以支持链式调用。
+     * 将此 QuerySpec 与另一个 QuerySpec 使用 AND 组合，返回新的组合 {@link Specification}。 使用 {@link #then(QuerySpec)} 可在保留 QuerySpec
+     * 类型的同时组合条件以支持链式调用。
      *
      * @param other 另一个 QuerySpec 实例
      * @return 组合后的 Specification 实例
@@ -489,8 +487,7 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
     }
 
     /**
-     * 将另一个 QuerySpec 的条件以 AND 语义合并到当前实例。 另一个 spec 的条件、分组、排序和 distinct 标志将追加到当前 spec， 保留 QuerySpec
-     * 类型以支持链式调用。
+     * 将另一个 QuerySpec 的条件以 AND 语义合并到当前实例。 另一个 spec 的条件、分组、排序和 distinct 标志将追加到当前 spec， 保留 QuerySpec 类型以支持链式调用。
      *
      * @param other 另一个 QuerySpec 实例
      * @return 当前 QuerySpec 实例，支持链式调用
@@ -535,12 +532,8 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
     public Predicate toPredicate(Root<T> root, CriteriaQuery<?> query, CriteriaBuilder cb) {
         validateCleanState();
         if (log.isDebugEnabled()) {
-            log.debug(
-                    "QuerySpec: building predicate for {} with {} conditions, {} order nodes, distinct={}",
-                    root.getModel().getName(),
-                    conditions.size(),
-                    orderNodes.size(),
-                    distinct);
+            log.debug("QuerySpec: building predicate for {} with {} conditions, {} order nodes, distinct={}",
+                root.getModel().getName(), conditions.size(), orderNodes.size(), distinct);
         }
         if (query != null) {
             if (distinct) {
@@ -594,44 +587,38 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
      * @param pathPrefix 路径前缀
      * @return 生成的 Predicate，如果节点无条件则返回 null
      */
-    private Predicate resolveNode(
-            ConditionNode node,
-            Path<?> path,
-            CriteriaQuery<?> query,
-            CriteriaBuilder cb,
-            Map<String, Join<?, ?>> joinCache,
-            String pathPrefix) {
+    private Predicate resolveNode(ConditionNode node, Path<?> path, CriteriaQuery<?> query, CriteriaBuilder cb,
+        Map<String, Join<?, ?>> joinCache, String pathPrefix) {
         if (node instanceof ConditionNode.SimpleNode) {
-            return resolveSimple((ConditionNode.SimpleNode) node, path, cb);
+            return resolveSimple((ConditionNode.SimpleNode)node, path, cb);
         }
         if (node instanceof ConditionNode.JoinNode) {
-            return resolveJoin((ConditionNode.JoinNode) node, path, query, cb, joinCache, pathPrefix);
+            return resolveJoin((ConditionNode.JoinNode)node, path, query, cb, joinCache, pathPrefix);
         }
         if (node instanceof ConditionNode.OrNode) {
-            return resolveOr((ConditionNode.OrNode) node, path, query, cb, joinCache, pathPrefix);
+            return resolveOr((ConditionNode.OrNode)node, path, query, cb, joinCache, pathPrefix);
         }
         if (node instanceof ConditionNode.AndNode) {
-            return resolveAnd((ConditionNode.AndNode) node, path, query, cb, joinCache, pathPrefix);
+            return resolveAnd((ConditionNode.AndNode)node, path, query, cb, joinCache, pathPrefix);
         }
         if (node instanceof ConditionNode.MultiLikeNode) {
-            return resolveMultiLike((ConditionNode.MultiLikeNode) node, path, cb);
+            return resolveMultiLike((ConditionNode.MultiLikeNode)node, path, cb);
         }
         if (node instanceof ConditionNode.CollectionNode) {
-            return resolveCollection((ConditionNode.CollectionNode) node, path, cb);
+            return resolveCollection((ConditionNode.CollectionNode)node, path, cb);
         }
         if (node instanceof ConditionNode.ExistsNode) {
-            return resolveExists((ConditionNode.ExistsNode<?>) node, path, query, cb);
+            return resolveExists((ConditionNode.ExistsNode<?>)node, path, query, cb);
         }
         if (node instanceof ConditionNode.RawNode) {
-            return ((ConditionNode.RawNode) node).fn.apply(path, cb);
+            return ((ConditionNode.RawNode)node).fn.apply(path, cb);
         }
         if (node instanceof ConditionNode.NegateNode) {
             Predicate inner =
-                    resolveNode(((ConditionNode.NegateNode) node).inner, path, query, cb, joinCache, pathPrefix);
+                resolveNode(((ConditionNode.NegateNode)node).inner, path, query, cb, joinCache, pathPrefix);
             return inner != null ? cb.not(inner) : null;
         }
-        throw new IllegalArgumentException(
-                "Unknown ConditionNode type: " + node.getClass().getName());
+        throw new IllegalArgumentException("Unknown ConditionNode type: " + node.getClass().getName());
     }
 
     /**
@@ -651,51 +638,51 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
             case NE:
                 return cb.notEqual(fieldPath, node.value);
             case GT:
-                return cb.greaterThan((Expression<Comparable>) fieldPath, (Comparable) node.value);
+                return cb.greaterThan((Expression<Comparable>)fieldPath, (Comparable)node.value);
             case GE:
-                return cb.greaterThanOrEqualTo((Expression<Comparable>) fieldPath, (Comparable) node.value);
+                return cb.greaterThanOrEqualTo((Expression<Comparable>)fieldPath, (Comparable)node.value);
             case LT:
-                return cb.lessThan((Expression<Comparable>) fieldPath, (Comparable) node.value);
+                return cb.lessThan((Expression<Comparable>)fieldPath, (Comparable)node.value);
             case LE:
-                return cb.lessThanOrEqualTo((Expression<Comparable>) fieldPath, (Comparable) node.value);
+                return cb.lessThanOrEqualTo((Expression<Comparable>)fieldPath, (Comparable)node.value);
             case LIKE:
                 if (node.escapeChar != '\0') {
-                    return cb.like(fieldPath.as(String.class), (String) node.value, node.escapeChar);
+                    return cb.like(fieldPath.as(String.class), (String)node.value, node.escapeChar);
                 }
-                return cb.like(fieldPath.as(String.class), (String) node.value);
+                return cb.like(fieldPath.as(String.class), (String)node.value);
             case NOT_LIKE:
                 if (node.escapeChar != '\0') {
-                    return cb.notLike(fieldPath.as(String.class), (String) node.value, node.escapeChar);
+                    return cb.notLike(fieldPath.as(String.class), (String)node.value, node.escapeChar);
                 }
-                return cb.notLike(fieldPath.as(String.class), (String) node.value);
+                return cb.notLike(fieldPath.as(String.class), (String)node.value);
             case EQ_IGNORE_CASE:
-                return cb.equal(cb.upper(fieldPath.as(String.class)), ((String) node.value).toUpperCase());
+                return cb.equal(cb.upper(fieldPath.as(String.class)), ((String)node.value).toUpperCase());
             case LIKE_IGNORE_CASE:
-                return cb.like(cb.upper(fieldPath.as(String.class)), ((String) node.value).toUpperCase());
+                return cb.like(cb.upper(fieldPath.as(String.class)), ((String)node.value).toUpperCase());
             case IS_NULL:
                 return cb.isNull(fieldPath);
             case IS_NOT_NULL:
                 return cb.isNotNull(fieldPath);
             case IN: {
                 if (node.value instanceof Collection) {
-                    return InClauseBuilder.in(cb, fieldPath, (Collection<?>) node.value);
+                    return InClauseBuilder.in(cb, fieldPath, (Collection<?>)node.value);
                 }
-                return InClauseBuilder.in(cb, fieldPath, (Object[]) node.value);
+                return InClauseBuilder.in(cb, fieldPath, (Object[])node.value);
             }
             case NOT_IN: {
                 if (node.value instanceof Collection) {
-                    return InClauseBuilder.notIn(cb, fieldPath, (Collection<?>) node.value);
+                    return InClauseBuilder.notIn(cb, fieldPath, (Collection<?>)node.value);
                 }
-                return InClauseBuilder.notIn(cb, fieldPath, (Object[]) node.value);
+                return InClauseBuilder.notIn(cb, fieldPath, (Object[])node.value);
             }
             case BETWEEN: {
-                Comparable<?>[] range = (Comparable<?>[]) node.value;
-                return cb.between((Expression<Comparable>) fieldPath, (Comparable) range[0], (Comparable) range[1]);
+                Comparable<?>[] range = (Comparable<?>[])node.value;
+                return cb.between((Expression<Comparable>)fieldPath, (Comparable)range[0], (Comparable)range[1]);
             }
             case NOT_BETWEEN: {
-                Comparable<?>[] range = (Comparable<?>[]) node.value;
-                return cb.not(
-                        cb.between((Expression<Comparable>) fieldPath, (Comparable) range[0], (Comparable) range[1]));
+                Comparable<?>[] range = (Comparable<?>[])node.value;
+                return cb
+                    .not(cb.between((Expression<Comparable>)fieldPath, (Comparable)range[0], (Comparable)range[1]));
             }
             default:
                 throw new IllegalArgumentException("Unsupported operator: " + node.op);
@@ -714,26 +701,20 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
      * @return 生成的 Predicate
      */
     @SuppressWarnings({"unchecked", "rawtypes"})
-    private Predicate resolveJoin(
-            ConditionNode.JoinNode node,
-            Path<?> path,
-            CriteriaQuery<?> query,
-            CriteriaBuilder cb,
-            Map<String, Join<?, ?>> joinCache,
-            String pathPrefix) {
+    private Predicate resolveJoin(ConditionNode.JoinNode node, Path<?> path, CriteriaQuery<?> query, CriteriaBuilder cb,
+        Map<String, Join<?, ?>> joinCache, String pathPrefix) {
         String fullPath = (pathPrefix != null && !pathPrefix.isEmpty() ? pathPrefix + "." : "") + node.fieldName;
 
         Join<?, ?> join = joinCache.computeIfAbsent(fullPath, k -> {
             boolean isFetch =
-                    node.joinType == ConditionNode.JoinType.FETCH || node.joinType == ConditionNode.JoinType.LEFT_FETCH;
+                node.joinType == ConditionNode.JoinType.FETCH || node.joinType == ConditionNode.JoinType.LEFT_FETCH;
             jakarta.persistence.criteria.JoinType jt =
-                    (node.joinType == ConditionNode.JoinType.LEFT || node.joinType == ConditionNode.JoinType.LEFT_FETCH)
-                            ? jakarta.persistence.criteria.JoinType.LEFT
-                            : jakarta.persistence.criteria.JoinType.INNER;
+                (node.joinType == ConditionNode.JoinType.LEFT || node.joinType == ConditionNode.JoinType.LEFT_FETCH)
+                    ? jakarta.persistence.criteria.JoinType.LEFT : jakarta.persistence.criteria.JoinType.INNER;
             if (isFetch) {
-                return (Join<?, ?>) ((From<?, ?>) path).fetch(node.fieldName, jt);
+                return (Join<?, ?>)((From<?, ?>)path).fetch(node.fieldName, jt);
             }
-            return ((From<?, ?>) path).join(node.fieldName, jt);
+            return ((From<?, ?>)path).join(node.fieldName, jt);
         });
 
         List<Predicate> innerPredicates = new ArrayList<>();
@@ -757,13 +738,8 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
      * @param pathPrefix 路径前缀
      * @return 生成的 Predicate
      */
-    private Predicate resolveOr(
-            ConditionNode.OrNode node,
-            Path<?> path,
-            CriteriaQuery<?> query,
-            CriteriaBuilder cb,
-            Map<String, Join<?, ?>> joinCache,
-            String pathPrefix) {
+    private Predicate resolveOr(ConditionNode.OrNode node, Path<?> path, CriteriaQuery<?> query, CriteriaBuilder cb,
+        Map<String, Join<?, ?>> joinCache, String pathPrefix) {
         List<Predicate> childPredicates = new ArrayList<>();
         for (ConditionNode child : node.nodes) {
             Predicate p = resolveNode(child, path, query, cb, joinCache, pathPrefix);
@@ -791,13 +767,8 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
      * @param pathPrefix 路径前缀
      * @return 生成的 Predicate
      */
-    private Predicate resolveAnd(
-            ConditionNode.AndNode node,
-            Path<?> path,
-            CriteriaQuery<?> query,
-            CriteriaBuilder cb,
-            Map<String, Join<?, ?>> joinCache,
-            String pathPrefix) {
+    private Predicate resolveAnd(ConditionNode.AndNode node, Path<?> path, CriteriaQuery<?> query, CriteriaBuilder cb,
+        Map<String, Join<?, ?>> joinCache, String pathPrefix) {
         List<Predicate> childPredicates = new ArrayList<>();
         for (ConditionNode child : node.nodes) {
             Predicate p = resolveNode(child, path, query, cb, joinCache, pathPrefix);
@@ -843,9 +814,9 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
     private Predicate resolveCollection(ConditionNode.CollectionNode node, Path<?> path, CriteriaBuilder cb) {
         Path<?> fieldPath = path.get(node.fieldName);
         if (node.op == ConditionNode.CollectionOp.IS_EMPTY) {
-            return cb.isEmpty((Expression<Collection<?>>) (Expression<?>) fieldPath);
+            return cb.isEmpty((Expression<Collection<?>>)(Expression<?>)fieldPath);
         }
-        return cb.isNotEmpty((Expression<Collection<?>>) (Expression<?>) fieldPath);
+        return cb.isNotEmpty((Expression<Collection<?>>)(Expression<?>)fieldPath);
     }
 
     /**
@@ -859,17 +830,17 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
      * @return 生成的 Predicate
      */
     @SuppressWarnings("unchecked")
-    private <S> Predicate resolveExists(
-            ConditionNode.ExistsNode<S> node, Path<?> outerPath, CriteriaQuery<?> query, CriteriaBuilder cb) {
+    private <S> Predicate resolveExists(ConditionNode.ExistsNode<S> node, Path<?> outerPath, CriteriaQuery<?> query,
+        CriteriaBuilder cb) {
         if (query == null) {
             log.warn("EXISTS subquery used in count query context (query=null). "
-                    + "Correlation may not work correctly. Consider using a different approach for counting.");
+                + "Correlation may not work correctly. Consider using a different approach for counting.");
             CriteriaQuery<?> tempQuery = cb.createQuery();
             return resolveExists(node, outerPath, tempQuery, cb);
         }
         jakarta.persistence.criteria.Subquery<S> subquery = query.subquery(node.subEntity);
         Root<S> subRoot = subquery.from(node.subEntity);
-        Root<?> correlatedOuter = subquery.correlate((Root<?>) outerPath);
+        Root<?> correlatedOuter = subquery.correlate((Root<?>)outerPath);
         SubQuerySpec<S> subSpec = new SubQuerySpec<>(subquery, subRoot, correlatedOuter, cb);
         node.config.accept(subSpec);
         subSpec.applyWhere();

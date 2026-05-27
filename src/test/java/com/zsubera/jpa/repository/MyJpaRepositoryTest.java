@@ -87,8 +87,8 @@ class MyJpaRepositoryTest {
         d1.setDeleted(true);
         repository.save(d1);
 
-        long count = repository.countNotDeleted(
-                (Specification<MyJpaTestEntity>) (root, query, cb) -> cb.equal(root.get("name"), "match"));
+        long count = repository
+            .countNotDeleted((Specification<MyJpaTestEntity>)(root, query, cb) -> cb.equal(root.get("name"), "match"));
         assertEquals(1L, count);
     }
 
@@ -122,7 +122,7 @@ class MyJpaRepositoryTest {
         repository.save(a2);
 
         List<MyJpaTestEntity> result = repository.findNotDeletedAll(
-                (Specification<MyJpaTestEntity>) (root, query, cb) -> cb.equal(root.get("name"), "target"));
+            (Specification<MyJpaTestEntity>)(root, query, cb) -> cb.equal(root.get("name"), "target"));
         assertEquals(1, result.size());
         assertEquals("target", result.get(0).getName());
     }
@@ -140,7 +140,7 @@ class MyJpaRepositoryTest {
         repository.save(deleted);
 
         Optional<MyJpaTestEntity> result = repository.findNotDeletedOne(
-                (Specification<MyJpaTestEntity>) (root, query, cb) -> cb.equal(root.get("name"), "target"));
+            (Specification<MyJpaTestEntity>)(root, query, cb) -> cb.equal(root.get("name"), "target"));
         assertTrue(result.isPresent());
         assertFalse(result.get().getDeleted());
     }
@@ -163,7 +163,7 @@ class MyJpaRepositoryTest {
         repository.save(deleted);
 
         Page<MyJpaTestEntity> page = repository.findNotDeletedAll(
-                (Specification<MyJpaTestEntity>) (root, query, cb) -> cb.conjunction(), PageRequest.of(0, 10));
+            (Specification<MyJpaTestEntity>)(root, query, cb) -> cb.conjunction(), PageRequest.of(0, 10));
         assertEquals(2, page.getTotalElements());
     }
 }

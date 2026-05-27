@@ -22,7 +22,8 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 /**
  * JPA 批量操作构建器（{@link UpdateSpec} 和 {@link DeleteSpec}）的抽象基类。
  *
- * <p>使用延迟 Lambda 求值提供通用条件方法。谓词构造委托给 {@link PredicateHelper} 以与其他组件共享逻辑。
+ * <p>
+ * 使用延迟 Lambda 求值提供通用条件方法。谓词构造委托给 {@link PredicateHelper} 以与其他组件共享逻辑。
  *
  * @param <T> 实体类型
  * @param <SELF> 具体构建器类型，用于流式链式调用
@@ -48,7 +49,7 @@ public abstract class AbstractBulkOperationSpec<T, SELF extends AbstractBulkOper
      */
     @SuppressWarnings("unchecked")
     protected SELF self() {
-        return (SELF) this;
+        return (SELF)this;
     }
 
     /**
@@ -66,8 +67,8 @@ public abstract class AbstractBulkOperationSpec<T, SELF extends AbstractBulkOper
     }
 
     /**
-     * Executes the bulk operation within a new transaction if none is active, otherwise executes
-     * within the current transaction.
+     * Executes the bulk operation within a new transaction if none is active, otherwise executes within the current
+     * transaction.
      *
      * @param em the EntityManager
      * @return the number of affected rows
@@ -77,21 +78,24 @@ public abstract class AbstractBulkOperationSpec<T, SELF extends AbstractBulkOper
     }
 
     /**
-     * Executes the given operation within a new transaction if none is active, otherwise executes
-     * within the current transaction.
+     * Executes the given operation within a new transaction if none is active, otherwise executes within the current
+     * transaction.
      *
-     * <p>This overload allows subclasses to execute custom operations (e.g., unconditional deleteAll)
-     * with proper transaction management.
+     * <p>
+     * This overload allows subclasses to execute custom operations (e.g., unconditional deleteAll) with proper
+     * transaction management.
      *
      * @param em the EntityManager
      * @param operation the operation to execute
      * @return the number of affected rows
      */
     protected int executeInTransaction(EntityManager em, Function<EntityManager, Integer> operation) {
-        // Check if Spring manages the transaction first (container-managed JTA or Spring tx)
+        // Check if Spring manages the transaction first (container-managed JTA or
+        // Spring tx)
         boolean springTxActive = TransactionSynchronizationManager.isActualTransactionActive();
         if (springTxActive) {
-            // Spring transaction is active — delegate to it, don't touch EntityTransaction directly
+            // Spring transaction is active — delegate to it, don't touch EntityTransaction
+            // directly
             return operation.apply(em);
         }
         // No Spring transaction — use JPA's EntityTransaction for standalone scenarios
@@ -128,8 +132,7 @@ public abstract class AbstractBulkOperationSpec<T, SELF extends AbstractBulkOper
     }
 
     /**
-     * Executes the bulk operation. Requires an active transaction in the underlying {@link
-     * EntityManager}.
+     * Executes the bulk operation. Requires an active transaction in the underlying {@link EntityManager}.
      *
      * @param em the EntityManager
      * @return the number of affected rows
@@ -153,37 +156,38 @@ public abstract class AbstractBulkOperationSpec<T, SELF extends AbstractBulkOper
     protected abstract int doExecute(EntityManager em);
 
     /**
-     * Sealed node type for bulk operation condition trees. Supports AND (default), OR, NOT, and leaf
-     * predicate nodes.
+     * Sealed node type for bulk operation condition trees. Supports AND (default), OR, NOT, and leaf predicate nodes.
      */
     /** 批量操作条件树的密封节点类型。支持 AND（默认）、OR、NOT 和叶子谓词节点。 */
     @SuppressWarnings("unchecked")
     sealed interface BulkConditionNode {
         /** 叶子谓词函数节点。 */
-        record LeafNode(BiFunction<Root<?>, CriteriaBuilder, Predicate> fn) implements BulkConditionNode {}
+        record LeafNode(BiFunction<Root<?>, CriteriaBuilder, Predicate> fn) implements BulkConditionNode {
+        }
 
         /** OR 子节点组。 */
         @SuppressFBWarnings({"EI_EXPOSE_REP", "EI_EXPOSE_REP2"})
-        record OrNode(List<BulkConditionNode> children) implements BulkConditionNode {}
+        record OrNode(List<BulkConditionNode> children) implements BulkConditionNode {
+        }
 
         /** NOT 包装节点。 */
-        record NotNode(BulkConditionNode child) implements BulkConditionNode {}
+        record NotNode(BulkConditionNode child) implements BulkConditionNode {
+        }
     }
 
     @SuppressWarnings({"unchecked", "rawtypes"})
     private BulkConditionNode leaf(BiFunction<Root<T>, CriteriaBuilder, Predicate> fn) {
-        return new BulkConditionNode.LeafNode((BiFunction) fn);
+        return new BulkConditionNode.LeafNode((BiFunction)fn);
     }
 
     /**
-     * Adds an OR group of conditions. All conditions added inside the consumer will be combined with
-     * OR instead of AND.
+     * Adds an OR group of conditions. All conditions added inside the consumer will be combined with OR instead of AND.
      *
-     * <p>Example:
+     * <p>
+     * Example:
      *
      * <pre>{@code
-     * new DeleteSpec<>(User.class)
-     *     .or(o -> o.eq(User::getStatus, "INACTIVE").eq(User::getStatus, "SUSPENDED"))
+     * new DeleteSpec<>(User.class).or(o -> o.eq(User::getStatus, "INACTIVE").eq(User::getStatus, "SUSPENDED"))
      *     .execute();
      * // WHERE (status = 'INACTIVE' OR status = 'SUSPENDED')
      * }</pre>
@@ -198,12 +202,11 @@ public abstract class AbstractBulkOperationSpec<T, SELF extends AbstractBulkOper
     /**
      * Adds a NOT group of conditions. The combined conditions inside the consumer will be negated.
      *
-     * <p>Example:
+     * <p>
+     * Example:
      *
      * <pre>{@code
-     * new DeleteSpec<>(User.class)
-     *     .not(o -> o.eq(User::getStatus, "ACTIVE"))
-     *     .execute();
+     * new DeleteSpec<>(User.class).not(o -> o.eq(User::getStatus, "ACTIVE")).execute();
      * // WHERE NOT (status = 'ACTIVE')
      * }</pre>
      */
@@ -211,7 +214,7 @@ public abstract class AbstractBulkOperationSpec<T, SELF extends AbstractBulkOper
         List<BulkConditionNode> children = new ArrayList<>();
         config.accept(new OrConditionBuilder<>(self(), children));
         BulkConditionNode combined =
-                children.size() == 1 ? children.get(0) : new BulkConditionNode.OrNode(List.copyOf(children));
+            children.size() == 1 ? children.get(0) : new BulkConditionNode.OrNode(List.copyOf(children));
         conditionNodes.add(new BulkConditionNode.NotNode(combined));
         return self();
     }
@@ -514,7 +517,7 @@ public abstract class AbstractBulkOperationSpec<T, SELF extends AbstractBulkOper
         if (end == null) {
             throw new IllegalArgumentException("end must not be null");
         }
-        if (((Comparable) start).compareTo(end) > 0) {
+        if (((Comparable)start).compareTo(end) > 0) {
             throw new IllegalArgumentException("start must not be greater than end");
         }
         String name = property(field);
@@ -539,7 +542,7 @@ public abstract class AbstractBulkOperationSpec<T, SELF extends AbstractBulkOper
         if (end == null) {
             throw new IllegalArgumentException("end must not be null");
         }
-        if (((Comparable) start).compareTo(end) > 0) {
+        if (((Comparable)start).compareTo(end) > 0) {
             throw new IllegalArgumentException("start must not be greater than end");
         }
         String name = property(field);
@@ -598,7 +601,7 @@ public abstract class AbstractBulkOperationSpec<T, SELF extends AbstractBulkOper
     @SuppressWarnings({"unchecked", "rawtypes"})
     private Predicate resolveNode(BulkConditionNode node, Root<T> root, CriteriaBuilder cb) {
         if (node instanceof BulkConditionNode.LeafNode l) {
-            return ((BiFunction<Root<T>, CriteriaBuilder, Predicate>) (BiFunction) l.fn()).apply(root, cb);
+            return ((BiFunction<Root<T>, CriteriaBuilder, Predicate>)(BiFunction)l.fn()).apply(root, cb);
         }
         if (node instanceof BulkConditionNode.OrNode o) {
             List<Predicate> childPredicates = new ArrayList<>();
@@ -616,8 +619,7 @@ public abstract class AbstractBulkOperationSpec<T, SELF extends AbstractBulkOper
         if (node instanceof BulkConditionNode.NotNode n) {
             return cb.not(resolveNode(n.child(), root, cb));
         }
-        throw new IllegalArgumentException(
-                "Unknown BulkConditionNode type: " + node.getClass().getName());
+        throw new IllegalArgumentException("Unknown BulkConditionNode type: " + node.getClass().getName());
     }
 
     /**

@@ -8,56 +8,32 @@ import java.util.function.BiFunction;
 import java.util.function.Consumer;
 
 /**
- * 条件节点类型的密封层次结构，由 {@link QuerySpec}、{@link ConditionBuilder} 及相关类使用， 用于构建延迟执行的 {@link
- * jakarta.persistence.criteria.Predicate} 树。
+ * 条件节点类型的密封层次结构，由 {@link QuerySpec}、{@link ConditionBuilder} 及相关类使用， 用于构建延迟执行的
+ * {@link jakarta.persistence.criteria.Predicate} 树。
  *
- * <p>每个节点表示查询条件树中的一个条件或结构元素（例如，简单比较、JOIN、OR 组、子查询等）， 在查询执行时进行解析。
+ * <p>
+ * 每个节点表示查询条件树中的一个条件或结构元素（例如，简单比较、JOIN、OR 组、子查询等）， 在查询执行时进行解析。
  */
-public sealed interface ConditionNode
-        permits ConditionNode.SimpleNode,
-                ConditionNode.JoinNode,
-                ConditionNode.OrNode,
-                ConditionNode.AndNode,
-                ConditionNode.MultiLikeNode,
-                ConditionNode.CollectionNode,
-                ConditionNode.ExistsNode,
-                ConditionNode.RawNode,
-                ConditionNode.NegateNode {
+public sealed interface ConditionNode permits ConditionNode.SimpleNode, ConditionNode.JoinNode, ConditionNode.OrNode,
+    ConditionNode.AndNode, ConditionNode.MultiLikeNode, ConditionNode.CollectionNode, ConditionNode.ExistsNode,
+    ConditionNode.RawNode, ConditionNode.NegateNode {
 
     // ---- Operation enums ----
 
     /** 字段-值条件的比较运算符。 */
     enum Op {
-        EQ,
-        NE,
-        GT,
-        GE,
-        LT,
-        LE,
-        LIKE,
-        NOT_LIKE,
-        IN,
-        NOT_IN,
-        BETWEEN,
-        NOT_BETWEEN,
-        IS_NULL,
-        IS_NOT_NULL,
-        EQ_IGNORE_CASE,
+        EQ, NE, GT, GE, LT, LE, LIKE, NOT_LIKE, IN, NOT_IN, BETWEEN, NOT_BETWEEN, IS_NULL, IS_NOT_NULL, EQ_IGNORE_CASE,
         LIKE_IGNORE_CASE
     }
 
     /** JOIN 节点中使用的连接类型。 */
     enum JoinType {
-        INNER,
-        LEFT,
-        FETCH,
-        LEFT_FETCH
+        INNER, LEFT, FETCH, LEFT_FETCH
     }
 
     /** 用于多值关联检查的集合操作。 */
     enum CollectionOp {
-        IS_EMPTY,
-        IS_NOT_EMPTY
+        IS_EMPTY, IS_NOT_EMPTY
     }
 
     // ---- Node types ----
