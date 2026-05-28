@@ -10,7 +10,19 @@
         <cve>CVE-2026-40973</cve>
         <cve>CVE-2026-40974</cve>
         <cve>CVE-2026-40975</cve>
+        <cve>CVE-2026-40977</cve>
         <cve>CVE-2026-22733</cve>
+    </suppress>
+    <suppress>
+        <notes><![CDATA[
+            Spring Framework CVEs — MyJpa-Plus uses only JPA/Criteria API,
+            not web, WebSocket, or messaging components affected by these CVEs.
+        ]]></notes>
+        <cve>CVE-2026-22740</cve>
+        <cve>CVE-2026-22737</cve>
+        <cve>CVE-2026-22745</cve>
+        <cve>CVE-2026-22741</cve>
+        <cve>CVE-2026-22735</cve>
     </suppress>
     <suppress>
         <notes><![CDATA[
@@ -18,6 +30,8 @@
             as provided by Spring Boot. The Log4j API jar is a transitive
             dependency but the runtime implementation is Logback.
         ]]></notes>
+        <cve>CVE-2025-68161</cve>
+        <cve>CVE-2026-34477</cve>
         <cve>CVE-2026-34478</cve>
         <cve>CVE-2026-34479</cve>
         <cve>CVE-2026-34480</cve>

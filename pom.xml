@@ -244,6 +244,7 @@
                         <format>HTML</format>
                         <format>JSON</format>
                     </formats>
+                    <ossindexAnalyzerEnabled>false</ossindexAnalyzerEnabled>
                 </configuration>
                 <executions>
                     <execution>
