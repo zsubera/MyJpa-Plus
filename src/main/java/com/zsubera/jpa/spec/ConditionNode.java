@@ -58,7 +58,17 @@ public sealed interface ConditionNode permits ConditionNode.SimpleNode, Conditio
 
         @Override
         public String toString() {
-            return "SimpleNode[" + fieldName + " " + op + " " + value + "]";
+            String maskedValue;
+            if (value == null) {
+                maskedValue = "null";
+            } else if (value instanceof String s && s.length() > 4) {
+                maskedValue = s.substring(0, 2) + "***" + s.substring(s.length() - 2);
+            } else if (value instanceof String) {
+                maskedValue = "***";
+            } else {
+                maskedValue = value.toString();
+            }
+            return "SimpleNode[" + fieldName + " " + op + " " + maskedValue + "]";
         }
     }
 

@@ -35,6 +35,8 @@ public class DeleteSpec<T> extends AbstractBulkOperationSpec<T, DeleteSpec<T>> {
 
     private static final Logger log = LoggerFactory.getLogger(DeleteSpec.class);
 
+    private boolean allowUnconditional = false;
+
     /**
      * 创建指定实体类型的删除规范构建器。
      *
@@ -43,6 +45,17 @@ public class DeleteSpec<T> extends AbstractBulkOperationSpec<T, DeleteSpec<T>> {
      */
     public DeleteSpec(Class<T> entityClass) {
         super(entityClass);
+    }
+
+    /**
+     * 显式允许无条件操作（deleteAll）。 在调用 {@link #deleteAll(EntityManager)} 前必须先调用此方法。
+     *
+     * @param allow 是否允许无条件操作
+     * @return 当前构建器实例，支持链式调用
+     */
+    public DeleteSpec<T> allowUnconditional(boolean allow) {
+        this.allowUnconditional = allow;
+        return this;
     }
 
     /**
@@ -90,12 +103,18 @@ public class DeleteSpec<T> extends AbstractBulkOperationSpec<T, DeleteSpec<T>> {
      * 执行无条件删除，删除该实体的所有行。
      *
      * <p>
-     * 谨慎使用 — 此操作将删除表中的所有数据。
+     * <strong>安全要求：</strong>必须先调用 {@link #allowUnconditional(boolean)} 显式确认， 否则将抛出
+     * {@link IllegalStateException}。此机制防止误调用导致全表数据被意外删除。
      *
      * @param em 实体管理器
      * @return 删除的实体数量
+     * @throws IllegalStateException 如果未调用 allowUnconditional(true)
      */
     public int deleteAll(EntityManager em) {
+        if (!allowUnconditional) {
+            throw new IllegalStateException("Unconditional DELETE is not allowed. "
+                + "Call .allowUnconditional(true) to explicitly confirm this operation.");
+        }
         log.warn("WARNING: Executing unconditional DELETE on {} — this will affect ALL rows!",
             entityClass.getSimpleName());
         CriteriaBuilder cb = em.getCriteriaBuilder();

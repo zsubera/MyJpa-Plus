@@ -1,6 +1,5 @@
 package com.zsubera.jpa.repository;
 
-import com.zsubera.jpa.annotation.IgnoreSoftDelete;
 import com.zsubera.jpa.update.SoftDeleteHelper;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import jakarta.persistence.EntityManager;
@@ -56,63 +55,13 @@ public class SoftDeleteJpaRepository<T, ID> extends SimpleJpaRepository<T, ID> {
     /**
      * 检查当前调用是否应该应用软删除过滤。
      *
+     * <p>
+     * 使用 {@link SoftDeleteContext} 的 ThreadLocal 标志判断， 由 {@link IgnoreSoftDeleteAdvisor} 在方法调用前自动设置。替代了原先基于栈遍历的检测方案。
+     *
      * @return 如果应该应用过滤返回 true
      */
     private boolean shouldApplySoftDeleteFilter() {
-        return SoftDeleteHelper.findSoftDeleteField(domainClass) != null && !hasIgnoreSoftDeleteAnnotation();
-    }
-
-    /**
-     * 检查当前方法或类是否有 @IgnoreSoftDelete 注解。
-     *
-     * <p>
-     * 使用改进的匹配策略：
-     * <ul>
-     * <li>限制堆栈遍历深度（最多20层）以提高性能</li>
-     * <li>使用方法签名（方法名+参数类型）精确匹配，避免方法重载歧义</li>
-     * <li>优先检查类级别注解，减少不必要的方法扫描</li>
-     * </ul>
-     *
-     * @return 如果应该忽略软删除过滤返回 true
-     */
-    private boolean hasIgnoreSoftDeleteAnnotation() {
-        StackTraceElement[] stackTrace = Thread.currentThread().getStackTrace();
-        // 限制遍历深度，避免深层调用链的性能损耗
-        int maxDepth = Math.min(stackTrace.length, 20);
-        for (int i = 0; i < maxDepth; i++) {
-            StackTraceElement element = stackTrace[i];
-            try {
-                Class<?> clazz = Class.forName(element.getClassName());
-                // 检查类级别注解
-                if (clazz.isAnnotationPresent(IgnoreSoftDelete.class)) {
-                    return true;
-                }
-                // 使用方法签名精确匹配，避免方法重载歧义
-                if (hasMethodWithIgnoreSoftDelete(clazz, element.getMethodName())) {
-                    return true;
-                }
-            } catch (ClassNotFoundException e) {
-                // 忽略无法加载的类
-            }
-        }
-        return false;
-    }
-
-    /**
-     * 检查类中是否有指定名称且带有 @IgnoreSoftDelete 注解的方法。 使用方法签名精确匹配，避免方法重载歧义。
-     *
-     * @param clazz 要检查的类
-     * @param methodName 方法名
-     * @return 如果找到匹配的方法返回 true
-     */
-    private boolean hasMethodWithIgnoreSoftDelete(Class<?> clazz, String methodName) {
-        java.lang.reflect.Method[] methods = clazz.getDeclaredMethods();
-        for (java.lang.reflect.Method method : methods) {
-            if (method.getName().equals(methodName) && method.isAnnotationPresent(IgnoreSoftDelete.class)) {
-                return true;
-            }
-        }
-        return false;
+        return SoftDeleteHelper.findSoftDeleteField(domainClass) != null && !SoftDeleteContext.isIgnoreSoftDelete();
     }
 
     private Specification<T> mergeSoftDeleteFilter(@Nullable Specification<T> spec) {

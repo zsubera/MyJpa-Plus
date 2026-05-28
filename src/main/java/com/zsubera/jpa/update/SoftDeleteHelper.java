@@ -263,6 +263,8 @@ public final class SoftDeleteHelper {
             }
             return false;
         } catch (ReflectiveOperationException e) {
+            log.warn("Failed to read soft delete field '{}' from entity {}: {}", fieldName,
+                entity.getClass().getSimpleName(), e.getMessage());
             return false;
         }
     }

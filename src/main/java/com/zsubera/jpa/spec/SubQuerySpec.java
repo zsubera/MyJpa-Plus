@@ -83,6 +83,12 @@ public class SubQuerySpec<S> {
      * @return 当前 SubQuerySpec 实例，支持链式调用
      */
     public <T> SubQuerySpec<S> correlatedEq(SFunction<T, ?> outerField, SFunction<S, ?> subField) {
+        if (outerField == null) {
+            throw new IllegalArgumentException("outerField must not be null");
+        }
+        if (subField == null) {
+            throw new IllegalArgumentException("subField must not be null");
+        }
         predicates.add(cb.equal(correlatedRoot.get(LambdaUtils.getPropertyName(outerField)),
             root.get(LambdaUtils.getPropertyName(subField))));
         return this;
@@ -525,6 +531,9 @@ public class SubQuerySpec<S> {
      * @return 当前 SubQuerySpec 实例，支持链式调用
      */
     public SubQuerySpec<S> select(SFunction<S, ?> field) {
+        if (field == null) {
+            throw new IllegalArgumentException("field must not be null");
+        }
         subquery.select(root.get(LambdaUtils.getPropertyName(field)));
         selectSet = true;
         return this;

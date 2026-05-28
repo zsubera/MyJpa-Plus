@@ -20,6 +20,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
+import org.springframework.lang.Nullable;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
@@ -77,8 +78,8 @@ public class MyJpaTemplate {
     @PersistenceContext
     private EntityManager entityManager;
 
-    private int maxResults = DEFAULT_MAX_RESULTS;
-    private int deepPaginationOffsetThreshold = DEFAULT_DEEP_PAGINATION_OFFSET_THRESHOLD;
+    private volatile int maxResults = DEFAULT_MAX_RESULTS;
+    private volatile int deepPaginationOffsetThreshold = DEFAULT_DEEP_PAGINATION_OFFSET_THRESHOLD;
 
     /** 创建 MyJpaTemplate 实例，使用默认配置。 */
     public MyJpaTemplate() {
@@ -256,7 +257,7 @@ public class MyJpaTemplate {
      * 流式查询匹配给定 {@link QuerySpec} 的所有实体。适用于处理大数据集而无需将所有数据加载到内存。
      *
      * <p>
-     * <strong>重要：</strong>返回的 Stream 使用后必须关闭（例如使用 try-with-resources）。 底层的 EntityManager 和事务必须在 Stream 处理的整个期间保持活动状态。
+     * <strong>重要：必须使用 try-with-resources 确保资源关闭：</strong>
      *
      * <pre>{@code
      * try (Stream<User> stream = jpa.findAllStream(User.class, spec)) {
@@ -264,10 +265,13 @@ public class MyJpaTemplate {
      * }
      * }</pre>
      *
+     * <p>
+     * <strong>未关闭 Stream 会导致数据库连接泄漏。</strong>底层的 EntityManager 和事务必须在 Stream 处理的整个期间保持活动状态。
+     *
      * @param entityClass 实体类
      * @param spec 查询规范
      * @param <T> 实体类型
-     * @return 匹配实体的 Stream
+     * @return 匹配实体的 Stream（必须由调用方关闭）
      */
     @Transactional(readOnly = true)
     public <T> Stream<T> findAllStream(Class<T> entityClass, QuerySpec<T> spec) {
@@ -388,49 +392,7 @@ public class MyJpaTemplate {
 
     private <T> Page<T> findPageInternal(Class<T> entityClass, Specification<T> spec, Pageable pageable,
         QuerySpec<T> querySpec) {
-        CriteriaBuilder cb = entityManager.getCriteriaBuilder();
-
-        if (pageable.isUnpaged()) {
-            log.warn(
-                "Pageable.unpaged() used with findPageInternal - returning all results up to {} limit. "
-                    + "Consider using findAll() with explicit maxResults or findAllStream() for large datasets.",
-                this.maxResults);
-            TypedQuery<T> typedQuery = buildSpecificationQuery(entityClass, spec, this.maxResults);
-            querySpec.applyQuerySettings(typedQuery);
-            List<T> allContent = typedQuery.getResultList();
-            return new PageImpl<>(allContent);
-        }
-
-        // 深度分页警告
-        if (pageable.getOffset() > this.deepPaginationOffsetThreshold) {
-            log.warn("Deep pagination detected (offset={}). This may cause slow queries. "
-                + "Consider using keyset pagination for better performance.", pageable.getOffset());
-        }
-
-        // 计数查询
-        long total = executeCountQuery(entityClass, spec, cb);
-
-        // 数据查询
-        CriteriaQuery<T> cq = cb.createQuery(entityClass);
-        Root<T> root = cq.from(entityClass);
-        jakarta.persistence.criteria.Predicate predicate = spec.toPredicate(root, cq, cb);
-        if (predicate != null) {
-            cq.where(predicate);
-        }
-        if (pageable.getSort().isSorted()) {
-            cq.orderBy(pageable.getSort().stream().map(order -> order.isAscending()
-                ? cb.asc(root.get(order.getProperty())) : cb.desc(root.get(order.getProperty()))).toList());
-        }
-        TypedQuery<T> query = entityManager.createQuery(cq);
-        if (pageable.getOffset() > Integer.MAX_VALUE) {
-            throw new IllegalArgumentException("Offset too large: " + pageable.getOffset());
-        }
-        query.setFirstResult((int)pageable.getOffset());
-        query.setMaxResults(pageable.getPageSize());
-        querySpec.applyQuerySettings(query);
-        List<T> content = query.getResultList();
-
-        return new PageImpl<>(content, pageable, total);
+        return doFindPage(entityClass, spec, pageable, querySpec);
     }
 
     /**
@@ -464,16 +426,33 @@ public class MyJpaTemplate {
      */
     @Transactional(readOnly = true)
     public <T> Page<T> findPage(Class<T> entityClass, Specification<T> spec, Pageable pageable) {
+        return doFindPage(entityClass, spec, pageable, null);
+    }
+
+    /**
+     * 公共分页逻辑，消除 findPageInternal 和 findPage 的代码重复。
+     *
+     * @param entityClass 实体类
+     * @param spec 查询规范
+     * @param pageable 分页信息
+     * @param querySpec QuerySpec 实例（用于应用查询设置，可为 null）
+     * @param <T> 实体类型
+     * @return 匹配实体的分页结果
+     */
+    private <T> Page<T> doFindPage(Class<T> entityClass, Specification<T> spec, Pageable pageable,
+        @Nullable QuerySpec<T> querySpec) {
         CriteriaBuilder cb = entityManager.getCriteriaBuilder();
 
-        // 处理 Pageable.unpaged()，添加安全限制
         if (pageable.isUnpaged()) {
             log.warn(
-                "Pageable.unpaged() used with findPage - returning all results up to {} limit. "
-                    + "Consider using find() with explicit maxResults or findAllStream() for large datasets.",
+                "Pageable.unpaged() used with pagination method - returning all results up to {} limit. "
+                    + "Consider using findAll() with explicit maxResults or findAllStream() for large datasets.",
                 this.maxResults);
-            TypedQuery<T> query = buildSpecificationQuery(entityClass, spec, this.maxResults);
-            List<T> allContent = query.getResultList();
+            TypedQuery<T> typedQuery = buildSpecificationQuery(entityClass, spec, this.maxResults);
+            if (querySpec != null) {
+                querySpec.applyQuerySettings(typedQuery);
+            }
+            List<T> allContent = typedQuery.getResultList();
             return new PageImpl<>(allContent);
         }
 
@@ -498,11 +477,11 @@ public class MyJpaTemplate {
                 ? cb.asc(root.get(order.getProperty())) : cb.desc(root.get(order.getProperty()))).toList());
         }
         TypedQuery<T> query = entityManager.createQuery(cq);
-        if (pageable.getOffset() > Integer.MAX_VALUE) {
-            throw new IllegalArgumentException("Offset too large: " + pageable.getOffset());
-        }
-        query.setFirstResult((int)pageable.getOffset());
+        query.setFirstResult(Math.toIntExact(pageable.getOffset()));
         query.setMaxResults(pageable.getPageSize());
+        if (querySpec != null) {
+            querySpec.applyQuerySettings(query);
+        }
         List<T> content = query.getResultList();
 
         return new PageImpl<>(content, pageable, total);

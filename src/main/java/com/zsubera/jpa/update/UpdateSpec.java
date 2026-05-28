@@ -40,6 +40,7 @@ public class UpdateSpec<T> extends AbstractBulkOperationSpec<T, UpdateSpec<T>> {
     private static final Logger log = LoggerFactory.getLogger(UpdateSpec.class);
 
     private final List<SetClause> setClauses = new ArrayList<>();
+    private boolean allowUnconditional = false;
 
     private record SetClause(String fieldName, Object value) {
     }
@@ -52,6 +53,17 @@ public class UpdateSpec<T> extends AbstractBulkOperationSpec<T, UpdateSpec<T>> {
      */
     public UpdateSpec(Class<T> entityClass) {
         super(entityClass);
+    }
+
+    /**
+     * 显式允许无条件操作（updateAll）。 在调用 {@link #updateAll(EntityManager)} 前必须先调用此方法。
+     *
+     * @param allow 是否允许无条件操作
+     * @return 当前构建器实例，支持链式调用
+     */
+    public UpdateSpec<T> allowUnconditional(boolean allow) {
+        this.allowUnconditional = allow;
+        return this;
     }
 
     /**
@@ -137,13 +149,18 @@ public class UpdateSpec<T> extends AbstractBulkOperationSpec<T, UpdateSpec<T>> {
      * 执行无条件更新，更新该实体的所有行。
      *
      * <p>
-     * 谨慎使用 — 此操作将更新表中的所有数据。
+     * <strong>安全要求：</strong>必须先调用 {@link #allowUnconditional(boolean)} 显式确认， 否则将抛出
+     * {@link IllegalStateException}。此机制防止误调用导致全表数据被意外修改。
      *
      * @param em 实体管理器
      * @return 更新的实体数量
-     * @throws IllegalStateException 如果未指定 SET 子句
+     * @throws IllegalStateException 如果未调用 allowUnconditional(true) 或未指定 SET 子句
      */
     public int updateAll(EntityManager em) {
+        if (!allowUnconditional) {
+            throw new IllegalStateException("Unconditional UPDATE is not allowed. "
+                + "Call .allowUnconditional(true) to explicitly confirm this operation.");
+        }
         if (setClauses.isEmpty()) {
             throw new IllegalStateException("At least one set() clause is required");
         }

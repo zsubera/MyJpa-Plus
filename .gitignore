@@ -29,3 +29,19 @@ Thumbs.db
 # Build output
 build/
 out/
+/AGENTS.md
+/.opencode/agents/audit1.md
+/.opencode/agents/audit2.md
+/AUDIT-README.md
+/audit-workflow.ps1
+/.opencode/agents/final-audit.md
+/opencode.json
+/.opencode/agents/optimizer.md
+
+# Audit workflow
+.audit-markers/
+.audit-tasks/
+.audit-dones/
+audit-report-*.md
+final-audit-report-*.md
+optimization-report-*.md

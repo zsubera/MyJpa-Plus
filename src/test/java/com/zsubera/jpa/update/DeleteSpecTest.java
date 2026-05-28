@@ -167,7 +167,7 @@ class DeleteSpecTest {
         repository.save(newEntity("a", 1));
         repository.save(newEntity("b", 2));
 
-        int count = new DeleteSpec<>(TestEntity.class).deleteAll(em);
+        int count = new DeleteSpec<>(TestEntity.class).allowUnconditional(true).deleteAll(em);
 
         assertEquals(2, count);
         assertTrue(repository.findAll().isEmpty());
@@ -342,7 +342,7 @@ class DeleteSpecTest {
     void testDeleteDeleteAllInTransaction() {
         repository.save(newEntity("a", 1));
         repository.save(newEntity("b", 2));
-        int count = new DeleteSpec<>(TestEntity.class).deleteAllInTransaction(em);
+        int count = new DeleteSpec<>(TestEntity.class).allowUnconditional(true).deleteAllInTransaction(em);
         assertEquals(2, count);
         assertEquals(0, repository.count());
     }

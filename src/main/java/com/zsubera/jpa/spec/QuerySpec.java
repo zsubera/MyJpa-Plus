@@ -27,6 +27,10 @@ import org.springframework.lang.Nullable;
  * <strong>此类是可变的且非线程安全。</strong>实例不应在多线程间共享。 每次查询操作应创建新的 {@code QuerySpec} 实例。
  *
  * <p>
+ * <strong>序列化说明：</strong>{@code Specification} 接口继承了 {@code Serializable}， 但 {@code QuerySpec}
+ * 的内部状态不适合序列化（如不可序列化的条件节点）。 实际使用中无需序列化 {@code QuerySpec}，SpotBugs 的 SE_BAD_FIELD 警告已被有意抑制。
+ *
+ * <p>
  * 示例：
  *
  * <pre>{@code
@@ -163,6 +167,9 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
      */
     @SafeVarargs
     public final QuerySpec<T> groupBy(SFunction<T, ?>... fields) {
+        if (fields == null) {
+            throw new IllegalArgumentException("fields must not be null");
+        }
         for (SFunction<T, ?> f : fields) {
             groupByFields.add(LambdaUtils.getPropertyName(f));
         }
@@ -220,6 +227,9 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
      */
     @SafeVarargs
     public final QuerySpec<T> orderByAsc(SFunction<T, ?>... fields) {
+        if (fields == null) {
+            throw new IllegalArgumentException("fields must not be null");
+        }
         for (SFunction<T, ?> f : fields) {
             orderNodes.add(new ConditionNode.OrderNode(LambdaUtils.getPropertyName(f), true));
         }
@@ -241,6 +251,9 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
      */
     @SafeVarargs
     public final QuerySpec<T> orderByDesc(SFunction<T, ?>... fields) {
+        if (fields == null) {
+            throw new IllegalArgumentException("fields must not be null");
+        }
         for (SFunction<T, ?> f : fields) {
             orderNodes.add(new ConditionNode.OrderNode(LambdaUtils.getPropertyName(f), false));
         }
@@ -359,6 +372,9 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
      * @return JoinGroup 实例，用于配置关联条件
      */
     private <J> JoinGroup<T, J> internalJoin(SFunction<T, ?> field, ConditionNode.JoinType joinType) {
+        if (field == null) {
+            throw new IllegalArgumentException("field must not be null");
+        }
         ConditionNode.JoinNode joinNode = new ConditionNode.JoinNode(LambdaUtils.getPropertyName(field), joinType);
         currentGroup().add(joinNode);
         return new JoinGroup<>(this, joinNode);
@@ -373,6 +389,12 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
      * @return 当前 QuerySpec 实例，支持链式调用
      */
     public <S> QuerySpec<T> exists(Class<S> subEntity, Consumer<SubQuerySpec<S>> config) {
+        if (subEntity == null) {
+            throw new IllegalArgumentException("subEntity must not be null");
+        }
+        if (config == null) {
+            throw new IllegalArgumentException("config must not be null");
+        }
         currentGroup().add(new ConditionNode.ExistsNode<>(subEntity, config, false));
         return this;
     }
@@ -386,6 +408,12 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
      * @return 当前 QuerySpec 实例，支持链式调用
      */
     public <S> QuerySpec<T> notExists(Class<S> subEntity, Consumer<SubQuerySpec<S>> config) {
+        if (subEntity == null) {
+            throw new IllegalArgumentException("subEntity must not be null");
+        }
+        if (config == null) {
+            throw new IllegalArgumentException("config must not be null");
+        }
         currentGroup().add(new ConditionNode.ExistsNode<>(subEntity, config, true));
         return this;
     }
@@ -432,6 +460,9 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
      * @return 当前 QuerySpec 实例，支持链式调用
      */
     public QuerySpec<T> or(Consumer<OrGroup<T>> config) {
+        if (config == null) {
+            throw new IllegalArgumentException("config must not be null");
+        }
         ConditionNode.OrNode orNode = new ConditionNode.OrNode();
         currentGroup().add(orNode);
         groupStack.push(orNode.nodes);
@@ -499,6 +530,12 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
      */
     private <J> QuerySpec<T> internalJoinWithConsumer(SFunction<T, ?> field, ConditionNode.JoinType joinType,
         Consumer<JoinGroup<T, J>> config) {
+        if (field == null) {
+            throw new IllegalArgumentException("field must not be null");
+        }
+        if (config == null) {
+            throw new IllegalArgumentException("config must not be null");
+        }
         ConditionNode.JoinNode joinNode = new ConditionNode.JoinNode(LambdaUtils.getPropertyName(field), joinType);
         currentGroup().add(joinNode);
         config.accept(new JoinGroup<>(this, joinNode));
@@ -508,10 +545,18 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
     /**
      * 添加 NOT 条件组，对组合条件取反。
      *
+     * <p>
+     * <strong>注意：</strong>组内多个条件之间为 AND 关系，整体取反。 即 {@code not(b -> b.eq(A).eq(B))} 生成 {@code NOT (A AND B)}，根据德摩根定律等价于
+     * {@code NOT A OR NOT B}。
+     *
      * @param config 条件组配置消费者
      * @return 当前 QuerySpec 实例，支持链式调用
+     * @throws IllegalArgumentException 如果 config 为 null
      */
     public QuerySpec<T> not(Consumer<OrGroup<T>> config) {
+        if (config == null) {
+            throw new IllegalArgumentException("config must not be null");
+        }
         ConditionNode.AndNode andNode = new ConditionNode.AndNode();
         ConditionNode.NegateNode negate = new ConditionNode.NegateNode(andNode);
         currentGroup().add(negate);

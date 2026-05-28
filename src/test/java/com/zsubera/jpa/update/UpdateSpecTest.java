@@ -212,7 +212,8 @@ class UpdateSpecTest {
         repository.save(newEntity("a", 1));
         repository.save(newEntity("b", 2));
 
-        int count = new UpdateSpec<>(TestEntity.class).set(TestEntity::getStatus, 99).updateAll(em);
+        int count =
+            new UpdateSpec<>(TestEntity.class).set(TestEntity::getStatus, 99).allowUnconditional(true).updateAll(em);
 
         assertEquals(2, count);
     }
@@ -399,7 +400,8 @@ class UpdateSpecTest {
     void testUpdateUpdateAllInTransaction() {
         repository.save(newEntity("old1", 1));
         repository.save(newEntity("old2", 2));
-        int count = new UpdateSpec<>(TestEntity.class).set(TestEntity::getStatus, 99).updateAllInTransaction(em);
+        int count = new UpdateSpec<>(TestEntity.class).set(TestEntity::getStatus, 99).allowUnconditional(true)
+            .updateAllInTransaction(em);
         assertEquals(2, count);
     }
 

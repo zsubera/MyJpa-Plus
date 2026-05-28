@@ -24,6 +24,9 @@ public class OrGroup<T> implements ConditionBuilder<T, OrGroup<T>> {
     }
 
     private <J> JoinGroup<T, J> internalJoin(SFunction<T, ?> field, ConditionNode.JoinType joinType) {
+        if (field == null) {
+            throw new IllegalArgumentException("field must not be null");
+        }
         ConditionNode.JoinNode joinNode = new ConditionNode.JoinNode(LambdaUtils.getPropertyName(field), joinType);
         root.currentGroup().add(joinNode);
         return new JoinGroup<>(root, joinNode);
