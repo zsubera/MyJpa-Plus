@@ -359,8 +359,7 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
      * @return JoinGroup 实例，用于配置关联条件
      */
     private <J> JoinGroup<T, J> internalJoin(SFunction<T, ?> field, ConditionNode.JoinType joinType) {
-        ConditionNode.JoinNode joinNode =
-            new ConditionNode.JoinNode(LambdaUtils.getPropertyName(field), joinType);
+        ConditionNode.JoinNode joinNode = new ConditionNode.JoinNode(LambdaUtils.getPropertyName(field), joinType);
         currentGroup().add(joinNode);
         return new JoinGroup<>(this, joinNode);
     }
@@ -500,8 +499,7 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
      */
     private <J> QuerySpec<T> internalJoinWithConsumer(SFunction<T, ?> field, ConditionNode.JoinType joinType,
         Consumer<JoinGroup<T, J>> config) {
-        ConditionNode.JoinNode joinNode =
-            new ConditionNode.JoinNode(LambdaUtils.getPropertyName(field), joinType);
+        ConditionNode.JoinNode joinNode = new ConditionNode.JoinNode(LambdaUtils.getPropertyName(field), joinType);
         currentGroup().add(joinNode);
         config.accept(new JoinGroup<>(this, joinNode));
         return this;

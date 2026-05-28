@@ -19,20 +19,21 @@ import org.springframework.lang.Nullable;
  * 支持软删除自动过滤的 {@link SimpleJpaRepository} 实现。
  *
  * <p>
- * 当实体有 {@link com.zsubera.jpa.annotation.SoftDelete @SoftDelete} 字段时，查询会自动追加过滤条件。
- * 使用 {@link IgnoreSoftDelete @IgnoreSoftDelete} 注解可跳过自动过滤。
+ * 当实体有 {@link com.zsubera.jpa.annotation.SoftDelete @SoftDelete} 字段时，查询会自动追加过滤条件。 使用
+ * {@link IgnoreSoftDelete @IgnoreSoftDelete} 注解可跳过自动过滤。
  *
  * <p>
  * 使用方式：在 {@code @EnableJpaRepositories} 中指定 {@code repositoryBaseClass}：
  *
- * <pre>{@code
- * @Configuration
- * @EnableJpaRepositories(
- *     basePackages = "com.example.repository",
- *     repositoryBaseClass = SoftDeleteJpaRepository.class
- * )
- * public class JpaConfig {}
- * }</pre>
+ * <pre>
+ * {
+ *     &#64;code
+ *     &#64;Configuration
+ *     @EnableJpaRepositories(basePackages = "com.example.repository",
+ *         repositoryBaseClass = SoftDeleteJpaRepository.class)
+ *     public class JpaConfig {}
+ * }
+ * </pre>
  *
  * @param <T> 实体类型
  * @param <ID> ID 类型
@@ -67,9 +68,9 @@ public class SoftDeleteJpaRepository<T, ID> extends SimpleJpaRepository<T, ID> {
      * <p>
      * 使用改进的匹配策略：
      * <ul>
-     *   <li>限制堆栈遍历深度（最多20层）以提高性能</li>
-     *   <li>使用方法签名（方法名+参数类型）精确匹配，避免方法重载歧义</li>
-     *   <li>优先检查类级别注解，减少不必要的方法扫描</li>
+     * <li>限制堆栈遍历深度（最多20层）以提高性能</li>
+     * <li>使用方法签名（方法名+参数类型）精确匹配，避免方法重载歧义</li>
+     * <li>优先检查类级别注解，减少不必要的方法扫描</li>
      * </ul>
      *
      * @return 如果应该忽略软删除过滤返回 true
@@ -98,8 +99,7 @@ public class SoftDeleteJpaRepository<T, ID> extends SimpleJpaRepository<T, ID> {
     }
 
     /**
-     * 检查类中是否有指定名称且带有 @IgnoreSoftDelete 注解的方法。
-     * 使用方法签名精确匹配，避免方法重载歧义。
+     * 检查类中是否有指定名称且带有 @IgnoreSoftDelete 注解的方法。 使用方法签名精确匹配，避免方法重载歧义。
      *
      * @param clazz 要检查的类
      * @param methodName 方法名
@@ -108,8 +108,7 @@ public class SoftDeleteJpaRepository<T, ID> extends SimpleJpaRepository<T, ID> {
     private boolean hasMethodWithIgnoreSoftDelete(Class<?> clazz, String methodName) {
         java.lang.reflect.Method[] methods = clazz.getDeclaredMethods();
         for (java.lang.reflect.Method method : methods) {
-            if (method.getName().equals(methodName)
-                && method.isAnnotationPresent(IgnoreSoftDelete.class)) {
+            if (method.getName().equals(methodName) && method.isAnnotationPresent(IgnoreSoftDelete.class)) {
                 return true;
             }
         }

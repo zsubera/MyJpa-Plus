@@ -54,8 +54,7 @@ public final class LambdaUtils {
      * 线程安全的缓存，使用 ConcurrentHashMap 确保 computeIfAbsent 的原子性。
      *
      * <p>
-     * 注意：此缓存没有 LRU 淘汰能力，但在高并发场景下性能更好。
-     * 如果缓存大小超过 MAX_CACHE_SIZE，会记录警告日志。
+     * 注意：此缓存没有 LRU 淘汰能力，但在高并发场景下性能更好。 如果缓存大小超过 MAX_CACHE_SIZE，会记录警告日志。
      */
     private static final Map<String, String> CACHE = new ConcurrentHashMap<>();
 

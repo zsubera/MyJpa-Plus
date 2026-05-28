@@ -197,8 +197,8 @@ public abstract class AbstractBulkOperationSpec<T, SELF extends AbstractBulkOper
      * Adds a NOT group of conditions. The combined conditions inside the consumer will be negated.
      *
      * <p>
-     * Multiple conditions inside the NOT group are combined with OR before negation.
-     * This follows De Morgan's laws: {@code NOT(A OR B) = NOT(A) AND NOT(B)}.
+     * Multiple conditions inside the NOT group are combined with OR before negation. This follows De Morgan's laws:
+     * {@code NOT(A OR B) = NOT(A) AND NOT(B)}.
      *
      * <p>
      * Example:

@@ -10,23 +10,23 @@ import java.lang.annotation.Target;
  * 标记查询方法或仓库接口以跳过软删除自动过滤。
  *
  * <p>
- * 当 {@code myjpa-plus.soft-delete.auto-filter=true} 时，所有查询会自动追加软删除过滤条件。
- * 使用此注解可跳过自动过滤，查询包含已删除的记录。
+ * 当 {@code myjpa-plus.soft-delete.auto-filter=true} 时，所有查询会自动追加软删除过滤条件。 使用此注解可跳过自动过滤，查询包含已删除的记录。
  *
  * <p>
  * 使用示例：
  *
- * <pre>{@code
+ * <pre>
+ * {@code
  * // 标记单个方法
- * @IgnoreSoftDelete
- * @Query("SELECT p FROM Product p WHERE p.id = :id")
+ * &#64;IgnoreSoftDelete
+ * &#64;Query("SELECT p FROM Product p WHERE p.id = :id")
  * Product findByIdIncludingDeleted(@Param("id") Long id);
  *
  * // 标记整个接口（所有方法都不过滤）
  * @IgnoreSoftDelete
- * public interface TrashRepository extends MyJpaRepository<Product, Long> {
+ * public interface TrashRepository extends MyJpaRepository<Product, Long> {}
  * }
- * }</pre>
+ * </pre>
  *
  * @see com.zsubera.jpa.annotation.SoftDelete
  * @see com.zsubera.jpa.update.SoftDeleteHelper
