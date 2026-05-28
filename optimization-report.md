@@ -1565,3 +1565,144 @@ default SELF notLikeSafe(SFunction<E, ?> field, String value) {
 - Spotless 格式化：通过
 
 ---
+## 轮次 9 - 优化记录
+时间：2026-05-29
+
+### 已修复问题
+- [P1] P1-1 AbstractBulkOperationSpec.where() 缺少 @Deprecated 和安全警告：为 where(Function) 方法添加 @Deprecated 注解和安全警告 Javadoc，与 ConditionBuilder.where() 和 SubQuerySpec.where() 保持一致
+- [P1] P1-2 ProjectionSpec.JoinGroup 缺少安全 LIKE 方法：添加 likeSafe() 和 notLikeSafe() 方法，自动转义用户输入中的通配符，新增 ConditionNode.LikeSafe 和 NotLikeSafe 记录，在 resolveJoins() 中添加对应的 instanceof 分支处理
+- [P1] P1-5 ConditionBuilder LIKE 方法缺少 field null 校验：为 like()、rawLike()、likeSafe()、notLike()、notLikeSafe()、startsWith()、endsWith()、contains()、likeIgnoreCase() 共 9 个方法添加 field 参数的 null 校验
+- [P1] P1-6 SubQuerySpec.eq()/ne() 缺少文档和 @Nullable 注解：添加 @Nullable 注解和 Javadoc，说明 null value 时自动转为 IS NULL/IS NOT NULL 的行为，与 ConditionBuilder.eq()/ne() 保持一致
+- [P1] P1-7 SoftDeleteHelper Specification 缓存无驱逐策略：将 NOT_DELETED_SPEC_CACHE 和 DELETED_SPEC_CACHE 从 ConcurrentHashMap 改为 ConcurrentReferenceHashMap(weak keys)，与 FIELD_CACHE 保持一致，允许类加载器卸载后 GC 回收
+- [P1] P1-9 MyJpaTemplate.findAllStream() 安全版本调用 deprecated 方法：提取 doFindStream() 私有方法，安全版本和 deprecated 版本均调用 doFindStream()，消除内部调用 deprecated 方法的循环依赖；deprecated 版本添加日志警告提示下一版本将抛出异常
+
+### 未修复问题
+- [P1] P1-3 ProjectionSpec.JoinGroup 与 spec.ConditionNode 代码重复：需要提取共享条件节点类型到公共包或重构 ProjectionSpec 内部 sealed interface 为复用主 ConditionNode，改动量约 200+ 行，涉及大量类型转换和 instanceof 检查，风险较高，建议在 v2.0.0 版本中处理
+- [P1] P1-4 ProjectionSpec.resolveJoins() 过长 if-else instanceof 链：需要引入 Java 17+ switch pattern matching 或策略模式，属于架构级重构，建议在 v2.0.0 版本中处理
+- [P1] P1-8 executeLimited() 两步执行竞态条件：此问题为 JPA 的固有限制，当前已提供悲观锁选项和详细文档警告，无法在不重构执行架构的情况下完全消除
+
+### 修改详情
+#### 1. AbstractBulkOperationSpec.where() @Deprecated 标记
+**文件**：src/main/java/com/zsubera/jpa/update/AbstractBulkOperationSpec.java:582-595
+**修改前**：
+`java
+/**
+ * 添加自定义条件。
+ *
+ * @param condition 自定义条件函数，接收 Root 返回 Predicate
+ * @return 当前构建器实例
+ * @throws IllegalArgumentException 如果 condition 为 null
+ */
+public SELF where(Function<Root<T>, Predicate> condition) {
+`
+**修改后**：
+`java
+/**
+ * 添加自定义条件。
+ *
+ * <p>
+ * <strong>安全警告：此方法绕过类型安全机制，存在潜在的SQL注入风险！</strong>
+ * <ul>
+ * <li>请勿使用用户输入的字符串拼接字段名，如 {@code root.get(userInput)}，这可能导致 SQL 注入</li>
+ * <li>建议优先使用类型安全的方法引用 API（如 {@code eq(Entity::getField, value)}）</li>
+ * </ul>
+ *
+ * @param condition 自定义条件函数，接收 Root 返回 Predicate
+ * @return 当前构建器实例
+ * @throws IllegalArgumentException 如果 condition 为 null
+ * @deprecated 推荐使用类型安全的 {@link #eq(SFunction, Object)}、{@link #like(SFunction, String)} 等方法替代。
+ *             此方法绕过类型安全机制，存在潜在的 SQL 注入风险。
+ */
+@Deprecated(since = "1.1.0", forRemoval = false)
+public SELF where(Function<Root<T>, Predicate> condition) {
+`
+**原因**：AbstractBulkOperationSpec.where() 是三个包含 where() 方法的类中唯一未标记 @Deprecated 的。添加 @Deprecated 和安全警告与 ConditionBuilder.where()、SubQuerySpec.where() 保持一致，IDE 会显示弃用警告引导用户迁移到类型安全 API。
+
+#### 2. ProjectionSpec.JoinGroup likeSafe()/notLikeSafe() 方法
+**文件**：src/main/java/com/zsubera/jpa/projection/ProjectionSpec.java
+**修改内容**：
+- 新增 ConditionNode.LikeSafe 和 ConditionNode.NotLikeSafe record 类型
+- 新增 JoinGroup.likeSafe(SFunction, String) 方法，自动转义通配符
+- 新增 JoinGroup.notLikeSafe(SFunction, String) 方法，自动转义通配符
+- 在 esolveJoins() 中添加 LikeSafe 和 NotLikeSafe 的 instanceof 分支处理，使用 PredicateHelper.escapeLikeWildcards() 和 LIKE_ESCAPE_CHAR
+**原因**：JoinGroup 的 like()/notLike() 不转义通配符，缺少安全替代方法。添加 likeSafe()/notLikeSafe() 与 ConditionBuilder 保持一致，消除 JOIN 条件中的 LIKE 注入风险。
+
+#### 3. ConditionBuilder LIKE 方法 field null 校验
+**文件**：src/main/java/com/zsubera/jpa/spec/ConditionBuilder.java（9 处）
+**修改前**（以 like() 为例）：
+`java
+default SELF like(SFunction<E, ?> field, String value) {
+    if (value == null) {
+        throw new IllegalArgumentException("value must not be null");
+    }
+`
+**修改后**：
+`java
+default SELF like(SFunction<E, ?> field, String value) {
+    if (field == null) {
+        throw new IllegalArgumentException("field must not be null");
+    }
+    if (value == null) {
+        throw new IllegalArgumentException("value must not be null");
+    }
+`
+**原因**：like()、rawLike()、likeSafe()、notLike()、notLikeSafe()、startsWith()、endsWith()、contains()、likeIgnoreCase() 共 9 个方法只校验了 value 为 null，未校验 field 为 null。虽然 LambdaUtils.getPropertyName() 内部会抛出异常，但错误消息不同（"SerializedLambda must not be null" vs "field must not be null"）。统一添加显式校验确保一致的错误消息和快速失败行为。
+
+#### 4. SubQuerySpec.eq()/ne() @Nullable 和 Javadoc
+**文件**：src/main/java/com/zsubera/jpa/spec/SubQuerySpec.java:120-135
+**修改前**：
+`java
+/**
+ * 添加子查询实体的等值条件。
+ *
+ * @param field 实体字段
+ * @param value 比较值
+ * @return 当前 SubQuerySpec 实例，支持链式调用
+ */
+public SubQuerySpec<S> eq(SFunction<S, ?> field, Object value) {
+`
+**修改后**：
+`java
+/**
+ * 添加子查询实体的等值条件。value 为 null 时自动转为 IS NULL。
+ *
+ * @param field 实体字段
+ * @param value 比较值，null 表示 IS NULL
+ * @return 当前 SubQuerySpec 实例，支持链式调用
+ * @throws IllegalArgumentException 如果 field 为 null
+ */
+public SubQuerySpec<S> eq(SFunction<S, ?> field, @Nullable Object value) {
+`
+**原因**：SubQuerySpec.eq()/ne() 缺少 @Nullable 注解和 Javadoc，与其他方法（gt/ge/lt/le）及 ConditionBuilder.eq() 的行为不一致。添加 @Nullable 注解和 Javadoc 说明 null value 时的行为。
+
+#### 5. SoftDeleteHelper Specification 缓存改弱引用
+**文件**：src/main/java/com/zsubera/jpa/update/SoftDeleteHelper.java:64-67
+**修改前**：
+`java
+private static final ConcurrentMap<Class<?>, Specification<?>> NOT_DELETED_SPEC_CACHE = new ConcurrentHashMap<>();
+private static final ConcurrentMap<Class<?>, Specification<?>> DELETED_SPEC_CACHE = new ConcurrentHashMap<>();
+`
+**修改后**：
+`java
+private static final ConcurrentMap<Class<?>, Specification<?>> NOT_DELETED_SPEC_CACHE =
+    new ConcurrentReferenceHashMap<>(16, ConcurrentReferenceHashMap.ReferenceType.WEAK);
+private static final ConcurrentMap<Class<?>, Specification<?>> DELETED_SPEC_CACHE =
+    new ConcurrentReferenceHashMap<>(16, ConcurrentReferenceHashMap.ReferenceType.WEAK);
+`
+**原因**：NOT_DELETED_SPEC_CACHE 和 DELETED_SPEC_CACHE 使用强引用 ConcurrentHashMap，无驱逐策略。FIELD_CACHE 已正确使用弱引用键的 ConcurrentReferenceHashMap。改为弱引用后，三个缓存统一使用弱引用键，Class 对象在类加载器卸载后可被 GC 回收，防止热重部署环境中的内存泄漏。
+
+#### 6. MyJpaTemplate.findAllStream() 重构
+**文件**：src/main/java/com/zsubera/jpa/template/MyJpaTemplate.java
+**修改内容**：
+- 新增 doFindStream(Class, QuerySpec) 私有方法，包含实际查询逻辑
+- indAllStream(Class, QuerySpec, Consumer) 安全版本改为调用 doFindStream() 而非 deprecated 版本
+- indAllStream(Class, QuerySpec) deprecated 版本添加日志警告，改为调用 doFindStream()
+- indAllStream(Class, QuerySpec, EntityGraphHelper) deprecated 版本添加日志警告
+**原因**：安全版本 findAllStream(Class, QuerySpec, Consumer) 内部调用了 deprecated 的 findAllStream(Class, QuerySpec)，形成循环依赖。提取 doFindStream() 私有方法消除此问题，为下一版本移除不安全版本做好准备。deprecated 版本添加日志警告提示下一版本将抛出 UnsupportedOperationException。
+
+### 测试结果
+- 单元测试：全部通过（592 个测试，0 失败，0 错误）
+- 集成测试：跳过（需要 Docker，已排除）
+- Spotless 格式化：通过
+
+---

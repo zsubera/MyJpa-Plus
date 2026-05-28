@@ -8,6 +8,7 @@ import jakarta.persistence.criteria.Subquery;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
+import org.springframework.lang.Nullable;
 
 /**
  * JPA EXISTS / NOT EXISTS 子查询的类型安全构建器。
@@ -111,25 +112,27 @@ public class SubQuerySpec<S> {
     // ---- 比较运算符 ----
 
     /**
-     * 添加子查询实体的等值条件。
+     * 添加子查询实体的等值条件。value 为 null 时自动转为 IS NULL。
      *
      * @param field 实体字段
-     * @param value 比较值
+     * @param value 比较值，null 表示 IS NULL
      * @return 当前 SubQuerySpec 实例，支持链式调用
+     * @throws IllegalArgumentException 如果 field 为 null
      */
-    public SubQuerySpec<S> eq(SFunction<S, ?> field, Object value) {
+    public SubQuerySpec<S> eq(SFunction<S, ?> field, @Nullable Object value) {
         predicates.add(PredicateHelper.eq(root, property(field), value, cb));
         return this;
     }
 
     /**
-     * 添加子查询实体的不等值条件。
+     * 添加子查询实体的不等值条件。value 为 null 时自动转为 IS NOT NULL。
      *
      * @param field 实体字段
-     * @param value 比较值
+     * @param value 比较值，null 表示 IS NOT NULL
      * @return 当前 SubQuerySpec 实例，支持链式调用
+     * @throws IllegalArgumentException 如果 field 为 null
      */
-    public SubQuerySpec<S> ne(SFunction<S, ?> field, Object value) {
+    public SubQuerySpec<S> ne(SFunction<S, ?> field, @Nullable Object value) {
         predicates.add(PredicateHelper.ne(root, property(field), value, cb));
         return this;
     }

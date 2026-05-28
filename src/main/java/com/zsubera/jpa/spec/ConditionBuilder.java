@@ -229,6 +229,9 @@ public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> {
      * @see #endsWith(SFunction, String)
      */
     default SELF like(SFunction<E, ?> field, String value) {
+        if (field == null) {
+            throw new IllegalArgumentException("field must not be null");
+        }
         if (value == null) {
             throw new IllegalArgumentException("value must not be null");
         }
@@ -246,6 +249,9 @@ public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> {
      * @throws IllegalArgumentException 如果 {@code field} 或 {@code value} 为 null
      */
     default SELF rawLike(SFunction<E, ?> field, String value) {
+        if (field == null) {
+            throw new IllegalArgumentException("field must not be null");
+        }
         if (value == null) {
             throw new IllegalArgumentException("value must not be null");
         }
@@ -268,6 +274,9 @@ public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> {
      * @see #rawLike(SFunction, String)
      */
     default SELF likeSafe(SFunction<E, ?> field, String value) {
+        if (field == null) {
+            throw new IllegalArgumentException("field must not be null");
+        }
         if (value == null) {
             throw new IllegalArgumentException("value must not be null");
         }
@@ -290,6 +299,9 @@ public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> {
      * @see PredicateHelper#escapeLikeWildcards(String)
      */
     default SELF notLike(SFunction<E, ?> field, String value) {
+        if (field == null) {
+            throw new IllegalArgumentException("field must not be null");
+        }
         if (value == null) {
             throw new IllegalArgumentException("value must not be null");
         }
@@ -311,6 +323,9 @@ public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> {
      * @see #notLike(SFunction, String)
      */
     default SELF notLikeSafe(SFunction<E, ?> field, String value) {
+        if (field == null) {
+            throw new IllegalArgumentException("field must not be null");
+        }
         if (value == null) {
             throw new IllegalArgumentException("value must not be null");
         }
@@ -328,6 +343,9 @@ public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> {
      * @throws IllegalArgumentException 如果 {@code field} 或 {@code value} 为 null
      */
     default SELF startsWith(SFunction<E, ?> field, String value) {
+        if (field == null) {
+            throw new IllegalArgumentException("field must not be null");
+        }
         if (value == null) {
             throw new IllegalArgumentException("value must not be null");
         }
@@ -345,6 +363,9 @@ public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> {
      * @throws IllegalArgumentException 如果 {@code field} 或 {@code value} 为 null
      */
     default SELF endsWith(SFunction<E, ?> field, String value) {
+        if (field == null) {
+            throw new IllegalArgumentException("field must not be null");
+        }
         if (value == null) {
             throw new IllegalArgumentException("value must not be null");
         }
@@ -362,6 +383,9 @@ public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> {
      * @throws IllegalArgumentException 如果 {@code field} 或 {@code value} 为 null
      */
     default SELF contains(SFunction<E, ?> field, String value) {
+        if (field == null) {
+            throw new IllegalArgumentException("field must not be null");
+        }
         if (value == null) {
             throw new IllegalArgumentException("value must not be null");
         }
@@ -571,6 +595,9 @@ public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> {
      * @throws IllegalArgumentException 如果 {@code field} 或 {@code value} 为 null
      */
     default SELF likeIgnoreCase(SFunction<E, ?> field, String value) {
+        if (field == null) {
+            throw new IllegalArgumentException("field must not be null");
+        }
         if (value == null) {
             throw new IllegalArgumentException("value must not be null");
         }

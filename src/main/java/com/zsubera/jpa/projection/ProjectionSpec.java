@@ -272,6 +272,52 @@ public class ProjectionSpec<T> {
         }
 
         /**
+         * 添加安全 LIKE 条件（自动转义通配符）。
+         *
+         * <p>
+         * 此方法是 {@link #like(SFunction, String)} 的安全版本，适用于处理用户输入。 值中的 {@code %} 或 {@code _} 字符会被转义，作为字面量处理。
+         *
+         * @param field 实体属性的方法引用
+         * @param value 要匹配的原始字符串值（通配符会被转义）
+         * @return 当前 JoinGroup 实例，支持链式调用
+         * @throws IllegalArgumentException 如果 field 或 value 为 null
+         * @see com.zsubera.jpa.spec.ConditionBuilder#likeSafe(SFunction, String)
+         */
+        public JoinGroup<E> likeSafe(SFunction<E, ?> field, String value) {
+            if (field == null) {
+                throw new IllegalArgumentException("field must not be null");
+            }
+            if (value == null) {
+                throw new IllegalArgumentException("value must not be null");
+            }
+            conditions.add(new ConditionNode.LikeSafe(LambdaUtils.getPropertyName(field), value));
+            return this;
+        }
+
+        /**
+         * 添加安全 NOT LIKE 条件（自动转义通配符）。
+         *
+         * <p>
+         * 此方法是 {@link #notLike(SFunction, String)} 的安全版本，适用于处理用户输入。 值中的 {@code %} 或 {@code _} 字符会被转义，作为字面量处理。
+         *
+         * @param field 实体属性的方法引用
+         * @param value 要匹配的原始字符串值（通配符会被转义）
+         * @return 当前 JoinGroup 实例，支持链式调用
+         * @throws IllegalArgumentException 如果 field 或 value 为 null
+         * @see com.zsubera.jpa.spec.ConditionBuilder#notLikeSafe(SFunction, String)
+         */
+        public JoinGroup<E> notLikeSafe(SFunction<E, ?> field, String value) {
+            if (field == null) {
+                throw new IllegalArgumentException("field must not be null");
+            }
+            if (value == null) {
+                throw new IllegalArgumentException("value must not be null");
+            }
+            conditions.add(new ConditionNode.NotLikeSafe(LambdaUtils.getPropertyName(field), value));
+            return this;
+        }
+
+        /**
          * 添加 BETWEEN 条件。
          *
          * @param field 实体属性的方法引用
@@ -604,6 +650,14 @@ public class ProjectionSpec<T> {
             }
 
             record IsNotEmpty(String fieldName) implements ConditionNode {
+            }
+
+            /** 安全 LIKE 条件（自动转义通配符）。 */
+            record LikeSafe(String fieldName, String value) implements ConditionNode {
+            }
+
+            /** 安全 NOT LIKE 条件（自动转义通配符）。 */
+            record NotLikeSafe(String fieldName, String value) implements ConditionNode {
             }
         }
 
@@ -953,6 +1007,12 @@ public class ProjectionSpec<T> {
                     onPredicates.add(cb.like(join.get(contains.fieldName()).as(String.class),
                         "%" + PredicateHelper.escapeLikeWildcards(contains.value()) + "%",
                         PredicateHelper.LIKE_ESCAPE_CHAR));
+                } else if (node instanceof JoinGroup.ConditionNode.LikeSafe likeSafe) {
+                    onPredicates.add(cb.like(join.get(likeSafe.fieldName()).as(String.class),
+                        PredicateHelper.escapeLikeWildcards(likeSafe.value()), PredicateHelper.LIKE_ESCAPE_CHAR));
+                } else if (node instanceof JoinGroup.ConditionNode.NotLikeSafe notLikeSafe) {
+                    onPredicates.add(cb.notLike(join.get(notLikeSafe.fieldName()).as(String.class),
+                        PredicateHelper.escapeLikeWildcards(notLikeSafe.value()), PredicateHelper.LIKE_ESCAPE_CHAR));
                 } else if (node instanceof JoinGroup.ConditionNode.EqIgnoreCase eqIgnoreCase) {
                     onPredicates.add(cb.equal(cb.upper(join.get(eqIgnoreCase.fieldName()).as(String.class)),
                         cb.upper(cb.literal(eqIgnoreCase.value()))));

@@ -61,10 +61,14 @@ public final class SoftDeleteHelper {
         new ConcurrentReferenceHashMap<>(16, ConcurrentReferenceHashMap.ReferenceType.WEAK);
 
     // Cache: entityClass -> isNotDeleted Specification
-    private static final ConcurrentMap<Class<?>, Specification<?>> NOT_DELETED_SPEC_CACHE = new ConcurrentHashMap<>();
+    // Uses weak key references to allow class loader GC in OSGi/hot-redeploy scenarios
+    private static final ConcurrentMap<Class<?>, Specification<?>> NOT_DELETED_SPEC_CACHE =
+        new ConcurrentReferenceHashMap<>(16, ConcurrentReferenceHashMap.ReferenceType.WEAK);
 
     // Cache: entityClass -> isDeleted Specification
-    private static final ConcurrentMap<Class<?>, Specification<?>> DELETED_SPEC_CACHE = new ConcurrentHashMap<>();
+    // Uses weak key references to allow class loader GC in OSGi/hot-redeploy scenarios
+    private static final ConcurrentMap<Class<?>, Specification<?>> DELETED_SPEC_CACHE =
+        new ConcurrentReferenceHashMap<>(16, ConcurrentReferenceHashMap.ReferenceType.WEAK);
 
     private SoftDeleteHelper() {}
 

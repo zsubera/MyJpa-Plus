@@ -283,8 +283,9 @@ public class MyJpaTemplate {
     @Deprecated(since = "1.0.1", forRemoval = true)
     @Transactional(readOnly = true)
     public <T> Stream<T> findAllStream(Class<T> entityClass, QuerySpec<T> spec) {
-        TypedQuery<T> query = buildTypedQuery(entityClass, spec, null, null);
-        return query.getResultStream();
+        log.warn("findAllStream(Class, QuerySpec) is deprecated and will throw UnsupportedOperationException in 1.2.0. "
+            + "Use findAllStream(Class, QuerySpec, Consumer) instead.");
+        return doFindStream(entityClass, spec);
     }
 
     /**
@@ -300,6 +301,9 @@ public class MyJpaTemplate {
     @Deprecated(since = "1.0.1", forRemoval = true)
     @Transactional(readOnly = true)
     public <T> Stream<T> findAllStream(Class<T> entityClass, QuerySpec<T> spec, EntityGraphHelper<T> entityGraph) {
+        log.warn(
+            "findAllStream(Class, QuerySpec, EntityGraph) is deprecated and will throw UnsupportedOperationException "
+                + "in 1.2.0. Use findAllStream(Class, QuerySpec, Consumer) instead.");
         TypedQuery<T> query = buildTypedQuery(entityClass, spec, entityGraph, null);
         return query.getResultStream();
     }
@@ -333,9 +337,22 @@ public class MyJpaTemplate {
         if (consumer == null) {
             throw new IllegalArgumentException("consumer must not be null");
         }
-        try (Stream<T> stream = findAllStream(entityClass, spec)) {
+        try (Stream<T> stream = doFindStream(entityClass, spec)) {
             consumer.accept(stream);
         }
+    }
+
+    /**
+     * 内部流式查询实现，供安全版本和 deprecated 版本共用。
+     *
+     * @param entityClass 实体类
+     * @param spec 查询规范
+     * @param <T> 实体类型
+     * @return 匹配实体的 Stream（必须由调用方关闭）
+     */
+    private <T> Stream<T> doFindStream(Class<T> entityClass, QuerySpec<T> spec) {
+        TypedQuery<T> query = buildTypedQuery(entityClass, spec, null, null);
+        return query.getResultStream();
     }
 
     /**

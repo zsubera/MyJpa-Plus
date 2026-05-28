@@ -582,10 +582,21 @@ public abstract class AbstractBulkOperationSpec<T, SELF extends AbstractBulkOper
     /**
      * 添加自定义条件。
      *
+     * <p>
+     * <strong>安全警告：此方法绕过类型安全机制，存在潜在的SQL注入风险！</strong>
+     * <ul>
+     * <li>请勿使用用户输入的字符串拼接字段名，如 {@code root.get(userInput)}，这可能导致 SQL 注入</li>
+     * <li>建议优先使用类型安全的方法引用 API（如 {@code eq(Entity::getField, value)}）</li>
+     * <li>如果必须使用字符串字面量，请确保是硬编码的常量，而非运行时拼接</li>
+     * </ul>
+     *
      * @param condition 自定义条件函数，接收 Root 返回 Predicate
      * @return 当前构建器实例
      * @throws IllegalArgumentException 如果 condition 为 null
+     * @deprecated 推荐使用类型安全的 {@link #eq(SFunction, Object)}、{@link #like(SFunction, String)} 等方法替代。 此方法绕过类型安全机制，存在潜在的
+     *             SQL 注入风险。
      */
+    @Deprecated(since = "1.1.0", forRemoval = false)
     public SELF where(Function<Root<T>, Predicate> condition) {
         if (condition == null) {
             throw new IllegalArgumentException("condition must not be null");
