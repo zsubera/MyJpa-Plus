@@ -630,6 +630,13 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
         this.groupByFields.addAll(other.groupByFields);
         this.havingConditions.addAll(other.havingConditions);
         this.orderNodes.addAll(other.orderNodes);
+        // 复制查询设置：仅当当前实例未设置时，采用另一个实例的值
+        if (other.queryTimeout != null && this.queryTimeout == null) {
+            this.queryTimeout = other.queryTimeout;
+        }
+        if (other.lockMode != null && this.lockMode == null) {
+            this.lockMode = other.lockMode;
+        }
         return this;
     }
 

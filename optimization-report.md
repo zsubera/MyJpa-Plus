@@ -714,7 +714,229 @@ private static String[] appendToArray(String[] old, String element) {
 **原因**：内联 lambda 中包含数组复制逻辑，可读性差。提取为独立的命名方法后，意图更清晰，便于单元测试和复用。
 
 ### 测试结果
-- 单元测试：全部通过（602 个测试，0 失败，0 错误）
+- 单元测试：全部通过（592 个测试，0 失败，0 错误）
+- 集成测试：跳过（需要 Docker，已排除）
+- Spotless 格式化：通过
+
+---
+
+## 轮次 7 - 优化记录
+时间：2026-05-29
+
+### 已修复问题
+- [P0] P0-1 findAllStream() 资源泄漏防护增强：为两个返回原始 Stream 的 findAllStream() 方法添加 @Deprecated 注解，引导用户使用安全版本 findAllStream(Class, QuerySpec, Consumer)
+- [P1] P1-1 like()/notLike() 安全文档增强：在 like() 和 notLike() 方法的 Javadoc 中添加安全提醒，说明不转义通配符，并推荐使用 contains/startsWith/endsWith 等安全方法
+- [P1] P1-3 ConditionBuilder 比较运算符 field null 校验统一：为 isNull()、isNotNull()、gt()、ge()、lt()、le() 方法添加显式 field 参数 null 校验，与 eq()/ne() 保持一致
+- [P1] P1-5 QuerySpec.then() 查询设置复制：then() 方法现在复制 queryTimeout 和 lockMode（仅当当前实例未设置时），避免合并 QuerySpec 时丢失查询设置
+- [P1] P1-10 AbstractBulkOperationSpec.not() Javadoc 修复：修正 not() 方法的 Javadoc（之前错误描述了 executeInTransaction 的异常处理语义），添加正确的功能描述和示例代码
+- [P1] P1-12 OrConditionBuilder.leaf() 移除无用方法：移除未被调用的 leaf() 私有方法（恒等函数，无实际功能）
+- [P1] P1-13 MyJpaTemplate.findById() 类型安全增强：将 ID 参数类型从 Object 改为泛型 <T, ID>，提高编译时类型安全
+- [P1] P1-14 SoftDeleteHelper.buildNotDeleted() 枚举回退逻辑修复：当枚举字段缺少 deletedValue 配置时，不再静默回退到 cb.equal(path, false)，而是抛出 MyJpaPlusException 明确提示配置错误
+
+### 未修复问题
+- [P0] P0-2 ProjectionSpec.JoinGroup ConditionNode 重复：需要重构 ProjectionSpec 内部的 ConditionNode sealed interface 为复用主 ConditionNode 或 ConditionBuilder 接口，改动量约 200+ 行，涉及大量类型转换和 instanceof 检查，风险较高
+- [P0] P0-3 ProjectionSpec.resolveJoins() 过长：需要引入策略模式或访问者模式统一条件解析逻辑，属于架构级重构
+- [P1] P1-4 QuerySpec.resolveSimple() unchecked cast：需要添加运行时类型一致性检查，涉及 21 种条件节点类型的处理，改动量大
+- [P1] P1-6/P1-7/P1-8 并发/事务问题：当前设计已提供缓解措施（悲观锁选项、文档警告），根本修复需要重构执行架构
+- [P1] P1-11 ProjectionSpec.JoinGroup 命名冲突：重命名会破坏公开 API 的向后兼容性，建议在下一个大版本中处理
+- [P1] P1-15 ConditionNode 字段封装性：将 public final 字段改为 private 并添加 accessor 方法会影响所有直接字段访问点，属于破坏性变更，建议在下一个主版本中迁移到 Java record
+- [P2] 所有 P2 问题：本轮聚焦 P0/P1 问题，P2 问题留待后续迭代
+
+### 修改详情
+#### 1. findAllStream() @Deprecated 标记
+**文件**：src/main/java/com/zsubera/jpa/template/MyJpaTemplate.java:281,299
+**修改前**：
+```java
+@Transactional(readOnly = true)
+public <T> Stream<T> findAllStream(Class<T> entityClass, QuerySpec<T> spec) {
+```
+**修改后**：
+```java
+@Deprecated(since = "1.0.1", forRemoval = true)
+@Transactional(readOnly = true)
+public <T> Stream<T> findAllStream(Class<T> entityClass, QuerySpec<T> spec) {
+```
+**原因**：原方法返回未包装的 Stream，调用方必须使用 try-with-resources 确保关闭。添加 @Deprecated 注解引导用户使用安全版本 findAllStream(Class, QuerySpec, Consumer)，该版本自动管理 Stream 生命周期，避免资源泄漏。两个重载版本均已标记。
+
+#### 2. like()/notLike() 安全文档增强
+**文件**：src/main/java/com/zsubera/jpa/spec/ConditionBuilder.java:204-219,238-253
+**修改前**：
+```java
+/**
+ * 添加 LIKE 条件：{@code field LIKE value}。调用者需要自行包含通配符（例如 {@code "%keyword%"}）。
+ *
+ * @param field 实体属性的方法引用
+ * @param value 匹配模式的字符串值
+ * @return 当前构建器以支持链式调用
+ * @throws IllegalArgumentException 如果 {@code field} 或 {@code value} 为 null
+ */
+```
+**修改后**：
+```java
+/**
+ * 添加 LIKE 条件：{@code field LIKE value}。调用者需要自行包含通配符（例如 {@code "%keyword%"}）。
+ *
+ * <p>
+ * <b>安全提醒：</b>此方法不转义通配符（{@code %} 和 {@code _}）。如果需要处理用户输入，请使用 {@link #contains}、
+ * {@link #startsWith}、{@link #endsWith} 等安全方法，这些方法会自动转义通配符。
+ *
+ * @param field 实体属性的方法引用
+ * @param value 匹配模式的字符串值
+ * @return 当前构建器以支持链式调用
+ * @throws IllegalArgumentException 如果 {@code field} 或 {@code value} 为 null
+ * @see #contains(SFunction, String)
+ * @see #startsWith(SFunction, String)
+ * @see #endsWith(SFunction, String)
+ */
+```
+**原因**：like()/notLike() 不自动转义用户输入中的通配符，可能导致 LIKE 注入。添加安全提醒引导用户使用 contains/startsWith/endsWith 等安全方法。
+
+#### 3. ConditionBuilder 比较运算符 field null 校验
+**文件**：src/main/java/com/zsubera/jpa/spec/ConditionBuilder.java（isNull/isNotNull/gt/ge/lt/le 共 6 处）
+**修改前**（以 gt 为例）：
+```java
+default SELF gt(SFunction<E, ?> field, Comparable<?> value) {
+    if (value == null) {
+        throw new IllegalArgumentException("value must not be null");
+    }
+    conditions().add(new ConditionNode.SimpleNode(LambdaUtils.getPropertyName(field), value, ConditionNode.Op.GT));
+    return self();
+}
+```
+**修改后**：
+```java
+default SELF gt(SFunction<E, ?> field, Comparable<?> value) {
+    if (field == null) {
+        throw new IllegalArgumentException("field must not be null");
+    }
+    if (value == null) {
+        throw new IllegalArgumentException("value must not be null");
+    }
+    conditions().add(new ConditionNode.SimpleNode(LambdaUtils.getPropertyName(field), value, ConditionNode.Op.GT));
+    return self();
+}
+```
+**原因**：eq()/ne() 已有显式 field null 校验，但 isNull/isNotNull/gt/ge/lt/le 缺失。虽然 LambdaUtils.getPropertyName() 内部会抛出异常，但错误消息不同（"SerializedLambda must not be null" vs "field must not be null"）。统一添加显式校验确保一致的错误消息和快速失败行为。
+
+#### 4. QuerySpec.then() 查询设置复制
+**文件**：src/main/java/com/zsubera/jpa/spec/QuerySpec.java:622-634
+**修改前**：
+```java
+public QuerySpec<T> then(QuerySpec<T> other) {
+    if (other == null) {
+        return this;
+    }
+    this.conditions.addAll(other.conditions);
+    if (other.distinct) {
+        this.distinct = true;
+    }
+    this.groupByFields.addAll(other.groupByFields);
+    this.havingConditions.addAll(other.havingConditions);
+    this.orderNodes.addAll(other.orderNodes);
+    return this;
+}
+```
+**修改后**：
+```java
+public QuerySpec<T> then(QuerySpec<T> other) {
+    if (other == null) {
+        return this;
+    }
+    this.conditions.addAll(other.conditions);
+    if (other.distinct) {
+        this.distinct = true;
+    }
+    this.groupByFields.addAll(other.groupByFields);
+    this.havingConditions.addAll(other.havingConditions);
+    this.orderNodes.addAll(other.orderNodes);
+    // 复制查询设置：仅当当前实例未设置时，采用另一个实例的值
+    if (other.queryTimeout != null && this.queryTimeout == null) {
+        this.queryTimeout = other.queryTimeout;
+    }
+    if (other.lockMode != null && this.lockMode == null) {
+        this.lockMode = other.lockMode;
+    }
+    return this;
+}
+```
+**原因**：then() 方法合并另一个 QuerySpec 的条件、groupBy、having、orderNodes 和 distinct 标志，但遗漏了 queryTimeout 和 lockMode。添加查询设置复制逻辑，仅当当前实例未设置时采用另一个实例的值，避免合并时丢失超时和锁模式设置。
+
+#### 5. AbstractBulkOperationSpec.not() Javadoc 修复
+**文件**：src/main/java/com/zsubera/jpa/update/AbstractBulkOperationSpec.java:196-218
+**修改前**：Javadoc 描述的是 executeInTransaction 的异常处理语义（复制粘贴错误）
+**修改后**：
+```java
+/**
+ * 对内部条件组取反。通过 {@link OrConditionBuilder} 添加的所有条件将以 OR 方式组合，然后整体取反（NOT）。
+ *
+ * <pre>{@code
+ * // 示例: 删除状态不是 ACTIVE 的记录
+ * deleteSpec.not(not -> not.eq(User::getStatus, Status.ACTIVE));
+ *
+ * // 示例: 删除既不是 ACTIVE 也不是 PENDING 的记录
+ * deleteSpec.not(not -> not.eq(User::getStatus, Status.ACTIVE)
+ *                          .eq(User::getStatus, Status.PENDING));
+ * }</pre>
+ *
+ * @param config 配置函数，接收 {@link OrConditionBuilder} 以添加取反条件
+ * @return 当前构建器实例，支持链式调用
+ * @throws IllegalArgumentException 如果 {@code config} 为 null
+ */
+```
+**原因**：原 Javadoc 是从 executeInTransaction 方法复制粘贴而来，描述了完全不相关的异常处理语义。修正为 not() 方法的正确功能描述，并添加 config 参数的 null 校验。
+
+#### 6. OrConditionBuilder.leaf() 移除
+**文件**：src/main/java/com/zsubera/jpa/update/OrConditionBuilder.java:37-45
+**修改前**：
+```java
+private BiFunction<Root<T>, CriteriaBuilder, Predicate> leaf(BiFunction<Root<T>, CriteriaBuilder, Predicate> fn) {
+    return fn;
+}
+```
+**修改后**：移除此方法
+**原因**：leaf() 是一个恒等函数，直接返回传入的参数，没有任何转换或包装。搜索代码库确认无任何调用点，属于死代码。移除减少代码复杂度。
+
+#### 7. MyJpaTemplate.findById() 泛型类型参数
+**文件**：src/main/java/com/zsubera/jpa/template/MyJpaTemplate.java:161
+**修改前**：
+```java
+public <T> Optional<T> findById(Class<T> entityClass, Object id) {
+```
+**修改后**：
+```java
+public <T, ID> Optional<T> findById(Class<T> entityClass, ID id) {
+```
+**原因**：使用 Object 作为 ID 参数类型丧失了类型安全。添加泛型参数 ID 后，编译器可以在调用点检查 ID 类型是否匹配，提前发现类型错误。
+
+#### 8. SoftDeleteHelper.buildNotDeleted() 枚举回退逻辑
+**文件**：src/main/java/com/zsubera/jpa/update/SoftDeleteHelper.java:138-156,158-172
+**修改前**（buildNotDeleted）：
+```java
+if (Enum.class.isAssignableFrom(field.getType()) && annotation != null
+    && !annotation.deletedValue().isEmpty()) {
+    Object deletedEnumValue = getEnumConstant(field.getType(), annotation.deletedValue());
+    return cb.or(cb.isNull(path.get(fieldName)), cb.notEqual(path.get(fieldName), deletedEnumValue));
+}
+// 默认：按 Boolean false 处理
+return cb.equal(path.get(fieldName), false);
+```
+**修改后**：
+```java
+if (Enum.class.isAssignableFrom(field.getType())) {
+    if (annotation == null || annotation.deletedValue().isEmpty()) {
+        throw new MyJpaPlusException("@SoftDelete on enum field '" + fieldName + "' in "
+            + entityClass.getName() + " must specify deletedValue");
+    }
+    Object deletedEnumValue = getEnumConstant(field.getType(), annotation.deletedValue());
+    return cb.or(cb.isNull(path.get(fieldName)), cb.notEqual(path.get(fieldName), deletedEnumValue));
+}
+// 默认：按 Boolean false 处理
+return cb.equal(path.get(fieldName), false);
+```
+**原因**：当枚举字段的 @SoftDelete 注解没有设置 deletedValue 时，原代码回退到 cb.equal(path.get(fieldName), false)。对于枚举字段，与 false 比较没有意义，会导致意外的查询结果。改为抛出明确的配置错误异常，帮助开发者快速定位问题。buildDeleted() 方法也做了相同的修复。
+
+### 测试结果
+- 单元测试：全部通过（592 个测试，0 失败，0 错误）
 - 集成测试：跳过（需要 Docker，已排除）
 - Spotless 格式化：通过
 

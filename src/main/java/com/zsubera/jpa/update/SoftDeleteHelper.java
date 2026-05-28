@@ -146,8 +146,11 @@ public final class SoftDeleteHelper {
             return cb.or(cb.isNull(path.get(fieldName)), cb.equal(path.get(fieldName), false));
         }
         // 枚举类型
-        if (Enum.class.isAssignableFrom(field.getType()) && annotation != null
-            && !annotation.deletedValue().isEmpty()) {
+        if (Enum.class.isAssignableFrom(field.getType())) {
+            if (annotation == null || annotation.deletedValue().isEmpty()) {
+                throw new MyJpaPlusException("@SoftDelete on enum field '" + fieldName + "' in " + entityClass.getName()
+                    + " must specify deletedValue");
+            }
             Object deletedEnumValue = getEnumConstant(field.getType(), annotation.deletedValue());
             return cb.or(cb.isNull(path.get(fieldName)), cb.notEqual(path.get(fieldName), deletedEnumValue));
         }
@@ -162,8 +165,11 @@ public final class SoftDeleteHelper {
         }
         SoftDelete annotation = field.getAnnotation(SoftDelete.class);
         // 枚举类型
-        if (Enum.class.isAssignableFrom(field.getType()) && annotation != null
-            && !annotation.deletedValue().isEmpty()) {
+        if (Enum.class.isAssignableFrom(field.getType())) {
+            if (annotation == null || annotation.deletedValue().isEmpty()) {
+                throw new MyJpaPlusException("@SoftDelete on enum field '" + fieldName + "' in " + entityClass.getName()
+                    + " must specify deletedValue");
+            }
             Object deletedEnumValue = getEnumConstant(field.getType(), annotation.deletedValue());
             return cb.equal(path.get(fieldName), deletedEnumValue);
         }

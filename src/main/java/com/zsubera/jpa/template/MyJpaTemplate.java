@@ -155,10 +155,11 @@ public class MyJpaTemplate {
      * @param entityClass 实体类
      * @param id 实体 ID
      * @param <T> 实体类型
+     * @param <ID> ID 类型
      * @return 匹配实体的 Optional 包装
      */
     @Transactional(readOnly = true)
-    public <T> Optional<T> findById(Class<T> entityClass, Object id) {
+    public <T, ID> Optional<T> findById(Class<T> entityClass, ID id) {
         if (id == null) {
             throw new IllegalArgumentException("id must not be null");
         }
@@ -277,7 +278,9 @@ public class MyJpaTemplate {
      * @param spec 查询规范
      * @param <T> 实体类型
      * @return 匹配实体的 Stream（必须由调用方关闭）
+     * @deprecated 使用 {@link #findAllStream(Class, QuerySpec, Consumer)} 安全版本替代，该版本自动管理 Stream 生命周期，避免资源泄漏
      */
+    @Deprecated(since = "1.0.1", forRemoval = true)
     @Transactional(readOnly = true)
     public <T> Stream<T> findAllStream(Class<T> entityClass, QuerySpec<T> spec) {
         TypedQuery<T> query = buildTypedQuery(entityClass, spec, null, null);
@@ -292,7 +295,9 @@ public class MyJpaTemplate {
      * @param entityGraph 用于急切加载的实体图（可为 null）
      * @param <T> 实体类型
      * @return 匹配实体的 Stream
+     * @deprecated 使用 {@link #findAllStream(Class, QuerySpec, Consumer)} 安全版本替代，该版本自动管理 Stream 生命周期，避免资源泄漏
      */
+    @Deprecated(since = "1.0.1", forRemoval = true)
     @Transactional(readOnly = true)
     public <T> Stream<T> findAllStream(Class<T> entityClass, QuerySpec<T> spec, EntityGraphHelper<T> entityGraph) {
         TypedQuery<T> query = buildTypedQuery(entityClass, spec, entityGraph, null);

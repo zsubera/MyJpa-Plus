@@ -194,30 +194,24 @@ public abstract class AbstractBulkOperationSpec<T, SELF extends AbstractBulkOper
     }
 
     /**
-     * Execute a bulk operation within a transaction.
+     * 对内部条件组取反。通过 {@link OrConditionBuilder} 添加的所有条件将以 OR 方式组合，然后整体取反（NOT）。
      *
-     * <p>
-     * If a Spring-managed transaction is active, the operation is delegated to it directly. Otherwise, a JPA
-     * {@link EntityTransaction} is used for standalone scenarios.
+     * <pre>{@code
+     * // 示例: 删除状态不是 ACTIVE 的记录
+     * deleteSpec.not(not -> not.eq(User::getStatus, Status.ACTIVE));
      *
-     * <p>
-     * This overload allows subclasses to execute custom operations (e.g., unconditional deleteAll) with proper
-     * transaction management.
+     * // 示例: 删除既不是 ACTIVE 也不是 PENDING 的记录
+     * deleteSpec.not(not -> not.eq(User::getStatus, Status.ACTIVE).eq(User::getStatus, Status.PENDING));
+     * }</pre>
      *
-     * <p>
-     * <strong>异常处理语义：</strong>
-     * <ul>
-     * <li>{@link RuntimeException} 及其子类将被直接重新抛出，保留原始异常类型</li>
-     * <li>其他 {@link Exception}（checked exception）将被包装为 {@link MyJpaPlusException}</li>
-     * </ul>
-     *
-     * @param em the EntityManager
-     * @param operation the operation to execute
-     * @return the number of affected rows
-     * @throws RuntimeException 如果操作抛出运行时异常
-     * @throws MyJpaPlusException 如果操作抛出受检异常
+     * @param config 配置函数，接收 {@link OrConditionBuilder} 以添加取反条件
+     * @return 当前构建器实例，支持链式调用
+     * @throws IllegalArgumentException 如果 {@code config} 为 null
      */
     public SELF not(Consumer<OrConditionBuilder<T, SELF>> config) {
+        if (config == null) {
+            throw new IllegalArgumentException("config must not be null");
+        }
         List<BulkConditionNode> children = new ArrayList<>();
         config.accept(new OrConditionBuilder<>(self(), children));
         BulkConditionNode combined =

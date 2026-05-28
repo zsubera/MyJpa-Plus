@@ -3,11 +3,7 @@ package com.zsubera.jpa.update;
 import com.zsubera.jpa.spec.PredicateHelper;
 import com.zsubera.jpa.spec.SFunction;
 import com.zsubera.jpa.update.AbstractBulkOperationSpec.BulkConditionNode;
-import jakarta.persistence.criteria.CriteriaBuilder;
-import jakarta.persistence.criteria.Predicate;
-import jakarta.persistence.criteria.Root;
 import java.util.List;
-import java.util.function.BiFunction;
 
 /**
  * 批量操作（{@link UpdateSpec} 和 {@link DeleteSpec}）中 OR 条件组的构建器。
@@ -32,16 +28,6 @@ public class OrConditionBuilder<T, SELF extends AbstractBulkOperationSpec<T, SEL
     OrConditionBuilder(SELF parent, List<BulkConditionNode> nodes) {
         this.parent = parent;
         this.nodes = nodes;
-    }
-
-    /**
-     * 包装叶子谓词函数。
-     *
-     * @param fn 谓词函数
-     * @return 包装后的谓词函数
-     */
-    private BiFunction<Root<T>, CriteriaBuilder, Predicate> leaf(BiFunction<Root<T>, CriteriaBuilder, Predicate> fn) {
-        return fn;
     }
 
     /**

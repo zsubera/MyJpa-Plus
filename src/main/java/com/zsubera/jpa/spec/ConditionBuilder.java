@@ -144,6 +144,9 @@ public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> {
      * @throws IllegalArgumentException 如果 {@code field} 或 {@code value} 为 null
      */
     default SELF gt(SFunction<E, ?> field, Comparable<?> value) {
+        if (field == null) {
+            throw new IllegalArgumentException("field must not be null");
+        }
         if (value == null) {
             throw new IllegalArgumentException("value must not be null");
         }
@@ -160,6 +163,9 @@ public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> {
      * @throws IllegalArgumentException 如果 {@code field} 或 {@code value} 为 null
      */
     default SELF ge(SFunction<E, ?> field, Comparable<?> value) {
+        if (field == null) {
+            throw new IllegalArgumentException("field must not be null");
+        }
         if (value == null) {
             throw new IllegalArgumentException("value must not be null");
         }
@@ -176,6 +182,9 @@ public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> {
      * @throws IllegalArgumentException 如果 {@code field} 或 {@code value} 为 null
      */
     default SELF lt(SFunction<E, ?> field, Comparable<?> value) {
+        if (field == null) {
+            throw new IllegalArgumentException("field must not be null");
+        }
         if (value == null) {
             throw new IllegalArgumentException("value must not be null");
         }
@@ -192,6 +201,9 @@ public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> {
      * @throws IllegalArgumentException 如果 {@code field} 或 {@code value} 为 null
      */
     default SELF le(SFunction<E, ?> field, Comparable<?> value) {
+        if (field == null) {
+            throw new IllegalArgumentException("field must not be null");
+        }
         if (value == null) {
             throw new IllegalArgumentException("value must not be null");
         }
@@ -204,10 +216,17 @@ public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> {
     /**
      * 添加 LIKE 条件：{@code field LIKE value}。调用者需要自行包含通配符（例如 {@code "%keyword%"}）。
      *
+     * <p>
+     * <b>安全提醒：</b>此方法不转义通配符（{@code %} 和 {@code _}）。如果需要处理用户输入，请使用 {@link #contains}、
+     * {@link #startsWith}、{@link #endsWith} 等安全方法，这些方法会自动转义通配符。
+     *
      * @param field 实体属性的方法引用
      * @param value 匹配模式的字符串值
      * @return 当前构建器以支持链式调用
      * @throws IllegalArgumentException 如果 {@code field} 或 {@code value} 为 null
+     * @see #contains(SFunction, String)
+     * @see #startsWith(SFunction, String)
+     * @see #endsWith(SFunction, String)
      */
     default SELF like(SFunction<E, ?> field, String value) {
         if (value == null) {
@@ -238,10 +257,15 @@ public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> {
     /**
      * 添加 NOT LIKE 条件：{@code field NOT LIKE value}。
      *
+     * <p>
+     * <b>安全提醒：</b>此方法不转义通配符（{@code %} 和 {@code _}）。如果需要处理用户输入，请先使用 {@link PredicateHelper#escapeLikeWildcards(String)}
+     * 转义值中的通配符。
+     *
      * @param field 实体属性的方法引用
      * @param value 匹配模式的字符串值
      * @return 当前构建器以支持链式调用
      * @throws IllegalArgumentException 如果 {@code field} 或 {@code value} 为 null
+     * @see PredicateHelper#escapeLikeWildcards(String)
      */
     default SELF notLike(SFunction<E, ?> field, String value) {
         if (value == null) {
@@ -451,6 +475,9 @@ public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> {
      * @throws IllegalArgumentException 如果 {@code field} 为 null
      */
     default SELF isNull(SFunction<E, ?> field) {
+        if (field == null) {
+            throw new IllegalArgumentException("field must not be null");
+        }
         conditions()
             .add(new ConditionNode.SimpleNode(LambdaUtils.getPropertyName(field), null, ConditionNode.Op.IS_NULL));
         return self();
@@ -464,6 +491,9 @@ public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> {
      * @throws IllegalArgumentException 如果 {@code field} 为 null
      */
     default SELF isNotNull(SFunction<E, ?> field) {
+        if (field == null) {
+            throw new IllegalArgumentException("field must not be null");
+        }
         conditions()
             .add(new ConditionNode.SimpleNode(LambdaUtils.getPropertyName(field), null, ConditionNode.Op.IS_NOT_NULL));
         return self();
