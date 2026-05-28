@@ -20,13 +20,45 @@ import org.slf4j.LoggerFactory;
  * <p>
  * <strong>大型 IN 子句处理：</strong>大多数数据库对 IN 子句中的参数数量有限制 （Oracle: 1000, SQL Server: 2100）。此类会自动将大型 IN 子句拆分为多个 OR 连接的批次，
  * 以避免超出这些限制。
+ *
+ * <p>
+ * <strong>配置：</strong>可通过系统属性 {@code myjpa-plus.in-clause-max-size} 自定义最大参数数量：
+ *
+ * <pre>{@code
+ * // 启动时设置（例如 PostgreSQL 可设置较大值）
+ * -Dmyjpa-plus.in-clause-max-size=65535
+ * }</pre>
+ *
+ * 不同数据库的限制参考：
+ * <ul>
+ * <li>Oracle: 1000</li>
+ * <li>SQL Server: 2100</li>
+ * <li>MySQL: ~65535</li>
+ * <li>PostgreSQL: 无限制（建议设置合理值避免 SQL 过长）</li>
+ * </ul>
  */
 public final class InClauseBuilder {
 
     private static final Logger log = LoggerFactory.getLogger(InClauseBuilder.class);
 
-    /** 单个 IN 子句中的最大参数数量。此值为保守值，支持所有主流数据库（Oracle 限制为 1000）。 */
-    public static final int MAX_IN_CLAUSE_SIZE = 1000;
+    /** 单个 IN 子句中的最大参数数量。可通过系统属性 {@code myjpa-plus.in-clause-max-size} 配置。 */
+    public static final int MAX_IN_CLAUSE_SIZE;
+
+    static {
+        int configured = 1000;
+        String prop = System.getProperty("myjpa-plus.in-clause-max-size");
+        if (prop != null) {
+            try {
+                int val = Integer.parseInt(prop);
+                if (val > 0) {
+                    configured = val;
+                }
+            } catch (NumberFormatException ignored) {
+                // use default
+            }
+        }
+        MAX_IN_CLAUSE_SIZE = configured;
+    }
 
     private InClauseBuilder() {}
 

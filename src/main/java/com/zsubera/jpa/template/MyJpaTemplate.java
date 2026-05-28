@@ -1,5 +1,6 @@
 package com.zsubera.jpa.template;
 
+import com.zsubera.jpa.repository.EntityClassResolver;
 import com.zsubera.jpa.spec.QuerySpec;
 import com.zsubera.jpa.update.DeleteSpec;
 import com.zsubera.jpa.update.UpdateSpec;
@@ -11,6 +12,7 @@ import jakarta.persistence.criteria.CriteriaBuilder;
 import jakarta.persistence.criteria.CriteriaQuery;
 import jakarta.persistence.criteria.Root;
 import java.util.List;
+import java.util.Optional;
 import java.util.stream.Stream;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -44,11 +46,11 @@ import org.springframework.transaction.annotation.Transactional;
  *
  * public void deactivateOldUsers() {
  *     int updated =
- *         jpa.update(User.class).set(User::getStatus, "INACTIVE").lt(User::getLastLogin, cutoffDate).execute();
+ *         jpa.execute(jpa.update(User.class).set(User::getStatus, "INACTIVE").lt(User::getLastLogin, cutoffDate));
  *
- *     int deleted = jpa.delete(LogEntry.class).lt(LogEntry::getTimestamp, oldDate).execute();
+ *     int deleted = jpa.execute(jpa.delete(LogEntry.class).lt(LogEntry::getTimestamp, oldDate));
  *
- *     List<User> activeUsers = jpa.findAll(new QuerySpec<User>().eq(User::getStatus, "ACTIVE"));
+ *     List<User> activeUsers = jpa.findAll(User.class, new QuerySpec<User>().eq(User::getStatus, "ACTIVE"));
  * }
  * }</pre>
  *
@@ -141,6 +143,48 @@ public class MyJpaTemplate {
      */
     public <T> DeleteSpec<T> delete(Class<T> entityClass) {
         return new DeleteSpec<>(entityClass);
+    }
+
+    // ---- 便捷查询方法 ----
+
+    /**
+     * 根据 ID 查找实体。
+     *
+     * @param entityClass 实体类
+     * @param id 实体 ID
+     * @param <T> 实体类型
+     * @return 匹配实体的 Optional 包装
+     */
+    @Transactional(readOnly = true)
+    public <T> Optional<T> findById(Class<T> entityClass, Object id) {
+        String idFieldName = EntityClassResolver.resolveIdFieldName(entityClass);
+        QuerySpec<T> spec = new QuerySpec<>();
+        spec.where((root, cb) -> cb.equal(root.get(idFieldName), id));
+        return findOne(entityClass, spec);
+    }
+
+    /**
+     * 查找匹配给定 {@link QuerySpec} 的单个实体。
+     *
+     * @param entityClass 实体类
+     * @param spec 查询规范
+     * @param <T> 实体类型
+     * @return 匹配实体的 Optional 包装
+     */
+    @Transactional(readOnly = true)
+    public <T> Optional<T> findOne(Class<T> entityClass, QuerySpec<T> spec) {
+        CriteriaBuilder cb = entityManager.getCriteriaBuilder();
+        CriteriaQuery<T> cq = cb.createQuery(entityClass);
+        Root<T> root = cq.from(entityClass);
+        jakarta.persistence.criteria.Predicate predicate = spec.toPredicate(root, cq, cb);
+        if (predicate != null) {
+            cq.where(predicate);
+        }
+        TypedQuery<T> query = entityManager.createQuery(cq);
+        query.setMaxResults(1);
+        spec.applyQuerySettings(query);
+        List<T> results = query.getResultList();
+        return results.isEmpty() ? Optional.empty() : Optional.of(results.get(0));
     }
 
     // ---- 查询方法 ----

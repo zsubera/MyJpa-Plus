@@ -9,6 +9,7 @@ import jakarta.persistence.criteria.*;
 import java.util.*;
 import java.util.function.BiFunction;
 import java.util.function.Consumer;
+import java.util.function.Function;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.Sort;
@@ -186,6 +187,27 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
     }
 
     /**
+     * 添加 HAVING 条件，使用 {@link Root} 参数。此重载避免了 {@link #having(BiFunction)} 的类型推断问题。
+     *
+     * <p>
+     * 推荐使用此方法代替 {@link #having(BiFunction)}，因为 {@code Root<T>} 的类型推断更可靠：
+     *
+     * <pre>{@code
+     * qs.groupBy(User::getStatus).having(root -> cb.greaterThan(cb.count(root.get("id")), 5));
+     * }</pre>
+     *
+     * @param condition HAVING 条件函数，接收 Root 返回 Predicate
+     * @return 当前 QuerySpec 实例，支持链式调用
+     */
+    public QuerySpec<T> having(Function<Path<T>, Predicate> condition) {
+        havingConditions.add((root, cb) -> condition.apply(root));
+        if (log.isDebugEnabled()) {
+            log.debug("QuerySpec: HAVING condition added ({} total)", havingConditions.size());
+        }
+        return this;
+    }
+
+    /**
      * 添加升序 ORDER BY 排序。
      *
      * <p>
@@ -243,6 +265,29 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
     }
 
     /**
+     * 添加 INNER JOIN 关联，通过显式指定实体类辅助类型推断。
+     *
+     * <p>
+     * 当链式调用导致类型丢失时，使用此方法显式指定关联实体类型：
+     *
+     * <pre>{@code
+     * JoinGroup<User, Role> roleJoin = qs.join(User::getRoles, Role.class);
+     * roleJoin.eq(Role::getName, "ADMIN");
+     * }</pre>
+     *
+     * @param field 关联字段的方法引用
+     * @param joinEntityClass 关联实体类（仅用于类型推断，不影响运行时行为）
+     * @param <J> 关联实体类型
+     * @return JoinGroup 实例，用于配置关联条件
+     */
+    public <J> JoinGroup<T, J> join(SFunction<T, ?> field, Class<J> joinEntityClass) {
+        ConditionNode.JoinNode joinNode =
+            new ConditionNode.JoinNode(LambdaUtils.getPropertyName(field), ConditionNode.JoinType.INNER);
+        currentGroup().add(joinNode);
+        return new JoinGroup<>(this, joinNode);
+    }
+
+    /**
      * 添加 LEFT JOIN 关联。
      *
      * @param field 关联字段的方法引用
@@ -250,6 +295,21 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
      * @return JoinGroup 实例，用于配置关联条件
      */
     public <J> JoinGroup<T, J> leftJoin(SFunction<T, ?> field) {
+        ConditionNode.JoinNode joinNode =
+            new ConditionNode.JoinNode(LambdaUtils.getPropertyName(field), ConditionNode.JoinType.LEFT);
+        currentGroup().add(joinNode);
+        return new JoinGroup<>(this, joinNode);
+    }
+
+    /**
+     * 添加 LEFT JOIN 关联，通过显式指定实体类辅助类型推断。
+     *
+     * @param field 关联字段的方法引用
+     * @param joinEntityClass 关联实体类（仅用于类型推断，不影响运行时行为）
+     * @param <J> 关联实体类型
+     * @return JoinGroup 实例，用于配置关联条件
+     */
+    public <J> JoinGroup<T, J> leftJoin(SFunction<T, ?> field, Class<J> joinEntityClass) {
         ConditionNode.JoinNode joinNode =
             new ConditionNode.JoinNode(LambdaUtils.getPropertyName(field), ConditionNode.JoinType.LEFT);
         currentGroup().add(joinNode);
@@ -271,6 +331,21 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
     }
 
     /**
+     * 添加 FETCH JOIN 以急切加载关联关系，通过显式指定实体类辅助类型推断。
+     *
+     * @param field 关联字段的方法引用
+     * @param joinEntityClass 关联实体类（仅用于类型推断，不影响运行时行为）
+     * @param <J> 关联实体类型
+     * @return JoinGroup 实例，用于配置关联条件
+     */
+    public <J> JoinGroup<T, J> fetchJoin(SFunction<T, ?> field, Class<J> joinEntityClass) {
+        ConditionNode.JoinNode joinNode =
+            new ConditionNode.JoinNode(LambdaUtils.getPropertyName(field), ConditionNode.JoinType.FETCH);
+        currentGroup().add(joinNode);
+        return new JoinGroup<>(this, joinNode);
+    }
+
+    /**
      * 添加 LEFT FETCH JOIN 关联。
      *
      * @param field 关联字段的方法引用
@@ -278,6 +353,21 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
      * @return JoinGroup 实例，用于配置关联条件
      */
     public <J> JoinGroup<T, J> leftFetchJoin(SFunction<T, ?> field) {
+        ConditionNode.JoinNode joinNode =
+            new ConditionNode.JoinNode(LambdaUtils.getPropertyName(field), ConditionNode.JoinType.LEFT_FETCH);
+        currentGroup().add(joinNode);
+        return new JoinGroup<>(this, joinNode);
+    }
+
+    /**
+     * 添加 LEFT FETCH JOIN 关联，通过显式指定实体类辅助类型推断。
+     *
+     * @param field 关联字段的方法引用
+     * @param joinEntityClass 关联实体类（仅用于类型推断，不影响运行时行为）
+     * @param <J> 关联实体类型
+     * @return JoinGroup 实例，用于配置关联条件
+     */
+    public <J> JoinGroup<T, J> leftFetchJoin(SFunction<T, ?> field, Class<J> joinEntityClass) {
         ConditionNode.JoinNode joinNode =
             new ConditionNode.JoinNode(LambdaUtils.getPropertyName(field), ConditionNode.JoinType.LEFT_FETCH);
         currentGroup().add(joinNode);

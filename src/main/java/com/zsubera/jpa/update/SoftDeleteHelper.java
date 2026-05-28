@@ -19,6 +19,13 @@ import org.springframework.data.jpa.domain.Specification;
  * 用于处理带有 {@link SoftDelete @SoftDelete} 注解的实体，提供自动过滤软删除记录的 {@link Specification} 实例。
  *
  * <p>
+ * 支持的字段类型：
+ * <ul>
+ * <li>{@code Boolean} / {@code boolean} — {@code true} 表示"已删除"，{@code false}（或 {@code null}）表示"未删除"</li>
+ * <li>{@code Enum} — 通过 {@link SoftDelete#deletedValue()} 指定表示"已删除"的枚举值名称</li>
+ * </ul>
+ *
+ * <p>
  * 缓存策略：所有缓存均使用 {@link ConcurrentHashMap} 实现线程安全访问。缓存无驱逐策略， 因为实体类数量在实际应用中有限且有界。 FIELD_CACHE 在超过 1024 条目时会记录警告日志，
  * 以帮助诊断潜在的类加载器泄漏问题。NOT_DELETED_SPEC_CACHE 和 DELETED_SPEC_CACHE 按实体类缓存 Specification 实例， 避免每次调用创建新的 lambda。
  *
@@ -61,7 +68,7 @@ public final class SoftDeleteHelper {
      *
      * <p>
      * 对于 {@code Boolean} 类型字段，生成条件为 {@code field = false}；对于引用类型 {@code Boolean} 字段（使用 null 表示"未删除"），生成条件为
-     * {@code field IS NULL}。
+     * {@code field IS NULL}。对于 {@code Enum} 类型字段，生成条件为 {@code field != deletedValue}。
      *
      * <p>
      * 结果按实体类缓存，避免每次调用创建新的 lambda 实例。
@@ -98,7 +105,7 @@ public final class SoftDeleteHelper {
             if (fieldName == null) {
                 return (Specification<T>)(root, query, cb) -> cb.disjunction();
             }
-            return (Specification<T>)(root, query, cb) -> buildDeleted(cb, root, fieldName);
+            return (Specification<T>)(root, query, cb) -> buildDeleted(cb, root, fieldName, entityClass);
         });
     }
 
@@ -126,14 +133,59 @@ public final class SoftDeleteHelper {
 
     private static Predicate buildNotDeleted(CriteriaBuilder cb, Path<?> path, String fieldName, Class<?> entityClass) {
         Field field = getField(entityClass, fieldName);
-        if (field != null && field.getType() == Boolean.class) {
+        if (field == null) {
+            return cb.equal(path.get(fieldName), false);
+        }
+        SoftDelete annotation = field.getAnnotation(SoftDelete.class);
+        // Boolean 类型
+        if (field.getType() == Boolean.class || field.getType() == boolean.class) {
             return cb.or(cb.isNull(path.get(fieldName)), cb.equal(path.get(fieldName), false));
         }
+        // 枚举类型
+        if (Enum.class.isAssignableFrom(field.getType()) && annotation != null
+            && !annotation.deletedValue().isEmpty()) {
+            Object deletedEnumValue = getEnumConstant(field.getType(), annotation.deletedValue());
+            if (deletedEnumValue != null) {
+                return cb.or(cb.isNull(path.get(fieldName)), cb.notEqual(path.get(fieldName), deletedEnumValue));
+            }
+        }
+        // 默认：按 Boolean false 处理
         return cb.equal(path.get(fieldName), false);
     }
 
-    private static Predicate buildDeleted(CriteriaBuilder cb, Path<?> path, String fieldName) {
+    private static Predicate buildDeleted(CriteriaBuilder cb, Path<?> path, String fieldName, Class<?> entityClass) {
+        Field field = getField(entityClass, fieldName);
+        if (field == null) {
+            return cb.equal(path.get(fieldName), true);
+        }
+        SoftDelete annotation = field.getAnnotation(SoftDelete.class);
+        // 枚举类型
+        if (Enum.class.isAssignableFrom(field.getType()) && annotation != null
+            && !annotation.deletedValue().isEmpty()) {
+            Object deletedEnumValue = getEnumConstant(field.getType(), annotation.deletedValue());
+            if (deletedEnumValue != null) {
+                return cb.equal(path.get(fieldName), deletedEnumValue);
+            }
+        }
+        // 默认：按 Boolean true 处理
         return cb.equal(path.get(fieldName), true);
+    }
+
+    /**
+     * 获取枚举类型的指定常量。
+     *
+     * @param enumType 枚举类型
+     * @param constantName 枚举常量名称
+     * @return 枚举常量，如果未找到则返回 null
+     */
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    private static Object getEnumConstant(Class<?> enumType, String constantName) {
+        try {
+            return Enum.valueOf((Class<Enum>)enumType, constantName);
+        } catch (IllegalArgumentException e) {
+            log.warn("Enum constant '{}' not found in {}", constantName, enumType.getName());
+            return null;
+        }
     }
 
     /**
@@ -184,6 +236,7 @@ public final class SoftDeleteHelper {
      * @return 如果实体已软删除返回 {@code true}，否则返回 {@code false}
      * @throws IllegalArgumentException 如果实体类或实体实例为 {@code null}
      */
+    @SuppressWarnings({"unchecked", "rawtypes"})
     public static <T> boolean isSoftDeleted(Class<T> entityClass, T entity) {
         String fieldName = findSoftDeleteField(entityClass);
         if (fieldName == null) {
@@ -195,7 +248,23 @@ public final class SoftDeleteHelper {
         }
         field.setAccessible(true);
         try {
-            return Boolean.TRUE.equals(field.get(entity));
+            Object value = field.get(entity);
+            if (value == null) {
+                return false;
+            }
+            // Boolean 类型
+            if (value instanceof Boolean) {
+                return Boolean.TRUE.equals(value);
+            }
+            // 枚举类型
+            if (value instanceof Enum && field.isAnnotationPresent(SoftDelete.class)) {
+                SoftDelete annotation = field.getAnnotation(SoftDelete.class);
+                if (annotation != null && !annotation.deletedValue().isEmpty()) {
+                    Enum enumValue = (Enum)value;
+                    return enumValue.name().equals(annotation.deletedValue());
+                }
+            }
+            return false;
         } catch (ReflectiveOperationException e) {
             return false;
         }

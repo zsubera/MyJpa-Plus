@@ -6,9 +6,11 @@ import com.zsubera.jpa.util.LambdaUtils;
 import jakarta.persistence.criteria.CriteriaBuilder;
 import jakarta.persistence.criteria.Path;
 import jakarta.persistence.criteria.Predicate;
+import jakarta.persistence.criteria.Root;
 import java.util.Collection;
 import java.util.List;
 import java.util.function.BiFunction;
+import java.util.function.Function;
 import org.springframework.lang.Nullable;
 
 /**
@@ -499,6 +501,18 @@ public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> {
     /**
      * 添加原始 {@link Predicate} 条件，使用当前实体 {@link Path} 和 {@link CriteriaBuilder}。 这是处理构建器 API 未覆盖条件的扩展方法。
      *
+     * <p>
+     * <strong>注意：</strong>由于 Java 泛型类型推断限制，使用 lambda 时编译器可能无法正确推断 {@code Path<E>} 类型， 导致无法调用 {@code path.get()}
+     * 等方法。此时需要显式声明参数类型：
+     *
+     * <pre>{@code
+     * // 编译失败：path 被推断为 Object
+     * qs.where((path, cb) -> cb.like(path.get("name"), "%test%"));
+     *
+     * // 正确：显式声明 Path<?> 类型
+     * qs.where((Path<?> path, CriteriaBuilder cb) -> cb.like(path.get("name"), "%test%"));
+     * }</pre>
+     *
      * @param fn 接收实体路径和条件构建器的函数，返回谓词
      * @return 当前构建器以支持链式调用
      * @throws IllegalArgumentException 如果 {@code fn} 为 null
@@ -509,6 +523,34 @@ public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> {
             throw new IllegalArgumentException("fn must not be null");
         }
         conditions().add(new ConditionNode.RawNode((BiFunction<Path<?>, CriteriaBuilder, Predicate>)(Object)fn));
+        return self();
+    }
+
+    /**
+     * 添加原始 {@link Predicate} 条件，使用 {@link Root} 参数。此重载避免了 {@link #where(BiFunction)} 的类型推断问题。
+     *
+     * <p>
+     * 推荐使用此方法代替 {@link #where(BiFunction)}，因为 {@code Root<T>} 的类型推断更可靠：
+     *
+     * <pre>{@code
+     * // 使用 where(Function) - 类型推断正常
+     * qs.where(root -> cb.like(root.get("name"), "%test%"));
+     *
+     * // 注意：需要在外部获取 CriteriaBuilder
+     * CriteriaBuilder cb = entityManager.getCriteriaBuilder();
+     * qs.where(root -> cb.like(root.get("name"), "%test%"));
+     * }</pre>
+     *
+     * @param fn 接收 Root 的函数，返回谓词
+     * @return 当前构建器以支持链式调用
+     * @throws IllegalArgumentException 如果 {@code fn} 为 null
+     */
+    @SuppressWarnings("unchecked")
+    default SELF where(Function<Root<E>, Predicate> fn) {
+        if (fn == null) {
+            throw new IllegalArgumentException("fn must not be null");
+        }
+        conditions().add(new ConditionNode.RawNode((root, cb) -> fn.apply((Root<E>)root)));
         return self();
     }
 

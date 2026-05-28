@@ -21,7 +21,10 @@ import org.slf4j.LoggerFactory;
  *
  * <pre>{@code
  * // 创建一个抓取 'roles' 和 'roles.permissions' 的实体图
- * EntityGraphHelper<User> graph = EntityGraphHelper.forEntity(User.class).add("roles").add("roles", "permissions");
+ * EntityGraphHelper<User> graph = EntityGraphHelper.forEntity(User.class).add("roles").add("roles.permissions");
+ *
+ * // 使用 nest() 方法进行链式嵌套（等价于上面的写法）
+ * EntityGraphHelper<User> graph = EntityGraphHelper.forEntity(User.class).add("roles").nest("permissions");
  *
  * // 为仓库调用构建查询提示：
  * Map<String, Object> hints = graph.toHints(entityManager);
@@ -41,6 +44,7 @@ public final class EntityGraphHelper<T> {
     private final Class<T> entityClass;
     private final Map<String, String[]> attributePaths = new HashMap<>();
     private boolean loadGraphType = false;
+    private String lastAddedPath = null;
 
     private EntityGraphHelper(Class<T> entityClass) {
         this.entityClass = entityClass;
@@ -101,6 +105,7 @@ public final class EntityGraphHelper<T> {
             // e.g. add("roles.permissions") then add("roles") should keep "permissions"
             attributePaths.merge(attributePath, new String[0], (old, val) -> old);
         }
+        lastAddedPath = attributePath;
         return this;
     }
 
@@ -114,6 +119,37 @@ public final class EntityGraphHelper<T> {
         for (String path : attributePaths) {
             add(path);
         }
+        return this;
+    }
+
+    /**
+     * 在上一次添加的路径基础上进行嵌套。等价于 {@code add("parent.child")} 的链式写法。
+     *
+     * <p>
+     * 示例：
+     *
+     * <pre>{@code
+     * // 传统写法
+     * graph.add("roles").add("roles.permissions").add("roles.permissions.menu");
+     *
+     * // 链式嵌套写法（等价）
+     * graph.add("roles").nest("permissions").nest("menu");
+     * }</pre>
+     *
+     * @param attributeName 嵌套的属性名称
+     * @return this helper for chaining
+     * @throws IllegalStateException 如果没有先前的路径可嵌套
+     * @throws IllegalArgumentException 如果 attributeName 为 null 或空
+     */
+    public EntityGraphHelper<T> nest(String attributeName) {
+        if (lastAddedPath == null) {
+            throw new IllegalStateException("No previous path to nest from. Call add() first.");
+        }
+        if (attributeName == null || attributeName.isEmpty()) {
+            throw new IllegalArgumentException("attributeName must not be null or empty");
+        }
+        String nestedPath = lastAddedPath + "." + attributeName;
+        add(nestedPath);
         return this;
     }
 

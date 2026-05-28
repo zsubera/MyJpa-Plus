@@ -10,8 +10,12 @@ import java.lang.annotation.Target;
  * 将实体字段标记为软删除标志。
  *
  * <p>
- * 此注解标记一个字段用于指示实体是否已被软删除。该字段应为 {@code Boolean} 或 {@code boolean} 类型， 其中 {@code true} 表示"已删除"，{@code false}（或
- * {@code null}）表示"未删除"。
+ * 此注解标记一个字段用于指示实体是否已被软删除。支持以下字段类型：
+ *
+ * <ul>
+ * <li>{@code Boolean} / {@code boolean} — {@code true} 表示"已删除"，{@code false}（或 {@code null}）表示"未删除"</li>
+ * <li>{@code Enum} — 通过 {@link #deletedValue()} 指定表示"已删除"的枚举值名称</li>
+ * </ul>
  *
  * <p>
  * <strong>注意：</strong>此注解不会自动向所有查询注入 WHERE 条件。要过滤掉软删除的记录， 必须显式使用库提供的辅助方法：
@@ -24,7 +28,7 @@ import java.lang.annotation.Target;
  * </ul>
  *
  * <p>
- * 使用示例：
+ * 使用示例（Boolean 类型）：
  *
  * <pre>
  * {
@@ -34,13 +38,24 @@ import java.lang.annotation.Target;
  *         @SoftDelete
  *         private Boolean deleted = false;
  *     }
+ * }
+ * </pre>
  *
- *     // 使用 MyJpaRepository 方法查询：
- *     List&lt;Product&gt; active = repository.findNotDeletedAll();
+ * <p>
+ * 使用示例（枚举类型）：
  *
- *     // 或直接使用 SoftDeleteHelper：
- *     Specification&lt;Product&gt; spec = SoftDeleteHelper.isNotDeleted(Product.class);
- *     List&lt;Product&gt; active = repository.findAll(spec.and(otherCondition));
+ * <pre>
+ * {
+ *     &#64;code
+ *     &#64;Entity
+ *     public class Article {
+ *         @SoftDelete(deletedValue = "DELETED")
+ *         private DelFlag delFlag = DelFlag.EXIST;
+ *     }
+ *
+ *     public enum DelFlag {
+ *         EXIST, DELETED
+ *     }
  * }
  * </pre>
  *
@@ -50,4 +65,15 @@ import java.lang.annotation.Target;
 @Documented
 @Target(ElementType.FIELD)
 @Retention(RetentionPolicy.RUNTIME)
-public @interface SoftDelete {}
+public @interface SoftDelete {
+
+    /**
+     * 枚举类型字段中表示"已删除"的枚举值名称。
+     *
+     * <p>
+     * 仅当字段类型为 {@code Enum} 时有效。对于 {@code Boolean} 类型字段，此属性被忽略。
+     *
+     * @return 表示"已删除"的枚举值名称，默认为空字符串（使用 Boolean 语义）
+     */
+    String deletedValue() default "";
+}

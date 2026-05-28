@@ -346,7 +346,16 @@ class ConditionBuilderValidationTest {
     @Test
     void testWhereNullFnThrowsException() {
         QuerySpec<TestEntity> qs = new QuerySpec<>();
-        assertThrows(IllegalArgumentException.class, () -> qs.where(null));
+        assertThrows(IllegalArgumentException.class,
+            () -> qs.where((java.util.function.BiFunction<jakarta.persistence.criteria.Path<TestEntity>,
+                jakarta.persistence.criteria.CriteriaBuilder, jakarta.persistence.criteria.Predicate>)null));
+    }
+
+    @Test
+    void testWhereRootNullFnThrowsException() {
+        QuerySpec<TestEntity> qs = new QuerySpec<>();
+        assertThrows(IllegalArgumentException.class, () -> qs.where((java.util.function.Function<
+            jakarta.persistence.criteria.Root<TestEntity>, jakarta.persistence.criteria.Predicate>)null));
     }
 
     @Test
