@@ -344,6 +344,20 @@ public class MyJpaTemplate {
      */
     @Transactional(readOnly = true)
     public <T> List<T> find(Class<T> entityClass, Specification<T> spec, int maxResults) {
+        TypedQuery<T> query = buildSpecificationQuery(entityClass, spec, maxResults);
+        return query.getResultList();
+    }
+
+    /**
+     * 构建基于 Specification 的 TypedQuery 的公共方法，消除查询构建逻辑的重复。
+     *
+     * @param entityClass 实体类
+     * @param spec 查询规范
+     * @param maxResults 最大结果数（null 表示不限制）
+     * @param <T> 实体类型
+     * @return 构建的 TypedQuery
+     */
+    private <T> TypedQuery<T> buildSpecificationQuery(Class<T> entityClass, Specification<T> spec, Integer maxResults) {
         CriteriaBuilder cb = entityManager.getCriteriaBuilder();
         CriteriaQuery<T> cq = cb.createQuery(entityClass);
         Root<T> root = cq.from(entityClass);
@@ -352,8 +366,10 @@ public class MyJpaTemplate {
             cq.where(predicate);
         }
         TypedQuery<T> query = entityManager.createQuery(cq);
-        query.setMaxResults(maxResults);
-        return query.getResultList();
+        if (maxResults != null) {
+            query.setMaxResults(maxResults);
+        }
+        return query;
     }
 
     /**
@@ -379,14 +395,7 @@ public class MyJpaTemplate {
                 "Pageable.unpaged() used with findPageInternal - returning all results up to {} limit. "
                     + "Consider using findAll() with explicit maxResults or findAllStream() for large datasets.",
                 this.maxResults);
-            CriteriaQuery<T> cq = cb.createQuery(entityClass);
-            Root<T> root = cq.from(entityClass);
-            jakarta.persistence.criteria.Predicate predicate = spec.toPredicate(root, cq, cb);
-            if (predicate != null) {
-                cq.where(predicate);
-            }
-            TypedQuery<T> typedQuery = entityManager.createQuery(cq);
-            typedQuery.setMaxResults(this.maxResults);
+            TypedQuery<T> typedQuery = buildSpecificationQuery(entityClass, spec, this.maxResults);
             querySpec.applyQuerySettings(typedQuery);
             List<T> allContent = typedQuery.getResultList();
             return new PageImpl<>(allContent);
@@ -398,15 +407,10 @@ public class MyJpaTemplate {
                 + "Consider using keyset pagination for better performance.", pageable.getOffset());
         }
 
-        CriteriaQuery<Long> countCq = cb.createQuery(Long.class);
-        Root<T> countRoot = countCq.from(entityClass);
-        countCq.select(cb.count(countRoot));
-        jakarta.persistence.criteria.Predicate countPredicate = spec.toPredicate(countRoot, null, cb);
-        if (countPredicate != null) {
-            countCq.where(countPredicate);
-        }
-        long total = entityManager.createQuery(countCq).getSingleResult();
+        // 计数查询
+        long total = executeCountQuery(entityClass, spec, cb);
 
+        // 数据查询
         CriteriaQuery<T> cq = cb.createQuery(entityClass);
         Root<T> root = cq.from(entityClass);
         jakarta.persistence.criteria.Predicate predicate = spec.toPredicate(root, cq, cb);
@@ -419,7 +423,7 @@ public class MyJpaTemplate {
         }
         TypedQuery<T> query = entityManager.createQuery(cq);
         if (pageable.getOffset() > Integer.MAX_VALUE) {
-            throw new IllegalArgumentException("Offset 太大: " + pageable.getOffset());
+            throw new IllegalArgumentException("Offset too large: " + pageable.getOffset());
         }
         query.setFirstResult((int)pageable.getOffset());
         query.setMaxResults(pageable.getPageSize());
@@ -427,6 +431,26 @@ public class MyJpaTemplate {
         List<T> content = query.getResultList();
 
         return new PageImpl<>(content, pageable, total);
+    }
+
+    /**
+     * 执行计数查询的公共方法。
+     *
+     * @param entityClass 实体类
+     * @param spec 查询规范
+     * @param cb CriteriaBuilder
+     * @param <T> 实体类型
+     * @return 总记录数
+     */
+    private <T> long executeCountQuery(Class<T> entityClass, Specification<T> spec, CriteriaBuilder cb) {
+        CriteriaQuery<Long> countCq = cb.createQuery(Long.class);
+        Root<T> countRoot = countCq.from(entityClass);
+        countCq.select(cb.count(countRoot));
+        jakarta.persistence.criteria.Predicate countPredicate = spec.toPredicate(countRoot, countCq, cb);
+        if (countPredicate != null) {
+            countCq.where(countPredicate);
+        }
+        return entityManager.createQuery(countCq).getSingleResult();
     }
 
     /**
@@ -448,14 +472,7 @@ public class MyJpaTemplate {
                 "Pageable.unpaged() used with findPage - returning all results up to {} limit. "
                     + "Consider using find() with explicit maxResults or findAllStream() for large datasets.",
                 this.maxResults);
-            CriteriaQuery<T> cq = cb.createQuery(entityClass);
-            Root<T> root = cq.from(entityClass);
-            jakarta.persistence.criteria.Predicate predicate = spec.toPredicate(root, cq, cb);
-            if (predicate != null) {
-                cq.where(predicate);
-            }
-            TypedQuery<T> query = entityManager.createQuery(cq);
-            query.setMaxResults(this.maxResults);
+            TypedQuery<T> query = buildSpecificationQuery(entityClass, spec, this.maxResults);
             List<T> allContent = query.getResultList();
             return new PageImpl<>(allContent);
         }
@@ -467,14 +484,7 @@ public class MyJpaTemplate {
         }
 
         // 计数查询
-        CriteriaQuery<Long> countCq = cb.createQuery(Long.class);
-        Root<T> countRoot = countCq.from(entityClass);
-        countCq.select(cb.count(countRoot));
-        jakarta.persistence.criteria.Predicate countPredicate = spec.toPredicate(countRoot, null, cb);
-        if (countPredicate != null) {
-            countCq.where(countPredicate);
-        }
-        long total = entityManager.createQuery(countCq).getSingleResult();
+        long total = executeCountQuery(entityClass, spec, cb);
 
         // 数据查询
         CriteriaQuery<T> cq = cb.createQuery(entityClass);
@@ -489,7 +499,7 @@ public class MyJpaTemplate {
         }
         TypedQuery<T> query = entityManager.createQuery(cq);
         if (pageable.getOffset() > Integer.MAX_VALUE) {
-            throw new IllegalArgumentException("Offset 太大: " + pageable.getOffset());
+            throw new IllegalArgumentException("Offset too large: " + pageable.getOffset());
         }
         query.setFirstResult((int)pageable.getOffset());
         query.setMaxResults(pageable.getPageSize());
@@ -523,7 +533,12 @@ public class MyJpaTemplate {
     }
 
     /**
-     * 分批执行批量更新。对于大型更新更安全，因为它会分别提交每批数据， 避免长时间运行的事务和过度的锁竞争。
+     * 分批执行批量更新。通过分批处理减少内存占用（通过 {@link EntityManager#clear()} 清除一级缓存），
+     * 但所有批次在同一个事务中执行，要么全部成功，要么全部回滚。
+     *
+     * <p>
+     * <strong>注意：</strong>此方法不会分批提交事务。所有批次在同一个事务中执行，
+     * 只有在整个方法完成后才会提交。如果需要分批提交，请使用外部事务管理。
      *
      * @param spec 要执行的 UpdateSpec
      * @param batchSize 每批更新的行数
@@ -549,7 +564,12 @@ public class MyJpaTemplate {
     }
 
     /**
-     * 分批执行批量删除。对于大型删除更安全，因为它会分别提交每批数据， 避免长时间运行的事务和过度的锁竞争。
+     * 分批执行批量删除。通过分批处理减少内存占用（通过 {@link EntityManager#clear()} 清除一级缓存），
+     * 但所有批次在同一个事务中执行，要么全部成功，要么全部回滚。
+     *
+     * <p>
+     * <strong>注意：</strong>此方法不会分批提交事务。所有批次在同一个事务中执行，
+     * 只有在整个方法完成后才会提交。如果需要分批提交，请使用外部事务管理。
      *
      * @param spec 要执行的 DeleteSpec
      * @param batchSize 每批删除的行数

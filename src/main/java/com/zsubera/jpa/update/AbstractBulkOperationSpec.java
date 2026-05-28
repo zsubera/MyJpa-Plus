@@ -154,6 +154,11 @@ public abstract class AbstractBulkOperationSpec<T, SELF extends AbstractBulkOper
         record LeafNode(BiFunction<Root<?>, CriteriaBuilder, Predicate> fn) implements BulkConditionNode {
         }
 
+        /** AND 子节点组。 */
+        @SuppressFBWarnings({"EI_EXPOSE_REP", "EI_EXPOSE_REP2"})
+        record AndNode(List<BulkConditionNode> children) implements BulkConditionNode {
+        }
+
         /** OR 子节点组。 */
         @SuppressFBWarnings({"EI_EXPOSE_REP", "EI_EXPOSE_REP2"})
         record OrNode(List<BulkConditionNode> children) implements BulkConditionNode {
@@ -192,11 +197,18 @@ public abstract class AbstractBulkOperationSpec<T, SELF extends AbstractBulkOper
      * Adds a NOT group of conditions. The combined conditions inside the consumer will be negated.
      *
      * <p>
+     * Multiple conditions inside the NOT group are combined with OR before negation.
+     * This follows De Morgan's laws: {@code NOT(A OR B) = NOT(A) AND NOT(B)}.
+     *
+     * <p>
      * Example:
      *
      * <pre>{@code
      * new DeleteSpec<>(User.class).not(o -> o.eq(User::getStatus, "ACTIVE")).execute();
      * // WHERE NOT (status = 'ACTIVE')
+     *
+     * new DeleteSpec<>(User.class).not(o -> o.gt(User::getStatus, 3).lt(User::getStatus, 8)).execute();
+     * // WHERE NOT (status > 3 OR status < 8) = WHERE status <= 3 AND status >= 8
      * }</pre>
      */
     public SELF not(Consumer<OrConditionBuilder<T, SELF>> config) {
@@ -594,6 +606,19 @@ public abstract class AbstractBulkOperationSpec<T, SELF extends AbstractBulkOper
     private Predicate resolveNode(BulkConditionNode node, Root<T> root, CriteriaBuilder cb) {
         if (node instanceof BulkConditionNode.LeafNode l) {
             return ((BiFunction<Root<T>, CriteriaBuilder, Predicate>)(BiFunction)l.fn()).apply(root, cb);
+        }
+        if (node instanceof BulkConditionNode.AndNode a) {
+            List<Predicate> childPredicates = new ArrayList<>();
+            for (BulkConditionNode child : a.children()) {
+                childPredicates.add(resolveNode(child, root, cb));
+            }
+            if (childPredicates.isEmpty()) {
+                return cb.conjunction();
+            }
+            if (childPredicates.size() == 1) {
+                return childPredicates.get(0);
+            }
+            return cb.and(childPredicates.toArray(new Predicate[0]));
         }
         if (node instanceof BulkConditionNode.OrNode o) {
             List<Predicate> childPredicates = new ArrayList<>();

@@ -427,10 +427,12 @@ public class ProjectionSpec<T> {
             return new PageImpl<>(allContent);
         }
 
-        // Count query
+        // Count query - need to apply joins to get accurate count
         CriteriaQuery<Long> countQuery = cb.createQuery(Long.class);
         Root<T> countRoot = countQuery.from(entityClass);
-        countQuery.select(cb.count(countRoot));
+        // Apply joins to count query to ensure accurate results
+        resolveJoins(countRoot, cb);
+        countQuery.select(cb.countDistinct(countRoot));
         applyPredicate(countRoot, countQuery, cb);
         Long total = em.createQuery(countQuery).getSingleResult();
 
@@ -453,7 +455,7 @@ public class ProjectionSpec<T> {
      * @param cb CriteriaBuilder 实例
      * @return JOIN 映射关系
      */
-    @SuppressWarnings({"unchecked", "rawtypes"})
+    @SuppressWarnings({"unchecked"})
     private Map<String, Join<?, ?>> resolveJoins(Root<T> root, CriteriaBuilder cb) {
         Map<String, Join<?, ?>> joinMap = new LinkedHashMap<>();
         for (JoinSpec js : joins) {
@@ -501,7 +503,7 @@ public class ProjectionSpec<T> {
      * @param query CriteriaQuery 实例
      * @param cb CriteriaBuilder 实例
      */
-    @SuppressWarnings({"unchecked", "rawtypes"})
+    @SuppressWarnings({"rawtypes"})
     private void applyPredicate(Root<T> root, CriteriaQuery<?> query, CriteriaBuilder cb) {
         jakarta.persistence.criteria.Predicate predicate = querySpec.toPredicate(root, (CriteriaQuery)query, cb);
         if (predicate != null) {

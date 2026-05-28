@@ -306,13 +306,21 @@ public class OrConditionBuilder<T, SELF extends AbstractBulkOperationSpec<T, SEL
      * @param start 范围起始值
      * @param end 范围结束值
      * @return 当前构建器实例
-     * @throws IllegalArgumentException 如果 start 或 end 为 null
+     * @throws IllegalArgumentException 如果 start 或 end 为 null，或类型不匹配，或 start 大于 end
      */
+    @SuppressWarnings({"unchecked", "rawtypes"})
     public OrConditionBuilder<T, SELF> between(SFunction<T, ?> field, Comparable<?> start, Comparable<?> end) {
         if (start == null)
             throw new IllegalArgumentException("start must not be null");
         if (end == null)
             throw new IllegalArgumentException("end must not be null");
+        if (start.getClass() != end.getClass()) {
+            throw new IllegalArgumentException("start and end must be of the same type, but got "
+                + start.getClass().getName() + " and " + end.getClass().getName());
+        }
+        if (((Comparable)start).compareTo(end) > 0) {
+            throw new IllegalArgumentException("start must not be greater than end");
+        }
         String name = parent.property(field);
         nodes.add(new BulkConditionNode.LeafNode((root, cb) -> PredicateHelper.between(root, name, start, end, cb)));
         return this;
@@ -325,13 +333,21 @@ public class OrConditionBuilder<T, SELF extends AbstractBulkOperationSpec<T, SEL
      * @param start 范围起始值
      * @param end 范围结束值
      * @return 当前构建器实例
-     * @throws IllegalArgumentException 如果 start 或 end 为 null
+     * @throws IllegalArgumentException 如果 start 或 end 为 null，或类型不匹配，或 start 大于 end
      */
+    @SuppressWarnings({"unchecked", "rawtypes"})
     public OrConditionBuilder<T, SELF> notBetween(SFunction<T, ?> field, Comparable<?> start, Comparable<?> end) {
         if (start == null)
             throw new IllegalArgumentException("start must not be null");
         if (end == null)
             throw new IllegalArgumentException("end must not be null");
+        if (start.getClass() != end.getClass()) {
+            throw new IllegalArgumentException("start and end must be of the same type, but got "
+                + start.getClass().getName() + " and " + end.getClass().getName());
+        }
+        if (((Comparable)start).compareTo(end) > 0) {
+            throw new IllegalArgumentException("start must not be greater than end");
+        }
         String name = parent.property(field);
         nodes.add(new BulkConditionNode.LeafNode((root, cb) -> PredicateHelper.notBetween(root, name, start, end, cb)));
         return this;

@@ -6,6 +6,7 @@ import jakarta.persistence.criteria.CriteriaBuilder;
 import jakarta.persistence.criteria.Path;
 import jakarta.persistence.criteria.Predicate;
 import java.lang.reflect.Field;
+import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
@@ -46,19 +47,17 @@ public final class SoftDeleteHelper {
     private static final int MAX_CACHE_SIZE = 1024;
     private static final Logger log = org.slf4j.LoggerFactory.getLogger(SoftDeleteHelper.class);
 
-    // Sentinel value for entities without a @SoftDelete field (avoids null in
-    // cache)
+    // 没有@SoftDelete字段的实体的哨兵值（避免在 中出现空缓存）
     private static final String NO_FIELD_SENTINEL = "\0";
 
-    // Cache: entityClass -> field name (or sentinel for "no field")
-    // Using ConcurrentHashMap for thread-safe access; entity class count is limited
-    // in practice
+    // 缓存：entityClass ->字段名（或“无字段”的哨兵）
+    // 使用ConcurrentHashMap实现线程安全访问;实体类别数量在实际中是有限的
     private static final ConcurrentMap<Class<?>, String> FIELD_CACHE = new ConcurrentHashMap<>();
 
-    // Cache: entityClass -> Specification for isNotDeleted
+    // 缓存：entityClass -> isNotDeleted 的规范
     private static final ConcurrentMap<Class<?>, Specification<?>> NOT_DELETED_SPEC_CACHE = new ConcurrentHashMap<>();
 
-    // Cache: entityClass -> Specification for isDeleted
+    // 缓存：entityClass -> isDeleted 的规范
     private static final ConcurrentMap<Class<?>, Specification<?>> DELETED_SPEC_CACHE = new ConcurrentHashMap<>();
 
     private SoftDeleteHelper() {}
@@ -120,7 +119,6 @@ public final class SoftDeleteHelper {
      * @param <T> 实体类型
      * @return 应用了软删除条件的新 QuerySpec
      */
-    @SuppressWarnings("unchecked")
     public static <T> QuerySpec<T> notDeletedQuery(Class<T> entityClass) {
         String fieldName = findSoftDeleteField(entityClass);
         if (fieldName == null) {
@@ -236,7 +234,7 @@ public final class SoftDeleteHelper {
      * @return 如果实体已软删除返回 {@code true}，否则返回 {@code false}
      * @throws IllegalArgumentException 如果实体类或实体实例为 {@code null}
      */
-    @SuppressWarnings({"unchecked", "rawtypes"})
+    @SuppressWarnings({"rawtypes"})
     public static <T> boolean isSoftDeleted(Class<T> entityClass, T entity) {
         String fieldName = findSoftDeleteField(entityClass);
         if (fieldName == null) {
@@ -257,10 +255,9 @@ public final class SoftDeleteHelper {
                 return Boolean.TRUE.equals(value);
             }
             // 枚举类型
-            if (value instanceof Enum && field.isAnnotationPresent(SoftDelete.class)) {
+            if (value instanceof Enum enumValue && field.isAnnotationPresent(SoftDelete.class)) {
                 SoftDelete annotation = field.getAnnotation(SoftDelete.class);
                 if (annotation != null && !annotation.deletedValue().isEmpty()) {
-                    Enum enumValue = (Enum)value;
                     return enumValue.name().equals(annotation.deletedValue());
                 }
             }
@@ -273,9 +270,7 @@ public final class SoftDeleteHelper {
     private static List<Field> getAllFields(Class<?> clazz) {
         List<Field> fields = new java.util.ArrayList<>();
         while (clazz != null && clazz != Object.class) {
-            for (Field field : clazz.getDeclaredFields()) {
-                fields.add(field);
-            }
+            Collections.addAll(fields, clazz.getDeclaredFields());
             clazz = clazz.getSuperclass();
         }
         return fields;

@@ -35,6 +35,7 @@ public interface MyJpaRepository<T, ID> extends JpaRepository<T, ID>, JpaSpecifi
      * @param spec 查询规格说明
      * @return 匹配实体列表
      */
+    @Override
     List<T> findAll(Specification<T> spec);
 
     /**
@@ -44,6 +45,7 @@ public interface MyJpaRepository<T, ID> extends JpaRepository<T, ID>, JpaSpecifi
      * @param pageable 分页参数
      * @return 包含匹配实体的分页结果
      */
+    @Override
     Page<T> findAll(Specification<T> spec, Pageable pageable);
 
     /**
@@ -53,6 +55,7 @@ public interface MyJpaRepository<T, ID> extends JpaRepository<T, ID>, JpaSpecifi
      * @param sort 排序参数
      * @return 匹配实体列表
      */
+    @Override
     List<T> findAll(Specification<T> spec, Sort sort);
 
     /**
@@ -61,6 +64,7 @@ public interface MyJpaRepository<T, ID> extends JpaRepository<T, ID>, JpaSpecifi
      * @param spec 查询规格说明
      * @return 匹配实体的 Optional 包装
      */
+    @Override
     Optional<T> findOne(Specification<T> spec);
 
     /**
@@ -69,6 +73,7 @@ public interface MyJpaRepository<T, ID> extends JpaRepository<T, ID>, JpaSpecifi
      * @param spec 查询规格说明
      * @return 匹配实体数量
      */
+    @Override
     long count(Specification<T> spec);
 
     /**
@@ -77,6 +82,7 @@ public interface MyJpaRepository<T, ID> extends JpaRepository<T, ID>, JpaSpecifi
      * @param spec 查询规格说明
      * @return 如果存在匹配实体返回 true，否则返回 false
      */
+    @Override
     boolean exists(Specification<T> spec);
 
     /**

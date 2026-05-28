@@ -5,9 +5,8 @@ import com.zsubera.jpa.spec.SFunction;
 import java.beans.Introspector;
 import java.lang.invoke.SerializedLambda;
 import java.lang.reflect.Method;
-import java.util.Collections;
-import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Lambda 工具类，用于从方法引用中提取实体属性名称。
@@ -51,14 +50,14 @@ public final class LambdaUtils {
         MAX_CACHE_SIZE = configured;
     }
 
-    /** LRU 缓存，线程安全，达到最大容量时自动淘汰最久未使用的条目。 */
-    private static final Map<String, String> CACHE =
-        Collections.synchronizedMap(new LinkedHashMap<>(MAX_CACHE_SIZE * 4 / 3 + 1, 0.75f, true) {
-            @Override
-            protected boolean removeEldestEntry(Map.Entry<String, String> eldest) {
-                return size() > MAX_CACHE_SIZE;
-            }
-        });
+    /**
+     * 线程安全的缓存，使用 ConcurrentHashMap 确保 computeIfAbsent 的原子性。
+     *
+     * <p>
+     * 注意：此缓存没有 LRU 淘汰能力，但在高并发场景下性能更好。
+     * 如果缓存大小超过 MAX_CACHE_SIZE，会记录警告日志。
+     */
+    private static final Map<String, String> CACHE = new ConcurrentHashMap<>();
 
     private LambdaUtils() {}
 

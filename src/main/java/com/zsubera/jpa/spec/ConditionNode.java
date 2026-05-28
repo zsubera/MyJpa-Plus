@@ -161,5 +161,10 @@ public sealed interface ConditionNode permits ConditionNode.SimpleNode, Conditio
             this.fieldName = fieldName;
             this.asc = asc;
         }
+
+        @Override
+        public String toString() {
+            return "OrderNode[" + fieldName + (asc ? " ASC" : " DESC") + "]";
+        }
     }
 }

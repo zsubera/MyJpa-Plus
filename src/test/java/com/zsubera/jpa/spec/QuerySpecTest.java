@@ -1052,6 +1052,15 @@ public class QuerySpecTest {
         assertEquals(6, result.size());
     }
 
+    @Test
+    void testOrderNodeToString() {
+        ConditionNode.OrderNode ascNode = new ConditionNode.OrderNode("name", true);
+        assertEquals("OrderNode[name ASC]", ascNode.toString());
+
+        ConditionNode.OrderNode descNode = new ConditionNode.OrderNode("status", false);
+        assertEquals("OrderNode[status DESC]", descNode.toString());
+    }
+
     private TestEntity newEntity(String name, int status) {
         TestEntity entity = new TestEntity();
         entity.setName(name);

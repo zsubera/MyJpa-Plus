@@ -724,6 +724,30 @@ class DeleteSpecTest {
             () -> new DeleteSpec<>(TestEntity.class).notBetween(TestEntity::getStatus, 1, null));
     }
 
+    @Test
+    void testDeleteOrGroupBetweenTypeMismatchThrowsException() {
+        assertThrows(IllegalArgumentException.class,
+            () -> new DeleteSpec<>(TestEntity.class).or(o -> o.between(TestEntity::getStatus, 1, 2L)));
+    }
+
+    @Test
+    void testDeleteOrGroupNotBetweenTypeMismatchThrowsException() {
+        assertThrows(IllegalArgumentException.class,
+            () -> new DeleteSpec<>(TestEntity.class).or(o -> o.notBetween(TestEntity::getStatus, 1, 2L)));
+    }
+
+    @Test
+    void testDeleteOrGroupBetweenStartGreaterThanEndThrowsException() {
+        assertThrows(IllegalArgumentException.class,
+            () -> new DeleteSpec<>(TestEntity.class).or(o -> o.between(TestEntity::getStatus, 10, 1)));
+    }
+
+    @Test
+    void testDeleteOrGroupNotBetweenStartGreaterThanEndThrowsException() {
+        assertThrows(IllegalArgumentException.class,
+            () -> new DeleteSpec<>(TestEntity.class).or(o -> o.notBetween(TestEntity::getStatus, 10, 1)));
+    }
+
     private TestEntity newEntity(String name, int status) {
         TestEntity entity = new TestEntity();
         entity.setName(name);

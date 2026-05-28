@@ -258,10 +258,7 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
      * @return JoinGroup 实例，用于配置关联条件
      */
     public <J> JoinGroup<T, J> join(SFunction<T, ?> field) {
-        ConditionNode.JoinNode joinNode =
-            new ConditionNode.JoinNode(LambdaUtils.getPropertyName(field), ConditionNode.JoinType.INNER);
-        currentGroup().add(joinNode);
-        return new JoinGroup<>(this, joinNode);
+        return internalJoin(field, ConditionNode.JoinType.INNER);
     }
 
     /**
@@ -281,10 +278,7 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
      * @return JoinGroup 实例，用于配置关联条件
      */
     public <J> JoinGroup<T, J> join(SFunction<T, ?> field, Class<J> joinEntityClass) {
-        ConditionNode.JoinNode joinNode =
-            new ConditionNode.JoinNode(LambdaUtils.getPropertyName(field), ConditionNode.JoinType.INNER);
-        currentGroup().add(joinNode);
-        return new JoinGroup<>(this, joinNode);
+        return internalJoin(field, ConditionNode.JoinType.INNER);
     }
 
     /**
@@ -295,10 +289,7 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
      * @return JoinGroup 实例，用于配置关联条件
      */
     public <J> JoinGroup<T, J> leftJoin(SFunction<T, ?> field) {
-        ConditionNode.JoinNode joinNode =
-            new ConditionNode.JoinNode(LambdaUtils.getPropertyName(field), ConditionNode.JoinType.LEFT);
-        currentGroup().add(joinNode);
-        return new JoinGroup<>(this, joinNode);
+        return internalJoin(field, ConditionNode.JoinType.LEFT);
     }
 
     /**
@@ -310,10 +301,7 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
      * @return JoinGroup 实例，用于配置关联条件
      */
     public <J> JoinGroup<T, J> leftJoin(SFunction<T, ?> field, Class<J> joinEntityClass) {
-        ConditionNode.JoinNode joinNode =
-            new ConditionNode.JoinNode(LambdaUtils.getPropertyName(field), ConditionNode.JoinType.LEFT);
-        currentGroup().add(joinNode);
-        return new JoinGroup<>(this, joinNode);
+        return internalJoin(field, ConditionNode.JoinType.LEFT);
     }
 
     /**
@@ -324,10 +312,7 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
      * @return JoinGroup 实例，用于配置关联条件
      */
     public <J> JoinGroup<T, J> fetchJoin(SFunction<T, ?> field) {
-        ConditionNode.JoinNode joinNode =
-            new ConditionNode.JoinNode(LambdaUtils.getPropertyName(field), ConditionNode.JoinType.FETCH);
-        currentGroup().add(joinNode);
-        return new JoinGroup<>(this, joinNode);
+        return internalJoin(field, ConditionNode.JoinType.FETCH);
     }
 
     /**
@@ -339,10 +324,7 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
      * @return JoinGroup 实例，用于配置关联条件
      */
     public <J> JoinGroup<T, J> fetchJoin(SFunction<T, ?> field, Class<J> joinEntityClass) {
-        ConditionNode.JoinNode joinNode =
-            new ConditionNode.JoinNode(LambdaUtils.getPropertyName(field), ConditionNode.JoinType.FETCH);
-        currentGroup().add(joinNode);
-        return new JoinGroup<>(this, joinNode);
+        return internalJoin(field, ConditionNode.JoinType.FETCH);
     }
 
     /**
@@ -353,10 +335,7 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
      * @return JoinGroup 实例，用于配置关联条件
      */
     public <J> JoinGroup<T, J> leftFetchJoin(SFunction<T, ?> field) {
-        ConditionNode.JoinNode joinNode =
-            new ConditionNode.JoinNode(LambdaUtils.getPropertyName(field), ConditionNode.JoinType.LEFT_FETCH);
-        currentGroup().add(joinNode);
-        return new JoinGroup<>(this, joinNode);
+        return internalJoin(field, ConditionNode.JoinType.LEFT_FETCH);
     }
 
     /**
@@ -368,8 +347,20 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
      * @return JoinGroup 实例，用于配置关联条件
      */
     public <J> JoinGroup<T, J> leftFetchJoin(SFunction<T, ?> field, Class<J> joinEntityClass) {
+        return internalJoin(field, ConditionNode.JoinType.LEFT_FETCH);
+    }
+
+    /**
+     * 内部 JOIN 实现方法，消除重复代码。
+     *
+     * @param field 关联字段的方法引用
+     * @param joinType JOIN 类型
+     * @param <J> 关联实体类型
+     * @return JoinGroup 实例，用于配置关联条件
+     */
+    private <J> JoinGroup<T, J> internalJoin(SFunction<T, ?> field, ConditionNode.JoinType joinType) {
         ConditionNode.JoinNode joinNode =
-            new ConditionNode.JoinNode(LambdaUtils.getPropertyName(field), ConditionNode.JoinType.LEFT_FETCH);
+            new ConditionNode.JoinNode(LambdaUtils.getPropertyName(field), joinType);
         currentGroup().add(joinNode);
         return new JoinGroup<>(this, joinNode);
     }
@@ -459,11 +450,7 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
      * @return 当前 QuerySpec 实例，支持链式调用
      */
     public <J> QuerySpec<T> join(SFunction<T, ?> field, Consumer<JoinGroup<T, J>> config) {
-        ConditionNode.JoinNode joinNode =
-            new ConditionNode.JoinNode(LambdaUtils.getPropertyName(field), ConditionNode.JoinType.INNER);
-        currentGroup().add(joinNode);
-        config.accept(new JoinGroup<>(this, joinNode));
-        return this;
+        return internalJoinWithConsumer(field, ConditionNode.JoinType.INNER, config);
     }
 
     /**
@@ -475,11 +462,7 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
      * @return 当前 QuerySpec 实例，支持链式调用
      */
     public <J> QuerySpec<T> leftJoin(SFunction<T, ?> field, Consumer<JoinGroup<T, J>> config) {
-        ConditionNode.JoinNode joinNode =
-            new ConditionNode.JoinNode(LambdaUtils.getPropertyName(field), ConditionNode.JoinType.LEFT);
-        currentGroup().add(joinNode);
-        config.accept(new JoinGroup<>(this, joinNode));
-        return this;
+        return internalJoinWithConsumer(field, ConditionNode.JoinType.LEFT, config);
     }
 
     /**
@@ -491,11 +474,7 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
      * @return 当前 QuerySpec 实例，支持链式调用
      */
     public <J> QuerySpec<T> fetchJoin(SFunction<T, ?> field, Consumer<JoinGroup<T, J>> config) {
-        ConditionNode.JoinNode joinNode =
-            new ConditionNode.JoinNode(LambdaUtils.getPropertyName(field), ConditionNode.JoinType.FETCH);
-        currentGroup().add(joinNode);
-        config.accept(new JoinGroup<>(this, joinNode));
-        return this;
+        return internalJoinWithConsumer(field, ConditionNode.JoinType.FETCH, config);
     }
 
     /**
@@ -507,8 +486,22 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
      * @return 当前 QuerySpec 实例，支持链式调用
      */
     public <J> QuerySpec<T> leftFetchJoin(SFunction<T, ?> field, Consumer<JoinGroup<T, J>> config) {
+        return internalJoinWithConsumer(field, ConditionNode.JoinType.LEFT_FETCH, config);
+    }
+
+    /**
+     * 内部 JOIN Consumer 模式实现方法，消除重复代码。
+     *
+     * @param field 关联字段的方法引用
+     * @param joinType JOIN 类型
+     * @param config JoinGroup 配置消费者
+     * @param <J> 关联实体类型
+     * @return 当前 QuerySpec 实例，支持链式调用
+     */
+    private <J> QuerySpec<T> internalJoinWithConsumer(SFunction<T, ?> field, ConditionNode.JoinType joinType,
+        Consumer<JoinGroup<T, J>> config) {
         ConditionNode.JoinNode joinNode =
-            new ConditionNode.JoinNode(LambdaUtils.getPropertyName(field), ConditionNode.JoinType.LEFT_FETCH);
+            new ConditionNode.JoinNode(LambdaUtils.getPropertyName(field), joinType);
         currentGroup().add(joinNode);
         config.accept(new JoinGroup<>(this, joinNode));
         return this;
