@@ -60,9 +60,9 @@ public class IgnoreSoftDeleteAdvisor {
             }
             return pjp.proceed();
         } finally {
-            if (hasAnnotation) {
-                SoftDeleteContext.clear();
-            }
+            // 无条件清理 ThreadLocal，防止嵌套调用场景下的泄漏
+            // ThreadLocal.remove() 在无值时是幂等的
+            SoftDeleteContext.clear();
         }
     }
 }

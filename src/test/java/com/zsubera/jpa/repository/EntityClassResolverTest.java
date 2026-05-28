@@ -20,10 +20,9 @@ class EntityClassResolverTest {
     }
 
     @Test
-    void testResolveIdFieldNameReturnsDefaultIdForEntityWithoutId() {
-        // String.class has no @Id field, should fall back to "id"
-        String fieldName = EntityClassResolver.resolveIdFieldName(String.class);
-        assertEquals("id", fieldName);
+    void testResolveIdFieldNameThrowsExceptionForEntityWithoutId() {
+        // String.class has no @Id field, should throw IllegalStateException
+        assertThrows(IllegalStateException.class, () -> EntityClassResolver.resolveIdFieldName(String.class));
     }
 
     @Test

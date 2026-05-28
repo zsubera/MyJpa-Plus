@@ -47,7 +47,8 @@ public final class EntityClassResolver {
      * 为给定实体类解析{@code @Id}字段名。遍历类层次结构（包括超类）以找到使用{@link Id @Id}注解的字段。 结果按实体类缓存。
      *
      * @param entityClass 实体类
-     * @return ID字段名，如果未找到{@code @Id}则返回{@code "id"}
+     * @return ID字段名
+     * @throws IllegalStateException 如果实体类没有{@code @Id}注解的字段
      */
     public static String resolveIdFieldName(Class<?> entityClass) {
         return ID_FIELD_CACHE.computeIfAbsent(entityClass, cls -> {
@@ -58,7 +59,8 @@ public final class EntityClassResolver {
                     }
                 }
             }
-            return "id";
+            throw new IllegalStateException("No @Id field found in " + cls.getName()
+                + ". Ensure the entity has a field annotated with @jakarta.persistence.Id");
         });
     }
 

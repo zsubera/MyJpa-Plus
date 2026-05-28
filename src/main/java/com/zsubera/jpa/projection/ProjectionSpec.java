@@ -928,9 +928,11 @@ public class ProjectionSpec<T> {
                     onPredicates.add(cb.not(cb.between(notBetweenExpr, (Comparable<Object>)notBetween.start(),
                         (Comparable<Object>)notBetween.end())));
                 } else if (node instanceof JoinGroup.ConditionNode.In in) {
-                    onPredicates.add(join.get(in.fieldName()).in(in.values()));
+                    onPredicates
+                        .add(com.zsubera.jpa.util.InClauseBuilder.in(cb, join.get(in.fieldName()), in.values()));
                 } else if (node instanceof JoinGroup.ConditionNode.NotIn notIn) {
-                    onPredicates.add(join.get(notIn.fieldName()).in(notIn.values()).not());
+                    onPredicates.add(
+                        com.zsubera.jpa.util.InClauseBuilder.notIn(cb, join.get(notIn.fieldName()), notIn.values()));
                 } else if (node instanceof JoinGroup.ConditionNode.StartsWith startsWith) {
                     onPredicates
                         .add(cb.like(join.get(startsWith.fieldName()).as(String.class), startsWith.value() + "%"));

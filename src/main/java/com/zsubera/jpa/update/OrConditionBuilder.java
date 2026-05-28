@@ -79,8 +79,9 @@ public class OrConditionBuilder<T, SELF extends AbstractBulkOperationSpec<T, SEL
      * @throws IllegalArgumentException 如果 value 为 null
      */
     public OrConditionBuilder<T, SELF> gt(SFunction<T, ?> field, Comparable<?> value) {
-        if (value == null)
+        if (value == null) {
             throw new IllegalArgumentException("value must not be null");
+        }
         String name = parent.property(field);
         nodes.add(new BulkConditionNode.LeafNode((root, cb) -> PredicateHelper.gt(root, name, value, cb)));
         return this;
@@ -95,8 +96,9 @@ public class OrConditionBuilder<T, SELF extends AbstractBulkOperationSpec<T, SEL
      * @throws IllegalArgumentException 如果 value 为 null
      */
     public OrConditionBuilder<T, SELF> ge(SFunction<T, ?> field, Comparable<?> value) {
-        if (value == null)
+        if (value == null) {
             throw new IllegalArgumentException("value must not be null");
+        }
         String name = parent.property(field);
         nodes.add(new BulkConditionNode.LeafNode((root, cb) -> PredicateHelper.ge(root, name, value, cb)));
         return this;
@@ -111,8 +113,9 @@ public class OrConditionBuilder<T, SELF extends AbstractBulkOperationSpec<T, SEL
      * @throws IllegalArgumentException 如果 value 为 null
      */
     public OrConditionBuilder<T, SELF> lt(SFunction<T, ?> field, Comparable<?> value) {
-        if (value == null)
+        if (value == null) {
             throw new IllegalArgumentException("value must not be null");
+        }
         String name = parent.property(field);
         nodes.add(new BulkConditionNode.LeafNode((root, cb) -> PredicateHelper.lt(root, name, value, cb)));
         return this;
@@ -127,8 +130,9 @@ public class OrConditionBuilder<T, SELF extends AbstractBulkOperationSpec<T, SEL
      * @throws IllegalArgumentException 如果 value 为 null
      */
     public OrConditionBuilder<T, SELF> le(SFunction<T, ?> field, Comparable<?> value) {
-        if (value == null)
+        if (value == null) {
             throw new IllegalArgumentException("value must not be null");
+        }
         String name = parent.property(field);
         nodes.add(new BulkConditionNode.LeafNode((root, cb) -> PredicateHelper.le(root, name, value, cb)));
         return this;
@@ -143,8 +147,9 @@ public class OrConditionBuilder<T, SELF extends AbstractBulkOperationSpec<T, SEL
      * @throws IllegalArgumentException 如果 value 为 null
      */
     public OrConditionBuilder<T, SELF> like(SFunction<T, ?> field, String value) {
-        if (value == null)
+        if (value == null) {
             throw new IllegalArgumentException("value must not be null");
+        }
         String name = parent.property(field);
         nodes.add(new BulkConditionNode.LeafNode((root, cb) -> PredicateHelper.like(root, name, value, cb)));
         return this;
@@ -159,8 +164,9 @@ public class OrConditionBuilder<T, SELF extends AbstractBulkOperationSpec<T, SEL
      * @throws IllegalArgumentException 如果 value 为 null
      */
     public OrConditionBuilder<T, SELF> notLike(SFunction<T, ?> field, String value) {
-        if (value == null)
+        if (value == null) {
             throw new IllegalArgumentException("value must not be null");
+        }
         String name = parent.property(field);
         nodes.add(new BulkConditionNode.LeafNode((root, cb) -> PredicateHelper.notLike(root, name, value, cb)));
         return this;
@@ -175,8 +181,9 @@ public class OrConditionBuilder<T, SELF extends AbstractBulkOperationSpec<T, SEL
      * @throws IllegalArgumentException 如果 value 为 null
      */
     public OrConditionBuilder<T, SELF> startsWith(SFunction<T, ?> field, String value) {
-        if (value == null)
+        if (value == null) {
             throw new IllegalArgumentException("value must not be null");
+        }
         String name = parent.property(field);
         nodes.add(new BulkConditionNode.LeafNode((root, cb) -> PredicateHelper.startsWith(root, name, value, cb)));
         return this;
@@ -191,8 +198,9 @@ public class OrConditionBuilder<T, SELF extends AbstractBulkOperationSpec<T, SEL
      * @throws IllegalArgumentException 如果 value 为 null
      */
     public OrConditionBuilder<T, SELF> endsWith(SFunction<T, ?> field, String value) {
-        if (value == null)
+        if (value == null) {
             throw new IllegalArgumentException("value must not be null");
+        }
         String name = parent.property(field);
         nodes.add(new BulkConditionNode.LeafNode((root, cb) -> PredicateHelper.endsWith(root, name, value, cb)));
         return this;
@@ -207,8 +215,9 @@ public class OrConditionBuilder<T, SELF extends AbstractBulkOperationSpec<T, SEL
      * @throws IllegalArgumentException 如果 value 为 null
      */
     public OrConditionBuilder<T, SELF> contains(SFunction<T, ?> field, String value) {
-        if (value == null)
+        if (value == null) {
             throw new IllegalArgumentException("value must not be null");
+        }
         String name = parent.property(field);
         nodes.add(new BulkConditionNode.LeafNode((root, cb) -> PredicateHelper.contains(root, name, value, cb)));
         return this;
@@ -236,8 +245,9 @@ public class OrConditionBuilder<T, SELF extends AbstractBulkOperationSpec<T, SEL
      * @throws IllegalArgumentException 如果 value 为 null
      */
     public OrConditionBuilder<T, SELF> likeIgnoreCase(SFunction<T, ?> field, String value) {
-        if (value == null)
+        if (value == null) {
             throw new IllegalArgumentException("value must not be null");
+        }
         String name = parent.property(field);
         nodes.add(new BulkConditionNode.LeafNode((root, cb) -> PredicateHelper.likeIgnoreCase(root, name, value, cb)));
         return this;
@@ -253,8 +263,9 @@ public class OrConditionBuilder<T, SELF extends AbstractBulkOperationSpec<T, SEL
      */
     public OrConditionBuilder<T, SELF> in(SFunction<T, ?> field, Object... values) {
         String name = parent.property(field);
-        if (values == null || values.length == 0)
+        if (values == null || values.length == 0) {
             throw new IllegalArgumentException("values must not be empty");
+        }
         nodes.add(new BulkConditionNode.LeafNode((root, cb) -> PredicateHelper.in(root, name, values, cb)));
         return this;
     }
@@ -269,8 +280,9 @@ public class OrConditionBuilder<T, SELF extends AbstractBulkOperationSpec<T, SEL
      */
     public OrConditionBuilder<T, SELF> notIn(SFunction<T, ?> field, Object... values) {
         String name = parent.property(field);
-        if (values == null || values.length == 0)
+        if (values == null || values.length == 0) {
             throw new IllegalArgumentException("values must not be empty");
+        }
         nodes.add(new BulkConditionNode.LeafNode((root, cb) -> PredicateHelper.notIn(root, name, values, cb)));
         return this;
     }
@@ -310,10 +322,12 @@ public class OrConditionBuilder<T, SELF extends AbstractBulkOperationSpec<T, SEL
      */
     @SuppressWarnings({"unchecked", "rawtypes"})
     public OrConditionBuilder<T, SELF> between(SFunction<T, ?> field, Comparable<?> start, Comparable<?> end) {
-        if (start == null)
+        if (start == null) {
             throw new IllegalArgumentException("start must not be null");
-        if (end == null)
+        }
+        if (end == null) {
             throw new IllegalArgumentException("end must not be null");
+        }
         if (start.getClass() != end.getClass()) {
             throw new IllegalArgumentException("start and end must be of the same type, but got "
                 + start.getClass().getName() + " and " + end.getClass().getName());
@@ -337,10 +351,12 @@ public class OrConditionBuilder<T, SELF extends AbstractBulkOperationSpec<T, SEL
      */
     @SuppressWarnings({"unchecked", "rawtypes"})
     public OrConditionBuilder<T, SELF> notBetween(SFunction<T, ?> field, Comparable<?> start, Comparable<?> end) {
-        if (start == null)
+        if (start == null) {
             throw new IllegalArgumentException("start must not be null");
-        if (end == null)
+        }
+        if (end == null) {
             throw new IllegalArgumentException("end must not be null");
+        }
         if (start.getClass() != end.getClass()) {
             throw new IllegalArgumentException("start and end must be of the same type, but got "
                 + start.getClass().getName() + " and " + end.getClass().getName());

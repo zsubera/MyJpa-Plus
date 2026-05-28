@@ -183,7 +183,7 @@ public final class InClauseBuilder {
             batch.add(v);
             if (batch.size() >= MAX_IN_CLAUSE_SIZE) {
                 batchPredicates.add(buildSingleIn(cb, path, batch));
-                batch = new ArrayList<>();
+                batch.clear(); // 复用同一个 ArrayList，减少 GC 压力
             }
         }
         if (!batch.isEmpty()) {
@@ -204,7 +204,7 @@ public final class InClauseBuilder {
             batch.add(v);
             if (batch.size() >= MAX_IN_CLAUSE_SIZE) {
                 batchPredicates.add(cb.not(buildSingleIn(cb, path, batch)));
-                batch = new ArrayList<>();
+                batch.clear(); // 复用同一个 ArrayList，减少 GC 压力
             }
         }
         if (!batch.isEmpty()) {
