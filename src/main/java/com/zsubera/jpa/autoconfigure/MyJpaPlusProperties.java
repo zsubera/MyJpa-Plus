@@ -20,6 +20,18 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  *     max-results: 10000
  *     deep-pagination-offset-threshold: 100000
  * }</pre>
+ *
+ * <p>
+ * 高并发场景最佳实践：
+ *
+ * <ul>
+ * <li>避免使用 {@code findAll()} 不带 limit 查询 — 始终指定 maxResults 或使用 findAllStream()
+ * <li>大数据集使用 {@code findAllStream()} 进行流式处理，避免内存溢出
+ * <li>分页推荐 keyset pagination（基于上一页最后一条记录的 ID）而非 offset pagination
+ * <li>批量操作使用 {@code executeBatch()} 而非 {@code execute()}，分批提交避免长事务
+ * <li>对于 1000 万+ 用户系统，建议 max-results 设置为 1000-5000
+ * <li>设置合理的 query-timeout 防止慢查询阻塞连接池
+ * </ul>
  */
 @ConfigurationProperties(prefix = "myjpa-plus")
 public class MyJpaPlusProperties {

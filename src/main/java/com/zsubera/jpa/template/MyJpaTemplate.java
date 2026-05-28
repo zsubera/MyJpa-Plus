@@ -173,16 +173,7 @@ public class MyJpaTemplate {
      */
     @Transactional(readOnly = true)
     public <T> List<T> findAll(Class<T> entityClass, QuerySpec<T> spec, int maxResults) {
-        CriteriaBuilder cb = entityManager.getCriteriaBuilder();
-        CriteriaQuery<T> cq = cb.createQuery(entityClass);
-        Root<T> root = cq.from(entityClass);
-        jakarta.persistence.criteria.Predicate predicate = spec.toPredicate(root, cq, cb);
-        if (predicate != null) {
-            cq.where(predicate);
-        }
-        TypedQuery<T> query = entityManager.createQuery(cq);
-        query.setMaxResults(maxResults);
-        spec.applyQuerySettings(query);
+        TypedQuery<T> query = buildTypedQuery(entityClass, spec, null, maxResults);
         return query.getResultList();
     }
 
@@ -213,19 +204,7 @@ public class MyJpaTemplate {
     @Transactional(readOnly = true)
     public <T> List<T> findAll(Class<T> entityClass, QuerySpec<T> spec, EntityGraphHelper<T> entityGraph,
         int maxResults) {
-        CriteriaBuilder cb = entityManager.getCriteriaBuilder();
-        CriteriaQuery<T> cq = cb.createQuery(entityClass);
-        Root<T> root = cq.from(entityClass);
-        jakarta.persistence.criteria.Predicate predicate = spec.toPredicate(root, cq, cb);
-        if (predicate != null) {
-            cq.where(predicate);
-        }
-        TypedQuery<T> query = entityManager.createQuery(cq);
-        query.setMaxResults(maxResults);
-        if (entityGraph != null) {
-            entityGraph.apply(query, entityManager);
-        }
-        spec.applyQuerySettings(query);
+        TypedQuery<T> query = buildTypedQuery(entityClass, spec, entityGraph, maxResults);
         return query.getResultList();
     }
 
@@ -248,15 +227,7 @@ public class MyJpaTemplate {
      */
     @Transactional(readOnly = true)
     public <T> Stream<T> findAllStream(Class<T> entityClass, QuerySpec<T> spec) {
-        CriteriaBuilder cb = entityManager.getCriteriaBuilder();
-        CriteriaQuery<T> cq = cb.createQuery(entityClass);
-        Root<T> root = cq.from(entityClass);
-        jakarta.persistence.criteria.Predicate predicate = spec.toPredicate(root, cq, cb);
-        if (predicate != null) {
-            cq.where(predicate);
-        }
-        TypedQuery<T> query = entityManager.createQuery(cq);
-        spec.applyQuerySettings(query);
+        TypedQuery<T> query = buildTypedQuery(entityClass, spec, null, null);
         return query.getResultStream();
     }
 
@@ -271,6 +242,22 @@ public class MyJpaTemplate {
      */
     @Transactional(readOnly = true)
     public <T> Stream<T> findAllStream(Class<T> entityClass, QuerySpec<T> spec, EntityGraphHelper<T> entityGraph) {
+        TypedQuery<T> query = buildTypedQuery(entityClass, spec, entityGraph, null);
+        return query.getResultStream();
+    }
+
+    /**
+     * 构建 TypedQuery 的公共方法，消除查询构建逻辑的重复。
+     *
+     * @param entityClass 实体类
+     * @param spec 查询规范
+     * @param entityGraph 用于急切加载的实体图（可为 null）
+     * @param maxResults 最大结果数（null 表示不限制）
+     * @param <T> 实体类型
+     * @return 构建的 TypedQuery
+     */
+    private <T> TypedQuery<T> buildTypedQuery(Class<T> entityClass, QuerySpec<T> spec,
+        EntityGraphHelper<T> entityGraph, Integer maxResults) {
         CriteriaBuilder cb = entityManager.getCriteriaBuilder();
         CriteriaQuery<T> cq = cb.createQuery(entityClass);
         Root<T> root = cq.from(entityClass);
@@ -279,11 +266,14 @@ public class MyJpaTemplate {
             cq.where(predicate);
         }
         TypedQuery<T> query = entityManager.createQuery(cq);
+        if (maxResults != null) {
+            query.setMaxResults(maxResults);
+        }
         if (entityGraph != null) {
             entityGraph.apply(query, entityManager);
         }
         spec.applyQuerySettings(query);
-        return query.getResultStream();
+        return query;
     }
 
     /**

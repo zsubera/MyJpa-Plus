@@ -22,10 +22,34 @@ import java.util.Map;
  * String name = LambdaUtils.getPropertyName(User::getName);
  * // 返回 "name"
  * }</pre>
+ *
+ * <p>
+ * 缓存配置：属性名缓存默认大小为 4096。可通过系统属性 {@code myjpa-plus.lambda-cache-size} 自定义：
+ *
+ * <pre>{@code
+ * // 启动时设置
+ * -Dmyjpa-plus.lambda-cache-size=8192
+ * }</pre>
  */
 public final class LambdaUtils {
 
-    private static final int MAX_CACHE_SIZE = 1024;
+    private static final int MAX_CACHE_SIZE;
+
+    static {
+        int configured = 4096;
+        String prop = System.getProperty("myjpa-plus.lambda-cache-size");
+        if (prop != null) {
+            try {
+                int val = Integer.parseInt(prop);
+                if (val > 0) {
+                    configured = val;
+                }
+            } catch (NumberFormatException ignored) {
+                // use default
+            }
+        }
+        MAX_CACHE_SIZE = configured;
+    }
 
     /** LRU 缓存，线程安全，达到最大容量时自动淘汰最久未使用的条目。 */
     private static final Map<String, String> CACHE =

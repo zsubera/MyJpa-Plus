@@ -688,6 +688,42 @@ class DeleteSpecTest {
         assertThrows(IllegalArgumentException.class, () -> new DeleteSpec<>(TestEntity.class).eq(null, "value"));
     }
 
+    @Test
+    void testDeleteBetweenTypeMismatchThrowsException() {
+        assertThrows(IllegalArgumentException.class,
+            () -> new DeleteSpec<>(TestEntity.class).between(TestEntity::getStatus, 1, 2L));
+    }
+
+    @Test
+    void testDeleteNotBetweenTypeMismatchThrowsException() {
+        assertThrows(IllegalArgumentException.class,
+            () -> new DeleteSpec<>(TestEntity.class).notBetween(TestEntity::getStatus, 1, 2L));
+    }
+
+    @Test
+    void testDeleteBetweenNullStartThrowsException() {
+        assertThrows(IllegalArgumentException.class,
+            () -> new DeleteSpec<>(TestEntity.class).between(TestEntity::getStatus, null, 5));
+    }
+
+    @Test
+    void testDeleteBetweenNullEndThrowsException() {
+        assertThrows(IllegalArgumentException.class,
+            () -> new DeleteSpec<>(TestEntity.class).between(TestEntity::getStatus, 1, null));
+    }
+
+    @Test
+    void testDeleteNotBetweenNullStartThrowsException() {
+        assertThrows(IllegalArgumentException.class,
+            () -> new DeleteSpec<>(TestEntity.class).notBetween(TestEntity::getStatus, null, 5));
+    }
+
+    @Test
+    void testDeleteNotBetweenNullEndThrowsException() {
+        assertThrows(IllegalArgumentException.class,
+            () -> new DeleteSpec<>(TestEntity.class).notBetween(TestEntity::getStatus, 1, null));
+    }
+
     private TestEntity newEntity(String name, int status) {
         TestEntity entity = new TestEntity();
         entity.setName(name);

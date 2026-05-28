@@ -502,6 +502,10 @@ public abstract class AbstractBulkOperationSpec<T, SELF extends AbstractBulkOper
         if (end == null) {
             throw new IllegalArgumentException("end must not be null");
         }
+        if (start.getClass() != end.getClass()) {
+            throw new IllegalArgumentException("start and end must be of the same type, but got "
+                + start.getClass().getName() + " and " + end.getClass().getName());
+        }
         if (((Comparable)start).compareTo(end) > 0) {
             throw new IllegalArgumentException("start must not be greater than end");
         }
@@ -526,6 +530,10 @@ public abstract class AbstractBulkOperationSpec<T, SELF extends AbstractBulkOper
         }
         if (end == null) {
             throw new IllegalArgumentException("end must not be null");
+        }
+        if (start.getClass() != end.getClass()) {
+            throw new IllegalArgumentException("start and end must be of the same type, but got "
+                + start.getClass().getName() + " and " + end.getClass().getName());
         }
         if (((Comparable)start).compareTo(end) > 0) {
             throw new IllegalArgumentException("start must not be greater than end");

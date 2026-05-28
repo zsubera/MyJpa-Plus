@@ -833,12 +833,26 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
     private <S> Predicate resolveExists(ConditionNode.ExistsNode<S> node, Path<?> outerPath, CriteriaQuery<?> query,
         CriteriaBuilder cb) {
         if (query == null) {
-            log.warn("EXISTS subquery used in count query context (query=null). "
-                + "Correlation may not work correctly. Consider using a different approach for counting.");
-            CriteriaQuery<?> tempQuery = cb.createQuery();
-            return resolveExists(node, outerPath, tempQuery, cb);
+            log.debug("EXISTS subquery used in count query context (query=null). "
+                + "Creating temporary CriteriaQuery for subquery construction.");
+            CriteriaQuery<S> tempQuery = cb.createQuery(node.subEntity);
+            return resolveExistsWithTempQuery(node, outerPath, tempQuery, cb);
         }
         jakarta.persistence.criteria.Subquery<S> subquery = query.subquery(node.subEntity);
+        Root<S> subRoot = subquery.from(node.subEntity);
+        Root<?> correlatedOuter = subquery.correlate((Root<?>)outerPath);
+        SubQuerySpec<S> subSpec = new SubQuerySpec<>(subquery, subRoot, correlatedOuter, cb);
+        node.config.accept(subSpec);
+        subSpec.applyWhere();
+        if (!subSpec.isSelectSet()) {
+            subquery.select(subRoot);
+        }
+        return node.negate ? cb.not(cb.exists(subquery)) : cb.exists(subquery);
+    }
+
+    private <S> Predicate resolveExistsWithTempQuery(ConditionNode.ExistsNode<S> node, Path<?> outerPath,
+        CriteriaQuery<S> tempQuery, CriteriaBuilder cb) {
+        jakarta.persistence.criteria.Subquery<S> subquery = tempQuery.subquery(node.subEntity);
         Root<S> subRoot = subquery.from(node.subEntity);
         Root<?> correlatedOuter = subquery.correlate((Root<?>)outerPath);
         SubQuerySpec<S> subSpec = new SubQuerySpec<>(subquery, subRoot, correlatedOuter, cb);

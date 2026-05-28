@@ -292,6 +292,10 @@ public class SubQuerySpec<S> {
         if (end == null) {
             throw new IllegalArgumentException("end must not be null");
         }
+        if (start.getClass() != end.getClass()) {
+            throw new IllegalArgumentException("start and end must be of the same type, but got "
+                + start.getClass().getName() + " and " + end.getClass().getName());
+        }
         @SuppressWarnings({"unchecked", "rawtypes"})
         int cmp = ((java.lang.Comparable)start).compareTo(end);
         if (cmp > 0) {
@@ -316,6 +320,10 @@ public class SubQuerySpec<S> {
         }
         if (end == null) {
             throw new IllegalArgumentException("end must not be null");
+        }
+        if (start.getClass() != end.getClass()) {
+            throw new IllegalArgumentException("start and end must be of the same type, but got "
+                + start.getClass().getName() + " and " + end.getClass().getName());
         }
         @SuppressWarnings({"unchecked", "rawtypes"})
         int cmp = ((java.lang.Comparable)start).compareTo(end);

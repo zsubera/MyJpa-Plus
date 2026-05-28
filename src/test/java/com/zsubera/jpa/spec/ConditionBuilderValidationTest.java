@@ -355,6 +355,18 @@ class ConditionBuilderValidationTest {
         assertThrows(IllegalArgumentException.class, () -> qs.rawLike(TestEntity::getName, null));
     }
 
+    @Test
+    void testBetweenTypeMismatchThrowsException() {
+        QuerySpec<TestEntity> qs = new QuerySpec<>();
+        assertThrows(IllegalArgumentException.class, () -> qs.between(TestEntity::getStatus, 1, 2L));
+    }
+
+    @Test
+    void testNotBetweenTypeMismatchThrowsException() {
+        QuerySpec<TestEntity> qs = new QuerySpec<>();
+        assertThrows(IllegalArgumentException.class, () -> qs.notBetween(TestEntity::getStatus, 1, 2L));
+    }
+
     private TestEntity newEntity(String name, int status) {
         TestEntity entity = new TestEntity();
         entity.setName(name);

@@ -713,6 +713,42 @@ class SubQuerySpecTest {
         assertEquals(1, result.size());
     }
 
+    @Test
+    void testSubQueryBetweenTypeMismatchThrowsException() {
+        QuerySpec<ParentEntity> qs = new QuerySpec<>();
+        qs.exists(TestEntity.class, sub -> sub.between(TestEntity::getStatus, 1, 2L));
+        RuntimeException ex =
+            assertThrows(RuntimeException.class, () -> parentRepository.findAll(qs.toSpecification()));
+        assertTrue(ex.getCause() instanceof IllegalArgumentException || ex instanceof IllegalArgumentException);
+    }
+
+    @Test
+    void testSubQueryNotBetweenTypeMismatchThrowsException() {
+        QuerySpec<ParentEntity> qs = new QuerySpec<>();
+        qs.exists(TestEntity.class, sub -> sub.notBetween(TestEntity::getStatus, 1, 2L));
+        RuntimeException ex =
+            assertThrows(RuntimeException.class, () -> parentRepository.findAll(qs.toSpecification()));
+        assertTrue(ex.getCause() instanceof IllegalArgumentException || ex instanceof IllegalArgumentException);
+    }
+
+    @Test
+    void testSubQueryEqIgnoreCaseNullValueBecomesIsNull() {
+        ParentEntity p = new ParentEntity();
+        p.setCategory("cat");
+        p.setLevel(10);
+        em.persist(p);
+        TestEntity child = new TestEntity();
+        child.setName(null);
+        child.setStatus(0);
+        child.setParent(p);
+        repository.save(child);
+
+        QuerySpec<ParentEntity> qs = new QuerySpec<>();
+        qs.exists(TestEntity.class, sub -> sub.eqIgnoreCase(TestEntity::getName, null));
+        List<ParentEntity> result = parentRepository.findAll(qs.toSpecification());
+        assertEquals(1, result.size());
+    }
+
     private TestEntity newEntity(String name, int status) {
         TestEntity entity = new TestEntity();
         entity.setName(name);

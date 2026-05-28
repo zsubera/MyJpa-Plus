@@ -643,6 +643,42 @@ class UpdateSpecTest {
             .set(TestEntity::getStatus, 1).notBetween(TestEntity::getStatus, 10, 1));
     }
 
+    @Test
+    void testUpdateBetweenTypeMismatchThrowsException() {
+        assertThrows(IllegalArgumentException.class,
+            () -> new UpdateSpec<>(TestEntity.class).between(TestEntity::getStatus, 1, 2L));
+    }
+
+    @Test
+    void testUpdateNotBetweenTypeMismatchThrowsException() {
+        assertThrows(IllegalArgumentException.class,
+            () -> new UpdateSpec<>(TestEntity.class).notBetween(TestEntity::getStatus, 1, 2L));
+    }
+
+    @Test
+    void testUpdateBetweenNullStartThrowsException() {
+        assertThrows(IllegalArgumentException.class,
+            () -> new UpdateSpec<>(TestEntity.class).between(TestEntity::getStatus, null, 5));
+    }
+
+    @Test
+    void testUpdateBetweenNullEndThrowsException() {
+        assertThrows(IllegalArgumentException.class,
+            () -> new UpdateSpec<>(TestEntity.class).between(TestEntity::getStatus, 1, null));
+    }
+
+    @Test
+    void testUpdateNotBetweenNullStartThrowsException() {
+        assertThrows(IllegalArgumentException.class,
+            () -> new UpdateSpec<>(TestEntity.class).notBetween(TestEntity::getStatus, null, 5));
+    }
+
+    @Test
+    void testUpdateNotBetweenNullEndThrowsException() {
+        assertThrows(IllegalArgumentException.class,
+            () -> new UpdateSpec<>(TestEntity.class).notBetween(TestEntity::getStatus, 1, null));
+    }
+
     private TestEntity newEntity(String name, int status) {
         TestEntity entity = new TestEntity();
         entity.setName(name);
