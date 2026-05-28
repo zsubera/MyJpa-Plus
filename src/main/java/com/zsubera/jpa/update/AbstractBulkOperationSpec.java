@@ -187,6 +187,9 @@ public abstract class AbstractBulkOperationSpec<T, SELF extends AbstractBulkOper
      * }</pre>
      */
     public SELF or(Consumer<OrConditionBuilder<T, SELF>> config) {
+        if (config == null) {
+            throw new IllegalArgumentException("config must not be null");
+        }
         List<BulkConditionNode> children = new ArrayList<>();
         config.accept(new OrConditionBuilder<>(self(), children));
         conditionNodes.add(new BulkConditionNode.OrNode(List.copyOf(children)));
@@ -514,8 +517,8 @@ public abstract class AbstractBulkOperationSpec<T, SELF extends AbstractBulkOper
         if (end == null) {
             throw new IllegalArgumentException("end must not be null");
         }
-        if (start.getClass() != end.getClass()) {
-            throw new IllegalArgumentException("start and end must be of the same type, but got "
+        if (!start.getClass().isAssignableFrom(end.getClass()) && !end.getClass().isAssignableFrom(start.getClass())) {
+            throw new IllegalArgumentException("start and end must be compatible types, but got "
                 + start.getClass().getName() + " and " + end.getClass().getName());
         }
         if (((Comparable)start).compareTo(end) > 0) {
@@ -543,8 +546,8 @@ public abstract class AbstractBulkOperationSpec<T, SELF extends AbstractBulkOper
         if (end == null) {
             throw new IllegalArgumentException("end must not be null");
         }
-        if (start.getClass() != end.getClass()) {
-            throw new IllegalArgumentException("start and end must be of the same type, but got "
+        if (!start.getClass().isAssignableFrom(end.getClass()) && !end.getClass().isAssignableFrom(start.getClass())) {
+            throw new IllegalArgumentException("start and end must be compatible types, but got "
                 + start.getClass().getName() + " and " + end.getClass().getName());
         }
         if (((Comparable)start).compareTo(end) > 0) {
@@ -596,7 +599,7 @@ public abstract class AbstractBulkOperationSpec<T, SELF extends AbstractBulkOper
      * @deprecated 推荐使用类型安全的 {@link #eq(SFunction, Object)}、{@link #like(SFunction, String)} 等方法替代。 此方法绕过类型安全机制，存在潜在的
      *             SQL 注入风险。
      */
-    @Deprecated(since = "1.1.0", forRemoval = false)
+    @Deprecated(since = "1.1.0", forRemoval = true)
     public SELF where(Function<Root<T>, Predicate> condition) {
         if (condition == null) {
             throw new IllegalArgumentException("condition must not be null");

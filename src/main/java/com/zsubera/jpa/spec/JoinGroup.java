@@ -141,6 +141,12 @@ public class JoinGroup<T, J> implements ConditionBuilder<J, JoinGroup<T, J>> {
      * @return 当前 JoinGroup 实例，支持链式调用
      */
     public <J2> JoinGroup<T, J> join(SFunction<J, ?> field, Consumer<JoinGroup<T, J2>> config) {
+        if (field == null) {
+            throw new IllegalArgumentException("field must not be null");
+        }
+        if (config == null) {
+            throw new IllegalArgumentException("config must not be null");
+        }
         ConditionNode.JoinNode nestedJoin =
             new ConditionNode.JoinNode(LambdaUtils.getPropertyName(field), ConditionNode.JoinType.INNER);
         joinNode.innerConditions.add(nestedJoin);
@@ -157,6 +163,12 @@ public class JoinGroup<T, J> implements ConditionBuilder<J, JoinGroup<T, J>> {
      * @return 当前 JoinGroup 实例，支持链式调用
      */
     public <J2> JoinGroup<T, J> leftJoin(SFunction<J, ?> field, Consumer<JoinGroup<T, J2>> config) {
+        if (field == null) {
+            throw new IllegalArgumentException("field must not be null");
+        }
+        if (config == null) {
+            throw new IllegalArgumentException("config must not be null");
+        }
         ConditionNode.JoinNode nestedJoin =
             new ConditionNode.JoinNode(LambdaUtils.getPropertyName(field), ConditionNode.JoinType.LEFT);
         joinNode.innerConditions.add(nestedJoin);

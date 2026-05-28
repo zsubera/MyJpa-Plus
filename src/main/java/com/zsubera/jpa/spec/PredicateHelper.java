@@ -263,7 +263,7 @@ public final class PredicateHelper {
         if (value == null) {
             return cb.isNull(fp);
         }
-        return cb.equal(cb.upper(fp.as(String.class)), value.toUpperCase());
+        return cb.equal(cb.upper(fp.as(String.class)), value.toUpperCase(java.util.Locale.ROOT));
     }
 
     /**
@@ -279,7 +279,7 @@ public final class PredicateHelper {
      * @return 忽略大小写的 LIKE 谓词
      */
     public static Predicate likeIgnoreCase(Path<?> path, String fieldName, String value, CriteriaBuilder cb) {
-        return cb.like(cb.upper(path.get(fieldName).as(String.class)), value.toUpperCase());
+        return cb.like(cb.upper(path.get(fieldName).as(String.class)), value.toUpperCase(java.util.Locale.ROOT));
     }
 
     // ==================== 集合运算符 ====================

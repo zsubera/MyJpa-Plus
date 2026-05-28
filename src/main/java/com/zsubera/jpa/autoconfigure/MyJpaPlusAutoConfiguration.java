@@ -33,7 +33,7 @@ import org.springframework.context.event.EventListener;
 @AutoConfiguration
 @ConditionalOnClass({EntityManager.class})
 @EnableConfigurationProperties(MyJpaPlusProperties.class)
-@ComponentScan(basePackages = "com.zsubera.jpa")
+@ComponentScan(basePackages = "com.zsubera.jpa.autoconfigure")
 public class MyJpaPlusAutoConfiguration {
 
     private static final Logger log = LoggerFactory.getLogger(MyJpaPlusAutoConfiguration.class);
@@ -69,6 +69,6 @@ public class MyJpaPlusAutoConfiguration {
     @EventListener(ContextClosedEvent.class)
     public void onContextClosed(ContextClosedEvent event) {
         LambdaUtils.shutdown();
-        log.info("MyJpa-Plus LambdaUtils cleanup executor shut down");
+        log.info("MyJpa-Plus context closed (LambdaUtils.shutdown is no-op with LRU cache)");
     }
 }

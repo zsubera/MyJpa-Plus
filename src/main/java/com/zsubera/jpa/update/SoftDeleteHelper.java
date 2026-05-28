@@ -235,6 +235,7 @@ public final class SoftDeleteHelper {
                                 + "If using Java 17+ module system, add JVM argument: "
                                 + "--add-opens java.base/java.lang.reflect=ALL-UNNAMED",
                             field.getName(), cls.getSimpleName());
+                        return NO_FIELD_SENTINEL;
                     }
                     return field.getName();
                 }

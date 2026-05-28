@@ -95,8 +95,8 @@ public class MyJpaTemplate {
      * @param deepPaginationOffsetThreshold 深度分页警告阈值
      */
     public MyJpaTemplate(int maxResults, int deepPaginationOffsetThreshold) {
-        this.maxResults = maxResults;
-        this.deepPaginationOffsetThreshold = deepPaginationOffsetThreshold;
+        setMaxResults(maxResults);
+        setDeepPaginationOffsetThreshold(deepPaginationOffsetThreshold);
     }
 
     /**
@@ -160,6 +160,9 @@ public class MyJpaTemplate {
      */
     @Transactional(readOnly = true)
     public <T, ID> Optional<T> findById(Class<T> entityClass, ID id) {
+        if (entityClass == null) {
+            throw new IllegalArgumentException("entityClass must not be null");
+        }
         if (id == null) {
             throw new IllegalArgumentException("id must not be null");
         }
@@ -179,6 +182,12 @@ public class MyJpaTemplate {
      */
     @Transactional(readOnly = true)
     public <T> Optional<T> findOne(Class<T> entityClass, QuerySpec<T> spec) {
+        if (entityClass == null) {
+            throw new IllegalArgumentException("entityClass must not be null");
+        }
+        if (spec == null) {
+            throw new IllegalArgumentException("spec must not be null");
+        }
         CriteriaBuilder cb = entityManager.getCriteriaBuilder();
         CriteriaQuery<T> cq = cb.createQuery(entityClass);
         Root<T> root = cq.from(entityClass);
@@ -209,6 +218,12 @@ public class MyJpaTemplate {
      */
     @Transactional(readOnly = true)
     public <T> List<T> findAll(Class<T> entityClass, QuerySpec<T> spec) {
+        if (entityClass == null) {
+            throw new IllegalArgumentException("entityClass must not be null");
+        }
+        if (spec == null) {
+            throw new IllegalArgumentException("spec must not be null");
+        }
         return findAll(entityClass, spec, this.maxResults);
     }
 
@@ -223,6 +238,15 @@ public class MyJpaTemplate {
      */
     @Transactional(readOnly = true)
     public <T> List<T> findAll(Class<T> entityClass, QuerySpec<T> spec, int maxResults) {
+        if (entityClass == null) {
+            throw new IllegalArgumentException("entityClass must not be null");
+        }
+        if (spec == null) {
+            throw new IllegalArgumentException("spec must not be null");
+        }
+        if (maxResults <= 0) {
+            throw new IllegalArgumentException("maxResults must be positive");
+        }
         TypedQuery<T> query = buildTypedQuery(entityClass, spec, null, maxResults);
         return query.getResultList();
     }
@@ -385,6 +409,12 @@ public class MyJpaTemplate {
      */
     @Transactional(readOnly = true)
     public <T> List<T> find(Class<T> entityClass, Specification<T> spec) {
+        if (entityClass == null) {
+            throw new IllegalArgumentException("entityClass must not be null");
+        }
+        if (spec == null) {
+            throw new IllegalArgumentException("spec must not be null");
+        }
         return find(entityClass, spec, this.maxResults);
     }
 
@@ -444,6 +474,15 @@ public class MyJpaTemplate {
      */
     @Transactional(readOnly = true)
     public <T> Page<T> findAll(Class<T> entityClass, QuerySpec<T> spec, Pageable pageable) {
+        if (entityClass == null) {
+            throw new IllegalArgumentException("entityClass must not be null");
+        }
+        if (spec == null) {
+            throw new IllegalArgumentException("spec must not be null");
+        }
+        if (pageable == null) {
+            throw new IllegalArgumentException("pageable must not be null");
+        }
         return findPageInternal(entityClass, spec.toSpecification(), pageable, spec);
     }
 
@@ -483,6 +522,15 @@ public class MyJpaTemplate {
      */
     @Transactional(readOnly = true)
     public <T> Page<T> findPage(Class<T> entityClass, Specification<T> spec, Pageable pageable) {
+        if (entityClass == null) {
+            throw new IllegalArgumentException("entityClass must not be null");
+        }
+        if (spec == null) {
+            throw new IllegalArgumentException("spec must not be null");
+        }
+        if (pageable == null) {
+            throw new IllegalArgumentException("pageable must not be null");
+        }
         return doFindPage(entityClass, spec, pageable, null);
     }
 
@@ -542,6 +590,9 @@ public class MyJpaTemplate {
      */
     @Transactional(rollbackFor = Exception.class)
     public <T> int execute(UpdateSpec<T> spec) {
+        if (spec == null) {
+            throw new IllegalArgumentException("spec must not be null");
+        }
         return spec.executeInTransaction(entityManager);
     }
 
@@ -554,6 +605,9 @@ public class MyJpaTemplate {
      */
     @Transactional(rollbackFor = Exception.class)
     public <T> int execute(DeleteSpec<T> spec) {
+        if (spec == null) {
+            throw new IllegalArgumentException("spec must not be null");
+        }
         return spec.executeInTransaction(entityManager);
     }
 
@@ -578,6 +632,12 @@ public class MyJpaTemplate {
      */
     @Transactional(rollbackFor = Exception.class)
     public <T> int executeBatch(UpdateSpec<T> spec, int batchSize) {
+        if (spec == null) {
+            throw new IllegalArgumentException("spec must not be null");
+        }
+        if (batchSize <= 0) {
+            throw new IllegalArgumentException("batchSize must be positive");
+        }
         int totalUpdated = 0;
         int batchUpdated;
         do {
@@ -615,6 +675,12 @@ public class MyJpaTemplate {
      */
     @Transactional(rollbackFor = Exception.class)
     public <T> int executeBatch(DeleteSpec<T> spec, int batchSize) {
+        if (spec == null) {
+            throw new IllegalArgumentException("spec must not be null");
+        }
+        if (batchSize <= 0) {
+            throw new IllegalArgumentException("batchSize must be positive");
+        }
         int totalDeleted = 0;
         int batchDeleted;
         do {

@@ -491,8 +491,8 @@ public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> {
         if (end == null) {
             throw new IllegalArgumentException("end must not be null");
         }
-        if (start.getClass() != end.getClass()) {
-            throw new IllegalArgumentException("start and end must be of the same type, but got "
+        if (!start.getClass().isAssignableFrom(end.getClass()) && !end.getClass().isAssignableFrom(start.getClass())) {
+            throw new IllegalArgumentException("start and end must be compatible types, but got "
                 + start.getClass().getName() + " and " + end.getClass().getName());
         }
         if (((Comparable)start).compareTo(end) > 0) {
@@ -520,8 +520,8 @@ public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> {
         if (end == null) {
             throw new IllegalArgumentException("end must not be null");
         }
-        if (start.getClass() != end.getClass()) {
-            throw new IllegalArgumentException("start and end must be of the same type, but got "
+        if (!start.getClass().isAssignableFrom(end.getClass()) && !end.getClass().isAssignableFrom(start.getClass())) {
+            throw new IllegalArgumentException("start and end must be compatible types, but got "
                 + start.getClass().getName() + " and " + end.getClass().getName());
         }
         if (((Comparable)start).compareTo(end) > 0) {
@@ -684,7 +684,7 @@ public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> {
      * @see #eq(SFunction, Object)
      * @see #ne(SFunction, Object)
      */
-    @Deprecated(since = "1.1.0", forRemoval = false)
+    @Deprecated(since = "1.1.0", forRemoval = true)
     @SuppressWarnings("unchecked")
     default SELF where(BiFunction<Path<E>, CriteriaBuilder, Predicate> fn) {
         if (fn == null) {
@@ -726,7 +726,7 @@ public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> {
      * @see #eq(SFunction, Object)
      * @see #ne(SFunction, Object)
      */
-    @Deprecated(since = "1.1.0", forRemoval = false)
+    @Deprecated(since = "1.1.0", forRemoval = true)
     @SuppressWarnings("unchecked")
     default SELF where(Function<Root<E>, Predicate> fn) {
         if (fn == null) {

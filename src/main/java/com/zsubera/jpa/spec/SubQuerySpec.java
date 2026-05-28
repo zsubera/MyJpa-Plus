@@ -535,7 +535,7 @@ public class SubQuerySpec<S> {
      * @deprecated 推荐使用类型安全的 {@link #eq(SFunction, Object)}、{@link #like(SFunction, String)} 等方法替代。 此方法绕过类型安全机制，存在潜在的
      *             SQL 注入风险。
      */
-    @Deprecated(since = "1.1.0", forRemoval = false)
+    @Deprecated(since = "1.1.0", forRemoval = true)
     public SubQuerySpec<S> where(java.util.function.Function<Root<S>, Predicate> condition) {
         if (condition == null) {
             throw new IllegalArgumentException("condition must not be null");

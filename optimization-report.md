@@ -1706,3 +1706,150 @@ private static final ConcurrentMap<Class<?>, Specification<?>> DELETED_SPEC_CACH
 - Spotless 格式化：通过
 
 ---
+## 轮次 10 - 优化记录
+时间：2026-05-29
+
+### 已修复问题
+- [P0] P0-1 Raw where() 方法标记为 forRemoval=true：将 ConditionBuilder.where(BiFunction)、ConditionBuilder.where(Function)、SubQuerySpec.where(Function) 和 AbstractBulkOperationSpec.where(Function) 四个方法的 @Deprecated(forRemoval = false) 改为 forRemoval = true，明确告知开发者这些方法将在 2.0.0 版本移除
+- [P0] P0-3 BETWEEN 操作数组长度校验：在 QuerySpec.resolveSimple() 的 BETWEEN 和 NOT_BETWEEN case 中添加 range.length != 2 的校验，传入非法数组时抛出明确的 IllegalArgumentException
+- [P0] P0-4 MyJpaTemplate 大面积 null 校验缺失：为 findById、findOne、findAll（4 个重载）、find（2 个重载）、findPage、findAll(Class,QuerySpec,Pageable)、execute(UpdateSpec)、execute(DeleteSpec)、executeBatch(UpdateSpec,int)、executeBatch(DeleteSpec,int) 共 12 个公开方法添加参数 null 校验和正数校验
+- [P0] P0-5 ProjectionSpec.resolveJoins() 缺少 else 兜底：在 91 行的 if-else instanceof 链末尾添加 else 分支，抛出 IllegalArgumentException 提示未知的 ConditionNode 类型
+- [P0] P0-6 JoinGroup/OrGroup Consumer 参数 null 校验：为 JoinGroup.join(field,Consumer)、JoinGroup.leftJoin(field,Consumer)、OrGroup.or(Consumer)、OrGroup.join(field,Consumer)、OrGroup.leftJoin(field,Consumer) 共 5 个方法添加 field 和 config 参数的 null 校验
+- [P0] P0-7 MyJpaPlusAutoConfiguration @ComponentScan 范围缩小：将 @ComponentScan(basePackages = "com.zsubera.jpa") 缩小为 "com.zsubera.jpa.autoconfigure"，避免扫描用户应用的类导致 Bean 冲突
+- [P1] P1-3 toUpperCase() Locale 问题：将 PredicateHelper.eqIgnoreCase()、PredicateHelper.likeIgnoreCase()、QuerySpec.resolveSimple() 中的 4 处 toUpperCase() 改为 toUpperCase(Locale.ROOT)，确保土耳其语等区域设置下行为一致
+- [P1] P1-4 MyJpaTemplate 构造函数绕过参数校验：将构造函数中的直接赋值改为调用 setMaxResults() 和 setDeepPaginationOffsetThreshold()，确保构造函数也受正数校验保护
+- [P1] P1-9 SoftDeleteHelper SecurityException 处理不完整：当 field.setAccessible(true) 抛出 SecurityException 时，改为返回 NO_FIELD_SENTINEL 而非继续返回字段名，防止安全管理器环境下后续反射访问失败
+- [P1] P1-10 between() 类型检查过于严格：将 ConditionBuilder 和 AbstractBulkOperationSpec 的 between()/notBetween() 方法中的 start.getClass() != end.getClass() 改为双向 isAssignableFrom 检查，支持 int/Integer 等装箱类型的混合使用
+- [P1] P1-11 resolveExists Root 强制转型可能失败：在 QuerySpec.resolveExists() 和 resolveExistsWithTempQuery() 中添加 outerPath instanceof Root<?> 检查，嵌套 JOIN 路径下抛出明确异常而非 ClassCastException
+- [P1] P1-13 AbstractBulkOperationSpec.or() 缺少 null 校验：为 or(Consumer) 方法添加 config 参数的 null 校验，与 not() 方法保持一致
+- [P1] P1-14 LambdaUtils.shutdown() 日志误导：将 MyJpaPlusAutoConfiguration.onContextClosed() 的日志消息从 "LambdaUtils cleanup executor shut down" 改为 "context closed (LambdaUtils.shutdown is no-op with LRU cache)"，准确反映实际情况
+
+### 未修复问题
+- [P0] P0-2 like() 不转义通配符增强：已在此前轮次中添加 likeSafe()/notLikeSafe() 安全替代方法和安全文档，本轮无额外改动
+- [P0] P0-8 SoftDeleteHelper.buildNotDeleted() 字段类型回退逻辑：已在此前轮次（轮次 7 P1-14）中修复枚举回退逻辑，本轮无额外改动
+- [P0] P0-9 findAll 无结果限制防护：QuerySpec Javadoc 已在轮次 8 中添加安全建议，Repository 层限制需要覆盖 Spring Data 默认实现，风险较高，建议在 v2.0.0 中处理
+- [P1] P1-1 无条件 UPDATE/DELETE 安全防护重置：allowUnconditional 标志已通过轮次 1 的 executeLimited 防护机制缓解，一次性标志设计需要 API 变更
+- [P1] P1-2 executeLimited() 竞态条件：已有悲观锁缓解措施，根本修复需要重构执行架构
+- [P1] P1-5~P1-7 ProjectionSpec/QuerySpec 可维护性问题：属于大规模重构（大类拆分、策略模式），建议在 v2.0.0 中处理
+- [P1] P1-8 SimpleNode.toString() 敏感数据：已有掩码逻辑，完全掩码会影响调试体验
+- [P2] 所有 P2 问题：本轮聚焦 P0/P1 问题，P2 问题留待后续迭代
+
+### 修改详情
+#### 1. Raw where() 方法 forRemoval 标记
+**文件**：ConditionBuilder.java:687,729, SubQuerySpec.java:538, AbstractBulkOperationSpec.java:599
+**修改前**：`@Deprecated(since = "1.1.0", forRemoval = false)`
+**修改后**：`@Deprecated(since = "1.1.0", forRemoval = true)`
+**原因**：明确告知开发者这些绕过类型安全机制的方法将在 2.0.0 版本移除，IDE 会显示更强的弃用警告
+
+#### 2. BETWEEN 数组长度校验
+**文件**：src/main/java/com/zsubera/jpa/spec/QuerySpec.java:825-838
+**修改前**：
+```java
+case BETWEEN: {
+    Comparable<?>[] range = (Comparable<?>[])node.value;
+    return cb.between((Expression<Comparable>)fieldPath, (Comparable)range[0], (Comparable)range[1]);
+}
+```
+**修改后**：
+```java
+case BETWEEN: {
+    Comparable<?>[] range = (Comparable<?>[])node.value;
+    if (range.length != 2) {
+        throw new IllegalArgumentException("BETWEEN requires exactly 2 values, got " + range.length);
+    }
+    return cb.between((Expression<Comparable>)fieldPath, (Comparable)range[0], (Comparable)range[1]);
+}
+```
+**原因**：防止传入非法数组时抛出 ArrayIndexOutOfBoundsException，提供明确的错误信息
+
+#### 3. MyJpaTemplate null 校验
+**文件**：src/main/java/com/zsubera/jpa/template/MyJpaTemplate.java（12 处）
+**修改内容**：为 findById、findOne、findAll（4 个重载）、find（2 个重载）、findPage、findAll(Pageable)、execute(UpdateSpec)、execute(DeleteSpec)、executeBatch(UpdateSpec,int)、executeBatch(DeleteSpec,int) 添加 entityClass/spec/id/pageable/batchSize 参数的 null 校验和正数校验
+**原因**：符合项目规范"所有公开 API 参数必须添加 null 校验"，传入 null 时抛出明确的 IllegalArgumentException
+
+#### 4. ProjectionSpec.resolveJoins() else 兜底
+**文件**：src/main/java/com/zsubera/jpa/projection/ProjectionSpec.java:1030-1032
+**修改前**：if-else instanceof 链末尾无 else 分支
+**修改后**：
+```java
+} else {
+    throw new IllegalArgumentException(
+        "Unknown JoinGroup.ConditionNode type: " + node.getClass().getSimpleName());
+}
+```
+**原因**：新增条件类型时能够及时发现问题，避免被静默忽略
+
+#### 5. JoinGroup/OrGroup Consumer null 校验
+**文件**：JoinGroup.java:143-165, OrGroup.java:60-85
+**修改内容**：为 5 个 Consumer 参数方法添加 field 和 config 的 null 校验
+**原因**：API 行为一致性，与 QuerySpec 的同类方法保持一致
+
+#### 6. @ComponentScan 范围缩小
+**文件**：src/main/java/com/zsubera/jpa/autoconfigure/MyJpaPlusAutoConfiguration.java:36
+**修改前**：`@ComponentScan(basePackages = "com.zsubera.jpa")`
+**修改后**：`@ComponentScan(basePackages = "com.zsubera.jpa.autoconfigure")`
+**原因**：避免扫描用户应用中位于 com.zsubera.jpa 子包下的类，防止 Bean 冲突
+
+#### 7. toUpperCase() Locale.ROOT
+**文件**：PredicateHelper.java:266,282, QuerySpec.java:806,808
+**修改前**：`value.toUpperCase()`
+**修改后**：`value.toUpperCase(java.util.Locale.ROOT)`
+**原因**：土耳其语环境下 I 的大写是 İ 而非 I，使用 Locale.ROOT 确保查询结果在不同 Locale 下保持一致
+
+#### 8. MyJpaTemplate 构造函数校验
+**文件**：src/main/java/com/zsubera/jpa/template/MyJpaTemplate.java:97-100
+**修改前**：
+```java
+this.maxResults = maxResults;
+this.deepPaginationOffsetThreshold = deepPaginationOffsetThreshold;
+```
+**修改后**：
+```java
+setMaxResults(maxResults);
+setDeepPaginationOffsetThreshold(deepPaginationOffsetThreshold);
+```
+**原因**：setter 方法有正数校验，构造函数直接赋值绕过了校验，改为调用 setter 确保一致的参数校验行为
+
+#### 9. SoftDeleteHelper SecurityException 处理
+**文件**：src/main/java/com/zsubera/jpa/update/SoftDeleteHelper.java:230-238
+**修改前**：SecurityException 被捕获后仅记录 warn 日志，方法继续返回字段名
+**修改后**：SecurityException 时返回 NO_FIELD_SENTINEL，字段不被视为软删除字段
+**原因**：安全管理器环境下 setAccessible 失败，后续 isSoftDeleted() 的反射访问也会失败
+
+#### 10. between() 类型检查放宽
+**文件**：ConditionBuilder.java:494,523, AbstractBulkOperationSpec.java:517,546
+**修改前**：`start.getClass() != end.getClass()`
+**修改后**：`!start.getClass().isAssignableFrom(end.getClass()) && !end.getClass().isAssignableFrom(start.getClass())`
+**原因**：支持 int/Integer、long/Long 等装箱类型的混合使用
+
+#### 11. resolveExists Root instanceof 检查
+**文件**：src/main/java/com/zsubera/jpa/spec/QuerySpec.java:990-992,1006-1008
+**修改前**：`Root<?> correlatedOuter = subquery.correlate((Root<?>)outerPath);`
+**修改后**：
+```java
+if (!(outerPath instanceof Root<?>)) {
+    throw new IllegalArgumentException(
+        "EXISTS correlation requires a Root path, but got " + outerPath.getClass().getSimpleName());
+}
+Root<?> correlatedOuter = subquery.correlate((Root<?>)outerPath);
+```
+**原因**：嵌套 JOIN 路径下 outerPath 可能是 Join 而非 Root，直接强制转型会抛出 ClassCastException
+
+#### 12. AbstractBulkOperationSpec.or() null 校验
+**文件**：src/main/java/com/zsubera/jpa/update/AbstractBulkOperationSpec.java:189
+**修改前**：无 null 校验
+**修改后**：`if (config == null) throw new IllegalArgumentException("config must not be null");`
+**原因**：与 not() 方法保持一致的 API 行为
+
+#### 13. LambdaUtils.shutdown() 日志修正
+**文件**：src/main/java/com/zsubera/jpa/autoconfigure/MyJpaPlusAutoConfiguration.java:72
+**修改前**：`log.info("MyJpa-Plus LambdaUtils cleanup executor shut down");`
+**修改后**：`log.info("MyJpa-Plus context closed (LambdaUtils.shutdown is no-op with LRU cache)");`
+**原因**：shutdown() 当前为空操作（LRU 缓存自动管理），原日志消息具有误导性
+
+### 测试结果
+- 单元测试：全部通过（592 个测试，0 失败，0 错误）
+- 集成测试：跳过（需要 Docker，已排除）
+- Spotless 格式化：通过
+
+---

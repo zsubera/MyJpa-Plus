@@ -803,9 +803,11 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
                 }
                 return cb.notLike(fieldPath.as(String.class), (String)node.value);
             case EQ_IGNORE_CASE:
-                return cb.equal(cb.upper(fieldPath.as(String.class)), ((String)node.value).toUpperCase());
+                return cb.equal(cb.upper(fieldPath.as(String.class)),
+                    ((String)node.value).toUpperCase(java.util.Locale.ROOT));
             case LIKE_IGNORE_CASE:
-                return cb.like(cb.upper(fieldPath.as(String.class)), ((String)node.value).toUpperCase());
+                return cb.like(cb.upper(fieldPath.as(String.class)),
+                    ((String)node.value).toUpperCase(java.util.Locale.ROOT));
             case IS_NULL:
                 return cb.isNull(fieldPath);
             case IS_NOT_NULL:
@@ -824,10 +826,16 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
             }
             case BETWEEN: {
                 Comparable<?>[] range = (Comparable<?>[])node.value;
+                if (range.length != 2) {
+                    throw new IllegalArgumentException("BETWEEN requires exactly 2 values, got " + range.length);
+                }
                 return cb.between((Expression<Comparable>)fieldPath, (Comparable)range[0], (Comparable)range[1]);
             }
             case NOT_BETWEEN: {
                 Comparable<?>[] range = (Comparable<?>[])node.value;
+                if (range.length != 2) {
+                    throw new IllegalArgumentException("NOT_BETWEEN requires exactly 2 values, got " + range.length);
+                }
                 return cb
                     .not(cb.between((Expression<Comparable>)fieldPath, (Comparable)range[0], (Comparable)range[1]));
             }
@@ -989,6 +997,10 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
         }
         jakarta.persistence.criteria.Subquery<S> subquery = query.subquery(node.subEntity);
         Root<S> subRoot = subquery.from(node.subEntity);
+        if (!(outerPath instanceof Root<?>)) {
+            throw new IllegalArgumentException("EXISTS correlation requires a Root path, but got "
+                + outerPath.getClass().getSimpleName() + ". Nested JOIN correlation is not supported.");
+        }
         Root<?> correlatedOuter = subquery.correlate((Root<?>)outerPath);
         SubQuerySpec<S> subSpec = new SubQuerySpec<>(subquery, subRoot, correlatedOuter, cb);
         node.config.accept(subSpec);
@@ -1003,6 +1015,10 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
         CriteriaQuery<S> tempQuery, CriteriaBuilder cb) {
         jakarta.persistence.criteria.Subquery<S> subquery = tempQuery.subquery(node.subEntity);
         Root<S> subRoot = subquery.from(node.subEntity);
+        if (!(outerPath instanceof Root<?>)) {
+            throw new IllegalArgumentException("EXISTS correlation requires a Root path, but got "
+                + outerPath.getClass().getSimpleName() + ". Nested JOIN correlation is not supported.");
+        }
         Root<?> correlatedOuter = subquery.correlate((Root<?>)outerPath);
         SubQuerySpec<S> subSpec = new SubQuerySpec<>(subquery, subRoot, correlatedOuter, cb);
         node.config.accept(subSpec);

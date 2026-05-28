@@ -1027,6 +1027,9 @@ public class ProjectionSpec<T> {
                     onPredicates.add(cb.isEmpty(join.get(isEmpty.fieldName())));
                 } else if (node instanceof JoinGroup.ConditionNode.IsNotEmpty isNotEmpty) {
                     onPredicates.add(cb.isNotEmpty(join.get(isNotEmpty.fieldName())));
+                } else {
+                    throw new IllegalArgumentException(
+                        "Unknown JoinGroup.ConditionNode type: " + node.getClass().getSimpleName());
                 }
             }
             if (!onPredicates.isEmpty()) {
