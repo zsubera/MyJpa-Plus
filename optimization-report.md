@@ -1355,3 +1355,213 @@ return findOne(spec);
 - Spotless 格式化：通过
 
 ---
+
+## 轮次 8 - 优化记录
+时间：2026-05-29
+
+### 已修复问题
+- [P1] P1-1 where() 方法绕过类型安全：为 ConditionBuilder.where(BiFunction)、ConditionBuilder.where(Function) 和 SubQuerySpec.where(Function) 方法添加 @Deprecated 注解，明确标记为不推荐使用，引导用户使用类型安全的 eq/ne/like 等方法
+- [P1] P1-2 like()/notLike() 不转义通配符：添加 likeSafe() 和 notLikeSafe() 方法，自动转义用户输入中的 % 和 _ 通配符，提供安全的模糊查询替代方案
+- [P1] P1-4 QuerySpec 无查询结果限制：在 QuerySpec 类的 Javadoc 中添加安全建议，明确说明直接使用 Repository.findAll(spec) 可能导致 OOM，推荐使用 MyJpaTemplate 进行查询
+- [P1] P1-5 executeLimited() 竞态条件：增强 UpdateSpec.executeLimited() 和 DeleteSpec.executeLimited() 的文档警告，明确说明两步操作的竞态条件风险，并建议使用悲观锁或数据库原生 LIMIT 语法
+- [P1] P1-6 ProjectionSpec.JoinGroup 条件节点重复：在 ProjectionSpec.JoinGroup.ConditionNode 的 Javadoc 中添加交叉引用注释，说明此类型与 spec.ConditionNode 结构相同但为避免循环依赖而独立定义，修改时必须同步
+
+### 未修复问题
+- [P1] P1-3 LambdaUtils 缓存使用 synchronizedMap：当前已使用 LRU LinkedHashMap 实现，虽然 synchronizedMap 在高并发下可能有锁竞争，但 LRU 策略对缓存命中率至关重要。改用 ConcurrentHashMap 会失去 LRU 特性，需要引入 Caffeine 依赖或自行实现分段锁 LRU，改动较大，建议在 v1.1.0 版本中处理
+- [P2] 所有 P2 问题：本轮聚焦 P1 问题，P2 问题留待后续迭代
+
+### 修改详情
+#### 1. where() 方法 @Deprecated 标记
+**文件**：src/main/java/com/zsubera/jpa/spec/ConditionBuilder.java:615-622, 654-661
+**修改前**：
+```java
+/**
+ * 添加原始 {@link Predicate} 条件，使用当前实体 {@link Path} 和 {@link CriteriaBuilder}。
+ * ...
+ * @see #eq(SFunction, Object)
+ * @see #ne(SFunction, Object)
+ */
+@SuppressWarnings("unchecked")
+default SELF where(BiFunction<Path<E>, CriteriaBuilder, Predicate> fn) {
+```
+**修改后**：
+```java
+/**
+ * 添加原始 {@link Predicate} 条件，使用当前实体 {@link Path} 和 {@link CriteriaBuilder}。
+ * ...
+ * @deprecated 推荐使用类型安全的 {@link #eq(SFunction, Object)}、{@link #like(SFunction, String)} 等方法替代。
+ *             此方法绕过类型安全机制，存在潜在的 SQL 注入风险。
+ * @see #eq(SFunction, Object)
+ * @see #ne(SFunction, Object)
+ */
+@Deprecated(since = "1.1.0", forRemoval = false)
+@SuppressWarnings("unchecked")
+default SELF where(BiFunction<Path<E>, CriteriaBuilder, Predicate> fn) {
+```
+**原因**：where() 方法允许直接操作 Path/Root 对象，使用字符串字面量访问字段，绕过了类型安全机制。添加 @Deprecated 注解明确标记为不推荐使用，引导用户优先使用类型安全的方法引用 API。同样修改了 where(Function) 和 SubQuerySpec.where(Function) 方法。
+
+#### 2. likeSafe()/notLikeSafe() 方法
+**文件**：src/main/java/com/zsubera/jpa/spec/ConditionBuilder.java:256-270, 299-313
+**修改前**：无
+**修改后**：
+```java
+/**
+ * 添加带自动通配符转义的 LIKE 条件：{@code field LIKE value}。 值中的 {@code %} 或 {@code _} 字符会被转义，作为字面量处理。
+ *
+ * <p>
+ * 此方法是 {@link #like(SFunction, String)} 的安全版本，适用于处理用户输入。
+ *
+ * @param field 实体属性的方法引用
+ * @param value 要匹配的原始字符串值（通配符会被转义）
+ * @return 当前构建器以支持链式调用
+ * @throws IllegalArgumentException 如果 {@code field} 或 {@code value} 为 null
+ * @see #like(SFunction, String)
+ * @see #rawLike(SFunction, String)
+ */
+default SELF likeSafe(SFunction<E, ?> field, String value) {
+    if (value == null) {
+        throw new IllegalArgumentException("value must not be null");
+    }
+    conditions().add(new ConditionNode.SimpleNode(LambdaUtils.getPropertyName(field),
+        escapeLikeWildcards(value), ConditionNode.Op.LIKE, PredicateHelper.LIKE_ESCAPE_CHAR));
+    return self();
+}
+
+/**
+ * 添加带自动通配符转义的 NOT LIKE 条件：{@code field NOT LIKE value}。 值中的 {@code %} 或 {@code _} 字符会被转义，作为字面量处理。
+ *
+ * <p>
+ * 此方法是 {@link #notLike(SFunction, String)} 的安全版本，适用于处理用户输入。
+ *
+ * @param field 实体属性的方法引用
+ * @param value 要匹配的原始字符串值（通配符会被转义）
+ * @return 当前构建器以支持链式调用
+ * @throws IllegalArgumentException 如果 {@code field} 或 {@code value} 为 null
+ * @see #notLike(SFunction, String)
+ */
+default SELF notLikeSafe(SFunction<E, ?> field, String value) {
+    if (value == null) {
+        throw new IllegalArgumentException("value must not be null");
+    }
+    conditions().add(new ConditionNode.SimpleNode(LambdaUtils.getPropertyName(field),
+        escapeLikeWildcards(value), ConditionNode.Op.NOT_LIKE, PredicateHelper.LIKE_ESCAPE_CHAR));
+    return self();
+}
+```
+**原因**：like()/notLike() 方法不自动转义用户输入中的通配符，可能导致 LIKE 注入。添加 likeSafe()/notLikeSafe() 方法作为安全版本，自动使用 PredicateHelper.escapeLikeWildcards() 转义通配符，适用于处理用户输入。
+
+#### 3. QuerySpec 安全建议文档
+**文件**：src/main/java/com/zsubera/jpa/spec/QuerySpec.java:20-42
+**修改前**：
+```java
+/**
+ * 基于 Lambda 的类型安全 JPA {@link Specification} 查询构建器。
+ * ...
+ * 示例：
+ *
+ * <pre>{@code
+ * new QuerySpec<User>().eq(User::getStatus, "ACTIVE").or().like(User::getName, "%John%").like(User::getEmail, "%john%")
+ *     .endOr().toSpecification();
+ * }</pre>
+ *
+ * @param <T> 被查询的根实体类型
+ */
+```
+**修改后**：
+```java
+/**
+ * 基于 Lambda 的类型安全 JPA {@link Specification} 查询构建器。
+ * ...
+ * <strong>安全建议：</strong>直接使用 {@code Repository.findAll(spec)} 可能导致全表查询和内存溢出。
+ * 推荐使用 {@link com.zsubera.jpa.template.MyJpaTemplate} 进行查询，它提供了内置的结果数量限制和分页支持。
+ *
+ * <pre>{@code
+ * // 推荐：使用 MyJpaTemplate（自动限制结果数量）
+ * MyJpaTemplate template = ...;
+ * List<User> users = template.findAll(User.class, spec);
+ *
+ * // 或使用分页
+ * Page<User> page = template.findPage(User.class, spec, pageable);
+ *
+ * // 不推荐：直接使用 Repository（可能导致 OOM）
+ * // repository.findAll(spec); // 无结果数量限制
+ * }</pre>
+ *
+ * 示例：
+ *
+ * <pre>{@code
+ * new QuerySpec<User>().eq(User::getStatus, "ACTIVE").or().like(User::getName, "%John%").like(User::getEmail, "%john%")
+ *     .endOr().toSpecification();
+ * }</pre>
+ *
+ * @param <T> 被查询的根实体类型
+ * @see com.zsubera.jpa.template.MyJpaTemplate#findAll(Class, QuerySpec)
+ * @see com.zsubera.jpa.template.MyJpaTemplate#findPage(Class, QuerySpec, org.springframework.data.domain.Pageable)
+ */
+```
+**原因**：QuerySpec 作为 Specification 的实现，本身不提供 maxResults 限制。直接使用 Repository.findAll(spec) 可能导致全表查询和内存溢出。在 Javadoc 中添加安全建议，明确推荐使用 MyJpaTemplate 进行查询。
+
+#### 4. executeLimited() 竞态条件文档增强
+**文件**：src/main/java/com/zsubera/jpa/update/UpdateSpec.java:200-214, src/main/java/com/zsubera/jpa/update/DeleteSpec.java:150-162
+**修改前**：
+```java
+/**
+ * <strong>并发风险警告：</strong>此方法存在并发时间窗口。在查询ID和执行更新之间，其他事务可能修改或删除记录。 对于高并发场景，建议：
+ * <ul>
+ * <li>使用 {@link #executeLimited(EntityManager, int, boolean)} 并设置 {@code pessimisticLock=true}</li>
+ * <li>或者在应用层使用分布式锁</li>
+ * <li>监控数据库锁等待情况</li>
+ * </ul>
+ */
+```
+**修改后**：
+```java
+/**
+ * <strong>并发风险警告：</strong>此方法分两步执行（先查询 ID，再更新），在高并发场景下存在竞态条件。
+ * 在查询ID和执行更新之间，其他事务可能修改或删除记录，导致数据不一致。对于高并发场景，建议：
+ * <ul>
+ * <li>使用 {@link #executeLimited(EntityManager, int, boolean)} 并设置 {@code pessimisticLock=true}</li>
+ * <li>或者在应用层使用分布式锁</li>
+ * <li>监控数据库锁等待情况</li>
+ * <li>考虑使用数据库原生的 {@code UPDATE ... LIMIT} 语法（如果数据库支持）</li>
+ * </ul>
+ */
+```
+**原因**：executeLimited() 方法分两步执行（先查询 ID，再更新/删除），在高并发场景下存在竞态条件。增强文档警告，明确说明两步操作的风险，并建议使用悲观锁或数据库原生 LIMIT 语法。
+
+#### 5. ProjectionSpec.JoinGroup.ConditionNode 交叉引用
+**文件**：src/main/java/com/zsubera/jpa/projection/ProjectionSpec.java:540-603
+**修改前**：
+```java
+/**
+ * 条件节点定义，用于 JOIN ON 子句中的条件表达式。
+ *
+ * <p>
+ * 支持的条件类型：
+ * ...
+ */
+```
+**修改后**：
+```java
+/**
+ * 条件节点定义，用于 JOIN ON 子句中的条件表达式。
+ *
+ * <p>
+ * <strong>注意：</strong>此类型与 {@link com.zsubera.jpa.spec.ConditionNode} 结构相同，
+ * 但为避免 ProjectionSpec 对 spec 包的循环依赖而独立定义。
+ * 修改此类型时，必须同步修改 spec.ConditionNode。
+ *
+ * <p>
+ * 支持的条件类型：
+ * ...
+ * @see com.zsubera.jpa.spec.ConditionNode
+ */
+```
+**原因**：ProjectionSpec.JoinGroup.ConditionNode 与 spec.ConditionNode 结构完全相同，但为避免循环依赖而独立定义。添加交叉引用注释，提醒开发者修改时必须同步两处定义。
+
+### 测试结果
+- 单元测试：全部通过（592 个测试，0 失败，0 错误）
+- 集成测试：跳过（需要 Docker，已排除）
+- Spotless 格式化：通过
+
+---

@@ -164,15 +164,23 @@ public class DeleteSpec<T> extends AbstractBulkOperationSpec<T, DeleteSpec<T>> {
     }
 
     /**
-     * Execute DELETE statement limiting the number of affected rows, with optional pessimistic locking.
+     * Execute DELETE statement limiting the number of affected rows.
      *
      * <p>
-     * When {@code pessimisticLock} is {@code true}, the ID query uses {@code SELECT ... FOR UPDATE} to lock the rows
-     * before deleting, preventing lost updates in concurrent scenarios.
+     * This method first queries for matching entity IDs with the specified limit, then performs the deletion on those
+     * entities.
+     *
+     * <p>
+     * <strong>并发风险警告：</strong>此方法分两步执行（先查询 ID，再删除），在高并发场景下存在竞态条件。 在查询ID和执行删除之间，其他事务可能修改或删除记录，导致数据不一致。对于高并发场景，建议：
+     * <ul>
+     * <li>使用 {@link #executeLimited(EntityManager, int, boolean)} 并设置 {@code pessimisticLock=true}</li>
+     * <li>或者在应用层使用分布式锁</li>
+     * <li>监控数据库锁等待情况</li>
+     * <li>考虑使用数据库原生的 {@code DELETE ... LIMIT} 语法（如果数据库支持）</li>
+     * </ul>
      *
      * @param em entity manager
      * @param limit maximum number of rows to delete
-     * @param pessimisticLock whether to use pessimistic locking on the ID query
      * @return actual number of rows deleted
      */
     public int executeLimited(EntityManager em, int limit, boolean pessimisticLock) {

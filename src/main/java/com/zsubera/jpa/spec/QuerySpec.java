@@ -31,6 +31,22 @@ import org.springframework.lang.Nullable;
  * 的内部状态不适合序列化（如不可序列化的条件节点）。 实际使用中无需序列化 {@code QuerySpec}，SpotBugs 的 SE_BAD_FIELD 警告已被有意抑制。
  *
  * <p>
+ * <strong>安全建议：</strong>直接使用 {@code Repository.findAll(spec)} 可能导致全表查询和内存溢出。 推荐使用
+ * {@link com.zsubera.jpa.template.MyJpaTemplate} 进行查询，它提供了内置的结果数量限制和分页支持。
+ *
+ * <pre>{@code
+ * // 推荐：使用 MyJpaTemplate（自动限制结果数量）
+ * MyJpaTemplate template = ...;
+ * List<User> users = template.findAll(User.class, spec);
+ *
+ * // 或使用分页
+ * Page<User> page = template.findPage(User.class, spec, pageable);
+ *
+ * // 不推荐：直接使用 Repository（可能导致 OOM）
+ * // repository.findAll(spec); // 无结果数量限制
+ * }</pre>
+ *
+ * <p>
  * 示例：
  *
  * <pre>{@code
@@ -39,6 +55,8 @@ import org.springframework.lang.Nullable;
  * }</pre>
  *
  * @param <T> 被查询的根实体类型
+ * @see com.zsubera.jpa.template.MyJpaTemplate#findAll(Class, QuerySpec)
+ * @see com.zsubera.jpa.template.MyJpaTemplate#findPage(Class, QuerySpec, org.springframework.data.domain.Pageable)
  */
 @SuppressFBWarnings("SE_BAD_FIELD")
 public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, QuerySpec<T>> {

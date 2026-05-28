@@ -255,6 +255,28 @@ public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> {
     }
 
     /**
+     * 添加带自动通配符转义的 LIKE 条件：{@code field LIKE value}。 值中的 {@code %} 或 {@code _} 字符会被转义，作为字面量处理。
+     *
+     * <p>
+     * 此方法是 {@link #like(SFunction, String)} 的安全版本，适用于处理用户输入。
+     *
+     * @param field 实体属性的方法引用
+     * @param value 要匹配的原始字符串值（通配符会被转义）
+     * @return 当前构建器以支持链式调用
+     * @throws IllegalArgumentException 如果 {@code field} 或 {@code value} 为 null
+     * @see #like(SFunction, String)
+     * @see #rawLike(SFunction, String)
+     */
+    default SELF likeSafe(SFunction<E, ?> field, String value) {
+        if (value == null) {
+            throw new IllegalArgumentException("value must not be null");
+        }
+        conditions().add(new ConditionNode.SimpleNode(LambdaUtils.getPropertyName(field), escapeLikeWildcards(value),
+            ConditionNode.Op.LIKE, PredicateHelper.LIKE_ESCAPE_CHAR));
+        return self();
+    }
+
+    /**
      * 添加 NOT LIKE 条件：{@code field NOT LIKE value}。
      *
      * <p>
@@ -273,6 +295,27 @@ public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> {
         }
         conditions()
             .add(new ConditionNode.SimpleNode(LambdaUtils.getPropertyName(field), value, ConditionNode.Op.NOT_LIKE));
+        return self();
+    }
+
+    /**
+     * 添加带自动通配符转义的 NOT LIKE 条件：{@code field NOT LIKE value}。 值中的 {@code %} 或 {@code _} 字符会被转义，作为字面量处理。
+     *
+     * <p>
+     * 此方法是 {@link #notLike(SFunction, String)} 的安全版本，适用于处理用户输入。
+     *
+     * @param field 实体属性的方法引用
+     * @param value 要匹配的原始字符串值（通配符会被转义）
+     * @return 当前构建器以支持链式调用
+     * @throws IllegalArgumentException 如果 {@code field} 或 {@code value} 为 null
+     * @see #notLike(SFunction, String)
+     */
+    default SELF notLikeSafe(SFunction<E, ?> field, String value) {
+        if (value == null) {
+            throw new IllegalArgumentException("value must not be null");
+        }
+        conditions().add(new ConditionNode.SimpleNode(LambdaUtils.getPropertyName(field), escapeLikeWildcards(value),
+            ConditionNode.Op.NOT_LIKE, PredicateHelper.LIKE_ESCAPE_CHAR));
         return self();
     }
 
@@ -609,9 +652,12 @@ public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> {
      * @param fn 接收实体路径和条件构建器的函数，返回谓词
      * @return 当前构建器以支持链式调用
      * @throws IllegalArgumentException 如果 {@code fn} 为 null
+     * @deprecated 推荐使用类型安全的 {@link #eq(SFunction, Object)}、{@link #like(SFunction, String)} 等方法替代。 此方法绕过类型安全机制，存在潜在的
+     *             SQL 注入风险。
      * @see #eq(SFunction, Object)
      * @see #ne(SFunction, Object)
      */
+    @Deprecated(since = "1.1.0", forRemoval = false)
     @SuppressWarnings("unchecked")
     default SELF where(BiFunction<Path<E>, CriteriaBuilder, Predicate> fn) {
         if (fn == null) {
@@ -648,9 +694,12 @@ public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> {
      * @param fn 接收 Root 的函数，返回谓词
      * @return 当前构建器以支持链式调用
      * @throws IllegalArgumentException 如果 {@code fn} 为 null
+     * @deprecated 推荐使用类型安全的 {@link #eq(SFunction, Object)}、{@link #like(SFunction, String)} 等方法替代。 此方法绕过类型安全机制，存在潜在的
+     *             SQL 注入风险。
      * @see #eq(SFunction, Object)
      * @see #ne(SFunction, Object)
      */
+    @Deprecated(since = "1.1.0", forRemoval = false)
     @SuppressWarnings("unchecked")
     default SELF where(Function<Root<E>, Predicate> fn) {
         if (fn == null) {

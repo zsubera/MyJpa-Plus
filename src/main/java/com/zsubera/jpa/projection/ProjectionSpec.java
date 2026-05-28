@@ -508,34 +508,39 @@ public class ProjectionSpec<T> {
         }
 
         /**
-         * 投影 JOIN 条件的内部条件节点接口。
+         * 条件节点定义，用于 JOIN ON 子句中的条件表达式。
          *
          * <p>
-         * 使用 sealed 接口和 record 实现，支持多种条件类型：
+         * <strong>注意：</strong>此类型与 {@link com.zsubera.jpa.spec.ConditionNode} 结构相同， 但为避免 ProjectionSpec 对 spec
+         * 包的循环依赖而独立定义。 修改此类型时，必须同步修改 spec.ConditionNode。
          *
+         * <p>
+         * 支持的条件类型：
          * <ul>
-         * <li>{@link Eq} - 等于条件
-         * <li>{@link Ne} - 不等于条件
-         * <li>{@link Like} - 模糊匹配条件
-         * <li>{@link NotLike} - NOT LIKE 条件
-         * <li>{@link Gt} - 大于条件
-         * <li>{@link Ge} - 大于等于条件
-         * <li>{@link Lt} - 小于条件
-         * <li>{@link Le} - 小于等于条件
-         * <li>{@link Between} - BETWEEN 条件
-         * <li>{@link NotBetween} - NOT BETWEEN 条件
-         * <li>{@link In} - IN 条件
-         * <li>{@link NotIn} - NOT IN 条件
-         * <li>{@link StartsWith} - 前缀匹配条件
-         * <li>{@link EndsWith} - 后缀匹配条件
-         * <li>{@link Contains} - 包含匹配条件
-         * <li>{@link EqIgnoreCase} - 不区分大小写等于条件
-         * <li>{@link LikeIgnoreCase} - 不区分大小写 LIKE 条件
-         * <li>{@link IsNull} - IS NULL 条件
-         * <li>{@link IsNotNull} - IS NOT NULL 条件
-         * <li>{@link IsEmpty} - IS EMPTY 条件
-         * <li>{@link IsNotEmpty} - IS NOT EMPTY 条件
+         * <li>{@link Eq} - 等值条件</li>
+         * <li>{@link Ne} - 不等条件</li>
+         * <li>{@link Like} - LIKE 条件</li>
+         * <li>{@link NotLike} - NOT LIKE 条件</li>
+         * <li>{@link Gt} - 大于条件</li>
+         * <li>{@link Ge} - 大于等于条件</li>
+         * <li>{@link Lt} - 小于条件</li>
+         * <li>{@link Le} - 小于等于条件</li>
+         * <li>{@link Between} - BETWEEN 条件</li>
+         * <li>{@link NotBetween} - NOT BETWEEN 条件</li>
+         * <li>{@link In} - IN 条件</li>
+         * <li>{@link NotIn} - NOT IN 条件</li>
+         * <li>{@link StartsWith} - 前缀匹配条件</li>
+         * <li>{@link EndsWith} - 后缀匹配条件</li>
+         * <li>{@link Contains} - 包含匹配条件</li>
+         * <li>{@link EqIgnoreCase} - 不区分大小写等于条件</li>
+         * <li>{@link LikeIgnoreCase} - 不区分大小写 LIKE 条件</li>
+         * <li>{@link IsNull} - IS NULL 条件</li>
+         * <li>{@link IsNotNull} - IS NOT NULL 条件</li>
+         * <li>{@link IsEmpty} - IS EMPTY 条件</li>
+         * <li>{@link IsNotEmpty} - IS NOT EMPTY 条件</li>
          * </ul>
+         *
+         * @see com.zsubera.jpa.spec.ConditionNode
          */
         sealed interface ConditionNode {
             record Eq(String fieldName, Object value) implements ConditionNode {
