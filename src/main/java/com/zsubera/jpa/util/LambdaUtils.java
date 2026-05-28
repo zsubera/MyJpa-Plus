@@ -75,7 +75,11 @@ public final class LambdaUtils {
         });
         cleaner.scheduleAtFixedRate(() -> {
             if (CACHE.size() > MAX_CACHE_SIZE) {
-                int toRemove = CACHE.size() / 2;
+                // 使用更小的驱逐比例（10%而非50%）以减少性能毛刺
+                int toRemove = CACHE.size() / 10;
+                if (toRemove < 1) {
+                    toRemove = 1;
+                }
                 if (log.isDebugEnabled()) {
                     log.debug("LambdaUtils cache size ({}) exceeds limit ({}). Evicting ~{} entries.", CACHE.size(),
                         MAX_CACHE_SIZE, toRemove);

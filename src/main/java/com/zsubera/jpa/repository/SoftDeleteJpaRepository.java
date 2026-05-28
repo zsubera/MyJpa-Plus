@@ -141,7 +141,8 @@ public class SoftDeleteJpaRepository<T, ID> extends SimpleJpaRepository<T, ID> {
         }
         // 构建带软删除过滤的查询
         Specification<T> spec = (root, query, cb) -> {
-            jakarta.persistence.criteria.Predicate idPredicate = cb.equal(root.get("id"), id);
+            String idFieldName = EntityClassResolver.resolveIdFieldName(domainClass);
+            jakarta.persistence.criteria.Predicate idPredicate = cb.equal(root.get(idFieldName), id);
             jakarta.persistence.criteria.Predicate softDeleteFilter =
                 mergeSoftDeleteFilter(null).toPredicate(root, query, cb);
             return cb.and(idPredicate, softDeleteFilter);

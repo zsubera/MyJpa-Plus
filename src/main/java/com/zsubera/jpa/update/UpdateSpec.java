@@ -242,10 +242,16 @@ public class UpdateSpec<T> extends AbstractBulkOperationSpec<T, UpdateSpec<T>> {
         idQuery.select(idRoot.get(idFieldName));
         Predicate[] predicates = buildPredicates(idRoot, cb);
         if (predicates.length == 0) {
-            throw new IllegalStateException(
-                "No WHERE conditions specified for UPDATE operation. " + "Use updateAll() for unconditional updates.");
+            // 与 updateAll() 保持一致的安全检查
+            if (!allowUnconditional) {
+                throw new IllegalStateException("No WHERE conditions specified for UPDATE operation. "
+                    + "Call .allowUnconditional(true) to explicitly confirm this operation, "
+                    + "or use updateAll(EntityManager) instead.");
+            }
+            log.warn("WARNING: Executing limited UPDATE without conditions on {} — this will affect up to {} rows!",
+                entityClass.getSimpleName(), limit);
         }
-        idQuery.where(cb.and(predicates));
+        idQuery.where(predicates.length > 0 ? cb.and(predicates) : cb.conjunction());
         TypedQuery<?> query = em.createQuery(idQuery).setMaxResults(limit);
         if (pessimisticLock) {
             query.setLockMode(LockModeType.PESSIMISTIC_WRITE);

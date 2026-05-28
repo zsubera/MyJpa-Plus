@@ -513,6 +513,10 @@ public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> {
      * qs.where((Path<?> path, CriteriaBuilder cb) -> cb.like(path.get("name"), "%test%"));
      * }</pre>
      *
+     * <p>
+     * <strong>安全警告：</strong>在 lambda 表达式中应使用 JPA Criteria API 的类型安全方法（如 {@code path.get("fieldName")}），
+     * 避免使用字符串拼接构建字段名。字符串拼接可能导致 SQL 注入风险。
+     *
      * @param fn 接收实体路径和条件构建器的函数，返回谓词
      * @return 当前构建器以支持链式调用
      * @throws IllegalArgumentException 如果 {@code fn} 为 null
