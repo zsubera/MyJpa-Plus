@@ -256,8 +256,8 @@ public class MyJpaTemplate {
      * @param <T> 实体类型
      * @return 构建的 TypedQuery
      */
-    private <T> TypedQuery<T> buildTypedQuery(Class<T> entityClass, QuerySpec<T> spec,
-        EntityGraphHelper<T> entityGraph, Integer maxResults) {
+    private <T> TypedQuery<T> buildTypedQuery(Class<T> entityClass, QuerySpec<T> spec, EntityGraphHelper<T> entityGraph,
+        Integer maxResults) {
         CriteriaBuilder cb = entityManager.getCriteriaBuilder();
         CriteriaQuery<T> cq = cb.createQuery(entityClass);
         Root<T> root = cq.from(entityClass);
