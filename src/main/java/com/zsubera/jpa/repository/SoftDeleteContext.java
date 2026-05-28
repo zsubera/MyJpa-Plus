@@ -14,7 +14,7 @@ package com.zsubera.jpa.repository;
  */
 public final class SoftDeleteContext {
 
-    private static final ThreadLocal<Boolean> IGNORE_FLAG = ThreadLocal.withInitial(() -> Boolean.FALSE);
+    private static final ThreadLocal<Boolean> ignoreSoftDeleteFlag = ThreadLocal.withInitial(() -> Boolean.FALSE);
 
     private SoftDeleteContext() {}
 
@@ -24,7 +24,7 @@ public final class SoftDeleteContext {
      * @return 如果应跳过过滤返回 true
      */
     public static boolean isIgnoreSoftDelete() {
-        return IGNORE_FLAG.get();
+        return ignoreSoftDeleteFlag.get();
     }
 
     /**
@@ -33,13 +33,13 @@ public final class SoftDeleteContext {
      * @param ignore 是否跳过过滤
      */
     public static void setIgnoreSoftDelete(boolean ignore) {
-        IGNORE_FLAG.set(ignore);
+        ignoreSoftDeleteFlag.set(ignore);
     }
 
     /**
      * 清除当前线程的标志，防止 ThreadLocal 泄漏。应在方法执行完成后调用。
      */
     public static void clear() {
-        IGNORE_FLAG.remove();
+        ignoreSoftDeleteFlag.remove();
     }
 }

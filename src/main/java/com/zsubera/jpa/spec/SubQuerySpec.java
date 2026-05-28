@@ -491,7 +491,10 @@ public class SubQuerySpec<S> {
      * @throws IllegalArgumentException 如果 fields 中包含 null 元素
      */
     public SubQuerySpec<S> multiLike(String keyword, SFunction<S, ?>... fields) {
-        if (keyword != null && !keyword.isEmpty() && fields != null && fields.length > 0) {
+        if (fields == null) {
+            throw new IllegalArgumentException("fields must not be null");
+        }
+        if (keyword != null && !keyword.isEmpty() && fields.length > 0) {
             String pattern = "%" + PredicateHelper.escapeLikeWildcards(keyword) + "%";
             List<Predicate> likes = new ArrayList<>();
             for (SFunction<S, ?> field : fields) {
@@ -515,6 +518,14 @@ public class SubQuerySpec<S> {
      * qs.exists(Child.class, sub -> sub
      *     .where(r -> cb.and(cb.equal(r.get("parent"), sub.correlated()), cb.greaterThan(r.get("amount"), 0))));
      * }</pre>
+     *
+     * <p>
+     * <strong>安全警告：</strong>此方法允许直接操作 Root 对象，存在潜在的安全风险：
+     * <ul>
+     * <li>请勿使用用户输入的字符串拼接字段名，如 {@code root.get(userInput)}，这可能导致 SQL 注入</li>
+     * <li>建议优先使用类型安全的方法引用 API（如 {@code eq(Entity::getField, value)}）</li>
+     * <li>如果必须使用字符串字面量，请确保是硬编码的常量，而非运行时拼接</li>
+     * </ul>
      *
      * @param condition 谓词函数，接收子查询根返回谓词
      * @return 当前 SubQuerySpec 实例，支持链式调用

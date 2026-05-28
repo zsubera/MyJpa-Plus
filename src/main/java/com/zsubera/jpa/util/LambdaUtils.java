@@ -5,9 +5,9 @@ import com.zsubera.jpa.spec.SFunction;
 import java.beans.Introspector;
 import java.lang.invoke.SerializedLambda;
 import java.lang.reflect.Method;
-import java.util.Iterator;
+import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
@@ -62,10 +62,17 @@ public final class LambdaUtils {
     }
 
     /**
-     * Thread-safe cache using ConcurrentHashMap. A background daemon thread periodically checks cache size and clears
-     * if it exceeds MAX_CACHE_SIZE. This prevents memory leaks in hot-redeploy and OSGi environments.
+     * Thread-safe cache using LinkedHashMap in access-order (LRU) mode. The least recently accessed entries are
+     * automatically evicted when the cache exceeds MAX_CACHE_SIZE. This prevents memory leaks in hot-redeploy and OSGi
+     * environments.
      */
-    private static final Map<String, String> CACHE = new ConcurrentHashMap<>();
+    private static final Map<String, String> CACHE =
+        Collections.synchronizedMap(new LinkedHashMap<>(4096, 0.75f, true) {
+            @Override
+            protected boolean removeEldestEntry(Map.Entry<String, String> eldest) {
+                return size() > MAX_CACHE_SIZE;
+            }
+        });
 
     /** Background daemon thread for periodic cache eviction. */
     private static final ScheduledExecutorService CLEANUP_EXECUTOR;
@@ -77,23 +84,12 @@ public final class LambdaUtils {
             return t;
         });
         CLEANUP_EXECUTOR.scheduleAtFixedRate(() -> {
-            if (CACHE.size() > MAX_CACHE_SIZE) {
-                // 使用更小的驱逐比例（10%而非50%）以减少性能毛刺
-                int toRemove = CACHE.size() / 10;
-                if (toRemove < 1) {
-                    toRemove = 1;
-                }
-                if (log.isDebugEnabled()) {
-                    log.debug("LambdaUtils cache size ({}) exceeds limit ({}). Evicting ~{} entries.", CACHE.size(),
-                        MAX_CACHE_SIZE, toRemove);
-                }
-                Iterator<String> it = CACHE.keySet().iterator();
-                for (int i = 0; i < toRemove && it.hasNext(); i++) {
-                    it.next();
-                    it.remove();
-                }
+            // LRU 缓存会自动驱逐最久未使用的条目，无需手动清理
+            // 保留清理线程用于监控和调试目的
+            if (log.isDebugEnabled()) {
+                log.debug("LambdaUtils cache size: {}", CACHE.size());
             }
-        }, 5, 5, TimeUnit.MINUTES);
+        }, 30, 300, TimeUnit.SECONDS);
     }
 
     /**

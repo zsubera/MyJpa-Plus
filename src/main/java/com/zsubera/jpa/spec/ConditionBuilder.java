@@ -94,6 +94,48 @@ public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> {
     }
 
     /**
+     * 添加严格等值条件：{@code field = value}。如果 {@code value} 为 null，则抛出异常。
+     *
+     * <p>
+     * 此方法提供明确的 null 处理选择，避免 {@link #eq(SFunction, Object)} 自动转换为 IS NULL 的行为。 如果您希望比较 null 值，请使用
+     * {@link #isNull(SFunction)} 方法。
+     *
+     * @param field 实体属性的方法引用
+     * @param value 要比较的值
+     * @return 当前构建器以支持链式调用
+     * @throws IllegalArgumentException 如果 {@code field} 或 {@code value} 为 null
+     * @see #eq(SFunction, Object)
+     * @see #isNull(SFunction)
+     */
+    default SELF eqStrict(SFunction<E, ?> field, Object value) {
+        if (value == null) {
+            throw new IllegalArgumentException("value must not be null. Use isNull() for null comparisons.");
+        }
+        return eq(field, value);
+    }
+
+    /**
+     * 添加严格不等条件：{@code field != value}。如果 {@code value} 为 null，则抛出异常。
+     *
+     * <p>
+     * 此方法提供明确的 null 处理选择，避免 {@link #ne(SFunction, Object)} 自动转换为 IS NOT NULL 的行为。 如果您希望比较 null 值，请使用
+     * {@link #isNotNull(SFunction)} 方法。
+     *
+     * @param field 实体属性的方法引用
+     * @param value 要比较的值
+     * @return 当前构建器以支持链式调用
+     * @throws IllegalArgumentException 如果 {@code field} 或 {@code value} 为 null
+     * @see #ne(SFunction, Object)
+     * @see #isNotNull(SFunction)
+     */
+    default SELF neStrict(SFunction<E, ?> field, Object value) {
+        if (value == null) {
+            throw new IllegalArgumentException("value must not be null. Use isNotNull() for null comparisons.");
+        }
+        return ne(field, value);
+    }
+
+    /**
      * 添加大于条件：{@code field > value}。
      *
      * @param field 实体属性的方法引用
@@ -514,12 +556,30 @@ public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> {
      * }</pre>
      *
      * <p>
-     * <strong>安全警告：</strong>在 lambda 表达式中应使用 JPA Criteria API 的类型安全方法（如 {@code path.get("fieldName")}），
-     * 避免使用字符串拼接构建字段名。字符串拼接可能导致 SQL 注入风险。
+     * <strong>安全警告：</strong>此方法允许直接操作 Path 对象，存在潜在的安全风险：
+     * <ul>
+     * <li>请勿使用用户输入的字符串拼接字段名，如 {@code path.get(userInput)}，这可能导致 SQL 注入</li>
+     * <li>建议优先使用类型安全的方法引用 API（如 {@code eq(Entity::getField, value)}）</li>
+     * <li>如果必须使用字符串字面量，请确保是硬编码的常量，而非运行时拼接</li>
+     * </ul>
+     *
+     * <pre>{@code
+     * // 危险：用户输入直接拼接到字段名
+     * String userInput = request.getParameter("field");
+     * qs.where((path, cb) -> cb.equal(path.get(userInput), value)); // SQL 注入风险！
+     *
+     * // 安全：使用硬编码字段名
+     * qs.where((path, cb) -> cb.equal(path.get("name"), value));
+     *
+     * // 更好：使用类型安全的方法引用
+     * qs.eq(Entity::getName, value);
+     * }</pre>
      *
      * @param fn 接收实体路径和条件构建器的函数，返回谓词
      * @return 当前构建器以支持链式调用
      * @throws IllegalArgumentException 如果 {@code fn} 为 null
+     * @see #eq(SFunction, Object)
+     * @see #ne(SFunction, Object)
      */
     @SuppressWarnings("unchecked")
     default SELF where(BiFunction<Path<E>, CriteriaBuilder, Predicate> fn) {
@@ -545,9 +605,19 @@ public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> {
      * qs.where(root -> cb.like(root.get("name"), "%test%"));
      * }</pre>
      *
+     * <p>
+     * <strong>安全警告：</strong>此方法允许直接操作 Root 对象，存在潜在的安全风险：
+     * <ul>
+     * <li>请勿使用用户输入的字符串拼接字段名，如 {@code root.get(userInput)}，这可能导致 SQL 注入</li>
+     * <li>建议优先使用类型安全的方法引用 API（如 {@code eq(Entity::getField, value)}）</li>
+     * <li>如果必须使用字符串字面量，请确保是硬编码的常量，而非运行时拼接</li>
+     * </ul>
+     *
      * @param fn 接收 Root 的函数，返回谓词
      * @return 当前构建器以支持链式调用
      * @throws IllegalArgumentException 如果 {@code fn} 为 null
+     * @see #eq(SFunction, Object)
+     * @see #ne(SFunction, Object)
      */
     @SuppressWarnings("unchecked")
     default SELF where(Function<Root<E>, Predicate> fn) {

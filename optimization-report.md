@@ -719,3 +719,319 @@ private static String[] appendToArray(String[] old, String element) {
 - Spotless 格式化：通过
 
 ---
+
+## 轮次 5 - 优化记录
+时间：2026-05-29
+
+### 已修复问题
+- [P1] P1-6 SoftDeleteContext.IGNORE_FLAG 命名不规范：将 IGNORE_FLAG 重命名为 ignoreSoftDeleteFlag，符合 Java 命名规范
+- [P1] P1-7/P1-8 where(BiFunction/Function) 安全文档增强：在 ConditionBuilder.where(BiFunction)、ConditionBuilder.where(Function) 和 SubQuerySpec.where(Function) 的 Javadoc 中添加详细的安全警告，包括 SQL 注入风险说明和安全编码示例
+- [P2] P2-3 SubQuerySpec.multiLike 缺少 fields 数组 null 检查：在方法开头添加 fields == null 的显式检查，与 ConditionBuilder.multiLike 保持一致
+- [P1] P1-10 LambdaUtils 缓存驱逐策略优化：将缓存从 ConcurrentHashMap 改为 LinkedHashMap 的 LRU（最近最少使用）变体，使用 Collections.synchronizedMap 包装确保线程安全，LRU 策略确保热数据不被驱逐
+- [P1] P1-9 超大 IN 子句性能警告：在 InClauseBuilder 的 buildBatchedIn 和 buildBatchedNotIn 方法中添加性能警告日志，当 IN 子句参数超过 10000 个时记录 WARN 级别日志
+- [P1] P1-3 ConditionBuilder.eq(field, null) 语义不一致：添加 eqStrict 和 neStrict 方法，提供明确的 null 处理选择，当 value 为 null 时抛出异常而非静默转换为 IS NULL/IS NOT NULL
+- [P2] P2-1 LambdaUtils 清理线程初始延迟过长：将初始延迟从 5 分钟缩短为 30 秒，间隔保持 5 分钟
+
+### 未修复问题
+- P1-1 QuerySpec.java 过大（990 行）：属于大类拆分重构，需要创建 ConditionNodeResolver 和 QuerySettings 类，改动量大，建议在 v2.0.0 版本中进行
+- P1-2 ProjectionSpec.resolveJoins() 过长且重复：需要重构为使用 ConditionNode 的 toPredicate 方法或提取 JoinConditionResolver 工具类，改动量大，建议在 v2.0.0 版本中进行
+- P1-4 SubQuerySpec 与 ConditionBuilder 大量重复：需要提取共享的条件方法接口或改为使用 ConditionNode 树，改动量大，建议在 v2.0.0 版本中进行
+- P1-5 ProjectionSpec.JoinGroup.ConditionNode 与核心 ConditionNode 重复：需要统一条件节点体系，改动量大，建议在 v2.0.0 版本中进行
+- P2-2 QuerySpec.resolveSimple() 中的 unchecked cast 警告：需要添加类型一致性检查或 try-catch，涉及多处修改，建议后续版本处理
+- P2-4 AbstractBulkOperationSpec.executeInTransaction rollback 异常处理：当前实现在技术上是正确的，建议在 rollback 失败时记录日志
+- P2-5 ProjectionSpec.JoinGroup 缺少条件便捷重载：需要为 JoinGroup 添加条件便捷重载方法，保持 API 一致性
+- P2-6 MyJpaTemplate.findAll 不支持 unpaged：需要考虑在 unpaged 时自动使用 findAll() 方法
+- P2-7 中英文注释混合使用：需要统一注释语言，建议全部使用中文
+- P2-8 UpdateSpec.executeLimited 两阶段操作的并发窗口：已有悲观锁缓解措施，根本修复需要重构执行架构
+- P2-9 无条件批量操作缺少权限框架集成：文档中建议用户在调用 updateAll/deleteAll 前进行额外的权限验证
+- P2-10 反射调用 setAccessible(true) 在 Java 17+ 模块系统中的兼容性：需要在 README 中更显眼地说明 --add-opens 参数要求
+- P2-11 分页计数查询重复执行 JOIN：对于计数查询，如果 JOIN 不影响计数结果，可以省略 JOIN
+- P2-12 ID 字段解析缓存使用无界 ConcurrentHashMap：需要使用 WeakHashMap 或 Caffeine.newBuilder().weakKeys() 替代
+- P2-13 分页查询中 COUNT 和 DATA 查询独立执行：考虑缓存 Specification 的 Predicate 结果
+- P2-14 findAllStream 方法返回的 Stream 资源管理风险：已在 Javadoc 中明确说明必须使用 try-with-resources
+- P2-15 反射调用依赖 SerializedLambda 内部实现：需要添加 JDK 版本兼容性测试
+
+### 修改详情
+#### 1. SoftDeleteContext.IGNORE_FLAG 重命名
+**文件**：src/main/java/com/zsubera/jpa/repository/SoftDeleteContext.java:17,27,36,43
+**修改前**：
+```java
+private static final ThreadLocal<Boolean> IGNORE_FLAG = ThreadLocal.withInitial(() -> Boolean.FALSE);
+// ... 其他引用
+```
+**修改后**：
+```java
+private static final ThreadLocal<Boolean> ignoreSoftDeleteFlag = ThreadLocal.withInitial(() -> Boolean.FALSE);
+// ... 其他引用
+```
+**原因**：IGNORE_FLAG 使用 SCREAMING_SNAKE_CASE 命名，但它是 ThreadLocal<Boolean> 类型的可变字段，不是常量。重命名为 ignoreSoftDeleteFlag 符合 Java 命名规范。
+
+#### 2. where(BiFunction) 安全文档增强
+**文件**：src/main/java/com/zsubera/jpa/spec/ConditionBuilder.java:501-560
+**修改前**：
+```java
+/**
+ * 添加原始 {@link Predicate} 条件，使用当前实体 {@link Path} 和 {@link CriteriaBuilder}。 这是处理构建器 API 未覆盖条件的扩展方法。
+ * ...
+ * <p>
+ * <strong>安全警告：</strong>在 lambda 表达式中应使用 JPA Criteria API 的类型安全方法（如 {@code path.get("fieldName")}），
+ * 避免使用字符串拼接构建字段名。字符串拼接可能导致 SQL 注入风险。
+ * ...
+ */
+```
+**修改后**：
+```java
+/**
+ * 添加原始 {@link Predicate} 条件，使用当前实体 {@link Path} 和 {@link CriteriaBuilder}。 这是处理构建器 API 未覆盖条件的扩展方法。
+ * ...
+ * <p>
+ * <strong>安全警告：</strong>此方法允许直接操作 Path 对象，存在潜在的安全风险：
+ * <ul>
+ *   <li>请勿使用用户输入的字符串拼接字段名，如 {@code path.get(userInput)}，这可能导致 SQL 注入</li>
+ *   <li>建议优先使用类型安全的方法引用 API（如 {@code eq(Entity::getField, value)}）</li>
+ *   <li>如果必须使用字符串字面量，请确保是硬编码的常量，而非运行时拼接</li>
+ * </ul>
+ *
+ * <pre>{@code
+ * // 危险：用户输入直接拼接到字段名
+ * String userInput = request.getParameter("field");
+ * qs.where((path, cb) -> cb.equal(path.get(userInput), value)); // SQL 注入风险！
+ *
+ * // 安全：使用硬编码字段名
+ * qs.where((path, cb) -> cb.equal(path.get("name"), value));
+ *
+ * // 更好：使用类型安全的方法引用
+ * qs.eq(Entity::getName, value);
+ * }</pre>
+ * ...
+ * @see #eq(SFunction, Object)
+ * @see #ne(SFunction, Object)
+ */
+```
+**原因**：增强安全警告，提供更详细的 SQL 注入风险说明和安全编码示例，引导用户优先使用类型安全的方法引用 API。
+
+#### 3. where(Function) 安全文档增强
+**文件**：src/main/java/com/zsubera/jpa/spec/ConditionBuilder.java:561-595
+**修改前**：
+```java
+/**
+ * 添加原始 {@link Predicate} 条件，使用 {@link Root} 参数。此重载避免了 {@link #where(BiFunction)} 的类型推断问题。
+ * ...
+ * @param fn 接收 Root 的函数，返回谓词
+ * @return 当前构建器以支持链式调用
+ * @throws IllegalArgumentException 如果 {@code fn} 为 null
+ */
+```
+**修改后**：
+```java
+/**
+ * 添加原始 {@link Predicate} 条件，使用 {@link Root} 参数。此重载避免了 {@link #where(BiFunction)} 的类型推断问题。
+ * ...
+ * <p>
+ * <strong>安全警告：</strong>此方法允许直接操作 Root 对象，存在潜在的安全风险：
+ * <ul>
+ *   <li>请勿使用用户输入的字符串拼接字段名，如 {@code root.get(userInput)}，这可能导致 SQL 注入</li>
+ *   <li>建议优先使用类型安全的方法引用 API（如 {@code eq(Entity::getField, value)}）</li>
+ *   <li>如果必须使用字符串字面量，请确保是硬编码的常量，而非运行时拼接</li>
+ * </ul>
+ *
+ * @param fn 接收 Root 的函数，返回谓词
+ * @return 当前构建器以支持链式调用
+ * @throws IllegalArgumentException 如果 {@code fn} 为 null
+ * @see #eq(SFunction, Object)
+ * @see #ne(SFunction, Object)
+ */
+```
+**原因**：为 where(Function) 方法添加与 where(BiFunction) 一致的安全警告，确保所有原始 Predicate 扩展点都有明确的安全提示。
+
+#### 4. SubQuerySpec.where(Function) 安全文档增强
+**文件**：src/main/java/com/zsubera/jpa/spec/SubQuerySpec.java:511-528
+**修改前**：
+```java
+/**
+ * 使用子查询根和 CriteriaBuilder 添加原始谓词。作为复杂条件或关联谓词的扩展机制。 要引用外部查询根，请使用 {@link #correlated()}。
+ * ...
+ * @param condition 谓词函数，接收子查询根返回谓词
+ * @return 当前 SubQuerySpec 实例，支持链式调用
+ */
+```
+**修改后**：
+```java
+/**
+ * 使用子查询根和 CriteriaBuilder 添加原始谓词。作为复杂条件或关联谓词的扩展机制。 要引用外部查询根，请使用 {@link #correlated()}。
+ * ...
+ * <p>
+ * <strong>安全警告：</strong>此方法允许直接操作 Root 对象，存在潜在的安全风险：
+ * <ul>
+ *   <li>请勿使用用户输入的字符串拼接字段名，如 {@code root.get(userInput)}，这可能导致 SQL 注入</li>
+ *   <li>建议优先使用类型安全的方法引用 API（如 {@code eq(Entity::getField, value)}）</li>
+ *   <li>如果必须使用字符串字面量，请确保是硬编码的常量，而非运行时拼接</li>
+ * </ul>
+ *
+ * @param condition 谓词函数，接收子查询根返回谓词
+ * @return 当前 SubQuerySpec 实例，支持链式调用
+ */
+```
+**原因**：为子查询的 where 方法添加安全警告，与 ConditionBuilder 保持一致。
+
+#### 5. SubQuerySpec.multiLike fields null 检查
+**文件**：src/main/java/com/zsubera/jpa/spec/SubQuerySpec.java:493-509
+**修改前**：
+```java
+public SubQuerySpec<S> multiLike(String keyword, SFunction<S, ?>... fields) {
+    if (keyword != null && !keyword.isEmpty() && fields != null && fields.length > 0) {
+        // ...
+    }
+    return this;
+}
+```
+**修改后**：
+```java
+public SubQuerySpec<S> multiLike(String keyword, SFunction<S, ?>... fields) {
+    if (fields == null) {
+        throw new IllegalArgumentException("fields must not be null");
+    }
+    if (keyword != null && !keyword.isEmpty() && fields.length > 0) {
+        // ...
+    }
+    return this;
+}
+```
+**原因**：添加显式的 fields null 检查，与 ConditionBuilder.multiLike 保持一致，提供更明确的错误消息。
+
+#### 6. LambdaUtils 缓存驱逐策略优化
+**文件**：src/main/java/com/zsubera/jpa/util/LambdaUtils.java:68-76
+**修改前**：
+```java
+private static final Map<String, String> CACHE = new ConcurrentHashMap<>();
+```
+**修改后**：
+```java
+private static final Map<String, String> CACHE = Collections.synchronizedMap(
+    new LinkedHashMap<>(4096, 0.75f, true) {
+        @Override
+        protected boolean removeEldestEntry(Map.Entry<String, String> eldest) {
+            return size() > MAX_CACHE_SIZE;
+        }
+    });
+```
+**原因**：将缓存从 ConcurrentHashMap 改为 LinkedHashMap 的 LRU（最近最少使用）变体。LRU 策略确保最近最少使用的条目在缓存满时被驱逐，提高热数据的缓存命中率。使用 Collections.synchronizedMap 包装确保线程安全。
+
+#### 7. LambdaUtils 清理线程逻辑简化
+**文件**：src/main/java/com/zsubera/jpa/util/LambdaUtils.java:87-93
+**修改前**：
+```java
+CLEANUP_EXECUTOR.scheduleAtFixedRate(() -> {
+    if (CACHE.size() > MAX_CACHE_SIZE) {
+        // 使用更小的驱逐比例（10%而非50%）以减少性能毛刺
+        int toRemove = CACHE.size() / 10;
+        if (toRemove < 1) {
+            toRemove = 1;
+        }
+        if (log.isDebugEnabled()) {
+            log.debug("LambdaUtils cache size ({}) exceeds limit ({}). Evicting ~{} entries.", CACHE.size(),
+                MAX_CACHE_SIZE, toRemove);
+        }
+        Iterator<String> it = CACHE.keySet().iterator();
+        for (int i = 0; i < toRemove && it.hasNext(); i++) {
+            it.next();
+            it.remove();
+        }
+    }
+}, 5, 5, TimeUnit.MINUTES);
+```
+**修改后**：
+```java
+CLEANUP_EXECUTOR.scheduleAtFixedRate(() -> {
+    // LRU 缓存会自动驱逐最久未使用的条目，无需手动清理
+    // 保留清理线程用于监控和调试目的
+    if (log.isDebugEnabled()) {
+        log.debug("LambdaUtils cache size: {}", CACHE.size());
+    }
+}, 30, 300, TimeUnit.SECONDS);
+```
+**原因**：LRU 缓存会自动驱逐条目，无需手动清理。简化清理线程逻辑，仅用于监控和调试目的。同时将初始延迟从 5 分钟缩短为 30 秒，间隔保持 5 分钟。
+
+#### 8. InClauseBuilder 超大 IN 子句性能警告
+**文件**：src/main/java/com/zsubera/jpa/util/InClauseBuilder.java:174-178, 195-199
+**修改前**：
+```java
+private static Predicate buildBatchedIn(CriteriaBuilder cb, Path<?> path, Collection<?> values) {
+    if (log.isDebugEnabled()) {
+        log.debug("IN clause has {} values, exceeding limit of {}. Splitting into batches.", values.size(),
+            MAX_IN_CLAUSE_SIZE);
+    }
+    // ...
+}
+```
+**修改后**：
+```java
+private static Predicate buildBatchedIn(CriteriaBuilder cb, Path<?> path, Collection<?> values) {
+    if (values.size() > 10000) {
+        log.warn("IN clause has {} values, which may cause performance issues. "
+            + "Consider using temporary tables or subqueries for better performance.", values.size());
+    }
+    if (log.isDebugEnabled()) {
+        log.debug("IN clause has {} values, exceeding limit of {}. Splitting into batches.", values.size(),
+            MAX_IN_CLAUSE_SIZE);
+    }
+    // ...
+}
+```
+**原因**：当 IN 子句参数超过 10000 个时，生成的 SQL 语句可能非常长，导致数据库解析性能问题。添加 WARN 级别日志提醒用户考虑使用临时表或子查询方案。
+
+#### 9. ConditionBuilder.eqStrict/neStrict 方法
+**文件**：src/main/java/com/zsubera/jpa/spec/ConditionBuilder.java:95-135
+**修改前**：无
+**修改后**：
+```java
+/**
+ * 添加严格等值条件：{@code field = value}。如果 {@code value} 为 null，则抛出异常。
+ *
+ * <p>
+ * 此方法提供明确的 null 处理选择，避免 {@link #eq(SFunction, Object)} 自动转换为 IS NULL 的行为。
+ * 如果您希望比较 null 值，请使用 {@link #isNull(SFunction)} 方法。
+ *
+ * @param field 实体属性的方法引用
+ * @param value 要比较的值
+ * @return 当前构建器以支持链式调用
+ * @throws IllegalArgumentException 如果 {@code field} 或 {@code value} 为 null
+ * @see #eq(SFunction, Object)
+ * @see #isNull(SFunction)
+ */
+default SELF eqStrict(SFunction<E, ?> field, Object value) {
+    if (value == null) {
+        throw new IllegalArgumentException("value must not be null. Use isNull() for null comparisons.");
+    }
+    return eq(field, value);
+}
+
+/**
+ * 添加严格不等条件：{@code field != value}。如果 {@code value} 为 null，则抛出异常。
+ *
+ * <p>
+ * 此方法提供明确的 null 处理选择，避免 {@link #ne(SFunction, Object)} 自动转换为 IS NOT NULL 的行为。
+ * 如果您希望比较 null 值，请使用 {@link #isNotNull(SFunction)} 方法。
+ *
+ * @param field 实体属性的方法引用
+ * @param value 要比较的值
+ * @return 当前构建器以支持链式调用
+ * @throws IllegalArgumentException 如果 {@code field} 或 {@code value} 为 null
+ * @see #ne(SFunction, Object)
+ * @see #isNotNull(SFunction)
+ */
+default SELF neStrict(SFunction<E, ?> field, Object value) {
+    if (value == null) {
+        throw new IllegalArgumentException("value must not be null. Use isNotNull() for null comparisons.");
+    }
+    return ne(field, value);
+}
+```
+**原因**：提供明确的 null 处理选择，避免 eq(field, null) 自动转换为 IS NULL 的行为可能导致的意外数据错误。
+
+### 测试结果
+- 单元测试：全部通过（592 个测试，0 失败，0 错误）
+- 集成测试：跳过（需要 Docker，已排除）
+- Spotless 格式化：通过
+
+---

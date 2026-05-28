@@ -172,6 +172,10 @@ public final class InClauseBuilder {
     }
 
     private static Predicate buildBatchedIn(CriteriaBuilder cb, Path<?> path, Collection<?> values) {
+        if (values.size() > 10000) {
+            log.warn("IN clause has {} values, which may cause performance issues. "
+                + "Consider using temporary tables or subqueries for better performance.", values.size());
+        }
         if (log.isDebugEnabled()) {
             log.debug("IN clause has {} values, exceeding limit of {}. Splitting into batches.", values.size(),
                 MAX_IN_CLAUSE_SIZE);
@@ -193,6 +197,10 @@ public final class InClauseBuilder {
     }
 
     private static Predicate buildBatchedNotIn(CriteriaBuilder cb, Path<?> path, Collection<?> values) {
+        if (values.size() > 10000) {
+            log.warn("NOT IN clause has {} values, which may cause performance issues. "
+                + "Consider using temporary tables or subqueries for better performance.", values.size());
+        }
         if (log.isDebugEnabled()) {
             log.debug("NOT IN clause has {} values, exceeding limit of {}. Splitting into batches.", values.size(),
                 MAX_IN_CLAUSE_SIZE);
