@@ -13,6 +13,7 @@ import jakarta.persistence.criteria.CriteriaQuery;
 import jakarta.persistence.criteria.Root;
 import java.util.List;
 import java.util.Optional;
+import java.util.function.Consumer;
 import java.util.stream.Stream;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -269,7 +270,8 @@ public class MyJpaTemplate {
      * }</pre>
      *
      * <p>
-     * <strong>未关闭 Stream 会导致数据库连接泄漏。</strong>底层的 EntityManager 和事务必须在 Stream 处理的整个期间保持活动状态。
+     * <strong>警告：未关闭 Stream 会导致数据库连接泄漏！</strong>底层的 EntityManager 和事务必须在 Stream 处理的整个期间保持活动状态。 推荐使用
+     * {@link #findAllStream(Class, QuerySpec, Consumer)} 安全版本，它会自动管理 Stream 生命周期。
      *
      * @param entityClass 实体类
      * @param spec 查询规范
@@ -295,6 +297,40 @@ public class MyJpaTemplate {
     public <T> Stream<T> findAllStream(Class<T> entityClass, QuerySpec<T> spec, EntityGraphHelper<T> entityGraph) {
         TypedQuery<T> query = buildTypedQuery(entityClass, spec, entityGraph, null);
         return query.getResultStream();
+    }
+
+    /**
+     * 安全版本的流式查询，自动管理 Stream 生命周期。推荐使用此方法替代 {@link #findAllStream(Class, QuerySpec)}， 以避免忘记关闭 Stream 导致的数据库连接泄漏。
+     *
+     * <p>
+     * 示例：
+     *
+     * <pre>{@code
+     * jpa.findAllStream(User.class, spec, stream -> {
+     *     stream.filter(u -> u.getAge() > 18).forEach(this::processUser);
+     * });
+     * }</pre>
+     *
+     * @param entityClass 实体类
+     * @param spec 查询规范
+     * @param consumer Stream 消费者（在 try-with-resources 中执行）
+     * @param <T> 实体类型
+     * @throws IllegalArgumentException 如果任何参数为 null
+     */
+    @Transactional(readOnly = true)
+    public <T> void findAllStream(Class<T> entityClass, QuerySpec<T> spec, Consumer<Stream<T>> consumer) {
+        if (entityClass == null) {
+            throw new IllegalArgumentException("entityClass must not be null");
+        }
+        if (spec == null) {
+            throw new IllegalArgumentException("spec must not be null");
+        }
+        if (consumer == null) {
+            throw new IllegalArgumentException("consumer must not be null");
+        }
+        try (Stream<T> stream = findAllStream(entityClass, spec)) {
+            consumer.accept(stream);
+        }
     }
 
     /**
@@ -505,6 +541,14 @@ public class MyJpaTemplate {
      * <p>
      * <strong>注意：</strong>此方法不会分批提交事务。所有批次在同一个事务中执行， 只有在整个方法完成后才会提交。如果需要分批提交，请使用外部事务管理。
      *
+     * <p>
+     * <strong>长事务风险：</strong>如果数据量非常大，事务日志可能撑爆，导致数据库锁等待超时。 对于大数据量操作，建议：
+     * <ul>
+     * <li>使用较小的 batchSize（如 1000-5000）</li>
+     * <li>考虑使用外部事务管理进行分批提交</li>
+     * <li>监控数据库事务日志使用情况</li>
+     * </ul>
+     *
      * @param spec 要执行的 UpdateSpec
      * @param batchSize 每批更新的行数
      * @param <T> 实体类型
@@ -533,6 +577,14 @@ public class MyJpaTemplate {
      *
      * <p>
      * <strong>注意：</strong>此方法不会分批提交事务。所有批次在同一个事务中执行， 只有在整个方法完成后才会提交。如果需要分批提交，请使用外部事务管理。
+     *
+     * <p>
+     * <strong>长事务风险：</strong>如果数据量非常大，事务日志可能撑爆，导致数据库锁等待超时。 对于大数据量操作，建议：
+     * <ul>
+     * <li>使用较小的 batchSize（如 1000-5000）</li>
+     * <li>考虑使用外部事务管理进行分批提交</li>
+     * <li>监控数据库事务日志使用情况</li>
+     * </ul>
      *
      * @param spec 要执行的 DeleteSpec
      * @param batchSize 每批删除的行数

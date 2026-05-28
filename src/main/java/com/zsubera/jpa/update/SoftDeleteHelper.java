@@ -1,6 +1,7 @@
 package com.zsubera.jpa.update;
 
 import com.zsubera.jpa.annotation.SoftDelete;
+import com.zsubera.jpa.exception.MyJpaPlusException;
 import com.zsubera.jpa.spec.QuerySpec;
 import jakarta.persistence.criteria.CriteriaBuilder;
 import jakarta.persistence.criteria.Path;
@@ -148,9 +149,7 @@ public final class SoftDeleteHelper {
         if (Enum.class.isAssignableFrom(field.getType()) && annotation != null
             && !annotation.deletedValue().isEmpty()) {
             Object deletedEnumValue = getEnumConstant(field.getType(), annotation.deletedValue());
-            if (deletedEnumValue != null) {
-                return cb.or(cb.isNull(path.get(fieldName)), cb.notEqual(path.get(fieldName), deletedEnumValue));
-            }
+            return cb.or(cb.isNull(path.get(fieldName)), cb.notEqual(path.get(fieldName), deletedEnumValue));
         }
         // 默认：按 Boolean false 处理
         return cb.equal(path.get(fieldName), false);
@@ -166,9 +165,7 @@ public final class SoftDeleteHelper {
         if (Enum.class.isAssignableFrom(field.getType()) && annotation != null
             && !annotation.deletedValue().isEmpty()) {
             Object deletedEnumValue = getEnumConstant(field.getType(), annotation.deletedValue());
-            if (deletedEnumValue != null) {
-                return cb.equal(path.get(fieldName), deletedEnumValue);
-            }
+            return cb.equal(path.get(fieldName), deletedEnumValue);
         }
         // 默认：按 Boolean true 处理
         return cb.equal(path.get(fieldName), true);
@@ -179,15 +176,17 @@ public final class SoftDeleteHelper {
      *
      * @param enumType 枚举类型
      * @param constantName 枚举常量名称
-     * @return 枚举常量，如果未找到则返回 null
+     * @return 枚举常量
+     * @throws IllegalStateException 如果枚举常量不存在
      */
     @SuppressWarnings({"unchecked", "rawtypes"})
     private static Object getEnumConstant(Class<?> enumType, String constantName) {
         try {
             return Enum.valueOf((Class<Enum>)enumType, constantName);
         } catch (IllegalArgumentException e) {
-            log.warn("Enum constant '{}' not found in {}", constantName, enumType.getName());
-            return null;
+            throw new IllegalStateException(String.format(
+                "Enum constant '%s' not found in %s. " + "Please check the @SoftDelete(deletedValue) configuration.",
+                constantName, enumType.getName()), e);
         }
     }
 
@@ -313,12 +312,11 @@ public final class SoftDeleteHelper {
             }
             return false;
         } catch (ReflectiveOperationException e) {
-            log.warn(
-                "Failed to read soft delete field '{}' from entity {}: {}. "
+            throw new MyJpaPlusException(String.format(
+                "Failed to read soft delete field '%s' from entity %s. "
                     + "If using Java 17+ module system, add JVM argument: "
                     + "--add-opens java.base/java.lang.reflect=ALL-UNNAMED",
-                fieldName, entity.getClass().getSimpleName(), e.getMessage());
-            return false;
+                fieldName, entity.getClass().getSimpleName()), e);
         }
     }
 

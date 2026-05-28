@@ -1035,3 +1035,101 @@ default SELF neStrict(SFunction<E, ?> field, Object value) {
 - Spotless 格式化：通过
 
 ---
+## 轮次 6 - 优化记录
+时间：2026-05-29
+
+### 已修复问题
+- [P0] findAllStream() 资源泄漏：添加安全版本 findAllStream(Class, QuerySpec, Consumer) 自动管理 Stream 生命周期，增强原有方法 Javadoc 警告
+- [P1] SoftDeleteJpaRepository.findById() 双重过滤：移除手动构建的软删除条件，由 findOne() 自动处理
+- [P1] LambdaUtils 缓存清理线程无效：移除无实际清理操作的定时任务线程，保留空的 shutdown() 方法以兼容现有调用
+- [P1] where() 方法 SQL 注入风险：增强两个 where() 方法的 Javadoc 安全警告，明确标注"绕过类型安全机制"
+- [P1] executeLimited() 未使用 InClauseBuilder：UpdateSpec 和 DeleteSpec 的 executeLimited() 改用 InClauseBuilder.in() 处理大型 IN 子句
+- [P1] executeBatch() 长事务风险：增强 UpdateSpec 和 DeleteSpec 的 executeBatch() Javadoc，添加长事务风险警告和操作建议
+- [P1] executeLimited() 并发时间窗口：增强 UpdateSpec 和 DeleteSpec 的 executeLimited() Javadoc，标注并发风险和悲观锁建议
+- [P1] SoftDeleteHelper.getEnumConstant() 静默降级：改为抛出 IllegalStateException，移除调用方的 null 检查
+- [P1] SoftDeleteHelper.isSoftDeleted() 静默返回：反射失败时改为抛出 MyJpaPlusException
+- [P1] AbstractBulkOperationSpec 异常语义不一致：添加 Javadoc 明确说明 RuntimeException 直接重抛、checked exception 包装为 MyJpaPlusException 的行为
+
+### 未修复问题
+- [P1] ProjectionSpec.JoinGroup 命名冲突：重命名会破坏公开 API 的向后兼容性，建议在下一个大版本中处理
+- [P1] ProjectionSpec.JoinGroup.ConditionNode 代码重复：需要大型重构统一条件节点类型，风险较高
+- [P1] resolveJoins() 方法过长：需要引入策略模式或访问者模式，属于架构级重构
+- [P1] SoftDeleteHelper.setAccessible() SecurityException 被吞掉（REL-12）：当前日志警告行为合理，字段名仍然被发现，后续访问失败时会由 isSoftDeleted() 抛出异常
+- [P2] 所有 P2 问题：本轮聚焦 P0/P1 问题，P2 问题留待后续迭代
+
+### 修改详情
+#### 1. findAllStream() 安全版本
+**文件**：src/main/java/com/zsubera/jpa/template/MyJpaTemplate.java
+**修改内容**：
+- 添加 `import java.util.function.Consumer`
+- 增强原有 findAllStream(Class, QuerySpec) 的 Javadoc，添加"推荐使用安全版本"提示
+- 新增 `findAllStream(Class<T>, QuerySpec<T>, Consumer<Stream<T>>)` 方法，自动在 try-with-resources 中管理 Stream 生命周期
+- 包含完整的 null 校验（entityClass、spec、consumer）
+
+#### 2. SoftDeleteJpaRepository.findById() 双重过滤修复
+**文件**：src/main/java/com/zsubera/jpa/repository/SoftDeleteJpaRepository.java:138-151
+**修改前**：
+```java
+Specification<T> spec = (root, query, cb) -> {
+    String idFieldName = EntityClassResolver.resolveIdFieldName(domainClass);
+    jakarta.persistence.criteria.Predicate idPredicate = cb.equal(root.get(idFieldName), id);
+    jakarta.persistence.criteria.Predicate softDeleteFilter =
+        mergeSoftDeleteFilter(null).toPredicate(root, query, cb);
+    return cb.and(idPredicate, softDeleteFilter);
+};
+return findOne(spec);
+```
+**修改后**：
+```java
+Specification<T> spec = (root, query, cb) -> {
+    String idFieldName = EntityClassResolver.resolveIdFieldName(domainClass);
+    return cb.equal(root.get(idFieldName), id);
+};
+return findOne(spec);
+```
+**原因**：findOne() 内部会调用 mergeSoftDeleteFilter(spec)，之前手动添加软删除条件导致双重过滤
+
+#### 3. LambdaUtils 缓存清理线程移除
+**文件**：src/main/java/com/zsubera/jpa/util/LambdaUtils.java
+**修改内容**：
+- 移除 `ScheduledExecutorService` 相关 import
+- 移除 CLEANUP_EXECUTOR 字段声明和静态初始化块
+- shutdown() 方法改为空操作，保留方法签名以兼容 MyJpaPlusAutoConfiguration
+**原因**：LRU LinkedHashMap 已自动驱逐过期条目，定时任务仅记录日志不执行清理，浪费线程资源
+
+#### 4. where() 方法安全警告增强
+**文件**：src/main/java/com/zsubera/jpa/spec/ConditionBuilder.java:543-583, 593-629
+**修改内容**：将安全警告从"存在潜在的安全风险"改为"此方法绕过类型安全机制，存在潜在的SQL注入风险"，并添加推荐使用类型安全方法的建议
+
+#### 5. executeLimited() 使用 InClauseBuilder
+**文件**：src/main/java/com/zsubera/jpa/update/UpdateSpec.java:271, DeleteSpec.java:211
+**修改前**：`update.where(updateRoot.get(idFieldName).in(ids));`
+**修改后**：`update.where(InClauseBuilder.in(cb, updateRoot.get(idFieldName), ids));`
+**原因**：避免超出 Oracle(1000)、SQL Server(2100) 等数据库的 IN 子句参数限制
+
+#### 6. executeBatch() 长事务风险警告
+**文件**：src/main/java/com/zsubera/jpa/template/MyJpaTemplate.java
+**修改内容**：为 UpdateSpec 和 DeleteSpec 的 executeBatch() 方法添加长事务风险警告，建议使用较小的 batchSize 和监控数据库事务日志
+
+#### 7. SoftDeleteHelper 枚举配置错误处理
+**文件**：src/main/java/com/zsubera/jpa/update/SoftDeleteHelper.java:185-192
+**修改前**：catch IllegalArgumentException 后 log.warn 并返回 null
+**修改后**：catch IllegalArgumentException 后抛出 IllegalStateException，附带配置错误提示
+**原因**：尽早发现 @SoftDelete(deletedValue) 配置错误，避免运行时生成错误 SQL
+
+#### 8. SoftDeleteHelper.isSoftDeleted() 反射失败处理
+**文件**：src/main/java/com/zsubera/jpa/update/SoftDeleteHelper.java:315-322
+**修改前**：catch ReflectiveOperationException 后 log.warn 并返回 false
+**修改后**：catch ReflectiveOperationException 后抛出 MyJpaPlusException，附带模块系统修复提示
+**原因**：反射失败时静默返回 false 会导致已删除实体被错误判断为未删除
+
+#### 9. AbstractBulkOperationSpec 异常语义文档
+**文件**：src/main/java/com/zsubera/jpa/update/AbstractBulkOperationSpec.java:85-91
+**修改内容**：添加异常处理语义说明，明确 RuntimeException 直接重抛、checked exception 包装为 MyJpaPlusException 的行为
+
+### 测试结果
+- 单元测试：全部通过（592 个测试，0 失败，0 错误）
+- 集成测试：跳过（需要 Docker，已排除）
+- Spotless 格式化：通过
+
+---

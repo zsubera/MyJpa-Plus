@@ -1,6 +1,7 @@
 package com.zsubera.jpa.update;
 
 import com.zsubera.jpa.repository.EntityClassResolver;
+import com.zsubera.jpa.util.InClauseBuilder;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.LockModeType;
 import jakarta.persistence.TypedQuery;
@@ -147,10 +148,12 @@ public class DeleteSpec<T> extends AbstractBulkOperationSpec<T, DeleteSpec<T>> {
      * clearing the persistence context between batches.
      *
      * <p>
-     * <strong>REL-1 note:</strong> There is a time window between querying IDs and executing the delete. In
-     * high-concurrency scenarios, other transactions may modify or delete records. Use
-     * {@link #executeLimited(EntityManager, int, boolean)} with {@code pessimisticLock=true} for high-concurrency
-     * scenarios.
+     * <strong>并发风险警告：</strong>此方法存在并发时间窗口。在查询ID和执行删除之间，其他事务可能修改或删除记录。 对于高并发场景，建议：
+     * <ul>
+     * <li>使用 {@link #executeLimited(EntityManager, int, boolean)} 并设置 {@code pessimisticLock=true}</li>
+     * <li>或者在应用层使用分布式锁</li>
+     * <li>监控数据库锁等待情况</li>
+     * </ul>
      *
      * @param em entity manager
      * @param limit maximum number of rows to delete
@@ -208,7 +211,7 @@ public class DeleteSpec<T> extends AbstractBulkOperationSpec<T, DeleteSpec<T>> {
         // Step 2: 用ID列表执行删除
         CriteriaDelete<T> delete = cb.createCriteriaDelete(entityClass);
         Root<T> deleteRoot = delete.from(entityClass);
-        delete.where(deleteRoot.get(idFieldName).in(ids));
+        delete.where(InClauseBuilder.in(cb, deleteRoot.get(idFieldName), ids));
         return em.createQuery(delete).executeUpdate();
     }
 }

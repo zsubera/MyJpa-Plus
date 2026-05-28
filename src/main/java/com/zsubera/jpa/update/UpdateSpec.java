@@ -2,6 +2,7 @@ package com.zsubera.jpa.update;
 
 import com.zsubera.jpa.repository.EntityClassResolver;
 import com.zsubera.jpa.spec.SFunction;
+import com.zsubera.jpa.util.InClauseBuilder;
 import com.zsubera.jpa.util.LambdaUtils;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.LockModeType;
@@ -191,18 +192,20 @@ public class UpdateSpec<T> extends AbstractBulkOperationSpec<T, UpdateSpec<T>> {
      * Execute UPDATE statement limiting the number of affected rows.
      *
      * <p>
-     * This method is suitable for batch processing scenarios. It limits the number of rows affected by SQL. Note that
-     * LIMIT support for UPDATE statements varies by database.
+     * This method first queries a list of IDs matching the WHERE conditions (with LIMIT), then executes the update
+     * using those IDs. This two-step approach is necessary because JPA CriteriaUpdate does not support LIMIT directly.
      *
      * <p>
-     * <strong>Note:</strong> This method requires an active transaction. The caller is responsible for flushing and
+     * The method uses {@link EntityManager#clear()} to detach updated entities, allowing multiple batches without
      * clearing the persistence context between batches.
      *
      * <p>
-     * <strong>REL-1 note:</strong> There is a time window between querying IDs and executing the update. In
-     * high-concurrency scenarios, other transactions may modify or delete records. Use
-     * {@link #executeLimited(EntityManager, int, boolean)} with {@code pessimisticLock=true} for high-concurrency
-     * scenarios.
+     * <strong>并发风险警告：</strong>此方法存在并发时间窗口。在查询ID和执行更新之间，其他事务可能修改或删除记录。 对于高并发场景，建议：
+     * <ul>
+     * <li>使用 {@link #executeLimited(EntityManager, int, boolean)} 并设置 {@code pessimisticLock=true}</li>
+     * <li>或者在应用层使用分布式锁</li>
+     * <li>监控数据库锁等待情况</li>
+     * </ul>
      *
      * @param em entity manager
      * @param limit maximum number of rows to update
@@ -268,7 +271,7 @@ public class UpdateSpec<T> extends AbstractBulkOperationSpec<T, UpdateSpec<T>> {
         for (SetClause sc : setClauses) {
             update.set(updateRoot.get(sc.fieldName), sc.value);
         }
-        update.where(updateRoot.get(idFieldName).in(ids));
+        update.where(InClauseBuilder.in(cb, updateRoot.get(idFieldName), ids));
         return em.createQuery(update).executeUpdate();
     }
 }

@@ -556,11 +556,12 @@ public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> {
      * }</pre>
      *
      * <p>
-     * <strong>安全警告：</strong>此方法允许直接操作 Path 对象，存在潜在的安全风险：
+     * <strong>安全警告：此方法绕过类型安全机制，存在潜在的SQL注入风险！</strong>
      * <ul>
      * <li>请勿使用用户输入的字符串拼接字段名，如 {@code path.get(userInput)}，这可能导致 SQL 注入</li>
      * <li>建议优先使用类型安全的方法引用 API（如 {@code eq(Entity::getField, value)}）</li>
      * <li>如果必须使用字符串字面量，请确保是硬编码的常量，而非运行时拼接</li>
+     * <li>推荐使用 {@link #eq(SFunction, Object)}、{@link #like(SFunction, String)} 等类型安全方法</li>
      * </ul>
      *
      * <pre>{@code
@@ -606,11 +607,12 @@ public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> {
      * }</pre>
      *
      * <p>
-     * <strong>安全警告：</strong>此方法允许直接操作 Root 对象，存在潜在的安全风险：
+     * <strong>安全警告：此方法绕过类型安全机制，存在潜在的SQL注入风险！</strong>
      * <ul>
      * <li>请勿使用用户输入的字符串拼接字段名，如 {@code root.get(userInput)}，这可能导致 SQL 注入</li>
      * <li>建议优先使用类型安全的方法引用 API（如 {@code eq(Entity::getField, value)}）</li>
      * <li>如果必须使用字符串字面量，请确保是硬编码的常量，而非运行时拼接</li>
+     * <li>推荐使用 {@link #eq(SFunction, Object)}、{@link #like(SFunction, String)} 等类型安全方法</li>
      * </ul>
      *
      * @param fn 接收 Root 的函数，返回谓词

@@ -8,9 +8,6 @@ import java.lang.reflect.Method;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.Map;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.TimeUnit;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -74,40 +71,19 @@ public final class LambdaUtils {
             }
         });
 
-    /** Background daemon thread for periodic cache eviction. */
-    private static final ScheduledExecutorService CLEANUP_EXECUTOR;
-
-    static {
-        CLEANUP_EXECUTOR = Executors.newSingleThreadScheduledExecutor(r -> {
-            Thread t = new Thread(r, "myjpa-cache-cleaner");
-            t.setDaemon(true);
-            return t;
-        });
-        CLEANUP_EXECUTOR.scheduleAtFixedRate(() -> {
-            // LRU 缓存会自动驱逐最久未使用的条目，无需手动清理
-            // 保留清理线程用于监控和调试目的
-            if (log.isDebugEnabled()) {
-                log.debug("LambdaUtils cache size: {}", CACHE.size());
-            }
-        }, 30, 300, TimeUnit.SECONDS);
-    }
+    // LRU 缓存会自动驱逐最久未使用的条目，无需手动清理线程
 
     /**
      * 关闭后台清理线程。在应用关闭或热部署环境中应调用此方法以确保资源正确释放。
      *
      * <p>
      * 已在 {@code MyJpaPlusAutoConfiguration} 中通过 {@code DisposableBean} 自动注册关闭钩子。
+     *
+     * <p>
+     * 当前实现为空操作，因为 LRU 缓存会自动驱逐最久未使用的条目，无需手动清理线程。
      */
     public static void shutdown() {
-        CLEANUP_EXECUTOR.shutdown();
-        try {
-            if (!CLEANUP_EXECUTOR.awaitTermination(5, TimeUnit.SECONDS)) {
-                CLEANUP_EXECUTOR.shutdownNow();
-            }
-        } catch (InterruptedException e) {
-            CLEANUP_EXECUTOR.shutdownNow();
-            Thread.currentThread().interrupt();
-        }
+        // 空操作：LRU 缓存自动管理，无需清理线程
     }
 
     private LambdaUtils() {}

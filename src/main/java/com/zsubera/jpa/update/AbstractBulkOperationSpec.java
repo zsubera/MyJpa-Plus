@@ -194,22 +194,28 @@ public abstract class AbstractBulkOperationSpec<T, SELF extends AbstractBulkOper
     }
 
     /**
-     * Adds a NOT group of conditions. The combined conditions inside the consumer will be negated.
+     * Execute a bulk operation within a transaction.
      *
      * <p>
-     * Multiple conditions inside the NOT group are combined with OR before negation. This follows De Morgan's laws:
-     * {@code NOT(A OR B) = NOT(A) AND NOT(B)}.
+     * If a Spring-managed transaction is active, the operation is delegated to it directly. Otherwise, a JPA
+     * {@link EntityTransaction} is used for standalone scenarios.
      *
      * <p>
-     * Example:
+     * This overload allows subclasses to execute custom operations (e.g., unconditional deleteAll) with proper
+     * transaction management.
      *
-     * <pre>{@code
-     * new DeleteSpec<>(User.class).not(o -> o.eq(User::getStatus, "ACTIVE")).execute();
-     * // WHERE NOT (status = 'ACTIVE')
+     * <p>
+     * <strong>异常处理语义：</strong>
+     * <ul>
+     * <li>{@link RuntimeException} 及其子类将被直接重新抛出，保留原始异常类型</li>
+     * <li>其他 {@link Exception}（checked exception）将被包装为 {@link MyJpaPlusException}</li>
+     * </ul>
      *
-     * new DeleteSpec<>(User.class).not(o -> o.gt(User::getStatus, 3).lt(User::getStatus, 8)).execute();
-     * // WHERE NOT (status > 3 OR status < 8) = WHERE status <= 3 AND status >= 8
-     * }</pre>
+     * @param em the EntityManager
+     * @param operation the operation to execute
+     * @return the number of affected rows
+     * @throws RuntimeException 如果操作抛出运行时异常
+     * @throws MyJpaPlusException 如果操作抛出受检异常
      */
     public SELF not(Consumer<OrConditionBuilder<T, SELF>> config) {
         List<BulkConditionNode> children = new ArrayList<>();
