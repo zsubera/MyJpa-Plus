@@ -123,4 +123,29 @@ public class SoftDeleteJpaRepository<T, ID> extends SimpleJpaRepository<T, ID> {
     public boolean exists(Specification<T> spec) {
         return super.exists(mergeSoftDeleteFilter(spec));
     }
+
+    /**
+     * 覆盖 findById() 以支持软删除过滤。
+     *
+     * <p>
+     * 默认的 {@link SimpleJpaRepository#findById(Object)} 不会过滤软删除记录， 导致用户可能通过 {@code repository.findById(id)} 获取已删除的实体。
+     * 此实现会自动追加软删除过滤条件，确保已删除的实体返回 {@link Optional#empty()}。
+     *
+     * @param id 实体 ID，不能为 {@code null}
+     * @return 包含实体的 {@link Optional}，如果实体不存在或已软删除则返回 {@link Optional#empty()}
+     */
+    @Override
+    public Optional<T> findById(ID id) {
+        if (id == null) {
+            return Optional.empty();
+        }
+        // 构建带软删除过滤的查询
+        Specification<T> spec = (root, query, cb) -> {
+            jakarta.persistence.criteria.Predicate idPredicate = cb.equal(root.get("id"), id);
+            jakarta.persistence.criteria.Predicate softDeleteFilter =
+                mergeSoftDeleteFilter(null).toPredicate(root, query, cb);
+            return cb.and(idPredicate, softDeleteFilter);
+        };
+        return findOne(spec);
+    }
 }

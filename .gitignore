@@ -44,4 +44,4 @@ out/
 .audit-dones/
 audit-report-*.md
 final-audit-report-*.md
-optimization-report-*.md
+optimization-report.md

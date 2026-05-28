@@ -38,7 +38,13 @@ public sealed interface ConditionNode permits ConditionNode.SimpleNode, Conditio
 
     // ---- Node types ----
 
-    /** 单个字段-值比较条件。 */
+    /**
+     * 单个字段-值比较条件。
+     *
+     * <p>
+     * <strong>实现说明：</strong>使用 {@code final class} 而非 {@code record} 是为了支持两阶段构造函数（无 escapeChar 的默认构造函数） 和自定义
+     * {@code toString()} 以掩码敏感值。如需迁移至 record，需评估对所有直接字段访问的兼容性影响。
+     */
     final class SimpleNode implements ConditionNode {
         public final String fieldName;
         public final Object value;
@@ -162,7 +168,16 @@ public sealed interface ConditionNode permits ConditionNode.SimpleNode, Conditio
         }
     }
 
-    /** ORDER BY 子句的排序节点。 */
+    /**
+     * ORDER BY 子句的排序节点。
+     *
+     * <p>
+     * <strong>注意：</strong>此类定义在 {@code ConditionNode} 内部以便于组织，但不实现 {@code ConditionNode} 接口， 因为 ORDER BY 不是查询条件（WHERE
+     * clause）的一部分。排序逻辑由 {@link QuerySpec} 中的 {@code orders} 列表独立管理。
+     *
+     * @param fieldName 排序字段名
+     * @param asc 是否升序
+     */
     final class OrderNode {
         public final String fieldName;
         public final boolean asc;

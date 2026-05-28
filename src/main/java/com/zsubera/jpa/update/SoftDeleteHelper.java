@@ -206,6 +206,8 @@ public final class SoftDeleteHelper {
                 "SoftDeleteHelper field cache size ({}) exceeds limit ({}). "
                     + "This may indicate a class loader leak or excessive entity classes.",
                 FIELD_CACHE.size(), MAX_CACHE_SIZE);
+            // Evict stale entries (null key/value) to prevent unbounded growth
+            FIELD_CACHE.entrySet().removeIf(e -> e.getKey() == null || e.getValue() == null);
         }
         String result = FIELD_CACHE.computeIfAbsent(entityClass, cls -> {
             // Try getter-based resolution first (Java 17+ compatible)

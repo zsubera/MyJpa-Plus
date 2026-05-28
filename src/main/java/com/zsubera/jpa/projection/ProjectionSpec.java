@@ -48,11 +48,25 @@ public class ProjectionSpec<T> {
         final String fieldName;
         final Consumer<?> config;
         final boolean left;
+        /** Cached conditions from the first Consumer invocation to avoid re-computation. */
+        List<JoinGroup.ConditionNode> cachedConditions;
 
         <E> JoinSpec(String fieldName, Consumer<JoinGroup<E>> config, boolean left) {
             this.fieldName = fieldName;
             this.config = config;
             this.left = left;
+        }
+
+        @SuppressWarnings("unchecked")
+        <E> List<JoinGroup.ConditionNode> getConditions() {
+            if (cachedConditions == null) {
+                @SuppressWarnings("unchecked")
+                Consumer<JoinGroup<Object>> cfg = (Consumer<JoinGroup<Object>>)(Consumer<?>)config;
+                JoinGroup<Object> group = JoinGroup.create();
+                cfg.accept(group);
+                cachedConditions = group.getConditions();
+            }
+            return cachedConditions;
         }
     }
 
@@ -197,6 +211,302 @@ public class ProjectionSpec<T> {
         }
 
         /**
+         * 添加大于等于条件。
+         *
+         * @param field 实体属性的方法引用
+         * @param value 比较的值，不能为 null
+         * @return 当前 JoinGroup 实例，支持链式调用
+         * @throws IllegalArgumentException 如果 field 或 value 为 null
+         * @see com.zsubera.jpa.spec.ConditionBuilder#ge(SFunction, Comparable)
+         */
+        public JoinGroup<E> ge(SFunction<E, ?> field, Comparable<?> value) {
+            if (field == null) {
+                throw new IllegalArgumentException("field must not be null");
+            }
+            if (value == null) {
+                throw new IllegalArgumentException("value must not be null");
+            }
+            conditions.add(new ConditionNode.Ge(LambdaUtils.getPropertyName(field), value));
+            return this;
+        }
+
+        /**
+         * 添加小于等于条件。
+         *
+         * @param field 实体属性的方法引用
+         * @param value 比较的值，不能为 null
+         * @return 当前 JoinGroup 实例，支持链式调用
+         * @throws IllegalArgumentException 如果 field 或 value 为 null
+         * @see com.zsubera.jpa.spec.ConditionBuilder#le(SFunction, Comparable)
+         */
+        public JoinGroup<E> le(SFunction<E, ?> field, Comparable<?> value) {
+            if (field == null) {
+                throw new IllegalArgumentException("field must not be null");
+            }
+            if (value == null) {
+                throw new IllegalArgumentException("value must not be null");
+            }
+            conditions.add(new ConditionNode.Le(LambdaUtils.getPropertyName(field), value));
+            return this;
+        }
+
+        /**
+         * 添加 NOT LIKE 条件。
+         *
+         * @param field 实体属性的方法引用
+         * @param value 匹配模式，不能为 null
+         * @return 当前 JoinGroup 实例，支持链式调用
+         * @throws IllegalArgumentException 如果 field 或 value 为 null
+         * @see com.zsubera.jpa.spec.ConditionBuilder#notLike(SFunction, String)
+         */
+        public JoinGroup<E> notLike(SFunction<E, ?> field, String value) {
+            if (field == null) {
+                throw new IllegalArgumentException("field must not be null");
+            }
+            if (value == null) {
+                throw new IllegalArgumentException("value must not be null");
+            }
+            conditions.add(new ConditionNode.NotLike(LambdaUtils.getPropertyName(field), value));
+            return this;
+        }
+
+        /**
+         * 添加 BETWEEN 条件。
+         *
+         * @param field 实体属性的方法引用
+         * @param start 下界（包含），不能为 null
+         * @param end 上界（包含），不能为 null
+         * @return 当前 JoinGroup 实例，支持链式调用
+         * @throws IllegalArgumentException 如果 field、start 或 end 为 null，或者 start 大于 end
+         * @see com.zsubera.jpa.spec.ConditionBuilder#between(SFunction, Comparable, Comparable)
+         */
+        @SuppressWarnings({"unchecked", "rawtypes"})
+        public JoinGroup<E> between(SFunction<E, ?> field, Comparable<?> start, Comparable<?> end) {
+            if (field == null) {
+                throw new IllegalArgumentException("field must not be null");
+            }
+            if (start == null) {
+                throw new IllegalArgumentException("start must not be null");
+            }
+            if (end == null) {
+                throw new IllegalArgumentException("end must not be null");
+            }
+            if (start.getClass() != end.getClass()) {
+                throw new IllegalArgumentException("start and end must be of the same type, but got "
+                    + start.getClass().getName() + " and " + end.getClass().getName());
+            }
+            if (((Comparable)start).compareTo(end) > 0) {
+                throw new IllegalArgumentException("start must not be greater than end");
+            }
+            conditions.add(new ConditionNode.Between(LambdaUtils.getPropertyName(field), start, end));
+            return this;
+        }
+
+        /**
+         * 添加 NOT BETWEEN 条件。
+         *
+         * @param field 实体属性的方法引用
+         * @param start 下界（包含），不能为 null
+         * @param end 上界（包含），不能为 null
+         * @return 当前 JoinGroup 实例，支持链式调用
+         * @throws IllegalArgumentException 如果 field、start 或 end 为 null，或者 start 大于 end
+         * @see com.zsubera.jpa.spec.ConditionBuilder#notBetween(SFunction, Comparable, Comparable)
+         */
+        @SuppressWarnings({"unchecked", "rawtypes"})
+        public JoinGroup<E> notBetween(SFunction<E, ?> field, Comparable<?> start, Comparable<?> end) {
+            if (field == null) {
+                throw new IllegalArgumentException("field must not be null");
+            }
+            if (start == null) {
+                throw new IllegalArgumentException("start must not be null");
+            }
+            if (end == null) {
+                throw new IllegalArgumentException("end must not be null");
+            }
+            if (start.getClass() != end.getClass()) {
+                throw new IllegalArgumentException("start and end must be of the same type, but got "
+                    + start.getClass().getName() + " and " + end.getClass().getName());
+            }
+            if (((Comparable)start).compareTo(end) > 0) {
+                throw new IllegalArgumentException("start must not be greater than end");
+            }
+            conditions.add(new ConditionNode.NotBetween(LambdaUtils.getPropertyName(field), start, end));
+            return this;
+        }
+
+        /**
+         * 添加 IN 条件。
+         *
+         * @param field 实体属性的方法引用
+         * @param values 值数组，不能为 null 或空
+         * @return 当前 JoinGroup 实例，支持链式调用
+         * @throws IllegalArgumentException 如果 field 为 null 或 values 为空
+         * @see com.zsubera.jpa.spec.ConditionBuilder#in(SFunction, Object...)
+         */
+        public JoinGroup<E> in(SFunction<E, ?> field, Object... values) {
+            if (field == null) {
+                throw new IllegalArgumentException("field must not be null");
+            }
+            if (values == null || values.length == 0) {
+                throw new IllegalArgumentException("values must not be empty");
+            }
+            conditions.add(new ConditionNode.In(LambdaUtils.getPropertyName(field), values));
+            return this;
+        }
+
+        /**
+         * 添加 NOT IN 条件。
+         *
+         * @param field 实体属性的方法引用
+         * @param values 值数组，不能为 null 或空
+         * @return 当前 JoinGroup 实例，支持链式调用
+         * @throws IllegalArgumentException 如果 field 为 null 或 values 为空
+         * @see com.zsubera.jpa.spec.ConditionBuilder#notIn(SFunction, Object...)
+         */
+        public JoinGroup<E> notIn(SFunction<E, ?> field, Object... values) {
+            if (field == null) {
+                throw new IllegalArgumentException("field must not be null");
+            }
+            if (values == null || values.length == 0) {
+                throw new IllegalArgumentException("values must not be empty");
+            }
+            conditions.add(new ConditionNode.NotIn(LambdaUtils.getPropertyName(field), values));
+            return this;
+        }
+
+        /**
+         * 添加前缀匹配 LIKE 条件：{@code field LIKE 'value%'}。
+         *
+         * @param field 实体属性的方法引用
+         * @param value 前缀字符串值，不能为 null
+         * @return 当前 JoinGroup 实例，支持链式调用
+         * @throws IllegalArgumentException 如果 field 或 value 为 null
+         * @see com.zsubera.jpa.spec.ConditionBuilder#startsWith(SFunction, String)
+         */
+        public JoinGroup<E> startsWith(SFunction<E, ?> field, String value) {
+            if (field == null) {
+                throw new IllegalArgumentException("field must not be null");
+            }
+            if (value == null) {
+                throw new IllegalArgumentException("value must not be null");
+            }
+            conditions.add(new ConditionNode.StartsWith(LambdaUtils.getPropertyName(field), value));
+            return this;
+        }
+
+        /**
+         * 添加后缀匹配 LIKE 条件：{@code field LIKE '%value'}。
+         *
+         * @param field 实体属性的方法引用
+         * @param value 后缀字符串值，不能为 null
+         * @return 当前 JoinGroup 实例，支持链式调用
+         * @throws IllegalArgumentException 如果 field 或 value 为 null
+         * @see com.zsubera.jpa.spec.ConditionBuilder#endsWith(SFunction, String)
+         */
+        public JoinGroup<E> endsWith(SFunction<E, ?> field, String value) {
+            if (field == null) {
+                throw new IllegalArgumentException("field must not be null");
+            }
+            if (value == null) {
+                throw new IllegalArgumentException("value must not be null");
+            }
+            conditions.add(new ConditionNode.EndsWith(LambdaUtils.getPropertyName(field), value));
+            return this;
+        }
+
+        /**
+         * 添加包含匹配 LIKE 条件：{@code field LIKE '%value%'}。
+         *
+         * @param field 实体属性的方法引用
+         * @param value 要包含的子字符串值，不能为 null
+         * @return 当前 JoinGroup 实例，支持链式调用
+         * @throws IllegalArgumentException 如果 field 或 value 为 null
+         * @see com.zsubera.jpa.spec.ConditionBuilder#contains(SFunction, String)
+         */
+        public JoinGroup<E> contains(SFunction<E, ?> field, String value) {
+            if (field == null) {
+                throw new IllegalArgumentException("field must not be null");
+            }
+            if (value == null) {
+                throw new IllegalArgumentException("value must not be null");
+            }
+            conditions.add(new ConditionNode.Contains(LambdaUtils.getPropertyName(field), value));
+            return this;
+        }
+
+        /**
+         * 添加不区分大小写的等值条件：{@code UPPER(field) = UPPER(value)}。
+         *
+         * @param field 实体属性的方法引用
+         * @param value 要比较的字符串值，如果为 null 则生成 IS NULL 条件
+         * @return 当前 JoinGroup 实例，支持链式调用
+         * @throws IllegalArgumentException 如果 field 为 null
+         * @see com.zsubera.jpa.spec.ConditionBuilder#eqIgnoreCase(SFunction, String)
+         */
+        public JoinGroup<E> eqIgnoreCase(SFunction<E, ?> field, String value) {
+            if (field == null) {
+                throw new IllegalArgumentException("field must not be null");
+            }
+            if (value == null) {
+                return isNull(field);
+            }
+            conditions.add(new ConditionNode.EqIgnoreCase(LambdaUtils.getPropertyName(field), value));
+            return this;
+        }
+
+        /**
+         * 添加不区分大小写的 LIKE 条件：{@code UPPER(field) LIKE UPPER('%value%')}。
+         *
+         * @param field 实体属性的方法引用
+         * @param value 匹配模式的字符串值，不能为 null
+         * @return 当前 JoinGroup 实例，支持链式调用
+         * @throws IllegalArgumentException 如果 field 或 value 为 null
+         * @see com.zsubera.jpa.spec.ConditionBuilder#likeIgnoreCase(SFunction, String)
+         */
+        public JoinGroup<E> likeIgnoreCase(SFunction<E, ?> field, String value) {
+            if (field == null) {
+                throw new IllegalArgumentException("field must not be null");
+            }
+            if (value == null) {
+                throw new IllegalArgumentException("value must not be null");
+            }
+            conditions.add(new ConditionNode.LikeIgnoreCase(LambdaUtils.getPropertyName(field), value));
+            return this;
+        }
+
+        /**
+         * 添加 IS EMPTY 条件，用于一对多关联。
+         *
+         * @param field 实体属性的方法引用
+         * @return 当前 JoinGroup 实例，支持链式调用
+         * @throws IllegalArgumentException 如果 field 为 null
+         * @see com.zsubera.jpa.spec.ConditionBuilder#isEmpty(SFunction)
+         */
+        public JoinGroup<E> isEmpty(SFunction<E, ?> field) {
+            if (field == null) {
+                throw new IllegalArgumentException("field must not be null");
+            }
+            conditions.add(new ConditionNode.IsEmpty(LambdaUtils.getPropertyName(field)));
+            return this;
+        }
+
+        /**
+         * 添加 IS NOT EMPTY 条件，用于一对多关联。
+         *
+         * @param field 实体属性的方法引用
+         * @return 当前 JoinGroup 实例，支持链式调用
+         * @throws IllegalArgumentException 如果 field 为 null
+         * @see com.zsubera.jpa.spec.ConditionBuilder#isNotEmpty(SFunction)
+         */
+        public JoinGroup<E> isNotEmpty(SFunction<E, ?> field) {
+            if (field == null) {
+                throw new IllegalArgumentException("field must not be null");
+            }
+            conditions.add(new ConditionNode.IsNotEmpty(LambdaUtils.getPropertyName(field)));
+            return this;
+        }
+
+        /**
          * 投影 JOIN 条件的内部条件节点接口。
          *
          * <p>
@@ -206,10 +516,24 @@ public class ProjectionSpec<T> {
          * <li>{@link Eq} - 等于条件
          * <li>{@link Ne} - 不等于条件
          * <li>{@link Like} - 模糊匹配条件
+         * <li>{@link NotLike} - NOT LIKE 条件
          * <li>{@link Gt} - 大于条件
+         * <li>{@link Ge} - 大于等于条件
          * <li>{@link Lt} - 小于条件
+         * <li>{@link Le} - 小于等于条件
+         * <li>{@link Between} - BETWEEN 条件
+         * <li>{@link NotBetween} - NOT BETWEEN 条件
+         * <li>{@link In} - IN 条件
+         * <li>{@link NotIn} - NOT IN 条件
+         * <li>{@link StartsWith} - 前缀匹配条件
+         * <li>{@link EndsWith} - 后缀匹配条件
+         * <li>{@link Contains} - 包含匹配条件
+         * <li>{@link EqIgnoreCase} - 不区分大小写等于条件
+         * <li>{@link LikeIgnoreCase} - 不区分大小写 LIKE 条件
          * <li>{@link IsNull} - IS NULL 条件
          * <li>{@link IsNotNull} - IS NOT NULL 条件
+         * <li>{@link IsEmpty} - IS EMPTY 条件
+         * <li>{@link IsNotEmpty} - IS NOT EMPTY 条件
          * </ul>
          */
         sealed interface ConditionNode {
@@ -222,16 +546,58 @@ public class ProjectionSpec<T> {
             record Like(String fieldName, String value) implements ConditionNode {
             }
 
+            record NotLike(String fieldName, String value) implements ConditionNode {
+            }
+
             record Gt(String fieldName, Comparable<?> value) implements ConditionNode {
             }
 
+            record Ge(String fieldName, Comparable<?> value) implements ConditionNode {
+            }
+
             record Lt(String fieldName, Comparable<?> value) implements ConditionNode {
+            }
+
+            record Le(String fieldName, Comparable<?> value) implements ConditionNode {
+            }
+
+            record Between(String fieldName, Comparable<?> start, Comparable<?> end) implements ConditionNode {
+            }
+
+            record NotBetween(String fieldName, Comparable<?> start, Comparable<?> end) implements ConditionNode {
+            }
+
+            record In(String fieldName, Object[] values) implements ConditionNode {
+            }
+
+            record NotIn(String fieldName, Object[] values) implements ConditionNode {
+            }
+
+            record StartsWith(String fieldName, String value) implements ConditionNode {
+            }
+
+            record EndsWith(String fieldName, String value) implements ConditionNode {
+            }
+
+            record Contains(String fieldName, String value) implements ConditionNode {
+            }
+
+            record EqIgnoreCase(String fieldName, String value) implements ConditionNode {
+            }
+
+            record LikeIgnoreCase(String fieldName, String value) implements ConditionNode {
             }
 
             record IsNull(String fieldName) implements ConditionNode {
             }
 
             record IsNotNull(String fieldName) implements ConditionNode {
+            }
+
+            record IsEmpty(String fieldName) implements ConditionNode {
+            }
+
+            record IsNotEmpty(String fieldName) implements ConditionNode {
             }
         }
 
@@ -505,6 +871,10 @@ public class ProjectionSpec<T> {
     /**
      * 解析并应用所有 JOIN 子句。
      *
+     * <p>
+     * Uses cached conditions from {@link JoinSpec#getConditions()} to avoid re-invoking the Consumer for each Root
+     * (count vs data query).
+     *
      * @param root 查询根实体
      * @param cb CriteriaBuilder 实例
      * @return JOIN 映射关系
@@ -515,32 +885,74 @@ public class ProjectionSpec<T> {
         for (JoinSpec js : joins) {
             Join<?, ?> join = joinMap.computeIfAbsent(js.fieldName, k -> js.left
                 ? root.join(js.fieldName, jakarta.persistence.criteria.JoinType.LEFT) : root.join(js.fieldName));
-            @SuppressWarnings("unchecked")
-            Consumer<JoinGroup<Object>> cfg = (Consumer<JoinGroup<Object>>)js.config;
-            JoinGroup<Object> group = JoinGroup.create();
-            cfg.accept(group);
             List<Predicate> onPredicates = new ArrayList<>();
-            for (JoinGroup.ConditionNode node : group.getConditions()) {
+            for (JoinGroup.ConditionNode node : js.getConditions()) {
                 if (node instanceof JoinGroup.ConditionNode.Eq eq) {
                     onPredicates.add(cb.equal(join.get(eq.fieldName()), eq.value()));
                 } else if (node instanceof JoinGroup.ConditionNode.Ne ne) {
                     onPredicates.add(cb.notEqual(join.get(ne.fieldName()), ne.value()));
                 } else if (node instanceof JoinGroup.ConditionNode.Like like) {
                     onPredicates.add(cb.like(join.get(like.fieldName()).as(String.class), like.value()));
+                } else if (node instanceof JoinGroup.ConditionNode.NotLike notLike) {
+                    onPredicates.add(cb.notLike(join.get(notLike.fieldName()).as(String.class), notLike.value()));
                 } else if (node instanceof JoinGroup.ConditionNode.Gt gt) {
                     @SuppressWarnings("unchecked")
                     Expression<Comparable<Object>> gtExpr =
                         (Expression<Comparable<Object>>)(Expression<?>)join.get(gt.fieldName());
                     onPredicates.add(cb.greaterThan(gtExpr, (Comparable<Object>)gt.value()));
+                } else if (node instanceof JoinGroup.ConditionNode.Ge ge) {
+                    @SuppressWarnings("unchecked")
+                    Expression<Comparable<Object>> geExpr =
+                        (Expression<Comparable<Object>>)(Expression<?>)join.get(ge.fieldName());
+                    onPredicates.add(cb.greaterThanOrEqualTo(geExpr, (Comparable<Object>)ge.value()));
                 } else if (node instanceof JoinGroup.ConditionNode.Lt lt) {
                     @SuppressWarnings("unchecked")
                     Expression<Comparable<Object>> ltExpr =
                         (Expression<Comparable<Object>>)(Expression<?>)join.get(lt.fieldName());
                     onPredicates.add(cb.lessThan(ltExpr, (Comparable<Object>)lt.value()));
+                } else if (node instanceof JoinGroup.ConditionNode.Le le) {
+                    @SuppressWarnings("unchecked")
+                    Expression<Comparable<Object>> leExpr =
+                        (Expression<Comparable<Object>>)(Expression<?>)join.get(le.fieldName());
+                    onPredicates.add(cb.lessThanOrEqualTo(leExpr, (Comparable<Object>)le.value()));
+                } else if (node instanceof JoinGroup.ConditionNode.Between between) {
+                    @SuppressWarnings("unchecked")
+                    Expression<Comparable<Object>> betweenExpr =
+                        (Expression<Comparable<Object>>)(Expression<?>)join.get(between.fieldName());
+                    onPredicates.add(cb.between(betweenExpr, (Comparable<Object>)between.start(),
+                        (Comparable<Object>)between.end()));
+                } else if (node instanceof JoinGroup.ConditionNode.NotBetween notBetween) {
+                    @SuppressWarnings("unchecked")
+                    Expression<Comparable<Object>> notBetweenExpr =
+                        (Expression<Comparable<Object>>)(Expression<?>)join.get(notBetween.fieldName());
+                    onPredicates.add(cb.not(cb.between(notBetweenExpr, (Comparable<Object>)notBetween.start(),
+                        (Comparable<Object>)notBetween.end())));
+                } else if (node instanceof JoinGroup.ConditionNode.In in) {
+                    onPredicates.add(join.get(in.fieldName()).in(in.values()));
+                } else if (node instanceof JoinGroup.ConditionNode.NotIn notIn) {
+                    onPredicates.add(join.get(notIn.fieldName()).in(notIn.values()).not());
+                } else if (node instanceof JoinGroup.ConditionNode.StartsWith startsWith) {
+                    onPredicates
+                        .add(cb.like(join.get(startsWith.fieldName()).as(String.class), startsWith.value() + "%"));
+                } else if (node instanceof JoinGroup.ConditionNode.EndsWith endsWith) {
+                    onPredicates.add(cb.like(join.get(endsWith.fieldName()).as(String.class), "%" + endsWith.value()));
+                } else if (node instanceof JoinGroup.ConditionNode.Contains contains) {
+                    onPredicates
+                        .add(cb.like(join.get(contains.fieldName()).as(String.class), "%" + contains.value() + "%"));
+                } else if (node instanceof JoinGroup.ConditionNode.EqIgnoreCase eqIgnoreCase) {
+                    onPredicates.add(cb.equal(cb.upper(join.get(eqIgnoreCase.fieldName()).as(String.class)),
+                        cb.upper(cb.literal(eqIgnoreCase.value()))));
+                } else if (node instanceof JoinGroup.ConditionNode.LikeIgnoreCase likeIgnoreCase) {
+                    onPredicates.add(cb.like(cb.upper(join.get(likeIgnoreCase.fieldName()).as(String.class)),
+                        cb.upper(cb.literal(likeIgnoreCase.value()))));
                 } else if (node instanceof JoinGroup.ConditionNode.IsNull isNull) {
                     onPredicates.add(cb.isNull(join.get(isNull.fieldName())));
                 } else if (node instanceof JoinGroup.ConditionNode.IsNotNull isNotNull) {
                     onPredicates.add(cb.isNotNull(join.get(isNotNull.fieldName())));
+                } else if (node instanceof JoinGroup.ConditionNode.IsEmpty isEmpty) {
+                    onPredicates.add(cb.isEmpty(join.get(isEmpty.fieldName())));
+                } else if (node instanceof JoinGroup.ConditionNode.IsNotEmpty isNotEmpty) {
+                    onPredicates.add(cb.isNotEmpty(join.get(isNotEmpty.fieldName())));
                 }
             }
             if (!onPredicates.isEmpty()) {

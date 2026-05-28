@@ -5,6 +5,7 @@ import com.zsubera.jpa.spec.SFunction;
 import java.beans.Introspector;
 import java.lang.invoke.SerializedLambda;
 import java.lang.reflect.Method;
+import java.util.Iterator;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executors;
@@ -74,11 +75,16 @@ public final class LambdaUtils {
         });
         cleaner.scheduleAtFixedRate(() -> {
             if (CACHE.size() > MAX_CACHE_SIZE) {
+                int toRemove = CACHE.size() / 2;
                 if (log.isDebugEnabled()) {
-                    log.debug("LambdaUtils cache size ({}) exceeds limit ({}). Clearing cache.", CACHE.size(),
-                        MAX_CACHE_SIZE);
+                    log.debug("LambdaUtils cache size ({}) exceeds limit ({}). Evicting ~{} entries.", CACHE.size(),
+                        MAX_CACHE_SIZE, toRemove);
                 }
-                CACHE.clear();
+                Iterator<String> it = CACHE.keySet().iterator();
+                for (int i = 0; i < toRemove && it.hasNext(); i++) {
+                    it.next();
+                    it.remove();
+                }
             }
         }, 5, 5, TimeUnit.MINUTES);
     }
