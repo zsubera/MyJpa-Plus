@@ -640,3 +640,82 @@ import com.zsubera.jpa.util.LambdaUtils;
 **原因**：新增对 PredicateHelper.escapeLikeWildcards() 和 PredicateHelper.LIKE_ESCAPE_CHAR 的引用。
 
 ---
+
+## 轮次 4 - 优化记录
+时间：2026-05-29
+
+### 已修复问题
+- [P1] F-10 ConditionBuilder.fieldName() 私有方法与 LambdaUtils.getPropertyName 重复：移除 fieldName() 私有方法，统一使用 LambdaUtils.getPropertyName()，消除代码重复（LambdaUtils 已内置 null 校验）
+- [P2] F-11 QuerySpec 中 7 处 if (log.isDebugEnabled()) 不必要的日志守卫：移除所有 if (log.isDebugEnabled()) 包装，直接调用 log.debug()（SLF4J 内部已使用参数化占位符，无需额外守卫）
+- [P2] F-15 EntityGraphHelper.attributePaths.merge lambda 可读性差：将内联 lambda 表达式提取为 appendToArray() 独立方法，提高代码可读性
+
+### 未修复问题
+- F-01 ProjectionSpec JOIN 条件 LIKE 通配符未转义：经检查，已在轮次 3 中修复（ProjectionSpec.java:940-950 已调用 PredicateHelper.escapeLikeWildcards()）
+- F-02/F-03/F-04 大类拆分（QuerySpec/ProjectionSpec/ConditionBuilder）：属于大规模重构（1-2 天工作量），建议在 v2.0.0 版本中进行，不纳入本次迭代
+- F-05 LambdaUtils 缓存驱逐策略（FIFO → LRU）：需要引入 Caffeine 依赖或自行实现 LRU，改动较大，建议在 v1.1.0 版本中处理
+- F-06 SoftDeleteHelper 缓存大小硬编码：配置化改动较小，但需要额外的测试验证，建议后续迭代处理
+- F-08 UpdateSpec/DeleteSpec TOCTOU 竞态条件：当前设计已合理（提供悲观锁选项），根本修复需要重构执行架构
+- F-12 SubQuerySpec 使用 java.lang.Comparable 而非导入：Spotless 格式化已自动处理，无需手动修改
+- F-14 MyJpaTemplate.unpaged() 字符串拼接：经检查，已使用 SLF4J 占位符，无需修改
+
+### 修改详情
+#### 1. ConditionBuilder.fieldName() 移除，统一使用 LambdaUtils.getPropertyName()
+**文件**：src/main/java/com/zsubera/jpa/spec/ConditionBuilder.java:40-45
+**修改前**：
+```java
+private String fieldName(SFunction<E, ?> field) {
+    if (field == null) {
+        throw new IllegalArgumentException("field must not be null");
+    }
+    return LambdaUtils.getPropertyName(field);
+}
+```
+**修改后**：移除此私有方法
+**原因**：fieldName() 方法与 LambdaUtils.getPropertyName() 功能完全重复，后者已内置 null 校验（IllegalArgumentException）。移除后，所有 18 处调用点统一使用 LambdaUtils.getPropertyName(field)，消除代码重复。
+
+#### 2. QuerySpec 移除不必要的 isDebugEnabled 守卫
+**文件**：src/main/java/com/zsubera/jpa/spec/QuerySpec.java（7 处）
+**修改前**：
+```java
+if (log.isDebugEnabled()) {
+    log.debug("QuerySpec: DISTINCT enabled");
+}
+```
+**修改后**：
+```java
+log.debug("QuerySpec: DISTINCT enabled");
+```
+**原因**：SLF4J 的 log.debug() 使用参数化占位符（{}），日志框架内部会在输出前检查日志级别。额外的 if (log.isDebugEnabled()) 守卫是多余的代码噪音，增加了代码行数但不提供性能收益（对于无参数的 debug 调用，现代 SLF4J 实现的开销可忽略不计）。
+
+#### 3. EntityGraphHelper.appendToArray() 提取
+**文件**：src/main/java/com/zsubera/jpa/util/EntityGraphHelper.java:100-105
+**修改前**：
+```java
+attributePaths.merge(root, new String[] {subpath}, (old, val) -> {
+    String[] combined = new String[old.length + 1];
+    System.arraycopy(old, 0, combined, 0, old.length);
+    combined[old.length] = subpath;
+    return combined;
+});
+```
+**修改后**：
+```java
+attributePaths.merge(root, new String[] {subpath}, (old, val) -> appendToArray(old, subpath));
+```
+新增方法：
+```java
+private static String[] appendToArray(String[] old, String element) {
+    String[] combined = new String[old.length + 1];
+    System.arraycopy(old, 0, combined, 0, old.length);
+    combined[old.length] = element;
+    return combined;
+}
+```
+**原因**：内联 lambda 中包含数组复制逻辑，可读性差。提取为独立的命名方法后，意图更清晰，便于单元测试和复用。
+
+### 测试结果
+- 单元测试：全部通过（602 个测试，0 失败，0 错误）
+- 集成测试：跳过（需要 Docker，已排除）
+- Spotless 格式化：通过
+
+---

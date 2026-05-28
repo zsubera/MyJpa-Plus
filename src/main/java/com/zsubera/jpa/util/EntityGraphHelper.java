@@ -97,12 +97,7 @@ public final class EntityGraphHelper<T> {
         if (dotIndex > 0) {
             String root = attributePath.substring(0, dotIndex);
             String subpath = attributePath.substring(dotIndex + 1);
-            attributePaths.merge(root, new String[] {subpath}, (old, val) -> {
-                String[] combined = new String[old.length + 1];
-                System.arraycopy(old, 0, combined, 0, old.length);
-                combined[old.length] = subpath;
-                return combined;
-            });
+            attributePaths.merge(root, new String[] {subpath}, (old, val) -> appendToArray(old, subpath));
         } else {
             // Use merge instead of put to preserve existing subpaths
             // e.g. add("roles.permissions") then add("roles") should keep "permissions"
@@ -253,5 +248,19 @@ public final class EntityGraphHelper<T> {
      */
     public String getHintName() {
         return loadGraphType ? HINT_LOADGRAPH : HINT_FETCHGRAPH;
+    }
+
+    /**
+     * 将元素追加到数组末尾，返回新数组。
+     *
+     * @param old 原数组
+     * @param element 要追加的元素
+     * @return 包含新元素的新数组
+     */
+    private static String[] appendToArray(String[] old, String element) {
+        String[] combined = new String[old.length + 1];
+        System.arraycopy(old, 0, combined, 0, old.length);
+        combined[old.length] = element;
+        return combined;
     }
 }

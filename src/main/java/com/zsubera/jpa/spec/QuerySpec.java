@@ -159,9 +159,7 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
      */
     public QuerySpec<T> distinct() {
         this.distinct = true;
-        if (log.isDebugEnabled()) {
-            log.debug("QuerySpec: DISTINCT enabled");
-        }
+        log.debug("QuerySpec: DISTINCT enabled");
         return this;
     }
 
@@ -179,9 +177,7 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
         for (SFunction<T, ?> f : fields) {
             groupByFields.add(LambdaUtils.getPropertyName(f));
         }
-        if (log.isDebugEnabled()) {
-            log.debug("QuerySpec: GROUP BY {}", groupByFields);
-        }
+        log.debug("QuerySpec: GROUP BY {}", groupByFields);
         return this;
     }
 
@@ -196,9 +192,7 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
             throw new IllegalArgumentException("condition must not be null");
         }
         havingConditions.add(condition);
-        if (log.isDebugEnabled()) {
-            log.debug("QuerySpec: HAVING condition added ({} total)", havingConditions.size());
-        }
+        log.debug("QuerySpec: HAVING condition added ({} total)", havingConditions.size());
         return this;
     }
 
@@ -220,9 +214,7 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
             throw new IllegalArgumentException("condition must not be null");
         }
         havingConditions.add((root, cb) -> condition.apply(root));
-        if (log.isDebugEnabled()) {
-            log.debug("QuerySpec: HAVING condition added ({} total)", havingConditions.size());
-        }
+        log.debug("QuerySpec: HAVING condition added ({} total)", havingConditions.size());
         return this;
     }
 
@@ -245,9 +237,7 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
         for (SFunction<T, ?> f : fields) {
             orderNodes.add(new ConditionNode.OrderNode(LambdaUtils.getPropertyName(f), true));
         }
-        if (log.isDebugEnabled()) {
-            log.debug("QuerySpec: ORDER BY ASC {}", Arrays.toString(fields));
-        }
+        log.debug("QuerySpec: ORDER BY ASC {}", Arrays.toString(fields));
         return this;
     }
 
@@ -269,9 +259,7 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
         for (SFunction<T, ?> f : fields) {
             orderNodes.add(new ConditionNode.OrderNode(LambdaUtils.getPropertyName(f), false));
         }
-        if (log.isDebugEnabled()) {
-            log.debug("QuerySpec: ORDER BY DESC {}", Arrays.toString(fields));
-        }
+        log.debug("QuerySpec: ORDER BY DESC {}", Arrays.toString(fields));
         return this;
     }
 
@@ -669,10 +657,8 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
     @Override
     public Predicate toPredicate(@NonNull Root<T> root, @Nullable CriteriaQuery<?> query, @NonNull CriteriaBuilder cb) {
         validateCleanState();
-        if (log.isDebugEnabled()) {
-            log.debug("QuerySpec: building predicate for {} with {} conditions, {} order nodes, distinct={}",
-                root.getModel().getName(), conditions.size(), orderNodes.size(), distinct);
-        }
+        log.debug("QuerySpec: building predicate for {} with {} conditions, {} order nodes, distinct={}",
+            root.getModel().getName(), conditions.size(), orderNodes.size(), distinct);
         if (query != null) {
             if (distinct) {
                 query.distinct(true);
@@ -708,9 +694,7 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
             }
         }
         Predicate result = predicates.isEmpty() ? cb.conjunction() : cb.and(predicates.toArray(new Predicate[0]));
-        if (log.isDebugEnabled()) {
-            log.debug("QuerySpec: predicate built with {} conditions", predicates.size());
-        }
+        log.debug("QuerySpec: predicate built with {} conditions", predicates.size());
         return result;
     }
 
