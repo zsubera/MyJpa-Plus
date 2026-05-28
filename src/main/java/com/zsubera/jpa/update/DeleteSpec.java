@@ -2,6 +2,8 @@ package com.zsubera.jpa.update;
 
 import com.zsubera.jpa.repository.EntityClassResolver;
 import jakarta.persistence.EntityManager;
+import jakarta.persistence.LockModeType;
+import jakarta.persistence.TypedQuery;
 import jakarta.persistence.criteria.CriteriaBuilder;
 import jakarta.persistence.criteria.CriteriaDelete;
 import jakarta.persistence.criteria.CriteriaQuery;
@@ -134,19 +136,43 @@ public class DeleteSpec<T> extends AbstractBulkOperationSpec<T, DeleteSpec<T>> {
     }
 
     /**
-     * 执行 DELETE 语句并限制受影响的行数。
+     * Execute DELETE statement limiting the number of affected rows.
      *
      * <p>
-     * 此方法适用于批处理场景。它会限制 SQL 影响的行数。请注意，DELETE 语句的 LIMIT 支持因数据库而异。
+     * This method is suitable for batch processing scenarios. It limits the number of rows affected by SQL. Note that
+     * LIMIT support for DELETE statements varies by database.
      *
      * <p>
-     * <strong>注意：</strong>此方法需要活动事务。调用方负责在批次之间刷新和清除持久化上下文。
+     * <strong>Note:</strong> This method requires an active transaction. The caller is responsible for flushing and
+     * clearing the persistence context between batches.
      *
-     * @param em 实体管理器
-     * @param limit 要删除的最大行数
-     * @return 实际删除的行数
+     * <p>
+     * <strong>REL-1 note:</strong> There is a time window between querying IDs and executing the delete. In
+     * high-concurrency scenarios, other transactions may modify or delete records. Use
+     * {@link #executeLimited(EntityManager, int, boolean)} with {@code pessimisticLock=true} for high-concurrency
+     * scenarios.
+     *
+     * @param em entity manager
+     * @param limit maximum number of rows to delete
+     * @return actual number of rows deleted
      */
     public int executeLimited(EntityManager em, int limit) {
+        return executeLimited(em, limit, false);
+    }
+
+    /**
+     * Execute DELETE statement limiting the number of affected rows, with optional pessimistic locking.
+     *
+     * <p>
+     * When {@code pessimisticLock} is {@code true}, the ID query uses {@code SELECT ... FOR UPDATE} to lock the rows
+     * before deleting, preventing lost updates in concurrent scenarios.
+     *
+     * @param em entity manager
+     * @param limit maximum number of rows to delete
+     * @param pessimisticLock whether to use pessimistic locking on the ID query
+     * @return actual number of rows deleted
+     */
+    public int executeLimited(EntityManager em, int limit, boolean pessimisticLock) {
         if (limit <= 0) {
             throw new IllegalArgumentException("limit must be positive");
         }
@@ -163,7 +189,11 @@ public class DeleteSpec<T> extends AbstractBulkOperationSpec<T, DeleteSpec<T>> {
                 + "Use deleteAll() for unconditional deletions.");
         }
         idQuery.where(cb.and(predicates));
-        List<?> ids = em.createQuery(idQuery).setMaxResults(limit).getResultList();
+        TypedQuery<?> query = em.createQuery(idQuery).setMaxResults(limit);
+        if (pessimisticLock) {
+            query.setLockMode(LockModeType.PESSIMISTIC_WRITE);
+        }
+        List<?> ids = query.getResultList();
 
         if (ids.isEmpty()) {
             return 0;

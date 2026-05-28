@@ -158,6 +158,9 @@ public class MyJpaTemplate {
      */
     @Transactional(readOnly = true)
     public <T> Optional<T> findById(Class<T> entityClass, Object id) {
+        if (id == null) {
+            throw new IllegalArgumentException("id must not be null");
+        }
         String idFieldName = EntityClassResolver.resolveIdFieldName(entityClass);
         QuerySpec<T> spec = new QuerySpec<>();
         spec.where((root, cb) -> cb.equal(root.get(idFieldName), id));

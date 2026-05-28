@@ -50,8 +50,12 @@ public final class InClauseBuilder {
         if (prop != null) {
             try {
                 int val = Integer.parseInt(prop);
-                if (val > 0) {
+                if (val > 0 && val <= 100000) {
                     configured = val;
+                } else if (val > 100000) {
+                    log.warn("myjpa-plus.in-clause-max-size value ({}) exceeds upper limit (100000). Using 100000.",
+                        val);
+                    configured = 100000;
                 }
             } catch (NumberFormatException ignored) {
                 // use default
@@ -172,8 +176,9 @@ public final class InClauseBuilder {
             log.debug("IN clause has {} values, exceeding limit of {}. Splitting into batches.", values.size(),
                 MAX_IN_CLAUSE_SIZE);
         }
-        List<Predicate> batchPredicates = new ArrayList<>();
-        List<Object> batch = new ArrayList<>();
+        int estimatedBatches = (values.size() + MAX_IN_CLAUSE_SIZE - 1) / MAX_IN_CLAUSE_SIZE;
+        List<Predicate> batchPredicates = new ArrayList<>(estimatedBatches);
+        List<Object> batch = new ArrayList<>(MAX_IN_CLAUSE_SIZE);
         for (Object v : values) {
             batch.add(v);
             if (batch.size() >= MAX_IN_CLAUSE_SIZE) {
@@ -192,8 +197,9 @@ public final class InClauseBuilder {
             log.debug("NOT IN clause has {} values, exceeding limit of {}. Splitting into batches.", values.size(),
                 MAX_IN_CLAUSE_SIZE);
         }
-        List<Predicate> batchPredicates = new ArrayList<>();
-        List<Object> batch = new ArrayList<>();
+        int estimatedBatches = (values.size() + MAX_IN_CLAUSE_SIZE - 1) / MAX_IN_CLAUSE_SIZE;
+        List<Predicate> batchPredicates = new ArrayList<>(estimatedBatches);
+        List<Object> batch = new ArrayList<>(MAX_IN_CLAUSE_SIZE);
         for (Object v : values) {
             batch.add(v);
             if (batch.size() >= MAX_IN_CLAUSE_SIZE) {

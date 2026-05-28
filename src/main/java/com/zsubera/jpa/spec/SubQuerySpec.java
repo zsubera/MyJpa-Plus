@@ -520,6 +520,9 @@ public class SubQuerySpec<S> {
      * @return 当前 SubQuerySpec 实例，支持链式调用
      */
     public SubQuerySpec<S> where(java.util.function.Function<Root<S>, Predicate> condition) {
+        if (condition == null) {
+            throw new IllegalArgumentException("condition must not be null");
+        }
         predicates.add(condition.apply(root));
         return this;
     }

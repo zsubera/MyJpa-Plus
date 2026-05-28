@@ -186,6 +186,9 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
      * @return 当前 QuerySpec 实例，支持链式调用
      */
     public QuerySpec<T> having(BiFunction<Path<T>, CriteriaBuilder, Predicate> condition) {
+        if (condition == null) {
+            throw new IllegalArgumentException("condition must not be null");
+        }
         havingConditions.add(condition);
         if (log.isDebugEnabled()) {
             log.debug("QuerySpec: HAVING condition added ({} total)", havingConditions.size());
@@ -207,6 +210,9 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
      * @return 当前 QuerySpec 实例，支持链式调用
      */
     public QuerySpec<T> having(Function<Path<T>, Predicate> condition) {
+        if (condition == null) {
+            throw new IllegalArgumentException("condition must not be null");
+        }
         havingConditions.add((root, cb) -> condition.apply(root));
         if (log.isDebugEnabled()) {
             log.debug("QuerySpec: HAVING condition added ({} total)", havingConditions.size());
@@ -811,6 +817,8 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
                     .not(cb.between((Expression<Comparable>)fieldPath, (Comparable)range[0], (Comparable)range[1]));
             }
             default:
+                // Defensive programming: this branch should never be reached if all Op enum values
+                // are handled above. Throw to catch any future enum values added without corresponding cases.
                 throw new IllegalArgumentException("Unsupported operator: " + node.op);
         }
     }

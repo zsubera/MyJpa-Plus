@@ -83,6 +83,9 @@ public class ProjectionSpec<T> {
          * @see com.zsubera.jpa.spec.ConditionBuilder#eq(SFunction, Object)
          */
         public JoinGroup<E> eq(SFunction<E, ?> field, Object value) {
+            if (field == null) {
+                throw new IllegalArgumentException("field must not be null");
+            }
             conditions.add(new ConditionNode.Eq(LambdaUtils.getPropertyName(field), value));
             return this;
         }
@@ -96,6 +99,9 @@ public class ProjectionSpec<T> {
          * @see com.zsubera.jpa.spec.ConditionBuilder#ne(SFunction, Object)
          */
         public JoinGroup<E> ne(SFunction<E, ?> field, Object value) {
+            if (field == null) {
+                throw new IllegalArgumentException("field must not be null");
+            }
             conditions.add(new ConditionNode.Ne(LambdaUtils.getPropertyName(field), value));
             return this;
         }
@@ -110,6 +116,9 @@ public class ProjectionSpec<T> {
          * @see com.zsubera.jpa.spec.ConditionBuilder#like(SFunction, String)
          */
         public JoinGroup<E> like(SFunction<E, ?> field, String value) {
+            if (field == null) {
+                throw new IllegalArgumentException("field must not be null");
+            }
             if (value == null) {
                 throw new IllegalArgumentException("value must not be null");
             }
@@ -127,6 +136,9 @@ public class ProjectionSpec<T> {
          * @see com.zsubera.jpa.spec.ConditionBuilder#gt(SFunction, Comparable)
          */
         public JoinGroup<E> gt(SFunction<E, ?> field, Comparable<?> value) {
+            if (field == null) {
+                throw new IllegalArgumentException("field must not be null");
+            }
             if (value == null) {
                 throw new IllegalArgumentException("value must not be null");
             }
@@ -144,6 +156,9 @@ public class ProjectionSpec<T> {
          * @see com.zsubera.jpa.spec.ConditionBuilder#lt(SFunction, Comparable)
          */
         public JoinGroup<E> lt(SFunction<E, ?> field, Comparable<?> value) {
+            if (field == null) {
+                throw new IllegalArgumentException("field must not be null");
+            }
             if (value == null) {
                 throw new IllegalArgumentException("value must not be null");
             }
@@ -159,6 +174,9 @@ public class ProjectionSpec<T> {
          * @see com.zsubera.jpa.spec.ConditionBuilder#isNull(SFunction)
          */
         public JoinGroup<E> isNull(SFunction<E, ?> field) {
+            if (field == null) {
+                throw new IllegalArgumentException("field must not be null");
+            }
             conditions.add(new ConditionNode.IsNull(LambdaUtils.getPropertyName(field)));
             return this;
         }
@@ -171,6 +189,9 @@ public class ProjectionSpec<T> {
          * @see com.zsubera.jpa.spec.ConditionBuilder#isNotNull(SFunction)
          */
         public JoinGroup<E> isNotNull(SFunction<E, ?> field) {
+            if (field == null) {
+                throw new IllegalArgumentException("field must not be null");
+            }
             conditions.add(new ConditionNode.IsNotNull(LambdaUtils.getPropertyName(field)));
             return this;
         }
@@ -249,6 +270,9 @@ public class ProjectionSpec<T> {
      * @return 当前 ProjectionSpec 实例，支持链式调用
      */
     public ProjectionSpec<T> select(SFunction<T, ?> field) {
+        if (field == null) {
+            throw new IllegalArgumentException("field must not be null");
+        }
         selections.put(LambdaUtils.getPropertyName(field), field);
         return this;
     }
@@ -276,6 +300,12 @@ public class ProjectionSpec<T> {
      * @return 当前 ProjectionSpec 实例，支持链式调用
      */
     public <E> ProjectionSpec<T> join(SFunction<T, ?> field, Consumer<JoinGroup<E>> config) {
+        if (field == null) {
+            throw new IllegalArgumentException("field must not be null");
+        }
+        if (config == null) {
+            throw new IllegalArgumentException("config must not be null");
+        }
         joins.add(new JoinSpec(LambdaUtils.getPropertyName(field), config, false));
         return this;
     }
@@ -292,6 +322,12 @@ public class ProjectionSpec<T> {
      * @return 当前 ProjectionSpec 实例，支持链式调用
      */
     public <E> ProjectionSpec<T> leftJoin(SFunction<T, ?> field, Consumer<JoinGroup<E>> config) {
+        if (field == null) {
+            throw new IllegalArgumentException("field must not be null");
+        }
+        if (config == null) {
+            throw new IllegalArgumentException("config must not be null");
+        }
         joins.add(new JoinSpec(LambdaUtils.getPropertyName(field), config, true));
         return this;
     }
@@ -303,6 +339,9 @@ public class ProjectionSpec<T> {
      * @return 当前 ProjectionSpec 实例，支持链式调用
      */
     public ProjectionSpec<T> orderByAsc(SFunction<T, ?> field) {
+        if (field == null) {
+            throw new IllegalArgumentException("field must not be null");
+        }
         orderSpecs.add(new OrderSpec(LambdaUtils.getPropertyName(field), true));
         return this;
     }
@@ -314,6 +353,9 @@ public class ProjectionSpec<T> {
      * @return 当前 ProjectionSpec 实例，支持链式调用
      */
     public ProjectionSpec<T> orderByDesc(SFunction<T, ?> field) {
+        if (field == null) {
+            throw new IllegalArgumentException("field must not be null");
+        }
         orderSpecs.add(new OrderSpec(LambdaUtils.getPropertyName(field), false));
         return this;
     }
@@ -325,6 +367,9 @@ public class ProjectionSpec<T> {
      * @return 当前 ProjectionSpec 实例，支持链式调用
      */
     public ProjectionSpec<T> where(Consumer<QuerySpec<T>> config) {
+        if (config == null) {
+            throw new IllegalArgumentException("config must not be null");
+        }
         config.accept(querySpec);
         return this;
     }
@@ -410,12 +455,21 @@ public class ProjectionSpec<T> {
     }
 
     /**
-     * 分页查询投影结果。
+     * Paginate projection results.
      *
-     * @param em JPA 实体管理器
-     * @param pageable 分页信息
-     * @return 分页投影结果
-     * @throws IllegalArgumentException 如果分页偏移量过大
+     * <p>
+     * <strong>PERF-3 note:</strong> Join descriptors are extracted once and reused for both count and data queries to
+     * avoid redundant JOIN resolution.
+     *
+     * <p>
+     * <strong>PERF-4 note:</strong> Uses {@code countDistinct(root)} for accurate counting when JOINs may produce
+     * duplicate rows. For one-to-many JOINs with complex primary keys, consider using subquery counting via
+     * {@code QuerySpec} directly.
+     *
+     * @param em JPA entity manager
+     * @param pageable pagination info
+     * @return paginated projection results
+     * @throws IllegalArgumentException if pagination offset is too large
      */
     public Page<Tuple> findPage(EntityManager em, Pageable pageable) {
         CriteriaBuilder cb = em.getCriteriaBuilder();

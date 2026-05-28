@@ -7,6 +7,11 @@ import java.lang.invoke.SerializedLambda;
 import java.lang.reflect.Method;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Lambda 工具类，用于从方法引用中提取实体属性名称。
@@ -32,6 +37,8 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 public final class LambdaUtils {
 
+    private static final Logger log = LoggerFactory.getLogger(LambdaUtils.class);
+
     private static final int MAX_CACHE_SIZE;
 
     static {
@@ -40,8 +47,11 @@ public final class LambdaUtils {
         if (prop != null) {
             try {
                 int val = Integer.parseInt(prop);
-                if (val > 0) {
+                if (val > 0 && val <= 65536) {
                     configured = val;
+                } else if (val > 65536) {
+                    log.warn("myjpa-plus.lambda-cache-size value ({}) exceeds upper limit (65536). Using 65536.", val);
+                    configured = 65536;
                 }
             } catch (NumberFormatException ignored) {
                 // use default
@@ -51,12 +61,27 @@ public final class LambdaUtils {
     }
 
     /**
-     * 线程安全的缓存，使用 ConcurrentHashMap 确保 computeIfAbsent 的原子性。
-     *
-     * <p>
-     * 注意：此缓存没有 LRU 淘汰能力，但在高并发场景下性能更好。 如果缓存大小超过 MAX_CACHE_SIZE，会记录警告日志。
+     * Thread-safe cache using ConcurrentHashMap. A background daemon thread periodically checks cache size and clears
+     * if it exceeds MAX_CACHE_SIZE. This prevents memory leaks in hot-redeploy and OSGi environments.
      */
     private static final Map<String, String> CACHE = new ConcurrentHashMap<>();
+
+    static {
+        ScheduledExecutorService cleaner = Executors.newSingleThreadScheduledExecutor(r -> {
+            Thread t = new Thread(r, "myjpa-cache-cleaner");
+            t.setDaemon(true);
+            return t;
+        });
+        cleaner.scheduleAtFixedRate(() -> {
+            if (CACHE.size() > MAX_CACHE_SIZE) {
+                if (log.isDebugEnabled()) {
+                    log.debug("LambdaUtils cache size ({}) exceeds limit ({}). Clearing cache.", CACHE.size(),
+                        MAX_CACHE_SIZE);
+                }
+                CACHE.clear();
+            }
+        }, 5, 5, TimeUnit.MINUTES);
+    }
 
     private LambdaUtils() {}
 
@@ -82,9 +107,13 @@ public final class LambdaUtils {
         } catch (ReflectiveOperationException e) {
             throw new MyJpaPlusException("Failed to extract property name from method reference. "
                 + "Ensure you are using a method reference directly (e.g., Entity::getField). "
-                + "Lambda expressions like e -> e.getField() are not supported.", e);
+                + "Lambda expressions like e -> e.getField() are not supported. "
+                + "If using Java 17+ module system, add JVM argument: "
+                + "--add-opens java.base/java.lang.invoke=ALL-UNNAMED", e);
         } catch (SecurityException e) {
-            throw new MyJpaPlusException("Failed to extract property name due to security restriction.", e);
+            throw new MyJpaPlusException("Failed to extract property name due to security restriction. "
+                + "If using Java 17+ module system, add JVM argument: "
+                + "--add-opens java.base/java.lang.invoke=ALL-UNNAMED", e);
         }
     }
 

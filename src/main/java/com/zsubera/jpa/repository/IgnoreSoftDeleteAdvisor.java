@@ -35,28 +35,29 @@ public class IgnoreSoftDeleteAdvisor {
      * @return 方法执行结果
      * @throws Throwable 方法执行异常
      */
-    @Around("within(com.zsubera.jpa.repository..*) || within(org.springframework.data.jpa.repository.support..*)")
+    @Around("within(com.zsubera.jpa.repository.SoftDeleteJpaRepository+)")
     public Object aroundRepositoryMethod(ProceedingJoinPoint pjp) throws Throwable {
         MethodSignature signature = (MethodSignature)pjp.getSignature();
         Method method = signature.getMethod();
 
-        // 检查方法级别注解
-        boolean hasAnnotation = method.isAnnotationPresent(IgnoreSoftDelete.class);
-        // 检查接口级别注解
-        if (!hasAnnotation) {
-            Class<?> declaringClass = method.getDeclaringClass();
-            hasAnnotation = declaringClass.isAnnotationPresent(IgnoreSoftDelete.class);
-        }
-
-        if (hasAnnotation) {
-            SoftDeleteContext.setIgnoreSoftDelete(true);
-            if (log.isTraceEnabled()) {
-                log.trace("Soft delete filter bypassed for method: {}.{}", method.getDeclaringClass().getSimpleName(),
-                    method.getName());
-            }
-        }
-
+        // Compute hasAnnotation inside try block to ensure cleanup in finally
+        boolean hasAnnotation = false;
         try {
+            // Check method-level annotation
+            hasAnnotation = method.isAnnotationPresent(IgnoreSoftDelete.class);
+            // Check interface-level annotation
+            if (!hasAnnotation) {
+                Class<?> declaringClass = method.getDeclaringClass();
+                hasAnnotation = declaringClass.isAnnotationPresent(IgnoreSoftDelete.class);
+            }
+
+            if (hasAnnotation) {
+                SoftDeleteContext.setIgnoreSoftDelete(true);
+                if (log.isTraceEnabled()) {
+                    log.trace("Soft delete filter bypassed for method: {}.{}",
+                        method.getDeclaringClass().getSimpleName(), method.getName());
+                }
+            }
             return pjp.proceed();
         } finally {
             if (hasAnnotation) {

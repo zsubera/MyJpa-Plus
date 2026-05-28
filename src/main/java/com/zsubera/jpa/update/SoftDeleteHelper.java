@@ -6,12 +6,14 @@ import jakarta.persistence.criteria.CriteriaBuilder;
 import jakarta.persistence.criteria.Path;
 import jakarta.persistence.criteria.Predicate;
 import java.lang.reflect.Field;
+import java.lang.reflect.Method;
 import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import org.slf4j.Logger;
 import org.springframework.data.jpa.domain.Specification;
+import org.springframework.util.ConcurrentReferenceHashMap;
 
 /**
  * 软删除实体辅助工具类。
@@ -52,12 +54,15 @@ public final class SoftDeleteHelper {
 
     // 缓存：entityClass ->字段名（或“无字段”的哨兵）
     // 使用ConcurrentHashMap实现线程安全访问;实体类别数量在实际中是有限的
-    private static final ConcurrentMap<Class<?>, String> FIELD_CACHE = new ConcurrentHashMap<>();
+    // Cache: entityClass -> field name (or sentinel for "no field")
+    // Uses weak key references to allow class loader GC in OSGi/hot-redeploy scenarios
+    private static final ConcurrentMap<Class<?>, String> FIELD_CACHE =
+        new ConcurrentReferenceHashMap<>(16, ConcurrentReferenceHashMap.ReferenceType.WEAK);
 
-    // 缓存：entityClass -> isNotDeleted 的规范
+    // Cache: entityClass -> isNotDeleted Specification
     private static final ConcurrentMap<Class<?>, Specification<?>> NOT_DELETED_SPEC_CACHE = new ConcurrentHashMap<>();
 
-    // 缓存：entityClass -> isDeleted 的规范
+    // Cache: entityClass -> isDeleted Specification
     private static final ConcurrentMap<Class<?>, Specification<?>> DELETED_SPEC_CACHE = new ConcurrentHashMap<>();
 
     private SoftDeleteHelper() {}
@@ -203,15 +208,52 @@ public final class SoftDeleteHelper {
                 FIELD_CACHE.size(), MAX_CACHE_SIZE);
         }
         String result = FIELD_CACHE.computeIfAbsent(entityClass, cls -> {
+            // Try getter-based resolution first (Java 17+ compatible)
+            String viaGetter = resolveSoftDeleteFieldNameViaGetter(cls);
+            if (viaGetter != null) {
+                return viaGetter;
+            }
+            // Fallback to field-based reflection
             for (Field field : getAllFields(cls)) {
                 if (field.isAnnotationPresent(SoftDelete.class)) {
-                    field.setAccessible(true);
+                    try {
+                        field.setAccessible(true);
+                    } catch (SecurityException e) {
+                        log.warn(
+                            "Cannot set accessible on field '{}' in {}. "
+                                + "If using Java 17+ module system, add JVM argument: "
+                                + "--add-opens java.base/java.lang.reflect=ALL-UNNAMED",
+                            field.getName(), cls.getSimpleName());
+                    }
                     return field.getName();
                 }
             }
             return NO_FIELD_SENTINEL;
         });
         return NO_FIELD_SENTINEL.equals(result) ? null : result;
+    }
+
+    /**
+     * Resolve soft delete field name via getter methods (Java 17+ compatible). Scans public methods for @SoftDelete
+     * annotation on getters.
+     *
+     * @param entityClass the entity class to scan
+     * @return the field name, or null if not found via getters
+     */
+    private static String resolveSoftDeleteFieldNameViaGetter(Class<?> entityClass) {
+        for (Method m : entityClass.getMethods()) {
+            SoftDelete ann = m.getAnnotation(SoftDelete.class);
+            if (ann != null) {
+                String name = m.getName();
+                if (name.startsWith("get") && name.length() > 3) {
+                    return Character.toLowerCase(name.charAt(3)) + name.substring(4);
+                }
+                if (name.startsWith("is") && name.length() > 2 && Character.isUpperCase(name.charAt(2))) {
+                    return Character.toLowerCase(name.charAt(2)) + name.substring(3);
+                }
+            }
+        }
+        return null;
     }
 
     private static Field getField(Class<?> entityClass, String fieldName) {
@@ -250,11 +292,11 @@ public final class SoftDeleteHelper {
             if (value == null) {
                 return false;
             }
-            // Boolean 类型
+            // Boolean type
             if (value instanceof Boolean) {
                 return Boolean.TRUE.equals(value);
             }
-            // 枚举类型
+            // Enum type
             if (value instanceof Enum enumValue && field.isAnnotationPresent(SoftDelete.class)) {
                 SoftDelete annotation = field.getAnnotation(SoftDelete.class);
                 if (annotation != null && !annotation.deletedValue().isEmpty()) {
@@ -263,8 +305,11 @@ public final class SoftDeleteHelper {
             }
             return false;
         } catch (ReflectiveOperationException e) {
-            log.warn("Failed to read soft delete field '{}' from entity {}: {}", fieldName,
-                entity.getClass().getSimpleName(), e.getMessage());
+            log.warn(
+                "Failed to read soft delete field '{}' from entity {}: {}. "
+                    + "If using Java 17+ module system, add JVM argument: "
+                    + "--add-opens java.base/java.lang.reflect=ALL-UNNAMED",
+                fieldName, entity.getClass().getSimpleName(), e.getMessage());
             return false;
         }
     }
