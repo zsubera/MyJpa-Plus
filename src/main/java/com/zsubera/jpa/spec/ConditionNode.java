@@ -124,6 +124,11 @@ public sealed interface ConditionNode permits ConditionNode.SimpleNode, Conditio
             this.keyword = keyword;
             this.fieldNames = fieldNames;
         }
+
+        @Override
+        public String toString() {
+            return "MultiLikeNode[keyword='" + keyword + "', fields=" + java.util.Arrays.toString(fieldNames) + "]";
+        }
     }
 
     /** 集合 IS_EMPTY 或 IS_NOT_EMPTY 检查。 */
@@ -134,6 +139,11 @@ public sealed interface ConditionNode permits ConditionNode.SimpleNode, Conditio
         public CollectionNode(String fieldName, CollectionOp op) {
             this.fieldName = fieldName;
             this.op = op;
+        }
+
+        @Override
+        public String toString() {
+            return "CollectionNode[" + fieldName + " " + op + "]";
         }
     }
 
@@ -148,6 +158,11 @@ public sealed interface ConditionNode permits ConditionNode.SimpleNode, Conditio
             this.config = config;
             this.negate = negate;
         }
+
+        @Override
+        public String toString() {
+            return "ExistsNode[" + (negate ? "NOT " : "") + subEntity.getSimpleName() + "]";
+        }
     }
 
     /** 原始谓词函数（复杂条件的应急方案）。 */
@@ -157,6 +172,11 @@ public sealed interface ConditionNode permits ConditionNode.SimpleNode, Conditio
         public RawNode(BiFunction<jakarta.persistence.criteria.Path<?>, CriteriaBuilder, Predicate> fn) {
             this.fn = fn;
         }
+
+        @Override
+        public String toString() {
+            return "RawNode[fn=" + fn.getClass().getName() + "]";
+        }
     }
 
     /** 取反组节点：NOT（内部条件）。 */
@@ -165,6 +185,11 @@ public sealed interface ConditionNode permits ConditionNode.SimpleNode, Conditio
 
         public NegateNode(ConditionNode inner) {
             this.inner = inner;
+        }
+
+        @Override
+        public String toString() {
+            return "NegateNode[" + inner + "]";
         }
     }
 

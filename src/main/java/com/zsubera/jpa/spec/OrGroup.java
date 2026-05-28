@@ -15,6 +15,9 @@ public class OrGroup<T> implements ConditionBuilder<T, OrGroup<T>> {
     private final QuerySpec<T> root;
 
     OrGroup(QuerySpec<T> root) {
+        if (root == null) {
+            throw new IllegalArgumentException("root must not be null");
+        }
         this.root = root;
     }
 

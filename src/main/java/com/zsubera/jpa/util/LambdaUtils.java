@@ -67,13 +67,16 @@ public final class LambdaUtils {
      */
     private static final Map<String, String> CACHE = new ConcurrentHashMap<>();
 
+    /** Background daemon thread for periodic cache eviction. */
+    private static final ScheduledExecutorService CLEANUP_EXECUTOR;
+
     static {
-        ScheduledExecutorService cleaner = Executors.newSingleThreadScheduledExecutor(r -> {
+        CLEANUP_EXECUTOR = Executors.newSingleThreadScheduledExecutor(r -> {
             Thread t = new Thread(r, "myjpa-cache-cleaner");
             t.setDaemon(true);
             return t;
         });
-        cleaner.scheduleAtFixedRate(() -> {
+        CLEANUP_EXECUTOR.scheduleAtFixedRate(() -> {
             if (CACHE.size() > MAX_CACHE_SIZE) {
                 // 使用更小的驱逐比例（10%而非50%）以减少性能毛刺
                 int toRemove = CACHE.size() / 10;
@@ -91,6 +94,24 @@ public final class LambdaUtils {
                 }
             }
         }, 5, 5, TimeUnit.MINUTES);
+    }
+
+    /**
+     * 关闭后台清理线程。在应用关闭或热部署环境中应调用此方法以确保资源正确释放。
+     *
+     * <p>
+     * 已在 {@code MyJpaPlusAutoConfiguration} 中通过 {@code DisposableBean} 自动注册关闭钩子。
+     */
+    public static void shutdown() {
+        CLEANUP_EXECUTOR.shutdown();
+        try {
+            if (!CLEANUP_EXECUTOR.awaitTermination(5, TimeUnit.SECONDS)) {
+                CLEANUP_EXECUTOR.shutdownNow();
+            }
+        } catch (InterruptedException e) {
+            CLEANUP_EXECUTOR.shutdownNow();
+            Thread.currentThread().interrupt();
+        }
     }
 
     private LambdaUtils() {}

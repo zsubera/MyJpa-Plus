@@ -15,6 +15,15 @@ public class OrJoinGroup<T, J> implements ConditionBuilder<J, OrJoinGroup<T, J>>
     private final ConditionNode.OrNode orNode;
 
     OrJoinGroup(QuerySpec<T> root, ConditionNode.JoinNode joinNode, ConditionNode.OrNode orNode) {
+        if (root == null) {
+            throw new IllegalArgumentException("root must not be null");
+        }
+        if (joinNode == null) {
+            throw new IllegalArgumentException("joinNode must not be null");
+        }
+        if (orNode == null) {
+            throw new IllegalArgumentException("orNode must not be null");
+        }
         this.root = root;
         this.joinNode = joinNode;
         this.orNode = orNode;

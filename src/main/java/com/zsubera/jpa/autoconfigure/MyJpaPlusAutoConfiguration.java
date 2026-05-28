@@ -1,6 +1,7 @@
 package com.zsubera.jpa.autoconfigure;
 
 import com.zsubera.jpa.template.MyJpaTemplate;
+import com.zsubera.jpa.util.LambdaUtils;
 import jakarta.persistence.EntityManager;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -10,6 +11,8 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.ComponentScan;
+import org.springframework.context.event.ContextClosedEvent;
+import org.springframework.context.event.EventListener;
 
 /**
  * MyJpa-Plus 的自动配置类。
@@ -56,5 +59,16 @@ public class MyJpaPlusAutoConfiguration {
     public MyJpaTemplate myJpaTemplate(MyJpaPlusProperties properties) {
         return new MyJpaTemplate(properties.getQuery().getMaxResults(),
             properties.getQuery().getDeepPaginationOffsetThreshold());
+    }
+
+    /**
+     * 应用关闭时清理 LambdaUtils 后台缓存清理线程，防止在 OSGi 或热部署环境中导致类加载器泄漏。
+     *
+     * @param event 上下文关闭事件
+     */
+    @EventListener(ContextClosedEvent.class)
+    public void onContextClosed(ContextClosedEvent event) {
+        LambdaUtils.shutdown();
+        log.info("MyJpa-Plus LambdaUtils cleanup executor shut down");
     }
 }

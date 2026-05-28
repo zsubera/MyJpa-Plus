@@ -99,6 +99,9 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
      * @return 当前 QuerySpec 实例，支持链式调用
      */
     public QuerySpec<T> timeout(int seconds) {
+        if (seconds <= 0) {
+            throw new IllegalArgumentException("timeout must be positive, got: " + seconds);
+        }
         this.queryTimeout = seconds;
         return this;
     }
@@ -119,6 +122,9 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
      * @return 当前 QuerySpec 实例，支持链式调用
      */
     public QuerySpec<T> lockMode(LockModeType lockMode) {
+        if (lockMode == null) {
+            throw new IllegalArgumentException("lockMode must not be null");
+        }
         this.lockMode = lockMode;
         return this;
     }

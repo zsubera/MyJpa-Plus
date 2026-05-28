@@ -58,6 +58,9 @@ public final class EntityGraphHelper<T> {
      * @return a new EntityGraphHelper
      */
     public static <T> EntityGraphHelper<T> forEntity(Class<T> entityClass) {
+        if (entityClass == null) {
+            throw new IllegalArgumentException("entityClass must not be null");
+        }
         return new EntityGraphHelper<>(entityClass);
     }
 

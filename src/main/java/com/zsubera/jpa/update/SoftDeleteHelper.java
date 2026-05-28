@@ -280,6 +280,12 @@ public final class SoftDeleteHelper {
      */
     @SuppressWarnings({"rawtypes"})
     public static <T> boolean isSoftDeleted(Class<T> entityClass, T entity) {
+        if (entityClass == null) {
+            throw new IllegalArgumentException("entityClass must not be null");
+        }
+        if (entity == null) {
+            throw new IllegalArgumentException("entity must not be null");
+        }
         String fieldName = findSoftDeleteField(entityClass);
         if (fieldName == null) {
             return false;

@@ -32,6 +32,12 @@ public class JoinGroup<T, J> implements ConditionBuilder<J, JoinGroup<T, J>> {
     private final ConditionNode.JoinNode joinNode;
 
     JoinGroup(QuerySpec<T> root, ConditionNode.JoinNode joinNode) {
+        if (root == null) {
+            throw new IllegalArgumentException("root must not be null");
+        }
+        if (joinNode == null) {
+            throw new IllegalArgumentException("joinNode must not be null");
+        }
         this.root = root;
         this.joinNode = joinNode;
     }
@@ -160,6 +166,9 @@ public class JoinGroup<T, J> implements ConditionBuilder<J, JoinGroup<T, J>> {
 
     /** JOIN 内自动关闭的 OR：在 JOIN 实体上构建 OR 组，然后返回到当前 JoinGroup。 */
     public JoinGroup<T, J> or(Consumer<OrJoinGroup<T, J>> config) {
+        if (config == null) {
+            throw new IllegalArgumentException("config must not be null");
+        }
         ConditionNode.OrNode orNode = new ConditionNode.OrNode();
         joinNode.innerConditions.add(orNode);
         config.accept(new OrJoinGroup<>(root, joinNode, orNode));

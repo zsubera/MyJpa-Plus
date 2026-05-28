@@ -1,5 +1,6 @@
 package com.zsubera.jpa.projection;
 
+import com.zsubera.jpa.spec.PredicateHelper;
 import com.zsubera.jpa.spec.QuerySpec;
 import com.zsubera.jpa.spec.SFunction;
 import com.zsubera.jpa.util.LambdaUtils;
@@ -653,6 +654,9 @@ public class ProjectionSpec<T> {
      * @return 当前 ProjectionSpec 实例，支持链式调用
      */
     public ProjectionSpec<T> asDto(Class<?> dtoClass) {
+        if (dtoClass == null) {
+            throw new IllegalArgumentException("dtoClass must not be null");
+        }
         this.dtoClass = dtoClass;
         return this;
     }
@@ -934,13 +938,16 @@ public class ProjectionSpec<T> {
                     onPredicates.add(
                         com.zsubera.jpa.util.InClauseBuilder.notIn(cb, join.get(notIn.fieldName()), notIn.values()));
                 } else if (node instanceof JoinGroup.ConditionNode.StartsWith startsWith) {
-                    onPredicates
-                        .add(cb.like(join.get(startsWith.fieldName()).as(String.class), startsWith.value() + "%"));
+                    onPredicates.add(cb.like(join.get(startsWith.fieldName()).as(String.class),
+                        PredicateHelper.escapeLikeWildcards(startsWith.value()) + "%",
+                        PredicateHelper.LIKE_ESCAPE_CHAR));
                 } else if (node instanceof JoinGroup.ConditionNode.EndsWith endsWith) {
-                    onPredicates.add(cb.like(join.get(endsWith.fieldName()).as(String.class), "%" + endsWith.value()));
+                    onPredicates.add(cb.like(join.get(endsWith.fieldName()).as(String.class),
+                        "%" + PredicateHelper.escapeLikeWildcards(endsWith.value()), PredicateHelper.LIKE_ESCAPE_CHAR));
                 } else if (node instanceof JoinGroup.ConditionNode.Contains contains) {
-                    onPredicates
-                        .add(cb.like(join.get(contains.fieldName()).as(String.class), "%" + contains.value() + "%"));
+                    onPredicates.add(cb.like(join.get(contains.fieldName()).as(String.class),
+                        "%" + PredicateHelper.escapeLikeWildcards(contains.value()) + "%",
+                        PredicateHelper.LIKE_ESCAPE_CHAR));
                 } else if (node instanceof JoinGroup.ConditionNode.EqIgnoreCase eqIgnoreCase) {
                     onPredicates.add(cb.equal(cb.upper(join.get(eqIgnoreCase.fieldName()).as(String.class)),
                         cb.upper(cb.literal(eqIgnoreCase.value()))));
