@@ -45,6 +45,7 @@ public class MyJpaPlusAutoConfiguration {
             log.info("  query.max-results = {}", properties.getQuery().getMaxResults());
             log.info("  query.deep-pagination-offset-threshold = {}",
                 properties.getQuery().getDeepPaginationOffsetThreshold());
+            log.info("  query.deep-pagination-offset-limit = {}", properties.getQuery().getDeepPaginationOffsetLimit());
         }
     }
 
@@ -57,8 +58,13 @@ public class MyJpaPlusAutoConfiguration {
     @Bean
     @ConditionalOnMissingBean(MyJpaTemplate.class)
     public MyJpaTemplate myJpaTemplate(MyJpaPlusProperties properties) {
-        return new MyJpaTemplate(properties.getQuery().getMaxResults(),
+        MyJpaTemplate template = new MyJpaTemplate(properties.getQuery().getMaxResults(),
             properties.getQuery().getDeepPaginationOffsetThreshold());
+        int limit = properties.getQuery().getDeepPaginationOffsetLimit();
+        if (limit > 0) {
+            template.setDeepPaginationOffsetLimit(limit);
+        }
+        return template;
     }
 
     /**

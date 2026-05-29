@@ -81,6 +81,8 @@ public class MyJpaTemplate {
 
     private volatile int maxResults = DEFAULT_MAX_RESULTS;
     private volatile int deepPaginationOffsetThreshold = DEFAULT_DEEP_PAGINATION_OFFSET_THRESHOLD;
+    /** 深度分页硬限制。{@code -1} 表示禁用（仅记录警告）。 */
+    private volatile int deepPaginationOffsetLimit = -1;
 
     /** 创建 MyJpaTemplate 实例，使用默认配置。 */
     public MyJpaTemplate() {
@@ -123,6 +125,22 @@ public class MyJpaTemplate {
             throw new IllegalArgumentException("deepPaginationOffsetThreshold must be positive");
         }
         this.deepPaginationOffsetThreshold = deepPaginationOffsetThreshold;
+    }
+
+    /**
+     * 设置深度分页硬限制。超过此 offset 值将抛出 {@link IllegalArgumentException}，阻止执行。
+     *
+     * <p>
+     * 设置为 {@code -1} 表示禁用硬限制（仅记录警告日志，不阻止执行）。
+     *
+     * @param deepPaginationOffsetLimit 深度分页硬限制值，或 {@code -1} 表示禁用
+     * @throws IllegalArgumentException 如果值不是正数且不等于 -1
+     */
+    public void setDeepPaginationOffsetLimit(int deepPaginationOffsetLimit) {
+        if (deepPaginationOffsetLimit <= 0 && deepPaginationOffsetLimit != -1) {
+            throw new IllegalArgumentException("deepPaginationOffsetLimit must be positive or -1 (disabled)");
+        }
+        this.deepPaginationOffsetLimit = deepPaginationOffsetLimit;
     }
 
     /**
@@ -565,6 +583,13 @@ public class MyJpaTemplate {
         if (pageable.getOffset() > this.deepPaginationOffsetThreshold) {
             log.warn("Deep pagination detected (offset={}). This may cause slow queries. "
                 + "Consider using keyset pagination for better performance.", pageable.getOffset());
+        }
+
+        // 深度分页硬限制
+        if (this.deepPaginationOffsetLimit > 0 && pageable.getOffset() > this.deepPaginationOffsetLimit) {
+            throw new IllegalArgumentException("Pagination offset (" + pageable.getOffset()
+                + ") exceeds the configured hard limit (" + this.deepPaginationOffsetLimit
+                + "). Use keyset pagination for better performance, or adjust myjpa-plus.query.deep-pagination-offset-limit.");
         }
 
         // 计数查询

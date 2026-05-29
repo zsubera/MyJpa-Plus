@@ -19,6 +19,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  *   query:
  *     max-results: 10000
  *     deep-pagination-offset-threshold: 100000
+ *     deep-pagination-offset-limit: -1  # -1=禁用硬限制，>0=超过此值抛出异常
  * }</pre>
  *
  * <p>
@@ -85,6 +86,12 @@ public class MyJpaPlusProperties {
         /** 深度分页的 offset 阈值，超过此值会记录警告日志。 默认值：{@code 100000} */
         private int deepPaginationOffsetThreshold = 100000;
 
+        /**
+         * 深度分页的硬限制。超过此 offset 值将抛出 {@link IllegalArgumentException}，阻止执行。 设置为 {@code -1} 表示禁用硬限制（仅记录警告日志）。
+         * 默认值：{@code -1}（禁用）
+         */
+        private int deepPaginationOffsetLimit = -1;
+
         public int getMaxResults() {
             return maxResults;
         }
@@ -105,6 +112,17 @@ public class MyJpaPlusProperties {
                 throw new IllegalArgumentException("deepPaginationOffsetThreshold must be positive");
             }
             this.deepPaginationOffsetThreshold = deepPaginationOffsetThreshold;
+        }
+
+        public int getDeepPaginationOffsetLimit() {
+            return deepPaginationOffsetLimit;
+        }
+
+        public void setDeepPaginationOffsetLimit(int deepPaginationOffsetLimit) {
+            if (deepPaginationOffsetLimit <= 0 && deepPaginationOffsetLimit != -1) {
+                throw new IllegalArgumentException("deepPaginationOffsetLimit must be positive or -1 (disabled)");
+            }
+            this.deepPaginationOffsetLimit = deepPaginationOffsetLimit;
         }
     }
 }

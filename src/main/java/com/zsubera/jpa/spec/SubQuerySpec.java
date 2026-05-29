@@ -22,6 +22,17 @@ import org.springframework.lang.Nullable;
  * 外部查询构建之前完全构造完成。谓词构造委托给 {@link PredicateHelper} 以与其他组件共享逻辑。
  *
  * <p>
+ * 新增条件类型时，需同步更新以下位置：
+ * <ol>
+ * <li>{@link ConditionBuilder} — 查询构建器</li>
+ * <li>{@link ConditionNode.Op} — 运算符枚举</li>
+ * <li>{@link QuerySpec#resolveSimple} — 查询条件解析</li>
+ * <li>{@link com.zsubera.jpa.projection.ProjectionSpec.JoinGroup} — 投影 JOIN 条件</li>
+ * <li>{@link com.zsubera.jpa.update.AbstractBulkOperationSpec} — 批量操作条件</li>
+ * <li>此类（SubQuerySpec）— 子查询条件</li>
+ * </ol>
+ *
+ * <p>
  * 通过 {@link QuerySpec#exists(Class, java.util.function.Consumer)} 或
  * {@link QuerySpec#notExists(Class, java.util.function.Consumer)} 使用。
  *

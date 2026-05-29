@@ -164,23 +164,33 @@ public class DeleteSpec<T> extends AbstractBulkOperationSpec<T, DeleteSpec<T>> {
     }
 
     /**
-     * Execute DELETE statement limiting the number of affected rows.
+     * Execute DELETE statement limiting the number of affected rows, with optional pessimistic locking.
      *
      * <p>
      * This method first queries for matching entity IDs with the specified limit, then performs the deletion on those
      * entities.
      *
      * <p>
-     * <strong>并发风险警告：</strong>此方法分两步执行（先查询 ID，再删除），在高并发场景下存在竞态条件。 在查询ID和执行删除之间，其他事务可能修改或删除记录，导致数据不一致。对于高并发场景，建议：
-     * <ul>
-     * <li>使用 {@link #executeLimited(EntityManager, int, boolean)} 并设置 {@code pessimisticLock=true}</li>
-     * <li>或者在应用层使用分布式锁</li>
-     * <li>监控数据库锁等待情况</li>
-     * <li>考虑使用数据库原生的 {@code DELETE ... LIMIT} 语法（如果数据库支持）</li>
-     * </ul>
+     * <strong>并发风险警告：</strong>此方法分两步执行（先查询 ID，再删除），在高并发场景下存在竞态条件。 在查询ID和执行删除之间，其他事务可能修改或删除记录，导致数据不一致。
+     *
+     * <p>
+     * <strong>安全使用建议（按推荐程度排序）：</strong>
+     * <ol>
+     * <li>使用 {@code pessimisticLock=true}，在单个数据库事务中持有行锁，防止并发修改：
+     *
+     * <pre>{@code
+     * DeleteSpec.of(LogEntry.class).lt(LogEntry::getTimestamp, cutoffDate).executeLimited(entityManager, 1000, true); // 悲观锁
+     * }</pre>
+     *
+     * <li>在已有的 {@code @Transactional} 方法内调用，确保查询和更新在同一事务中执行
+     * <li>对于支持 {@code DELETE ... LIMIT} 的数据库（如 MySQL），考虑使用原生 SQL 作为替代方案
+     * <li>在应用层使用分布式锁保护整个操作流程
+     * </ol>
      *
      * @param em entity manager
      * @param limit maximum number of rows to delete
+     * @param pessimisticLock if true, acquire {@link jakarta.persistence.LockModeType#PESSIMISTIC_WRITE} on the
+     *            selected IDs to prevent concurrent modifications
      * @return actual number of rows deleted
      */
     public int executeLimited(EntityManager em, int limit, boolean pessimisticLock) {

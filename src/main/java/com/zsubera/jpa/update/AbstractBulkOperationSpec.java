@@ -25,6 +25,24 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
  * <p>
  * 使用延迟 Lambda 求值提供通用条件方法。谓词构造委托给 {@link PredicateHelper} 以与其他组件共享逻辑。
  *
+ * <p>
+ * <strong>设计说明：</strong>此抽象类独立提供条件方法（eq、ne、gt 等），而非实现 {@link com.zsubera.jpa.spec.ConditionBuilder} 接口。原因是两者使用不同的求值模型：
+ * <ul>
+ * <li>{@code ConditionBuilder}：延迟执行——构建 {@link com.zsubera.jpa.spec.ConditionNode} 树，在查询时统一求值
+ * <li>{@code AbstractBulkOperationSpec}：延迟 Lambda——直接构建 {@code BiFunction<Root, CriteriaBuilder, Predicate>}
+ * </ul>
+ *
+ * <p>
+ * 条件方法的签名和行为与 {@link com.zsubera.jpa.spec.ConditionBuilder} 保持一致。 新增条件类型时，需同步更新以下位置：
+ * <ol>
+ * <li>{@link com.zsubera.jpa.spec.ConditionBuilder} — 查询构建器</li>
+ * <li>{@link com.zsubera.jpa.spec.ConditionNode.Op} — 运算符枚举</li>
+ * <li>{@link com.zsubera.jpa.spec.QuerySpec#resolveSimple} — 查询条件解析</li>
+ * <li>{@link com.zsubera.jpa.projection.ProjectionSpec.JoinGroup} — 投影 JOIN 条件</li>
+ * <li>此类（AbstractBulkOperationSpec）— 批量操作条件</li>
+ * <li>{@link com.zsubera.jpa.spec.SubQuerySpec} — 子查询条件</li>
+ * </ol>
+ *
  * @param <T> 实体类型
  * @param <SELF> 具体构建器类型，用于流式链式调用
  */
