@@ -840,9 +840,9 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
                     .not(cb.between((Expression<Comparable>)fieldPath, (Comparable)range[0], (Comparable)range[1]));
             }
             default:
-                // Defensive programming: this branch should never be reached if all Op enum values
-                // are handled above. Throw to catch any future enum values added without corresponding cases.
-                throw new IllegalArgumentException("Unsupported operator: " + node.op);
+                // 穷举匹配防御：如果此处被执行，说明 Op 枚举新增了值但未添加对应的 case 处理。
+                // 使用 AssertionError 而非 IllegalArgumentException，因为这是编程错误而非用户输入错误。
+                throw new AssertionError("Unhandled Op: " + node.op);
         }
     }
 

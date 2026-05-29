@@ -1,5 +1,6 @@
 package com.zsubera.jpa.autoconfigure;
 
+import com.zsubera.jpa.repository.SoftDeleteJpaRepository;
 import com.zsubera.jpa.template.MyJpaTemplate;
 import com.zsubera.jpa.util.LambdaUtils;
 import jakarta.persistence.EntityManager;
@@ -39,6 +40,8 @@ public class MyJpaPlusAutoConfiguration {
     private static final Logger log = LoggerFactory.getLogger(MyJpaPlusAutoConfiguration.class);
 
     public MyJpaPlusAutoConfiguration(MyJpaPlusProperties properties) {
+        // 将 auto-filter 配置同步到 SoftDeleteJpaRepository 的静态标志，确保 Repository 层面行为一致
+        SoftDeleteJpaRepository.setAutoFilterEnabled(properties.getSoftDelete().isAutoFilter());
         if (log.isInfoEnabled()) {
             log.info("MyJpa-Plus AutoConfiguration initialized");
             log.info("  soft-delete.auto-filter = {}", properties.getSoftDelete().isAutoFilter());

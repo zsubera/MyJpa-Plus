@@ -145,6 +145,9 @@ public interface MyJpaRepository<T, ID> extends JpaRepository<T, ID>, JpaSpecifi
      * @return 匹配实体的 Optional 包装
      */
     default Optional<T> findNotDeletedById(ID id) {
+        if (id == null) {
+            return Optional.empty();
+        }
         Class<T> entityClass = getEntityClass();
         String idFieldName = EntityClassResolver.resolveIdFieldName(entityClass);
         return findOne(

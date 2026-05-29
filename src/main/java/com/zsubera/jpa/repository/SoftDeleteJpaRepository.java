@@ -45,6 +45,31 @@ public class SoftDeleteJpaRepository<T, ID> extends SimpleJpaRepository<T, ID> {
     private final Class<T> domainClass;
     private final EntityManager entityManager;
 
+    /**
+     * 全局自动过滤开关，由自动配置类设置。当为 false 时，所有 Repository 层面的软删除过滤将被禁用。
+     * <p>
+     * 默认值为 true，与 {@link com.zsubera.jpa.autoconfigure.SoftDeleteFilterBean} 的行为保持一致。
+     */
+    private static volatile boolean autoFilterEnabled = true;
+
+    /**
+     * 设置全局自动过滤开关。由自动配置类在启动时调用。
+     *
+     * @param enabled 是否启用自动过滤
+     */
+    public static void setAutoFilterEnabled(boolean enabled) {
+        autoFilterEnabled = enabled;
+    }
+
+    /**
+     * 获取当前全局自动过滤开关状态。
+     *
+     * @return 如果自动过滤已启用返回 true
+     */
+    public static boolean isAutoFilterEnabled() {
+        return autoFilterEnabled;
+    }
+
     @SuppressFBWarnings("EI_EXPOSE_REP2")
     public SoftDeleteJpaRepository(JpaEntityInformation<T, ?> entityInformation, EntityManager entityManager) {
         super(entityInformation, entityManager);
@@ -58,10 +83,15 @@ public class SoftDeleteJpaRepository<T, ID> extends SimpleJpaRepository<T, ID> {
      * <p>
      * 使用 {@link SoftDeleteContext} 的 ThreadLocal 标志判断， 由 {@link IgnoreSoftDeleteAdvisor} 在方法调用前自动设置。替代了原先基于栈遍历的检测方案。
      *
+     * <p>
+     * 同时检查全局 {@code auto-filter} 配置，与 {@link com.zsubera.jpa.autoconfigure.SoftDeleteFilterBean} 保持一致。 当
+     * {@code auto-filter=false} 时，Repository 层面也停止自动过滤。
+     *
      * @return 如果应该应用过滤返回 true
      */
     private boolean shouldApplySoftDeleteFilter() {
-        return SoftDeleteHelper.findSoftDeleteField(domainClass) != null && !SoftDeleteContext.isIgnoreSoftDelete();
+        return autoFilterEnabled && SoftDeleteHelper.findSoftDeleteField(domainClass) != null
+            && !SoftDeleteContext.isIgnoreSoftDelete();
     }
 
     private Specification<T> mergeSoftDeleteFilter(@Nullable Specification<T> spec) {

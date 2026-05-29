@@ -11,7 +11,6 @@ import jakarta.persistence.TypedQuery;
 import jakarta.persistence.criteria.CriteriaBuilder;
 import jakarta.persistence.criteria.CriteriaQuery;
 import jakarta.persistence.criteria.Root;
-import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
 import java.util.function.Consumer;
@@ -335,9 +334,10 @@ public class MyJpaTemplate {
     @Deprecated(since = "1.0.1", forRemoval = true)
     @Transactional(readOnly = true)
     public <T> Stream<T> findAllStream(Class<T> entityClass, QuerySpec<T> spec) {
-        log.warn("DEPRECATED: findAllStream(Class, QuerySpec) may cause resource leaks and will throw "
-            + "UnsupportedOperationException in 1.2.0. Use findAllStream(Class, QuerySpec, Consumer) instead. "
-            + "Stack trace: {}", Arrays.toString(Thread.currentThread().getStackTrace()));
+        if (log.isWarnEnabled()) {
+            log.warn("DEPRECATED: findAllStream(Class, QuerySpec) may cause resource leaks and will throw "
+                + "UnsupportedOperationException in 1.2.0. Use findAllStream(Class, QuerySpec, Consumer) instead.");
+        }
         return doFindStream(entityClass, spec);
     }
 
@@ -354,9 +354,10 @@ public class MyJpaTemplate {
     @Deprecated(since = "1.0.1", forRemoval = true)
     @Transactional(readOnly = true)
     public <T> Stream<T> findAllStream(Class<T> entityClass, QuerySpec<T> spec, EntityGraphHelper<T> entityGraph) {
-        log.warn("DEPRECATED: findAllStream(Class, QuerySpec, EntityGraph) may cause resource leaks and will throw "
-            + "UnsupportedOperationException in 1.2.0. Use findAllStream(Class, QuerySpec, Consumer) instead. "
-            + "Stack trace: {}", Arrays.toString(Thread.currentThread().getStackTrace()));
+        if (log.isWarnEnabled()) {
+            log.warn("DEPRECATED: findAllStream(Class, QuerySpec, EntityGraph) may cause resource leaks and will throw "
+                + "UnsupportedOperationException in 1.2.0. Use findAllStream(Class, QuerySpec, Consumer) instead.");
+        }
         TypedQuery<T> query = buildTypedQuery(entityClass, spec, entityGraph, null);
         return query.getResultStream();
     }

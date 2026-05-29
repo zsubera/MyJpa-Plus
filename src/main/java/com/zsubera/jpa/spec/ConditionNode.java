@@ -3,6 +3,7 @@ package com.zsubera.jpa.spec;
 import jakarta.persistence.criteria.CriteriaBuilder;
 import jakarta.persistence.criteria.Predicate;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
 import java.util.function.BiFunction;
 import java.util.function.Consumer;
@@ -67,6 +68,12 @@ public sealed interface ConditionNode permits ConditionNode.SimpleNode, Conditio
             String maskedValue;
             if (value == null) {
                 maskedValue = "null";
+            } else if (value instanceof Object[] arr) {
+                maskedValue = "IN[" + arr.length + " items]";
+            } else if (value instanceof Comparable<?>[] arr) {
+                maskedValue = "BETWEEN[" + arr.length + " items]";
+            } else if (value instanceof Collection<?> col) {
+                maskedValue = "IN[" + col.size() + " items]";
             } else if (value instanceof String s && s.length() > 4) {
                 maskedValue = s.substring(0, 2) + "***" + s.substring(s.length() - 2);
             } else if (value instanceof String) {

@@ -695,10 +695,11 @@ public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> {
         if (fn == null) {
             throw new IllegalArgumentException("fn must not be null");
         }
-        log.warn(
-            "SECURITY: where(BiFunction) method called - bypasses type safety and may expose SQL injection risk. "
-                + "Use type-safe methods like eq(), like(), etc. Stack trace: {}",
-            java.util.Arrays.toString(Thread.currentThread().getStackTrace()));
+        if (log.isWarnEnabled()) {
+            log.warn(
+                "SECURITY: where(BiFunction) method called - bypasses type safety and may expose SQL injection risk. "
+                    + "Use type-safe methods like eq(), like(), etc.");
+        }
         conditions().add(new ConditionNode.RawNode((BiFunction<Path<?>, CriteriaBuilder, Predicate>)(Object)fn));
         return self();
     }
@@ -741,10 +742,11 @@ public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> {
         if (fn == null) {
             throw new IllegalArgumentException("fn must not be null");
         }
-        log.warn(
-            "SECURITY: where(Function) method called - bypasses type safety and may expose SQL injection risk. "
-                + "Use type-safe methods like eq(), like(), etc. Stack trace: {}",
-            java.util.Arrays.toString(Thread.currentThread().getStackTrace()));
+        if (log.isWarnEnabled()) {
+            log.warn(
+                "SECURITY: where(Function) method called - bypasses type safety and may expose SQL injection risk. "
+                    + "Use type-safe methods like eq(), like(), etc.");
+        }
         conditions().add(new ConditionNode.RawNode((root, cb) -> fn.apply((Root<E>)root)));
         return self();
     }
