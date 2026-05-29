@@ -11,6 +11,7 @@ import jakarta.persistence.TypedQuery;
 import jakarta.persistence.criteria.CriteriaBuilder;
 import jakarta.persistence.criteria.CriteriaQuery;
 import jakarta.persistence.criteria.Root;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
 import java.util.function.Consumer;
@@ -185,9 +186,18 @@ public class MyJpaTemplate {
             throw new IllegalArgumentException("id must not be null");
         }
         String idFieldName = EntityClassResolver.resolveIdFieldName(entityClass);
-        QuerySpec<T> spec = new QuerySpec<>();
-        spec.where((root, cb) -> cb.equal(root.get(idFieldName), id));
-        return findOne(entityClass, spec);
+        Specification<T> idSpec = (root, query, cb) -> cb.equal(root.get(idFieldName), id);
+        CriteriaBuilder cb = entityManager.getCriteriaBuilder();
+        CriteriaQuery<T> cq = cb.createQuery(entityClass);
+        Root<T> root = cq.from(entityClass);
+        jakarta.persistence.criteria.Predicate predicate = idSpec.toPredicate(root, cq, cb);
+        if (predicate != null) {
+            cq.where(predicate);
+        }
+        TypedQuery<T> query = entityManager.createQuery(cq);
+        query.setMaxResults(1);
+        List<T> results = query.getResultList();
+        return results.isEmpty() ? Optional.empty() : Optional.of(results.get(0));
     }
 
     /**
@@ -325,8 +335,9 @@ public class MyJpaTemplate {
     @Deprecated(since = "1.0.1", forRemoval = true)
     @Transactional(readOnly = true)
     public <T> Stream<T> findAllStream(Class<T> entityClass, QuerySpec<T> spec) {
-        log.warn("findAllStream(Class, QuerySpec) is deprecated and will throw UnsupportedOperationException in 1.2.0. "
-            + "Use findAllStream(Class, QuerySpec, Consumer) instead.");
+        log.warn("DEPRECATED: findAllStream(Class, QuerySpec) may cause resource leaks and will throw "
+            + "UnsupportedOperationException in 1.2.0. Use findAllStream(Class, QuerySpec, Consumer) instead. "
+            + "Stack trace: {}", Arrays.toString(Thread.currentThread().getStackTrace()));
         return doFindStream(entityClass, spec);
     }
 
@@ -343,9 +354,9 @@ public class MyJpaTemplate {
     @Deprecated(since = "1.0.1", forRemoval = true)
     @Transactional(readOnly = true)
     public <T> Stream<T> findAllStream(Class<T> entityClass, QuerySpec<T> spec, EntityGraphHelper<T> entityGraph) {
-        log.warn(
-            "findAllStream(Class, QuerySpec, EntityGraph) is deprecated and will throw UnsupportedOperationException "
-                + "in 1.2.0. Use findAllStream(Class, QuerySpec, Consumer) instead.");
+        log.warn("DEPRECATED: findAllStream(Class, QuerySpec, EntityGraph) may cause resource leaks and will throw "
+            + "UnsupportedOperationException in 1.2.0. Use findAllStream(Class, QuerySpec, Consumer) instead. "
+            + "Stack trace: {}", Arrays.toString(Thread.currentThread().getStackTrace()));
         TypedQuery<T> query = buildTypedQuery(entityClass, spec, entityGraph, null);
         return query.getResultStream();
     }

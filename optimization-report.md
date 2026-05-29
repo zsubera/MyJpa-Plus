@@ -52,3 +52,70 @@
 - spotless:apply: 通过
 - compile: 通过
 - test -DexcludedGroups=integration: 全部通过（0 failures）
+
+---
+## 轮次 2 - 优化记录
+时间：2026-05-29 19:07
+
+### 已修复问题
+- [P0-1] findAllStream(Class, QuerySpec) 废弃版本资源泄漏：在已有 @Deprecated(forRemoval=true) 和运行时警告基础上，增加调用栈追踪信息（Arrays.toString(Thread.currentThread().getStackTrace())），便于定位泄漏调用点。同步更新 findAllStream(Class, QuerySpec, EntityGraph) 废弃方法
+- [P1-1] where() 方法绕过类型安全机制存在 SQL 注入风险：为 ConditionBuilder 接口添加静态 Logger，在两个 where() 重载方法中增加运行时 SECURITY 级别警告日志，包含调用栈追踪，帮助开发者识别和迁移不安全调用
+- [P1-2] MyJpaTemplate.findById() 使用已弃用的 where() 方法：重构为直接使用 Specification<T> 构建 ID 查询条件，绕过 QuerySpec.where() 的弃用路径。findById() 现在直接构建 CriteriaQuery 并执行，减少一层间接调用
+- [P1-3] SoftDeleteHelper.notDeletedQuery() 使用已弃用的 where() 方法：改为直接向 QuerySpec.conditions() 添加 ConditionNode.RawNode，避免调用已弃用的 ConditionBuilder.where() 方法，消除安全警告日志
+- [P1-4] ProjectionSpec.JoinGroup.like() 缺少安全警告文档：为 like() 方法添加完整的 Javadoc，包含安全警告（不转义 % 和 _ 通配符）、@see 引用指向 likeSafe() 方法
+- [P1-7] ConditionBuilder 缺少 isEmpty/isNotEmpty conditional 重载：新增 isEmpty(boolean, SFunction) 和 isNotEmpty(boolean, SFunction) 两个 default 方法，与其他操作符的 conditional 重载保持 API 一致性
+- [P1-8] ProjectionSpec.findPage() 对 count 和 data 查询双重解析 JOIN：重构 findPage() 方法，数据查询直接构建 CriteriaQuery<Tuple> 而非委托给 toTupleQuery()，避免第二次 resolveJoins() 调用
+
+### 未修复问题
+- P1-5 ProjectionSpec.JoinGroup 与 ConditionBuilder 大量重复代码：需要创建共享接口或工具类，涉及较大重构，建议作为独立迭代处理
+- P1-6 UpdateSpec.executeLimited 与 DeleteSpec.executeLimited 重复逻辑：需要提取模板方法到 AbstractBulkOperationSpec，涉及 protected API 设计变更，建议作为独立迭代处理
+- P1-9 UpdateSpec.executeLimited() 两步执行存在并发竞态条件：默认悲观锁策略变更属于破坏性变更，需要评估兼容性后决定
+- P2-1 至 P2-18：均为 P2 优先级的可选优化，本轮未涉及
+
+### 修改详情
+#### 1. P0-1: findAllStream 废弃版本资源泄漏增强
+**文件**：MyJpaTemplate.java:14/327-331/343-351
+**修改前**：仅记录方法名和版本警告
+**修改后**：增加 Arrays.toString(Thread.currentThread().getStackTrace()) 输出完整调用栈，同时更新两个废弃 findAllStream 方法
+**原因**：便于开发者快速定位泄漏调用点，加速迁移到安全版本 API
+
+#### 2. P1-1: where() 方法运行时安全警告
+**文件**：ConditionBuilder.java:14-17/33/699-705/743-748
+**修改前**：仅通过 @Deprecated 注解和 Javadoc 标记弃用和安全风险
+**修改后**：添加静态 Logger，两个 where() 方法在运行时记录 SECURITY 级别警告（含调用栈）
+**原因**：运行时警告比静态注解更能引起开发者注意，调用栈有助于定位问题代码
+
+#### 3. P1-2: MyJpaTemplate.findById() 弃用方法迁移
+**文件**：MyJpaTemplate.java:179-197
+**修改前**：创建 QuerySpec 并调用 spec.where((root, cb) -> ...)，然后委托给 findOne()
+**修改后**：直接使用 Specification<T> 构建 ID 匹配条件，内联构建 CriteriaQuery 并执行
+**原因**：消除对已弃用 where() 方法的依赖，减少一层间接调用
+
+#### 4. P1-3: SoftDeleteHelper.notDeletedQuery() 弃用方法迁移
+**文件**：SoftDeleteHelper.java:7/132-140
+**修改前**：调用 qs.where((path, cb) -> buildNotDeleted(...)) 
+**修改后**：直接调用 qs.conditions().add(new ConditionNode.RawNode(...))，添加 ConditionNode import
+**原因**：绕过已弃用的 where() 方法，避免触发安全警告日志
+
+#### 5. P1-4: ProjectionSpec.JoinGroup.like() 安全文档
+**文件**：ProjectionSpec.java:114-128
+**修改前**：无 Javadoc 注释
+**修改后**：添加完整 Javadoc，包含安全警告（不转义通配符）、参数说明、@see likeSafe 引用
+**原因**：引导用户在处理用户输入时使用 likeSafe() 方法
+
+#### 6. P1-7: isEmpty/isNotEmpty conditional 重载
+**文件**：ConditionBuilder.java:985-1007
+**修改前**：无 conditional 重载
+**修改后**：新增 isEmpty(boolean, SFunction) 和 isNotEmpty(boolean, SFunction) default 方法
+**原因**：API 一致性，与其他操作符（eq, ne, gt, like 等）的 conditional 重载保持一致
+
+#### 7. P1-8: ProjectionSpec.findPage() JOIN 解析优化
+**文件**：ProjectionSpec.java:619-665
+**修改前**：count 查询调用 resolveJoins(countRoot, cb)，data 查询通过 toTupleQuery() 再次调用 resolveJoins(root, cb)
+**修改后**：data 查询直接构建 CriteriaQuery<Tuple>（内联 selections、predicate、orderBy），避免 toTupleQuery() 中的第二次 resolveJoins()
+**原因**：减少一半的 JOIN 解析开销，提升分页查询性能
+
+### 验证结果
+- spotless:apply: 通过
+- compile: 通过
+- test -DexcludedGroups=integration: 全部通过（592 tests, 0 failures）

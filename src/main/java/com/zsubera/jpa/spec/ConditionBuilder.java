@@ -11,6 +11,8 @@ import java.util.Collection;
 import java.util.List;
 import java.util.function.BiFunction;
 import java.util.function.Function;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.lang.Nullable;
 
 /**
@@ -29,6 +31,9 @@ import org.springframework.lang.Nullable;
  * @param <SELF> 用于流式链式调用的具体构建器类型
  */
 public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> {
+
+    /** Logger for security warnings on deprecated where() methods. */
+    Logger log = LoggerFactory.getLogger(ConditionBuilder.class);
 
     /**
      * 获取当前条件列表。
@@ -690,6 +695,10 @@ public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> {
         if (fn == null) {
             throw new IllegalArgumentException("fn must not be null");
         }
+        log.warn(
+            "SECURITY: where(BiFunction) method called - bypasses type safety and may expose SQL injection risk. "
+                + "Use type-safe methods like eq(), like(), etc. Stack trace: {}",
+            java.util.Arrays.toString(Thread.currentThread().getStackTrace()));
         conditions().add(new ConditionNode.RawNode((BiFunction<Path<?>, CriteriaBuilder, Predicate>)(Object)fn));
         return self();
     }
@@ -732,6 +741,10 @@ public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> {
         if (fn == null) {
             throw new IllegalArgumentException("fn must not be null");
         }
+        log.warn(
+            "SECURITY: where(Function) method called - bypasses type safety and may expose SQL injection risk. "
+                + "Use type-safe methods like eq(), like(), etc. Stack trace: {}",
+            java.util.Arrays.toString(Thread.currentThread().getStackTrace()));
         conditions().add(new ConditionNode.RawNode((root, cb) -> fn.apply((Root<E>)root)));
         return self();
     }
@@ -969,5 +982,27 @@ public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> {
      */
     default SELF multiLike(boolean condition, String keyword, SFunction<E, ?>... fields) {
         return condition ? multiLike(keyword, fields) : self();
+    }
+
+    /**
+     * 仅在 {@code condition} 为 true 时添加 IS EMPTY 条件。
+     *
+     * @param condition 是否添加条件的标志
+     * @param field 实体属性的方法引用
+     * @return 当前构建器以支持链式调用
+     */
+    default SELF isEmpty(boolean condition, SFunction<E, ?> field) {
+        return condition ? isEmpty(field) : self();
+    }
+
+    /**
+     * 仅在 {@code condition} 为 true 时添加 IS NOT EMPTY 条件。
+     *
+     * @param condition 是否添加条件的标志
+     * @param field 实体属性的方法引用
+     * @return 当前构建器以支持链式调用
+     */
+    default SELF isNotEmpty(boolean condition, SFunction<E, ?> field) {
+        return condition ? isNotEmpty(field) : self();
     }
 }

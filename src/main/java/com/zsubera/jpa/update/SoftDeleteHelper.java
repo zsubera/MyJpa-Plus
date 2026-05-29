@@ -2,6 +2,7 @@ package com.zsubera.jpa.update;
 
 import com.zsubera.jpa.annotation.SoftDelete;
 import com.zsubera.jpa.exception.MyJpaPlusException;
+import com.zsubera.jpa.spec.ConditionNode;
 import com.zsubera.jpa.spec.QuerySpec;
 import jakarta.persistence.criteria.CriteriaBuilder;
 import jakarta.persistence.criteria.Path;
@@ -135,7 +136,8 @@ public final class SoftDeleteHelper {
             return new QuerySpec<>();
         }
         QuerySpec<T> qs = new QuerySpec<>();
-        qs.where((path, cb) -> buildNotDeleted(cb, path, fieldName, entityClass));
+        // 直接添加 RawNode 而非调用已弃用的 where() 方法，避免安全警告日志
+        qs.conditions().add(new ConditionNode.RawNode((path, cb) -> buildNotDeleted(cb, path, fieldName, entityClass)));
         return qs;
     }
 

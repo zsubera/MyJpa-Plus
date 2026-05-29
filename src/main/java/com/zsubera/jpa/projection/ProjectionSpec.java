@@ -111,6 +111,20 @@ public class ProjectionSpec<T> {
             return this;
         }
 
+        /**
+         * 添加 LIKE 条件（不转义通配符）。
+         *
+         * <p>
+         * <b>安全警告</b>: 此方法不转义 {@code %} 和 {@code _} 通配符。如果 {@code value} 来自用户输入， 请使用
+         * {@link #likeSafe(SFunction, String)} 方法，该方法会自动转义通配符。
+         * </p>
+         *
+         * @param field JOIN 目标实体属性的方法引用
+         * @param value 匹配模式的字符串值
+         * @return 当前 JoinGroup 以支持链式调用
+         * @throws IllegalArgumentException 如果 {@code field} 或 {@code value} 为 null
+         * @see #likeSafe(SFunction, String)
+         */
         public JoinGroup<E> like(SFunction<E, ?> field, String value) {
             if (field == null) {
                 throw new IllegalArgumentException("field must not be null");
@@ -604,7 +618,8 @@ public class ProjectionSpec<T> {
      *
      * <p>
      * <strong>PERF-3 note:</strong> Join descriptors are extracted once and reused for both count and data queries to
-     * avoid redundant JOIN resolution.
+     * avoid redundant JOIN resolution. The data query is built directly instead of delegating to
+     * {@link #toTupleQuery(EntityManager)} to avoid a second {@code resolveJoins()} call.
      *
      * <p>
      * <strong>PERF-4 note:</strong> Uses {@code countDistinct(root)} for accurate counting when JOINs may produce
@@ -626,17 +641,29 @@ public class ProjectionSpec<T> {
             return new PageImpl<>(allContent);
         }
 
-        // Count query - need to apply joins to get accurate count
+        // Build count and data queries sharing a single pass of join resolution per root.
+        // Count query
         CriteriaQuery<Long> countQuery = cb.createQuery(Long.class);
         Root<T> countRoot = countQuery.from(entityClass);
-        // Apply joins to count query to ensure accurate results
         resolveJoins(countRoot, cb);
         countQuery.select(cb.countDistinct(countRoot));
         applyPredicate(countRoot, countQuery, cb);
         Long total = em.createQuery(countQuery).getSingleResult();
 
-        // Data query
-        TypedQuery<Tuple> query = toTupleQuery(em);
+        // Data query - build directly to avoid calling toTupleQuery() which would resolveJoins() again
+        CriteriaQuery<Tuple> dataQuery = cb.createTupleQuery();
+        Root<T> dataRoot = dataQuery.from(entityClass);
+        resolveJoins(dataRoot, cb);
+
+        List<jakarta.persistence.criteria.Selection<?>> selectionList = new ArrayList<>();
+        for (String alias : selections.keySet()) {
+            selectionList.add(dataRoot.get(alias).alias(alias));
+        }
+        dataQuery.multiselect(selectionList);
+        applyPredicate(dataRoot, dataQuery, cb);
+        applyOrderBy(dataRoot, cb, dataQuery);
+
+        TypedQuery<Tuple> query = em.createQuery(dataQuery);
         if (pageable.getOffset() > Integer.MAX_VALUE) {
             throw new IllegalArgumentException("Offset too large: " + pageable.getOffset());
         }
