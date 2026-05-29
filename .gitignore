@@ -32,10 +32,11 @@ out/
 /AGENTS.md
 /.opencode/agents/audit1.md
 /.opencode/agents/audit2.md
-/AUDIT-README.md
-/audit-workflow.ps1
+/.opencode/AUDIT-README.md
+/.opencode/audit-workflow.ps1
+/run-audit.bat
 /.opencode/agents/final-audit.md
-/opencode.json
+/.opencode/opencode.json
 /.opencode/agents/optimizer.md
 
 # Audit workflow
