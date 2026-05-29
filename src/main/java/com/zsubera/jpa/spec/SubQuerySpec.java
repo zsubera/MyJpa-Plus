@@ -217,10 +217,16 @@ public class SubQuerySpec<S> {
     /**
      * 添加子查询实体的 LIKE 条件。
      *
+     * <p>
+     * <b>安全警告</b>: 此方法不转义 {@code %} 和 {@code _} 通配符。如果 {@code value} 来自用户输入， 请使用 {@link #likeSafe(SFunction, String)}
+     * 方法，该方法会自动转义通配符。
+     * </p>
+     *
      * @param field 实体字段
      * @param value 匹配模式（可使用 % 通配符）
      * @return 当前 SubQuerySpec 实例，支持链式调用
      * @throws IllegalArgumentException 如果 value 为 null
+     * @see #likeSafe(SFunction, String)
      */
     public SubQuerySpec<S> like(SFunction<S, ?> field, String value) {
         if (value == null) {
@@ -233,16 +239,64 @@ public class SubQuerySpec<S> {
     /**
      * 添加子查询实体的 NOT LIKE 条件。
      *
+     * <p>
+     * <b>安全警告</b>: 此方法不转义 {@code %} 和 {@code _} 通配符。如果 {@code value} 来自用户输入， 请使用
+     * {@link #notLikeSafe(SFunction, String)} 方法，该方法会自动转义通配符。
+     * </p>
+     *
      * @param field 实体字段
      * @param value 匹配模式（可使用 % 通配符）
      * @return 当前 SubQuerySpec 实例，支持链式调用
      * @throws IllegalArgumentException 如果 value 为 null
+     * @see #notLikeSafe(SFunction, String)
      */
     public SubQuerySpec<S> notLike(SFunction<S, ?> field, String value) {
         if (value == null) {
             throw new IllegalArgumentException("value must not be null");
         }
         predicates.add(PredicateHelper.notLike(root, property(field), value, cb));
+        return this;
+    }
+
+    /**
+     * 添加带自动通配符转义的 LIKE 条件。值中的 {@code %} 或 {@code _} 字符会被转义，作为字面量处理。
+     *
+     * <p>
+     * 此方法是 {@link #like(SFunction, String)} 的安全版本，适用于处理用户输入。
+     *
+     * @param field 实体字段
+     * @param value 要匹配的原始字符串值（通配符会被转义）
+     * @return 当前 SubQuerySpec 实例，支持链式调用
+     * @throws IllegalArgumentException 如果 value 为 null
+     * @see #like(SFunction, String)
+     */
+    public SubQuerySpec<S> likeSafe(SFunction<S, ?> field, String value) {
+        if (value == null) {
+            throw new IllegalArgumentException("value must not be null");
+        }
+        predicates.add(PredicateHelper.like(root, property(field), PredicateHelper.escapeLikeWildcards(value), cb,
+            PredicateHelper.LIKE_ESCAPE_CHAR));
+        return this;
+    }
+
+    /**
+     * 添加带自动通配符转义的 NOT LIKE 条件。值中的 {@code %} 或 {@code _} 字符会被转义，作为字面量处理。
+     *
+     * <p>
+     * 此方法是 {@link #notLike(SFunction, String)} 的安全版本，适用于处理用户输入。
+     *
+     * @param field 实体字段
+     * @param value 要匹配的原始字符串值（通配符会被转义）
+     * @return 当前 SubQuerySpec 实例，支持链式调用
+     * @throws IllegalArgumentException 如果 value 为 null
+     * @see #notLike(SFunction, String)
+     */
+    public SubQuerySpec<S> notLikeSafe(SFunction<S, ?> field, String value) {
+        if (value == null) {
+            throw new IllegalArgumentException("value must not be null");
+        }
+        predicates.add(PredicateHelper.notLike(root, property(field), PredicateHelper.escapeLikeWildcards(value), cb,
+            PredicateHelper.LIKE_ESCAPE_CHAR));
         return this;
     }
 
@@ -312,8 +366,8 @@ public class SubQuerySpec<S> {
         if (end == null) {
             throw new IllegalArgumentException("end must not be null");
         }
-        if (start.getClass() != end.getClass()) {
-            throw new IllegalArgumentException("start and end must be of the same type, but got "
+        if (!start.getClass().isAssignableFrom(end.getClass()) && !end.getClass().isAssignableFrom(start.getClass())) {
+            throw new IllegalArgumentException("start and end must be compatible types, but got "
                 + start.getClass().getName() + " and " + end.getClass().getName());
         }
         @SuppressWarnings({"unchecked", "rawtypes"})
@@ -341,8 +395,8 @@ public class SubQuerySpec<S> {
         if (end == null) {
             throw new IllegalArgumentException("end must not be null");
         }
-        if (start.getClass() != end.getClass()) {
-            throw new IllegalArgumentException("start and end must be of the same type, but got "
+        if (!start.getClass().isAssignableFrom(end.getClass()) && !end.getClass().isAssignableFrom(start.getClass())) {
+            throw new IllegalArgumentException("start and end must be compatible types, but got "
                 + start.getClass().getName() + " and " + end.getClass().getName());
         }
         @SuppressWarnings({"unchecked", "rawtypes"})

@@ -251,8 +251,9 @@ public class ProjectionSpec<T> {
             if (end == null) {
                 throw new IllegalArgumentException("end must not be null");
             }
-            if (start.getClass() != end.getClass()) {
-                throw new IllegalArgumentException("start and end must be of the same type, but got "
+            if (!start.getClass().isAssignableFrom(end.getClass())
+                && !end.getClass().isAssignableFrom(start.getClass())) {
+                throw new IllegalArgumentException("start and end must be compatible types, but got "
                     + start.getClass().getName() + " and " + end.getClass().getName());
             }
             if (((Comparable)start).compareTo(end) > 0) {
@@ -274,8 +275,9 @@ public class ProjectionSpec<T> {
             if (end == null) {
                 throw new IllegalArgumentException("end must not be null");
             }
-            if (start.getClass() != end.getClass()) {
-                throw new IllegalArgumentException("start and end must be of the same type, but got "
+            if (!start.getClass().isAssignableFrom(end.getClass())
+                && !end.getClass().isAssignableFrom(start.getClass())) {
+                throw new IllegalArgumentException("start and end must be compatible types, but got "
                     + start.getClass().getName() + " and " + end.getClass().getName());
             }
             if (((Comparable)start).compareTo(end) > 0) {

@@ -119,3 +119,56 @@
 - spotless:apply: 通过
 - compile: 通过
 - test -DexcludedGroups=integration: 全部通过（592 tests, 0 failures）
+
+---
+## 轮次 3 - 优化记录
+时间：2026-05-29 19:19
+
+### 已修复问题
+- [P1-1] executeLimited() 默认不使用悲观锁（SEC-02）：将 UpdateSpec.executeLimited(em, limit) 和 DeleteSpec.executeLimited(em, limit) 的默认悲观锁参数从 false 改为 true，消除查询ID与执行更新/删除之间的并发竞态窗口。同步更新 Javadoc 说明默认行为变更
+- [P1-2] IgnoreSoftDeleteAdvisor AOP 切面范围过窄（REL-01）：将 @Around 切面从 `within(com.zsubera.jpa.repository.SoftDeleteJpaRepository+)` 扩大为 `within(org.springframework.data.jpa.repository.JpaRepository+)`，使 @IgnoreSoftDelete 注解在 MyJpaRepository 和 SoftDeleteJpaRepository 上均生效。同步更新类级 Javadoc 说明适用范围
+- [P2-1] SubQuerySpec.like()/notLike() 缺少安全警告和 likeSafe() 方法（SEC-04）：为 like() 和 notLike() 添加安全警告 Javadoc（不转义 % 和 _ 通配符），新增 likeSafe() 和 notLikeSafe() 方法（使用 PredicateHelper.escapeLikeWildcards + LIKE_ESCAPE_CHAR）
+- [P2-2] AbstractBulkOperationSpec.like()/notLike() 缺少安全警告和 likeSafe() 方法（SEC-05）：为 like() 和 notLike() 添加安全警告 Javadoc，新增 likeSafe() 和 notLikeSafe() 方法，与 ConditionBuilder 和 SubQuerySpec 保持 API 一致性
+- [P2-3] between() 类型检查策略不一致（MAINT-04）：将 ProjectionSpec.JoinGroup.between()/notBetween() 和 SubQuerySpec.between()/notBetween() 的类型检查从严格相等（getClass() != end.getClass()）统一为兼容性检查（isAssignableFrom），与 ConditionBuilder 和 AbstractBulkOperationSpec 保持一致
+
+### 未修复问题
+- SEC-03 ProjectionSpec.JoinGroup.like() 缺少安全警告：已检查代码，like() 方法在轮次2中已添加完整的安全警告 Javadoc，无需额外修改
+- SEC-06 至 SEC-10：均为 P2 级别可接受/已缓解的安全问题，无需修改
+- PERF-02 至 PERF-08：均为 P2 级别可接受/设计权衡的性能问题，无需修改
+- REL-02 至 REL-05：均为 P2 级别可接受/已保障的可靠性问题，无需修改
+
+### 修改详情
+#### 1. P1-1: executeLimited() 默认启用悲观锁
+**文件**：UpdateSpec.java:203-216, DeleteSpec.java:150-163
+**修改前**：`return executeLimited(em, limit, false);` 且 Javadoc 仅列出并发风险建议
+**修改后**：`return executeLimited(em, limit, true);` 且 Javadoc 说明默认启用悲观锁，如需禁用请使用三参数重载
+**原因**：默认不启用悲观锁在高并发场景下存在数据不一致风险，安全性优先于性能
+
+#### 2. P1-2: IgnoreSoftDeleteAdvisor 切面范围扩大
+**文件**：IgnoreSoftDeleteAdvisor.java:14-42
+**修改前**：`@Around("within(com.zsubera.jpa.repository.SoftDeleteJpaRepository+)")`
+**修改后**：`@Around("within(org.springframework.data.jpa.repository.JpaRepository+)")`
+**原因**：原切面仅拦截 SoftDeleteJpaRepository 及其子类，导致 MyJpaRepository 上的 @IgnoreSoftDelete 注解不生效
+
+#### 3. SEC-04: SubQuerySpec likeSafe()/notLikeSafe() 方法
+**文件**：SubQuerySpec.java:217-295（新增约50行）
+**修改前**：like()/notLike() 无安全警告，无 likeSafe()/notLikeSafe() 方法
+**修改后**：like()/notLike() 添加安全警告 Javadoc；新增 likeSafe() 和 notLikeSafe() 方法，使用 PredicateHelper.escapeLikeWildcards() + LIKE_ESCAPE_CHAR
+**原因**：与 ConditionBuilder 的 likeSafe()/notLikeSafe() 保持 API 一致性，防止用户输入中的通配符被错误解释
+
+#### 4. SEC-05: AbstractBulkOperationSpec likeSafe()/notLikeSafe() 方法
+**文件**：AbstractBulkOperationSpec.java:338-417（新增约50行）
+**修改前**：like()/notLike() 无安全警告，无 likeSafe()/notLikeSafe() 方法
+**修改后**：like()/notLike() 添加安全警告 Javadoc；新增 likeSafe() 和 notLikeSafe() 方法
+**原因**：与 ConditionBuilder 和 SubQuerySpec 保持 API 一致性
+
+#### 5. MAINT-04: between() 类型检查统一
+**文件**：ProjectionSpec.java:244-287, SubQuerySpec.java:308-355
+**修改前**：`start.getClass() != end.getClass()`（严格相等，不兼容子类）
+**修改后**：`!start.getClass().isAssignableFrom(end.getClass()) && !end.getClass().isAssignableFrom(start.getClass())`（兼容性检查）
+**原因**：ConditionBuilder 和 AbstractBulkOperationSpec 已使用 isAssignableFrom，统一策略避免开发者混淆
+
+### 验证结果
+- spotless:apply: 通过
+- compile: 通过
+- test -DexcludedGroups=integration: 全部通过（592 tests, 0 failures）

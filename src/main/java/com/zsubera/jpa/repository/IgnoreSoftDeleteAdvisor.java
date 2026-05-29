@@ -15,11 +15,13 @@ import org.springframework.stereotype.Component;
  * AOP 拦截器：自动检测 {@link IgnoreSoftDelete @IgnoreSoftDelete} 注解并设置 {@link SoftDeleteContext} 标志。
  *
  * <p>
- * 替代原先基于 {@code Thread.currentThread().getStackTrace()} 的栈遍历方案。 拦截所有 Repository 方法调用，检查目标方法或接口上是否存在
+ * 替代原先基于 {@code Thread.currentThread().getStackTrace()} 的栈遍历方案。 拦截所有 JPA Repository 方法调用（包括
+ * {@link com.zsubera.jpa.repository.MyJpaRepository} 和 {@link SoftDeleteJpaRepository}），检查目标方法或接口上是否存在
  * {@code @IgnoreSoftDelete} 注解。
  *
  * @see SoftDeleteContext
  * @see SoftDeleteJpaRepository
+ * @see com.zsubera.jpa.repository.MyJpaRepository
  */
 @Aspect
 @Component
@@ -29,13 +31,17 @@ public class IgnoreSoftDeleteAdvisor {
     private static final Logger log = LoggerFactory.getLogger(IgnoreSoftDeleteAdvisor.class);
 
     /**
-     * 拦截所有 Spring Data Repository 方法调用。
+     * 拦截所有 Spring Data JPA Repository 方法调用。
+     *
+     * <p>
+     * 切面范围覆盖所有 {@code JpaRepository} 子接口，确保 {@code @IgnoreSoftDelete} 注解在 {@link SoftDeleteJpaRepository} 和
+     * {@link com.zsubera.jpa.repository.MyJpaRepository} 上均生效。
      *
      * @param pjp 连接点
      * @return 方法执行结果
      * @throws Throwable 方法执行异常
      */
-    @Around("within(com.zsubera.jpa.repository.SoftDeleteJpaRepository+)")
+    @Around("within(org.springframework.data.jpa.repository.JpaRepository+)")
     public Object aroundRepositoryMethod(ProceedingJoinPoint pjp) throws Throwable {
         MethodSignature signature = (MethodSignature)pjp.getSignature();
         Method method = signature.getMethod();

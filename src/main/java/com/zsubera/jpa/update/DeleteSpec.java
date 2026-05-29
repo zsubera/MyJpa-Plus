@@ -148,19 +148,16 @@ public class DeleteSpec<T> extends AbstractBulkOperationSpec<T, DeleteSpec<T>> {
      * clearing the persistence context between batches.
      *
      * <p>
-     * <strong>并发风险警告：</strong>此方法存在并发时间窗口。在查询ID和执行删除之间，其他事务可能修改或删除记录。 对于高并发场景，建议：
-     * <ul>
-     * <li>使用 {@link #executeLimited(EntityManager, int, boolean)} 并设置 {@code pessimisticLock=true}</li>
-     * <li>或者在应用层使用分布式锁</li>
-     * <li>监控数据库锁等待情况</li>
-     * </ul>
+     * <p>
+     * <strong>安全说明：</strong>此方法默认启用悲观锁（{@code pessimisticLock=true}）， 以防止查询ID和执行删除之间的并发竞态条件。如需禁用悲观锁，请使用
+     * {@link #executeLimited(EntityManager, int, boolean)} 并设置 {@code pessimisticLock=false}。
      *
      * @param em entity manager
      * @param limit maximum number of rows to delete
      * @return actual number of rows deleted
      */
     public int executeLimited(EntityManager em, int limit) {
-        return executeLimited(em, limit, false);
+        return executeLimited(em, limit, true);
     }
 
     /**

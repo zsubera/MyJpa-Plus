@@ -338,10 +338,16 @@ public abstract class AbstractBulkOperationSpec<T, SELF extends AbstractBulkOper
     /**
      * 添加 LIKE 条件：{@code field LIKE value}。
      *
+     * <p>
+     * <b>安全警告</b>: 此方法不转义 {@code %} 和 {@code _} 通配符。如果 {@code value} 来自用户输入， 请使用 {@link #likeSafe(SFunction, String)}
+     * 方法，该方法会自动转义通配符。
+     * </p>
+     *
      * @param field 实体属性引用
      * @param value 匹配模式
      * @return 当前构建器实例
      * @throws IllegalArgumentException 如果 value 为 null
+     * @see #likeSafe(SFunction, String)
      */
     public SELF like(SFunction<T, ?> field, String value) {
         if (value == null) {
@@ -355,10 +361,16 @@ public abstract class AbstractBulkOperationSpec<T, SELF extends AbstractBulkOper
     /**
      * 添加 NOT LIKE 条件：{@code field NOT LIKE value}。
      *
+     * <p>
+     * <b>安全警告</b>: 此方法不转义 {@code %} 和 {@code _} 通配符。如果 {@code value} 来自用户输入， 请使用
+     * {@link #notLikeSafe(SFunction, String)} 方法，该方法会自动转义通配符。
+     * </p>
+     *
      * @param field 实体属性引用
      * @param value 匹配模式
      * @return 当前构建器实例
      * @throws IllegalArgumentException 如果 value 为 null
+     * @see #notLikeSafe(SFunction, String)
      */
     public SELF notLike(SFunction<T, ?> field, String value) {
         if (value == null) {
@@ -366,6 +378,50 @@ public abstract class AbstractBulkOperationSpec<T, SELF extends AbstractBulkOper
         }
         String name = property(field);
         conditionNodes.add(leaf((root, cb) -> PredicateHelper.notLike(root, name, value, cb)));
+        return self();
+    }
+
+    /**
+     * 添加带自动通配符转义的 LIKE 条件：{@code field LIKE value}。 值中的 {@code %} 或 {@code _} 字符会被转义，作为字面量处理。
+     *
+     * <p>
+     * 此方法是 {@link #like(SFunction, String)} 的安全版本，适用于处理用户输入。
+     *
+     * @param field 实体属性引用
+     * @param value 要匹配的原始字符串值（通配符会被转义）
+     * @return 当前构建器实例
+     * @throws IllegalArgumentException 如果 value 为 null
+     * @see #like(SFunction, String)
+     */
+    public SELF likeSafe(SFunction<T, ?> field, String value) {
+        if (value == null) {
+            throw new IllegalArgumentException("value must not be null");
+        }
+        String name = property(field);
+        conditionNodes.add(leaf((root, cb) -> PredicateHelper.like(root, name,
+            PredicateHelper.escapeLikeWildcards(value), cb, PredicateHelper.LIKE_ESCAPE_CHAR)));
+        return self();
+    }
+
+    /**
+     * 添加带自动通配符转义的 NOT LIKE 条件：{@code field NOT LIKE value}。 值中的 {@code %} 或 {@code _} 字符会被转义，作为字面量处理。
+     *
+     * <p>
+     * 此方法是 {@link #notLike(SFunction, String)} 的安全版本，适用于处理用户输入。
+     *
+     * @param field 实体属性引用
+     * @param value 要匹配的原始字符串值（通配符会被转义）
+     * @return 当前构建器实例
+     * @throws IllegalArgumentException 如果 value 为 null
+     * @see #notLike(SFunction, String)
+     */
+    public SELF notLikeSafe(SFunction<T, ?> field, String value) {
+        if (value == null) {
+            throw new IllegalArgumentException("value must not be null");
+        }
+        String name = property(field);
+        conditionNodes.add(leaf((root, cb) -> PredicateHelper.notLike(root, name,
+            PredicateHelper.escapeLikeWildcards(value), cb, PredicateHelper.LIKE_ESCAPE_CHAR)));
         return self();
     }
 
