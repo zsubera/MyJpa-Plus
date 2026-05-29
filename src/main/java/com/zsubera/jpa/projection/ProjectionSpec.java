@@ -1,7 +1,7 @@
 package com.zsubera.jpa.projection;
 
+import com.zsubera.jpa.spec.ConditionBuilder;
 import com.zsubera.jpa.spec.ConditionNode;
-import com.zsubera.jpa.spec.PredicateHelper;
 import com.zsubera.jpa.spec.QuerySpec;
 import com.zsubera.jpa.spec.SFunction;
 import com.zsubera.jpa.util.InClauseBuilder;
@@ -68,7 +68,7 @@ public class ProjectionSpec<T> {
                 Consumer<JoinGroup<Object>> cfg = (Consumer<JoinGroup<Object>>)(Consumer<?>)config;
                 JoinGroup<Object> group = JoinGroup.create();
                 cfg.accept(group);
-                cachedConditions = group.getConditions();
+                cachedConditions = group.conditions();
             }
             return cachedConditions;
         }
@@ -78,327 +78,22 @@ public class ProjectionSpec<T> {
      * JOIN 目标实体的嵌套条件构建器。
      *
      * <p>
-     * 提供类似于 {@link com.zsubera.jpa.spec.ConditionBuilder} 的 API， 用于在 JOIN 子句中添加 ON 条件。 条件节点复用
-     * {@link com.zsubera.jpa.spec.ConditionNode} 体系，避免重复定义。
+     * 实现 {@link ConditionBuilder} 接口，复用所有类型安全的条件方法（eq、like、in 等）， 避免与主接口的代码重复。条件节点复用 {@link ConditionNode} 体系。
      *
      * @param <E> JOIN 目标实体类型
      */
-    public static final class JoinGroup<E> {
+    public static final class JoinGroup<E> implements ConditionBuilder<E, JoinGroup<E>> {
 
         private final List<ConditionNode> conditions = new ArrayList<>();
 
         private JoinGroup() {}
 
-        private static <E> JoinGroup<E> create() {
+        static <E> JoinGroup<E> create() {
             return new JoinGroup<>();
         }
 
-        public JoinGroup<E> eq(SFunction<E, ?> field, Object value) {
-            if (field == null) {
-                throw new IllegalArgumentException("field must not be null");
-            }
-            conditions
-                .add(new ConditionNode.SimpleNode(LambdaUtils.getPropertyName(field), value, ConditionNode.Op.EQ));
-            return this;
-        }
-
-        public JoinGroup<E> ne(SFunction<E, ?> field, Object value) {
-            if (field == null) {
-                throw new IllegalArgumentException("field must not be null");
-            }
-            conditions
-                .add(new ConditionNode.SimpleNode(LambdaUtils.getPropertyName(field), value, ConditionNode.Op.NE));
-            return this;
-        }
-
-        /**
-         * 添加 LIKE 条件（不转义通配符）。
-         *
-         * <p>
-         * <b>安全警告</b>: 此方法不转义 {@code %} 和 {@code _} 通配符。如果 {@code value} 来自用户输入， 请使用
-         * {@link #likeSafe(SFunction, String)} 方法，该方法会自动转义通配符。
-         * </p>
-         *
-         * @param field JOIN 目标实体属性的方法引用
-         * @param value 匹配模式的字符串值
-         * @return 当前 JoinGroup 以支持链式调用
-         * @throws IllegalArgumentException 如果 {@code field} 或 {@code value} 为 null
-         * @see #likeSafe(SFunction, String)
-         */
-        public JoinGroup<E> like(SFunction<E, ?> field, String value) {
-            if (field == null) {
-                throw new IllegalArgumentException("field must not be null");
-            }
-            if (value == null) {
-                throw new IllegalArgumentException("value must not be null");
-            }
-            conditions
-                .add(new ConditionNode.SimpleNode(LambdaUtils.getPropertyName(field), value, ConditionNode.Op.LIKE));
-            return this;
-        }
-
-        public JoinGroup<E> notLike(SFunction<E, ?> field, String value) {
-            if (field == null) {
-                throw new IllegalArgumentException("field must not be null");
-            }
-            if (value == null) {
-                throw new IllegalArgumentException("value must not be null");
-            }
-            conditions.add(
-                new ConditionNode.SimpleNode(LambdaUtils.getPropertyName(field), value, ConditionNode.Op.NOT_LIKE));
-            return this;
-        }
-
-        public JoinGroup<E> gt(SFunction<E, ?> field, Comparable<?> value) {
-            if (field == null) {
-                throw new IllegalArgumentException("field must not be null");
-            }
-            if (value == null) {
-                throw new IllegalArgumentException("value must not be null");
-            }
-            conditions
-                .add(new ConditionNode.SimpleNode(LambdaUtils.getPropertyName(field), value, ConditionNode.Op.GT));
-            return this;
-        }
-
-        public JoinGroup<E> ge(SFunction<E, ?> field, Comparable<?> value) {
-            if (field == null) {
-                throw new IllegalArgumentException("field must not be null");
-            }
-            if (value == null) {
-                throw new IllegalArgumentException("value must not be null");
-            }
-            conditions
-                .add(new ConditionNode.SimpleNode(LambdaUtils.getPropertyName(field), value, ConditionNode.Op.GE));
-            return this;
-        }
-
-        public JoinGroup<E> lt(SFunction<E, ?> field, Comparable<?> value) {
-            if (field == null) {
-                throw new IllegalArgumentException("field must not be null");
-            }
-            if (value == null) {
-                throw new IllegalArgumentException("value must not be null");
-            }
-            conditions
-                .add(new ConditionNode.SimpleNode(LambdaUtils.getPropertyName(field), value, ConditionNode.Op.LT));
-            return this;
-        }
-
-        public JoinGroup<E> le(SFunction<E, ?> field, Comparable<?> value) {
-            if (field == null) {
-                throw new IllegalArgumentException("field must not be null");
-            }
-            if (value == null) {
-                throw new IllegalArgumentException("value must not be null");
-            }
-            conditions
-                .add(new ConditionNode.SimpleNode(LambdaUtils.getPropertyName(field), value, ConditionNode.Op.LE));
-            return this;
-        }
-
-        public JoinGroup<E> isNull(SFunction<E, ?> field) {
-            if (field == null) {
-                throw new IllegalArgumentException("field must not be null");
-            }
-            conditions
-                .add(new ConditionNode.SimpleNode(LambdaUtils.getPropertyName(field), null, ConditionNode.Op.IS_NULL));
-            return this;
-        }
-
-        public JoinGroup<E> isNotNull(SFunction<E, ?> field) {
-            if (field == null) {
-                throw new IllegalArgumentException("field must not be null");
-            }
-            conditions.add(
-                new ConditionNode.SimpleNode(LambdaUtils.getPropertyName(field), null, ConditionNode.Op.IS_NOT_NULL));
-            return this;
-        }
-
-        public JoinGroup<E> likeSafe(SFunction<E, ?> field, String value) {
-            if (field == null) {
-                throw new IllegalArgumentException("field must not be null");
-            }
-            if (value == null) {
-                throw new IllegalArgumentException("value must not be null");
-            }
-            conditions.add(new ConditionNode.SimpleNode(LambdaUtils.getPropertyName(field),
-                PredicateHelper.escapeLikeWildcards(value), ConditionNode.Op.LIKE, PredicateHelper.LIKE_ESCAPE_CHAR));
-            return this;
-        }
-
-        public JoinGroup<E> notLikeSafe(SFunction<E, ?> field, String value) {
-            if (field == null) {
-                throw new IllegalArgumentException("field must not be null");
-            }
-            if (value == null) {
-                throw new IllegalArgumentException("value must not be null");
-            }
-            conditions.add(new ConditionNode.SimpleNode(LambdaUtils.getPropertyName(field),
-                PredicateHelper.escapeLikeWildcards(value), ConditionNode.Op.NOT_LIKE,
-                PredicateHelper.LIKE_ESCAPE_CHAR));
-            return this;
-        }
-
-        @SuppressWarnings({"unchecked", "rawtypes"})
-        public JoinGroup<E> between(SFunction<E, ?> field, Comparable<?> start, Comparable<?> end) {
-            if (field == null) {
-                throw new IllegalArgumentException("field must not be null");
-            }
-            if (start == null) {
-                throw new IllegalArgumentException("start must not be null");
-            }
-            if (end == null) {
-                throw new IllegalArgumentException("end must not be null");
-            }
-            if (!start.getClass().isAssignableFrom(end.getClass())
-                && !end.getClass().isAssignableFrom(start.getClass())) {
-                throw new IllegalArgumentException("start and end must be compatible types, but got "
-                    + start.getClass().getName() + " and " + end.getClass().getName());
-            }
-            if (((Comparable)start).compareTo(end) > 0) {
-                throw new IllegalArgumentException("start must not be greater than end");
-            }
-            conditions.add(new ConditionNode.SimpleNode(LambdaUtils.getPropertyName(field),
-                new Comparable<?>[] {start, end}, ConditionNode.Op.BETWEEN));
-            return this;
-        }
-
-        @SuppressWarnings({"unchecked", "rawtypes"})
-        public JoinGroup<E> notBetween(SFunction<E, ?> field, Comparable<?> start, Comparable<?> end) {
-            if (field == null) {
-                throw new IllegalArgumentException("field must not be null");
-            }
-            if (start == null) {
-                throw new IllegalArgumentException("start must not be null");
-            }
-            if (end == null) {
-                throw new IllegalArgumentException("end must not be null");
-            }
-            if (!start.getClass().isAssignableFrom(end.getClass())
-                && !end.getClass().isAssignableFrom(start.getClass())) {
-                throw new IllegalArgumentException("start and end must be compatible types, but got "
-                    + start.getClass().getName() + " and " + end.getClass().getName());
-            }
-            if (((Comparable)start).compareTo(end) > 0) {
-                throw new IllegalArgumentException("start must not be greater than end");
-            }
-            conditions.add(new ConditionNode.SimpleNode(LambdaUtils.getPropertyName(field),
-                new Comparable<?>[] {start, end}, ConditionNode.Op.NOT_BETWEEN));
-            return this;
-        }
-
-        public JoinGroup<E> in(SFunction<E, ?> field, Object... values) {
-            if (field == null) {
-                throw new IllegalArgumentException("field must not be null");
-            }
-            if (values == null || values.length == 0) {
-                throw new IllegalArgumentException("values must not be empty");
-            }
-            conditions
-                .add(new ConditionNode.SimpleNode(LambdaUtils.getPropertyName(field), values, ConditionNode.Op.IN));
-            return this;
-        }
-
-        public JoinGroup<E> notIn(SFunction<E, ?> field, Object... values) {
-            if (field == null) {
-                throw new IllegalArgumentException("field must not be null");
-            }
-            if (values == null || values.length == 0) {
-                throw new IllegalArgumentException("values must not be empty");
-            }
-            conditions
-                .add(new ConditionNode.SimpleNode(LambdaUtils.getPropertyName(field), values, ConditionNode.Op.NOT_IN));
-            return this;
-        }
-
-        public JoinGroup<E> startsWith(SFunction<E, ?> field, String value) {
-            if (field == null) {
-                throw new IllegalArgumentException("field must not be null");
-            }
-            if (value == null) {
-                throw new IllegalArgumentException("value must not be null");
-            }
-            conditions.add(new ConditionNode.SimpleNode(LambdaUtils.getPropertyName(field),
-                PredicateHelper.escapeLikeWildcards(value) + "%", ConditionNode.Op.LIKE,
-                PredicateHelper.LIKE_ESCAPE_CHAR));
-            return this;
-        }
-
-        public JoinGroup<E> endsWith(SFunction<E, ?> field, String value) {
-            if (field == null) {
-                throw new IllegalArgumentException("field must not be null");
-            }
-            if (value == null) {
-                throw new IllegalArgumentException("value must not be null");
-            }
-            conditions.add(new ConditionNode.SimpleNode(LambdaUtils.getPropertyName(field),
-                "%" + PredicateHelper.escapeLikeWildcards(value), ConditionNode.Op.LIKE,
-                PredicateHelper.LIKE_ESCAPE_CHAR));
-            return this;
-        }
-
-        public JoinGroup<E> contains(SFunction<E, ?> field, String value) {
-            if (field == null) {
-                throw new IllegalArgumentException("field must not be null");
-            }
-            if (value == null) {
-                throw new IllegalArgumentException("value must not be null");
-            }
-            conditions.add(new ConditionNode.SimpleNode(LambdaUtils.getPropertyName(field),
-                "%" + PredicateHelper.escapeLikeWildcards(value) + "%", ConditionNode.Op.LIKE,
-                PredicateHelper.LIKE_ESCAPE_CHAR));
-            return this;
-        }
-
-        public JoinGroup<E> eqIgnoreCase(SFunction<E, ?> field, String value) {
-            if (field == null) {
-                throw new IllegalArgumentException("field must not be null");
-            }
-            if (value == null) {
-                return isNull(field);
-            }
-            conditions.add(new ConditionNode.SimpleNode(LambdaUtils.getPropertyName(field), value,
-                ConditionNode.Op.EQ_IGNORE_CASE));
-            return this;
-        }
-
-        public JoinGroup<E> likeIgnoreCase(SFunction<E, ?> field, String value) {
-            if (field == null) {
-                throw new IllegalArgumentException("field must not be null");
-            }
-            if (value == null) {
-                throw new IllegalArgumentException("value must not be null");
-            }
-            conditions.add(new ConditionNode.SimpleNode(LambdaUtils.getPropertyName(field), value,
-                ConditionNode.Op.LIKE_IGNORE_CASE));
-            return this;
-        }
-
-        public JoinGroup<E> isEmpty(SFunction<E, ?> field) {
-            if (field == null) {
-                throw new IllegalArgumentException("field must not be null");
-            }
-            conditions.add(new ConditionNode.CollectionNode(LambdaUtils.getPropertyName(field),
-                ConditionNode.CollectionOp.IS_EMPTY));
-            return this;
-        }
-
-        public JoinGroup<E> isNotEmpty(SFunction<E, ?> field) {
-            if (field == null) {
-                throw new IllegalArgumentException("field must not be null");
-            }
-            conditions.add(new ConditionNode.CollectionNode(LambdaUtils.getPropertyName(field),
-                ConditionNode.CollectionOp.IS_NOT_EMPTY));
-            return this;
-        }
-
-        /**
-         * 获取所有条件节点列表。
-         *
-         * @return 条件节点列表
-         */
-        List<ConditionNode> getConditions() {
+        @Override
+        public List<ConditionNode> conditions() {
             return conditions;
         }
     }

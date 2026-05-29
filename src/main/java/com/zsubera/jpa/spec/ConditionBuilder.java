@@ -229,10 +229,14 @@ public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> {
      * @param value 匹配模式的字符串值
      * @return 当前构建器以支持链式调用
      * @throws IllegalArgumentException 如果 {@code field} 或 {@code value} 为 null
+     * @deprecated 不转义通配符，存在 LIKE 注入风险。请使用 {@link #likeSafe}、{@link #contains}、{@link #startsWith}、 {@link #endsWith}
+     *             等安全替代方法。
+     * @see #likeSafe(SFunction, String)
      * @see #contains(SFunction, String)
      * @see #startsWith(SFunction, String)
      * @see #endsWith(SFunction, String)
      */
+    @Deprecated(since = "1.1.0")
     default SELF like(SFunction<E, ?> field, String value) {
         if (field == null) {
             throw new IllegalArgumentException("field must not be null");
@@ -301,8 +305,11 @@ public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> {
      * @param value 匹配模式的字符串值
      * @return 当前构建器以支持链式调用
      * @throws IllegalArgumentException 如果 {@code field} 或 {@code value} 为 null
+     * @deprecated 不转义通配符，存在 LIKE 注入风险。请使用 {@link #notLikeSafe} 等安全替代方法。
+     * @see #notLikeSafe(SFunction, String)
      * @see PredicateHelper#escapeLikeWildcards(String)
      */
+    @Deprecated(since = "1.1.0")
     default SELF notLike(SFunction<E, ?> field, String value) {
         if (field == null) {
             throw new IllegalArgumentException("field must not be null");

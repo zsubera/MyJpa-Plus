@@ -48,6 +48,18 @@ public class SubQuerySpec<S> {
     private boolean selectSet;
 
     SubQuerySpec(Subquery<S> subquery, Root<S> root, Root<?> correlatedRoot, CriteriaBuilder cb) {
+        if (subquery == null) {
+            throw new IllegalArgumentException("subquery must not be null");
+        }
+        if (root == null) {
+            throw new IllegalArgumentException("root must not be null");
+        }
+        if (correlatedRoot == null) {
+            throw new IllegalArgumentException("correlatedRoot must not be null");
+        }
+        if (cb == null) {
+            throw new IllegalArgumentException("cb must not be null");
+        }
         this.subquery = subquery;
         this.root = root;
         this.correlatedRoot = correlatedRoot;

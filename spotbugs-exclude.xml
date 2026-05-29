@@ -6,4 +6,21 @@
         <Class name="com.zsubera.jpa.template.MyJpaTemplate"/>
         <Bug pattern="CT_CONSTRUCTOR_THROW"/>
     </Match>
+
+    <!-- Exclude CT_CONSTRUCTOR_THROW for internal condition group builders -->
+    <!-- These classes have package-private constructors with defensive null checks.
+         The constructors are only invoked from within the same package (QuerySpec),
+         so the Finalizer attack risk is not applicable. -->
+    <Match>
+        <Class name="com.zsubera.jpa.spec.JoinGroup"/>
+        <Bug pattern="CT_CONSTRUCTOR_THROW"/>
+    </Match>
+    <Match>
+        <Class name="com.zsubera.jpa.spec.OrGroup"/>
+        <Bug pattern="CT_CONSTRUCTOR_THROW"/>
+    </Match>
+    <Match>
+        <Class name="com.zsubera.jpa.spec.OrJoinGroup"/>
+        <Bug pattern="CT_CONSTRUCTOR_THROW"/>
+    </Match>
 </FindBugsFilter>
