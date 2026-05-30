@@ -68,7 +68,7 @@ class OrGroupTest {
         repository.save(newEntity("world", 0));
         repository.save(newEntity("help", 0));
         QuerySpec<TestEntity> qs = new QuerySpec<>();
-        qs.or().like(TestEntity::getName, "hel%").endOr();
+        qs.or().startsWith(TestEntity::getName, "hel").endOr();
         List<TestEntity> result = repository.findAll(qs.toSpecification());
         assertEquals(2, result.size());
     }
@@ -78,7 +78,7 @@ class OrGroupTest {
         repository.save(newEntity("hello", 0));
         repository.save(newEntity("world", 0));
         QuerySpec<TestEntity> qs = new QuerySpec<>();
-        qs.or().notLike(TestEntity::getName, "%hello%").endOr();
+        qs.or().notLikeSafe(TestEntity::getName, "hello").endOr();
         List<TestEntity> result = repository.findAll(qs.toSpecification());
         assertEquals(1, result.size());
         assertEquals("world", result.get(0).getName());

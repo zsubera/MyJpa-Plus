@@ -56,18 +56,18 @@ public final class SoftDeleteHelper {
 
     // 缓存：entityClass ->字段名（或“无字段”的哨兵）
     // 使用ConcurrentHashMap实现线程安全访问;实体类别数量在实际中是有限的
-    // Cache: entityClass -> field name (or sentinel for "no field")
-    // Uses weak key references to allow class loader GC in OSGi/hot-redeploy scenarios
+    // 缓存: entityClass -> 字段名（或"无字段"的哨兵值）
+    // 使用弱引用键允许类加载器在 OSGi/热重载场景中被 GC 回收
     private static final ConcurrentMap<Class<?>, String> FIELD_CACHE =
         new ConcurrentReferenceHashMap<>(16, ConcurrentReferenceHashMap.ReferenceType.WEAK);
 
-    // Cache: entityClass -> isNotDeleted Specification
-    // Uses weak key references to allow class loader GC in OSGi/hot-redeploy scenarios
+    // 缓存: entityClass -> isNotDeleted Specification
+    // 使用弱引用键允许类加载器在 OSGi/热重载场景中被 GC 回收
     private static final ConcurrentMap<Class<?>, Specification<?>> NOT_DELETED_SPEC_CACHE =
         new ConcurrentReferenceHashMap<>(16, ConcurrentReferenceHashMap.ReferenceType.WEAK);
 
-    // Cache: entityClass -> isDeleted Specification
-    // Uses weak key references to allow class loader GC in OSGi/hot-redeploy scenarios
+    // 缓存: entityClass -> isDeleted Specification
+    // 使用弱引用键允许类加载器在 OSGi/热重载场景中被 GC 回收
     private static final ConcurrentMap<Class<?>, Specification<?>> DELETED_SPEC_CACHE =
         new ConcurrentReferenceHashMap<>(16, ConcurrentReferenceHashMap.ReferenceType.WEAK);
 

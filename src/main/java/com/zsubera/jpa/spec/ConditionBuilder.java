@@ -231,17 +231,10 @@ public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> {
      * @see #startsWith(SFunction, String)
      * @see #endsWith(SFunction, String)
      */
-    @Deprecated(since = "1.1.0")
+    @Deprecated(since = "1.1.0", forRemoval = true)
     default SELF like(SFunction<E, ?> field, String value) {
-        if (field == null) {
-            throw new IllegalArgumentException("field must not be null");
-        }
-        if (value == null) {
-            throw new IllegalArgumentException("value must not be null");
-        }
-        conditions()
-            .add(new ConditionNode.SimpleNode(LambdaUtils.getPropertyName(field), value, ConditionNode.Op.LIKE));
-        return self();
+        throw new UnsupportedOperationException(
+            "like() 已在 1.1.0 版本移除，请使用 likeSafe()、contains()、startsWith() 或 endsWith()。");
     }
 
     /**
@@ -309,17 +302,9 @@ public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> {
      * @see #notLikeSafe(SFunction, String)
      * @see PredicateHelper#escapeLikeWildcards(String)
      */
-    @Deprecated(since = "1.1.0")
+    @Deprecated(since = "1.1.0", forRemoval = true)
     default SELF notLike(SFunction<E, ?> field, String value) {
-        if (field == null) {
-            throw new IllegalArgumentException("field must not be null");
-        }
-        if (value == null) {
-            throw new IllegalArgumentException("value must not be null");
-        }
-        conditions()
-            .add(new ConditionNode.SimpleNode(LambdaUtils.getPropertyName(field), value, ConditionNode.Op.NOT_LIKE));
-        return self();
+        throw new UnsupportedOperationException("notLike() 已在 1.1.0 版本移除，请使用 notLikeSafe() 或其他安全方法。");
     }
 
     /**

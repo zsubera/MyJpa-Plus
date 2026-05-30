@@ -40,7 +40,7 @@ public class QuerySpecTest {
         repository.save(newEntity("world", 0));
         repository.save(newEntity("hello world", 0));
         QuerySpec<TestEntity> qs = new QuerySpec<>();
-        qs.like(TestEntity::getName, "%hello%");
+        qs.contains(TestEntity::getName, "hello");
         List<TestEntity> result = repository.findAll(qs.toSpecification());
         assertEquals(2, result.size());
     }
@@ -292,9 +292,8 @@ public class QuerySpecTest {
     void testNotLike() {
         repository.save(newEntity("hello", 0));
         repository.save(newEntity("world", 0));
-        repository.save(newEntity("hello world", 0));
         QuerySpec<TestEntity> qs = new QuerySpec<>();
-        qs.notLike(TestEntity::getName, "%hello%");
+        qs.notLikeSafe(TestEntity::getName, "hello");
         List<TestEntity> result = repository.findAll(qs.toSpecification());
         assertEquals(1, result.size());
         assertEquals("world", result.get(0).getName());

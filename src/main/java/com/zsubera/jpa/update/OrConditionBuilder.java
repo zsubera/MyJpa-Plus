@@ -137,12 +137,8 @@ public class OrConditionBuilder<T, SELF extends AbstractBulkOperationSpec<T, SEL
      */
     @Deprecated(since = "1.1.0", forRemoval = true)
     public OrConditionBuilder<T, SELF> like(SFunction<T, ?> field, String value) {
-        if (value == null) {
-            throw new IllegalArgumentException("value must not be null");
-        }
-        String name = parent.property(field);
-        nodes.add(new BulkConditionNode.LeafNode((root, cb) -> PredicateHelper.like(root, name, value, cb)));
-        return this;
+        throw new UnsupportedOperationException(
+            "like() 已在 1.1.0 版本移除，请使用 likeSafe()、contains()、startsWith() 或 endsWith()。");
     }
 
     /**
@@ -157,12 +153,7 @@ public class OrConditionBuilder<T, SELF extends AbstractBulkOperationSpec<T, SEL
      */
     @Deprecated(since = "1.1.0", forRemoval = true)
     public OrConditionBuilder<T, SELF> notLike(SFunction<T, ?> field, String value) {
-        if (value == null) {
-            throw new IllegalArgumentException("value must not be null");
-        }
-        String name = parent.property(field);
-        nodes.add(new BulkConditionNode.LeafNode((root, cb) -> PredicateHelper.notLike(root, name, value, cb)));
-        return this;
+        throw new UnsupportedOperationException("notLike() 已在 1.1.0 版本移除，请使用 notLikeSafe() 或其他安全方法。");
     }
 
     /**

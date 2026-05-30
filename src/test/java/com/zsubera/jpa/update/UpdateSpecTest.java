@@ -120,8 +120,8 @@ class UpdateSpecTest {
         repository.save(newEntity("hello", 1));
         repository.save(newEntity("world", 1));
 
-        int count = new UpdateSpec<>(TestEntity.class).set(TestEntity::getStatus, 99).like(TestEntity::getName, "hel%")
-            .execute(em);
+        int count = new UpdateSpec<>(TestEntity.class).set(TestEntity::getStatus, 99)
+            .startsWith(TestEntity::getName, "hel").execute(em);
 
         assertEquals(1, count);
         em.clear();
@@ -276,7 +276,7 @@ class UpdateSpecTest {
         repository.save(newEntity("hello", 1));
         repository.save(newEntity("world", 1));
         int count = new UpdateSpec<>(TestEntity.class).set(TestEntity::getStatus, 99)
-            .notLike(TestEntity::getName, "%hello%").execute(em);
+            .notLikeSafe(TestEntity::getName, "hello").execute(em);
         assertEquals(1, count);
     }
 
@@ -506,7 +506,7 @@ class UpdateSpecTest {
         repository.save(newEntity("hello", 1));
         repository.save(newEntity("world", 2));
         int count = new UpdateSpec<>(TestEntity.class).set(TestEntity::getStatus, 99)
-            .or(o -> o.like(TestEntity::getName, "%hel%")).execute(em);
+            .or(o -> o.contains(TestEntity::getName, "hel")).execute(em);
         assertEquals(1, count);
     }
 
@@ -515,7 +515,7 @@ class UpdateSpecTest {
         repository.save(newEntity("hello", 1));
         repository.save(newEntity("world", 2));
         int count = new UpdateSpec<>(TestEntity.class).set(TestEntity::getStatus, 99)
-            .or(o -> o.notLike(TestEntity::getName, "%hel%")).execute(em);
+            .or(o -> o.notLikeSafe(TestEntity::getName, "hello")).execute(em);
         assertEquals(1, count);
     }
 

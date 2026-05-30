@@ -933,29 +933,6 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
     }
 
     /**
-     * 在 COUNT 查询上下文中解析 EXISTS 子查询（当外部 query 为 null 时）。
-     *
-     * <p>
-     * <strong>实现说明：</strong>此方法创建一个临时的 {@code CriteriaQuery<S>} 作为子查询的载体，该临时 query 从未被 {@link EntityManager}
-     * 执行。子查询的构建仅依赖 JPA Criteria API 的对象模型（{@link Subquery}、{@link Root} 等）， 不依赖于查询执行。此行为在主流 JPA
-     * 实现（Hibernate、EclipseLink）中均可正常工作。
-     *
-     * <p>
-     * 临时 query 的唯一用途是提供类型化的 {@code Subquery.from()} 调用上下文，因为 JPA Criteria API 要求子查询从其父查询派生。
-     *
-     * @param <S> 子查询实体类型
-     * @param node EXISTS 条件节点
-     * @param outerPath 外部查询的实体路径
-     * @param tempQuery 临时 CriteriaQuery（仅用于创建子查询对象）
-     * @param cb CriteriaBuilder 实例
-     * @return 构建好的 EXISTS 或 NOT EXISTS 谓词
-     */
-    private <S> Predicate resolveExistsWithTempQuery(ConditionNode.ExistsNode<S> node, Path<?> outerPath,
-        CriteriaQuery<S> tempQuery, CriteriaBuilder cb) {
-        return resolveExistsInternal(node, outerPath, tempQuery, cb);
-    }
-
-    /**
      * EXISTS 子查询解析的内部实现。
      *
      * @param <S> 子查询实体类型

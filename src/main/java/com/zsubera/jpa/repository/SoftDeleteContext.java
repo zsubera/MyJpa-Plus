@@ -41,14 +41,19 @@ public final class SoftDeleteContext {
      * 弹出忽略标记（减少计数）。当方法离开 {@code @IgnoreSoftDelete} 注解的方法时调用。
      *
      * <p>
-     * 当计数归零时自动清除 ThreadLocal，防止内存泄漏。
+     * 当计数归零时自动清除 ThreadLocal，防止内存泄漏。包含防御性检查以处理异常场景下的计数漂移。
      */
     public static void popIgnore() {
-        int count = ignoreCount.get() - 1;
-        if (count <= 0) {
+        Integer count = ignoreCount.get();
+        if (count == null || count <= 0) {
+            // 防御性清理，避免计数漂移
+            ignoreCount.remove();
+            return;
+        }
+        if (count - 1 <= 0) {
             ignoreCount.remove();
         } else {
-            ignoreCount.set(count);
+            ignoreCount.set(count - 1);
         }
     }
 

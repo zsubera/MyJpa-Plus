@@ -126,7 +126,7 @@ class JoinGroupTest {
 
         QuerySpec<TestEntity> qs = new QuerySpec<>();
         JoinGroup<TestEntity, ParentEntity> jg = qs.join(TestEntity::getParent);
-        jg.like(ParentEntity::getCategory, "admin%");
+        jg.startsWith(ParentEntity::getCategory, "admin");
         jg.endJoin();
 
         List<TestEntity> result = repository.findAll(qs.toSpecification());

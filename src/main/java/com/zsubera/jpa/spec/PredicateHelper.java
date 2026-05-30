@@ -63,10 +63,10 @@ public final class PredicateHelper {
                 throw new IllegalArgumentException("start and end must be compatible types, but got "
                     + start.getClass().getName() + " and " + end.getClass().getName());
             }
-            // Use doubleValue() for cross-numeric-type comparison
-            double startVal = ((Number)start).doubleValue();
-            double endVal = ((Number)end).doubleValue();
-            if (startVal > endVal) {
+            // Use BigDecimal for precise cross-numeric-type comparison to avoid precision loss
+            java.math.BigDecimal startDecimal = new java.math.BigDecimal(start.toString());
+            java.math.BigDecimal endDecimal = new java.math.BigDecimal(end.toString());
+            if (startDecimal.compareTo(endDecimal) > 0) {
                 throw new IllegalArgumentException("start must not be greater than end");
             }
             return;

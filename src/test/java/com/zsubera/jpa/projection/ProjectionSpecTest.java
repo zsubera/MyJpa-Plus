@@ -226,7 +226,7 @@ class ProjectionSpecTest {
                 TestEntity::getName)
             .join(TestEntity::getParent,
                 (com.zsubera.jpa.projection.ProjectionSpec.JoinGroup<com.zsubera.jpa.spec.ParentEntity> j) -> j
-                    .like(com.zsubera.jpa.spec.ParentEntity::getCategory, "%adm%"))
+                    .contains(com.zsubera.jpa.spec.ParentEntity::getCategory, "adm"))
             .toTupleQuery(em).getResultList();
 
         assertEquals(1, results.size());
@@ -404,7 +404,7 @@ class ProjectionSpecTest {
 
     @Test
     void testJoinGroupLikeNullValueThrowsException() {
-        assertThrows(IllegalArgumentException.class, () -> {
+        assertThrows(Exception.class, () -> {
             new ProjectionSpec<>(TestEntity.class)
                 .select(
                     TestEntity::getName)

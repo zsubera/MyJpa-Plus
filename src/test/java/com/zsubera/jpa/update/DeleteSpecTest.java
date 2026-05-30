@@ -95,7 +95,7 @@ class DeleteSpecTest {
         repository.save(newEntity("hello", 1));
         repository.save(newEntity("world", 1));
 
-        int count = new DeleteSpec<>(TestEntity.class).like(TestEntity::getName, "hel%").execute(em);
+        int count = new DeleteSpec<>(TestEntity.class).startsWith(TestEntity::getName, "hel").execute(em);
 
         assertEquals(1, count);
         assertEquals("world", repository.findAll().get(0).getName());
@@ -218,7 +218,7 @@ class DeleteSpecTest {
     void testDeleteNotLike() {
         repository.save(newEntity("hello", 1));
         repository.save(newEntity("world", 1));
-        int count = new DeleteSpec<>(TestEntity.class).notLike(TestEntity::getName, "%hello%").execute(em);
+        int count = new DeleteSpec<>(TestEntity.class).notLikeSafe(TestEntity::getName, "hello").execute(em);
         assertEquals(1, count);
         assertEquals("hello", repository.findAll().get(0).getName());
     }
@@ -436,7 +436,7 @@ class DeleteSpecTest {
     void testDeleteOrGroupLike() {
         repository.save(newEntity("hello", 1));
         repository.save(newEntity("world", 2));
-        int count = new DeleteSpec<>(TestEntity.class).or(o -> o.like(TestEntity::getName, "%hel%")).execute(em);
+        int count = new DeleteSpec<>(TestEntity.class).or(o -> o.contains(TestEntity::getName, "hel")).execute(em);
         assertEquals(1, count);
     }
 
@@ -444,7 +444,7 @@ class DeleteSpecTest {
     void testDeleteOrGroupNotLike() {
         repository.save(newEntity("hello", 1));
         repository.save(newEntity("world", 2));
-        int count = new DeleteSpec<>(TestEntity.class).or(o -> o.notLike(TestEntity::getName, "%hel%")).execute(em);
+        int count = new DeleteSpec<>(TestEntity.class).or(o -> o.notLikeSafe(TestEntity::getName, "hello")).execute(em);
         assertEquals(1, count);
     }
 
@@ -590,13 +590,13 @@ class DeleteSpecTest {
 
     @Test
     void testDeleteOrGroupLikeNullThrowsException() {
-        assertThrows(IllegalArgumentException.class,
+        assertThrows(UnsupportedOperationException.class,
             () -> new DeleteSpec<>(TestEntity.class).or(o -> o.like(TestEntity::getName, null)));
     }
 
     @Test
     void testDeleteOrGroupNotLikeNullThrowsException() {
-        assertThrows(IllegalArgumentException.class,
+        assertThrows(UnsupportedOperationException.class,
             () -> new DeleteSpec<>(TestEntity.class).or(o -> o.notLike(TestEntity::getName, null)));
     }
 

@@ -366,12 +366,8 @@ public abstract class AbstractBulkOperationSpec<T, SELF extends AbstractBulkOper
      */
     @Deprecated(since = "1.1.0", forRemoval = true)
     public SELF like(SFunction<T, ?> field, String value) {
-        if (value == null) {
-            throw new IllegalArgumentException("value must not be null");
-        }
-        String name = property(field);
-        conditionNodes.add(leaf((root, cb) -> PredicateHelper.like(root, name, value, cb)));
-        return self();
+        throw new UnsupportedOperationException(
+            "like() 已在 1.1.0 版本移除，请使用 likeSafe()、contains()、startsWith() 或 endsWith()。");
     }
 
     /**
@@ -391,12 +387,7 @@ public abstract class AbstractBulkOperationSpec<T, SELF extends AbstractBulkOper
      */
     @Deprecated(since = "1.1.0", forRemoval = true)
     public SELF notLike(SFunction<T, ?> field, String value) {
-        if (value == null) {
-            throw new IllegalArgumentException("value must not be null");
-        }
-        String name = property(field);
-        conditionNodes.add(leaf((root, cb) -> PredicateHelper.notLike(root, name, value, cb)));
-        return self();
+        throw new UnsupportedOperationException("notLike() 已在 1.1.0 版本移除，请使用 notLikeSafe() 或其他安全方法。");
     }
 
     /**
@@ -675,15 +666,8 @@ public abstract class AbstractBulkOperationSpec<T, SELF extends AbstractBulkOper
     @Deprecated(since = "1.1.0", forRemoval = true)
     @SuppressWarnings("unchecked")
     public SELF where(Function<Root<T>, Predicate> condition) {
-        if (condition == null) {
-            throw new IllegalArgumentException("condition must not be null");
-        }
-        if (log.isWarnEnabled()) {
-            log.warn("DEPRECATED: where(Function) bypasses type safety and will be removed in 2.0. "
-                + "Use type-safe methods like eq(), likeSafe(), contains() instead.");
-        }
-        conditionNodes.add(leaf((root, cb) -> condition.apply((Root<T>)root)));
-        return self();
+        throw new UnsupportedOperationException("where(Function) 已在 1.1.0 版本移除，请使用类型安全的条件方法 (eq/ne/likeSafe 等)。"
+            + "如确需使用原始 Predicate，请使用 allowUnsafePredicate() 方法。");
     }
 
     /**

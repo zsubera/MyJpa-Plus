@@ -96,6 +96,12 @@ public class ProjectionSpec<T> {
 
         private JoinGroup() {}
 
+        /**
+         * 创建 JoinGroup 实例。
+         *
+         * @param <E> JOIN 目标实体类型
+         * @return 新的 JoinGroup 实例
+         */
         static <E> JoinGroup<E> create() {
             return new JoinGroup<>();
         }

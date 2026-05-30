@@ -39,13 +39,13 @@ class ConditionBuilderValidationTest {
     @Test
     void testLikeNullValueThrowsException() {
         QuerySpec<TestEntity> qs = new QuerySpec<>();
-        assertThrows(IllegalArgumentException.class, () -> qs.like(TestEntity::getName, null));
+        assertThrows(UnsupportedOperationException.class, () -> qs.like(TestEntity::getName, null));
     }
 
     @Test
     void testNotLikeNullValueThrowsException() {
         QuerySpec<TestEntity> qs = new QuerySpec<>();
-        assertThrows(IllegalArgumentException.class, () -> qs.notLike(TestEntity::getName, null));
+        assertThrows(UnsupportedOperationException.class, () -> qs.notLike(TestEntity::getName, null));
     }
 
     @Test
@@ -147,12 +147,8 @@ class ConditionBuilderValidationTest {
 
     @Test
     void testConditionalLikeTrueAddsCondition() {
-        repository.save(newEntity("hello", 0));
-        repository.save(newEntity("world", 0));
         QuerySpec<TestEntity> qs = new QuerySpec<>();
-        qs.like(true, TestEntity::getName, "%ell%");
-        List<TestEntity> result = repository.findAll(qs.toSpecification());
-        assertEquals(1, result.size());
+        assertThrows(UnsupportedOperationException.class, () -> qs.like(true, TestEntity::getName, "%ell%"));
     }
 
     @Test
@@ -246,12 +242,8 @@ class ConditionBuilderValidationTest {
 
     @Test
     void testConditionalNotLikeTrueAppliesCondition() {
-        repository.save(newEntity("hello", 0));
-        repository.save(newEntity("world", 0));
         QuerySpec<TestEntity> qs = new QuerySpec<>();
-        qs.notLike(true, TestEntity::getName, "%hello%");
-        List<TestEntity> result = repository.findAll(qs.toSpecification());
-        assertEquals(1, result.size());
+        assertThrows(UnsupportedOperationException.class, () -> qs.notLike(true, TestEntity::getName, "%hello%"));
     }
 
     @Test
