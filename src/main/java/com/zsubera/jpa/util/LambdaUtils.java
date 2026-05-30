@@ -63,7 +63,8 @@ public final class LambdaUtils {
      * 使用 LinkedHashMap 实现 LRU 缓存，按访问顺序维护条目，确保热点数据不被误驱逐。
      *
      * <p>
-     * 当缓存大小超过 {@link #MAX_CACHE_SIZE} 时会自动驱逐最旧的 25% 条目，防止热部署场景下无限增长。驱逐后已有的 lambda 元数据会在下次访问时重新解析（无副作用）。
+     * 当缓存大小超过 {@link #MAX_CACHE_SIZE} 时会自动驱逐最旧的条目（通过 {@code removeEldestEntry}），防止热部署场景下无限增长。驱逐后已有的 lambda
+     * 元数据会在下次访问时重新解析（无副作用）。
      */
     private static final Map<String, String> CACHE =
         Collections.synchronizedMap(new LinkedHashMap<>(4096, 0.75f, true) {

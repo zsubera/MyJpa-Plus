@@ -9,6 +9,7 @@ import java.util.*;
 import java.util.function.BiFunction;
 import java.util.function.Consumer;
 import java.util.function.Function;
+import java.util.stream.Collectors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.Sort;
@@ -254,7 +255,8 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
         for (SFunction<T, ?> f : fields) {
             orderNodes.add(new ConditionNode.OrderNode(LambdaUtils.getPropertyName(f), true));
         }
-        log.debug("QuerySpec: ORDER BY ASC {}", Arrays.toString(fields));
+        log.debug("QuerySpec: ORDER BY ASC {}",
+            Arrays.stream(fields).map(LambdaUtils::getPropertyName).collect(Collectors.joining(", ")));
         return this;
     }
 
@@ -276,7 +278,8 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
         for (SFunction<T, ?> f : fields) {
             orderNodes.add(new ConditionNode.OrderNode(LambdaUtils.getPropertyName(f), false));
         }
-        log.debug("QuerySpec: ORDER BY DESC {}", Arrays.toString(fields));
+        log.debug("QuerySpec: ORDER BY DESC {}",
+            Arrays.stream(fields).map(LambdaUtils::getPropertyName).collect(Collectors.joining(", ")));
         return this;
     }
 

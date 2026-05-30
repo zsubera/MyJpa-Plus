@@ -9,7 +9,7 @@ import jakarta.persistence.criteria.Path;
 import jakarta.persistence.criteria.Predicate;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
-import java.util.Collections;
+import java.lang.reflect.Modifier;
 import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
@@ -344,7 +344,12 @@ public final class SoftDeleteHelper {
     private static List<Field> getAllFields(Class<?> clazz) {
         List<Field> fields = new java.util.ArrayList<>();
         while (clazz != null && clazz != Object.class) {
-            Collections.addAll(fields, clazz.getDeclaredFields());
+            for (Field field : clazz.getDeclaredFields()) {
+                // 过滤静态字段和合成字段，只返回实例字段
+                if (!Modifier.isStatic(field.getModifiers()) && !field.isSynthetic()) {
+                    fields.add(field);
+                }
+            }
             clazz = clazz.getSuperclass();
         }
         return fields;
