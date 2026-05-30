@@ -177,17 +177,11 @@ public class SoftDeleteJpaRepository<T, ID> extends SimpleJpaRepository<T, ID> {
         if (id == null) {
             return Optional.empty();
         }
-        try {
-            // 构建只包含 ID 条件的 Specification，软删除过滤由 findOne 自动处理
-            Specification<T> spec = (root, query, cb) -> {
-                String idFieldName = EntityClassResolver.resolveIdFieldName(domainClass);
-                return cb.equal(root.get(idFieldName), id);
-            };
-            return findOne(spec);
-        } catch (IllegalStateException e) {
-            log.warn("Failed to resolve ID field for {}, falling back to default findById", domainClass.getSimpleName(),
-                e);
-            return super.findById(id);
-        }
+        // 构建只包含 ID 条件的 Specification，软删除过滤由 findOne 自动处理
+        Specification<T> spec = (root, query, cb) -> {
+            String idFieldName = EntityClassResolver.resolveIdFieldName(domainClass);
+            return cb.equal(root.get(idFieldName), id);
+        };
+        return findOne(spec);
     }
 }

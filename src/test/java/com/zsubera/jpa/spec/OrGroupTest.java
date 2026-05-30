@@ -283,9 +283,7 @@ class OrGroupTest {
         repository.save(newEntity("hello", 0));
         repository.save(newEntity("world", 0));
         QuerySpec<TestEntity> qs = new QuerySpec<>();
-        qs.or(g -> g.rawLike(TestEntity::getName, "hel"));
-        List<TestEntity> result = repository.findAll(qs.toSpecification());
-        assertEquals(1, result.size());
+        assertThrows(UnsupportedOperationException.class, () -> qs.or(g -> g.rawLike(TestEntity::getName, "hel")));
     }
 
     @Test
@@ -293,9 +291,7 @@ class OrGroupTest {
         repository.save(newEntity("100%", 0));
         repository.save(newEntity("100x", 0));
         QuerySpec<TestEntity> qs = new QuerySpec<>();
-        qs.or(g -> g.rawLike(TestEntity::getName, "100%"));
-        List<TestEntity> result = repository.findAll(qs.toSpecification());
-        assertEquals(1, result.size());
+        assertThrows(UnsupportedOperationException.class, () -> qs.or(g -> g.rawLike(TestEntity::getName, "100%")));
     }
 
     @Test

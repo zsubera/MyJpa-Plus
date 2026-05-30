@@ -58,6 +58,16 @@ public final class SoftDeleteContext {
     }
 
     /**
+     * 重置当前线程的忽略状态，清除 ThreadLocal 值。用于异常恢复或测试场景。
+     *
+     * <p>
+     * 当 pushIgnore() 和 popIgnore() 不匹配时（如异常导致 Advisor 的 after 未执行）， 可调用此方法强制清理，防止线程池环境下的内存泄漏。
+     */
+    public static void reset() {
+        ignoreCount.remove();
+    }
+
+    /**
      * 清除当前线程的标志，防止 ThreadLocal 泄漏。应在方法执行完成后调用。
      *
      * @deprecated 自 1.1.0 起废弃，请使用 {@link #popIgnore()} 以支持嵌套调用场景。

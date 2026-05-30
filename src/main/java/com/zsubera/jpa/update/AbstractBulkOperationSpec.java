@@ -125,12 +125,21 @@ public abstract class AbstractBulkOperationSpec<T, SELF extends AbstractBulkOper
         // the container manages the transaction, so we execute directly.
         EntityTransaction tx = em.getTransaction();
         if (tx == null) {
-            // JTA environment: container-managed transaction, execute directly
+            // JTA environment: container-managed transaction
+            // Verify that a container-managed transaction is active
+            // If no active transaction, JPA operations will throw TransactionRequiredException
             if (log.isDebugEnabled()) {
                 log.debug(
-                    "JTA environment detected (getTransaction() returned null), executing without local transaction");
+                    "JTA environment detected (getTransaction() returned null), executing with container-managed transaction");
             }
-            return operation.apply(em);
+            // Attempt to verify transaction is active by checking if EntityManager can perform operations
+            // This will throw TransactionRequiredException if no container transaction is active
+            try {
+                return operation.apply(em);
+            } catch (jakarta.persistence.TransactionRequiredException e) {
+                throw new MyJpaPlusException("No active transaction in JTA environment. "
+                    + "Ensure a container-managed transaction is active, " + "or use @Transactional annotation.", e);
+            }
         }
         boolean isNewTransaction = !tx.isActive();
         if (isNewTransaction) {
@@ -143,23 +152,31 @@ public abstract class AbstractBulkOperationSpec<T, SELF extends AbstractBulkOper
             }
             return result;
         } catch (RuntimeException e) {
-            if (isNewTransaction && tx.isActive()) {
-                try {
-                    tx.rollback();
-                } catch (Exception rollbackEx) {
-                    e.addSuppressed(rollbackEx);
-                }
+            if (isNewTransaction) {
+                rollbackIfActive(tx, e);
             }
             throw e;
         } catch (Exception e) {
-            if (isNewTransaction && tx.isActive()) {
-                try {
-                    tx.rollback();
-                } catch (Exception rollbackEx) {
-                    e.addSuppressed(rollbackEx);
-                }
+            if (isNewTransaction) {
+                rollbackIfActive(tx, e);
             }
             throw new MyJpaPlusException("Bulk operation failed", e);
+        }
+    }
+
+    /**
+     * 如果事务处于活动状态则回滚，并将回滚异常添加为原始异常的抑制异常。
+     *
+     * @param tx 实体事务
+     * @param original 原始异常
+     */
+    private void rollbackIfActive(EntityTransaction tx, Exception original) {
+        if (tx.isActive()) {
+            try {
+                tx.rollback();
+            } catch (Exception rollbackEx) {
+                original.addSuppressed(rollbackEx);
+            }
         }
     }
 

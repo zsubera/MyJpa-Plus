@@ -375,10 +375,7 @@ class JoinGroupTest {
 
         QuerySpec<TestEntity> qs = new QuerySpec<>();
         JoinGroup<TestEntity, ParentEntity> jg = qs.join(TestEntity::getParent);
-        jg.rawLike(ParentEntity::getCategory, "adm");
-        jg.endJoin();
-        List<TestEntity> result = repository.findAll(qs.toSpecification());
-        assertEquals(1, result.size());
+        assertThrows(UnsupportedOperationException.class, () -> jg.rawLike(ParentEntity::getCategory, "adm"));
     }
 
     @Test

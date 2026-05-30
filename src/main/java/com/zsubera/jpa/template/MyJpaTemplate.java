@@ -83,6 +83,8 @@ public class MyJpaTemplate {
     private volatile int deepPaginationOffsetThreshold = DEFAULT_DEEP_PAGINATION_OFFSET_THRESHOLD;
     /** 深度分页硬限制。{@code -1} 表示禁用（仅记录警告）。 */
     private volatile int deepPaginationOffsetLimit = -1;
+    /** 批量操作最大影响行数限制。{@code -1} 表示禁用（不限制）。 */
+    private volatile int maxBulkOperationRows = -1;
 
     /** 创建 MyJpaTemplate 实例，使用默认配置。 */
     public MyJpaTemplate() {
@@ -141,6 +143,22 @@ public class MyJpaTemplate {
             throw new IllegalArgumentException("deepPaginationOffsetLimit must be positive or -1 (disabled)");
         }
         this.deepPaginationOffsetLimit = deepPaginationOffsetLimit;
+    }
+
+    /**
+     * 设置批量操作最大影响行数限制。
+     *
+     * <p>
+     * 设置为 {@code -1} 表示禁用限制（不限制影响行数）。
+     *
+     * @param maxBulkOperationRows 最大影响行数，或 {@code -1} 表示禁用
+     * @throws IllegalArgumentException 如果值不是正数且不等于 -1
+     */
+    public void setMaxBulkOperationRows(int maxBulkOperationRows) {
+        if (maxBulkOperationRows <= 0 && maxBulkOperationRows != -1) {
+            throw new IllegalArgumentException("maxBulkOperationRows must be positive or -1 (disabled)");
+        }
+        this.maxBulkOperationRows = maxBulkOperationRows;
     }
 
     /**
@@ -677,6 +695,62 @@ public class MyJpaTemplate {
             throw new IllegalArgumentException("spec must not be null");
         }
         return spec.executeInTransaction(entityManager);
+    }
+
+    /**
+     * 使用给定的 {@link UpdateSpec} 执行批量更新，限制最大影响行数。
+     *
+     * <p>
+     * 如果配置了 {@link #maxBulkOperationRows} 且大于 0，则使用 {@link UpdateSpec#executeLimited} 限制影响行数。 否则，直接执行
+     * {@link #execute(UpdateSpec)}。
+     *
+     * @param spec 要执行的 UpdateSpec
+     * @param maxRows 最大影响行数，如果为 -1 则使用全局配置
+     * @param <T> 实体类型
+     * @return 受影响的行数
+     * @throws IllegalArgumentException 如果 maxRows 不是正数且不等于 -1
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public <T> int executeWithMaxRows(UpdateSpec<T> spec, int maxRows) {
+        if (spec == null) {
+            throw new IllegalArgumentException("spec must not be null");
+        }
+        if (maxRows <= 0 && maxRows != -1) {
+            throw new IllegalArgumentException("maxRows must be positive or -1 (use global config)");
+        }
+        int effectiveLimit = maxRows == -1 ? maxBulkOperationRows : maxRows;
+        if (effectiveLimit <= 0) {
+            return spec.executeInTransaction(entityManager);
+        }
+        return spec.executeLimited(entityManager, effectiveLimit);
+    }
+
+    /**
+     * 使用给定的 {@link DeleteSpec} 执行批量删除，限制最大影响行数。
+     *
+     * <p>
+     * 如果配置了 {@link #maxBulkOperationRows} 且大于 0，则使用 {@link DeleteSpec#executeLimited} 限制影响行数。 否则，直接执行
+     * {@link #execute(DeleteSpec)}。
+     *
+     * @param spec 要执行的 DeleteSpec
+     * @param maxRows 最大影响行数，如果为 -1 则使用全局配置
+     * @param <T> 实体类型
+     * @return 受影响的行数
+     * @throws IllegalArgumentException 如果 maxRows 不是正数且不等于 -1
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public <T> int executeWithMaxRows(DeleteSpec<T> spec, int maxRows) {
+        if (spec == null) {
+            throw new IllegalArgumentException("spec must not be null");
+        }
+        if (maxRows <= 0 && maxRows != -1) {
+            throw new IllegalArgumentException("maxRows must be positive or -1 (use global config)");
+        }
+        int effectiveLimit = maxRows == -1 ? maxBulkOperationRows : maxRows;
+        if (effectiveLimit <= 0) {
+            return spec.executeInTransaction(entityManager);
+        }
+        return spec.executeLimited(entityManager, effectiveLimit);
     }
 
     /**

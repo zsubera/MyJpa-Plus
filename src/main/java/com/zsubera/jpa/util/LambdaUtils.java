@@ -5,9 +5,10 @@ import com.zsubera.jpa.spec.SFunction;
 import java.beans.Introspector;
 import java.lang.invoke.SerializedLambda;
 import java.lang.reflect.Method;
+import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.atomic.AtomicBoolean;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -59,17 +60,21 @@ public final class LambdaUtils {
     }
 
     /**
-     * 使用 ConcurrentHashMap 替代 synchronizedMap，消除高并发场景下的锁竞争。 缓存大小由 lambda 表达式数量决定，应用中是有限的。
+     * 使用 LinkedHashMap 实现 LRU 缓存，按访问顺序维护条目，确保热点数据不被误驱逐。
      *
      * <p>
      * 当缓存大小超过 {@link #MAX_CACHE_SIZE} 时会自动驱逐最旧的 25% 条目，防止热部署场景下无限增长。驱逐后已有的 lambda 元数据会在下次访问时重新解析（无副作用）。
      */
-    private static final Map<String, String> CACHE = new ConcurrentHashMap<>(4096);
+    private static final Map<String, String> CACHE =
+        Collections.synchronizedMap(new LinkedHashMap<>(4096, 0.75f, true) {
+            @Override
+            protected boolean removeEldestEntry(Map.Entry<String, String> eldest) {
+                return size() > MAX_CACHE_SIZE;
+            }
+        });
 
-    /** 缓存清理锁，确保同一时刻只有一个线程执行清理操作。 */
-    private static final AtomicBoolean CLEANING = new AtomicBoolean(false);
-
-    // ConcurrentHashMap 无自动驱逐机制，通过 AtomicBoolean 控制单线程清理
+    /** 缓存每个 lambda 类对应的 Method 对象，避免重复反射操作。 */
+    private static final Map<Class<?>, Method> METHOD_CACHE = new ConcurrentHashMap<>();
 
     /**
      * 关闭后台清理线程。在应用关闭或热部署环境中应调用此方法以确保资源正确释放。
@@ -78,10 +83,10 @@ public final class LambdaUtils {
      * 已在 {@code MyJpaPlusAutoConfiguration} 中通过 {@code DisposableBean} 自动注册关闭钩子。
      *
      * <p>
-     * 当前实现为空操作，因为缓存清理已在 {@link #getPropertyName} 中通过 {@link AtomicBoolean} 控制。
+     * 当前实现为空操作，因为缓存清理已通过 {@link LinkedHashMap} 的 {@code removeEldestEntry} 自动处理。
      */
     public static void shutdown() {
-        // 空操作：缓存清理已在 getPropertyName 中通过 AtomicBoolean 控制
+        // 空操作：缓存清理已通过 LinkedHashMap 的 removeEldestEntry 自动处理
     }
 
     private LambdaUtils() {}
@@ -100,25 +105,22 @@ public final class LambdaUtils {
             throw new IllegalArgumentException("SFunction must not be null");
         }
         try {
-            Method writeReplace = fn.getClass().getDeclaredMethod("writeReplace");
-            writeReplace.setAccessible(true);
+            Class<?> fnClass = fn.getClass();
+            Method writeReplace = METHOD_CACHE.computeIfAbsent(fnClass, clazz -> {
+                try {
+                    Method m = clazz.getDeclaredMethod("writeReplace");
+                    m.setAccessible(true);
+                    return m;
+                } catch (ReflectiveOperationException e) {
+                    throw new MyJpaPlusException("Failed to extract property name from method reference. "
+                        + "Ensure you are using a method reference directly (e.g., Entity::getField). "
+                        + "Lambda expressions like e -> e.getField() are not supported. "
+                        + "If using Java 17+ module system, add JVM argument: "
+                        + "--add-opens java.base/java.lang.invoke=ALL-UNNAMED", e);
+                }
+            });
             SerializedLambda lambda = (SerializedLambda)writeReplace.invoke(fn);
             String key = lambda.getImplClass() + "#" + lambda.getImplMethodName();
-            // 强制执行缓存大小限制，防止热部署场景下无限增长
-            // 使用 AtomicBoolean 确保同一时刻只有一个线程执行清理操作，避免多线程同时触发缓存重建
-            if (CACHE.size() > MAX_CACHE_SIZE && CLEANING.compareAndSet(false, true)) {
-                try {
-                    int toEvict = MAX_CACHE_SIZE / 4;
-                    if (log.isDebugEnabled()) {
-                        log.debug("Lambda cache size ({}) exceeds limit ({}). Evicting oldest {} entries.",
-                            CACHE.size(), MAX_CACHE_SIZE, toEvict);
-                    }
-                    // Evict a portion of entries to avoid full cache rebuild
-                    CACHE.keySet().stream().limit(toEvict).forEach(CACHE::remove);
-                } finally {
-                    CLEANING.set(false);
-                }
-            }
             return CACHE.computeIfAbsent(key, k -> methodToProperty(lambda.getImplMethodName()));
         } catch (ReflectiveOperationException e) {
             throw new MyJpaPlusException("Failed to extract property name from method reference. "

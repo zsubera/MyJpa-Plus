@@ -962,9 +962,7 @@ public class QuerySpecTest {
         repository.save(newEntity("world", 0));
         repository.save(newEntity("hel%lo", 0));
         QuerySpec<TestEntity> qs = new QuerySpec<>();
-        qs.rawLike(TestEntity::getName, "hel");
-        List<TestEntity> result = repository.findAll(qs.toSpecification());
-        assertEquals(2, result.size());
+        assertThrows(UnsupportedOperationException.class, () -> qs.rawLike(TestEntity::getName, "hel"));
     }
 
     @Test
@@ -972,10 +970,7 @@ public class QuerySpecTest {
         repository.save(newEntity("100%", 0));
         repository.save(newEntity("100x", 0));
         QuerySpec<TestEntity> qs = new QuerySpec<>();
-        qs.rawLike(TestEntity::getName, "100%");
-        List<TestEntity> result = repository.findAll(qs.toSpecification());
-        assertEquals(1, result.size());
-        assertEquals("100%", result.get(0).getName());
+        assertThrows(UnsupportedOperationException.class, () -> qs.rawLike(TestEntity::getName, "100%"));
     }
 
     @Test
@@ -983,10 +978,7 @@ public class QuerySpecTest {
         repository.save(newEntity("a_b", 0));
         repository.save(newEntity("axb", 0));
         QuerySpec<TestEntity> qs = new QuerySpec<>();
-        qs.rawLike(TestEntity::getName, "a_b");
-        List<TestEntity> result = repository.findAll(qs.toSpecification());
-        assertEquals(1, result.size());
-        assertEquals("a_b", result.get(0).getName());
+        assertThrows(UnsupportedOperationException.class, () -> qs.rawLike(TestEntity::getName, "a_b"));
     }
 
     @Test

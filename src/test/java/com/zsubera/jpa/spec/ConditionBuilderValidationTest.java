@@ -366,7 +366,7 @@ class ConditionBuilderValidationTest {
     @Test
     void testRawLikeNullValueThrowsException() {
         QuerySpec<TestEntity> qs = new QuerySpec<>();
-        assertThrows(IllegalArgumentException.class, () -> qs.rawLike(TestEntity::getName, null));
+        assertThrows(UnsupportedOperationException.class, () -> qs.rawLike(TestEntity::getName, null));
     }
 
     @Test

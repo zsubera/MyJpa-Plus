@@ -249,17 +249,9 @@ public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> {
      * @throws IllegalArgumentException 如果 {@code field} 或 {@code value} 为 null
      * @deprecated 方法命名具有误导性（暗示"原始 LIKE"不转义），实际行为与 {@link #contains(SFunction, String)} 相同。请使用 {@link #contains} 替代。
      */
-    @Deprecated(since = "1.1.0")
+    @Deprecated(since = "1.1.0", forRemoval = true)
     default SELF rawLike(SFunction<E, ?> field, String value) {
-        if (field == null) {
-            throw new IllegalArgumentException("field must not be null");
-        }
-        if (value == null) {
-            throw new IllegalArgumentException("value must not be null");
-        }
-        conditions().add(new ConditionNode.SimpleNode(LambdaUtils.getPropertyName(field),
-            "%" + escapeLikeWildcards(value) + "%", ConditionNode.Op.LIKE, PredicateHelper.LIKE_ESCAPE_CHAR));
-        return self();
+        throw new UnsupportedOperationException("rawLike() 已在 1.1.0 版本移除，请使用 contains()、startsWith() 或 endsWith()。");
     }
 
     /**

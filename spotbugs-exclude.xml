@@ -37,4 +37,13 @@
         <Class name="com.zsubera.jpa.spec.SubQuerySpec"/>
         <Bug pattern="CT_CONSTRUCTOR_THROW"/>
     </Match>
+
+    <!-- Exclude CT_CONSTRUCTOR_THROW for OrConditionBuilder -->
+    <!-- This class has package-private constructor with defensive null checks.
+         The constructor is only invoked from within the same package (AbstractBulkOperationSpec),
+         so the Finalizer attack risk is not applicable. -->
+    <Match>
+        <Class name="com.zsubera.jpa.update.OrConditionBuilder"/>
+        <Bug pattern="CT_CONSTRUCTOR_THROW"/>
+    </Match>
 </FindBugsFilter>
