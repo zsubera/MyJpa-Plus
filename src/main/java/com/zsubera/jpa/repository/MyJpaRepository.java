@@ -32,6 +32,11 @@ public interface MyJpaRepository<T, ID> extends JpaRepository<T, ID>, JpaSpecifi
     /**
      * 查找所有匹配给定 {@link Specification} 的实体。
      *
+     * <p>
+     * <strong>安全建议：</strong>此方法不限制返回结果数量，可能导致大数据集查询时的内存溢出（OOM）。 在生产环境中，推荐使用
+     * {@link com.zsubera.jpa.template.MyJpaTemplate#findAll(Class, com.zsubera.jpa.spec.QuerySpec)}
+     * 进行查询，它提供了可配置的最大行数限制（默认 10000 条）。 或使用分页查询 {@link #findAll(Specification, Pageable)} 限制结果数量。
+     *
      * @param spec 查询规格说明
      * @return 匹配实体列表
      */

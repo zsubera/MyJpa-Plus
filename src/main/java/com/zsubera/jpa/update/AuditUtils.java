@@ -17,7 +17,7 @@ final class AuditUtils {
      * 获取调用栈信息，用于审计日志。
      *
      * <p>
-     * 返回从调用者开始的最近 6 层调用栈，格式为 {@code className.methodName:lineNumber}， 各层之间用 {@code <- } 分隔。
+     * 返回从调用者开始的最近 10 层调用栈，格式为 {@code className.methodName:lineNumber}， 各层之间用 {@code <- } 分隔。
      *
      * @return 格式化的调用栈字符串
      */
@@ -25,7 +25,7 @@ final class AuditUtils {
         StackTraceElement[] stack = Thread.currentThread().getStackTrace();
         // 跳过 getStackTrace() 和 getCallStack() 本身，从调用者开始
         StringBuilder sb = new StringBuilder();
-        for (int i = 2; i < stack.length && i < 8; i++) {
+        for (int i = 2; i < stack.length && i < 12; i++) {
             if (i > 2) {
                 sb.append(" <- ");
             }

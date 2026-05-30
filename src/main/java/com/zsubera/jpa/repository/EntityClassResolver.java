@@ -3,6 +3,8 @@ package com.zsubera.jpa.repository;
 import jakarta.persistence.Id;
 import java.lang.reflect.Field;
 import java.util.concurrent.ConcurrentMap;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.core.ResolvableType;
 import org.springframework.util.ConcurrentReferenceHashMap;
 
@@ -14,6 +16,8 @@ import org.springframework.util.ConcurrentReferenceHashMap;
  * extends MyJpaRepository<T, ID>}，通过遍历整个接口层次结构来找到绑定到 {@link MyJpaRepository}类型参数的实际类型参数。
  */
 public final class EntityClassResolver {
+
+    private static final Logger log = LoggerFactory.getLogger(EntityClassResolver.class);
 
     /**
      * 缓存使用弱引用键，允许 GC 回收旧类加载器，防止热部署场景下的类加载器泄漏。 与 SoftDeleteHelper 的缓存策略保持一致。
@@ -81,8 +85,10 @@ public final class EntityClassResolver {
                     return resolved;
                 }
             }
-        } catch (IllegalArgumentException | UnsupportedOperationException e) {
-            // Fall through to hierarchy traversal
+        } catch (IllegalArgumentException e) {
+            // 仅捕获 IllegalArgumentException，这是 ResolvableType 在类型无法解析时的预期异常
+            // 不捕获 UnsupportedOperationException，因为它可能表示编程错误
+            log.debug("ResolvableType resolution failed for {}: {}", repositoryClass.getSimpleName(), e.getMessage());
         }
         return null;
     }

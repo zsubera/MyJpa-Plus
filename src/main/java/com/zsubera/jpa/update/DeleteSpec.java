@@ -150,35 +150,31 @@ public class DeleteSpec<T> extends AbstractBulkOperationSpec<T, DeleteSpec<T>> {
     }
 
     /**
-     * Execute DELETE statement limiting the number of affected rows.
+     * 执行限制删除行数的条件删除操作。
      *
      * <p>
-     * This method is suitable for batch processing scenarios. It limits the number of rows affected by SQL. Note that
-     * LIMIT support for DELETE statements varies by database.
+     * 此方法适用于批处理场景，通过限制 SQL 影响的行数来控制操作范围。 请注意，不同数据库对 DELETE 语句的 LIMIT 支持程度不同。
      *
      * <p>
-     * <strong>Note:</strong> This method requires an active transaction. The caller is responsible for flushing and
-     * clearing the persistence context between batches.
+     * <strong>注意：</strong>此方法需要活动事务。调用方负责在批次之间刷新和清除持久化上下文。
      *
-     * <p>
      * <p>
      * <strong>安全说明：</strong>此方法默认启用悲观锁（{@code pessimisticLock=true}）， 以防止查询ID和执行删除之间的并发竞态条件。如需禁用悲观锁，请使用
      * {@link #executeLimited(EntityManager, int, boolean)} 并设置 {@code pessimisticLock=false}。
      *
-     * @param em entity manager
-     * @param limit maximum number of rows to delete
-     * @return actual number of rows deleted
+     * @param em 实体管理器
+     * @param limit 最大删除行数
+     * @return 实际删除的行数
      */
     public int executeLimited(EntityManager em, int limit) {
         return executeLimited(em, limit, true);
     }
 
     /**
-     * Execute DELETE statement limiting the number of affected rows, with optional pessimistic locking.
+     * 执行限制删除行数的条件删除操作，支持可选的悲观锁。
      *
      * <p>
-     * This method first queries for matching entity IDs with the specified limit, then performs the deletion on those
-     * entities.
+     * 此方法首先查询符合条件的实体 ID 列表（带限制），然后对这些实体执行删除操作。
      *
      * <p>
      * <strong>并发风险警告：</strong>此方法分两步执行（先查询 ID，再删除），在高并发场景下存在竞态条件。 在查询ID和执行删除之间，其他事务可能修改或删除记录，导致数据不一致。
@@ -197,11 +193,10 @@ public class DeleteSpec<T> extends AbstractBulkOperationSpec<T, DeleteSpec<T>> {
      * <li>在应用层使用分布式锁保护整个操作流程
      * </ol>
      *
-     * @param em entity manager
-     * @param limit maximum number of rows to delete
-     * @param pessimisticLock if true, acquire {@link jakarta.persistence.LockModeType#PESSIMISTIC_WRITE} on the
-     *            selected IDs to prevent concurrent modifications
-     * @return actual number of rows deleted
+     * @param em 实体管理器
+     * @param limit 最大删除行数
+     * @param pessimisticLock 如果为 true，则获取 {@link jakarta.persistence.LockModeType#PESSIMISTIC_WRITE} 锁以防止并发修改
+     * @return 实际删除的行数
      */
     public int executeLimited(EntityManager em, int limit, boolean pessimisticLock) {
         if (limit <= 0) {

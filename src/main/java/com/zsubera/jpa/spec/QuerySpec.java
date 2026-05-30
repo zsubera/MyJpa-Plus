@@ -113,12 +113,16 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
     /**
      * 设置生成查询的超时时间（秒）。 由 {@link #applyQuerySettings(TypedQuery)} 和 {@link com.zsubera.jpa.template.MyJpaTemplate} 应用。
      *
-     * @param seconds 超时时间（秒）
+     * @param seconds 超时时间（秒），必须为正数且不超过 300 秒
      * @return 当前 QuerySpec 实例，支持链式调用
+     * @throws IllegalArgumentException 如果 seconds 不是正数或超过 300 秒
      */
     public QuerySpec<T> timeout(int seconds) {
         if (seconds <= 0) {
             throw new IllegalArgumentException("timeout must be positive, got: " + seconds);
+        }
+        if (seconds > 300) {
+            throw new IllegalArgumentException("timeout must not exceed 300 seconds, got: " + seconds);
         }
         this.queryTimeout = seconds;
         return this;
@@ -163,7 +167,7 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
      */
     public void applyQuerySettings(TypedQuery<?> query) {
         if (queryTimeout != null) {
-            query.setHint("jakarta.persistence.query.timeout", queryTimeout * 1000);
+            query.setHint("jakarta.persistence.query.timeout", (int)(queryTimeout * 1000L));
         }
         if (lockMode != null) {
             query.setLockMode(lockMode);
@@ -439,6 +443,80 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
     }
 
     /**
+     * 添加 IN 子查询条件：{@code field IN (SELECT ...)}。
+     *
+     * <p>
+     * 使用示例：
+     *
+     * <pre>{@code
+     * qs.inSubQuery(User::getDepartmentId, Department.class,
+     *     sub -> sub.eq(Department::getActive, true).select(Department::getId));
+     * }</pre>
+     *
+     * <p>
+     * 生成：{@code user.department_id IN (SELECT d.id FROM department d WHERE d.active = true)}
+     *
+     * @param outerField 外部实体的字段方法引用
+     * @param subEntity 子查询实体类型
+     * @param config 子查询配置消费者
+     * @param <S> 子查询实体类型
+     * @return 当前 QuerySpec 实例，支持链式调用
+     * @throws IllegalArgumentException 如果任何参数为 null
+     */
+    public <S> QuerySpec<T> inSubQuery(SFunction<T, ?> outerField, Class<S> subEntity,
+        java.util.function.Consumer<SubQuerySpec<S>> config) {
+        if (outerField == null) {
+            throw new IllegalArgumentException("outerField must not be null");
+        }
+        if (subEntity == null) {
+            throw new IllegalArgumentException("subEntity must not be null");
+        }
+        if (config == null) {
+            throw new IllegalArgumentException("config must not be null");
+        }
+        currentGroup()
+            .add(new ConditionNode.InSubQueryNode<>(LambdaUtils.getPropertyName(outerField), subEntity, config, false));
+        return this;
+    }
+
+    /**
+     * 添加 NOT IN 子查询条件：{@code field NOT IN (SELECT ...)}。
+     *
+     * <p>
+     * 使用示例：
+     *
+     * <pre>{@code
+     * qs.notInSubQuery(User::getDepartmentId, Department.class,
+     *     sub -> sub.eq(Department::getArchived, true).select(Department::getId));
+     * }</pre>
+     *
+     * <p>
+     * 生成：{@code user.department_id NOT IN (SELECT d.id FROM department d WHERE d.archived = true)}
+     *
+     * @param outerField 外部实体的字段方法引用
+     * @param subEntity 子查询实体类型
+     * @param config 子查询配置消费者
+     * @param <S> 子查询实体类型
+     * @return 当前 QuerySpec 实例，支持链式调用
+     * @throws IllegalArgumentException 如果任何参数为 null
+     */
+    public <S> QuerySpec<T> notInSubQuery(SFunction<T, ?> outerField, Class<S> subEntity,
+        java.util.function.Consumer<SubQuerySpec<S>> config) {
+        if (outerField == null) {
+            throw new IllegalArgumentException("outerField must not be null");
+        }
+        if (subEntity == null) {
+            throw new IllegalArgumentException("subEntity must not be null");
+        }
+        if (config == null) {
+            throw new IllegalArgumentException("config must not be null");
+        }
+        currentGroup()
+            .add(new ConditionNode.InSubQueryNode<>(LambdaUtils.getPropertyName(outerField), subEntity, config, true));
+        return this;
+    }
+
+    /**
      * 打开一个 OR 条件组。
      *
      * @return OrGroup 实例，用于添加 OR 条件
@@ -687,30 +765,8 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
         log.debug("QuerySpec: building predicate for {} with {} conditions, {} order nodes, distinct={}",
             root.getModel().getName(), conditions.size(), orderNodes.size(), distinct);
         if (query != null) {
-            if (distinct) {
-                query.distinct(true);
-            }
-            if (!groupByFields.isEmpty()) {
-                List<Path<?>> paths = new ArrayList<>();
-                for (String field : groupByFields) {
-                    paths.add(root.get(field));
-                }
-                query.groupBy(paths.toArray(new Expression[0]));
-                for (BiFunction<Path<T>, CriteriaBuilder, Predicate> having : havingConditions) {
-                    query.having(having.apply(root, cb));
-                }
-            }
-            if (!orderNodes.isEmpty()) {
-                List<jakarta.persistence.criteria.Order> orders = new ArrayList<>();
-                for (ConditionNode.OrderNode node : orderNodes) {
-                    if (node.asc) {
-                        orders.add(cb.asc(root.get(node.fieldName)));
-                    } else {
-                        orders.add(cb.desc(root.get(node.fieldName)));
-                    }
-                }
-                query.orderBy(orders);
-            }
+            applyDistinctAndGroupBy(root, query, cb);
+            applyOrderBy(root, query, cb);
         }
         Map<String, Join<?, ?>> joinCache = new LinkedHashMap<>();
         List<Predicate> predicates = new ArrayList<>();
@@ -723,6 +779,50 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
         Predicate result = predicates.isEmpty() ? cb.conjunction() : cb.and(predicates.toArray(new Predicate[0]));
         log.debug("QuerySpec: predicate built with {} conditions", predicates.size());
         return result;
+    }
+
+    /**
+     * 应用 DISTINCT 和 GROUP BY/HAVING 子句到查询。
+     *
+     * @param root 根实体路径
+     * @param query Criteria 查询对象
+     * @param cb Criteria 构建器
+     */
+    private void applyDistinctAndGroupBy(Root<T> root, CriteriaQuery<?> query, CriteriaBuilder cb) {
+        if (distinct) {
+            query.distinct(true);
+        }
+        if (!groupByFields.isEmpty()) {
+            List<Path<?>> paths = new ArrayList<>();
+            for (String field : groupByFields) {
+                paths.add(root.get(field));
+            }
+            query.groupBy(paths.toArray(new Expression[0]));
+            for (BiFunction<Path<T>, CriteriaBuilder, Predicate> having : havingConditions) {
+                query.having(having.apply(root, cb));
+            }
+        }
+    }
+
+    /**
+     * 应用 ORDER BY 子句到查询。
+     *
+     * @param root 根实体路径
+     * @param query Criteria 查询对象
+     * @param cb Criteria 构建器
+     */
+    private void applyOrderBy(Root<T> root, CriteriaQuery<?> query, CriteriaBuilder cb) {
+        if (!orderNodes.isEmpty()) {
+            List<jakarta.persistence.criteria.Order> orders = new ArrayList<>();
+            for (ConditionNode.OrderNode node : orderNodes) {
+                if (node.asc) {
+                    orders.add(cb.asc(root.get(node.fieldName)));
+                } else {
+                    orders.add(cb.desc(root.get(node.fieldName)));
+                }
+            }
+            query.orderBy(orders);
+        }
     }
 
     /**
@@ -758,6 +858,9 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
         }
         if (node instanceof ConditionNode.ExistsNode) {
             return resolveExists((ConditionNode.ExistsNode<?>)node, path, query, cb);
+        }
+        if (node instanceof ConditionNode.InSubQueryNode) {
+            return resolveInSubQuery((ConditionNode.InSubQueryNode<?>)node, path, query, cb);
         }
         if (node instanceof ConditionNode.RawNode) {
             return ((ConditionNode.RawNode)node).fn.apply(path, cb);
@@ -961,6 +1064,58 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
             subquery.select(subRoot);
         }
         return node.negate ? cb.not(cb.exists(subquery)) : cb.exists(subquery);
+    }
+
+    /**
+     * 解析 IN 子查询节点。
+     *
+     * @param node IN 子查询节点
+     * @param path 当前路径
+     * @param query Criteria 查询对象
+     * @param cb Criteria 构建器
+     * @param <S> 子查询实体类型
+     * @return 生成的 Predicate
+     */
+    @SuppressWarnings("unchecked")
+    private <S> Predicate resolveInSubQuery(ConditionNode.InSubQueryNode<S> node, Path<?> path, CriteriaQuery<?> query,
+        CriteriaBuilder cb) {
+        if (query == null) {
+            log.debug("IN subquery used in count query context (query=null). "
+                + "Creating temporary CriteriaQuery for subquery construction.");
+            CriteriaQuery<S> tempQuery = cb.createQuery(node.subEntity);
+            return resolveInSubQueryInternal(node, path, tempQuery, cb);
+        }
+        return resolveInSubQueryInternal(node, path, query, cb);
+    }
+
+    /**
+     * IN 子查询解析的内部实现。
+     *
+     * @param <S> 子查询实体类型
+     * @param node IN 子查询条件节点
+     * @param outerPath 外部查询的实体路径
+     * @param query CriteriaQuery 实例（可以是临时 query）
+     * @param cb CriteriaBuilder 实例
+     * @return 构建好的 IN 或 NOT IN 子查询谓词
+     */
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    private <S> Predicate resolveInSubQueryInternal(ConditionNode.InSubQueryNode<S> node, Path<?> outerPath,
+        CriteriaQuery<?> query, CriteriaBuilder cb) {
+        jakarta.persistence.criteria.Subquery<S> subquery = query.subquery(node.subEntity);
+        Root<S> subRoot = subquery.from(node.subEntity);
+        // 构建子查询条件（不关联外部查询，纯独立子查询）
+        SubQuerySpec<S> subSpec = SubQuerySpec.create(subquery, subRoot, subRoot, cb);
+        node.config.accept(subSpec);
+        subSpec.applyWhere();
+        if (!subSpec.isSelectSet()) {
+            // 默认选择子查询实体的根（用于 EXISTS 风格）
+            subquery.select(subRoot);
+        }
+        // 构建 outer.field IN (subquery) 或 outer.field NOT IN (subquery)
+        // 使用 raw 类型绕过泛型限制，因为 Subquery<S> 与 In<T> 的泛型不兼容
+        CriteriaBuilder.In inClause = cb.in(outerPath.get(node.outerFieldName));
+        inClause.value((jakarta.persistence.criteria.Subquery)subquery);
+        return node.negate ? cb.not(inClause) : inClause;
     }
 
     // ---- 聚合函数便捷 API ----

@@ -3,6 +3,7 @@ package com.zsubera.jpa.update;
 import com.zsubera.jpa.spec.PredicateHelper;
 import com.zsubera.jpa.spec.SFunction;
 import com.zsubera.jpa.update.AbstractBulkOperationSpec.BulkConditionNode;
+import jakarta.persistence.criteria.Predicate;
 import java.util.List;
 import org.springframework.lang.Nullable;
 
@@ -397,6 +398,46 @@ public class OrConditionBuilder<T, SELF extends AbstractBulkOperationSpec<T, SEL
     public OrConditionBuilder<T, SELF> isNotEmpty(SFunction<T, ?> field) {
         String name = parent.property(field);
         nodes.add(new BulkConditionNode.LeafNode((root, cb) -> PredicateHelper.isNotEmpty(root, name, cb)));
+        return this;
+    }
+
+    /**
+     * 添加多字段 LIKE 搜索条件。关键字被包装为 {@code %keyword%} 并与每个给定字段匹配，使用 OR 连接。
+     *
+     * <p>
+     * 值中的 {@code %} 或 {@code _} 字符会被转义，作为字面量处理，防止 LIKE 注入。
+     *
+     * @param keyword 搜索关键字
+     * @param fields 一个或多个字符串属性的方法引用
+     * @return 当前构建器实例
+     * @throws IllegalArgumentException 如果 keyword 为 null，或 fields 为 null，或 fields 包含 null 元素
+     */
+    @SuppressWarnings("unchecked")
+    public OrConditionBuilder<T, SELF> multiLike(String keyword, SFunction<T, ?>... fields) {
+        if (keyword == null) {
+            throw new IllegalArgumentException("keyword must not be null");
+        }
+        if (fields == null) {
+            throw new IllegalArgumentException("fields must not be null");
+        }
+        if (!keyword.isEmpty() && fields.length > 0) {
+            String[] fieldNames = new String[fields.length];
+            for (int i = 0; i < fields.length; i++) {
+                if (fields[i] == null) {
+                    throw new IllegalArgumentException("fields[" + i + "] must not be null");
+                }
+                fieldNames[i] = parent.property(fields[i]);
+            }
+            String escaped = PredicateHelper.escapeLikeWildcards(keyword);
+            String pattern = "%" + escaped + "%";
+            nodes.add(new BulkConditionNode.LeafNode((root, cb) -> {
+                List<Predicate> likes = new java.util.ArrayList<>();
+                for (String fieldName : fieldNames) {
+                    likes.add(cb.like(root.get(fieldName).as(String.class), pattern, PredicateHelper.LIKE_ESCAPE_CHAR));
+                }
+                return cb.or(likes.toArray(new Predicate[0]));
+            }));
+        }
         return this;
     }
 }

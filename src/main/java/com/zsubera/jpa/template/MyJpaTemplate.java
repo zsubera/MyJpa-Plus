@@ -356,22 +356,15 @@ public class MyJpaTemplate {
      * @param spec 查询规范
      * @param <T> 实体类型
      * @return 匹配实体的 Stream（必须由调用方关闭）
+     * @throws UnsupportedOperationException 此方法已移除，请使用 {@link #findAllStream(Class, QuerySpec, Consumer)} 安全版本
      * @deprecated 使用 {@link #findAllStream(Class, QuerySpec, Consumer)} 安全版本替代，该版本自动管理 Stream 生命周期，避免资源泄漏。 此方法将在 2.0
      *             版本中移除。
      */
     @Deprecated(since = "1.0.1", forRemoval = true)
     public <T> Stream<T> findAllStream(Class<T> entityClass, QuerySpec<T> spec) {
-        if (log.isWarnEnabled()) {
-            log.warn("DEPRECATED: findAllStream(Class, QuerySpec) may cause resource leaks and will be removed in 2.0. "
+        throw new UnsupportedOperationException(
+            "findAllStream(Class, QuerySpec) has been removed due to resource leak risk. "
                 + "Use findAllStream(Class, QuerySpec, Consumer) instead, which automatically manages the Stream lifecycle.");
-        }
-        if (entityClass == null) {
-            throw new IllegalArgumentException("entityClass must not be null");
-        }
-        if (spec == null) {
-            throw new IllegalArgumentException("spec must not be null");
-        }
-        return doFindStream(entityClass, spec);
     }
 
     /**
@@ -382,24 +375,15 @@ public class MyJpaTemplate {
      * @param entityGraph 用于急切加载的实体图（可为 null）
      * @param <T> 实体类型
      * @return 匹配实体的 Stream
+     * @throws UnsupportedOperationException 此方法已移除，请使用 {@link #findAllStream(Class, QuerySpec, Consumer)} 安全版本
      * @deprecated 使用 {@link #findAllStream(Class, QuerySpec, Consumer)} 安全版本替代，该版本自动管理 Stream 生命周期，避免资源泄漏。 此方法将在 2.0
      *             版本中移除。
      */
     @Deprecated(since = "1.0.1", forRemoval = true)
     public <T> Stream<T> findAllStream(Class<T> entityClass, QuerySpec<T> spec, EntityGraphHelper<T> entityGraph) {
-        if (log.isWarnEnabled()) {
-            log.warn(
-                "DEPRECATED: findAllStream(Class, QuerySpec, EntityGraph) may cause resource leaks and will be removed in 2.0. "
-                    + "Use findAllStream(Class, QuerySpec, Consumer) instead.");
-        }
-        if (entityClass == null) {
-            throw new IllegalArgumentException("entityClass must not be null");
-        }
-        if (spec == null) {
-            throw new IllegalArgumentException("spec must not be null");
-        }
-        TypedQuery<T> query = buildTypedQuery(entityClass, spec, entityGraph, null);
-        return query.getResultStream();
+        throw new UnsupportedOperationException(
+            "findAllStream(Class, QuerySpec, EntityGraph) has been removed due to resource leak risk. "
+                + "Use findAllStream(Class, QuerySpec, Consumer) instead, which automatically manages the Stream lifecycle.");
     }
 
     /**

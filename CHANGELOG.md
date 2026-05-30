@@ -1,6 +1,13 @@
 # MyJpa-Plus 更新日志
 
-## [0.1.0-SNAPSHOT] - 2026-05-26
+## [1.1.0] - 2026-05-31
+
+### 发布说明
+- 统一版本号至 1.1.0（pom.xml、README.md、CHANGELOG.md）
+- 修复缓存驱逐策略、volatile 可见性、timeout 上限等可靠性问题
+- 优化 API 一致性、文档质量和企业级标准合规性
+
+## [0.1.0-SNAPSHOT] - 2026-05-26（开发版本，已合并至 1.1.0）
 
 ### 破坏性变更
 - **`DeleteSpec` 现在要求显式指定 WHERE 条件。** 在不带任何条件的情况下调用 `execute()` 或 `toDelete()` 会抛出 `IllegalStateException`。请使用新的 `deleteAll(EntityManager)` 进行无条件删除。

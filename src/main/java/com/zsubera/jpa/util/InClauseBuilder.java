@@ -50,7 +50,7 @@ public final class InClauseBuilder {
      * <p>
      * 配置优先级：Spring Boot 配置 > 系统属性 {@code myjpa-plus.in-clause-hard-limit} > 默认值 (5000)。
      */
-    private static int hardLimit;
+    private static volatile int hardLimit;
 
     /**
      * 单个 IN 子句中的最大参数数量。
@@ -58,7 +58,7 @@ public final class InClauseBuilder {
      * <p>
      * 配置优先级：Spring Boot 配置 > 系统属性 {@code myjpa-plus.in-clause-max-size} > 默认值 (1000)。
      */
-    private static int maxInClauseSize;
+    private static volatile int maxInClauseSize;
 
     static {
         int configured = 1000;
@@ -132,12 +132,17 @@ public final class InClauseBuilder {
     /**
      * 设置 IN 子句的硬限制。由 Spring Boot 自动配置调用。
      *
-     * @param limit 硬限制值，必须为正数
+     * <p>
+     * 有效范围：1-100000。超出范围的值将被忽略并记录警告。
+     *
+     * @param limit 硬限制值
      */
     public static void setHardLimit(int limit) {
-        if (limit > 0) {
+        if (limit > 0 && limit <= 100000) {
             hardLimit = limit;
             log.info("IN clause hard limit configured to {}", limit);
+        } else if (limit > 100000) {
+            log.warn("IN clause hard limit ({}) exceeds upper limit (100000). Ignoring.", limit);
         }
     }
 

@@ -217,21 +217,25 @@ public final class SoftDeleteHelper {
      */
     public static String findSoftDeleteField(Class<?> entityClass) {
         // 使用计数器检查缓存大小，避免频繁调用 ConcurrentReferenceHashMap.size()（该方法遍历所有桶）
-        if (insertCounter.get() > MAX_CACHE_SIZE) {
-            log.warn(
-                "SoftDeleteHelper field cache insert count ({}) exceeds limit ({}). "
-                    + "This may indicate a class loader leak or excessive entity classes.",
-                insertCounter.get(), MAX_CACHE_SIZE);
-            // Evict stale entries (null key/value) to prevent unbounded growth
-            int evicted = 0;
-            for (var entry : FIELD_CACHE.entrySet()) {
-                if (entry.getKey() == null || entry.getValue() == null) {
-                    FIELD_CACHE.remove(entry.getKey());
-                    evicted++;
+        // 使用 compareAndSet 保护驱逐逻辑，避免多线程竞态条件
+        int currentCount = insertCounter.get();
+        if (currentCount > MAX_CACHE_SIZE) {
+            if (insertCounter.compareAndSet(currentCount, currentCount - 1)) {
+                log.warn(
+                    "SoftDeleteHelper field cache insert count ({}) exceeds limit ({}). "
+                        + "This may indicate a class loader leak or excessive entity classes.",
+                    currentCount, MAX_CACHE_SIZE);
+                // Evict stale entries (null key/value) to prevent unbounded growth
+                int evicted = 0;
+                for (var entry : FIELD_CACHE.entrySet()) {
+                    if (entry.getKey() == null || entry.getValue() == null) {
+                        FIELD_CACHE.remove(entry.getKey());
+                        evicted++;
+                    }
                 }
-            }
-            if (evicted > 0) {
-                insertCounter.addAndGet(-evicted);
+                if (evicted > 0) {
+                    insertCounter.addAndGet(-evicted);
+                }
             }
         }
         String result = FIELD_CACHE.computeIfAbsent(entityClass, cls -> {

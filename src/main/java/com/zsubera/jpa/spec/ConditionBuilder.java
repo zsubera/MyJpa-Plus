@@ -628,6 +628,9 @@ public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> {
      *
      * // 正确：显式声明 Path<?> 类型
      * qs.where((Path<?> path, CriteriaBuilder cb) -> cb.like(path.get("name"), "%test%"));
+     *
+     * // 推荐：使用类型安全的方法引用（编译时检查）
+     * qs.like(User::getName, "%test%");
      * }</pre>
      *
      * <p>
@@ -644,10 +647,10 @@ public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> {
      * String userInput = request.getParameter("field");
      * qs.where((path, cb) -> cb.equal(path.get(userInput), value)); // SQL 注入风险！
      *
-     * // 安全：使用硬编码字段名
+     * // 安全：使用硬编码字段名（仍存在类型安全风险）
      * qs.where((path, cb) -> cb.equal(path.get("name"), value));
      *
-     * // 更好：使用类型安全的方法引用
+     * // 推荐：使用类型安全的方法引用（编译时检查，无 SQL 注入风险）
      * qs.eq(Entity::getName, value);
      * }</pre>
      *
@@ -683,6 +686,9 @@ public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> {
      * // 注意：需要在外部获取 CriteriaBuilder
      * CriteriaBuilder cb = entityManager.getCriteriaBuilder();
      * qs.where(root -> cb.like(root.get("name"), "%test%"));
+     *
+     * // 推荐：使用类型安全的方法引用（编译时检查，无 SQL 注入风险）
+     * qs.like(User::getName, "%test%");
      * }</pre>
      *
      * <p>
@@ -741,6 +747,82 @@ public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> {
             }
             conditions().add(new ConditionNode.MultiLikeNode(keyword, fieldNames));
         }
+        return self();
+    }
+
+    // ---- IN 子查询 ----
+
+    /**
+     * 添加 IN 子查询条件：{@code field IN (SELECT ...)}。
+     *
+     * <p>
+     * 使用示例：
+     *
+     * <pre>{@code
+     * qs.inSubQuery(User::getDepartmentId, Department.class,
+     *     sub -> sub.eq(Department::getActive, true).select(Department::getId));
+     * }</pre>
+     *
+     * <p>
+     * 生成：{@code user.department_id IN (SELECT d.id FROM department d WHERE d.active = true)}
+     *
+     * @param outerField 外部实体的字段方法引用
+     * @param subEntity 子查询实体类型
+     * @param config 子查询配置消费者
+     * @param <S> 子查询实体类型
+     * @return 当前构建器以支持链式调用
+     * @throws IllegalArgumentException 如果任何参数为 null
+     */
+    default <S> SELF inSubQuery(SFunction<E, ?> outerField, Class<S> subEntity,
+        java.util.function.Consumer<SubQuerySpec<S>> config) {
+        if (outerField == null) {
+            throw new IllegalArgumentException("outerField must not be null");
+        }
+        if (subEntity == null) {
+            throw new IllegalArgumentException("subEntity must not be null");
+        }
+        if (config == null) {
+            throw new IllegalArgumentException("config must not be null");
+        }
+        conditions()
+            .add(new ConditionNode.InSubQueryNode<>(LambdaUtils.getPropertyName(outerField), subEntity, config, false));
+        return self();
+    }
+
+    /**
+     * 添加 NOT IN 子查询条件：{@code field NOT IN (SELECT ...)}。
+     *
+     * <p>
+     * 使用示例：
+     *
+     * <pre>{@code
+     * qs.notInSubQuery(User::getDepartmentId, Department.class,
+     *     sub -> sub.eq(Department::getArchived, true).select(Department::getId));
+     * }</pre>
+     *
+     * <p>
+     * 生成：{@code user.department_id NOT IN (SELECT d.id FROM department d WHERE d.archived = true)}
+     *
+     * @param outerField 外部实体的字段方法引用
+     * @param subEntity 子查询实体类型
+     * @param config 子查询配置消费者
+     * @param <S> 子查询实体类型
+     * @return 当前构建器以支持链式调用
+     * @throws IllegalArgumentException 如果任何参数为 null
+     */
+    default <S> SELF notInSubQuery(SFunction<E, ?> outerField, Class<S> subEntity,
+        java.util.function.Consumer<SubQuerySpec<S>> config) {
+        if (outerField == null) {
+            throw new IllegalArgumentException("outerField must not be null");
+        }
+        if (subEntity == null) {
+            throw new IllegalArgumentException("subEntity must not be null");
+        }
+        if (config == null) {
+            throw new IllegalArgumentException("config must not be null");
+        }
+        conditions()
+            .add(new ConditionNode.InSubQueryNode<>(LambdaUtils.getPropertyName(outerField), subEntity, config, true));
         return self();
     }
 

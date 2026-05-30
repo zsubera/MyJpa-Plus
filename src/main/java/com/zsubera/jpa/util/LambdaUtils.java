@@ -43,7 +43,7 @@ public final class LambdaUtils {
      * <p>
      * 配置优先级：Spring Boot 配置 > 系统属性 {@code myjpa-plus.lambda-cache-size} > 默认值 (4096)。
      */
-    private static int maxCacheSize;
+    private static volatile int maxCacheSize;
 
     static {
         int configured = 4096;
@@ -99,8 +99,13 @@ public final class LambdaUtils {
      */
     private static final ConcurrentHashMap<String, String> CACHE = new ConcurrentHashMap<>(4096);
 
-    /** 缓存每个 lambda 类对应的 Method 对象，避免重复反射操作。 */
-    private static final Map<Class<?>, Method> METHOD_CACHE = new ConcurrentHashMap<>();
+    /**
+     * 缓存每个 lambda 类对应的 Method 对象，避免重复反射操作。
+     *
+     * <p>
+     * 大小限制为 2048，超过时清除旧条目以防止热部署场景下无限增长。
+     */
+    private static final Map<Class<?>, Method> METHOD_CACHE = new ConcurrentHashMap<>(256);
 
     /**
      * 关闭后台清理线程。在应用关闭或热部署环境中应调用此方法以确保资源正确释放。
@@ -109,10 +114,10 @@ public final class LambdaUtils {
      * 已在 {@code MyJpaPlusAutoConfiguration} 中通过 {@code DisposableBean} 自动注册关闭钩子。
      *
      * <p>
-     * 当前实现为空操作，因为缓存清理已通过 {@link LinkedHashMap} 的 {@code removeEldestEntry} 自动处理。
+     * 当前实现为空操作，因为缓存清理已通过 {@link ConcurrentHashMap} 的 {@code clear()} 方法在 {@link #evictIfNeeded()} 中自动处理。
      */
     public static void shutdown() {
-        // 空操作：缓存清理已通过 LinkedHashMap 的 removeEldestEntry 自动处理
+        // 空操作：缓存清理已通过 ConcurrentHashMap 的 clear() 方法在 evictIfNeeded() 中自动处理
     }
 
     private LambdaUtils() {}
@@ -149,6 +154,7 @@ public final class LambdaUtils {
             String key = lambda.getImplClass() + "#" + lambda.getImplMethodName();
             String result = CACHE.computeIfAbsent(key, k -> methodToProperty(lambda.getImplMethodName()));
             evictIfNeeded();
+            evictMethodCacheIfNeeded();
             return result;
         } catch (ReflectiveOperationException e) {
             throw new MyJpaPlusException("Failed to extract property name from method reference. "
@@ -167,13 +173,21 @@ public final class LambdaUtils {
      * 驱逐旧缓存条目，确保缓存大小不超过 {@link #maxCacheSize}。
      *
      * <p>
-     * 当缓存大小超过限制时，清除约 25% 的条目以避免频繁驱逐。 ConcurrentHashMap 的 clear() 操作在多线程环境下是安全的。
+     * 当缓存大小超过限制时，随机淘汰约 25% 的条目，将缓存大小降至 75% 水平。 使用 ConcurrentHashMap 的原子操作避免全量清除导致的缓存雪崩。
+     * 多个线程可能同时触发驱逐，但驱逐操作是幂等的，不会造成功能问题。
      */
     private static void evictIfNeeded() {
-        if (CACHE.size() > maxCacheSize) {
-            // 清除缓存，下次访问时会重新解析（无副作用）
-            CACHE.clear();
-            log.debug("Lambda cache evicted due to size limit ({})", maxCacheSize);
+        long currentSize = CACHE.mappingCount();
+        if (currentSize > maxCacheSize) {
+            long target = (long)(maxCacheSize * 0.75);
+            long toRemove = currentSize - target;
+            if (toRemove > 0) {
+                // 使用 removeIf 随机淘汰条目，避免全量清除导致的缓存雪崩
+                long[] removed = {0};
+                CACHE.entrySet().removeIf(entry -> removed[0]++ < toRemove);
+                log.debug("Lambda cache evicted {} entries (size: {} -> {})", removed[0], currentSize,
+                    CACHE.mappingCount());
+            }
         }
     }
 
@@ -189,6 +203,19 @@ public final class LambdaUtils {
     /** 清空缓存。 */
     static void clearCache() {
         CACHE.clear();
+    }
+
+    /**
+     * 驱逐 METHOD_CACHE 中的旧条目，防止热部署场景下无限增长。
+     *
+     * <p>
+     * 当 METHOD_CACHE 大小超过 2048 时，清除全部条目。该缓存仅存储 Class -> Method 映射， 数量通常有界，但在热部署场景下可能积累旧类加载器的条目。
+     */
+    private static void evictMethodCacheIfNeeded() {
+        if (METHOD_CACHE.size() > 2048) {
+            METHOD_CACHE.clear();
+            log.debug("Method cache evicted due to size limit");
+        }
     }
 
     /**

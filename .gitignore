@@ -42,4 +42,4 @@ out/
 # Audit workflow
 .audit-tasks/
 .audit-dones/
-.opencode/reports/
+.opencode/

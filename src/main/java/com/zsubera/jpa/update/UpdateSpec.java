@@ -203,36 +203,32 @@ public class UpdateSpec<T> extends AbstractBulkOperationSpec<T, UpdateSpec<T>> {
     }
 
     /**
-     * Execute UPDATE statement limiting the number of affected rows.
+     * 执行限制更新行数的条件更新操作。
      *
      * <p>
-     * This method first queries a list of IDs matching the WHERE conditions (with LIMIT), then executes the update
-     * using those IDs. This two-step approach is necessary because JPA CriteriaUpdate does not support LIMIT directly.
+     * 此方法首先查询符合条件的 ID 列表（带限制），然后使用这些 ID 执行更新操作。 这种两步方法是必要的，因为 JPA CriteriaUpdate 不直接支持 LIMIT。
      *
      * <p>
-     * The method uses {@link EntityManager#clear()} to detach updated entities, allowing multiple batches without
-     * clearing the persistence context between batches.
+     * 此方法使用 {@link EntityManager#clear()} 分离已更新的实体，允许在不清除持久化上下文的情况下执行多个批次。
      *
-     * <p>
      * <p>
      * <strong>安全说明：</strong>此方法默认启用悲观锁（{@code pessimisticLock=true}）， 以防止查询ID和执行更新之间的并发竞态条件。如需禁用悲观锁，请使用
      * {@link #executeLimited(EntityManager, int, boolean)} 并设置 {@code pessimisticLock=false}。
      *
-     * @param em entity manager
-     * @param limit maximum number of rows to update
-     * @return actual number of rows updated
-     * @throws IllegalStateException if no SET clauses are specified
+     * @param em 实体管理器
+     * @param limit 最大更新行数
+     * @return 实际更新的行数
+     * @throws IllegalStateException 如果未指定 SET 子句
      */
     public int executeLimited(EntityManager em, int limit) {
         return executeLimited(em, limit, true);
     }
 
     /**
-     * Execute UPDATE statement limiting the number of affected rows, with optional pessimistic locking.
+     * 执行限制更新行数的条件更新操作，支持可选的悲观锁。
      *
      * <p>
-     * This method first queries for matching entity IDs with the specified limit, then performs the update on those
-     * entities. The persistence context is cleared between batches to prevent memory leaks.
+     * 此方法首先查询符合条件的实体 ID 列表（带限制），然后对这些实体执行更新操作。 持久化上下文会在批次之间被清除以防止内存泄漏。
      *
      * <p>
      * <strong>并发风险警告：</strong>此方法分两步执行（先查询 ID，再更新），在高并发场景下存在竞态条件。 在查询ID和执行更新之间，其他事务可能修改或删除记录，导致数据不一致。
@@ -252,12 +248,11 @@ public class UpdateSpec<T> extends AbstractBulkOperationSpec<T, UpdateSpec<T>> {
      * <li>在应用层使用分布式锁保护整个操作流程
      * </ol>
      *
-     * @param em entity manager
-     * @param limit maximum number of rows to update
-     * @param pessimisticLock if true, acquire {@link jakarta.persistence.LockModeType#PESSIMISTIC_WRITE} on the
-     *            selected IDs to prevent concurrent modifications
-     * @return actual number of rows updated
-     * @throws IllegalStateException if no SET clauses are specified
+     * @param em 实体管理器
+     * @param limit 最大更新行数
+     * @param pessimisticLock 如果为 true，则获取 {@link jakarta.persistence.LockModeType#PESSIMISTIC_WRITE} 锁以防止并发修改
+     * @return 实际更新的行数
+     * @throws IllegalStateException 如果未指定 SET 子句
      */
     public int executeLimited(EntityManager em, int limit, boolean pessimisticLock) {
         if (setClauses.isEmpty()) {

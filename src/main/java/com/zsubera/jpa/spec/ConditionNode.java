@@ -17,7 +17,7 @@ import java.util.function.Consumer;
  */
 public sealed interface ConditionNode permits ConditionNode.SimpleNode, ConditionNode.JoinNode, ConditionNode.OrNode,
     ConditionNode.AndNode, ConditionNode.MultiLikeNode, ConditionNode.CollectionNode, ConditionNode.ExistsNode,
-    ConditionNode.RawNode, ConditionNode.NegateNode {
+    ConditionNode.InSubQueryNode, ConditionNode.RawNode, ConditionNode.NegateNode {
 
     // ---- Operation enums ----
 
@@ -48,6 +48,7 @@ public sealed interface ConditionNode permits ConditionNode.SimpleNode, Conditio
      */
     final class SimpleNode implements ConditionNode {
         final String fieldName;
+        /** 条件值。对于数组类型（Object[]、Comparable[]），构造时会进行防御性拷贝。 */
         final Object value;
         final Op op;
         final char escapeChar;
@@ -58,7 +59,14 @@ public sealed interface ConditionNode permits ConditionNode.SimpleNode, Conditio
 
         public SimpleNode(String fieldName, Object value, Op op, char escapeChar) {
             this.fieldName = fieldName;
-            this.value = value;
+            // 防御性拷贝：数组是可变的，拷贝防止外部修改影响内部状态
+            if (value instanceof Object[] arr) {
+                this.value = arr.clone();
+            } else if (value instanceof Comparable<?>[] arr) {
+                this.value = arr.clone();
+            } else {
+                this.value = value;
+            }
             this.op = op;
             this.escapeChar = escapeChar;
         }
@@ -88,6 +96,18 @@ public sealed interface ConditionNode permits ConditionNode.SimpleNode, Conditio
     final class JoinNode implements ConditionNode {
         final String fieldName;
         final JoinType joinType;
+        /**
+         * 内部条件列表。
+         *
+         * <p>
+         * <strong>设计说明：</strong>此字段为包级私有可变列表，允许 {@link com.zsubera.jpa.spec.JoinGroup} 和
+         * {@link com.zsubera.jpa.spec.QuerySpec} 直接操作。 这是有意的设计决策，因为：
+         * <ul>
+         * <li>包内所有使用方都在同一模块中，访问受控</li>
+         * <li>使用不可变列表会导致每次添加条件时创建新列表，增加 GC 压力</li>
+         * <li>外部用户无法访问此字段（包级私有）</li>
+         * </ul>
+         */
         final List<ConditionNode> innerConditions = new ArrayList<>();
 
         public JoinNode(String fieldName, JoinType joinType) {
@@ -178,6 +198,41 @@ public sealed interface ConditionNode permits ConditionNode.SimpleNode, Conditio
         @Override
         public String toString() {
             return "ExistsNode[" + (negate ? "NOT " : "") + subEntity.getSimpleName() + "]";
+        }
+    }
+
+    /**
+     * IN 子查询节点：{@code field IN (SELECT ...)}。
+     *
+     * <p>
+     * 支持类型安全的 IN 子查询，例如：
+     *
+     * <pre>{@code
+     * qs.inSubQuery(User::getDepartmentId, Department.class,
+     *     sub -> sub.eq(Department::getActive, true).select(Department::getId));
+     * }</pre>
+     *
+     * <p>
+     * 生成：{@code user.department_id IN (SELECT d.id FROM department d WHERE d.active = true)}
+     */
+    final class InSubQueryNode<S> implements ConditionNode {
+        final String outerFieldName;
+        final Class<S> subEntity;
+        final Consumer<SubQuerySpec<S>> config;
+        final boolean negate;
+
+        public InSubQueryNode(String outerFieldName, Class<S> subEntity, Consumer<SubQuerySpec<S>> config,
+            boolean negate) {
+            this.outerFieldName = outerFieldName;
+            this.subEntity = subEntity;
+            this.config = config;
+            this.negate = negate;
+        }
+
+        @Override
+        public String toString() {
+            return "InSubQueryNode[" + (negate ? "NOT " : "") + outerFieldName + " IN (SELECT FROM "
+                + subEntity.getSimpleName() + ")]";
         }
     }
 
