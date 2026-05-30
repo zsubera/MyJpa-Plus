@@ -55,7 +55,7 @@ import org.springframework.lang.Nullable;
  *
  * @param <T> 被查询的根实体类型
  * @see com.zsubera.jpa.template.MyJpaTemplate#findAll(Class, QuerySpec)
- * @see com.zsubera.jpa.template.MyJpaTemplate#findPage(Class, QuerySpec, org.springframework.data.domain.Pageable)
+ * @see com.zsubera.jpa.template.MyJpaTemplate#findPage(Class, Specification, org.springframework.data.domain.Pageable)
  */
 @SuppressFBWarnings("SE_BAD_FIELD")
 public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, QuerySpec<T>> {

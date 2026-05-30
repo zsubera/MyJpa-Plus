@@ -19,7 +19,7 @@ import org.springframework.lang.Nullable;
  *
  * <p>
  * 当实体有 {@link com.zsubera.jpa.annotation.SoftDelete @SoftDelete} 字段时，查询会自动追加过滤条件。 使用
- * {@link IgnoreSoftDelete @IgnoreSoftDelete} 注解可跳过自动过滤。
+ * {@link com.zsubera.jpa.annotation.IgnoreSoftDelete @IgnoreSoftDelete} 注解可跳过自动过滤。
  *
  * <p>
  * 使用方式：在 {@code @EnableJpaRepositories} 中指定 {@code repositoryBaseClass}：
@@ -37,7 +37,7 @@ import org.springframework.lang.Nullable;
  * @param <T> 实体类型
  * @param <ID> ID 类型
  * @see com.zsubera.jpa.annotation.SoftDelete
- * @see IgnoreSoftDelete
+ * @see com.zsubera.jpa.annotation.IgnoreSoftDelete
  */
 @NoRepositoryBean
 public class SoftDeleteJpaRepository<T, ID> extends SimpleJpaRepository<T, ID> {

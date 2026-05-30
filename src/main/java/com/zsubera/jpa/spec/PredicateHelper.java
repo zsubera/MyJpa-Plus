@@ -468,7 +468,7 @@ public final class PredicateHelper {
      * 根据 {@link ConditionNode.SimpleNode} 的运算符解析为对应的 JPA {@link Predicate}。
      *
      * <p>
-     * 此方法消除了 {@link QuerySpec#resolveSimple} 和 {@link ProjectionSpec#resolveSimpleForJoin} 之间的重复代码。 新增
+     * 此方法集中处理简单条件的解析逻辑，避免重复代码。新增
      * {@link ConditionNode.Op} 枚举值时，只需在此方法中添加对应的 case。
      *
      * @param path 实体路径（可以是 Root 或 Join）
