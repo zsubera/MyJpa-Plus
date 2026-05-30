@@ -695,7 +695,7 @@ public class QuerySpecTest {
         repository.save(newEntity("mid", 5));
         repository.save(newEntity("high", 10));
         QuerySpec<TestEntity> qs = new QuerySpec<>();
-        qs.where((path, cb) -> cb.greaterThan(path.get("status"), 5));
+        qs.gt(TestEntity::getStatus, 5);
         List<TestEntity> result = repository.findAll(qs.toSpecification());
         assertEquals(1, result.size());
         assertEquals("high", result.get(0).getName());

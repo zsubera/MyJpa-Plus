@@ -1,6 +1,5 @@
 package com.zsubera.jpa.spec;
 
-import com.zsubera.jpa.util.InClauseBuilder;
 import com.zsubera.jpa.util.LambdaUtils;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import jakarta.persistence.LockModeType;
@@ -778,72 +777,7 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
      */
     @SuppressWarnings({"unchecked", "rawtypes"})
     private Predicate resolveSimple(ConditionNode.SimpleNode node, Path<?> path, CriteriaBuilder cb) {
-        Path<?> fieldPath = path.get(node.fieldName);
-        switch (node.op) {
-            case EQ:
-                return cb.equal(fieldPath, node.value);
-            case NE:
-                return cb.notEqual(fieldPath, node.value);
-            case GT:
-                return cb.greaterThan((Expression<Comparable>)fieldPath, (Comparable)node.value);
-            case GE:
-                return cb.greaterThanOrEqualTo((Expression<Comparable>)fieldPath, (Comparable)node.value);
-            case LT:
-                return cb.lessThan((Expression<Comparable>)fieldPath, (Comparable)node.value);
-            case LE:
-                return cb.lessThanOrEqualTo((Expression<Comparable>)fieldPath, (Comparable)node.value);
-            case LIKE:
-                if (node.escapeChar != '\0') {
-                    return cb.like(fieldPath.as(String.class), (String)node.value, node.escapeChar);
-                }
-                return cb.like(fieldPath.as(String.class), (String)node.value);
-            case NOT_LIKE:
-                if (node.escapeChar != '\0') {
-                    return cb.notLike(fieldPath.as(String.class), (String)node.value, node.escapeChar);
-                }
-                return cb.notLike(fieldPath.as(String.class), (String)node.value);
-            case EQ_IGNORE_CASE:
-                return cb.equal(cb.upper(fieldPath.as(String.class)),
-                    ((String)node.value).toUpperCase(java.util.Locale.ROOT));
-            case LIKE_IGNORE_CASE:
-                return cb.like(cb.upper(fieldPath.as(String.class)),
-                    ((String)node.value).toUpperCase(java.util.Locale.ROOT));
-            case IS_NULL:
-                return cb.isNull(fieldPath);
-            case IS_NOT_NULL:
-                return cb.isNotNull(fieldPath);
-            case IN: {
-                if (node.value instanceof Collection) {
-                    return InClauseBuilder.in(cb, fieldPath, (Collection<?>)node.value);
-                }
-                return InClauseBuilder.in(cb, fieldPath, (Object[])node.value);
-            }
-            case NOT_IN: {
-                if (node.value instanceof Collection) {
-                    return InClauseBuilder.notIn(cb, fieldPath, (Collection<?>)node.value);
-                }
-                return InClauseBuilder.notIn(cb, fieldPath, (Object[])node.value);
-            }
-            case BETWEEN: {
-                Comparable<?>[] range = (Comparable<?>[])node.value;
-                if (range.length != 2) {
-                    throw new IllegalArgumentException("BETWEEN requires exactly 2 values, got " + range.length);
-                }
-                return cb.between((Expression<Comparable>)fieldPath, (Comparable)range[0], (Comparable)range[1]);
-            }
-            case NOT_BETWEEN: {
-                Comparable<?>[] range = (Comparable<?>[])node.value;
-                if (range.length != 2) {
-                    throw new IllegalArgumentException("NOT_BETWEEN requires exactly 2 values, got " + range.length);
-                }
-                return cb
-                    .not(cb.between((Expression<Comparable>)fieldPath, (Comparable)range[0], (Comparable)range[1]));
-            }
-            default:
-                // 穷举匹配防御：如果此处被执行，说明 Op 枚举新增了值但未添加对应的 case 处理。
-                // 使用 AssertionError 而非 IllegalArgumentException，因为这是编程错误而非用户输入错误。
-                throw new AssertionError("Unhandled Op: " + node.op);
-        }
+        return PredicateHelper.resolveSimplePredicate(path, node, cb);
     }
 
     /**

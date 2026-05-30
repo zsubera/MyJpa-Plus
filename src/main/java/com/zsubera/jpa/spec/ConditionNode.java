@@ -74,9 +74,8 @@ public sealed interface ConditionNode permits ConditionNode.SimpleNode, Conditio
                 maskedValue = "BETWEEN[" + arr.length + " items]";
             } else if (value instanceof Collection<?> col) {
                 maskedValue = "IN[" + col.size() + " items]";
-            } else if (value instanceof String s && s.length() > 4) {
-                maskedValue = s.substring(0, 2) + "***" + s.substring(s.length() - 2);
             } else if (value instanceof String) {
+                // 完全掩码：防止密码、token 等敏感数据泄露到日志系统
                 maskedValue = "***";
             } else {
                 maskedValue = value.toString();

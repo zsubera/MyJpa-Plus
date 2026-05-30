@@ -11,8 +11,6 @@ import java.util.Collection;
 import java.util.List;
 import java.util.function.BiFunction;
 import java.util.function.Function;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.lang.Nullable;
 
 /**
@@ -31,9 +29,6 @@ import org.springframework.lang.Nullable;
  * @param <SELF> 用于流式链式调用的具体构建器类型
  */
 public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> {
-
-    /** Logger for security warnings on deprecated where() methods. */
-    Logger log = LoggerFactory.getLogger(ConditionBuilder.class);
 
     /**
      * 获取当前条件列表。
@@ -252,11 +247,16 @@ public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> {
     /**
      * 添加带自动通配符转义的 LIKE 条件：{@code field LIKE '%value%'}。 值中的 {@code %} 或 {@code _} 字符会被转义，作为字面量处理。
      *
+     * <p>
+     * 此方法行为与 {@link #contains(SFunction, String)} 完全相同。
+     *
      * @param field 实体属性的方法引用
      * @param value 要匹配的原始字符串值
      * @return 当前构建器以支持链式调用
      * @throws IllegalArgumentException 如果 {@code field} 或 {@code value} 为 null
+     * @deprecated 方法命名具有误导性（暗示"原始 LIKE"不转义），实际行为与 {@link #contains(SFunction, String)} 相同。请使用 {@link #contains} 替代。
      */
+    @Deprecated(since = "1.1.0")
     default SELF rawLike(SFunction<E, ?> field, String value) {
         if (field == null) {
             throw new IllegalArgumentException("field must not be null");
@@ -702,13 +702,9 @@ public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> {
         if (fn == null) {
             throw new IllegalArgumentException("fn must not be null");
         }
-        if (log.isWarnEnabled()) {
-            log.warn(
-                "SECURITY: where(BiFunction) method called - bypasses type safety and may expose SQL injection risk. "
-                    + "Use type-safe methods like eq(), like(), etc.");
-        }
-        conditions().add(new ConditionNode.RawNode((BiFunction<Path<?>, CriteriaBuilder, Predicate>)(Object)fn));
-        return self();
+        throw new UnsupportedOperationException("where(BiFunction) has been removed for security reasons. "
+            + "This method bypasses type safety and exposes SQL injection risk. "
+            + "Use type-safe methods like eq(), like(), contains(), etc. instead.");
     }
 
     /**
@@ -749,13 +745,9 @@ public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> {
         if (fn == null) {
             throw new IllegalArgumentException("fn must not be null");
         }
-        if (log.isWarnEnabled()) {
-            log.warn(
-                "SECURITY: where(Function) method called - bypasses type safety and may expose SQL injection risk. "
-                    + "Use type-safe methods like eq(), like(), etc.");
-        }
-        conditions().add(new ConditionNode.RawNode((root, cb) -> fn.apply((Root<E>)root)));
-        return self();
+        throw new UnsupportedOperationException("where(Function) has been removed for security reasons. "
+            + "This method bypasses type safety and exposes SQL injection risk. "
+            + "Use type-safe methods like eq(), like(), contains(), etc. instead.");
     }
 
     // ---- 多字段搜索 ----

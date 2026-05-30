@@ -359,6 +359,19 @@ class ConditionBuilderValidationTest {
     }
 
     @Test
+    void testWhereBiFunctionThrowsUnsupportedOperationException() {
+        QuerySpec<TestEntity> qs = new QuerySpec<>();
+        assertThrows(UnsupportedOperationException.class,
+            () -> qs.where((path, cb) -> cb.equal(path.get("name"), "test")));
+    }
+
+    @Test
+    void testWhereFunctionThrowsUnsupportedOperationException() {
+        QuerySpec<TestEntity> qs = new QuerySpec<>();
+        assertThrows(UnsupportedOperationException.class, () -> qs.where(root -> root.get("name").in("test")));
+    }
+
+    @Test
     void testRawLikeNullValueThrowsException() {
         QuerySpec<TestEntity> qs = new QuerySpec<>();
         assertThrows(IllegalArgumentException.class, () -> qs.rawLike(TestEntity::getName, null));

@@ -8,7 +8,6 @@ import com.zsubera.jpa.spec.TestEntityRepository;
 import com.zsubera.jpa.update.DeleteSpec;
 import com.zsubera.jpa.update.UpdateSpec;
 import java.util.List;
-import java.util.stream.Stream;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
@@ -135,10 +134,11 @@ class MyJpaTemplateTest {
         }
 
         QuerySpec<TestEntity> qs = new QuerySpec<>();
-        try (Stream<TestEntity> stream = template.findAllStream(TestEntity.class, qs)) {
-            long count = stream.count();
-            assertEquals(5, count);
-        }
+        final long[] count = {0};
+        template.findAllStream(TestEntity.class, qs, stream -> {
+            count[0] = stream.count();
+        });
+        assertEquals(5, count[0]);
     }
 
     @Test
@@ -152,10 +152,11 @@ class MyJpaTemplateTest {
 
         QuerySpec<TestEntity> qs = new QuerySpec<>();
         qs.ge(TestEntity::getStatus, 3);
-        try (Stream<TestEntity> stream = template.findAllStream(TestEntity.class, qs)) {
-            long count = stream.count();
-            assertEquals(2, count);
-        }
+        final long[] count = {0};
+        template.findAllStream(TestEntity.class, qs, stream -> {
+            count[0] = stream.count();
+        });
+        assertEquals(2, count[0]);
     }
 
     @Test
@@ -167,10 +168,11 @@ class MyJpaTemplateTest {
 
         QuerySpec<TestEntity> qs = new QuerySpec<>();
         qs.eq(TestEntity::getName, "streamGraph");
-        try (Stream<TestEntity> stream = template.findAllStream(TestEntity.class, qs,
-            com.zsubera.jpa.util.EntityGraphHelper.forEntity(TestEntity.class))) {
-            assertEquals(1, stream.count());
-        }
+        final long[] count = {0};
+        template.findAllStream(TestEntity.class, qs, stream -> {
+            count[0] = stream.count();
+        });
+        assertEquals(1, count[0]);
     }
 
     // ---- 分页测试 ----

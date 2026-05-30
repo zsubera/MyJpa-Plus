@@ -352,8 +352,8 @@ class UpdateSpecTest {
     void testUpdateWhere() {
         repository.save(newEntity("a", 1));
         repository.save(newEntity("b", 10));
-        int count = new UpdateSpec<>(TestEntity.class).set(TestEntity::getName, "where")
-            .where(root -> root.get("status").in(1)).execute(em);
+        int count = new UpdateSpec<>(TestEntity.class).set(TestEntity::getName, "where").in(TestEntity::getStatus, 1)
+            .execute(em);
         assertEquals(1, count);
     }
 

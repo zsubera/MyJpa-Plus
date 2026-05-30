@@ -338,7 +338,9 @@ public class MyJpaTemplate {
             log.warn("DEPRECATED: findAllStream(Class, QuerySpec) may cause resource leaks and will throw "
                 + "UnsupportedOperationException in 1.2.0. Use findAllStream(Class, QuerySpec, Consumer) instead.");
         }
-        return doFindStream(entityClass, spec);
+        throw new UnsupportedOperationException(
+            "findAllStream(Class, QuerySpec) has been removed to prevent resource leaks. "
+                + "Use findAllStream(Class, QuerySpec, Consumer) which automatically manages the Stream lifecycle.");
     }
 
     /**
@@ -358,8 +360,9 @@ public class MyJpaTemplate {
             log.warn("DEPRECATED: findAllStream(Class, QuerySpec, EntityGraph) may cause resource leaks and will throw "
                 + "UnsupportedOperationException in 1.2.0. Use findAllStream(Class, QuerySpec, Consumer) instead.");
         }
-        TypedQuery<T> query = buildTypedQuery(entityClass, spec, entityGraph, null);
-        return query.getResultStream();
+        throw new UnsupportedOperationException(
+            "findAllStream(Class, QuerySpec, EntityGraph) has been removed to prevent resource leaks. "
+                + "Use findAllStream(Class, QuerySpec, Consumer) which automatically manages the Stream lifecycle.");
     }
 
     /**

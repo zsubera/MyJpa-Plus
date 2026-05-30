@@ -411,6 +411,87 @@ public final class PredicateHelper {
     // ==================== 集合空值检查 ====================
 
     /**
+     * 根据 {@link ConditionNode.SimpleNode} 的运算符解析为对应的 JPA {@link Predicate}。
+     *
+     * <p>
+     * 此方法消除了 {@link QuerySpec#resolveSimple} 和 {@link ProjectionSpec#resolveSimpleForJoin} 之间的重复代码。 新增
+     * {@link ConditionNode.Op} 枚举值时，只需在此方法中添加对应的 case。
+     *
+     * @param path 实体路径（可以是 Root 或 Join）
+     * @param node 简单条件节点
+     * @param cb CriteriaBuilder 实例
+     * @return 解析后的 Predicate
+     * @throws AssertionError 如果遇到未处理的 Op 枚举值（编程错误）
+     */
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    public static Predicate resolveSimplePredicate(Path<?> path, ConditionNode.SimpleNode node, CriteriaBuilder cb) {
+        Path<?> fieldPath = path.get(node.fieldName);
+        switch (node.op) {
+            case EQ:
+                return node.value == null ? cb.isNull(fieldPath) : cb.equal(fieldPath, node.value);
+            case NE:
+                return node.value == null ? cb.isNotNull(fieldPath) : cb.notEqual(fieldPath, node.value);
+            case GT:
+                return cb.greaterThan((Expression<Comparable>)fieldPath, (Comparable)node.value);
+            case GE:
+                return cb.greaterThanOrEqualTo((Expression<Comparable>)fieldPath, (Comparable)node.value);
+            case LT:
+                return cb.lessThan((Expression<Comparable>)fieldPath, (Comparable)node.value);
+            case LE:
+                return cb.lessThanOrEqualTo((Expression<Comparable>)fieldPath, (Comparable)node.value);
+            case LIKE:
+                if (node.escapeChar != '\0') {
+                    return cb.like(fieldPath.as(String.class), (String)node.value, node.escapeChar);
+                }
+                return cb.like(fieldPath.as(String.class), (String)node.value);
+            case NOT_LIKE:
+                if (node.escapeChar != '\0') {
+                    return cb.notLike(fieldPath.as(String.class), (String)node.value, node.escapeChar);
+                }
+                return cb.notLike(fieldPath.as(String.class), (String)node.value);
+            case EQ_IGNORE_CASE:
+                return cb.equal(cb.upper(fieldPath.as(String.class)),
+                    ((String)node.value).toUpperCase(java.util.Locale.ROOT));
+            case LIKE_IGNORE_CASE:
+                return cb.like(cb.upper(fieldPath.as(String.class)),
+                    ((String)node.value).toUpperCase(java.util.Locale.ROOT));
+            case IS_NULL:
+                return cb.isNull(fieldPath);
+            case IS_NOT_NULL:
+                return cb.isNotNull(fieldPath);
+            case IN: {
+                if (node.value instanceof Collection) {
+                    return InClauseBuilder.in(cb, fieldPath, (Collection<?>)node.value);
+                }
+                return InClauseBuilder.in(cb, fieldPath, (Object[])node.value);
+            }
+            case NOT_IN: {
+                if (node.value instanceof Collection) {
+                    return InClauseBuilder.notIn(cb, fieldPath, (Collection<?>)node.value);
+                }
+                return InClauseBuilder.notIn(cb, fieldPath, (Object[])node.value);
+            }
+            case BETWEEN: {
+                Comparable<?>[] range = (Comparable<?>[])node.value;
+                if (range.length != 2) {
+                    throw new IllegalArgumentException("BETWEEN requires exactly 2 values, got " + range.length);
+                }
+                return cb.between((Expression<Comparable>)fieldPath, (Comparable)range[0], (Comparable)range[1]);
+            }
+            case NOT_BETWEEN: {
+                Comparable<?>[] range = (Comparable<?>[])node.value;
+                if (range.length != 2) {
+                    throw new IllegalArgumentException("NOT_BETWEEN requires exactly 2 values, got " + range.length);
+                }
+                return cb
+                    .not(cb.between((Expression<Comparable>)fieldPath, (Comparable)range[0], (Comparable)range[1]));
+            }
+            default:
+                throw new AssertionError("Unhandled Op: " + node.op);
+        }
+    }
+
+    /**
      * 构建集合为空（IS EMPTY）谓词。
      *
      * @param path 实体路径

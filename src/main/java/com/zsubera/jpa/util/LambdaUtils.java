@@ -5,9 +5,8 @@ import com.zsubera.jpa.spec.SFunction;
 import java.beans.Introspector;
 import java.lang.invoke.SerializedLambda;
 import java.lang.reflect.Method;
-import java.util.Collections;
-import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -59,17 +58,9 @@ public final class LambdaUtils {
     }
 
     /**
-     * Thread-safe cache using LinkedHashMap in access-order (LRU) mode. The least recently accessed entries are
-     * automatically evicted when the cache exceeds MAX_CACHE_SIZE. This prevents memory leaks in hot-redeploy and OSGi
-     * environments.
+     * 使用 ConcurrentHashMap 替代 synchronizedMap，消除高并发场景下的锁竞争。 缓存大小由 lambda 表达式数量决定，应用中是有限的，无需 LRU 驱逐。
      */
-    private static final Map<String, String> CACHE =
-        Collections.synchronizedMap(new LinkedHashMap<>(4096, 0.75f, true) {
-            @Override
-            protected boolean removeEldestEntry(Map.Entry<String, String> eldest) {
-                return size() > MAX_CACHE_SIZE;
-            }
-        });
+    private static final Map<String, String> CACHE = new ConcurrentHashMap<>(4096);
 
     // LRU 缓存会自动驱逐最久未使用的条目，无需手动清理线程
 

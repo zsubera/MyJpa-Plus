@@ -1,5 +1,6 @@
 package com.zsubera.jpa.util;
 
+import com.zsubera.jpa.exception.MyJpaPlusException;
 import jakarta.persistence.criteria.CriteriaBuilder;
 import jakarta.persistence.criteria.Path;
 import jakarta.persistence.criteria.Predicate;
@@ -41,6 +42,14 @@ public final class InClauseBuilder {
 
     private static final Logger log = LoggerFactory.getLogger(InClauseBuilder.class);
 
+    /**
+     * IN 子句的硬限制。超过此限制时将抛出异常，防止数据库性能问题。
+     *
+     * <p>
+     * 可通过系统属性 {@code myjpa-plus.in-clause-hard-limit} 自定义。
+     */
+    private static final int HARD_LIMIT;
+
     /** 单个 IN 子句中的最大参数数量。可通过系统属性 {@code myjpa-plus.in-clause-max-size} 配置。 */
     public static final int MAX_IN_CLAUSE_SIZE;
 
@@ -62,6 +71,20 @@ public final class InClauseBuilder {
             }
         }
         MAX_IN_CLAUSE_SIZE = configured;
+
+        int hardConfigured = 50000;
+        String hardProp = System.getProperty("myjpa-plus.in-clause-hard-limit");
+        if (hardProp != null) {
+            try {
+                int val = Integer.parseInt(hardProp);
+                if (val > 0) {
+                    hardConfigured = val;
+                }
+            } catch (NumberFormatException ignored) {
+                // use default
+            }
+        }
+        HARD_LIMIT = hardConfigured;
     }
 
     private InClauseBuilder() {}
@@ -172,6 +195,11 @@ public final class InClauseBuilder {
     }
 
     private static Predicate buildBatchedIn(CriteriaBuilder cb, Path<?> path, Collection<?> values) {
+        if (values.size() > HARD_LIMIT) {
+            throw new MyJpaPlusException("IN clause size " + values.size() + " exceeds hard limit " + HARD_LIMIT
+                + ". Consider using temporary tables or subqueries for better performance. "
+                + "You can adjust the limit via -Dmyjpa-plus.in-clause-hard-limit=<value>.");
+        }
         if (values.size() > 10000) {
             log.warn("IN clause has {} values, which may cause performance issues. "
                 + "Consider using temporary tables or subqueries for better performance.", values.size());
@@ -197,6 +225,11 @@ public final class InClauseBuilder {
     }
 
     private static Predicate buildBatchedNotIn(CriteriaBuilder cb, Path<?> path, Collection<?> values) {
+        if (values.size() > HARD_LIMIT) {
+            throw new MyJpaPlusException("NOT IN clause size " + values.size() + " exceeds hard limit " + HARD_LIMIT
+                + ". Consider using temporary tables or subqueries for better performance. "
+                + "You can adjust the limit via -Dmyjpa-plus.in-clause-hard-limit=<value>.");
+        }
         if (values.size() > 10000) {
             log.warn("NOT IN clause has {} values, which may cause performance issues. "
                 + "Consider using temporary tables or subqueries for better performance.", values.size());

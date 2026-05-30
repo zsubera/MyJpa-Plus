@@ -2,9 +2,9 @@ package com.zsubera.jpa.projection;
 
 import com.zsubera.jpa.spec.ConditionBuilder;
 import com.zsubera.jpa.spec.ConditionNode;
+import com.zsubera.jpa.spec.PredicateHelper;
 import com.zsubera.jpa.spec.QuerySpec;
 import com.zsubera.jpa.spec.SFunction;
-import com.zsubera.jpa.util.InClauseBuilder;
 import com.zsubera.jpa.util.LambdaUtils;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import jakarta.persistence.EntityManager;
@@ -12,7 +12,6 @@ import jakarta.persistence.Tuple;
 import jakarta.persistence.TypedQuery;
 import jakarta.persistence.criteria.*;
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -438,47 +437,7 @@ public class ProjectionSpec<T> {
      */
     @SuppressWarnings({"unchecked", "rawtypes"})
     private Predicate resolveSimpleForJoin(ConditionNode.SimpleNode node, Join<?, ?> join, CriteriaBuilder cb) {
-        Path<?> fieldPath = join.get(node.fieldName);
-        return switch (node.op) {
-            case EQ -> node.value == null ? cb.isNull(fieldPath) : cb.equal(fieldPath, node.value);
-            case NE -> node.value == null ? cb.isNotNull(fieldPath) : cb.notEqual(fieldPath, node.value);
-            case GT -> cb.greaterThan((Expression<Comparable>)fieldPath, (Comparable)node.value);
-            case GE -> cb.greaterThanOrEqualTo((Expression<Comparable>)fieldPath, (Comparable)node.value);
-            case LT -> cb.lessThan((Expression<Comparable>)fieldPath, (Comparable)node.value);
-            case LE -> cb.lessThanOrEqualTo((Expression<Comparable>)fieldPath, (Comparable)node.value);
-            case LIKE ->
-                node.escapeChar != '\0' ? cb.like(fieldPath.as(String.class), (String)node.value, node.escapeChar)
-                    : cb.like(fieldPath.as(String.class), (String)node.value);
-            case NOT_LIKE ->
-                node.escapeChar != '\0' ? cb.notLike(fieldPath.as(String.class), (String)node.value, node.escapeChar)
-                    : cb.notLike(fieldPath.as(String.class), (String)node.value);
-            case IN -> {
-                if (node.value instanceof Collection) {
-                    yield InClauseBuilder.in(cb, fieldPath, (Collection<?>)node.value);
-                }
-                yield InClauseBuilder.in(cb, fieldPath, (Object[])node.value);
-            }
-            case NOT_IN -> {
-                if (node.value instanceof Collection) {
-                    yield InClauseBuilder.notIn(cb, fieldPath, (Collection<?>)node.value);
-                }
-                yield InClauseBuilder.notIn(cb, fieldPath, (Object[])node.value);
-            }
-            case BETWEEN -> {
-                Comparable<?>[] range = (Comparable<?>[])node.value;
-                yield cb.between((Expression<Comparable>)fieldPath, (Comparable)range[0], (Comparable)range[1]);
-            }
-            case NOT_BETWEEN -> {
-                Comparable<?>[] range = (Comparable<?>[])node.value;
-                yield cb.not(cb.between((Expression<Comparable>)fieldPath, (Comparable)range[0], (Comparable)range[1]));
-            }
-            case IS_NULL -> cb.isNull(fieldPath);
-            case IS_NOT_NULL -> cb.isNotNull(fieldPath);
-            case EQ_IGNORE_CASE ->
-                cb.equal(cb.upper(fieldPath.as(String.class)), ((String)node.value).toUpperCase(java.util.Locale.ROOT));
-            case LIKE_IGNORE_CASE ->
-                cb.like(cb.upper(fieldPath.as(String.class)), ((String)node.value).toUpperCase(java.util.Locale.ROOT));
-        };
+        return PredicateHelper.resolveSimplePredicate(join, node, cb);
     }
 
     /**

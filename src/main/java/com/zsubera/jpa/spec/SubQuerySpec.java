@@ -617,8 +617,9 @@ public class SubQuerySpec<S> {
         if (condition == null) {
             throw new IllegalArgumentException("condition must not be null");
         }
-        predicates.add(condition.apply(root));
-        return this;
+        throw new UnsupportedOperationException("where(Function) has been removed for security reasons. "
+            + "This method bypasses type safety and exposes SQL injection risk. "
+            + "Use type-safe methods like eq(), like(), contains(), etc. instead.");
     }
 
     /**

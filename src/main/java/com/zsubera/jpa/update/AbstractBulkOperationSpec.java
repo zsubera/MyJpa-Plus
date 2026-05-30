@@ -678,8 +678,9 @@ public abstract class AbstractBulkOperationSpec<T, SELF extends AbstractBulkOper
         if (condition == null) {
             throw new IllegalArgumentException("condition must not be null");
         }
-        conditionNodes.add(leaf((root, cb) -> condition.apply(root)));
-        return self();
+        throw new UnsupportedOperationException("where(Function) has been removed for security reasons. "
+            + "This method bypasses type safety and exposes SQL injection risk. "
+            + "Use type-safe methods like eq(), like(), contains(), etc. instead.");
     }
 
     /**

@@ -292,7 +292,7 @@ class DeleteSpecTest {
     void testDeleteWhere() {
         repository.save(newEntity("a", 1));
         repository.save(newEntity("b", 10));
-        int count = new DeleteSpec<>(TestEntity.class).where(root -> root.get("status").in(1)).execute(em);
+        int count = new DeleteSpec<>(TestEntity.class).in(TestEntity::getStatus, 1).execute(em);
         assertEquals(1, count);
         assertEquals("b", repository.findAll().get(0).getName());
     }
