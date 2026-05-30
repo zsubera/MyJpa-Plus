@@ -962,4 +962,209 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
         }
         return node.negate ? cb.not(cb.exists(subquery)) : cb.exists(subquery);
     }
+
+    // ---- 聚合函数便捷 API ----
+
+    /**
+     * 创建 COUNT 聚合表达式，用于 HAVING 子句中。
+     *
+     * <p>
+     * 使用示例：
+     *
+     * <pre>{@code
+     * qs.groupBy(User::getDepartment).having((root, cb) -> cb.greaterThan(QuerySpec.count(root, cb), 5L));
+     * }</pre>
+     *
+     * @param root 查询根路径
+     * @param cb CriteriaBuilder 实例
+     * @return COUNT 聚合表达式
+     * @param <T> 实体类型
+     */
+    public static <T> Expression<Long> count(Path<T> root, CriteriaBuilder cb) {
+        if (root == null) {
+            throw new IllegalArgumentException("root must not be null");
+        }
+        if (cb == null) {
+            throw new IllegalArgumentException("cb must not be null");
+        }
+        return cb.count(root);
+    }
+
+    /**
+     * 创建指定字段的 COUNT 聚合表达式，用于 HAVING 子句中。
+     *
+     * <p>
+     * 使用示例：
+     *
+     * <pre>{@code
+     * qs.groupBy(User::getDepartment).having((root, cb) -> cb.greaterThan(QuerySpec.count(root, User::getEmail, cb), 10L));
+     * }</pre>
+     *
+     * @param root 查询根路径
+     * @param field 要计数的字段方法引用
+     * @param cb CriteriaBuilder 实例
+     * @return COUNT 聚合表达式
+     * @param <T> 实体类型
+     */
+    public static <T> Expression<Long> count(Path<T> root, SFunction<T, ?> field, CriteriaBuilder cb) {
+        if (root == null) {
+            throw new IllegalArgumentException("root must not be null");
+        }
+        if (field == null) {
+            throw new IllegalArgumentException("field must not be null");
+        }
+        if (cb == null) {
+            throw new IllegalArgumentException("cb must not be null");
+        }
+        return cb.count(root.get(LambdaUtils.getPropertyName(field)));
+    }
+
+    /**
+     * 创建 COUNT DISTINCT 聚合表达式，用于 HAVING 子句中。
+     *
+     * @param root 查询根路径
+     * @param field 要计数的字段方法引用
+     * @param cb CriteriaBuilder 实例
+     * @return COUNT DISTINCT 聚合表达式
+     * @param <T> 实体类型
+     */
+    public static <T> Expression<Long> countDistinct(Path<T> root, SFunction<T, ?> field, CriteriaBuilder cb) {
+        if (root == null) {
+            throw new IllegalArgumentException("root must not be null");
+        }
+        if (field == null) {
+            throw new IllegalArgumentException("field must not be null");
+        }
+        if (cb == null) {
+            throw new IllegalArgumentException("cb must not be null");
+        }
+        return cb.countDistinct(root.get(LambdaUtils.getPropertyName(field)));
+    }
+
+    /**
+     * 创建 SUM 聚合表达式，用于 HAVING 子句中。
+     *
+     * <p>
+     * 使用示例：
+     *
+     * <pre>{@code
+     * qs.groupBy(Order::getCustomerId)
+     *     .having((root, cb) -> cb.greaterThan(QuerySpec.sum(root, Order::getAmount, cb), 1000.0));
+     * }</pre>
+     *
+     * @param root 查询根路径
+     * @param field 要求和的字段方法引用
+     * @param cb CriteriaBuilder 实例
+     * @return SUM 聚合表达式
+     * @param <T> 实体类型
+     */
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    public static <T> Expression<? extends Number> sum(Path<T> root, SFunction<T, ?> field, CriteriaBuilder cb) {
+        if (root == null) {
+            throw new IllegalArgumentException("root must not be null");
+        }
+        if (field == null) {
+            throw new IllegalArgumentException("field must not be null");
+        }
+        if (cb == null) {
+            throw new IllegalArgumentException("cb must not be null");
+        }
+        return cb.sum((Expression)root.get(LambdaUtils.getPropertyName(field)));
+    }
+
+    /**
+     * 创建 AVG 聚合表达式，用于 HAVING 子句中。
+     *
+     * <p>
+     * 使用示例：
+     *
+     * <pre>{@code
+     * qs.groupBy(Product::getCategory)
+     *     .having((root, cb) -> cb.greaterThan(QuerySpec.avg(root, Product::getPrice, cb), 50.0));
+     * }</pre>
+     *
+     * @param root 查询根路径
+     * @param field 要求平均值的字段方法引用
+     * @param cb CriteriaBuilder 实例
+     * @return AVG 聚合表达式
+     * @param <T> 实体类型
+     */
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    public static <T> Expression<Double> avg(Path<T> root, SFunction<T, ?> field, CriteriaBuilder cb) {
+        if (root == null) {
+            throw new IllegalArgumentException("root must not be null");
+        }
+        if (field == null) {
+            throw new IllegalArgumentException("field must not be null");
+        }
+        if (cb == null) {
+            throw new IllegalArgumentException("cb must not be null");
+        }
+        return cb.avg((Expression)root.get(LambdaUtils.getPropertyName(field)));
+    }
+
+    /**
+     * 创建 MAX 聚合表达式，用于 HAVING 子句中。
+     *
+     * <p>
+     * 使用示例：
+     *
+     * <pre>{@code
+     * qs.groupBy(Order::getCustomerId)
+     *     .having((root, cb) -> cb.greaterThan(QuerySpec.max(root, Order::getAmount, cb), 500.0));
+     * }</pre>
+     *
+     * @param root 查询根路径
+     * @param field 要求最大值的字段方法引用
+     * @param cb CriteriaBuilder 实例
+     * @return MAX 聚合表达式
+     * @param <T> 实体类型
+     * @param <Y> 可比较类型
+     */
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    public static <T, Y extends Comparable<? super Y>> Expression<Y> max(Path<T> root, SFunction<T, ?> field,
+        CriteriaBuilder cb) {
+        if (root == null) {
+            throw new IllegalArgumentException("root must not be null");
+        }
+        if (field == null) {
+            throw new IllegalArgumentException("field must not be null");
+        }
+        if (cb == null) {
+            throw new IllegalArgumentException("cb must not be null");
+        }
+        return cb.max((Expression)root.get(LambdaUtils.getPropertyName(field)));
+    }
+
+    /**
+     * 创建 MIN 聚合表达式，用于 HAVING 子句中。
+     *
+     * <p>
+     * 使用示例：
+     *
+     * <pre>{@code
+     * qs.groupBy(Product::getCategory).having((root, cb) -> cb.lessThan(QuerySpec.min(root, Product::getPrice, cb), 10.0));
+     * }</pre>
+     *
+     * @param root 查询根路径
+     * @param field 要求最小值的字段方法引用
+     * @param cb CriteriaBuilder 实例
+     * @return MIN 聚合表达式
+     * @param <T> 实体类型
+     * @param <Y> 可比较类型
+     */
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    public static <T, Y extends Comparable<? super Y>> Expression<Y> min(Path<T> root, SFunction<T, ?> field,
+        CriteriaBuilder cb) {
+        if (root == null) {
+            throw new IllegalArgumentException("root must not be null");
+        }
+        if (field == null) {
+            throw new IllegalArgumentException("field must not be null");
+        }
+        if (cb == null) {
+            throw new IllegalArgumentException("cb must not be null");
+        }
+        return cb.min((Expression)root.get(LambdaUtils.getPropertyName(field)));
+    }
 }

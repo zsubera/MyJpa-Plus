@@ -196,14 +196,11 @@ class ProjectionSpecTest {
         child.setParent(p1);
         testEntityManager.persistAndFlush(child);
 
-        List<Tuple> results =
-            new ProjectionSpec<>(TestEntity.class)
-                .select(
-                    TestEntity::getName)
-                .join(TestEntity::getParent,
-                    (com.zsubera.jpa.projection.ProjectionSpec.JoinGroup<com.zsubera.jpa.spec.ParentEntity> j) -> j
-                        .ne(com.zsubera.jpa.spec.ParentEntity::getCategory, "user"))
-                .toTupleQuery(em).getResultList();
+        List<Tuple> results = new ProjectionSpec<>(TestEntity.class).select(TestEntity::getName).join(
+            TestEntity::getParent,
+            (com.zsubera.jpa.projection.ProjectionSpec.ProjectionJoinGroup<com.zsubera.jpa.spec.ParentEntity> j) -> j
+                .ne(com.zsubera.jpa.spec.ParentEntity::getCategory, "user"))
+            .toTupleQuery(em).getResultList();
 
         assertEquals(1, results.size());
     }
@@ -221,12 +218,10 @@ class ProjectionSpecTest {
         child.setParent(p1);
         testEntityManager.persistAndFlush(child);
 
-        List<Tuple> results = new ProjectionSpec<>(TestEntity.class)
-            .select(
-                TestEntity::getName)
-            .join(TestEntity::getParent,
-                (com.zsubera.jpa.projection.ProjectionSpec.JoinGroup<com.zsubera.jpa.spec.ParentEntity> j) -> j
-                    .contains(com.zsubera.jpa.spec.ParentEntity::getCategory, "adm"))
+        List<Tuple> results = new ProjectionSpec<>(TestEntity.class).select(TestEntity::getName).join(
+            TestEntity::getParent,
+            (com.zsubera.jpa.projection.ProjectionSpec.ProjectionJoinGroup<com.zsubera.jpa.spec.ParentEntity> j) -> j
+                .contains(com.zsubera.jpa.spec.ParentEntity::getCategory, "adm"))
             .toTupleQuery(em).getResultList();
 
         assertEquals(1, results.size());
@@ -247,8 +242,8 @@ class ProjectionSpecTest {
 
         List<Tuple> results = new ProjectionSpec<>(TestEntity.class).select(TestEntity::getName)
             .join(TestEntity::getParent,
-                (com.zsubera.jpa.projection.ProjectionSpec.JoinGroup<com.zsubera.jpa.spec.ParentEntity> j) -> j
-                    .gt(com.zsubera.jpa.spec.ParentEntity::getLevel, 5))
+                (com.zsubera.jpa.projection.ProjectionSpec.ProjectionJoinGroup<
+                    com.zsubera.jpa.spec.ParentEntity> j) -> j.gt(com.zsubera.jpa.spec.ParentEntity::getLevel, 5))
             .toTupleQuery(em).getResultList();
 
         assertEquals(1, results.size());
@@ -269,8 +264,8 @@ class ProjectionSpecTest {
 
         List<Tuple> results = new ProjectionSpec<>(TestEntity.class).select(TestEntity::getName)
             .join(TestEntity::getParent,
-                (com.zsubera.jpa.projection.ProjectionSpec.JoinGroup<com.zsubera.jpa.spec.ParentEntity> j) -> j
-                    .lt(com.zsubera.jpa.spec.ParentEntity::getLevel, 20))
+                (com.zsubera.jpa.projection.ProjectionSpec.ProjectionJoinGroup<
+                    com.zsubera.jpa.spec.ParentEntity> j) -> j.lt(com.zsubera.jpa.spec.ParentEntity::getLevel, 20))
             .toTupleQuery(em).getResultList();
 
         assertEquals(1, results.size());
@@ -286,8 +281,8 @@ class ProjectionSpecTest {
 
         List<Tuple> results = new ProjectionSpec<>(TestEntity.class).select(TestEntity::getName)
             .leftJoin(TestEntity::getParent,
-                (com.zsubera.jpa.projection.ProjectionSpec.JoinGroup<com.zsubera.jpa.spec.ParentEntity> j) -> j
-                    .isNull(com.zsubera.jpa.spec.ParentEntity::getCategory))
+                (com.zsubera.jpa.projection.ProjectionSpec.ProjectionJoinGroup<
+                    com.zsubera.jpa.spec.ParentEntity> j) -> j.isNull(com.zsubera.jpa.spec.ParentEntity::getCategory))
             .toTupleQuery(em).getResultList();
 
         assertEquals(1, results.size());
@@ -306,14 +301,11 @@ class ProjectionSpecTest {
         child.setParent(p1);
         testEntityManager.persistAndFlush(child);
 
-        List<Tuple> results =
-            new ProjectionSpec<>(TestEntity.class)
-                .select(
-                    TestEntity::getName)
-                .join(TestEntity::getParent,
-                    (com.zsubera.jpa.projection.ProjectionSpec.JoinGroup<com.zsubera.jpa.spec.ParentEntity> j) -> j
-                        .isNotNull(com.zsubera.jpa.spec.ParentEntity::getCategory))
-                .toTupleQuery(em).getResultList();
+        List<Tuple> results = new ProjectionSpec<>(TestEntity.class).select(TestEntity::getName).join(
+            TestEntity::getParent,
+            (com.zsubera.jpa.projection.ProjectionSpec.ProjectionJoinGroup<com.zsubera.jpa.spec.ParentEntity> j) -> j
+                .isNotNull(com.zsubera.jpa.spec.ParentEntity::getCategory))
+            .toTupleQuery(em).getResultList();
 
         assertEquals(1, results.size());
     }
@@ -337,10 +329,10 @@ class ProjectionSpecTest {
         orphan.setParent(null);
         testEntityManager.persistAndFlush(orphan);
 
-        List<Tuple> results = new ProjectionSpec<>(TestEntity.class).select(TestEntity::getName)
-            .leftJoin(TestEntity::getParent,
-                (com.zsubera.jpa.projection.ProjectionSpec.JoinGroup<com.zsubera.jpa.spec.ParentEntity> j) -> j
-                    .eq(com.zsubera.jpa.spec.ParentEntity::getCategory, "admin"))
+        List<Tuple> results = new ProjectionSpec<>(TestEntity.class).select(TestEntity::getName).leftJoin(
+            TestEntity::getParent,
+            (com.zsubera.jpa.projection.ProjectionSpec.ProjectionJoinGroup<com.zsubera.jpa.spec.ParentEntity> j) -> j
+                .eq(com.zsubera.jpa.spec.ParentEntity::getCategory, "admin"))
             .where(q -> q.isNotNull(TestEntity::getParent)).toTupleQuery(em).getResultList();
 
         assertEquals(1, results.size());
@@ -391,10 +383,10 @@ class ProjectionSpecTest {
             testEntityManager.persistAndFlush(child);
         }
 
-        Page<Tuple> page = new ProjectionSpec<>(TestEntity.class).select(TestEntity::getName)
-            .join(TestEntity::getParent,
-                (com.zsubera.jpa.projection.ProjectionSpec.JoinGroup<com.zsubera.jpa.spec.ParentEntity> j) -> j
-                    .eq(com.zsubera.jpa.spec.ParentEntity::getCategory, "admin"))
+        Page<Tuple> page = new ProjectionSpec<>(TestEntity.class).select(TestEntity::getName).join(
+            TestEntity::getParent,
+            (com.zsubera.jpa.projection.ProjectionSpec.ProjectionJoinGroup<com.zsubera.jpa.spec.ParentEntity> j) -> j
+                .eq(com.zsubera.jpa.spec.ParentEntity::getCategory, "admin"))
             .where(q -> q.ge(TestEntity::getStatus, 0)).orderByAsc(TestEntity::getName)
             .findPage(em, PageRequest.of(0, 3));
 
@@ -405,12 +397,11 @@ class ProjectionSpecTest {
     @Test
     void testJoinGroupLikeNullValueThrowsException() {
         assertThrows(Exception.class, () -> {
-            new ProjectionSpec<>(TestEntity.class)
-                .select(
-                    TestEntity::getName)
+            new ProjectionSpec<>(TestEntity.class).select(TestEntity::getName)
                 .join(TestEntity::getParent,
-                    (com.zsubera.jpa.projection.ProjectionSpec.JoinGroup<com.zsubera.jpa.spec.ParentEntity> j) -> j
-                        .like(com.zsubera.jpa.spec.ParentEntity::getCategory, null))
+                    (com.zsubera.jpa.projection.ProjectionSpec.ProjectionJoinGroup<
+                        com.zsubera.jpa.spec.ParentEntity> j) -> j.like(com.zsubera.jpa.spec.ParentEntity::getCategory,
+                            null))
                 .toTupleQuery(em).getResultList();
         });
     }
@@ -418,10 +409,9 @@ class ProjectionSpecTest {
     @Test
     void testJoinGroupGtNullValueThrowsException() {
         assertThrows(IllegalArgumentException.class, () -> {
-            new ProjectionSpec<>(TestEntity.class).select(TestEntity::getName)
-                .join(TestEntity::getParent,
-                    (com.zsubera.jpa.projection.ProjectionSpec.JoinGroup<com.zsubera.jpa.spec.ParentEntity> j) -> j
-                        .gt(com.zsubera.jpa.spec.ParentEntity::getLevel, null))
+            new ProjectionSpec<>(TestEntity.class).select(TestEntity::getName).join(TestEntity::getParent,
+                (com.zsubera.jpa.projection.ProjectionSpec.ProjectionJoinGroup<
+                    com.zsubera.jpa.spec.ParentEntity> j) -> j.gt(com.zsubera.jpa.spec.ParentEntity::getLevel, null))
                 .toTupleQuery(em).getResultList();
         });
     }
@@ -429,10 +419,9 @@ class ProjectionSpecTest {
     @Test
     void testJoinGroupLtNullValueThrowsException() {
         assertThrows(IllegalArgumentException.class, () -> {
-            new ProjectionSpec<>(TestEntity.class).select(TestEntity::getName)
-                .join(TestEntity::getParent,
-                    (com.zsubera.jpa.projection.ProjectionSpec.JoinGroup<com.zsubera.jpa.spec.ParentEntity> j) -> j
-                        .lt(com.zsubera.jpa.spec.ParentEntity::getLevel, null))
+            new ProjectionSpec<>(TestEntity.class).select(TestEntity::getName).join(TestEntity::getParent,
+                (com.zsubera.jpa.projection.ProjectionSpec.ProjectionJoinGroup<
+                    com.zsubera.jpa.spec.ParentEntity> j) -> j.lt(com.zsubera.jpa.spec.ParentEntity::getLevel, null))
                 .toTupleQuery(em).getResultList();
         });
     }

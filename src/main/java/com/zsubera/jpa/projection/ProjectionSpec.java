@@ -56,7 +56,7 @@ public class ProjectionSpec<T> {
         /** Cached conditions from the first Consumer invocation to avoid re-computation. */
         List<ConditionNode> cachedConditions;
 
-        <E> JoinSpec(String fieldName, Consumer<JoinGroup<E>> config, boolean left) {
+        <E> JoinSpec(String fieldName, Consumer<ProjectionJoinGroup<E>> config, boolean left) {
             this.fieldName = fieldName;
             this.config = config;
             this.left = left;
@@ -67,8 +67,9 @@ public class ProjectionSpec<T> {
             if (cachedConditions == null) {
                 try {
                     @SuppressWarnings("unchecked")
-                    Consumer<JoinGroup<Object>> cfg = (Consumer<JoinGroup<Object>>)(Consumer<?>)config;
-                    JoinGroup<Object> group = JoinGroup.create();
+                    Consumer<ProjectionJoinGroup<Object>> cfg =
+                        (Consumer<ProjectionJoinGroup<Object>>)(Consumer<?>)config;
+                    ProjectionJoinGroup<Object> group = ProjectionJoinGroup.create();
                     cfg.accept(group);
                     cachedConditions = group.conditions();
                 } catch (IllegalArgumentException e) {
@@ -90,20 +91,20 @@ public class ProjectionSpec<T> {
      *
      * @param <E> JOIN 目标实体类型
      */
-    public static final class JoinGroup<E> implements ConditionBuilder<E, JoinGroup<E>> {
+    public static final class ProjectionJoinGroup<E> implements ConditionBuilder<E, ProjectionJoinGroup<E>> {
 
         private final List<ConditionNode> conditions = new ArrayList<>();
 
-        private JoinGroup() {}
+        private ProjectionJoinGroup() {}
 
         /**
-         * 创建 JoinGroup 实例。
+         * 创建 ProjectionJoinGroup 实例。
          *
          * @param <E> JOIN 目标实体类型
-         * @return 新的 JoinGroup 实例
+         * @return 新的 ProjectionJoinGroup 实例
          */
-        static <E> JoinGroup<E> create() {
-            return new JoinGroup<>();
+        static <E> ProjectionJoinGroup<E> create() {
+            return new ProjectionJoinGroup<>();
         }
 
         @Override
@@ -170,7 +171,7 @@ public class ProjectionSpec<T> {
      * @param <E> JOIN 目标实体类型
      * @return 当前 ProjectionSpec 实例，支持链式调用
      */
-    public <E> ProjectionSpec<T> join(SFunction<T, ?> field, Consumer<JoinGroup<E>> config) {
+    public <E> ProjectionSpec<T> join(SFunction<T, ?> field, Consumer<ProjectionJoinGroup<E>> config) {
         if (field == null) {
             throw new IllegalArgumentException("field must not be null");
         }
@@ -192,7 +193,7 @@ public class ProjectionSpec<T> {
      * @param <E> JOIN 目标实体类型
      * @return 当前 ProjectionSpec 实例，支持链式调用
      */
-    public <E> ProjectionSpec<T> leftJoin(SFunction<T, ?> field, Consumer<JoinGroup<E>> config) {
+    public <E> ProjectionSpec<T> leftJoin(SFunction<T, ?> field, Consumer<ProjectionJoinGroup<E>> config) {
         if (field == null) {
             throw new IllegalArgumentException("field must not be null");
         }

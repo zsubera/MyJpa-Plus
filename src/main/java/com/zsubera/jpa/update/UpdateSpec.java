@@ -169,7 +169,7 @@ public class UpdateSpec<T> extends AbstractBulkOperationSpec<T, UpdateSpec<T>> {
         }
         // 审计日志：记录无条件更新操作及调用栈，便于生产环境追踪危险操作
         log.warn("AUDIT: Executing unconditional UPDATE on {} — this will affect ALL rows! Call stack: {}",
-            entityClass.getSimpleName(), getCallStack());
+            entityClass.getSimpleName(), AuditUtils.getCallStack());
         CriteriaBuilder cb = em.getCriteriaBuilder();
         CriteriaUpdate<T> update = cb.createCriteriaUpdate(entityClass);
         Root<T> root = update.from(entityClass);
@@ -305,22 +305,4 @@ public class UpdateSpec<T> extends AbstractBulkOperationSpec<T, UpdateSpec<T>> {
         return em.createQuery(update).executeUpdate();
     }
 
-    /**
-     * 获取调用栈信息，用于审计日志。
-     *
-     * @return 格式化的调用栈字符串
-     */
-    private String getCallStack() {
-        StackTraceElement[] stack = Thread.currentThread().getStackTrace();
-        // 跳过 getStackTrace() 和 getCallStack() 本身，从调用者开始
-        StringBuilder sb = new StringBuilder();
-        for (int i = 2; i < stack.length && i < 8; i++) {
-            if (i > 2) {
-                sb.append(" <- ");
-            }
-            sb.append(stack[i].getClassName()).append(".").append(stack[i].getMethodName());
-            sb.append(":").append(stack[i].getLineNumber());
-        }
-        return sb.toString();
-    }
 }

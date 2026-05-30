@@ -352,20 +352,19 @@ class ConditionBuilderValidationTest {
 
     @Test
     @SuppressWarnings("deprecation")
-    void testWhereBiFunctionIsDeprecatedButFunctional() {
+    void testWhereBiFunctionIsDeprecatedAndRemoved() {
         QuerySpec<TestEntity> qs = new QuerySpec<>();
-        // where(BiFunction) is deprecated but should still work for backward compatibility
-        qs.where((path, cb) -> cb.equal(path.get("name"), "test"));
-        assertFalse(qs.conditions().isEmpty(), "where(BiFunction) should add a condition");
+        // where(BiFunction) is deprecated and removed for security reasons
+        assertThrows(UnsupportedOperationException.class,
+            () -> qs.where((path, cb) -> cb.equal(path.get("name"), "test")));
     }
 
     @Test
     @SuppressWarnings("deprecation")
-    void testWhereFunctionIsDeprecatedButFunctional() {
+    void testWhereFunctionIsDeprecatedAndRemoved() {
         QuerySpec<TestEntity> qs = new QuerySpec<>();
-        // where(Function) is deprecated but should still work for backward compatibility
-        qs.where(root -> root.get("name").in("test"));
-        assertFalse(qs.conditions().isEmpty(), "where(Function) should add a condition");
+        // where(Function) is deprecated and removed for security reasons
+        assertThrows(UnsupportedOperationException.class, () -> qs.where(root -> root.get("name").in("test")));
     }
 
     @Test

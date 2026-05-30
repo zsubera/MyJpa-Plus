@@ -28,7 +28,7 @@ import org.springframework.lang.Nullable;
  * <li>{@link ConditionBuilder} — 查询构建器</li>
  * <li>{@link ConditionNode.Op} — 运算符枚举</li>
  * <li>{@link QuerySpec#resolveSimple} — 查询条件解析</li>
- * <li>{@link com.zsubera.jpa.projection.ProjectionSpec.JoinGroup} — 投影 JOIN 条件</li>
+ * <li>{@link com.zsubera.jpa.projection.ProjectionSpec.ProjectionJoinGroup} — 投影 JOIN 条件</li>
  * <li>{@link com.zsubera.jpa.update.AbstractBulkOperationSpec} — 批量操作条件</li>
  * <li>此类（SubQuerySpec）— 子查询条件</li>
  * </ol>
@@ -264,11 +264,8 @@ public class SubQuerySpec<S> {
      */
     @Deprecated(since = "1.1.0", forRemoval = true)
     public SubQuerySpec<S> like(SFunction<S, ?> field, String value) {
-        if (value == null) {
-            throw new IllegalArgumentException("value must not be null");
-        }
-        predicates.add(PredicateHelper.like(root, property(field), value, cb));
-        return this;
+        throw new UnsupportedOperationException("like() has been removed in 1.1.0. Use likeSafe() instead. "
+            + "The original like() does not escape SQL wildcards, posing a security risk.");
     }
 
     /**
@@ -288,11 +285,8 @@ public class SubQuerySpec<S> {
      */
     @Deprecated(since = "1.1.0", forRemoval = true)
     public SubQuerySpec<S> notLike(SFunction<S, ?> field, String value) {
-        if (value == null) {
-            throw new IllegalArgumentException("value must not be null");
-        }
-        predicates.add(PredicateHelper.notLike(root, property(field), value, cb));
-        return this;
+        throw new UnsupportedOperationException("notLike() has been removed in 1.1.0. Use notLikeSafe() instead. "
+            + "The original notLike() does not escape SQL wildcards, posing a security risk.");
     }
 
     /**

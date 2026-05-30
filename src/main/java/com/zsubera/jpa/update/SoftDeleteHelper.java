@@ -13,6 +13,7 @@ import java.lang.reflect.Modifier;
 import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.atomic.AtomicInteger;
 import org.slf4j.Logger;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.util.ConcurrentReferenceHashMap;
@@ -53,6 +54,9 @@ public final class SoftDeleteHelper {
 
     // 没有@SoftDelete字段的实体的哨兵值（避免在 中出现空缓存）
     private static final String NO_FIELD_SENTINEL = "\0";
+
+    // 缓存插入计数器，用于避免频繁调用 ConcurrentReferenceHashMap.size()（该方法遍历所有桶）
+    private static final AtomicInteger insertCounter = new AtomicInteger(0);
 
     // 缓存：entityClass ->字段名（或“无字段”的哨兵）
     // 使用ConcurrentHashMap实现线程安全访问;实体类别数量在实际中是有限的
@@ -212,15 +216,26 @@ public final class SoftDeleteHelper {
      * @return 字段名称，如果未找到 {@code @SoftDelete} 字段则返回 {@code null}
      */
     public static String findSoftDeleteField(Class<?> entityClass) {
-        if (FIELD_CACHE.size() > MAX_CACHE_SIZE) {
+        // 使用计数器检查缓存大小，避免频繁调用 ConcurrentReferenceHashMap.size()（该方法遍历所有桶）
+        if (insertCounter.get() > MAX_CACHE_SIZE) {
             log.warn(
-                "SoftDeleteHelper field cache size ({}) exceeds limit ({}). "
+                "SoftDeleteHelper field cache insert count ({}) exceeds limit ({}). "
                     + "This may indicate a class loader leak or excessive entity classes.",
-                FIELD_CACHE.size(), MAX_CACHE_SIZE);
+                insertCounter.get(), MAX_CACHE_SIZE);
             // Evict stale entries (null key/value) to prevent unbounded growth
-            FIELD_CACHE.entrySet().removeIf(e -> e.getKey() == null || e.getValue() == null);
+            int evicted = 0;
+            for (var entry : FIELD_CACHE.entrySet()) {
+                if (entry.getKey() == null || entry.getValue() == null) {
+                    FIELD_CACHE.remove(entry.getKey());
+                    evicted++;
+                }
+            }
+            if (evicted > 0) {
+                insertCounter.addAndGet(-evicted);
+            }
         }
         String result = FIELD_CACHE.computeIfAbsent(entityClass, cls -> {
+            insertCounter.incrementAndGet();
             // Try getter-based resolution first (Java 17+ compatible)
             String viaGetter = resolveSoftDeleteFieldNameViaGetter(cls);
             if (viaGetter != null) {

@@ -120,7 +120,7 @@ public class DeleteSpec<T> extends AbstractBulkOperationSpec<T, DeleteSpec<T>> {
         }
         // 审计日志：记录无条件删除操作及调用栈，便于生产环境追踪危险操作
         log.warn("AUDIT: Executing unconditional DELETE on {} — this will affect ALL rows! Call stack: {}",
-            entityClass.getSimpleName(), getCallStack());
+            entityClass.getSimpleName(), AuditUtils.getCallStack());
         CriteriaBuilder cb = em.getCriteriaBuilder();
         CriteriaDelete<T> delete = cb.createCriteriaDelete(entityClass);
         delete.from(entityClass);
@@ -243,22 +243,4 @@ public class DeleteSpec<T> extends AbstractBulkOperationSpec<T, DeleteSpec<T>> {
         return em.createQuery(delete).executeUpdate();
     }
 
-    /**
-     * 获取调用栈信息，用于审计日志。
-     *
-     * @return 格式化的调用栈字符串
-     */
-    private String getCallStack() {
-        StackTraceElement[] stack = Thread.currentThread().getStackTrace();
-        // 跳过 getStackTrace() 和 getCallStack() 本身，从调用者开始
-        StringBuilder sb = new StringBuilder();
-        for (int i = 2; i < stack.length && i < 8; i++) {
-            if (i > 2) {
-                sb.append(" <- ");
-            }
-            sb.append(stack[i].getClassName()).append(".").append(stack[i].getMethodName());
-            sb.append(":").append(stack[i].getLineNumber());
-        }
-        return sb.toString();
-    }
 }
