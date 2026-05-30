@@ -648,13 +648,13 @@ class UpdateSpecTest {
     @Test
     void testUpdateBetweenTypeMismatchThrowsException() {
         assertThrows(IllegalArgumentException.class,
-            () -> new UpdateSpec<>(TestEntity.class).between(TestEntity::getStatus, 1, 2L));
+            () -> new UpdateSpec<>(TestEntity.class).between(TestEntity::getName, 1, "abc"));
     }
 
     @Test
     void testUpdateNotBetweenTypeMismatchThrowsException() {
         assertThrows(IllegalArgumentException.class,
-            () -> new UpdateSpec<>(TestEntity.class).notBetween(TestEntity::getStatus, 1, 2L));
+            () -> new UpdateSpec<>(TestEntity.class).notBetween(TestEntity::getName, 1, "abc"));
     }
 
     @Test

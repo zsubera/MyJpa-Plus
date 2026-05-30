@@ -62,7 +62,7 @@ public final class LambdaUtils {
      * 使用 ConcurrentHashMap 替代 synchronizedMap，消除高并发场景下的锁竞争。 缓存大小由 lambda 表达式数量决定，应用中是有限的。
      *
      * <p>
-     * 当缓存大小超过 {@link #MAX_CACHE_SIZE} 时会自动清空，防止热部署场景下无限增长。清空后已有的 lambda 元数据会在下次访问时重新解析（无副作用）。
+     * 当缓存大小超过 {@link #MAX_CACHE_SIZE} 时会自动驱逐最旧的 25% 条目，防止热部署场景下无限增长。驱逐后已有的 lambda 元数据会在下次访问时重新解析（无副作用）。
      */
     private static final Map<String, String> CACHE = new ConcurrentHashMap<>(4096);
 
@@ -108,11 +108,13 @@ public final class LambdaUtils {
             // 使用 AtomicBoolean 确保同一时刻只有一个线程执行清理操作，避免多线程同时触发缓存重建
             if (CACHE.size() > MAX_CACHE_SIZE && CLEANING.compareAndSet(false, true)) {
                 try {
+                    int toEvict = MAX_CACHE_SIZE / 4;
                     if (log.isDebugEnabled()) {
-                        log.debug("Lambda cache size ({}) exceeds limit ({}). Clearing cache to prevent memory leak.",
-                            CACHE.size(), MAX_CACHE_SIZE);
+                        log.debug("Lambda cache size ({}) exceeds limit ({}). Evicting oldest {} entries.",
+                            CACHE.size(), MAX_CACHE_SIZE, toEvict);
                     }
-                    CACHE.clear();
+                    // Evict a portion of entries to avoid full cache rebuild
+                    CACHE.keySet().stream().limit(toEvict).forEach(CACHE::remove);
                 } finally {
                     CLEANING.set(false);
                 }

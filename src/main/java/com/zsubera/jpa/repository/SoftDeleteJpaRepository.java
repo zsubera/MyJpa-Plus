@@ -5,6 +5,8 @@ import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import jakarta.persistence.EntityManager;
 import java.util.List;
 import java.util.Optional;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
@@ -41,6 +43,8 @@ import org.springframework.lang.Nullable;
  */
 @NoRepositoryBean
 public class SoftDeleteJpaRepository<T, ID> extends SimpleJpaRepository<T, ID> {
+
+    private static final Logger log = LoggerFactory.getLogger(SoftDeleteJpaRepository.class);
 
     private final Class<T> domainClass;
     private final EntityManager entityManager;
@@ -99,6 +103,10 @@ public class SoftDeleteJpaRepository<T, ID> extends SimpleJpaRepository<T, ID> {
             return spec == null ? (root, query, cb) -> cb.conjunction() : spec;
         }
         Specification<T> softDeleteSpec = SoftDeleteHelper.isNotDeleted(domainClass);
+        if (softDeleteSpec == null) {
+            log.debug("No soft delete field found for {}, skipping filter", domainClass.getSimpleName());
+            return spec == null ? (root, query, cb) -> cb.conjunction() : spec;
+        }
         return spec == null ? softDeleteSpec : spec.and(softDeleteSpec);
     }
 
@@ -169,11 +177,17 @@ public class SoftDeleteJpaRepository<T, ID> extends SimpleJpaRepository<T, ID> {
         if (id == null) {
             return Optional.empty();
         }
-        // 构建只包含 ID 条件的 Specification，软删除过滤由 findOne 自动处理
-        Specification<T> spec = (root, query, cb) -> {
-            String idFieldName = EntityClassResolver.resolveIdFieldName(domainClass);
-            return cb.equal(root.get(idFieldName), id);
-        };
-        return findOne(spec);
+        try {
+            // 构建只包含 ID 条件的 Specification，软删除过滤由 findOne 自动处理
+            Specification<T> spec = (root, query, cb) -> {
+                String idFieldName = EntityClassResolver.resolveIdFieldName(domainClass);
+                return cb.equal(root.get(idFieldName), id);
+            };
+            return findOne(spec);
+        } catch (IllegalStateException e) {
+            log.warn("Failed to resolve ID field for {}, falling back to default findById", domainClass.getSimpleName(),
+                e);
+            return super.findById(id);
+        }
     }
 }

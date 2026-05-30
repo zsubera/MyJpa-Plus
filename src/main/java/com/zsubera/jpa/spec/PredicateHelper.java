@@ -41,7 +41,7 @@ public final class PredicateHelper {
      * 检查项：
      * <ul>
      * <li>start 和 end 均不能为 null</li>
-     * <li>start 和 end 必须为兼容类型（双向 isAssignableFrom 检查）</li>
+     * <li>start 和 end 必须为兼容类型（双向 isAssignableFrom 检查，或均为 Number 类型）</li>
      * <li>start 不能大于 end</li>
      * </ul>
      *
@@ -58,8 +58,18 @@ public final class PredicateHelper {
             throw new IllegalArgumentException("end must not be null");
         }
         if (!start.getClass().isAssignableFrom(end.getClass()) && !end.getClass().isAssignableFrom(start.getClass())) {
-            throw new IllegalArgumentException("start and end must be compatible types, but got "
-                + start.getClass().getName() + " and " + end.getClass().getName());
+            // Allow cross-numeric-type comparison (e.g., Integer vs Long)
+            if (!(start instanceof Number) || !(end instanceof Number)) {
+                throw new IllegalArgumentException("start and end must be compatible types, but got "
+                    + start.getClass().getName() + " and " + end.getClass().getName());
+            }
+            // Use doubleValue() for cross-numeric-type comparison
+            double startVal = ((Number)start).doubleValue();
+            double endVal = ((Number)end).doubleValue();
+            if (startVal > endVal) {
+                throw new IllegalArgumentException("start must not be greater than end");
+            }
+            return;
         }
         if (((Comparable)start).compareTo(end) > 0) {
             throw new IllegalArgumentException("start must not be greater than end");
@@ -474,7 +484,7 @@ public final class PredicateHelper {
      * @param node 简单条件节点
      * @param cb CriteriaBuilder 实例
      * @return 解析后的 Predicate
-     * @throws AssertionError 如果遇到未处理的 Op 枚举值（编程错误）
+     * @throws IllegalArgumentException 如果遇到未处理的 Op 枚举值（编程错误）
      */
     @SuppressWarnings({"unchecked", "rawtypes"})
     public static Predicate resolveSimplePredicate(Path<?> path, ConditionNode.SimpleNode node, CriteriaBuilder cb) {
@@ -553,7 +563,7 @@ public final class PredicateHelper {
                     .not(cb.between((Expression<Comparable>)fieldPath, (Comparable)range[0], (Comparable)range[1]));
             }
             default:
-                throw new AssertionError("Unhandled Op: " + node.op);
+                throw new IllegalArgumentException("Unhandled Op: " + node.op);
         }
     }
 

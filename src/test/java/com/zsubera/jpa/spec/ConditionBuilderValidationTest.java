@@ -380,13 +380,27 @@ class ConditionBuilderValidationTest {
     @Test
     void testBetweenTypeMismatchThrowsException() {
         QuerySpec<TestEntity> qs = new QuerySpec<>();
-        assertThrows(IllegalArgumentException.class, () -> qs.between(TestEntity::getStatus, 1, 2L));
+        assertThrows(IllegalArgumentException.class, () -> qs.between(TestEntity::getName, 1, "abc"));
     }
 
     @Test
     void testNotBetweenTypeMismatchThrowsException() {
         QuerySpec<TestEntity> qs = new QuerySpec<>();
-        assertThrows(IllegalArgumentException.class, () -> qs.notBetween(TestEntity::getStatus, 1, 2L));
+        assertThrows(IllegalArgumentException.class, () -> qs.notBetween(TestEntity::getName, 1, "abc"));
+    }
+
+    @Test
+    void testBetweenCrossNumericTypeAllowed() {
+        // Integer vs Long should be allowed as both are Number types
+        QuerySpec<TestEntity> qs = new QuerySpec<>();
+        assertDoesNotThrow(() -> qs.between(TestEntity::getStatus, 1, 2L));
+    }
+
+    @Test
+    void testNotBetweenCrossNumericTypeAllowed() {
+        // Integer vs Long should be allowed as both are Number types
+        QuerySpec<TestEntity> qs = new QuerySpec<>();
+        assertDoesNotThrow(() -> qs.notBetween(TestEntity::getStatus, 1, 2L));
     }
 
     private TestEntity newEntity(String name, int status) {

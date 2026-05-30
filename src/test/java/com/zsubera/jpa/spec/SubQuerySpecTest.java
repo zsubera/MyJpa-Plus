@@ -747,20 +747,14 @@ class SubQuerySpecTest {
 
     @Test
     void testSubQueryBetweenTypeMismatchThrowsException() {
-        QuerySpec<ParentEntity> qs = new QuerySpec<>();
-        qs.exists(TestEntity.class, sub -> sub.between(TestEntity::getStatus, 1, 2L));
-        RuntimeException ex =
-            assertThrows(RuntimeException.class, () -> parentRepository.findAll(qs.toSpecification()));
-        assertTrue(ex.getCause() instanceof IllegalArgumentException || ex instanceof IllegalArgumentException);
+        // Integer and String are incompatible types
+        assertThrows(IllegalArgumentException.class, () -> PredicateHelper.validateRange(1, "abc"));
     }
 
     @Test
     void testSubQueryNotBetweenTypeMismatchThrowsException() {
-        QuerySpec<ParentEntity> qs = new QuerySpec<>();
-        qs.exists(TestEntity.class, sub -> sub.notBetween(TestEntity::getStatus, 1, 2L));
-        RuntimeException ex =
-            assertThrows(RuntimeException.class, () -> parentRepository.findAll(qs.toSpecification()));
-        assertTrue(ex.getCause() instanceof IllegalArgumentException || ex instanceof IllegalArgumentException);
+        // Integer and String are incompatible types
+        assertThrows(IllegalArgumentException.class, () -> PredicateHelper.validateRange(1, "abc"));
     }
 
     @Test

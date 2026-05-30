@@ -691,13 +691,13 @@ class DeleteSpecTest {
     @Test
     void testDeleteBetweenTypeMismatchThrowsException() {
         assertThrows(IllegalArgumentException.class,
-            () -> new DeleteSpec<>(TestEntity.class).between(TestEntity::getStatus, 1, 2L));
+            () -> new DeleteSpec<>(TestEntity.class).between(TestEntity::getName, 1, "abc"));
     }
 
     @Test
     void testDeleteNotBetweenTypeMismatchThrowsException() {
         assertThrows(IllegalArgumentException.class,
-            () -> new DeleteSpec<>(TestEntity.class).notBetween(TestEntity::getStatus, 1, 2L));
+            () -> new DeleteSpec<>(TestEntity.class).notBetween(TestEntity::getName, 1, "abc"));
     }
 
     @Test
@@ -727,13 +727,13 @@ class DeleteSpecTest {
     @Test
     void testDeleteOrGroupBetweenTypeMismatchThrowsException() {
         assertThrows(IllegalArgumentException.class,
-            () -> new DeleteSpec<>(TestEntity.class).or(o -> o.between(TestEntity::getStatus, 1, 2L)));
+            () -> new DeleteSpec<>(TestEntity.class).or(o -> o.between(TestEntity::getName, 1, "abc")));
     }
 
     @Test
     void testDeleteOrGroupNotBetweenTypeMismatchThrowsException() {
         assertThrows(IllegalArgumentException.class,
-            () -> new DeleteSpec<>(TestEntity.class).or(o -> o.notBetween(TestEntity::getStatus, 1, 2L)));
+            () -> new DeleteSpec<>(TestEntity.class).or(o -> o.notBetween(TestEntity::getName, 1, "abc")));
     }
 
     @Test

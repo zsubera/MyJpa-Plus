@@ -16,6 +16,8 @@ import java.util.List;
 import java.util.function.BiFunction;
 import java.util.function.Consumer;
 import java.util.function.Function;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.lang.Nullable;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 
@@ -47,6 +49,8 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
  * @param <SELF> 具体构建器类型，用于流式链式调用
  */
 public abstract class AbstractBulkOperationSpec<T, SELF extends AbstractBulkOperationSpec<T, SELF>> {
+
+    private static final Logger log = LoggerFactory.getLogger(AbstractBulkOperationSpec.class);
 
     protected final Class<T> entityClass;
     protected final List<BulkConditionNode> conditionNodes = new ArrayList<>();
@@ -116,8 +120,18 @@ public abstract class AbstractBulkOperationSpec<T, SELF extends AbstractBulkOper
             // directly
             return operation.apply(em);
         }
-        // No Spring transaction — use JPA's EntityTransaction for standalone scenarios
+        // No Spring transaction — use JPA's EntityTransaction for standalone scenarios.
+        // In JTA environments, em.getTransaction() may return null; in that case,
+        // the container manages the transaction, so we execute directly.
         EntityTransaction tx = em.getTransaction();
+        if (tx == null) {
+            // JTA environment: container-managed transaction, execute directly
+            if (log.isDebugEnabled()) {
+                log.debug(
+                    "JTA environment detected (getTransaction() returned null), executing without local transaction");
+            }
+            return operation.apply(em);
+        }
         boolean isNewTransaction = !tx.isActive();
         if (isNewTransaction) {
             tx.begin();
@@ -656,16 +670,20 @@ public abstract class AbstractBulkOperationSpec<T, SELF extends AbstractBulkOper
      * @return 当前构建器实例
      * @throws IllegalArgumentException 如果 condition 为 null
      * @deprecated 推荐使用类型安全的 {@link #eq(SFunction, Object)}、{@link #like(SFunction, String)} 等方法替代。 此方法绕过类型安全机制，存在潜在的
-     *             SQL 注入风险。
+     *             SQL 注入风险。此方法将在 2.0 版本中移除。
      */
     @Deprecated(since = "1.1.0", forRemoval = true)
+    @SuppressWarnings("unchecked")
     public SELF where(Function<Root<T>, Predicate> condition) {
         if (condition == null) {
             throw new IllegalArgumentException("condition must not be null");
         }
-        throw new UnsupportedOperationException("where(Function) has been removed for security reasons. "
-            + "This method bypasses type safety and exposes SQL injection risk. "
-            + "Use type-safe methods like eq(), like(), contains(), etc. instead.");
+        if (log.isWarnEnabled()) {
+            log.warn("DEPRECATED: where(Function) bypasses type safety and will be removed in 2.0. "
+                + "Use type-safe methods like eq(), likeSafe(), contains() instead.");
+        }
+        conditionNodes.add(leaf((root, cb) -> condition.apply((Root<T>)root)));
+        return self();
     }
 
     /**

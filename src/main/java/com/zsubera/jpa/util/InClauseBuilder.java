@@ -72,7 +72,7 @@ public final class InClauseBuilder {
         }
         MAX_IN_CLAUSE_SIZE = configured;
 
-        int hardConfigured = 20000;
+        int hardConfigured = 5000;
         String hardProp = System.getProperty("myjpa-plus.in-clause-hard-limit");
         if (hardProp != null) {
             try {
@@ -200,7 +200,12 @@ public final class InClauseBuilder {
                 + ". Consider using temporary tables or subqueries for better performance. "
                 + "You can adjust the limit via -Dmyjpa-plus.in-clause-hard-limit=<value>.");
         }
-        if (values.size() > 10000) {
+        if (values.size() > HARD_LIMIT / 2) {
+            log.warn(
+                "IN clause has {} values (hard limit: {}), which may cause severe database performance degradation. "
+                    + "Consider using temporary tables or subqueries.",
+                values.size(), HARD_LIMIT);
+        } else if (values.size() > 10000) {
             log.warn("IN clause has {} values, which may cause performance issues. "
                 + "Consider using temporary tables or subqueries for better performance.", values.size());
         }
@@ -230,7 +235,12 @@ public final class InClauseBuilder {
                 + ". Consider using temporary tables or subqueries for better performance. "
                 + "You can adjust the limit via -Dmyjpa-plus.in-clause-hard-limit=<value>.");
         }
-        if (values.size() > 10000) {
+        if (values.size() > HARD_LIMIT / 2) {
+            log.warn(
+                "NOT IN clause has {} values (hard limit: {}), which may cause severe database performance degradation. "
+                    + "Consider using temporary tables or subqueries.",
+                values.size(), HARD_LIMIT);
+        } else if (values.size() > 10000) {
             log.warn("NOT IN clause has {} values, which may cause performance issues. "
                 + "Consider using temporary tables or subqueries for better performance.", values.size());
         }

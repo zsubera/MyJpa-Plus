@@ -96,6 +96,10 @@ public class SubQuerySpec<S> {
     /**
      * 返回关联的外部查询根，用于构建关联谓词。在 {@link #where(java.util.function.Function)} 中使用 以引用外部实体。
      *
+     * <p>
+     * <strong>类型安全警告：</strong>此方法执行未经检查的类型转换。调用方必须确保返回的 {@link Root} 与目标实体类型匹配， 否则可能导致运行时
+     * {@link ClassCastException}。通常用于 {@link #correlatedEq(SFunction, SFunction)} 模式中。
+     *
      * @param <T> 外部实体类型
      * @return 外部查询 {@link Root}
      */
@@ -256,7 +260,9 @@ public class SubQuerySpec<S> {
      * @return 当前 SubQuerySpec 实例，支持链式调用
      * @throws IllegalArgumentException 如果 value 为 null
      * @see #likeSafe(SFunction, String)
+     * @deprecated 使用 {@link #likeSafe(SFunction, String)} 替代，该方法会自动转义通配符防止 LIKE 注入
      */
+    @Deprecated(since = "1.1.0", forRemoval = true)
     public SubQuerySpec<S> like(SFunction<S, ?> field, String value) {
         if (value == null) {
             throw new IllegalArgumentException("value must not be null");
@@ -278,7 +284,9 @@ public class SubQuerySpec<S> {
      * @return 当前 SubQuerySpec 实例，支持链式调用
      * @throws IllegalArgumentException 如果 value 为 null
      * @see #notLikeSafe(SFunction, String)
+     * @deprecated 使用 {@link #notLikeSafe(SFunction, String)} 替代，该方法会自动转义通配符防止 LIKE 注入
      */
+    @Deprecated(since = "1.1.0", forRemoval = true)
     public SubQuerySpec<S> notLike(SFunction<S, ?> field, String value) {
         if (value == null) {
             throw new IllegalArgumentException("value must not be null");
