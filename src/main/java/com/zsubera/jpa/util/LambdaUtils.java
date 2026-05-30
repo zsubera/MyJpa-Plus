@@ -59,6 +59,9 @@ public final class LambdaUtils {
 
     /**
      * 使用 ConcurrentHashMap 替代 synchronizedMap，消除高并发场景下的锁竞争。 缓存大小由 lambda 表达式数量决定，应用中是有限的，无需 LRU 驱逐。
+     *
+     * <p>
+     * 当缓存大小超过 {@link #MAX_CACHE_SIZE} 时会自动清空，防止热部署场景下无限增长。清空后已有的 lambda 元数据会在下次访问时重新解析（无副作用）。
      */
     private static final Map<String, String> CACHE = new ConcurrentHashMap<>(4096);
 
@@ -97,6 +100,14 @@ public final class LambdaUtils {
             writeReplace.setAccessible(true);
             SerializedLambda lambda = (SerializedLambda)writeReplace.invoke(fn);
             String key = lambda.getImplClass() + "#" + lambda.getImplMethodName();
+            // 强制执行缓存大小限制，防止热部署场景下无限增长
+            if (CACHE.size() > MAX_CACHE_SIZE) {
+                if (log.isDebugEnabled()) {
+                    log.debug("Lambda cache size ({}) exceeds limit ({}). Clearing cache to prevent memory leak.",
+                        CACHE.size(), MAX_CACHE_SIZE);
+                }
+                CACHE.clear();
+            }
             return CACHE.computeIfAbsent(key, k -> methodToProperty(lambda.getImplMethodName()));
         } catch (ReflectiveOperationException e) {
             throw new MyJpaPlusException("Failed to extract property name from method reference. "

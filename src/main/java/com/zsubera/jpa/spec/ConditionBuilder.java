@@ -497,19 +497,10 @@ public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> {
      */
     @SuppressWarnings({"unchecked", "rawtypes"})
     default SELF between(SFunction<E, ?> field, Comparable<?> start, Comparable<?> end) {
-        if (start == null) {
-            throw new IllegalArgumentException("start must not be null");
+        if (field == null) {
+            throw new IllegalArgumentException("field must not be null");
         }
-        if (end == null) {
-            throw new IllegalArgumentException("end must not be null");
-        }
-        if (!start.getClass().isAssignableFrom(end.getClass()) && !end.getClass().isAssignableFrom(start.getClass())) {
-            throw new IllegalArgumentException("start and end must be compatible types, but got "
-                + start.getClass().getName() + " and " + end.getClass().getName());
-        }
-        if (((Comparable)start).compareTo(end) > 0) {
-            throw new IllegalArgumentException("start must not be greater than end");
-        }
+        PredicateHelper.validateRange(start, end);
         conditions().add(new ConditionNode.SimpleNode(LambdaUtils.getPropertyName(field),
             new Comparable<?>[] {start, end}, ConditionNode.Op.BETWEEN));
         return self();
@@ -526,19 +517,10 @@ public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> {
      */
     @SuppressWarnings({"unchecked", "rawtypes"})
     default SELF notBetween(SFunction<E, ?> field, Comparable<?> start, Comparable<?> end) {
-        if (start == null) {
-            throw new IllegalArgumentException("start must not be null");
+        if (field == null) {
+            throw new IllegalArgumentException("field must not be null");
         }
-        if (end == null) {
-            throw new IllegalArgumentException("end must not be null");
-        }
-        if (!start.getClass().isAssignableFrom(end.getClass()) && !end.getClass().isAssignableFrom(start.getClass())) {
-            throw new IllegalArgumentException("start and end must be compatible types, but got "
-                + start.getClass().getName() + " and " + end.getClass().getName());
-        }
-        if (((Comparable)start).compareTo(end) > 0) {
-            throw new IllegalArgumentException("start must not be greater than end");
-        }
+        PredicateHelper.validateRange(start, end);
         conditions().add(new ConditionNode.SimpleNode(LambdaUtils.getPropertyName(field),
             new Comparable<?>[] {start, end}, ConditionNode.Op.NOT_BETWEEN));
         return self();
@@ -762,10 +744,13 @@ public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> {
      */
     @SuppressWarnings("unchecked")
     default SELF multiLike(String keyword, SFunction<E, ?>... fields) {
+        if (keyword == null) {
+            throw new IllegalArgumentException("keyword must not be null");
+        }
         if (fields == null) {
             throw new IllegalArgumentException("fields must not be null");
         }
-        if (keyword != null && !keyword.isEmpty() && fields.length > 0) {
+        if (!keyword.isEmpty() && fields.length > 0) {
             String[] fieldNames = new String[fields.length];
             for (int i = 0; i < fields.length; i++) {
                 if (fields[i] == null) {

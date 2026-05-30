@@ -2,9 +2,9 @@ package com.zsubera.jpa.repository;
 
 import jakarta.persistence.Id;
 import java.lang.reflect.Field;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import org.springframework.core.ResolvableType;
+import org.springframework.util.ConcurrentReferenceHashMap;
 
 /**
  * 从仓库接口解析实体类类型参数，支持通过中间接口的间接继承。
@@ -15,8 +15,13 @@ import org.springframework.core.ResolvableType;
  */
 public final class EntityClassResolver {
 
-    private static final ConcurrentMap<Class<?>, Class<?>> CACHE = new ConcurrentHashMap<>();
-    private static final ConcurrentMap<Class<?>, String> ID_FIELD_CACHE = new ConcurrentHashMap<>();
+    /**
+     * 缓存使用弱引用键，允许 GC 回收旧类加载器，防止热部署场景下的类加载器泄漏。 与 SoftDeleteHelper 的缓存策略保持一致。
+     */
+    private static final ConcurrentMap<Class<?>, Class<?>> CACHE =
+        new ConcurrentReferenceHashMap<>(16, ConcurrentReferenceHashMap.ReferenceType.WEAK);
+    private static final ConcurrentMap<Class<?>, String> ID_FIELD_CACHE =
+        new ConcurrentReferenceHashMap<>(16, ConcurrentReferenceHashMap.ReferenceType.WEAK);
 
     private EntityClassResolver() {}
 

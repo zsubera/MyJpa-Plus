@@ -4,6 +4,7 @@ import com.zsubera.jpa.spec.PredicateHelper;
 import com.zsubera.jpa.spec.SFunction;
 import com.zsubera.jpa.update.AbstractBulkOperationSpec.BulkConditionNode;
 import java.util.List;
+import org.springframework.lang.Nullable;
 
 /**
  * 批量操作（{@link UpdateSpec} 和 {@link DeleteSpec}）中 OR 条件组的构建器。
@@ -37,7 +38,7 @@ public class OrConditionBuilder<T, SELF extends AbstractBulkOperationSpec<T, SEL
      * @param value 比较值
      * @return 当前构建器实例
      */
-    public OrConditionBuilder<T, SELF> eq(SFunction<T, ?> field, Object value) {
+    public OrConditionBuilder<T, SELF> eq(SFunction<T, ?> field, @Nullable Object value) {
         String name = parent.property(field);
         nodes.add(new BulkConditionNode.LeafNode((root, cb) -> PredicateHelper.eq(root, name, value, cb)));
         return this;
@@ -50,7 +51,7 @@ public class OrConditionBuilder<T, SELF extends AbstractBulkOperationSpec<T, SEL
      * @param value 比较值
      * @return 当前构建器实例
      */
-    public OrConditionBuilder<T, SELF> ne(SFunction<T, ?> field, Object value) {
+    public OrConditionBuilder<T, SELF> ne(SFunction<T, ?> field, @Nullable Object value) {
         String name = parent.property(field);
         nodes.add(new BulkConditionNode.LeafNode((root, cb) -> PredicateHelper.ne(root, name, value, cb)));
         return this;
@@ -308,19 +309,7 @@ public class OrConditionBuilder<T, SELF extends AbstractBulkOperationSpec<T, SEL
      */
     @SuppressWarnings({"unchecked", "rawtypes"})
     public OrConditionBuilder<T, SELF> between(SFunction<T, ?> field, Comparable<?> start, Comparable<?> end) {
-        if (start == null) {
-            throw new IllegalArgumentException("start must not be null");
-        }
-        if (end == null) {
-            throw new IllegalArgumentException("end must not be null");
-        }
-        if (!start.getClass().isAssignableFrom(end.getClass()) && !end.getClass().isAssignableFrom(start.getClass())) {
-            throw new IllegalArgumentException("start and end must be compatible types, but got "
-                + start.getClass().getName() + " and " + end.getClass().getName());
-        }
-        if (((Comparable)start).compareTo(end) > 0) {
-            throw new IllegalArgumentException("start must not be greater than end");
-        }
+        PredicateHelper.validateRange(start, end);
         String name = parent.property(field);
         nodes.add(new BulkConditionNode.LeafNode((root, cb) -> PredicateHelper.between(root, name, start, end, cb)));
         return this;
@@ -337,19 +326,7 @@ public class OrConditionBuilder<T, SELF extends AbstractBulkOperationSpec<T, SEL
      */
     @SuppressWarnings({"unchecked", "rawtypes"})
     public OrConditionBuilder<T, SELF> notBetween(SFunction<T, ?> field, Comparable<?> start, Comparable<?> end) {
-        if (start == null) {
-            throw new IllegalArgumentException("start must not be null");
-        }
-        if (end == null) {
-            throw new IllegalArgumentException("end must not be null");
-        }
-        if (!start.getClass().isAssignableFrom(end.getClass()) && !end.getClass().isAssignableFrom(start.getClass())) {
-            throw new IllegalArgumentException("start and end must be compatible types, but got "
-                + start.getClass().getName() + " and " + end.getClass().getName());
-        }
-        if (((Comparable)start).compareTo(end) > 0) {
-            throw new IllegalArgumentException("start must not be greater than end");
-        }
+        PredicateHelper.validateRange(start, end);
         String name = parent.property(field);
         nodes.add(new BulkConditionNode.LeafNode((root, cb) -> PredicateHelper.notBetween(root, name, start, end, cb)));
         return this;

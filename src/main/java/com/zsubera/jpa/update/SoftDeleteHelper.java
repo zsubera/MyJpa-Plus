@@ -306,7 +306,15 @@ public final class SoftDeleteHelper {
         if (field == null) {
             return false;
         }
-        field.setAccessible(true);
+        try {
+            field.setAccessible(true);
+        } catch (SecurityException e) {
+            log.warn(
+                "Cannot set accessible on field '{}' in {}. " + "If using Java 17+ module system, add JVM argument: "
+                    + "--add-opens java.base/java.lang.reflect=ALL-UNNAMED",
+                field.getName(), entityClass.getSimpleName());
+            throw new MyJpaPlusException("Cannot access soft delete field '" + fieldName + "'", e);
+        }
         try {
             Object value = field.get(entity);
             if (value == null) {

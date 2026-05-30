@@ -35,6 +35,38 @@ public final class PredicateHelper {
     private PredicateHelper() {}
 
     /**
+     * 校验 BETWEEN/NOT BETWEEN 范围参数的合法性。
+     *
+     * <p>
+     * 检查项：
+     * <ul>
+     * <li>start 和 end 均不能为 null</li>
+     * <li>start 和 end 必须为兼容类型（双向 isAssignableFrom 检查）</li>
+     * <li>start 不能大于 end</li>
+     * </ul>
+     *
+     * @param start 范围起始值
+     * @param end 范围结束值
+     * @throws IllegalArgumentException 如果参数不合法
+     */
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    public static void validateRange(Comparable<?> start, Comparable<?> end) {
+        if (start == null) {
+            throw new IllegalArgumentException("start must not be null");
+        }
+        if (end == null) {
+            throw new IllegalArgumentException("end must not be null");
+        }
+        if (!start.getClass().isAssignableFrom(end.getClass()) && !end.getClass().isAssignableFrom(start.getClass())) {
+            throw new IllegalArgumentException("start and end must be compatible types, but got "
+                + start.getClass().getName() + " and " + end.getClass().getName());
+        }
+        if (((Comparable)start).compareTo(end) > 0) {
+            throw new IllegalArgumentException("start must not be greater than end");
+        }
+    }
+
+    /**
      * 转义 LIKE 模式中的 SQL 通配符（{@code %}、{@code _}）。
      *
      * <p>

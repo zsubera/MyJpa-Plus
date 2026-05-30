@@ -372,21 +372,7 @@ public class SubQuerySpec<S> {
      * @throws IllegalArgumentException 如果 start 或 end 为 null，或 start 大于 end
      */
     public SubQuerySpec<S> between(SFunction<S, ?> field, Comparable<?> start, Comparable<?> end) {
-        if (start == null) {
-            throw new IllegalArgumentException("start must not be null");
-        }
-        if (end == null) {
-            throw new IllegalArgumentException("end must not be null");
-        }
-        if (!start.getClass().isAssignableFrom(end.getClass()) && !end.getClass().isAssignableFrom(start.getClass())) {
-            throw new IllegalArgumentException("start and end must be compatible types, but got "
-                + start.getClass().getName() + " and " + end.getClass().getName());
-        }
-        @SuppressWarnings({"unchecked", "rawtypes"})
-        int cmp = ((java.lang.Comparable)start).compareTo(end);
-        if (cmp > 0) {
-            throw new IllegalArgumentException("start must not be greater than end");
-        }
+        PredicateHelper.validateRange(start, end);
         predicates.add(PredicateHelper.between(root, property(field), start, end, cb));
         return this;
     }
@@ -401,21 +387,7 @@ public class SubQuerySpec<S> {
      * @throws IllegalArgumentException 如果 start 或 end 为 null，或 start 大于 end
      */
     public SubQuerySpec<S> notBetween(SFunction<S, ?> field, Comparable<?> start, Comparable<?> end) {
-        if (start == null) {
-            throw new IllegalArgumentException("start must not be null");
-        }
-        if (end == null) {
-            throw new IllegalArgumentException("end must not be null");
-        }
-        if (!start.getClass().isAssignableFrom(end.getClass()) && !end.getClass().isAssignableFrom(start.getClass())) {
-            throw new IllegalArgumentException("start and end must be compatible types, but got "
-                + start.getClass().getName() + " and " + end.getClass().getName());
-        }
-        @SuppressWarnings({"unchecked", "rawtypes"})
-        int cmp = ((java.lang.Comparable)start).compareTo(end);
-        if (cmp > 0) {
-            throw new IllegalArgumentException("start must not be greater than end");
-        }
+        PredicateHelper.validateRange(start, end);
         predicates.add(PredicateHelper.notBetween(root, property(field), start, end, cb));
         return this;
     }

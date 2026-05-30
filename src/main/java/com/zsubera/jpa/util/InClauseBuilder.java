@@ -72,7 +72,7 @@ public final class InClauseBuilder {
         }
         MAX_IN_CLAUSE_SIZE = configured;
 
-        int hardConfigured = 50000;
+        int hardConfigured = 20000;
         String hardProp = System.getProperty("myjpa-plus.in-clause-hard-limit");
         if (hardProp != null) {
             try {

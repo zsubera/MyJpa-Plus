@@ -480,12 +480,9 @@ public class QuerySpecTest {
     }
 
     @Test
-    void testMultiLikeWithNullKeywordNoOp() {
-        repository.save(newEntity("hello", 0));
+    void testMultiLikeWithNullKeywordThrows() {
         QuerySpec<TestEntity> qs = new QuerySpec<>();
-        qs.multiLike(null, TestEntity::getName);
-        List<TestEntity> result = repository.findAll(qs.toSpecification());
-        assertEquals(1, result.size());
+        assertThrows(IllegalArgumentException.class, () -> qs.multiLike(null, TestEntity::getName));
     }
 
     @Test

@@ -410,9 +410,10 @@ class SubQuerySpecTest {
 
         // where(Function) 已移除以防止 SQL 注入风险，此测试验证抛出 UnsupportedOperationException
         QuerySpec<ParentEntity> qs = new QuerySpec<>();
-        qs.exists(TestEntity.class, sub -> sub.where(r -> em.getCriteriaBuilder()
-            .equal(r.get("parent").get("id"), sub.<ParentEntity>correlated().get("id")))
-            .gt(TestEntity::getStatus, 3));
+        qs.exists(TestEntity.class,
+            sub -> sub.where(
+                r -> em.getCriteriaBuilder().equal(r.get("parent").get("id"), sub.<ParentEntity>correlated().get("id")))
+                .gt(TestEntity::getStatus, 3));
         RuntimeException ex =
             assertThrows(RuntimeException.class, () -> parentRepository.findAll(qs.toSpecification()));
         assertTrue(
@@ -534,8 +535,8 @@ class SubQuerySpecTest {
         // where(Function) 已移除以防止 SQL 注入风险，此测试验证抛出 UnsupportedOperationException
         QuerySpec<ParentEntity> qs = new QuerySpec<>();
         qs.exists(TestEntity.class,
-            sub -> sub.where(r -> em.getCriteriaBuilder()
-                .equal(r.get("parent").get("id"), sub.<ParentEntity>correlated().get("id")))
+            sub -> sub.where(
+                r -> em.getCriteriaBuilder().equal(r.get("parent").get("id"), sub.<ParentEntity>correlated().get("id")))
                 .gt(TestEntity::getStatus, 3));
         RuntimeException ex =
             assertThrows(RuntimeException.class, () -> parentRepository.findAll(qs.toSpecification()));

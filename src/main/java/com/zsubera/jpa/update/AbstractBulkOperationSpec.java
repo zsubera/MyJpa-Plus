@@ -585,19 +585,7 @@ public abstract class AbstractBulkOperationSpec<T, SELF extends AbstractBulkOper
      */
     @SuppressWarnings({"unchecked", "rawtypes"})
     public SELF between(SFunction<T, ?> field, Comparable<?> start, Comparable<?> end) {
-        if (start == null) {
-            throw new IllegalArgumentException("start must not be null");
-        }
-        if (end == null) {
-            throw new IllegalArgumentException("end must not be null");
-        }
-        if (!start.getClass().isAssignableFrom(end.getClass()) && !end.getClass().isAssignableFrom(start.getClass())) {
-            throw new IllegalArgumentException("start and end must be compatible types, but got "
-                + start.getClass().getName() + " and " + end.getClass().getName());
-        }
-        if (((Comparable)start).compareTo(end) > 0) {
-            throw new IllegalArgumentException("start must not be greater than end");
-        }
+        PredicateHelper.validateRange(start, end);
         String name = property(field);
         conditionNodes.add(leaf((root, cb) -> PredicateHelper.between(root, name, start, end, cb)));
         return self();
@@ -614,19 +602,7 @@ public abstract class AbstractBulkOperationSpec<T, SELF extends AbstractBulkOper
      */
     @SuppressWarnings({"unchecked", "rawtypes"})
     public SELF notBetween(SFunction<T, ?> field, Comparable<?> start, Comparable<?> end) {
-        if (start == null) {
-            throw new IllegalArgumentException("start must not be null");
-        }
-        if (end == null) {
-            throw new IllegalArgumentException("end must not be null");
-        }
-        if (!start.getClass().isAssignableFrom(end.getClass()) && !end.getClass().isAssignableFrom(start.getClass())) {
-            throw new IllegalArgumentException("start and end must be compatible types, but got "
-                + start.getClass().getName() + " and " + end.getClass().getName());
-        }
-        if (((Comparable)start).compareTo(end) > 0) {
-            throw new IllegalArgumentException("start must not be greater than end");
-        }
+        PredicateHelper.validateRange(start, end);
         String name = property(field);
         conditionNodes.add(leaf((root, cb) -> PredicateHelper.notBetween(root, name, start, end, cb)));
         return self();
