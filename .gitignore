@@ -40,9 +40,6 @@ out/
 /.opencode/agents/optimizer.md
 
 # Audit workflow
-.audit-markers/
 .audit-tasks/
 .audit-dones/
-audit-report-*.md
-final-audit-report-*.md
-optimization-report.md
+.opencode/reports/
