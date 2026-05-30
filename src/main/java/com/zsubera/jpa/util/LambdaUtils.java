@@ -7,6 +7,7 @@ import java.lang.invoke.SerializedLambda;
 import java.lang.reflect.Method;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicBoolean;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -65,6 +66,9 @@ public final class LambdaUtils {
      */
     private static final Map<String, String> CACHE = new ConcurrentHashMap<>(4096);
 
+    /** 缓存清理锁，确保同一时刻只有一个线程执行清理操作。 */
+    private static final AtomicBoolean CLEANING = new AtomicBoolean(false);
+
     // LRU 缓存会自动驱逐最久未使用的条目，无需手动清理线程
 
     /**
@@ -101,12 +105,17 @@ public final class LambdaUtils {
             SerializedLambda lambda = (SerializedLambda)writeReplace.invoke(fn);
             String key = lambda.getImplClass() + "#" + lambda.getImplMethodName();
             // 强制执行缓存大小限制，防止热部署场景下无限增长
-            if (CACHE.size() > MAX_CACHE_SIZE) {
-                if (log.isDebugEnabled()) {
-                    log.debug("Lambda cache size ({}) exceeds limit ({}). Clearing cache to prevent memory leak.",
-                        CACHE.size(), MAX_CACHE_SIZE);
+            // 使用 AtomicBoolean 确保同一时刻只有一个线程执行清理操作，避免多线程同时触发缓存重建
+            if (CACHE.size() > MAX_CACHE_SIZE && CLEANING.compareAndSet(false, true)) {
+                try {
+                    if (log.isDebugEnabled()) {
+                        log.debug("Lambda cache size ({}) exceeds limit ({}). Clearing cache to prevent memory leak.",
+                            CACHE.size(), MAX_CACHE_SIZE);
+                    }
+                    CACHE.clear();
+                } finally {
+                    CLEANING.set(false);
                 }
-                CACHE.clear();
             }
             return CACHE.computeIfAbsent(key, k -> methodToProperty(lambda.getImplMethodName()));
         } catch (ReflectiveOperationException e) {

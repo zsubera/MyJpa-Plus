@@ -243,7 +243,7 @@ class SubQuerySpecTest {
         repository.save(child);
 
         QuerySpec<ParentEntity> qs = new QuerySpec<>();
-        qs.exists(TestEntity.class, sub -> sub.likeIgnoreCase(TestEntity::getName, "%hello%"));
+        qs.exists(TestEntity.class, sub -> sub.likeIgnoreCase(TestEntity::getName, "hello"));
         List<ParentEntity> result = parentRepository.findAll(qs.toSpecification());
         assertEquals(1, result.size());
     }

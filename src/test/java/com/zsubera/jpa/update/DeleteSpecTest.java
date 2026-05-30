@@ -263,7 +263,7 @@ class DeleteSpecTest {
     void testDeleteLikeIgnoreCase() {
         repository.save(newEntity("HelloWorld", 1));
         repository.save(newEntity("xyz", 1));
-        int count = new DeleteSpec<>(TestEntity.class).likeIgnoreCase(TestEntity::getName, "%hello%").execute(em);
+        int count = new DeleteSpec<>(TestEntity.class).likeIgnoreCase(TestEntity::getName, "hello").execute(em);
         assertEquals(1, count);
         assertEquals("xyz", repository.findAll().get(0).getName());
     }
@@ -486,7 +486,7 @@ class DeleteSpecTest {
         repository.save(newEntity("HelloWorld", 1));
         repository.save(newEntity("xyz", 2));
         int count =
-            new DeleteSpec<>(TestEntity.class).or(o -> o.likeIgnoreCase(TestEntity::getName, "%hello%")).execute(em);
+            new DeleteSpec<>(TestEntity.class).or(o -> o.likeIgnoreCase(TestEntity::getName, "hello")).execute(em);
         assertEquals(1, count);
     }
 

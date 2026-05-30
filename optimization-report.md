@@ -462,3 +462,164 @@ SubQuerySpec(Subquery<S> subquery, Root<S> root, Root<?> correlatedRoot, Criteri
 | 低 | P3 级别代码质量改进 | 逐步优化 |
 
 ---
+## 轮次 5 - 优化记录（终审报告迭代 3）
+时间：2026-05-30 14:00
+
+### 已修复问题
+
+#### P1 级别（7/7 已修复）
+
+- [F-01] likeIgnoreCase() 未转义 LIKE 通配符 % 和 _：修改所有 likeIgnoreCase 方法（ConditionBuilder、SubQuerySpec、OrConditionBuilder、AbstractBulkOperationSpec），自动调用 escapeLikeWildcards() 转义通配符并包裹 %...%，同时更新 PredicateHelper.likeIgnoreCase() 和 resolveSimplePredicate() 支持转义字符。与 contains()/startsWith()/endsWith() 行为一致，消除 LIKE 注入风险
+- [F-02] LambdaUtils.CACHE.clear() 并发竞态：添加 AtomicBoolean CLEANING 锁标志，使用 compareAndSet(false, true) 确保同一时刻只有一个线程执行清理操作，避免多线程同时触发缓存重建导致的性能抖动
+- [F-03] ProjectionSpec.JoinGroup 的 Consumer 异常处理不一致：在 JoinSpec.getConditions() 中添加 try-catch，IllegalArgumentException 直接重新抛出（保留调用方期望的异常类型），其他异常包装为 MyJpaPlusException 并设置 cachedConditions 为空列表避免重复执行失败的 Consumer
+- [F-04] resolveExistsWithTempQuery 依赖实现细节：添加详细 Javadoc 文档说明临时 CriteriaQuery 的用途和假设（子查询构建仅依赖 JPA Criteria API 对象模型，不依赖查询执行），明确此行为在 Hibernate 和 EclipseLink 中的兼容性
+- [F-05] SimpleNode 字段为 public final 破坏封装性：将 ConditionNode 中所有内部节点类（SimpleNode、JoinNode、OrNode、AndNode、MultiLikeNode、ExistsNode、RawNode、NegateNode、OrderNode）的字段从 public final 改为 package-private final。CollectionNode 保持 public final（因 ProjectionSpec 在不同包中访问）。所有字段访问均在 com.zsubera.jpa.spec 包内，外部通过 PredicateHelper.resolveSimplePredicate() 等封装方法访问
+- [F-06] executeLimited() 两步操作竞态条件：为 UpdateSpec.executeLimited() 和 DeleteSpec.executeLimited() 添加详细 Javadoc 并发注意事项文档，明确说明悲观锁（PESSIMISTIC_WRITE）是推荐的默认策略，禁用悲观锁时应用层需自行保证数据一致性
+- [F-07] deprecated findAllStream 抛出 UnsupportedOperationException：移除两个 deprecated findAllStream 方法上误导性的 @Transactional(readOnly = true) 注解，这些方法直接抛出 UnsupportedOperationException 不会执行任何事务操作
+
+### 未修复问题
+
+- [F-08] like()/notLike() deprecated 但仍可正常调用：已有 @Deprecated(since="1.1.0") 标记和 Javadoc 安全警告，保持现状，计划 2.0 版本中将方法体改为抛出 UnsupportedOperationException
+- [F-09] RawNode 允许绕过类型安全：已为 package-private，外部无法直接构造，当前设计已足够安全
+- [F-10] findPage() 的 count 查询执行不必要的 JOIN：当前实现使用 countDistinct(root) 确保 JOIN 场景下计数正确性，正确性优先，保持现状
+- [F-11] SoftDeleteHelper.setAccessible(true) 失败时静默跳过：已在轮次 4 中为 isSoftDeleted() 添加 SecurityException 捕获和 --add-opens 提示
+- [F-12 ~ F-16] 其他 P2 问题：均为低风险的可维护性/可靠性问题，不影响功能正确性，在后续版本中逐步优化
+
+### 修改详情
+
+#### 1. F-01: likeIgnoreCase() 通配符转义
+**文件**：ConditionBuilder.java、PredicateHelper.java、SubQuerySpec.java、OrConditionBuilder.java、AbstractBulkOperationSpec.java
+**修改前**（ConditionBuilder.likeIgnoreCase）：
+```java
+default SELF likeIgnoreCase(SFunction<E, ?> field, String value) {
+    if (field == null) throw new IllegalArgumentException("field must not be null");
+    if (value == null) throw new IllegalArgumentException("value must not be null");
+    conditions().add(new ConditionNode.SimpleNode(LambdaUtils.getPropertyName(field), value, ConditionNode.Op.LIKE_IGNORE_CASE));
+    return self();
+}
+```
+**修改后**：
+```java
+default SELF likeIgnoreCase(SFunction<E, ?> field, String value) {
+    if (field == null) throw new IllegalArgumentException("field must not be null");
+    if (value == null) throw new IllegalArgumentException("value must not be null");
+    String escaped = escapeLikeWildcards(value);
+    conditions().add(new ConditionNode.SimpleNode(LambdaUtils.getPropertyName(field),
+        "%" + escaped + "%", ConditionNode.Op.LIKE_IGNORE_CASE, PredicateHelper.LIKE_ESCAPE_CHAR));
+    return self();
+}
+```
+**原因**：原实现直接将用户输入传递给 LIKE 操作，未转义 % 和 _ 通配符。与 contains()、startsWith()、endsWith() 等安全方法不一致，存在 LIKE 注入风险。修改后自动转义通配符并包裹 %...%，行为与 contains() 一致。
+
+**同步修改**：
+- `PredicateHelper.likeIgnoreCase()` 新增带 escapeChar 参数的重载方法
+- `PredicateHelper.resolveSimplePredicate()` 的 LIKE_IGNORE_CASE case 支持 escapeChar
+- `SubQuerySpec.likeIgnoreCase()` 转义通配符并传递转义字符
+- `OrConditionBuilder.likeIgnoreCase()` 转义通配符并传递转义字符
+- `AbstractBulkOperationSpec.likeIgnoreCase()` 转义通配符并传递转义字符
+- 更新 6 个测试文件中的 likeIgnoreCase 调用（移除手动添加的 % 通配符）
+
+#### 2. F-02: LambdaUtils 缓存清理竞态
+**文件**：LambdaUtils.java:104-110
+**修改前**：
+```java
+if (CACHE.size() > MAX_CACHE_SIZE) {
+    if (log.isDebugEnabled()) {
+        log.debug("Lambda cache size ({}) exceeds limit ({}). Clearing cache...", CACHE.size(), MAX_CACHE_SIZE);
+    }
+    CACHE.clear();
+}
+```
+**修改后**：
+```java
+if (CACHE.size() > MAX_CACHE_SIZE && CLEANING.compareAndSet(false, true)) {
+    try {
+        if (log.isDebugEnabled()) {
+            log.debug("Lambda cache size ({}) exceeds limit ({}). Clearing cache...", CACHE.size(), MAX_CACHE_SIZE);
+        }
+        CACHE.clear();
+    } finally {
+        CLEANING.set(false);
+    }
+}
+```
+**原因**：原实现中多个线程可能同时看到缓存超限并同时执行 clear()，导致缓存被重复清除，所有线程的缓存命中率同时降至零。AtomicBoolean.compareAndSet 确保同一时刻只有一个线程执行清理。
+
+#### 3. F-03: ProjectionSpec.JoinSpec 异常处理
+**文件**：ProjectionSpec.java:64-73
+**修改前**：
+```java
+List<ConditionNode> getConditions() {
+    if (cachedConditions == null) {
+        Consumer<JoinGroup<Object>> cfg = (Consumer<JoinGroup<Object>>)(Consumer<?>)config;
+        JoinGroup<Object> group = JoinGroup.create();
+        cfg.accept(group);
+        cachedConditions = group.conditions();
+    }
+    return cachedConditions;
+}
+```
+**修改后**：
+```java
+List<ConditionNode> getConditions() {
+    if (cachedConditions == null) {
+        try {
+            Consumer<JoinGroup<Object>> cfg = (Consumer<JoinGroup<Object>>)(Consumer<?>)config;
+            JoinGroup<Object> group = JoinGroup.create();
+            cfg.accept(group);
+            cachedConditions = group.conditions();
+        } catch (IllegalArgumentException e) {
+            throw e;
+        } catch (Exception e) {
+            cachedConditions = Collections.emptyList();
+            throw new MyJpaPlusException("Failed to configure join conditions", e);
+        }
+    }
+    return cachedConditions;
+}
+```
+**原因**：Consumer 内部抛出异常时，cachedConditions 保持 null，下次调用会重试 Consumer。IllegalArgumentException 直接重新抛出（保留调用方期望的异常类型），其他异常包装为 MyJpaPlusException 并设置空列表避免重复执行。
+
+#### 4. F-04: resolveExistsWithTempQuery 文档
+**文件**：QuerySpec.java:948-964
+**修改内容**：添加详细 Javadoc 文档说明临时 CriteriaQuery 的用途和假设。
+**原因**：明确文档声明 + 降低未来版本兼容性风险。
+
+#### 5. F-05: ConditionNode 字段封装
+**文件**：ConditionNode.java
+**修改前**：`public final String fieldName; public final Object value; public final Op op; public final char escapeChar;`
+**修改后**：`final String fieldName; final Object value; final Op op; final char escapeChar;`
+**原因**：外部代码可直接访问 SimpleNode 内部数据结构，绕过 toString() 的敏感值掩码。改为 package-private 后，外部通过 PredicateHelper.resolveSimplePredicate() 等封装方法访问。
+
+#### 6. F-06: executeLimited() 文档
+**文件**：UpdateSpec.java、DeleteSpec.java
+**修改内容**：为 executeLimited() 方法添加详细并发注意事项文档。
+**原因**：两步操作之间存在竞态窗口，需要明确文档说明悲观锁是推荐的默认策略。
+
+#### 7. F-07: deprecated findAllStream @Transactional 移除
+**文件**：MyJpaTemplate.java:334-366
+**修改前**：`@Deprecated(since = "1.0.1", forRemoval = true) @Transactional(readOnly = true) public <T> Stream<T> findAllStream(...)`
+**修改后**：`@Deprecated(since = "1.0.1", forRemoval = true) public <T> Stream<T> findAllStream(...)`
+**原因**：方法直接抛出 UnsupportedOperationException，不会执行任何事务操作。@Transactional 注解具有误导性。
+
+### 测试结果
+
+- **总测试数**：595
+- **通过**：595
+- **失败**：0
+- **跳过**：0
+- **构建状态**：SUCCESS
+
+### 代码格式化
+
+- Spotless 格式化已应用
+
+### 后续计划
+
+| 优先级 | 问题 | 计划 |
+|--------|------|------|
+| 中 | F-08 like()/notLike() deprecated 但仍可调用 | 2.0 版本抛出 UnsupportedOperationException |
+| 低 | F-10 findPage() count 查询优化 | 评估简单查询场景下的优化 |
+| 低 | F-12~F-16 其他 P2 问题 | 后续版本逐步优化 |
+
+---

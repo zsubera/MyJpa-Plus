@@ -495,8 +495,11 @@ public class SubQuerySpec<S> {
     /**
      * 添加子查询实体的忽略大小写的 LIKE 条件。
      *
+     * <p>
+     * 值中的 {@code %} 或 {@code _} 字符会被转义，作为字面量处理，防止 LIKE 注入。
+     *
      * @param field 实体字段
-     * @param value 匹配模式（可使用 % 通配符）
+     * @param value 要匹配的原始字符串值（通配符会被转义）
      * @return 当前 SubQuerySpec 实例，支持链式调用
      * @throws IllegalArgumentException 如果 value 为 null
      */
@@ -504,7 +507,9 @@ public class SubQuerySpec<S> {
         if (value == null) {
             throw new IllegalArgumentException("value must not be null");
         }
-        predicates.add(PredicateHelper.likeIgnoreCase(root, property(field), value, cb));
+        String escaped = PredicateHelper.escapeLikeWildcards(value);
+        predicates.add(PredicateHelper.likeIgnoreCase(root, property(field), "%" + escaped + "%", cb,
+            PredicateHelper.LIKE_ESCAPE_CHAR));
         return this;
     }
 

@@ -490,10 +490,13 @@ public abstract class AbstractBulkOperationSpec<T, SELF extends AbstractBulkOper
     }
 
     /**
-     * 添加忽略大小写的 LIKE 条件：{@code UPPER(field) LIKE UPPER(value)}。
+     * 添加忽略大小写的 LIKE 条件：{@code UPPER(field) LIKE UPPER('%value%')}。
+     *
+     * <p>
+     * 值中的 {@code %} 或 {@code _} 字符会被转义，作为字面量处理，防止 LIKE 注入。
      *
      * @param field 实体属性引用
-     * @param value 匹配模式
+     * @param value 要匹配的原始字符串值（通配符会被转义）
      * @return 当前构建器实例
      * @throws IllegalArgumentException 如果 value 为 null
      */
@@ -502,7 +505,9 @@ public abstract class AbstractBulkOperationSpec<T, SELF extends AbstractBulkOper
             throw new IllegalArgumentException("value must not be null");
         }
         String name = property(field);
-        conditionNodes.add(leaf((root, cb) -> PredicateHelper.likeIgnoreCase(root, name, value, cb)));
+        String escaped = PredicateHelper.escapeLikeWildcards(value);
+        conditionNodes.add(leaf((root, cb) -> PredicateHelper.likeIgnoreCase(root, name, "%" + escaped + "%", cb,
+            PredicateHelper.LIKE_ESCAPE_CHAR)));
         return self();
     }
 

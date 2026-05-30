@@ -1,5 +1,6 @@
 package com.zsubera.jpa.projection;
 
+import com.zsubera.jpa.exception.MyJpaPlusException;
 import com.zsubera.jpa.spec.ConditionBuilder;
 import com.zsubera.jpa.spec.ConditionNode;
 import com.zsubera.jpa.spec.PredicateHelper;
@@ -12,6 +13,7 @@ import jakarta.persistence.Tuple;
 import jakarta.persistence.TypedQuery;
 import jakarta.persistence.criteria.*;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -63,11 +65,18 @@ public class ProjectionSpec<T> {
         @SuppressWarnings("unchecked")
         List<ConditionNode> getConditions() {
             if (cachedConditions == null) {
-                @SuppressWarnings("unchecked")
-                Consumer<JoinGroup<Object>> cfg = (Consumer<JoinGroup<Object>>)(Consumer<?>)config;
-                JoinGroup<Object> group = JoinGroup.create();
-                cfg.accept(group);
-                cachedConditions = group.conditions();
+                try {
+                    @SuppressWarnings("unchecked")
+                    Consumer<JoinGroup<Object>> cfg = (Consumer<JoinGroup<Object>>)(Consumer<?>)config;
+                    JoinGroup<Object> group = JoinGroup.create();
+                    cfg.accept(group);
+                    cachedConditions = group.conditions();
+                } catch (IllegalArgumentException e) {
+                    throw e;
+                } catch (Exception e) {
+                    cachedConditions = Collections.emptyList();
+                    throw new MyJpaPlusException("Failed to configure join conditions", e);
+                }
             }
             return cachedConditions;
         }

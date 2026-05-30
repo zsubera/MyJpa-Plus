@@ -583,8 +583,11 @@ public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> {
     /**
      * 添加不区分大小写的 LIKE 条件：{@code UPPER(field) LIKE UPPER('%value%')}。
      *
+     * <p>
+     * 值中的 {@code %} 或 {@code _} 字符会被转义，作为字面量处理，防止 LIKE 注入。
+     *
      * @param field 实体属性的方法引用
-     * @param value 匹配模式的字符串值
+     * @param value 要匹配的原始字符串值（通配符会被转义）
      * @return 当前构建器以支持链式调用
      * @throws IllegalArgumentException 如果 {@code field} 或 {@code value} 为 null
      */
@@ -595,8 +598,9 @@ public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> {
         if (value == null) {
             throw new IllegalArgumentException("value must not be null");
         }
-        conditions().add(
-            new ConditionNode.SimpleNode(LambdaUtils.getPropertyName(field), value, ConditionNode.Op.LIKE_IGNORE_CASE));
+        String escaped = escapeLikeWildcards(value);
+        conditions().add(new ConditionNode.SimpleNode(LambdaUtils.getPropertyName(field), "%" + escaped + "%",
+            ConditionNode.Op.LIKE_IGNORE_CASE, PredicateHelper.LIKE_ESCAPE_CHAR));
         return self();
     }
 

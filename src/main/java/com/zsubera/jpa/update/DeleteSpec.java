@@ -127,10 +127,25 @@ public class DeleteSpec<T> extends AbstractBulkOperationSpec<T, DeleteSpec<T>> {
     }
 
     /**
-     * 在新事务或现有事务中执行无条件删除。
+     * 限制删除行数的条件删除操作。
      *
-     * @param em 实体管理器
-     * @return 删除的实体数量
+     * <p>
+     * 分两步执行：
+     * <ol>
+     * <li>查询符合条件的 ID 列表（带 LIMIT）</li>
+     * <li>用 ID 列表执行批量删除</li>
+     * </ol>
+     *
+     * <p>
+     * <strong>并发注意事项：</strong>两步操作之间存在时间窗口，其他事务可能修改或删除记录。 当 {@code pessimisticLock=true}
+     * 时，第一步会获取悲观锁（{@link jakarta.persistence.LockModeType#PESSIMISTIC_WRITE}），
+     * 防止其他事务在此窗口期修改记录。<strong>建议在并发场景下始终使用悲观锁</strong>。 禁用悲观锁时，应用层需要自行保证数据一致性。
+     *
+     * @param em entity manager
+     * @param limit maximum number of rows to delete
+     * @param pessimisticLock if true, acquire {@link jakarta.persistence.LockModeType#PESSIMISTIC_WRITE} on the
+     *            selected IDs to prevent concurrent modifications
+     * @return actual number of rows deleted
      */
     public int deleteAllInTransaction(EntityManager em) {
         return executeInTransaction(em, this::deleteAll);

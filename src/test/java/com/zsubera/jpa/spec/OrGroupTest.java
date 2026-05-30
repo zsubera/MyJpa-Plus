@@ -197,7 +197,7 @@ class OrGroupTest {
         repository.save(newEntity("HELLO", 2));
         repository.save(newEntity("xyz", 3));
         QuerySpec<TestEntity> qs = new QuerySpec<>();
-        qs.or().likeIgnoreCase(TestEntity::getName, "%hello%").endOr();
+        qs.or().likeIgnoreCase(TestEntity::getName, "hello").endOr();
         List<TestEntity> result = repository.findAll(qs.toSpecification());
         assertEquals(2, result.size());
     }

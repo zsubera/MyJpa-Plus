@@ -47,10 +47,10 @@ public sealed interface ConditionNode permits ConditionNode.SimpleNode, Conditio
      * {@code toString()} 以掩码敏感值。如需迁移至 record，需评估对所有直接字段访问的兼容性影响。
      */
     final class SimpleNode implements ConditionNode {
-        public final String fieldName;
-        public final Object value;
-        public final Op op;
-        public final char escapeChar;
+        final String fieldName;
+        final Object value;
+        final Op op;
+        final char escapeChar;
 
         public SimpleNode(String fieldName, Object value, Op op) {
             this(fieldName, value, op, '\0');
@@ -86,9 +86,9 @@ public sealed interface ConditionNode permits ConditionNode.SimpleNode, Conditio
 
     /** 带有内部条件的 JOIN 或 FETCH JOIN。 */
     final class JoinNode implements ConditionNode {
-        public final String fieldName;
-        public final JoinType joinType;
-        public final List<ConditionNode> innerConditions = new ArrayList<>();
+        final String fieldName;
+        final JoinType joinType;
+        final List<ConditionNode> innerConditions = new ArrayList<>();
 
         public JoinNode(String fieldName, JoinType joinType) {
             this.fieldName = fieldName;
@@ -103,7 +103,7 @@ public sealed interface ConditionNode permits ConditionNode.SimpleNode, Conditio
 
     /** 条件的 OR 组。 */
     final class OrNode implements ConditionNode {
-        public final List<ConditionNode> nodes = new ArrayList<>();
+        final List<ConditionNode> nodes = new ArrayList<>();
 
         @Override
         public String toString() {
@@ -113,7 +113,7 @@ public sealed interface ConditionNode permits ConditionNode.SimpleNode, Conditio
 
     /** 条件的 AND 组。 */
     final class AndNode implements ConditionNode {
-        public final List<ConditionNode> nodes = new ArrayList<>();
+        final List<ConditionNode> nodes = new ArrayList<>();
 
         @Override
         public String toString() {
@@ -123,8 +123,8 @@ public sealed interface ConditionNode permits ConditionNode.SimpleNode, Conditio
 
     /** 多字段 LIKE 搜索（关键字通过 OR 与多个字段匹配）。 */
     final class MultiLikeNode implements ConditionNode {
-        public final String keyword;
-        public final String[] fieldNames;
+        final String keyword;
+        final String[] fieldNames;
 
         public MultiLikeNode(String keyword, String[] fieldNames) {
             this.keyword = keyword;
@@ -155,9 +155,9 @@ public sealed interface ConditionNode permits ConditionNode.SimpleNode, Conditio
 
     /** EXISTS 或 NOT EXISTS 关联子查询。 */
     final class ExistsNode<S> implements ConditionNode {
-        public final Class<S> subEntity;
-        public final Consumer<SubQuerySpec<S>> config;
-        public final boolean negate;
+        final Class<S> subEntity;
+        final Consumer<SubQuerySpec<S>> config;
+        final boolean negate;
 
         public ExistsNode(Class<S> subEntity, Consumer<SubQuerySpec<S>> config, boolean negate) {
             this.subEntity = subEntity;
@@ -173,7 +173,7 @@ public sealed interface ConditionNode permits ConditionNode.SimpleNode, Conditio
 
     /** 原始谓词函数（复杂条件的应急方案）。 */
     final class RawNode implements ConditionNode {
-        public final BiFunction<jakarta.persistence.criteria.Path<?>, CriteriaBuilder, Predicate> fn;
+        final BiFunction<jakarta.persistence.criteria.Path<?>, CriteriaBuilder, Predicate> fn;
 
         public RawNode(BiFunction<jakarta.persistence.criteria.Path<?>, CriteriaBuilder, Predicate> fn) {
             this.fn = fn;
@@ -187,7 +187,7 @@ public sealed interface ConditionNode permits ConditionNode.SimpleNode, Conditio
 
     /** 取反组节点：NOT（内部条件）。 */
     final class NegateNode implements ConditionNode {
-        public final ConditionNode inner;
+        final ConditionNode inner;
 
         public NegateNode(ConditionNode inner) {
             this.inner = inner;
@@ -210,8 +210,8 @@ public sealed interface ConditionNode permits ConditionNode.SimpleNode, Conditio
      * @param asc 是否升序
      */
     final class OrderNode {
-        public final String fieldName;
-        public final boolean asc;
+        final String fieldName;
+        final boolean asc;
 
         public OrderNode(String fieldName, boolean asc) {
             this.fieldName = fieldName;

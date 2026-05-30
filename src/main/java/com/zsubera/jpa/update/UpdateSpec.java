@@ -179,10 +179,26 @@ public class UpdateSpec<T> extends AbstractBulkOperationSpec<T, UpdateSpec<T>> {
     }
 
     /**
-     * 在新事务或现有事务中执行无条件更新。
+     * 限制更新行数的条件更新操作。
      *
-     * @param em 实体管理器
-     * @return 更新的实体数量
+     * <p>
+     * 分两步执行：
+     * <ol>
+     * <li>查询符合条件的 ID 列表（带 LIMIT）</li>
+     * <li>用 ID 列表执行批量更新</li>
+     * </ol>
+     *
+     * <p>
+     * <strong>并发注意事项：</strong>两步操作之间存在时间窗口，其他事务可能修改或删除记录。 当 {@code pessimisticLock=true}
+     * 时，第一步会获取悲观锁（{@link jakarta.persistence.LockModeType#PESSIMISTIC_WRITE}），
+     * 防止其他事务在此窗口期修改记录。<strong>建议在并发场景下始终使用悲观锁</strong>。 禁用悲观锁时，应用层需要自行保证数据一致性。
+     *
+     * @param em entity manager
+     * @param limit maximum number of rows to update
+     * @param pessimisticLock if true, acquire {@link jakarta.persistence.LockModeType#PESSIMISTIC_WRITE} on the
+     *            selected IDs to prevent concurrent modifications
+     * @return actual number of rows updated
+     * @throws IllegalStateException if no SET clauses are specified
      */
     public int updateAllInTransaction(EntityManager em) {
         return executeInTransaction(em, this::updateAll);

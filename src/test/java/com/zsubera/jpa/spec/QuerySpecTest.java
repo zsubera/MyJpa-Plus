@@ -760,7 +760,7 @@ public class QuerySpecTest {
         repository.save(newEntity("HELLO", 2));
         repository.save(newEntity("xyz", 3));
         QuerySpec<TestEntity> qs = new QuerySpec<>();
-        qs.likeIgnoreCase(TestEntity::getName, "%hello%");
+        qs.likeIgnoreCase(TestEntity::getName, "hello");
         List<TestEntity> result = repository.findAll(qs.toSpecification());
         assertEquals(2, result.size());
     }

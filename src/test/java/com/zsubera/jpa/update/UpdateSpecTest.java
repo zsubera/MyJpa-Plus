@@ -321,7 +321,7 @@ class UpdateSpecTest {
         repository.save(newEntity("HelloWorld", 1));
         repository.save(newEntity("xyz", 1));
         int count = new UpdateSpec<>(TestEntity.class).set(TestEntity::getStatus, 99)
-            .likeIgnoreCase(TestEntity::getName, "%hello%").execute(em);
+            .likeIgnoreCase(TestEntity::getName, "hello").execute(em);
         assertEquals(1, count);
     }
 
@@ -560,7 +560,7 @@ class UpdateSpecTest {
         repository.save(newEntity("HelloWorld", 1));
         repository.save(newEntity("xyz", 2));
         int count = new UpdateSpec<>(TestEntity.class).set(TestEntity::getStatus, 99)
-            .or(o -> o.likeIgnoreCase(TestEntity::getName, "%hello%")).execute(em);
+            .or(o -> o.likeIgnoreCase(TestEntity::getName, "hello")).execute(em);
         assertEquals(1, count);
     }
 

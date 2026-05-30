@@ -302,7 +302,7 @@ public final class PredicateHelper {
      * 构建忽略大小写的 LIKE 谓词。
      *
      * <p>
-     * 通过 {@code UPPER()} 函数将双方转换为大写后进行 LIKE 匹配。
+     * 通过 {@code UPPER()} 函数将双方转换为大写后进行 LIKE 匹配。 值中的 {@code %} 和 {@code _} 通配符应由调用方预先转义。
      *
      * @param path 实体路径
      * @param fieldName 字段名
@@ -311,6 +311,28 @@ public final class PredicateHelper {
      * @return 忽略大小写的 LIKE 谓词
      */
     public static Predicate likeIgnoreCase(Path<?> path, String fieldName, String value, CriteriaBuilder cb) {
+        return likeIgnoreCase(path, fieldName, value, cb, '\0');
+    }
+
+    /**
+     * 构建带转义字符的忽略大小写的 LIKE 谓词。
+     *
+     * <p>
+     * 通过 {@code UPPER()} 函数将双方转换为大写后进行 LIKE 匹配。
+     *
+     * @param path 实体路径
+     * @param fieldName 字段名
+     * @param value LIKE 模式字符串
+     * @param cb CriteriaBuilder 实例
+     * @param escapeChar 转义字符
+     * @return 忽略大小写的 LIKE 谓词
+     */
+    public static Predicate likeIgnoreCase(Path<?> path, String fieldName, String value, CriteriaBuilder cb,
+        char escapeChar) {
+        if (escapeChar != '\0') {
+            return cb.like(cb.upper(path.get(fieldName).as(String.class)), value.toUpperCase(java.util.Locale.ROOT),
+                escapeChar);
+        }
         return cb.like(cb.upper(path.get(fieldName).as(String.class)), value.toUpperCase(java.util.Locale.ROOT));
     }
 
@@ -485,6 +507,10 @@ public final class PredicateHelper {
                 return cb.equal(cb.upper(fieldPath.as(String.class)),
                     ((String)node.value).toUpperCase(java.util.Locale.ROOT));
             case LIKE_IGNORE_CASE:
+                if (node.escapeChar != '\0') {
+                    return cb.like(cb.upper(fieldPath.as(String.class)),
+                        ((String)node.value).toUpperCase(java.util.Locale.ROOT), node.escapeChar);
+                }
                 return cb.like(cb.upper(fieldPath.as(String.class)),
                     ((String)node.value).toUpperCase(java.util.Locale.ROOT));
             case IS_NULL:

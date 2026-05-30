@@ -332,7 +332,6 @@ public class MyJpaTemplate {
      * @deprecated 使用 {@link #findAllStream(Class, QuerySpec, Consumer)} 安全版本替代，该版本自动管理 Stream 生命周期，避免资源泄漏
      */
     @Deprecated(since = "1.0.1", forRemoval = true)
-    @Transactional(readOnly = true)
     public <T> Stream<T> findAllStream(Class<T> entityClass, QuerySpec<T> spec) {
         if (log.isWarnEnabled()) {
             log.warn("DEPRECATED: findAllStream(Class, QuerySpec) may cause resource leaks and will throw "
@@ -354,7 +353,6 @@ public class MyJpaTemplate {
      * @deprecated 使用 {@link #findAllStream(Class, QuerySpec, Consumer)} 安全版本替代，该版本自动管理 Stream 生命周期，避免资源泄漏
      */
     @Deprecated(since = "1.0.1", forRemoval = true)
-    @Transactional(readOnly = true)
     public <T> Stream<T> findAllStream(Class<T> entityClass, QuerySpec<T> spec, EntityGraphHelper<T> entityGraph) {
         if (log.isWarnEnabled()) {
             log.warn("DEPRECATED: findAllStream(Class, QuerySpec, EntityGraph) may cause resource leaks and will throw "
