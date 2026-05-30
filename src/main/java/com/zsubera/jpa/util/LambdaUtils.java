@@ -59,7 +59,7 @@ public final class LambdaUtils {
     }
 
     /**
-     * 使用 ConcurrentHashMap 替代 synchronizedMap，消除高并发场景下的锁竞争。 缓存大小由 lambda 表达式数量决定，应用中是有限的，无需 LRU 驱逐。
+     * 使用 ConcurrentHashMap 替代 synchronizedMap，消除高并发场景下的锁竞争。 缓存大小由 lambda 表达式数量决定，应用中是有限的。
      *
      * <p>
      * 当缓存大小超过 {@link #MAX_CACHE_SIZE} 时会自动清空，防止热部署场景下无限增长。清空后已有的 lambda 元数据会在下次访问时重新解析（无副作用）。
@@ -69,7 +69,7 @@ public final class LambdaUtils {
     /** 缓存清理锁，确保同一时刻只有一个线程执行清理操作。 */
     private static final AtomicBoolean CLEANING = new AtomicBoolean(false);
 
-    // LRU 缓存会自动驱逐最久未使用的条目，无需手动清理线程
+    // ConcurrentHashMap 无自动驱逐机制，通过 AtomicBoolean 控制单线程清理
 
     /**
      * 关闭后台清理线程。在应用关闭或热部署环境中应调用此方法以确保资源正确释放。
@@ -78,10 +78,10 @@ public final class LambdaUtils {
      * 已在 {@code MyJpaPlusAutoConfiguration} 中通过 {@code DisposableBean} 自动注册关闭钩子。
      *
      * <p>
-     * 当前实现为空操作，因为 LRU 缓存会自动驱逐最久未使用的条目，无需手动清理线程。
+     * 当前实现为空操作，因为缓存清理已在 {@link #getPropertyName} 中通过 {@link AtomicBoolean} 控制。
      */
     public static void shutdown() {
-        // 空操作：LRU 缓存自动管理，无需清理线程
+        // 空操作：缓存清理已在 getPropertyName 中通过 AtomicBoolean 控制
     }
 
     private LambdaUtils() {}

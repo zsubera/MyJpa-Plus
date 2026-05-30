@@ -139,12 +139,22 @@ public sealed interface ConditionNode permits ConditionNode.SimpleNode, Conditio
 
     /** 集合 IS_EMPTY 或 IS_NOT_EMPTY 检查。 */
     final class CollectionNode implements ConditionNode {
-        public final String fieldName;
-        public final CollectionOp op;
+        final String fieldName;
+        final CollectionOp op;
 
         public CollectionNode(String fieldName, CollectionOp op) {
             this.fieldName = fieldName;
             this.op = op;
+        }
+
+        /** 返回字段名。 */
+        public String fieldName() {
+            return fieldName;
+        }
+
+        /** 返回集合操作类型。 */
+        public CollectionOp op() {
+            return op;
         }
 
         @Override

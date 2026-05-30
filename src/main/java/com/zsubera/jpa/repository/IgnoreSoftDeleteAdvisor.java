@@ -58,7 +58,7 @@ public class IgnoreSoftDeleteAdvisor {
             }
 
             if (hasAnnotation) {
-                SoftDeleteContext.setIgnoreSoftDelete(true);
+                SoftDeleteContext.pushIgnore();
                 if (log.isTraceEnabled()) {
                     log.trace("Soft delete filter bypassed for method: {}.{}",
                         method.getDeclaringClass().getSimpleName(), method.getName());
@@ -66,9 +66,10 @@ public class IgnoreSoftDeleteAdvisor {
             }
             return pjp.proceed();
         } finally {
-            // 无条件清理 ThreadLocal，防止嵌套调用场景下的泄漏
-            // ThreadLocal.remove() 在无值时是幂等的
-            SoftDeleteContext.clear();
+            // 使用 popIgnore() 替代 clear()，支持嵌套调用场景
+            if (hasAnnotation) {
+                SoftDeleteContext.popIgnore();
+            }
         }
     }
 }

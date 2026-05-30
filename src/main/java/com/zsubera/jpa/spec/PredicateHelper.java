@@ -478,6 +478,15 @@ public final class PredicateHelper {
      */
     @SuppressWarnings({"unchecked", "rawtypes"})
     public static Predicate resolveSimplePredicate(Path<?> path, ConditionNode.SimpleNode node, CriteriaBuilder cb) {
+        if (path == null) {
+            throw new IllegalArgumentException("path must not be null");
+        }
+        if (node == null) {
+            throw new IllegalArgumentException("node must not be null");
+        }
+        if (cb == null) {
+            throw new IllegalArgumentException("cb must not be null");
+        }
         Path<?> fieldPath = path.get(node.fieldName);
         switch (node.op) {
             case EQ:

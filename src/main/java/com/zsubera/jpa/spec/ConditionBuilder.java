@@ -848,7 +848,10 @@ public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> {
      * @param field 实体属性的方法引用
      * @param value 匹配模式的字符串值
      * @return 当前构建器以支持链式调用
+     * @deprecated 自 1.1.0 起废弃，请使用 {@link #likeSafe(SFunction, String)} 或
+     *             {@link #startsWith(SFunction, String)}、{@link #endsWith(SFunction, String)}、{@link #contains(SFunction, String)}
      */
+    @Deprecated(since = "1.1.0", forRemoval = true)
     default SELF like(boolean condition, SFunction<E, ?> field, String value) {
         return condition ? like(field, value) : self();
     }
@@ -860,7 +863,9 @@ public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> {
      * @param field 实体属性的方法引用
      * @param value 匹配模式的字符串值
      * @return 当前构建器以支持链式调用
+     * @deprecated 自 1.1.0 起废弃，请使用 {@link #notLikeSafe(SFunction, String)}
      */
+    @Deprecated(since = "1.1.0", forRemoval = true)
     default SELF notLike(boolean condition, SFunction<E, ?> field, String value) {
         return condition ? notLike(field, value) : self();
     }

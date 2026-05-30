@@ -427,10 +427,11 @@ public class ProjectionSpec<T> {
             return resolveSimpleForJoin(sn, join, cb);
         }
         if (node instanceof ConditionNode.CollectionNode cn) {
-            return switch (cn.op) {
-                case IS_EMPTY -> cb.isEmpty((Expression<java.util.Collection<?>>)(Expression<?>)join.get(cn.fieldName));
+            return switch (cn.op()) {
+                case IS_EMPTY ->
+                    cb.isEmpty((Expression<java.util.Collection<?>>)(Expression<?>)join.get(cn.fieldName()));
                 case IS_NOT_EMPTY ->
-                    cb.isNotEmpty((Expression<java.util.Collection<?>>)(Expression<?>)join.get(cn.fieldName));
+                    cb.isNotEmpty((Expression<java.util.Collection<?>>)(Expression<?>)join.get(cn.fieldName()));
             };
         }
         throw new IllegalArgumentException("Unsupported ConditionNode type in JOIN clause: "

@@ -220,7 +220,7 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
      * 推荐使用此方法代替 {@link #having(BiFunction)}，因为 {@code Root<T>} 的类型推断更可靠：
      *
      * <pre>{@code
-     * qs.groupBy(User::getStatus).having(root -> cb.greaterThan(cb.count(root.get("id")), 5));
+     * qs.groupBy(User::getStatus).having(root -> cb.greaterThan(cb.count(root), 5L));
      * }</pre>
      *
      * @param condition HAVING 条件函数，接收 Root 返回 Predicate
@@ -927,22 +927,9 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
             log.debug("EXISTS subquery used in count query context (query=null). "
                 + "Creating temporary CriteriaQuery for subquery construction.");
             CriteriaQuery<S> tempQuery = cb.createQuery(node.subEntity);
-            return resolveExistsWithTempQuery(node, outerPath, tempQuery, cb);
+            return resolveExistsInternal(node, outerPath, tempQuery, cb);
         }
-        jakarta.persistence.criteria.Subquery<S> subquery = query.subquery(node.subEntity);
-        Root<S> subRoot = subquery.from(node.subEntity);
-        if (!(outerPath instanceof Root<?>)) {
-            throw new IllegalArgumentException("EXISTS correlation requires a Root path, but got "
-                + outerPath.getClass().getSimpleName() + ". Nested JOIN correlation is not supported.");
-        }
-        Root<?> correlatedOuter = subquery.correlate((Root<?>)outerPath);
-        SubQuerySpec<S> subSpec = SubQuerySpec.create(subquery, subRoot, correlatedOuter, cb);
-        node.config.accept(subSpec);
-        subSpec.applyWhere();
-        if (!subSpec.isSelectSet()) {
-            subquery.select(subRoot);
-        }
-        return node.negate ? cb.not(cb.exists(subquery)) : cb.exists(subquery);
+        return resolveExistsInternal(node, outerPath, query, cb);
     }
 
     /**
@@ -965,7 +952,22 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
      */
     private <S> Predicate resolveExistsWithTempQuery(ConditionNode.ExistsNode<S> node, Path<?> outerPath,
         CriteriaQuery<S> tempQuery, CriteriaBuilder cb) {
-        jakarta.persistence.criteria.Subquery<S> subquery = tempQuery.subquery(node.subEntity);
+        return resolveExistsInternal(node, outerPath, tempQuery, cb);
+    }
+
+    /**
+     * EXISTS 子查询解析的内部实现。
+     *
+     * @param <S> 子查询实体类型
+     * @param node EXISTS 条件节点
+     * @param outerPath 外部查询的实体路径
+     * @param query CriteriaQuery 实例（可以是临时 query）
+     * @param cb CriteriaBuilder 实例
+     * @return 构建好的 EXISTS 或 NOT EXISTS 谓词
+     */
+    private <S> Predicate resolveExistsInternal(ConditionNode.ExistsNode<S> node, Path<?> outerPath,
+        CriteriaQuery<?> query, CriteriaBuilder cb) {
+        jakarta.persistence.criteria.Subquery<S> subquery = query.subquery(node.subEntity);
         Root<S> subRoot = subquery.from(node.subEntity);
         if (!(outerPath instanceof Root<?>)) {
             throw new IllegalArgumentException("EXISTS correlation requires a Root path, but got "
