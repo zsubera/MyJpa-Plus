@@ -1,0 +1,46 @@
+package com.zsubera.jpa.repository;
+
+import com.zsubera.jpa.annotation.SoftDelete;
+import jakarta.persistence.*;
+
+/**
+ * Test entity for {@link SoftDeleteJpaRepository} tests.
+ */
+@Entity
+@Table(name = "soft_delete_repo_test_entity")
+class SoftDeleteRepoTestEntity {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+
+    private String name;
+
+    @Column(name = "deleted_flag")
+    @SoftDelete
+    private Boolean deleted = false;
+
+    public Long getId() {
+        return id;
+    }
+
+    public void setId(Long id) {
+        this.id = id;
+    }
+
+    public String getName() {
+        return name;
+    }
+
+    public void setName(String name) {
+        this.name = name;
+    }
+
+    public Boolean getDeleted() {
+        return deleted;
+    }
+
+    public void setDeleted(Boolean deleted) {
+        this.deleted = deleted;
+    }
+}

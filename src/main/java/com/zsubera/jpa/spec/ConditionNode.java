@@ -186,6 +186,9 @@ public sealed interface ConditionNode permits ConditionNode.SimpleNode, Conditio
         final BiFunction<jakarta.persistence.criteria.Path<?>, CriteriaBuilder, Predicate> fn;
 
         public RawNode(BiFunction<jakarta.persistence.criteria.Path<?>, CriteriaBuilder, Predicate> fn) {
+            if (fn == null) {
+                throw new IllegalArgumentException("Predicate function must not be null");
+            }
             this.fn = fn;
         }
 

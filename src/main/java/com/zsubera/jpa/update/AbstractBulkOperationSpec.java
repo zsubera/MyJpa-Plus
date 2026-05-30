@@ -348,7 +348,9 @@ public abstract class AbstractBulkOperationSpec<T, SELF extends AbstractBulkOper
      * @return 当前构建器实例
      * @throws IllegalArgumentException 如果 value 为 null
      * @see #likeSafe(SFunction, String)
+     * @deprecated 使用 {@link #likeSafe(SFunction, String)} 替代，该方法会自动转义通配符防止 LIKE 注入
      */
+    @Deprecated(since = "1.1.0", forRemoval = true)
     public SELF like(SFunction<T, ?> field, String value) {
         if (value == null) {
             throw new IllegalArgumentException("value must not be null");
@@ -371,7 +373,9 @@ public abstract class AbstractBulkOperationSpec<T, SELF extends AbstractBulkOper
      * @return 当前构建器实例
      * @throws IllegalArgumentException 如果 value 为 null
      * @see #notLikeSafe(SFunction, String)
+     * @deprecated 使用 {@link #notLikeSafe(SFunction, String)} 替代，该方法会自动转义通配符防止 LIKE 注入
      */
+    @Deprecated(since = "1.1.0", forRemoval = true)
     public SELF notLike(SFunction<T, ?> field, String value) {
         if (value == null) {
             throw new IllegalArgumentException("value must not be null");
