@@ -750,6 +750,44 @@ public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> {
         return self();
     }
 
+    /**
+     * 添加多字段 LIKE 搜索（字符串字段名版本）。
+     *
+     * <p>
+     * 适用于只有字符串形式字段名的场景（如通用解析器、动态字段名等）， 无法使用方法引用时的替代方案。
+     *
+     * <pre>{@code
+     * // 使用字符串字段名
+     * qs.multiLike("keyword", "name", "email", "phone");
+     *
+     * // 动态字段名
+     * String[] searchFields = {"name", "email"};
+     * qs.multiLike("keyword", searchFields);
+     * }</pre>
+     *
+     * @param keyword 搜索关键字
+     * @param fieldNames 一个或多个字段名字符串
+     * @return 当前构建器以支持链式调用
+     * @throws IllegalArgumentException 如果 {@code fieldNames} 为 null、空或包含 null 元素
+     */
+    default SELF multiLike(String keyword, String... fieldNames) {
+        if (keyword == null) {
+            throw new IllegalArgumentException("keyword must not be null");
+        }
+        if (fieldNames == null || fieldNames.length == 0) {
+            throw new IllegalArgumentException("fieldNames must not be empty");
+        }
+        if (!keyword.isEmpty()) {
+            for (int i = 0; i < fieldNames.length; i++) {
+                if (fieldNames[i] == null) {
+                    throw new IllegalArgumentException("fieldNames[" + i + "] must not be null");
+                }
+            }
+            conditions().add(new ConditionNode.MultiLikeNode(keyword, fieldNames));
+        }
+        return self();
+    }
+
     // ---- IN 子查询 ----
 
     /**
@@ -1024,6 +1062,31 @@ public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> {
      */
     default SELF between(boolean condition, SFunction<E, ?> field, Comparable<?> start, Comparable<?> end) {
         return condition ? between(field, start, end) : self();
+    }
+
+    /**
+     * 仅在 {@code condition} 为 true 时添加 NOT BETWEEN 条件。
+     *
+     * @param condition 是否添加条件的标志
+     * @param field 实体属性的方法引用
+     * @param start 下界（包含）
+     * @param end 上界（包含）
+     * @return 当前构建器以支持链式调用
+     */
+    default SELF notBetween(boolean condition, SFunction<E, ?> field, Comparable<?> start, Comparable<?> end) {
+        return condition ? notBetween(field, start, end) : self();
+    }
+
+    /**
+     * 仅在 {@code condition} 为 true 时添加忽略大小写的 LIKE 条件。
+     *
+     * @param condition 是否添加条件的标志
+     * @param field 实体属性的方法引用
+     * @param value 要匹配的原始字符串值（通配符会被转义）
+     * @return 当前构建器以支持链式调用
+     */
+    default SELF likeIgnoreCase(boolean condition, SFunction<E, ?> field, String value) {
+        return condition ? likeIgnoreCase(field, value) : self();
     }
 
     /**

@@ -285,7 +285,8 @@ public final class InClauseBuilder {
             batch.add(v);
             if (batch.size() >= maxInClauseSize) {
                 batchPredicates.add(buildSingleIn(cb, path, batch));
-                batch.clear(); // 复用同一个 ArrayList，减少 GC 压力
+                // 创建新列表以释放旧批次的引用，防止内存泄漏
+                batch = new ArrayList<>(maxInClauseSize);
             }
         }
         if (!batch.isEmpty()) {
@@ -320,7 +321,8 @@ public final class InClauseBuilder {
             batch.add(v);
             if (batch.size() >= maxInClauseSize) {
                 batchPredicates.add(cb.not(buildSingleIn(cb, path, batch)));
-                batch.clear(); // 复用同一个 ArrayList，减少 GC 压力
+                // 创建新列表以释放旧批次的引用，防止内存泄漏
+                batch = new ArrayList<>(maxInClauseSize);
             }
         }
         if (!batch.isEmpty()) {

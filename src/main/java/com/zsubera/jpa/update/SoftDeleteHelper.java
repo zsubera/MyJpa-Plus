@@ -28,6 +28,7 @@ import org.springframework.util.ConcurrentReferenceHashMap;
  * 支持的字段类型：
  * <ul>
  * <li>{@code Boolean} / {@code boolean} — {@code true} 表示"已删除"，{@code false}（或 {@code null}）表示"未删除"</li>
+ * <li>{@code Integer} / {@code int} — 通过 {@link SoftDelete#deletedIntValue()} 指定表示"已删除"的整数值（默认 1），其他值表示"未删除"</li>
  * <li>{@code Enum} — 通过 {@link SoftDelete#deletedValue()} 指定表示"已删除"的枚举值名称</li>
  * </ul>
  *
@@ -155,6 +156,11 @@ public final class SoftDeleteHelper {
         if (field.getType() == Boolean.class || field.getType() == boolean.class) {
             return cb.or(cb.isNull(path.get(fieldName)), cb.equal(path.get(fieldName), false));
         }
+        // Integer 类型
+        if (field.getType() == Integer.class || field.getType() == int.class) {
+            int deletedValue = (annotation != null) ? annotation.deletedIntValue() : 1;
+            return cb.or(cb.isNull(path.get(fieldName)), cb.notEqual(path.get(fieldName), deletedValue));
+        }
         // 枚举类型
         if (Enum.class.isAssignableFrom(field.getType())) {
             if (annotation == null || annotation.deletedValue().isEmpty()) {
@@ -174,6 +180,11 @@ public final class SoftDeleteHelper {
             return cb.equal(path.get(fieldName), true);
         }
         SoftDelete annotation = field.getAnnotation(SoftDelete.class);
+        // Integer 类型
+        if (field.getType() == Integer.class || field.getType() == int.class) {
+            int deletedValue = (annotation != null) ? annotation.deletedIntValue() : 1;
+            return cb.equal(path.get(fieldName), deletedValue);
+        }
         // 枚举类型
         if (Enum.class.isAssignableFrom(field.getType())) {
             if (annotation == null || annotation.deletedValue().isEmpty()) {
@@ -342,6 +353,13 @@ public final class SoftDeleteHelper {
             // Boolean type
             if (value instanceof Boolean) {
                 return Boolean.TRUE.equals(value);
+            }
+            // Integer type
+            if (value instanceof Integer intValue && field.isAnnotationPresent(SoftDelete.class)) {
+                SoftDelete annotation = field.getAnnotation(SoftDelete.class);
+                if (annotation != null) {
+                    return intValue == annotation.deletedIntValue();
+                }
             }
             // Enum type
             if (value instanceof Enum enumValue && field.isAnnotationPresent(SoftDelete.class)) {

@@ -176,20 +176,30 @@ public final class LambdaUtils {
      * 驱逐旧缓存条目，确保缓存大小不超过 {@link #maxCacheSize}。
      *
      * <p>
-     * 当缓存大小超过限制时，随机淘汰约 25% 的条目，将缓存大小降至 {@link #EVICTION_TARGET_RATIO} 水平。 使用 ConcurrentHashMap 的原子操作避免全量清除导致的缓存雪崩。
-     * 多个线程可能同时触发驱逐，但驱逐操作是幂等的，不会造成功能问题。
+     * 当缓存大小超过限制时，使用 CAS 操作确保只有一个线程执行驱逐， 驱逐后缓存大小降至 {@link #EVICTION_TARGET_RATIO} 水平。 使用
+     * {@link java.util.concurrent.atomic.AtomicBoolean} 防止多线程同时驱逐导致的缓存雪崩。
      */
+    private static final java.util.concurrent.atomic.AtomicBoolean EVICTING =
+        new java.util.concurrent.atomic.AtomicBoolean(false);
+
     private static void evictIfNeeded() {
         long currentSize = CACHE.mappingCount();
-        if (currentSize > maxCacheSize) {
-            long target = (long)(maxCacheSize * EVICTION_TARGET_RATIO);
-            long toRemove = currentSize - target;
-            if (toRemove > 0) {
-                // 使用 removeIf 随机淘汰条目，避免全量清除导致的缓存雪崩
-                long[] removed = {0};
-                CACHE.entrySet().removeIf(entry -> removed[0]++ < toRemove);
-                log.debug("Lambda cache evicted {} entries (size: {} -> {})", removed[0], currentSize,
-                    CACHE.mappingCount());
+        if (currentSize > maxCacheSize && EVICTING.compareAndSet(false, true)) {
+            try {
+                // 双重检查：获取锁后再次检查大小
+                currentSize = CACHE.mappingCount();
+                if (currentSize > maxCacheSize) {
+                    long target = (long)(maxCacheSize * EVICTION_TARGET_RATIO);
+                    long toRemove = currentSize - target;
+                    if (toRemove > 0) {
+                        long[] removed = {0};
+                        CACHE.entrySet().removeIf(entry -> removed[0]++ < toRemove);
+                        log.debug("Lambda cache evicted {} entries (size: {} -> {})", removed[0], currentSize,
+                            CACHE.mappingCount());
+                    }
+                }
+            } finally {
+                EVICTING.set(false);
             }
         }
     }
@@ -212,12 +222,29 @@ public final class LambdaUtils {
      * 驱逐 METHOD_CACHE 中的旧条目，防止热部署场景下无限增长。
      *
      * <p>
-     * 当 METHOD_CACHE 大小超过 2048 时，清除全部条目。该缓存仅存储 Class -> Method 映射， 数量通常有界，但在热部署场景下可能积累旧类加载器的条目。
+     * 当 METHOD_CACHE 大小超过 2048 时，驱逐约 25% 的条目，而非清除全部。 该缓存仅存储 Class -> Method 映射，数量通常有界，但在热部署场景下可能积累旧类加载器的条目。 使用 CAS
+     * 操作确保只有一个线程执行驱逐。
      */
+    private static final java.util.concurrent.atomic.AtomicBoolean METHOD_EVICTING =
+        new java.util.concurrent.atomic.AtomicBoolean(false);
+
     private static void evictMethodCacheIfNeeded() {
-        if (METHOD_CACHE.size() > 2048) {
-            METHOD_CACHE.clear();
-            log.debug("Method cache evicted due to size limit");
+        if (METHOD_CACHE.size() > 2048 && METHOD_EVICTING.compareAndSet(false, true)) {
+            try {
+                int currentSize = METHOD_CACHE.size();
+                if (currentSize > 2048) {
+                    int target = (int)(2048 * 0.75);
+                    int toRemove = currentSize - target;
+                    if (toRemove > 0) {
+                        int[] removed = {0};
+                        METHOD_CACHE.entrySet().removeIf(entry -> removed[0]++ < toRemove);
+                        log.debug("Method cache evicted {} entries (size: {} -> {})", removed[0], currentSize,
+                            METHOD_CACHE.size());
+                    }
+                }
+            } finally {
+                METHOD_EVICTING.set(false);
+            }
         }
     }
 

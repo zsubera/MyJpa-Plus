@@ -184,4 +184,31 @@ public class SoftDeleteJpaRepository<T, ID> extends SimpleJpaRepository<T, ID> {
         };
         return findOne(spec);
     }
+
+    /**
+     * 覆盖 deleteById() 以支持软删除过滤。
+     *
+     * <p>
+     * 默认的 {@link SimpleJpaRepository#deleteById(Object)} 会尝试删除实体， 但如果实体已被软删除，{@link #findById(Object)} 会返回
+     * {@link Optional#empty()}，导致抛出 {@link org.springframework.dao.EmptyResultDataAccessException}。
+     * 此实现会在删除前检查实体是否存在（未被软删除），如果不存在则记录警告并跳过删除。
+     *
+     * @param id 实体 ID，不能为 {@code null}
+     */
+    @Override
+    public void deleteById(ID id) {
+        if (id == null) {
+            throw new IllegalArgumentException("ID must not be null");
+        }
+        Optional<T> entity = findById(id);
+        if (entity.isPresent()) {
+            delete(entity.get());
+        } else if (shouldApplySoftDeleteFilter()) {
+            log.warn("Attempted to delete entity with id {} but it was not found (possibly soft-deleted). "
+                + "Use @IgnoreSoftDelete to bypass soft-delete filtering if needed.", id);
+        } else {
+            throw new org.springframework.dao.EmptyResultDataAccessException(
+                String.format("No %s entity with id %s exists!", domainClass.getSimpleName(), id), 1);
+        }
+    }
 }

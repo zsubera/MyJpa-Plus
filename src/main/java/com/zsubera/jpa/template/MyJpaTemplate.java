@@ -17,6 +17,8 @@ import java.util.function.Consumer;
 import java.util.stream.Stream;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.ApplicationContext;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
@@ -76,8 +78,18 @@ public class MyJpaTemplate {
     /** 深度分页的 offset 阈值，超过此值会记录警告日志。 */
     public static final int DEFAULT_DEEP_PAGINATION_OFFSET_THRESHOLD = 100000;
 
+    /** 深度分页警告日志的最小间隔（毫秒），防止日志泛滥。 */
+    private static final long DEEP_PAGINATION_WARN_INTERVAL_MS = 60_000; // 1 分钟
+
+    /** 上次记录深度分页警告的时间戳。 */
+    private final java.util.concurrent.atomic.AtomicLong lastDeepPaginationWarnTime =
+        new java.util.concurrent.atomic.AtomicLong(0);
+
     @PersistenceContext
     private EntityManager entityManager;
+
+    @Autowired(required = false)
+    private ApplicationContext applicationContext;
 
     private volatile int maxResults = DEFAULT_MAX_RESULTS;
     private volatile int deepPaginationOffsetThreshold = DEFAULT_DEEP_PAGINATION_OFFSET_THRESHOLD;
@@ -247,6 +259,47 @@ public class MyJpaTemplate {
         return results.isEmpty() ? Optional.empty() : Optional.of(results.get(0));
     }
 
+    // ---- 计数方法 ----
+
+    /**
+     * 统计匹配给定 {@link QuerySpec} 的实体数量。
+     *
+     * @param entityClass 实体类
+     * @param spec 查询规范
+     * @param <T> 实体类型
+     * @return 匹配实体数量
+     */
+    @Transactional(readOnly = true)
+    public <T> long count(Class<T> entityClass, QuerySpec<T> spec) {
+        if (entityClass == null) {
+            throw new IllegalArgumentException("entityClass must not be null");
+        }
+        if (spec == null) {
+            throw new IllegalArgumentException("spec must not be null");
+        }
+        return count(entityClass, spec.toSpecification());
+    }
+
+    /**
+     * 统计匹配给定 {@link Specification} 的实体数量。
+     *
+     * @param entityClass 实体类
+     * @param spec 查询规范
+     * @param <T> 实体类型
+     * @return 匹配实体数量
+     */
+    @Transactional(readOnly = true)
+    public <T> long count(Class<T> entityClass, Specification<T> spec) {
+        if (entityClass == null) {
+            throw new IllegalArgumentException("entityClass must not be null");
+        }
+        if (spec == null) {
+            throw new IllegalArgumentException("spec must not be null");
+        }
+        CriteriaBuilder cb = entityManager.getCriteriaBuilder();
+        return executeCountQuery(entityClass, spec, cb);
+    }
+
     // ---- 查询方法 ----
 
     /**
@@ -356,15 +409,19 @@ public class MyJpaTemplate {
      * @param spec 查询规范
      * @param <T> 实体类型
      * @return 匹配实体的 Stream（必须由调用方关闭）
-     * @throws UnsupportedOperationException 此方法已移除，请使用 {@link #findAllStream(Class, QuerySpec, Consumer)} 安全版本
      * @deprecated 使用 {@link #findAllStream(Class, QuerySpec, Consumer)} 安全版本替代，该版本自动管理 Stream 生命周期，避免资源泄漏。 此方法将在 2.0
      *             版本中移除。
      */
     @Deprecated(since = "1.0.1", forRemoval = true)
+    @Transactional(readOnly = true)
     public <T> Stream<T> findAllStream(Class<T> entityClass, QuerySpec<T> spec) {
-        throw new UnsupportedOperationException(
-            "findAllStream(Class, QuerySpec) has been removed due to resource leak risk. "
-                + "Use findAllStream(Class, QuerySpec, Consumer) instead, which automatically manages the Stream lifecycle.");
+        if (entityClass == null) {
+            throw new IllegalArgumentException("entityClass must not be null");
+        }
+        if (spec == null) {
+            throw new IllegalArgumentException("spec must not be null");
+        }
+        return doFindStream(entityClass, spec);
     }
 
     /**
@@ -374,16 +431,21 @@ public class MyJpaTemplate {
      * @param spec 查询规范
      * @param entityGraph 用于急切加载的实体图（可为 null）
      * @param <T> 实体类型
-     * @return 匹配实体的 Stream
-     * @throws UnsupportedOperationException 此方法已移除，请使用 {@link #findAllStream(Class, QuerySpec, Consumer)} 安全版本
+     * @return 匹配实体的 Stream（必须由调用方关闭）
      * @deprecated 使用 {@link #findAllStream(Class, QuerySpec, Consumer)} 安全版本替代，该版本自动管理 Stream 生命周期，避免资源泄漏。 此方法将在 2.0
      *             版本中移除。
      */
     @Deprecated(since = "1.0.1", forRemoval = true)
+    @Transactional(readOnly = true)
     public <T> Stream<T> findAllStream(Class<T> entityClass, QuerySpec<T> spec, EntityGraphHelper<T> entityGraph) {
-        throw new UnsupportedOperationException(
-            "findAllStream(Class, QuerySpec, EntityGraph) has been removed due to resource leak risk. "
-                + "Use findAllStream(Class, QuerySpec, Consumer) instead, which automatically manages the Stream lifecycle.");
+        if (entityClass == null) {
+            throw new IllegalArgumentException("entityClass must not be null");
+        }
+        if (spec == null) {
+            throw new IllegalArgumentException("spec must not be null");
+        }
+        TypedQuery<T> query = buildTypedQuery(entityClass, spec, entityGraph, null);
+        return query.getResultStream();
     }
 
     /**
@@ -624,10 +686,15 @@ public class MyJpaTemplate {
             return new PageImpl<>(allContent);
         }
 
-        // 深度分页警告
+        // 深度分页警告（限流：每分钟最多记录一次）
         if (pageable.getOffset() > this.deepPaginationOffsetThreshold) {
-            log.warn("Deep pagination detected (offset={}). This may cause slow queries. "
-                + "Consider using keyset pagination for better performance.", pageable.getOffset());
+            long now = System.currentTimeMillis();
+            long lastWarn = lastDeepPaginationWarnTime.get();
+            if (now - lastWarn > DEEP_PAGINATION_WARN_INTERVAL_MS
+                && lastDeepPaginationWarnTime.compareAndSet(lastWarn, now)) {
+                log.warn("Deep pagination detected (offset={}). This may cause slow queries. "
+                    + "Consider using keyset pagination for better performance.", pageable.getOffset());
+            }
         }
 
         // 深度分页硬限制
@@ -821,5 +888,114 @@ public class MyJpaTemplate {
             }
         } while (batchDeleted >= batchSize);
         return totalDeleted;
+    }
+
+    // ---- 分批提交事务的批量操作 ----
+
+    /**
+     * 分批执行批量更新，每批在独立事务中提交。
+     *
+     * <p>
+     * 与 {@link #executeBatch(UpdateSpec, int)} 不同，此方法每批操作完成后立即提交事务， 避免长事务导致的数据库锁等待超时问题。适用于大数据量操作场景。
+     *
+     * <p>
+     * <strong>注意：</strong>如果某批操作失败，已提交的批次不会回滚。调用方需要自行处理部分成功的情况。
+     *
+     * @param spec 要执行的 UpdateSpec
+     * @param batchSize 每批更新的行数
+     * @param <T> 实体类型
+     * @return 受影响的总行数
+     */
+    public <T> int executeBatchInSeparateTransactions(UpdateSpec<T> spec, int batchSize) {
+        if (spec == null) {
+            throw new IllegalArgumentException("spec must not be null");
+        }
+        if (batchSize <= 0) {
+            throw new IllegalArgumentException("batchSize must be positive");
+        }
+        int totalUpdated = 0;
+        int batchUpdated;
+        do {
+            batchUpdated = executeInNewTransaction(em -> spec.executeLimited(em, batchSize));
+            totalUpdated += batchUpdated;
+            if (batchUpdated > 0 && log.isDebugEnabled()) {
+                log.debug("Batch update committed: {} rows updated in this batch (total: {})", batchUpdated,
+                    totalUpdated);
+            }
+        } while (batchUpdated >= batchSize);
+        return totalUpdated;
+    }
+
+    /**
+     * 分批执行批量删除，每批在独立事务中提交。
+     *
+     * <p>
+     * 与 {@link #executeBatch(DeleteSpec, int)} 不同，此方法每批操作完成后立即提交事务， 避免长事务导致的数据库锁等待超时问题。适用于大数据量操作场景。
+     *
+     * <p>
+     * <strong>注意：</strong>如果某批操作失败，已提交的批次不会回滚。调用方需要自行处理部分成功的情况。
+     *
+     * @param spec 要执行的 DeleteSpec
+     * @param batchSize 每批删除的行数
+     * @param <T> 实体类型
+     * @return 受影响的总行数
+     */
+    public <T> int executeBatchInSeparateTransactions(DeleteSpec<T> spec, int batchSize) {
+        if (spec == null) {
+            throw new IllegalArgumentException("spec must not be null");
+        }
+        if (batchSize <= 0) {
+            throw new IllegalArgumentException("batchSize must be positive");
+        }
+        int totalDeleted = 0;
+        int batchDeleted;
+        do {
+            batchDeleted = executeInNewTransaction(em -> spec.executeLimited(em, batchSize));
+            totalDeleted += batchDeleted;
+            if (batchDeleted > 0 && log.isDebugEnabled()) {
+                log.debug("Batch delete committed: {} rows deleted in this batch (total: {})", batchDeleted,
+                    totalDeleted);
+            }
+        } while (batchDeleted >= batchSize);
+        return totalDeleted;
+    }
+
+    /**
+     * 在新事务中执行操作。
+     *
+     * <p>
+     * 使用 {@link org.springframework.transaction.support.TransactionTemplate} 创建独立事务， 每次调用都会创建新的事务上下文。 需要注入
+     * {@link org.springframework.transaction.PlatformTransactionManager}。
+     *
+     * @param operation 要执行的操作
+     * @param <R> 返回类型
+     * @return 操作结果
+     */
+    private <R> R executeInNewTransaction(java.util.function.Function<EntityManager, R> operation) {
+        org.springframework.transaction.PlatformTransactionManager txManager = getTransactionManager();
+        if (txManager == null) {
+            // 如果没有 TransactionManager，直接在当前上下文中执行
+            return operation.apply(entityManager);
+        }
+        org.springframework.transaction.support.TransactionTemplate txTemplate =
+            new org.springframework.transaction.support.TransactionTemplate(txManager);
+        return txTemplate.execute(status -> operation.apply(entityManager));
+    }
+
+    /**
+     * 获取 PlatformTransactionManager。
+     *
+     * <p>
+     * 通过 ApplicationContext 获取，如果不存在则返回 null。
+     *
+     * @return PlatformTransactionManager 实例，或 null
+     */
+    private org.springframework.transaction.PlatformTransactionManager getTransactionManager() {
+        try {
+            return applicationContext.getBean(org.springframework.transaction.PlatformTransactionManager.class);
+        } catch (Exception e) {
+            log.debug("No PlatformTransactionManager found, executing without separate transaction");
+            return null;
+        }
     }
 }

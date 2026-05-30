@@ -775,7 +775,7 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
         Map<String, Join<?, ?>> joinCache = new LinkedHashMap<>();
         List<Predicate> predicates = new ArrayList<>();
         for (ConditionNode node : conditions) {
-            Predicate p = resolveNode(node, root, query, cb, joinCache, null);
+            Predicate p = resolveNode(node, root, root, query, cb, joinCache, null);
             if (p != null) {
                 predicates.add(p);
             }
@@ -834,25 +834,26 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
      *
      * @param node 条件节点
      * @param path 当前路径
+     * @param rootPath 查询根路径（用于 EXISTS/IN 子查询关联）
      * @param query Criteria 查询对象
      * @param cb Criteria 构建器
      * @param joinCache JOIN 缓存
      * @param pathPrefix 路径前缀
      * @return 生成的 Predicate，如果节点无条件则返回 null
      */
-    private Predicate resolveNode(ConditionNode node, Path<?> path, CriteriaQuery<?> query, CriteriaBuilder cb,
-        Map<String, Join<?, ?>> joinCache, String pathPrefix) {
+    private Predicate resolveNode(ConditionNode node, Path<?> path, Path<?> rootPath, CriteriaQuery<?> query,
+        CriteriaBuilder cb, Map<String, Join<?, ?>> joinCache, String pathPrefix) {
         if (node instanceof ConditionNode.SimpleNode) {
             return resolveSimple((ConditionNode.SimpleNode)node, path, cb);
         }
         if (node instanceof ConditionNode.JoinNode) {
-            return resolveJoin((ConditionNode.JoinNode)node, path, query, cb, joinCache, pathPrefix);
+            return resolveJoin((ConditionNode.JoinNode)node, path, rootPath, query, cb, joinCache, pathPrefix);
         }
         if (node instanceof ConditionNode.OrNode) {
-            return resolveOr((ConditionNode.OrNode)node, path, query, cb, joinCache, pathPrefix);
+            return resolveOr((ConditionNode.OrNode)node, path, rootPath, query, cb, joinCache, pathPrefix);
         }
         if (node instanceof ConditionNode.AndNode) {
-            return resolveAnd((ConditionNode.AndNode)node, path, query, cb, joinCache, pathPrefix);
+            return resolveAnd((ConditionNode.AndNode)node, path, rootPath, query, cb, joinCache, pathPrefix);
         }
         if (node instanceof ConditionNode.MultiLikeNode) {
             return resolveMultiLike((ConditionNode.MultiLikeNode)node, path, cb);
@@ -861,7 +862,7 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
             return resolveCollection((ConditionNode.CollectionNode)node, path, cb);
         }
         if (node instanceof ConditionNode.ExistsNode) {
-            return resolveExists((ConditionNode.ExistsNode<?>)node, path, query, cb);
+            return resolveExists((ConditionNode.ExistsNode<?>)node, rootPath, query, cb);
         }
         if (node instanceof ConditionNode.InSubQueryNode) {
             return resolveInSubQuery((ConditionNode.InSubQueryNode<?>)node, path, query, cb);
@@ -871,7 +872,7 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
         }
         if (node instanceof ConditionNode.NegateNode) {
             Predicate inner =
-                resolveNode(((ConditionNode.NegateNode)node).inner, path, query, cb, joinCache, pathPrefix);
+                resolveNode(((ConditionNode.NegateNode)node).inner, path, rootPath, query, cb, joinCache, pathPrefix);
             return inner != null ? cb.not(inner) : null;
         }
         throw new IllegalArgumentException("Unknown ConditionNode type: " + node.getClass().getName());
@@ -895,6 +896,7 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
      *
      * @param node JOIN 节点
      * @param path 当前路径
+     * @param rootPath 查询根路径
      * @param query Criteria 查询对象
      * @param cb Criteria 构建器
      * @param joinCache JOIN 缓存
@@ -902,8 +904,8 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
      * @return 生成的 Predicate
      */
     @SuppressWarnings({"unchecked", "rawtypes"})
-    private Predicate resolveJoin(ConditionNode.JoinNode node, Path<?> path, CriteriaQuery<?> query, CriteriaBuilder cb,
-        Map<String, Join<?, ?>> joinCache, String pathPrefix) {
+    private Predicate resolveJoin(ConditionNode.JoinNode node, Path<?> path, Path<?> rootPath, CriteriaQuery<?> query,
+        CriteriaBuilder cb, Map<String, Join<?, ?>> joinCache, String pathPrefix) {
         String fullPath = (pathPrefix != null && !pathPrefix.isEmpty() ? pathPrefix + "." : "") + node.fieldName;
 
         Join<?, ?> join = joinCache.computeIfAbsent(fullPath, k -> {
@@ -920,7 +922,7 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
 
         List<Predicate> innerPredicates = new ArrayList<>();
         for (ConditionNode inner : node.innerConditions) {
-            Predicate p = resolveNode(inner, join, query, cb, joinCache, fullPath);
+            Predicate p = resolveNode(inner, join, rootPath, query, cb, joinCache, fullPath);
             if (p != null) {
                 innerPredicates.add(p);
             }
@@ -933,17 +935,18 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
      *
      * @param node OR 节点
      * @param path 当前路径
+     * @param rootPath 查询根路径
      * @param query Criteria 查询对象
      * @param cb Criteria 构建器
      * @param joinCache JOIN 缓存
      * @param pathPrefix 路径前缀
      * @return 生成的 Predicate
      */
-    private Predicate resolveOr(ConditionNode.OrNode node, Path<?> path, CriteriaQuery<?> query, CriteriaBuilder cb,
-        Map<String, Join<?, ?>> joinCache, String pathPrefix) {
+    private Predicate resolveOr(ConditionNode.OrNode node, Path<?> path, Path<?> rootPath, CriteriaQuery<?> query,
+        CriteriaBuilder cb, Map<String, Join<?, ?>> joinCache, String pathPrefix) {
         List<Predicate> childPredicates = new ArrayList<>();
         for (ConditionNode child : node.nodes) {
-            Predicate p = resolveNode(child, path, query, cb, joinCache, pathPrefix);
+            Predicate p = resolveNode(child, path, rootPath, query, cb, joinCache, pathPrefix);
             if (p != null) {
                 childPredicates.add(p);
             }
@@ -962,17 +965,18 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
      *
      * @param node AND 节点
      * @param path 当前路径
+     * @param rootPath 查询根路径
      * @param query Criteria 查询对象
      * @param cb Criteria 构建器
      * @param joinCache JOIN 缓存
      * @param pathPrefix 路径前缀
      * @return 生成的 Predicate
      */
-    private Predicate resolveAnd(ConditionNode.AndNode node, Path<?> path, CriteriaQuery<?> query, CriteriaBuilder cb,
-        Map<String, Join<?, ?>> joinCache, String pathPrefix) {
+    private Predicate resolveAnd(ConditionNode.AndNode node, Path<?> path, Path<?> rootPath, CriteriaQuery<?> query,
+        CriteriaBuilder cb, Map<String, Join<?, ?>> joinCache, String pathPrefix) {
         List<Predicate> childPredicates = new ArrayList<>();
         for (ConditionNode child : node.nodes) {
-            Predicate p = resolveNode(child, path, query, cb, joinCache, pathPrefix);
+            Predicate p = resolveNode(child, path, rootPath, query, cb, joinCache, pathPrefix);
             if (p != null) {
                 childPredicates.add(p);
             }
@@ -1047,20 +1051,21 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
      *
      * @param <S> 子查询实体类型
      * @param node EXISTS 条件节点
-     * @param outerPath 外部查询的实体路径
+     * @param rootPath 外部查询的根路径（用于关联）
      * @param query CriteriaQuery 实例（可以是临时 query）
      * @param cb CriteriaBuilder 实例
      * @return 构建好的 EXISTS 或 NOT EXISTS 谓词
      */
-    private <S> Predicate resolveExistsInternal(ConditionNode.ExistsNode<S> node, Path<?> outerPath,
+    private <S> Predicate resolveExistsInternal(ConditionNode.ExistsNode<S> node, Path<?> rootPath,
         CriteriaQuery<?> query, CriteriaBuilder cb) {
         jakarta.persistence.criteria.Subquery<S> subquery = query.subquery(node.subEntity);
         Root<S> subRoot = subquery.from(node.subEntity);
-        if (!(outerPath instanceof Root<?>)) {
-            throw new IllegalArgumentException("EXISTS correlation requires a Root path, but got "
-                + outerPath.getClass().getSimpleName() + ". Nested JOIN correlation is not supported.");
+        // 使用根路径进行关联，支持从 Join 路径调用
+        if (!(rootPath instanceof Root<?>)) {
+            throw new IllegalArgumentException("EXISTS correlation requires a Root path for correlation, but got "
+                + rootPath.getClass().getSimpleName() + ". This is an internal error.");
         }
-        Root<?> correlatedOuter = subquery.correlate((Root<?>)outerPath);
+        Root<?> correlatedOuter = subquery.correlate((Root<?>)rootPath);
         SubQuerySpec<S> subSpec = SubQuerySpec.create(subquery, subRoot, correlatedOuter, cb);
         node.config.accept(subSpec);
         subSpec.applyWhere();

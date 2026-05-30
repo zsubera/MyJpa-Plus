@@ -686,7 +686,189 @@ public abstract class AbstractBulkOperationSpec<T, SELF extends AbstractBulkOper
     @SuppressWarnings("unchecked")
     public SELF where(Function<Root<T>, Predicate> condition) {
         throw new UnsupportedOperationException("where(Function) 已在 1.1.0 版本移除，请使用类型安全的条件方法 (eq/ne/likeSafe 等)。"
-            + "如确需使用原始 Predicate，请使用 allowUnsafePredicate() 方法。");
+            + "如确需使用原始 Predicate，请使用 allowUnsafePredicate() 方法.");
+    }
+
+    // ---- 条件便捷方法 ----
+
+    /**
+     * 仅在 {@code condition} 为 true 时添加等值条件。
+     *
+     * @param condition 是否添加条件的标志
+     * @param field 实体属性的方法引用
+     * @param value 要比较的值
+     * @return 当前构建器实例，支持链式调用
+     */
+    public SELF eq(boolean condition, SFunction<T, ?> field, @Nullable Object value) {
+        return condition ? eq(field, value) : self();
+    }
+
+    /**
+     * 仅在 {@code condition} 为 true 时添加不等条件。
+     *
+     * @param condition 是否添加条件的标志
+     * @param field 实体属性的方法引用
+     * @param value 要比较的值
+     * @return 当前构建器实例，支持链式调用
+     */
+    public SELF ne(boolean condition, SFunction<T, ?> field, @Nullable Object value) {
+        return condition ? ne(field, value) : self();
+    }
+
+    /**
+     * 仅在 {@code condition} 为 true 时添加大于条件。
+     *
+     * @param condition 是否添加条件的标志
+     * @param field 实体属性的方法引用
+     * @param value 要比较的值
+     * @return 当前构建器实例，支持链式调用
+     */
+    public SELF gt(boolean condition, SFunction<T, ?> field, Comparable<?> value) {
+        return condition ? gt(field, value) : self();
+    }
+
+    /**
+     * 仅在 {@code condition} 为 true 时添加大于等于条件。
+     *
+     * @param condition 是否添加条件的标志
+     * @param field 实体属性的方法引用
+     * @param value 要比较的值
+     * @return 当前构建器实例，支持链式调用
+     */
+    public SELF ge(boolean condition, SFunction<T, ?> field, Comparable<?> value) {
+        return condition ? ge(field, value) : self();
+    }
+
+    /**
+     * 仅在 {@code condition} 为 true 时添加小于条件。
+     *
+     * @param condition 是否添加条件的标志
+     * @param field 实体属性的方法引用
+     * @param value 要比较的值
+     * @return 当前构建器实例，支持链式调用
+     */
+    public SELF lt(boolean condition, SFunction<T, ?> field, Comparable<?> value) {
+        return condition ? lt(field, value) : self();
+    }
+
+    /**
+     * 仅在 {@code condition} 为 true 时添加小于等于条件。
+     *
+     * @param condition 是否添加条件的标志
+     * @param field 实体属性的方法引用
+     * @param value 要比较的值
+     * @return 当前构建器实例，支持链式调用
+     */
+    public SELF le(boolean condition, SFunction<T, ?> field, Comparable<?> value) {
+        return condition ? le(field, value) : self();
+    }
+
+    /**
+     * 仅在 {@code condition} 为 true 时添加前缀匹配条件。
+     *
+     * @param condition 是否添加条件的标志
+     * @param field 实体属性的方法引用
+     * @param value 前缀字符串值
+     * @return 当前构建器实例，支持链式调用
+     */
+    public SELF startsWith(boolean condition, SFunction<T, ?> field, String value) {
+        return condition ? startsWith(field, value) : self();
+    }
+
+    /**
+     * 仅在 {@code condition} 为 true 时添加后缀匹配条件。
+     *
+     * @param condition 是否添加条件的标志
+     * @param field 实体属性的方法引用
+     * @param value 后缀字符串值
+     * @return 当前构建器实例，支持链式调用
+     */
+    public SELF endsWith(boolean condition, SFunction<T, ?> field, String value) {
+        return condition ? endsWith(field, value) : self();
+    }
+
+    /**
+     * 仅在 {@code condition} 为 true 时添加包含匹配条件。
+     *
+     * @param condition 是否添加条件的标志
+     * @param field 实体属性的方法引用
+     * @param value 要包含的子字符串值
+     * @return 当前构建器实例，支持链式调用
+     */
+    public SELF contains(boolean condition, SFunction<T, ?> field, String value) {
+        return condition ? contains(field, value) : self();
+    }
+
+    /**
+     * 仅在 {@code condition} 为 true 时添加 IN 条件。
+     *
+     * @param condition 是否添加条件的标志
+     * @param field 实体属性的方法引用
+     * @param values 值集合
+     * @return 当前构建器实例，支持链式调用
+     */
+    public SELF in(boolean condition, SFunction<T, ?> field, Object... values) {
+        return condition ? in(field, values) : self();
+    }
+
+    /**
+     * 仅在 {@code condition} 为 true 时添加 NOT IN 条件。
+     *
+     * @param condition 是否添加条件的标志
+     * @param field 实体属性的方法引用
+     * @param values 值集合
+     * @return 当前构建器实例，支持链式调用
+     */
+    public SELF notIn(boolean condition, SFunction<T, ?> field, Object... values) {
+        return condition ? notIn(field, values) : self();
+    }
+
+    /**
+     * 仅在 {@code condition} 为 true 时添加 BETWEEN 条件。
+     *
+     * @param condition 是否添加条件的标志
+     * @param field 实体属性的方法引用
+     * @param start 范围起始值
+     * @param end 范围结束值
+     * @return 当前构建器实例，支持链式调用
+     */
+    public SELF between(boolean condition, SFunction<T, ?> field, Comparable<?> start, Comparable<?> end) {
+        return condition ? between(field, start, end) : self();
+    }
+
+    /**
+     * 仅在 {@code condition} 为 true 时添加 NOT BETWEEN 条件。
+     *
+     * @param condition 是否添加条件的标志
+     * @param field 实体属性的方法引用
+     * @param start 范围起始值
+     * @param end 范围结束值
+     * @return 当前构建器实例，支持链式调用
+     */
+    public SELF notBetween(boolean condition, SFunction<T, ?> field, Comparable<?> start, Comparable<?> end) {
+        return condition ? notBetween(field, start, end) : self();
+    }
+
+    /**
+     * 仅在 {@code condition} 为 true 时添加 IS NULL 条件。
+     *
+     * @param condition 是否添加条件的标志
+     * @param field 实体属性的方法引用
+     * @return 当前构建器实例，支持链式调用
+     */
+    public SELF isNull(boolean condition, SFunction<T, ?> field) {
+        return condition ? isNull(field) : self();
+    }
+
+    /**
+     * 仅在 {@code condition} 为 true 时添加 IS NOT NULL 条件。
+     *
+     * @param condition 是否添加条件的标志
+     * @param field 实体属性的方法引用
+     * @return 当前构建器实例，支持链式调用
+     */
+    public SELF isNotNull(boolean condition, SFunction<T, ?> field) {
+        return condition ? isNotNull(field) : self();
     }
 
     /**

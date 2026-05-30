@@ -14,6 +14,7 @@ import java.lang.annotation.Target;
  *
  * <ul>
  * <li>{@code Boolean} / {@code boolean} — {@code true} 表示"已删除"，{@code false}（或 {@code null}）表示"未删除"</li>
+ * <li>{@code Integer} / {@code int} — 通过 {@link #deletedIntValue()} 指定表示"已删除"的整数值（默认 1），其他值表示"未删除"</li>
  * <li>{@code Enum} — 通过 {@link #deletedValue()} 指定表示"已删除"的枚举值名称</li>
  * </ul>
  *
@@ -37,6 +38,20 @@ import java.lang.annotation.Target;
  *     public class Product {
  *         @SoftDelete
  *         private Boolean deleted = false;
+ *     }
+ * }
+ * </pre>
+ *
+ * <p>
+ * 使用示例（Integer 类型）：
+ *
+ * <pre>
+ * {
+ *     &#64;code
+ *     &#64;Entity
+ *     public class Order {
+ *         @SoftDelete(deletedIntValue = 1)
+ *         private Integer isDeleted = 0;
  *     }
  * }
  * </pre>
@@ -71,9 +86,19 @@ public @interface SoftDelete {
      * 枚举类型字段中表示"已删除"的枚举值名称。
      *
      * <p>
-     * 仅当字段类型为 {@code Enum} 时有效。对于 {@code Boolean} 类型字段，此属性被忽略。
+     * 仅当字段类型为 {@code Enum} 时有效。对于 {@code Boolean} 和 {@code Integer} 类型字段，此属性被忽略。
      *
      * @return 表示"已删除"的枚举值名称，默认为空字符串（使用 Boolean 语义）
      */
     String deletedValue() default "";
+
+    /**
+     * Integer 类型字段中表示"已删除"的整数值。
+     *
+     * <p>
+     * 仅当字段类型为 {@code Integer} 或 {@code int} 时有效。对于 {@code Boolean} 和 {@code Enum} 类型字段，此属性被忽略。
+     *
+     * @return 表示"已删除"的整数值，默认为 1
+     */
+    int deletedIntValue() default 1;
 }

@@ -597,6 +597,241 @@ public class SubQuerySpec<S> {
     }
 
     /**
+     * 添加多字段模糊搜索条件（字符串字段名版本）。
+     *
+     * <p>
+     * 适用于只有字符串形式字段名的场景（如通用解析器、动态字段名等）， 无法使用方法引用时的替代方案。
+     *
+     * <pre>{@code
+     * // 使用字符串字段名
+     * sub.multiLike("keyword", "name", "email", "phone");
+     *
+     * // 动态字段名
+     * String[] searchFields = {"name", "email"};
+     * sub.multiLike("keyword", searchFields);
+     * }</pre>
+     *
+     * @param keyword 搜索关键词
+     * @param fieldNames 要搜索的字段名字符串列表
+     * @return 当前 SubQuerySpec 实例，支持链式调用
+     * @throws IllegalArgumentException 如果 fieldNames 为 null、空或包含 null 元素
+     */
+    public SubQuerySpec<S> multiLike(String keyword, String... fieldNames) {
+        if (fieldNames == null || fieldNames.length == 0) {
+            throw new IllegalArgumentException("fieldNames must not be empty");
+        }
+        if (keyword != null && !keyword.isEmpty()) {
+            String pattern = "%" + PredicateHelper.escapeLikeWildcards(keyword) + "%";
+            List<Predicate> likes = new ArrayList<>();
+            for (String fieldName : fieldNames) {
+                if (fieldName == null) {
+                    throw new IllegalArgumentException("fieldNames must not contain null elements");
+                }
+                likes.add(cb.like(root.get(fieldName).as(String.class), pattern, PredicateHelper.LIKE_ESCAPE_CHAR));
+            }
+            if (!likes.isEmpty()) {
+                predicates.add(likes.size() == 1 ? likes.get(0) : cb.or(likes.toArray(new Predicate[0])));
+            }
+        }
+        return this;
+    }
+
+    // ---- 条件便捷方法 ----
+
+    /**
+     * 仅在 {@code condition} 为 true 时添加等值条件。
+     *
+     * @param condition 是否添加条件的标志
+     * @param field 实体属性的方法引用
+     * @param value 要比较的值
+     * @return 当前 SubQuerySpec 实例，支持链式调用
+     */
+    public SubQuerySpec<S> eq(boolean condition, SFunction<S, ?> field, @Nullable Object value) {
+        return condition ? eq(field, value) : this;
+    }
+
+    /**
+     * 仅在 {@code condition} 为 true 时添加不等条件。
+     *
+     * @param condition 是否添加条件的标志
+     * @param field 实体属性的方法引用
+     * @param value 要比较的值
+     * @return 当前 SubQuerySpec 实例，支持链式调用
+     */
+    public SubQuerySpec<S> ne(boolean condition, SFunction<S, ?> field, @Nullable Object value) {
+        return condition ? ne(field, value) : this;
+    }
+
+    /**
+     * 仅在 {@code condition} 为 true 时添加大于条件。
+     *
+     * @param condition 是否添加条件的标志
+     * @param field 实体属性的方法引用
+     * @param value 要比较的值
+     * @return 当前 SubQuerySpec 实例，支持链式调用
+     */
+    public SubQuerySpec<S> gt(boolean condition, SFunction<S, ?> field, Comparable<?> value) {
+        return condition ? gt(field, value) : this;
+    }
+
+    /**
+     * 仅在 {@code condition} 为 true 时添加大于等于条件。
+     *
+     * @param condition 是否添加条件的标志
+     * @param field 实体属性的方法引用
+     * @param value 要比较的值
+     * @return 当前 SubQuerySpec 实例，支持链式调用
+     */
+    public SubQuerySpec<S> ge(boolean condition, SFunction<S, ?> field, Comparable<?> value) {
+        return condition ? ge(field, value) : this;
+    }
+
+    /**
+     * 仅在 {@code condition} 为 true 时添加小于条件。
+     *
+     * @param condition 是否添加条件的标志
+     * @param field 实体属性的方法引用
+     * @param value 要比较的值
+     * @return 当前 SubQuerySpec 实例，支持链式调用
+     */
+    public SubQuerySpec<S> lt(boolean condition, SFunction<S, ?> field, Comparable<?> value) {
+        return condition ? lt(field, value) : this;
+    }
+
+    /**
+     * 仅在 {@code condition} 为 true 时添加小于等于条件。
+     *
+     * @param condition 是否添加条件的标志
+     * @param field 实体属性的方法引用
+     * @param value 要比较的值
+     * @return 当前 SubQuerySpec 实例，支持链式调用
+     */
+    public SubQuerySpec<S> le(boolean condition, SFunction<S, ?> field, Comparable<?> value) {
+        return condition ? le(field, value) : this;
+    }
+
+    /**
+     * 仅在 {@code condition} 为 true 时添加前缀匹配条件。
+     *
+     * @param condition 是否添加条件的标志
+     * @param field 实体属性的方法引用
+     * @param value 前缀字符串值
+     * @return 当前 SubQuerySpec 实例，支持链式调用
+     */
+    public SubQuerySpec<S> startsWith(boolean condition, SFunction<S, ?> field, String value) {
+        return condition ? startsWith(field, value) : this;
+    }
+
+    /**
+     * 仅在 {@code condition} 为 true 时添加后缀匹配条件。
+     *
+     * @param condition 是否添加条件的标志
+     * @param field 实体属性的方法引用
+     * @param value 后缀字符串值
+     * @return 当前 SubQuerySpec 实例，支持链式调用
+     */
+    public SubQuerySpec<S> endsWith(boolean condition, SFunction<S, ?> field, String value) {
+        return condition ? endsWith(field, value) : this;
+    }
+
+    /**
+     * 仅在 {@code condition} 为 true 时添加包含匹配条件。
+     *
+     * @param condition 是否添加条件的标志
+     * @param field 实体属性的方法引用
+     * @param value 要包含的子字符串值
+     * @return 当前 SubQuerySpec 实例，支持链式调用
+     */
+    public SubQuerySpec<S> contains(boolean condition, SFunction<S, ?> field, String value) {
+        return condition ? contains(field, value) : this;
+    }
+
+    /**
+     * 仅在 {@code condition} 为 true 时添加 IN 条件。
+     *
+     * @param condition 是否添加条件的标志
+     * @param field 实体属性的方法引用
+     * @param values 值集合
+     * @return 当前 SubQuerySpec 实例，支持链式调用
+     */
+    public SubQuerySpec<S> in(boolean condition, SFunction<S, ?> field, Object... values) {
+        return condition ? in(field, values) : this;
+    }
+
+    /**
+     * 仅在 {@code condition} 为 true 时添加 NOT IN 条件。
+     *
+     * @param condition 是否添加条件的标志
+     * @param field 实体属性的方法引用
+     * @param values 值集合
+     * @return 当前 SubQuerySpec 实例，支持链式调用
+     */
+    public SubQuerySpec<S> notIn(boolean condition, SFunction<S, ?> field, Object... values) {
+        return condition ? notIn(field, values) : this;
+    }
+
+    /**
+     * 仅在 {@code condition} 为 true 时添加 BETWEEN 条件。
+     *
+     * @param condition 是否添加条件的标志
+     * @param field 实体属性的方法引用
+     * @param start 范围起始值（包含）
+     * @param end 范围结束值（包含）
+     * @return 当前 SubQuerySpec 实例，支持链式调用
+     */
+    public SubQuerySpec<S> between(boolean condition, SFunction<S, ?> field, Comparable<?> start, Comparable<?> end) {
+        return condition ? between(field, start, end) : this;
+    }
+
+    /**
+     * 仅在 {@code condition} 为 true 时添加 NOT BETWEEN 条件。
+     *
+     * @param condition 是否添加条件的标志
+     * @param field 实体属性的方法引用
+     * @param start 范围起始值（包含）
+     * @param end 范围结束值（包含）
+     * @return 当前 SubQuerySpec 实例，支持链式调用
+     */
+    public SubQuerySpec<S> notBetween(boolean condition, SFunction<S, ?> field, Comparable<?> start,
+        Comparable<?> end) {
+        return condition ? notBetween(field, start, end) : this;
+    }
+
+    /**
+     * 仅在 {@code condition} 为 true 时添加多字段模糊搜索条件。
+     *
+     * @param condition 是否添加条件的标志
+     * @param keyword 搜索关键词
+     * @param fields 要搜索的实体字段列表
+     * @return 当前 SubQuerySpec 实例，支持链式调用
+     */
+    public SubQuerySpec<S> multiLike(boolean condition, String keyword, SFunction<S, ?>... fields) {
+        return condition ? multiLike(keyword, fields) : this;
+    }
+
+    /**
+     * 仅在 {@code condition} 为 true 时添加 IS EMPTY 条件。
+     *
+     * @param condition 是否添加条件的标志
+     * @param field 实体属性的方法引用
+     * @return 当前 SubQuerySpec 实例，支持链式调用
+     */
+    public SubQuerySpec<S> isEmpty(boolean condition, SFunction<S, ?> field) {
+        return condition ? isEmpty(field) : this;
+    }
+
+    /**
+     * 仅在 {@code condition} 为 true 时添加 IS NOT EMPTY 条件。
+     *
+     * @param condition 是否添加条件的标志
+     * @param field 实体属性的方法引用
+     * @return 当前 SubQuerySpec 实例，支持链式调用
+     */
+    public SubQuerySpec<S> isNotEmpty(boolean condition, SFunction<S, ?> field) {
+        return condition ? isNotEmpty(field) : this;
+    }
+
+    /**
      * 使用子查询根和 CriteriaBuilder 添加原始谓词。作为复杂条件或关联谓词的扩展机制。 要引用外部查询根，请使用 {@link #correlated()}。
      *
      * <pre>{@code
