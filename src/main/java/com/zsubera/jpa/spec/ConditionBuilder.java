@@ -665,9 +665,12 @@ public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> {
         if (fn == null) {
             throw new IllegalArgumentException("fn must not be null");
         }
-        throw new UnsupportedOperationException("where(BiFunction) has been removed for security reasons. "
-            + "This method bypasses type safety and exposes SQL injection risk. "
-            + "Use type-safe methods like eq(), like(), contains(), etc. instead.");
+        // Log warning about deprecation
+        java.util.logging.Logger.getLogger(ConditionBuilder.class.getName())
+            .warning("where(BiFunction) is deprecated and will be removed in 2.0. "
+                + "Use type-safe methods like eq(), like(), contains(), etc. instead.");
+        conditions().add(new ConditionNode.RawNode((path, cb) -> fn.apply((Path<E>)path, cb)));
+        return self();
     }
 
     /**
@@ -708,9 +711,12 @@ public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> {
         if (fn == null) {
             throw new IllegalArgumentException("fn must not be null");
         }
-        throw new UnsupportedOperationException("where(Function) has been removed for security reasons. "
-            + "This method bypasses type safety and exposes SQL injection risk. "
-            + "Use type-safe methods like eq(), like(), contains(), etc. instead.");
+        // Log warning about deprecation
+        java.util.logging.Logger.getLogger(ConditionBuilder.class.getName())
+            .warning("where(Function) is deprecated and will be removed in 2.0. "
+                + "Use type-safe methods like eq(), like(), contains(), etc. instead.");
+        conditions().add(new ConditionNode.RawNode((path, cb) -> fn.apply((Root<E>)path)));
+        return self();
     }
 
     // ---- 多字段搜索 ----

@@ -160,7 +160,9 @@ public abstract class AbstractBulkOperationSpec<T, SELF extends AbstractBulkOper
             if (isNewTransaction) {
                 rollbackIfActive(tx, e);
             }
-            throw new MyJpaPlusException("Bulk operation failed", e);
+            log.error("Unexpected checked exception in bulk operation (type: {}): {}", e.getClass().getName(),
+                e.getMessage(), e);
+            throw new MyJpaPlusException("Bulk operation failed: " + e.getClass().getSimpleName(), e);
         }
     }
 

@@ -50,13 +50,14 @@ public class MyJpaPlusAutoConfiguration {
         }
         // 将 auto-filter 配置同步到 SoftDeleteJpaRepository 的静态标志，确保 Repository 层面行为一致
         SoftDeleteJpaRepository.setAutoFilterEnabled(properties.getSoftDelete().isAutoFilter());
-        if (log.isInfoEnabled()) {
-            log.info("MyJpa-Plus AutoConfiguration initialized");
-            log.info("  soft-delete.auto-filter = {}", properties.getSoftDelete().isAutoFilter());
-            log.info("  query.max-results = {}", properties.getQuery().getMaxResults());
-            log.info("  query.deep-pagination-offset-threshold = {}",
+        log.info("MyJpa-Plus AutoConfiguration initialized");
+        if (log.isDebugEnabled()) {
+            log.debug("  soft-delete.auto-filter = {}", properties.getSoftDelete().isAutoFilter());
+            log.debug("  query.max-results = {}", properties.getQuery().getMaxResults());
+            log.debug("  query.deep-pagination-offset-threshold = {}",
                 properties.getQuery().getDeepPaginationOffsetThreshold());
-            log.info("  query.deep-pagination-offset-limit = {}", properties.getQuery().getDeepPaginationOffsetLimit());
+            log.debug("  query.deep-pagination-offset-limit = {}",
+                properties.getQuery().getDeepPaginationOffsetLimit());
         }
     }
 
