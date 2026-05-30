@@ -352,7 +352,7 @@ public final class PredicateHelper {
      * 构建 IN 谓词（数组形式）。
      *
      * <p>
-     * 如果值的数量超过 {@link InClauseBuilder#MAX_IN_CLAUSE_SIZE}，会自动分批处理。
+     * 如果值的数量超过 {@link InClauseBuilder#getMaxInClauseSize()}，会自动分批处理。
      *
      * @param path 实体路径
      * @param fieldName 字段名
@@ -368,7 +368,7 @@ public final class PredicateHelper {
      * 构建 NOT IN 谓词（数组形式）。
      *
      * <p>
-     * 如果值的数量超过 {@link InClauseBuilder#MAX_IN_CLAUSE_SIZE}，会自动分批处理。
+     * 如果值的数量超过 {@link InClauseBuilder#getMaxInClauseSize()}，会自动分批处理。
      *
      * @param path 实体路径
      * @param fieldName 字段名
@@ -384,7 +384,7 @@ public final class PredicateHelper {
      * 构建 IN 谓词（集合形式）。
      *
      * <p>
-     * 如果值的数量超过 {@link InClauseBuilder#MAX_IN_CLAUSE_SIZE}，会自动分批处理。
+     * 如果值的数量超过 {@link InClauseBuilder#getMaxInClauseSize()}，会自动分批处理。
      *
      * @param path 实体路径
      * @param fieldName 字段名
@@ -400,7 +400,7 @@ public final class PredicateHelper {
      * 构建 NOT IN 谓词（集合形式）。
      *
      * <p>
-     * 如果值的数量超过 {@link InClauseBuilder#MAX_IN_CLAUSE_SIZE}，会自动分批处理。
+     * 如果值的数量超过 {@link InClauseBuilder#getMaxInClauseSize()}，会自动分批处理。
      *
      * @param path 实体路径
      * @param fieldName 字段名

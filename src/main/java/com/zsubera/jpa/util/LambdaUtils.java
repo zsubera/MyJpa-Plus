@@ -27,18 +27,25 @@ import org.slf4j.LoggerFactory;
  * }</pre>
  *
  * <p>
- * 缓存配置：属性名缓存默认大小为 4096。可通过系统属性 {@code myjpa-plus.lambda-cache-size} 自定义：
+ * 缓存配置优先级：Spring Boot 配置 > 系统属性 > 默认值
  *
- * <pre>{@code
- * // 启动时设置
- * -Dmyjpa-plus.lambda-cache-size=8192
- * }</pre>
+ * <ul>
+ * <li>Spring Boot: {@code myjpa-plus.lambda-cache-size}
+ * <li>系统属性: {@code -Dmyjpa-plus.lambda-cache-size}
+ * <li>默认值: 4096
+ * </ul>
  */
 public final class LambdaUtils {
 
     private static final Logger log = LoggerFactory.getLogger(LambdaUtils.class);
 
-    private static final int MAX_CACHE_SIZE;
+    /**
+     * 属性名缓存的最大大小。
+     *
+     * <p>
+     * 配置优先级：Spring Boot 配置 > 系统属性 {@code myjpa-plus.lambda-cache-size} > 默认值 (4096)。
+     */
+    private static int maxCacheSize;
 
     static {
         int configured = 4096;
@@ -56,21 +63,47 @@ public final class LambdaUtils {
                 // use default
             }
         }
-        MAX_CACHE_SIZE = configured;
+        maxCacheSize = configured;
+    }
+
+    /**
+     * 获取缓存最大大小。
+     *
+     * @return 缓存最大大小
+     */
+    public static int getMaxCacheSize() {
+        return maxCacheSize;
+    }
+
+    /**
+     * 设置缓存最大大小。由 Spring Boot 自动配置调用。
+     *
+     * <p>
+     * 有效范围：1-65536。超出范围的值将被忽略并记录警告。
+     *
+     * @param size 缓存最大大小
+     */
+    public static void setMaxCacheSize(int size) {
+        if (size > 0 && size <= 65536) {
+            maxCacheSize = size;
+            log.info("Lambda cache size configured to {}", size);
+        } else if (size > 65536) {
+            log.warn("Lambda cache size ({}) exceeds upper limit (65536). Ignoring.", size);
+        }
     }
 
     /**
      * 使用 LinkedHashMap 实现 LRU 缓存，按访问顺序维护条目，确保热点数据不被误驱逐。
      *
      * <p>
-     * 当缓存大小超过 {@link #MAX_CACHE_SIZE} 时会自动驱逐最旧的条目（通过 {@code removeEldestEntry}），防止热部署场景下无限增长。驱逐后已有的 lambda
+     * 当缓存大小超过 {@link #maxCacheSize} 时会自动驱逐最旧的条目（通过 {@code removeEldestEntry}），防止热部署场景下无限增长。驱逐后已有的 lambda
      * 元数据会在下次访问时重新解析（无副作用）。
      */
     private static final Map<String, String> CACHE =
         Collections.synchronizedMap(new LinkedHashMap<>(4096, 0.75f, true) {
             @Override
             protected boolean removeEldestEntry(Map.Entry<String, String> eldest) {
-                return size() > MAX_CACHE_SIZE;
+                return size() > maxCacheSize;
             }
         });
 

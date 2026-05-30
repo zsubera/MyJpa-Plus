@@ -2,6 +2,7 @@ package com.zsubera.jpa.autoconfigure;
 
 import com.zsubera.jpa.repository.SoftDeleteJpaRepository;
 import com.zsubera.jpa.template.MyJpaTemplate;
+import com.zsubera.jpa.util.InClauseBuilder;
 import com.zsubera.jpa.util.LambdaUtils;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import jakarta.persistence.EntityManager;
@@ -32,6 +33,9 @@ import org.springframework.context.event.EventListener;
  * <li>{@code myjpa-plus.soft-delete.auto-filter} — 自动应用软删除过滤器（默认：true）
  * <li>{@code myjpa-plus.query.max-results} — 查询最大返回行数（默认：10000）
  * <li>{@code myjpa-plus.query.deep-pagination-offset-threshold} — 深度分页警告阈值（默认：100000）
+ * <li>{@code myjpa-plus.query.in-clause-max-size} — IN 子句最大参数数量（默认：1000）
+ * <li>{@code myjpa-plus.query.in-clause-hard-limit} — IN 子句硬限制（默认：5000）
+ * <li>{@code myjpa-plus.query.lambda-cache-size} — Lambda 缓存大小（默认：4096）
  * </ul>
  */
 @AutoConfiguration
@@ -50,6 +54,14 @@ public class MyJpaPlusAutoConfiguration {
         }
         // 将 auto-filter 配置同步到 SoftDeleteJpaRepository 的静态标志，确保 Repository 层面行为一致
         SoftDeleteJpaRepository.setAutoFilterEnabled(properties.getSoftDelete().isAutoFilter());
+
+        // 应用 IN 子句配置
+        InClauseBuilder.setMaxInClauseSize(properties.getQuery().getInClauseMaxSize());
+        InClauseBuilder.setHardLimit(properties.getQuery().getInClauseHardLimit());
+
+        // 应用 Lambda 缓存配置
+        LambdaUtils.setMaxCacheSize(properties.getQuery().getLambdaCacheSize());
+
         log.info("MyJpa-Plus AutoConfiguration initialized");
         if (log.isDebugEnabled()) {
             log.debug("  soft-delete.auto-filter = {}", properties.getSoftDelete().isAutoFilter());
@@ -58,6 +70,9 @@ public class MyJpaPlusAutoConfiguration {
                 properties.getQuery().getDeepPaginationOffsetThreshold());
             log.debug("  query.deep-pagination-offset-limit = {}",
                 properties.getQuery().getDeepPaginationOffsetLimit());
+            log.debug("  query.in-clause-max-size = {}", properties.getQuery().getInClauseMaxSize());
+            log.debug("  query.in-clause-hard-limit = {}", properties.getQuery().getInClauseHardLimit());
+            log.debug("  query.lambda-cache-size = {}", properties.getQuery().getLambdaCacheSize());
         }
     }
 

@@ -92,6 +92,21 @@ public class MyJpaPlusProperties {
          */
         private int deepPaginationOffsetLimit = -1;
 
+        /**
+         * IN 子句中单个批次的最大参数数量。超过此值会自动拆分为多个 OR 连接的批次。 默认值：{@code 1000}（Oracle 限制）
+         */
+        private int inClauseMaxSize = 1000;
+
+        /**
+         * IN 子句的硬限制。超过此限制时将抛出异常，防止数据库性能问题。 默认值：{@code 5000}
+         */
+        private int inClauseHardLimit = 5000;
+
+        /**
+         * Lambda 属性名缓存大小。 默认值：{@code 4096}
+         */
+        private int lambdaCacheSize = 4096;
+
         public int getMaxResults() {
             return maxResults;
         }
@@ -123,6 +138,39 @@ public class MyJpaPlusProperties {
                 throw new IllegalArgumentException("deepPaginationOffsetLimit must be positive or -1 (disabled)");
             }
             this.deepPaginationOffsetLimit = deepPaginationOffsetLimit;
+        }
+
+        public int getInClauseMaxSize() {
+            return inClauseMaxSize;
+        }
+
+        public void setInClauseMaxSize(int inClauseMaxSize) {
+            if (inClauseMaxSize <= 0) {
+                throw new IllegalArgumentException("inClauseMaxSize must be positive");
+            }
+            this.inClauseMaxSize = inClauseMaxSize;
+        }
+
+        public int getInClauseHardLimit() {
+            return inClauseHardLimit;
+        }
+
+        public void setInClauseHardLimit(int inClauseHardLimit) {
+            if (inClauseHardLimit <= 0) {
+                throw new IllegalArgumentException("inClauseHardLimit must be positive");
+            }
+            this.inClauseHardLimit = inClauseHardLimit;
+        }
+
+        public int getLambdaCacheSize() {
+            return lambdaCacheSize;
+        }
+
+        public void setLambdaCacheSize(int lambdaCacheSize) {
+            if (lambdaCacheSize <= 0) {
+                throw new IllegalArgumentException("lambdaCacheSize must be positive");
+            }
+            this.lambdaCacheSize = lambdaCacheSize;
         }
     }
 }

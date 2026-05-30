@@ -160,7 +160,7 @@ class InClauseBuilderTest {
         persistEntity("target", 999);
         persistEntity("other", 0);
 
-        int totalValues = InClauseBuilder.MAX_IN_CLAUSE_SIZE + 100;
+        int totalValues = InClauseBuilder.getMaxInClauseSize() + 100;
         List<Integer> values = new ArrayList<>();
         for (int i = 0; i < totalValues; i++) {
             values.add(i);
@@ -180,7 +180,7 @@ class InClauseBuilderTest {
         persistEntity("target", 999);
         persistEntity("excluded", 500);
 
-        int totalValues = InClauseBuilder.MAX_IN_CLAUSE_SIZE + 100;
+        int totalValues = InClauseBuilder.getMaxInClauseSize() + 100;
         List<Integer> values = new ArrayList<>();
         for (int i = 0; i < totalValues; i++) {
             values.add(i);

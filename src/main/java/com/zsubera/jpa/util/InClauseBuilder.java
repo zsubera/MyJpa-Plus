@@ -23,13 +23,15 @@ import org.slf4j.LoggerFactory;
  * 以避免超出这些限制。
  *
  * <p>
- * <strong>配置：</strong>可通过系统属性 {@code myjpa-plus.in-clause-max-size} 自定义最大参数数量：
+ * <strong>配置优先级：</strong>Spring Boot 配置 > 系统属性 > 默认值
  *
- * <pre>{@code
- * // 启动时设置（例如 PostgreSQL 可设置较大值）
- * -Dmyjpa-plus.in-clause-max-size=65535
- * }</pre>
+ * <ul>
+ * <li>Spring Boot: {@code myjpa-plus.in-clause.max-size} / {@code myjpa-plus.in-clause.hard-limit}
+ * <li>系统属性: {@code -Dmyjpa-plus.in-clause-max-size} / {@code -Dmyjpa-plus.in-clause-hard-limit}
+ * <li>默认值: max-size=1000, hard-limit=5000
+ * </ul>
  *
+ * <p>
  * 不同数据库的限制参考：
  * <ul>
  * <li>Oracle: 1000</li>
@@ -46,12 +48,17 @@ public final class InClauseBuilder {
      * IN 子句的硬限制。超过此限制时将抛出异常，防止数据库性能问题。
      *
      * <p>
-     * 可通过系统属性 {@code myjpa-plus.in-clause-hard-limit} 自定义。
+     * 配置优先级：Spring Boot 配置 > 系统属性 {@code myjpa-plus.in-clause-hard-limit} > 默认值 (5000)。
      */
-    private static final int HARD_LIMIT;
+    private static int hardLimit;
 
-    /** 单个 IN 子句中的最大参数数量。可通过系统属性 {@code myjpa-plus.in-clause-max-size} 配置。 */
-    public static final int MAX_IN_CLAUSE_SIZE;
+    /**
+     * 单个 IN 子句中的最大参数数量。
+     *
+     * <p>
+     * 配置优先级：Spring Boot 配置 > 系统属性 {@code myjpa-plus.in-clause-max-size} > 默认值 (1000)。
+     */
+    private static int maxInClauseSize;
 
     static {
         int configured = 1000;
@@ -70,7 +77,7 @@ public final class InClauseBuilder {
                 // use default
             }
         }
-        MAX_IN_CLAUSE_SIZE = configured;
+        maxInClauseSize = configured;
 
         int hardConfigured = 5000;
         String hardProp = System.getProperty("myjpa-plus.in-clause-hard-limit");
@@ -84,7 +91,54 @@ public final class InClauseBuilder {
                 // use default
             }
         }
-        HARD_LIMIT = hardConfigured;
+        hardLimit = hardConfigured;
+    }
+
+    /**
+     * 获取单个 IN 子句中的最大参数数量。
+     *
+     * @return 最大参数数量
+     */
+    public static int getMaxInClauseSize() {
+        return maxInClauseSize;
+    }
+
+    /**
+     * 设置单个 IN 子句中的最大参数数量。由 Spring Boot 自动配置调用。
+     *
+     * <p>
+     * 有效范围：1-100000。超出范围的值将被忽略并记录警告。
+     *
+     * @param size 最大参数数量
+     */
+    public static void setMaxInClauseSize(int size) {
+        if (size > 0 && size <= 100000) {
+            maxInClauseSize = size;
+            log.info("IN clause max size configured to {}", size);
+        } else if (size > 100000) {
+            log.warn("IN clause max size ({}) exceeds upper limit (100000). Ignoring.", size);
+        }
+    }
+
+    /**
+     * 获取 IN 子句的硬限制。
+     *
+     * @return 硬限制值
+     */
+    public static int getHardLimit() {
+        return hardLimit;
+    }
+
+    /**
+     * 设置 IN 子句的硬限制。由 Spring Boot 自动配置调用。
+     *
+     * @param limit 硬限制值，必须为正数
+     */
+    public static void setHardLimit(int limit) {
+        if (limit > 0) {
+            hardLimit = limit;
+            log.info("IN clause hard limit configured to {}", limit);
+        }
     }
 
     private InClauseBuilder() {}
@@ -93,7 +147,7 @@ public final class InClauseBuilder {
      * 构建 {@code IN} 谓词：{@code field IN (values)}。
      *
      * <p>
-     * 如果值的数量超过 {@link #MAX_IN_CLAUSE_SIZE}，IN 子句会自动拆分为多个 OR 连接的批次： {@code field IN (1..1000) OR
+     * 如果值的数量超过 {@link #getMaxInClauseSize()}，IN 子句会自动拆分为多个 OR 连接的批次： {@code field IN (1..1000) OR
      * field IN (1001..2000) OR ...}
      *
      * @param cb CriteriaBuilder 实例
@@ -106,7 +160,7 @@ public final class InClauseBuilder {
         if (values == null || values.length == 0) {
             throw new IllegalArgumentException("values must not be empty");
         }
-        if (values.length <= MAX_IN_CLAUSE_SIZE) {
+        if (values.length <= maxInClauseSize) {
             return buildSingleIn(cb, path, values);
         }
         return buildBatchedIn(cb, path, Arrays.asList(values));
@@ -116,7 +170,7 @@ public final class InClauseBuilder {
      * 构建 {@code IN} 谓词：{@code field IN (values)}。
      *
      * <p>
-     * 如果值的数量超过 {@link #MAX_IN_CLAUSE_SIZE}，IN 子句会自动拆分为多个 OR 连接的批次。
+     * 如果值的数量超过 {@link #getMaxInClauseSize()}，IN 子句会自动拆分为多个 OR 连接的批次。
      *
      * @param cb CriteriaBuilder 实例
      * @param path 字段路径
@@ -128,7 +182,7 @@ public final class InClauseBuilder {
         if (values == null || values.isEmpty()) {
             throw new IllegalArgumentException("values must not be empty");
         }
-        if (values.size() <= MAX_IN_CLAUSE_SIZE) {
+        if (values.size() <= maxInClauseSize) {
             return buildSingleIn(cb, path, values);
         }
         return buildBatchedIn(cb, path, values);
@@ -138,7 +192,7 @@ public final class InClauseBuilder {
      * 构建 {@code NOT IN} 谓词：{@code field NOT IN (values)}。
      *
      * <p>
-     * 如果值的数量超过 {@link #MAX_IN_CLAUSE_SIZE}，NOT IN 子句会自动拆分为多个 AND NOT 连接的批次。
+     * 如果值的数量超过 {@link #maxInClauseSize}，NOT IN 子句会自动拆分为多个 AND NOT 连接的批次。
      *
      * @param cb CriteriaBuilder 实例
      * @param path 字段路径
@@ -150,7 +204,7 @@ public final class InClauseBuilder {
         if (values == null || values.length == 0) {
             throw new IllegalArgumentException("values must not be empty");
         }
-        if (values.length <= MAX_IN_CLAUSE_SIZE) {
+        if (values.length <= maxInClauseSize) {
             return cb.not(buildSingleIn(cb, path, values));
         }
         return buildBatchedNotIn(cb, path, Arrays.asList(values));
@@ -160,7 +214,7 @@ public final class InClauseBuilder {
      * 构建 {@code NOT IN} 谓词：{@code field NOT IN (values)}。
      *
      * <p>
-     * 如果值的数量超过 {@link #MAX_IN_CLAUSE_SIZE}，NOT IN 子句会自动拆分为多个 AND NOT 连接的批次。
+     * 如果值的数量超过 {@link #maxInClauseSize}，NOT IN 子句会自动拆分为多个 AND NOT 连接的批次。
      *
      * @param cb CriteriaBuilder 实例
      * @param path 字段路径
@@ -172,7 +226,7 @@ public final class InClauseBuilder {
         if (values == null || values.isEmpty()) {
             throw new IllegalArgumentException("values must not be empty");
         }
-        if (values.size() <= MAX_IN_CLAUSE_SIZE) {
+        if (values.size() <= maxInClauseSize) {
             return cb.not(buildSingleIn(cb, path, values));
         }
         return buildBatchedNotIn(cb, path, values);
@@ -195,30 +249,30 @@ public final class InClauseBuilder {
     }
 
     private static Predicate buildBatchedIn(CriteriaBuilder cb, Path<?> path, Collection<?> values) {
-        if (values.size() > HARD_LIMIT) {
-            throw new MyJpaPlusException("IN clause size " + values.size() + " exceeds hard limit " + HARD_LIMIT
+        if (values.size() > hardLimit) {
+            throw new MyJpaPlusException("IN clause size " + values.size() + " exceeds hard limit " + hardLimit
                 + ". Consider using temporary tables or subqueries for better performance. "
                 + "You can adjust the limit via -Dmyjpa-plus.in-clause-hard-limit=<value>.");
         }
-        if (values.size() > HARD_LIMIT / 2) {
+        if (values.size() > hardLimit / 2) {
             log.warn(
                 "IN clause has {} values (hard limit: {}), which may cause severe database performance degradation. "
                     + "Consider using temporary tables or subqueries.",
-                values.size(), HARD_LIMIT);
+                values.size(), hardLimit);
         } else if (values.size() > 10000) {
             log.warn("IN clause has {} values, which may cause performance issues. "
                 + "Consider using temporary tables or subqueries for better performance.", values.size());
         }
         if (log.isDebugEnabled()) {
             log.debug("IN clause has {} values, exceeding limit of {}. Splitting into batches.", values.size(),
-                MAX_IN_CLAUSE_SIZE);
+                maxInClauseSize);
         }
-        int estimatedBatches = (values.size() + MAX_IN_CLAUSE_SIZE - 1) / MAX_IN_CLAUSE_SIZE;
+        int estimatedBatches = (values.size() + maxInClauseSize - 1) / maxInClauseSize;
         List<Predicate> batchPredicates = new ArrayList<>(estimatedBatches);
-        List<Object> batch = new ArrayList<>(MAX_IN_CLAUSE_SIZE);
+        List<Object> batch = new ArrayList<>(maxInClauseSize);
         for (Object v : values) {
             batch.add(v);
-            if (batch.size() >= MAX_IN_CLAUSE_SIZE) {
+            if (batch.size() >= maxInClauseSize) {
                 batchPredicates.add(buildSingleIn(cb, path, batch));
                 batch.clear(); // 复用同一个 ArrayList，减少 GC 压力
             }
@@ -230,30 +284,30 @@ public final class InClauseBuilder {
     }
 
     private static Predicate buildBatchedNotIn(CriteriaBuilder cb, Path<?> path, Collection<?> values) {
-        if (values.size() > HARD_LIMIT) {
-            throw new MyJpaPlusException("NOT IN clause size " + values.size() + " exceeds hard limit " + HARD_LIMIT
+        if (values.size() > hardLimit) {
+            throw new MyJpaPlusException("NOT IN clause size " + values.size() + " exceeds hard limit " + hardLimit
                 + ". Consider using temporary tables or subqueries for better performance. "
                 + "You can adjust the limit via -Dmyjpa-plus.in-clause-hard-limit=<value>.");
         }
-        if (values.size() > HARD_LIMIT / 2) {
+        if (values.size() > hardLimit / 2) {
             log.warn(
                 "NOT IN clause has {} values (hard limit: {}), which may cause severe database performance degradation. "
                     + "Consider using temporary tables or subqueries.",
-                values.size(), HARD_LIMIT);
+                values.size(), hardLimit);
         } else if (values.size() > 10000) {
             log.warn("NOT IN clause has {} values, which may cause performance issues. "
                 + "Consider using temporary tables or subqueries for better performance.", values.size());
         }
         if (log.isDebugEnabled()) {
             log.debug("NOT IN clause has {} values, exceeding limit of {}. Splitting into batches.", values.size(),
-                MAX_IN_CLAUSE_SIZE);
+                maxInClauseSize);
         }
-        int estimatedBatches = (values.size() + MAX_IN_CLAUSE_SIZE - 1) / MAX_IN_CLAUSE_SIZE;
+        int estimatedBatches = (values.size() + maxInClauseSize - 1) / maxInClauseSize;
         List<Predicate> batchPredicates = new ArrayList<>(estimatedBatches);
-        List<Object> batch = new ArrayList<>(MAX_IN_CLAUSE_SIZE);
+        List<Object> batch = new ArrayList<>(maxInClauseSize);
         for (Object v : values) {
             batch.add(v);
-            if (batch.size() >= MAX_IN_CLAUSE_SIZE) {
+            if (batch.size() >= maxInClauseSize) {
                 batchPredicates.add(cb.not(buildSingleIn(cb, path, batch)));
                 batch.clear(); // 复用同一个 ArrayList，减少 GC 压力
             }
