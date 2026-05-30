@@ -11,6 +11,12 @@ package com.zsubera.jpa.update;
  */
 final class AuditUtils {
 
+    /** 跳过的栈帧数（getStackTrace + getCallStack） */
+    private static final int STACK_SKIP = 2;
+
+    /** 最大调用栈深度（从调用者开始的层数） */
+    private static final int MAX_STACK_DEPTH = 10;
+
     private AuditUtils() {}
 
     /**
@@ -25,8 +31,8 @@ final class AuditUtils {
         StackTraceElement[] stack = Thread.currentThread().getStackTrace();
         // 跳过 getStackTrace() 和 getCallStack() 本身，从调用者开始
         StringBuilder sb = new StringBuilder();
-        for (int i = 2; i < stack.length && i < 12; i++) {
-            if (i > 2) {
+        for (int i = STACK_SKIP; i < stack.length && i < STACK_SKIP + MAX_STACK_DEPTH; i++) {
+            if (i > STACK_SKIP) {
                 sb.append(" <- ");
             }
             sb.append(stack[i].getClassName()).append(".").append(stack[i].getMethodName());

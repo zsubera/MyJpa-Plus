@@ -37,6 +37,9 @@ public final class LambdaUtils {
 
     private static final Logger log = LoggerFactory.getLogger(LambdaUtils.class);
 
+    /** 缓存驱逐目标比例，驱逐后缓存大小降至 maxCacheSize 的此比例 */
+    private static final double EVICTION_TARGET_RATIO = 0.75;
+
     /**
      * 属性名缓存的最大大小。
      *
@@ -173,13 +176,13 @@ public final class LambdaUtils {
      * 驱逐旧缓存条目，确保缓存大小不超过 {@link #maxCacheSize}。
      *
      * <p>
-     * 当缓存大小超过限制时，随机淘汰约 25% 的条目，将缓存大小降至 75% 水平。 使用 ConcurrentHashMap 的原子操作避免全量清除导致的缓存雪崩。
+     * 当缓存大小超过限制时，随机淘汰约 25% 的条目，将缓存大小降至 {@link #EVICTION_TARGET_RATIO} 水平。 使用 ConcurrentHashMap 的原子操作避免全量清除导致的缓存雪崩。
      * 多个线程可能同时触发驱逐，但驱逐操作是幂等的，不会造成功能问题。
      */
     private static void evictIfNeeded() {
         long currentSize = CACHE.mappingCount();
         if (currentSize > maxCacheSize) {
-            long target = (long)(maxCacheSize * 0.75);
+            long target = (long)(maxCacheSize * EVICTION_TARGET_RATIO);
             long toRemove = currentSize - target;
             if (toRemove > 0) {
                 // 使用 removeIf 随机淘汰条目，避免全量清除导致的缓存雪崩

@@ -254,10 +254,15 @@ public class OrConditionBuilder<T, SELF extends AbstractBulkOperationSpec<T, SEL
      * 添加忽略大小写的等于条件：{@code UPPER(field) = UPPER(value)}。
      *
      * @param field 实体属性引用
-     * @param value 比较值
+     * @param value 比较值（不可为 null，如需检查 null 请使用 isNull()）
      * @return 当前构建器实例
+     * @throws IllegalArgumentException 如果 value 为 null
      */
     public OrConditionBuilder<T, SELF> eqIgnoreCase(SFunction<T, ?> field, String value) {
+        if (value == null) {
+            throw new IllegalArgumentException(
+                "value must not be null for eqIgnoreCase. " + "Use isNull() for null checks.");
+        }
         String name = parent.property(field);
         nodes.add(new BulkConditionNode.LeafNode((root, cb) -> PredicateHelper.eqIgnoreCase(root, name, value, cb)));
         return this;

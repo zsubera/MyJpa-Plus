@@ -194,9 +194,9 @@ public class UpdateSpec<T> extends AbstractBulkOperationSpec<T, UpdateSpec<T>> {
      * 当使用悲观锁时，第一步会获取悲观锁（{@link jakarta.persistence.LockModeType#PESSIMISTIC_WRITE}），
      * 防止其他事务在此窗口期修改记录。<strong>建议在并发场景下始终使用悲观锁</strong>。 禁用悲观锁时，应用层需要自行保证数据一致性。
      *
-     * @param em entity manager
-     * @return actual number of rows updated
-     * @throws IllegalStateException if no SET clauses are specified
+     * @param em 实体管理器
+     * @return 实际更新的行数
+     * @throws IllegalStateException 如果未指定 SET 子句
      */
     public int updateAllInTransaction(EntityManager em) {
         return executeInTransaction(em, this::updateAll);

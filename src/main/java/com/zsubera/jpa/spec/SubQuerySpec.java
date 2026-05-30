@@ -3,6 +3,7 @@ package com.zsubera.jpa.spec;
 import com.zsubera.jpa.util.LambdaUtils;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import jakarta.persistence.criteria.CriteriaBuilder;
+import jakarta.persistence.criteria.Path;
 import jakarta.persistence.criteria.Predicate;
 import jakarta.persistence.criteria.Root;
 import jakarta.persistence.criteria.Subquery;
@@ -49,6 +50,7 @@ public class SubQuerySpec<S> {
     private final Root<?> correlatedRoot;
     private final List<Predicate> predicates = new ArrayList<>();
     private boolean selectSet;
+    private Class<?> selectType;
 
     private SubQuerySpec(Subquery<S> subquery, Root<S> root, Root<?> correlatedRoot, CriteriaBuilder cb) {
         this.subquery = subquery;
@@ -87,6 +89,13 @@ public class SubQuerySpec<S> {
         if (!predicates.isEmpty()) {
             subquery.where(cb.and(predicates.toArray(new Predicate[0])));
         }
+    }
+
+    /**
+     * 清除已添加的谓词。用于 inSubQuery 场景下的两阶段类型推断。
+     */
+    void clearPredicates() {
+        predicates.clear();
     }
 
     boolean isSelectSet() {
@@ -624,12 +633,25 @@ public class SubQuerySpec<S> {
      * @param field 要选择的实体字段
      * @return 当前 SubQuerySpec 实例，支持链式调用
      */
+    @SuppressWarnings({"unchecked", "rawtypes"})
     public SubQuerySpec<S> select(SFunction<S, ?> field) {
         if (field == null) {
             throw new IllegalArgumentException("field must not be null");
         }
-        subquery.select(root.get(LambdaUtils.getPropertyName(field)));
+        String propName = LambdaUtils.getPropertyName(field);
+        Path selectPath = root.get(propName);
+        subquery.select(selectPath);
         selectSet = true;
+        selectType = selectPath.getJavaType();
         return this;
+    }
+
+    /**
+     * 获取 SELECT 子句选择的字段类型。
+     *
+     * @return 选择的字段类型，如果未设置 SELECT 则返回 null
+     */
+    Class<?> getSelectType() {
+        return selectType;
     }
 }

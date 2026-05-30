@@ -1049,6 +1049,125 @@ public class QuerySpecTest {
         assertEquals("OrderNode[status DESC]", descNode.toString());
     }
 
+    // ---- inSubQuery / notInSubQuery tests ----
+
+    @Test
+    void testInSubQuery() {
+        // 准备测试数据：status=1 的实体作为子查询目标
+        repository.save(newEntity("match1", 1));
+        repository.save(newEntity("match2", 1));
+        repository.save(newEntity("other1", 2));
+        repository.save(newEntity("other2", 3));
+
+        // 查找 status IN (SELECT status FROM testEntity WHERE name LIKE '%match%')
+        QuerySpec<TestEntity> spec = new QuerySpec<TestEntity>().inSubQuery(TestEntity::getStatus, TestEntity.class,
+            sub -> sub.select(TestEntity::getStatus).contains(TestEntity::getName, "match"));
+        List<TestEntity> results = repository.findAll(spec.toSpecification());
+        assertEquals(2, results.size());
+        assertTrue(results.stream().allMatch(e -> e.getStatus() == 1));
+    }
+
+    @Test
+    void testNotInSubQuery() {
+        // 准备测试数据
+        repository.save(newEntity("keep1", 1));
+        repository.save(newEntity("keep2", 2));
+        repository.save(newEntity("exclude1", 3));
+        repository.save(newEntity("exclude2", 3));
+
+        // 查找 status NOT IN (SELECT status FROM testEntity WHERE name LIKE '%exclude%')
+        QuerySpec<TestEntity> spec = new QuerySpec<TestEntity>().notInSubQuery(TestEntity::getStatus, TestEntity.class,
+            sub -> sub.select(TestEntity::getStatus).contains(TestEntity::getName, "exclude"));
+        List<TestEntity> results = repository.findAll(spec.toSpecification());
+        assertEquals(2, results.size());
+        assertTrue(results.stream().noneMatch(e -> e.getStatus() == 3));
+    }
+
+    @Test
+    void testInSubQueryWithMultipleConditions() {
+        // 准备测试数据
+        repository.save(newEntity("target_a", 10));
+        repository.save(newEntity("target_b", 20));
+        repository.save(newEntity("non_target", 30));
+        repository.save(newEntity("another", 40));
+
+        // 子查询中带多种条件：name 以 target_ 开头且 status > 5
+        QuerySpec<TestEntity> spec =
+            new QuerySpec<TestEntity>().inSubQuery(TestEntity::getStatus, TestEntity.class, sub -> sub
+                .select(TestEntity::getStatus).startsWith(TestEntity::getName, "target_").gt(TestEntity::getStatus, 5));
+        List<TestEntity> results = repository.findAll(spec.toSpecification());
+        // status 10 和 20 匹配（target_a 和 target_b 的 status）
+        assertEquals(2, results.size());
+    }
+
+    @Test
+    void testInSubQueryNullValidation() {
+        // null outerField
+        assertThrows(IllegalArgumentException.class,
+            () -> new QuerySpec<TestEntity>().inSubQuery(null, TestEntity.class, sub -> {
+            }));
+        // null subEntity
+        assertThrows(IllegalArgumentException.class,
+            () -> new QuerySpec<TestEntity>().inSubQuery(TestEntity::getStatus, null, sub -> {
+            }));
+        // null config
+        assertThrows(IllegalArgumentException.class,
+            () -> new QuerySpec<TestEntity>().inSubQuery(TestEntity::getStatus, TestEntity.class, null));
+        // notInSubQuery null outerField
+        assertThrows(IllegalArgumentException.class,
+            () -> new QuerySpec<TestEntity>().notInSubQuery(null, TestEntity.class, sub -> {
+            }));
+        // notInSubQuery null subEntity
+        assertThrows(IllegalArgumentException.class,
+            () -> new QuerySpec<TestEntity>().notInSubQuery(TestEntity::getStatus, null, sub -> {
+            }));
+        // notInSubQuery null config
+        assertThrows(IllegalArgumentException.class,
+            () -> new QuerySpec<TestEntity>().notInSubQuery(TestEntity::getStatus, TestEntity.class, null));
+    }
+
+    @Test
+    void testInSubQueryInOrGroup() {
+        // 准备测试数据
+        repository.save(newEntity("sub_match", 1));
+        repository.save(newEntity("direct", 2));
+        repository.save(newEntity("neither", 3));
+
+        // inSubQuery 与 OrGroup 结合使用
+        QuerySpec<TestEntity> spec = new QuerySpec<TestEntity>().or(group -> group
+            .inSubQuery(TestEntity::getStatus, TestEntity.class,
+                sub -> sub.select(TestEntity::getStatus).eq(TestEntity::getName, "sub_match"))
+            .eq(TestEntity::getName, "direct"));
+        List<TestEntity> results = repository.findAll(spec.toSpecification());
+        assertEquals(2, results.size());
+        assertTrue(results.stream().anyMatch(e -> "direct".equals(e.getName())));
+        assertTrue(results.stream().anyMatch(e -> e.getStatus() == 1));
+    }
+
+    @Test
+    void testInSubQueryNoMatch() {
+        // 子查询返回空结果
+        repository.save(newEntity("a", 1));
+        repository.save(newEntity("b", 2));
+
+        QuerySpec<TestEntity> spec = new QuerySpec<TestEntity>().inSubQuery(TestEntity::getStatus, TestEntity.class,
+            sub -> sub.select(TestEntity::getStatus).eq(TestEntity::getName, "nonexistent"));
+        List<TestEntity> results = repository.findAll(spec.toSpecification());
+        assertEquals(0, results.size());
+    }
+
+    @Test
+    void testNotInSubQueryNoMatch() {
+        // 子查询返回空结果，NOT IN 应返回所有行
+        repository.save(newEntity("a", 1));
+        repository.save(newEntity("b", 2));
+
+        QuerySpec<TestEntity> spec = new QuerySpec<TestEntity>().notInSubQuery(TestEntity::getStatus, TestEntity.class,
+            sub -> sub.select(TestEntity::getStatus).eq(TestEntity::getName, "nonexistent"));
+        List<TestEntity> results = repository.findAll(spec.toSpecification());
+        assertEquals(2, results.size());
+    }
+
     private TestEntity newEntity(String name, int status) {
         TestEntity entity = new TestEntity();
         entity.setName(name);

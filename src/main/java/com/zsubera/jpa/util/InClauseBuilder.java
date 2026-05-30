@@ -44,6 +44,12 @@ public final class InClauseBuilder {
 
     private static final Logger log = LoggerFactory.getLogger(InClauseBuilder.class);
 
+    /** IN 子句值数量的上限，超过此限制将抛出异常 */
+    private static final int MAX_ALLOWED_VALUE = 100_000;
+
+    /** 性能警告阈值，超过此值将记录警告日志 */
+    private static final int PERFORMANCE_WARNING_THRESHOLD = 10_000;
+
     /**
      * IN 子句的硬限制。超过此限制时将抛出异常，防止数据库性能问题。
      *
@@ -66,12 +72,12 @@ public final class InClauseBuilder {
         if (prop != null) {
             try {
                 int val = Integer.parseInt(prop);
-                if (val > 0 && val <= 100000) {
+                if (val > 0 && val <= MAX_ALLOWED_VALUE) {
                     configured = val;
-                } else if (val > 100000) {
-                    log.warn("myjpa-plus.in-clause-max-size value ({}) exceeds upper limit (100000). Using 100000.",
-                        val);
-                    configured = 100000;
+                } else if (val > MAX_ALLOWED_VALUE) {
+                    log.warn("myjpa-plus.in-clause-max-size value ({}) exceeds upper limit ({}). Using {}.", val,
+                        MAX_ALLOWED_VALUE, MAX_ALLOWED_VALUE);
+                    configured = MAX_ALLOWED_VALUE;
                 }
             } catch (NumberFormatException ignored) {
                 // use default
@@ -112,11 +118,11 @@ public final class InClauseBuilder {
      * @param size 最大参数数量
      */
     public static void setMaxInClauseSize(int size) {
-        if (size > 0 && size <= 100000) {
+        if (size > 0 && size <= MAX_ALLOWED_VALUE) {
             maxInClauseSize = size;
             log.info("IN clause max size configured to {}", size);
-        } else if (size > 100000) {
-            log.warn("IN clause max size ({}) exceeds upper limit (100000). Ignoring.", size);
+        } else if (size > MAX_ALLOWED_VALUE) {
+            log.warn("IN clause max size ({}) exceeds upper limit ({}). Ignoring.", size, MAX_ALLOWED_VALUE);
         }
     }
 
@@ -138,11 +144,11 @@ public final class InClauseBuilder {
      * @param limit 硬限制值
      */
     public static void setHardLimit(int limit) {
-        if (limit > 0 && limit <= 100000) {
+        if (limit > 0 && limit <= MAX_ALLOWED_VALUE) {
             hardLimit = limit;
             log.info("IN clause hard limit configured to {}", limit);
-        } else if (limit > 100000) {
-            log.warn("IN clause hard limit ({}) exceeds upper limit (100000). Ignoring.", limit);
+        } else if (limit > MAX_ALLOWED_VALUE) {
+            log.warn("IN clause hard limit ({}) exceeds upper limit ({}). Ignoring.", limit, MAX_ALLOWED_VALUE);
         }
     }
 
@@ -264,7 +270,7 @@ public final class InClauseBuilder {
                 "IN clause has {} values (hard limit: {}), which may cause severe database performance degradation. "
                     + "Consider using temporary tables or subqueries.",
                 values.size(), hardLimit);
-        } else if (values.size() > 10000) {
+        } else if (values.size() > PERFORMANCE_WARNING_THRESHOLD) {
             log.warn("IN clause has {} values, which may cause performance issues. "
                 + "Consider using temporary tables or subqueries for better performance.", values.size());
         }
@@ -299,7 +305,7 @@ public final class InClauseBuilder {
                 "NOT IN clause has {} values (hard limit: {}), which may cause severe database performance degradation. "
                     + "Consider using temporary tables or subqueries.",
                 values.size(), hardLimit);
-        } else if (values.size() > 10000) {
+        } else if (values.size() > PERFORMANCE_WARNING_THRESHOLD) {
             log.warn("NOT IN clause has {} values, which may cause performance issues. "
                 + "Consider using temporary tables or subqueries for better performance.", values.size());
         }

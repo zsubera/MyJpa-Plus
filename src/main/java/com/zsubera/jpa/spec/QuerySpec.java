@@ -63,6 +63,9 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
 
     private static final Logger log = LoggerFactory.getLogger(QuerySpec.class);
 
+    /** 查询超时时间上限（秒） */
+    private static final int MAX_TIMEOUT_SECONDS = 300;
+
     private final List<ConditionNode> conditions = new ArrayList<>();
     private final Deque<List<ConditionNode>> groupStack = new ArrayDeque<>();
     private boolean distinct = false;
@@ -121,8 +124,9 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
         if (seconds <= 0) {
             throw new IllegalArgumentException("timeout must be positive, got: " + seconds);
         }
-        if (seconds > 300) {
-            throw new IllegalArgumentException("timeout must not exceed 300 seconds, got: " + seconds);
+        if (seconds > MAX_TIMEOUT_SECONDS) {
+            throw new IllegalArgumentException(
+                "timeout must not exceed " + MAX_TIMEOUT_SECONDS + " seconds, got: " + seconds);
         }
         this.queryTimeout = seconds;
         return this;
@@ -1091,6 +1095,13 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
     /**
      * IN 子查询解析的内部实现。
      *
+     * <p>
+     * 使用两阶段类型推断：
+     * <ol>
+     * <li>第一阶段：应用配置以确定 SELECT 字段类型</li>
+     * <li>第二阶段：使用正确的返回类型创建子查询</li>
+     * </ol>
+     *
      * @param <S> 子查询实体类型
      * @param node IN 子查询条件节点
      * @param outerPath 外部查询的实体路径
@@ -1101,18 +1112,35 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
     @SuppressWarnings({"unchecked", "rawtypes"})
     private <S> Predicate resolveInSubQueryInternal(ConditionNode.InSubQueryNode<S> node, Path<?> outerPath,
         CriteriaQuery<?> query, CriteriaBuilder cb) {
-        jakarta.persistence.criteria.Subquery<S> subquery = query.subquery(node.subEntity);
-        Root<S> subRoot = subquery.from(node.subEntity);
-        // 构建子查询条件（不关联外部查询，纯独立子查询）
-        SubQuerySpec<S> subSpec = SubQuerySpec.create(subquery, subRoot, subRoot, cb);
+        // 第一阶段：使用临时子查询确定 SELECT 类型
+        jakarta.persistence.criteria.Subquery<S> tempSubquery = query.subquery(node.subEntity);
+        Root<S> tempRoot = tempSubquery.from(node.subEntity);
+        SubQuerySpec<S> tempSpec = SubQuerySpec.create(tempSubquery, tempRoot, tempRoot, cb);
+        node.config.accept(tempSpec);
+        Class<?> selectType = tempSpec.getSelectType();
+
+        // 第二阶段：使用正确的返回类型创建子查询
+        jakarta.persistence.criteria.Subquery<?> subquery;
+        Root<S> subRoot;
+        if (selectType != null) {
+            // SELECT 了特定字段，使用字段类型作为子查询返回类型
+            subquery = (jakarta.persistence.criteria.Subquery)query.subquery(selectType);
+            subRoot = (Root<S>)subquery.from(node.subEntity);
+        } else {
+            subquery = (jakarta.persistence.criteria.Subquery)query.subquery(node.subEntity);
+            subRoot = (Root<S>)subquery.from(node.subEntity);
+        }
+
+        // 创建正式的 SubQuerySpec 并重新应用配置
+        SubQuerySpec<S> subSpec = SubQuerySpec.create((Subquery<S>)subquery, subRoot, subRoot, cb);
         node.config.accept(subSpec);
         subSpec.applyWhere();
         if (!subSpec.isSelectSet()) {
             // 默认选择子查询实体的根（用于 EXISTS 风格）
-            subquery.select(subRoot);
+            ((jakarta.persistence.criteria.Subquery<S>)subquery).select(subRoot);
         }
+
         // 构建 outer.field IN (subquery) 或 outer.field NOT IN (subquery)
-        // 使用 raw 类型绕过泛型限制，因为 Subquery<S> 与 In<T> 的泛型不兼容
         CriteriaBuilder.In inClause = cb.in(outerPath.get(node.outerFieldName));
         inClause.value((jakarta.persistence.criteria.Subquery)subquery);
         return node.negate ? cb.not(inClause) : inClause;
