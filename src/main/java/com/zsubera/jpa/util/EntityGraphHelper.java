@@ -51,11 +51,11 @@ public final class EntityGraphHelper<T> {
     }
 
     /**
-     * Creates a new {@code EntityGraphHelper} for the given entity class.
+     * 为指定实体类创建新的 {@code EntityGraphHelper} 实例。
      *
-     * @param entityClass the entity class
-     * @param <T> the entity type
-     * @return a new EntityGraphHelper
+     * @param entityClass 实体类
+     * @param <T> 实体类型
+     * @return 新的 EntityGraphHelper 实例
      */
     public static <T> EntityGraphHelper<T> forEntity(Class<T> entityClass) {
         if (entityClass == null) {
@@ -65,8 +65,7 @@ public final class EntityGraphHelper<T> {
     }
 
     /**
-     * Sets the graph type to LOAD (hints JPA to load the specified attributes eagerly in addition to any attributes
-     * that are already eagerly loaded).
+     * 设置图类型为 LOAD（提示 JPA 在已有的急切加载属性之外，额外急切加载指定属性）。
      */
     public EntityGraphHelper<T> loadGraph() {
         this.loadGraphType = true;
@@ -74,8 +73,7 @@ public final class EntityGraphHelper<T> {
     }
 
     /**
-     * Sets the graph type to FETCH (only the specified attributes are fetched eagerly; all others are loaded lazily).
-     * This is the default.
+     * 设置图类型为 FETCH（仅急切加载指定属性，其余属性延迟加载）。此为默认行为。
      */
     public EntityGraphHelper<T> fetchGraph() {
         this.loadGraphType = false;
@@ -83,11 +81,10 @@ public final class EntityGraphHelper<T> {
     }
 
     /**
-     * Adds a single attribute path to the entity graph. Use dot notation for nested paths: {@code
-     * "roles.permissions"}.
+     * 向实体图添加单个属性路径。支持点号表示法的嵌套路径：{@code "roles.permissions"}。
      *
-     * @param attributePath the attribute path (e.g. "roles", "customer.address")
-     * @return this helper for chaining
+     * @param attributePath 属性路径（例如 "roles"、"customer.address"）
+     * @return 当前实例，支持链式调用
      */
     public EntityGraphHelper<T> add(String attributePath) {
         if (attributePath == null || attributePath.isEmpty()) {
@@ -99,8 +96,8 @@ public final class EntityGraphHelper<T> {
             String subpath = attributePath.substring(dotIndex + 1);
             attributePaths.merge(root, new String[] {subpath}, (old, val) -> appendToArray(old, subpath));
         } else {
-            // Use merge instead of put to preserve existing subpaths
-            // e.g. add("roles.permissions") then add("roles") should keep "permissions"
+            // 使用 merge 而非 put 以保留已有的子路径
+            // 例如：先 add("roles.permissions") 再 add("roles") 应保留 "permissions"
             attributePaths.merge(attributePath, new String[0], (old, val) -> old);
         }
         lastAddedPath = attributePath;
@@ -108,10 +105,10 @@ public final class EntityGraphHelper<T> {
     }
 
     /**
-     * Adds multiple attribute paths to the entity graph.
+     * 向实体图添加多个属性路径。
      *
-     * @param attributePaths one or more attribute paths
-     * @return this helper for chaining
+     * @param attributePaths 一个或多个属性路径
+     * @return 当前实例，支持链式调用
      */
     public EntityGraphHelper<T> add(String... attributePaths) {
         for (String path : attributePaths) {
@@ -135,7 +132,7 @@ public final class EntityGraphHelper<T> {
      * }</pre>
      *
      * @param attributeName 嵌套的属性名称
-     * @return this helper for chaining
+     * @return 当前实例，支持链式调用
      * @throws IllegalStateException 如果没有先前的路径可嵌套
      * @throws IllegalArgumentException 如果 attributeName 为 null 或空
      */
@@ -152,12 +149,12 @@ public final class EntityGraphHelper<T> {
     }
 
     /**
-     * Applies this entity graph to the given {@link TypedQuery} using the provided EntityManager.
+     * 将此实体图应用到指定的 {@link TypedQuery}。
      *
-     * @param query the typed query to apply the graph to
-     * @param em the EntityManager for creating the entity graph
-     * @param <R> the query result type
-     * @return the same query with the entity graph hint applied
+     * @param query 要应用实体图的类型化查询
+     * @param em 用于创建实体图的 EntityManager
+     * @param <R> 查询结果类型
+     * @return 应用了实体图提示的同一查询对象
      */
     public <R> TypedQuery<R> apply(TypedQuery<R> query, EntityManager em) {
         if (attributePaths.isEmpty()) {
@@ -172,11 +169,10 @@ public final class EntityGraphHelper<T> {
     }
 
     /**
-     * Converts this entity graph into a map of JPA query hints for use with repository find methods that accept hints
-     * (e.g., via {@code @QueryHints}).
+     * 将此实体图转换为 JPA 查询提示映射，用于支持 hints 参数的 Repository 查询方法（例如通过 {@code @QueryHints}）。
      *
-     * @param em the EntityManager
-     * @return a Map of JPA query hints containing the entity graph
+     * @param em EntityManager
+     * @return 包含实体图的 JPA 查询提示映射
      */
     public Map<String, Object> toHints(EntityManager em) {
         Map<String, Object> hints = new HashMap<>();
@@ -223,7 +219,7 @@ public final class EntityGraphHelper<T> {
             } else {
                 Subgraph<Object> subgraph = graph.addSubgraph(attributeName);
                 for (String subpath : subpaths) {
-                    // Support multi-level nested paths like "b.c.d"
+                    // 支持多级嵌套路径，如 "b.c.d"
                     addAttributeNodeRecursive(subgraph, subpath);
                 }
             }

@@ -623,3 +623,110 @@ List<ConditionNode> getConditions() {
 | 低 | F-12~F-16 其他 P2 问题 | 后续版本逐步优化 |
 
 ---
+
+---
+## 轮次 6 - 优化记录（终审报告迭代 4）
+时间：2026-05-30 14:25
+
+### 已修复问题
+
+#### P2 级别（3/3 已修复）
+
+- [F-01] SpotBugs EI_EXPOSE_REP: ProjectionSpec.JoinGroup.conditions() 返回可变内部列表：添加 @SuppressFBWarnings("EI_EXPOSE_REP") 注解。conditions() 方法必须返回可变列表（ConditionBuilder 接口的 default 方法依赖 conditions().add()），因此无法使用 Collections.unmodifiableList() 包装。抑制警告是正确方案，与 JoinGroup.endJoin() 的处理方式一致
+- [F-02] SpotBugs EI_EXPOSE_REP2: MultiLikeNode 直接存储外部数组引用：在构造函数中添加 fieldNames.clone() 防御性拷贝，防止调用者在构造后修改数组影响节点内部状态
+- [F-10] EntityGraphHelper Javadoc 中英文混用：将所有英文 Javadoc 注释统一为中文，包括 forEntity()、loadGraph()、fetchGraph()、add()、nest()、apply()、toHints() 等方法的文档，以及 add() 方法中的内联代码注释
+
+### 未修复问题
+
+- [F-03] LambdaUtils.getPropertyName() 使用 setAccessible(true) 反射：已缓解，自动配置类已检测兼容性，保持现状
+- [F-04] ProjectionSpec 分页查询 JOIN 解析两次：已通过条件缓存优化，影响轻微，保持现状
+- [F-05] LambdaUtils 缓存全量清除：已在迭代 3 中修复（AtomicBoolean CLEANING 锁），保持现状
+- [F-06] resolveExistsWithTempQuery 临时 CriteriaQuery：已文档化，保持现状
+- [F-07] SimpleNode 字段封装：已在迭代 3 中修复（改为 package-private final），保持现状
+- [F-08] executeLimited() 竞态条件：已缓解（悲观锁 + 文档），保持现状
+- [F-09] like()/notLike() deprecated 但仍可调用：已有 @Deprecated 标记和安全警告，计划 2.0 版本处理
+- [F-11] QuerySpec.java 文件过长：可接受，保持现状
+- [F-12] MyJpaTemplate 深度分页阈值硬编码：已文档化，保持现状
+- [F-13] autoFilterEnabled TOCTOU 竞态：volatile 语义已足够，保持现状
+
+### 修改详情
+
+#### 1. F-01: SpotBugs EI_EXPOSE_REP 抑制
+**文件**：ProjectionSpec.java:103-106
+**修改前**：
+\\\java
+@Override
+public List<ConditionNode> conditions() {
+    return conditions;
+}
+\\\
+**修改后**：
+\\\java
+@Override
+@SuppressFBWarnings("EI_EXPOSE_REP")
+public List<ConditionNode> conditions() {
+    return conditions;
+}
+\\\
+**原因**：ConditionBuilder 接口的 default 方法（eq、ne、like 等）通过 conditions().add() 添加条件节点，因此 conditions() 必须返回可变列表。无法使用 Collections.unmodifiableList() 包装，否则所有条件方法将抛出 UnsupportedOperationException。@SuppressFBWarnings 注解明确表达了这是有意设计，与 JoinGroup.endJoin() 的处理方式一致。
+
+#### 2. F-02: MultiLikeNode 防御性拷贝
+**文件**：ConditionNode.java:129-131
+**修改前**：
+\\\java
+public MultiLikeNode(String keyword, String[] fieldNames) {
+    this.keyword = keyword;
+    this.fieldNames = fieldNames;
+}
+\\\
+**修改后**：
+\\\java
+public MultiLikeNode(String keyword, String[] fieldNames) {
+    this.keyword = keyword;
+    this.fieldNames = fieldNames.clone();
+}
+\\\
+**原因**：直接存储外部数组引用意味着调用者在构造 MultiLikeNode 后仍可修改数组内容，影响节点内部状态。防御性拷贝确保节点的不可变性，消除 SpotBugs EI_EXPOSE_REP2 警告。
+
+#### 3. F-10: EntityGraphHelper Javadoc 统一语言
+**文件**：EntityGraphHelper.java
+**修改内容**：将以下方法的英文 Javadoc 转换为中文：
+- forEntity()：Creates a new → 为指定实体类创建新的
+- loadGraph()：Sets the graph type to LOAD → 设置图类型为 LOAD
+- fetchGraph()：Sets the graph type to FETCH → 设置图类型为 FETCH
+- add(String)：Adds a single attribute path → 向实体图添加单个属性路径
+- add(String...)：Adds multiple attribute paths → 向实体图添加多个属性路径
+- nest()：@return this helper for chaining → @return 当前实例，支持链式调用
+- apply()：Applies this entity graph → 将此实体图应用到指定的 TypedQuery
+- toHints()：Converts this entity graph → 将此实体图转换为 JPA 查询提示映射
+- 内联注释：Use merge instead of put → 使用 merge 而非 put；Support multi-level → 支持多级嵌套
+
+**原因**：项目 Javadoc 语言应保持一致。类级别的 Javadoc 已使用中文，但方法级别混用英文，统一后提升可读性和维护性。
+
+### 测试结果
+
+- **总测试数**：595
+- **通过**：595
+- **失败**：0
+- **跳过**：0
+- **构建状态**：SUCCESS
+
+### SpotBugs 验证
+
+- **修复前**：4 个警告（EI_EXPOSE_REP x1, EI_EXPOSE_REP2 x1, CT_CONSTRUCTOR_THROW x2）
+- **修复后**：2 个警告（CT_CONSTRUCTOR_THROW x2，为 MyJpaPlusAutoConfiguration 和 SubQuerySpec 的预有问题）
+- **EI_EXPOSE_REP/EI_EXPOSE_REP2**：已全部消除
+
+### 代码格式化
+
+- Spotless 格式化已应用
+
+### 后续计划
+
+| 优先级 | 问题 | 计划 |
+|--------|------|------|
+| 中 | F-09 like()/notLike() deprecated 但仍可调用 | 2.0 版本抛出 UnsupportedOperationException |
+| 低 | CT_CONSTRUCTOR_THROW x2 | 添加 spotbugs-exclude.xml 排除规则 |
+| 低 | F-11 QuerySpec 文件过长 | 后续版本提取 ConditionNodeResolver |
+
+---

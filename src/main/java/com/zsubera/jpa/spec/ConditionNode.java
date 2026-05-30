@@ -128,7 +128,7 @@ public sealed interface ConditionNode permits ConditionNode.SimpleNode, Conditio
 
         public MultiLikeNode(String keyword, String[] fieldNames) {
             this.keyword = keyword;
-            this.fieldNames = fieldNames;
+            this.fieldNames = fieldNames.clone();
         }
 
         @Override

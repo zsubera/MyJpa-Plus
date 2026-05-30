@@ -101,6 +101,7 @@ public class ProjectionSpec<T> {
         }
 
         @Override
+        @SuppressFBWarnings("EI_EXPOSE_REP")
         public List<ConditionNode> conditions() {
             return conditions;
         }
