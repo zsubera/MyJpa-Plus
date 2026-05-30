@@ -936,7 +936,7 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
                 + outerPath.getClass().getSimpleName() + ". Nested JOIN correlation is not supported.");
         }
         Root<?> correlatedOuter = subquery.correlate((Root<?>)outerPath);
-        SubQuerySpec<S> subSpec = new SubQuerySpec<>(subquery, subRoot, correlatedOuter, cb);
+        SubQuerySpec<S> subSpec = SubQuerySpec.create(subquery, subRoot, correlatedOuter, cb);
         node.config.accept(subSpec);
         subSpec.applyWhere();
         if (!subSpec.isSelectSet()) {
@@ -972,7 +972,7 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
                 + outerPath.getClass().getSimpleName() + ". Nested JOIN correlation is not supported.");
         }
         Root<?> correlatedOuter = subquery.correlate((Root<?>)outerPath);
-        SubQuerySpec<S> subSpec = new SubQuerySpec<>(subquery, subRoot, correlatedOuter, cb);
+        SubQuerySpec<S> subSpec = SubQuerySpec.create(subquery, subRoot, correlatedOuter, cb);
         node.config.accept(subSpec);
         subSpec.applyWhere();
         if (!subSpec.isSelectSet()) {

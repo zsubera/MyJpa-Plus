@@ -23,4 +23,18 @@
         <Class name="com.zsubera.jpa.spec.OrJoinGroup"/>
         <Bug pattern="CT_CONSTRUCTOR_THROW"/>
     </Match>
+
+    <!-- Exclude CT_CONSTRUCTOR_THROW for MyJpaPlusAutoConfiguration -->
+    <!-- Constructor validates properties before use, and Spring manages the lifecycle -->
+    <Match>
+        <Class name="com.zsubera.jpa.autoconfigure.MyJpaPlusAutoConfiguration"/>
+        <Bug pattern="CT_CONSTRUCTOR_THROW"/>
+    </Match>
+
+    <!-- Exclude CT_CONSTRUCTOR_THROW for SubQuerySpec -->
+    <!-- Static factory method validates parameters before constructor call -->
+    <Match>
+        <Class name="com.zsubera.jpa.spec.SubQuerySpec"/>
+        <Bug pattern="CT_CONSTRUCTOR_THROW"/>
+    </Match>
 </FindBugsFilter>

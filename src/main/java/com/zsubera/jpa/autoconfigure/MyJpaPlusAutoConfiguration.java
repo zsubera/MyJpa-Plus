@@ -3,6 +3,7 @@ package com.zsubera.jpa.autoconfigure;
 import com.zsubera.jpa.repository.SoftDeleteJpaRepository;
 import com.zsubera.jpa.template.MyJpaTemplate;
 import com.zsubera.jpa.util.LambdaUtils;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import jakarta.persistence.EntityManager;
 import java.lang.invoke.SerializedLambda;
 import java.lang.reflect.Method;
@@ -37,14 +38,18 @@ import org.springframework.context.event.EventListener;
 @ConditionalOnClass({EntityManager.class})
 @EnableConfigurationProperties(MyJpaPlusProperties.class)
 @ComponentScan(basePackages = "com.zsubera.jpa.autoconfigure")
+@SuppressFBWarnings(value = "CT_CONSTRUCTOR_THROW",
+    justification = "Constructor validates parameters before assignment")
 public class MyJpaPlusAutoConfiguration {
 
     private static final Logger log = LoggerFactory.getLogger(MyJpaPlusAutoConfiguration.class);
 
     public MyJpaPlusAutoConfiguration(MyJpaPlusProperties properties) {
+        if (properties == null) {
+            throw new IllegalArgumentException("properties must not be null");
+        }
         // 将 auto-filter 配置同步到 SoftDeleteJpaRepository 的静态标志，确保 Repository 层面行为一致
         SoftDeleteJpaRepository.setAutoFilterEnabled(properties.getSoftDelete().isAutoFilter());
-        checkModuleCompatibility();
         if (log.isInfoEnabled()) {
             log.info("MyJpa-Plus AutoConfiguration initialized");
             log.info("  soft-delete.auto-filter = {}", properties.getSoftDelete().isAutoFilter());
@@ -52,6 +57,41 @@ public class MyJpaPlusAutoConfiguration {
             log.info("  query.deep-pagination-offset-threshold = {}",
                 properties.getQuery().getDeepPaginationOffsetThreshold());
             log.info("  query.deep-pagination-offset-limit = {}", properties.getQuery().getDeepPaginationOffsetLimit());
+        }
+    }
+
+    /**
+     * 初始化后检查模块兼容性。
+     */
+    @org.springframework.context.annotation.Lazy(false)
+    @org.springframework.stereotype.Component
+    static class ModuleCompatibilityChecker {
+
+        @jakarta.annotation.PostConstruct
+        public void check() {
+            checkModuleCompatibility();
+        }
+
+        /**
+         * 检测 Java 17+ 模块系统兼容性。
+         *
+         * <p>
+         * LambdaUtils 通过反射调用 {@code SerializedLambda.writeReplace()} 并使用 {@code setAccessible(true)}。 在 Java 17+
+         * 的强封装模块系统下，此操作可能因缺少 {@code --add-opens} 参数而失败。 此方法在启动时检测并给出明确的警告信息。
+         */
+        private static void checkModuleCompatibility() {
+            try {
+                Method writeReplace = SerializedLambda.class.getDeclaredMethod("writeReplace");
+                writeReplace.setAccessible(true);
+            } catch (NoSuchMethodException e) {
+                // 不可能发生：writeReplace 是 SerializedLambda 的固有方法
+                log.warn("Unexpected: SerializedLambda.writeReplace() not found. LambdaUtils may not work correctly.");
+            } catch (SecurityException e) {
+                log.warn(
+                    "Java module system restriction detected. LambdaUtils uses reflection on SerializedLambda.writeReplace() "
+                        + "which may fail at runtime. If you encounter InaccessibleObjectException, add this JVM argument: "
+                        + "--add-opens java.base/java.lang.invoke=ALL-UNNAMED");
+            }
         }
     }
 
@@ -82,27 +122,5 @@ public class MyJpaPlusAutoConfiguration {
     public void onContextClosed(ContextClosedEvent event) {
         LambdaUtils.shutdown();
         log.info("MyJpa-Plus context closed (LambdaUtils.shutdown is no-op with LRU cache)");
-    }
-
-    /**
-     * 检测 Java 17+ 模块系统兼容性。
-     *
-     * <p>
-     * LambdaUtils 通过反射调用 {@code SerializedLambda.writeReplace()} 并使用 {@code setAccessible(true)}。 在 Java 17+
-     * 的强封装模块系统下，此操作可能因缺少 {@code --add-opens} 参数而失败。 此方法在启动时检测并给出明确的警告信息。
-     */
-    private static void checkModuleCompatibility() {
-        try {
-            Method writeReplace = SerializedLambda.class.getDeclaredMethod("writeReplace");
-            writeReplace.setAccessible(true);
-        } catch (NoSuchMethodException e) {
-            // 不可能发生：writeReplace 是 SerializedLambda 的固有方法
-            log.warn("Unexpected: SerializedLambda.writeReplace() not found. LambdaUtils may not work correctly.");
-        } catch (SecurityException e) {
-            log.warn(
-                "Java module system restriction detected. LambdaUtils uses reflection on SerializedLambda.writeReplace() "
-                    + "which may fail at runtime. If you encounter InaccessibleObjectException, add this JVM argument: "
-                    + "--add-opens java.base/java.lang.invoke=ALL-UNNAMED");
-        }
     }
 }

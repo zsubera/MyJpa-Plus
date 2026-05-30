@@ -1,6 +1,7 @@
 package com.zsubera.jpa.spec;
 
 import com.zsubera.jpa.util.LambdaUtils;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import jakarta.persistence.criteria.CriteriaBuilder;
 import jakarta.persistence.criteria.Predicate;
 import jakarta.persistence.criteria.Root;
@@ -38,6 +39,8 @@ import org.springframework.lang.Nullable;
  *
  * @param <S> 子查询实体类型
  */
+@SuppressFBWarnings(value = "CT_CONSTRUCTOR_THROW",
+    justification = "Static factory method validates parameters before constructor call")
 public class SubQuerySpec<S> {
 
     private final Subquery<S> subquery;
@@ -47,7 +50,24 @@ public class SubQuerySpec<S> {
     private final List<Predicate> predicates = new ArrayList<>();
     private boolean selectSet;
 
-    SubQuerySpec(Subquery<S> subquery, Root<S> root, Root<?> correlatedRoot, CriteriaBuilder cb) {
+    private SubQuerySpec(Subquery<S> subquery, Root<S> root, Root<?> correlatedRoot, CriteriaBuilder cb) {
+        this.subquery = subquery;
+        this.root = root;
+        this.correlatedRoot = correlatedRoot;
+        this.cb = cb;
+    }
+
+    /**
+     * 创建 SubQuerySpec 实例。
+     *
+     * @param subquery 子查询对象
+     * @param root 子查询根
+     * @param correlatedRoot 关联的外部查询根
+     * @param cb CriteriaBuilder 实例
+     * @return 新的 SubQuerySpec 实例
+     * @throws IllegalArgumentException 如果任何参数为 null
+     */
+    static <S> SubQuerySpec<S> create(Subquery<S> subquery, Root<S> root, Root<?> correlatedRoot, CriteriaBuilder cb) {
         if (subquery == null) {
             throw new IllegalArgumentException("subquery must not be null");
         }
@@ -60,10 +80,7 @@ public class SubQuerySpec<S> {
         if (cb == null) {
             throw new IllegalArgumentException("cb must not be null");
         }
-        this.subquery = subquery;
-        this.root = root;
-        this.correlatedRoot = correlatedRoot;
-        this.cb = cb;
+        return new SubQuerySpec<>(subquery, root, correlatedRoot, cb);
     }
 
     void applyWhere() {
