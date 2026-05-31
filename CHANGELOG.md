@@ -2,10 +2,26 @@
 
 ## [1.1.0] - 2026-05-31
 
-### 发布说明
-- 统一版本号至 1.1.0（pom.xml、README.md、CHANGELOG.md）
-- 修复缓存驱逐策略、volatile 可见性、timeout 上限等可靠性问题
-- 优化 API 一致性、文档质量和企业级标准合规性
+### 新增
+- **枚举转换支持** — `@CodeEnum` + `@CodeEnumValue` 注解解决 Hibernate 6 枚举映射问题
+  - 支持 CHAR(1) 存储枚举编码（如 '0'、'1'、'M'、'F'）
+  - 支持 int、long、String 类型的 code 字段
+  - 无需创建转换器类，只需在枚举和实体字段上添加注解
+- **multiLike 支持字符串字段名** — `multiLike(keyword, "field1", "field2")` 适用于动态字段名场景
+- **软删除 Integer 类型支持** — `@SoftDelete(deletedIntValue = 1)` 支持用整数值标记删除状态
+- **MyJpaTemplate.count() 方法** — 新增便捷的计数方法
+
+### 变更
+- `ConditionBuilder` 添加 `notBetween` 和 `likeIgnoreCase` 的条件变体
+- `SubQuerySpec` 和 `AbstractBulkOperationSpec` 添加更多条件便捷方法
+- 优化 `LambdaUtils` 缓存驱逐策略，使用 CAS 操作避免竞态条件
+- 优化 `InClauseBuilder` 批次处理，避免内存泄漏
+- 优化 `MyJpaTemplate` 深度分页警告日志，添加限流机制
+
+### 修复
+- 修复 EXISTS 子查询关联限制，支持从 Join 路径关联
+- 修复 `MyJpaTemplate.findAllStream` 废弃策略，恢复为可调用的 @Deprecated 方法
+- 修复 `SoftDeleteJpaRepository.deleteById` 方法，正确处理软删除实体
 
 ## [0.1.0-SNAPSHOT] - 2026-05-26（开发版本，已合并至 1.1.0）
 
