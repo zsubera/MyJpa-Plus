@@ -46,6 +46,15 @@ public class OptimisticLockRetryAdvisor {
         int maxRetries = annotation.maxRetries();
         long backoffMs = annotation.backoffMs();
 
+        // P2: Validate annotation parameters
+        if (maxRetries < 0) {
+            throw new IllegalStateException(
+                "@RetryOnOptimisticLock.maxRetries must be non-negative, got: " + maxRetries);
+        }
+        if (backoffMs <= 0) {
+            throw new IllegalStateException("@RetryOnOptimisticLock.backoffMs must be positive, got: " + backoffMs);
+        }
+
         int attempt = 0;
         while (true) {
             try {
@@ -57,9 +66,10 @@ public class OptimisticLockRetryAdvisor {
                         method.getDeclaringClass().getSimpleName(), method.getName());
                     throw ex;
                 }
-                long baseDelay = Math.min(backoffMs * (1L << (attempt - 1)), MAX_BACKOFF_MS);
-                // Add random jitter (0-25% of base delay) to prevent thundering herd
-                long jitter = (long)(baseDelay * 0.25 * ThreadLocalRandom.current().nextDouble());
+                // P0: Cap the shift amount to prevent Long overflow (1L << 46 is safe, 1L << 47 overflows)
+                long baseDelay = Math.min(backoffMs * (1L << Math.min(attempt - 1, 46)), MAX_BACKOFF_MS);
+                // P1: Ensure jitter is always positive (minimum 10% of base delay)
+                long jitter = (long)(baseDelay * ThreadLocalRandom.current().nextDouble(0.1, 0.25));
                 long delay = baseDelay + jitter;
                 log.debug("OptimisticLockException on attempt {}/{} for method {}.{}, retrying in {}ms", attempt,
                     maxRetries, method.getDeclaringClass().getSimpleName(), method.getName(), delay);

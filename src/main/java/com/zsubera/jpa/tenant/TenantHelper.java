@@ -98,7 +98,7 @@ public final class TenantHelper {
     private static String resolveTenantIdFieldNameViaGetter(Class<?> entityClass) {
         for (Method m : entityClass.getMethods()) {
             TenantId ann = m.getAnnotation(TenantId.class);
-            if (ann != null) {
+            if (ann != null && m.getParameterCount() == 0) {
                 String name = m.getName();
                 if (name.startsWith("get") && name.length() > 3) {
                     return Character.toLowerCase(name.charAt(3)) + name.substring(4);

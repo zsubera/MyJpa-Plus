@@ -58,7 +58,8 @@ public class MaskSerializer extends JsonSerializer<String> {
     }
 
     private static String maskEmail(String email) {
-        int atIndex = email.indexOf('@');
+        // P2: Use lastIndexOf to handle multiple @ symbols correctly
+        int atIndex = email.lastIndexOf('@');
         if (atIndex <= 0) {
             return email;
         }
@@ -81,6 +82,7 @@ public class MaskSerializer extends JsonSerializer<String> {
     }
 
     private static String maskName(String name) {
+        // P2: Use codePointCount for proper Unicode handling
         int codePointCount = name.codePointCount(0, name.length());
         if (codePointCount <= 1) {
             return name;
@@ -88,9 +90,16 @@ public class MaskSerializer extends JsonSerializer<String> {
         if (codePointCount == 2) {
             return new String(Character.toChars(name.codePointAt(0))) + "*";
         }
+        // For 3+ characters: keep first and last, mask the middle
         int lastCodePointIndex = name.offsetByCodePoints(0, codePointCount - 1);
-        return new String(Character.toChars(name.codePointAt(0))) + "*".repeat(codePointCount - 2)
-            + new String(Character.toChars(name.codePointAt(lastCodePointIndex)));
+        StringBuilder sb = new StringBuilder();
+        sb.append(Character.toChars(name.codePointAt(0)));
+        // P2: Ensure proper Unicode character repetition
+        for (int i = 0; i < codePointCount - 2; i++) {
+            sb.append('*');
+        }
+        sb.append(Character.toChars(name.codePointAt(lastCodePointIndex)));
+        return sb.toString();
     }
 
     private static String maskBankCard(String bankCard) {

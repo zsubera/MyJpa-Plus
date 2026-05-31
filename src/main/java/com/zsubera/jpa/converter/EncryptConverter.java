@@ -236,33 +236,9 @@ public class EncryptConverter implements AttributeConverter<String, String> {
      */
     private static SecretKeySpec deriveKey(String rawKeyMaterial) {
         try {
-            byte[] keyBytes = rawKeyMaterial.getBytes(StandardCharsets.UTF_8);
-            // 如果已经是有效的 AES 密钥长度，直接使用（向后兼容）
-            if (keyBytes.length == 16 || keyBytes.length == 24 || keyBytes.length == 32) {
-                // 检测是否为高熵密钥（非可打印 ASCII）
-                boolean looksLikeAscii = true;
-                for (byte b : keyBytes) {
-                    if (b < 0x20 || b > 0x7E) {
-                        looksLikeAscii = false;
-                        break;
-                    }
-                }
-                if (looksLikeAscii) {
-                    int uniqueChars = (int)new String(keyBytes, StandardCharsets.US_ASCII).chars().distinct().count();
-                    String msg =
-                        "Encryption key has low entropy (" + uniqueChars + " unique printable ASCII characters). "
-                            + "Use Base64-encoded high-entropy key for production. "
-                            + "Set MYJPA_ENCRYPT_KEY to a Base64-encoded random key.";
-                    if (STRICT_MODE || isProductionEnvironment()) {
-                        throw new IllegalStateException(
-                            msg + " - rejected in " + (STRICT_MODE ? "strict mode" : "production environment"));
-                    }
-                    LOG.log(System.Logger.Level.ERROR, "SECURITY: {0}. Set -D{1}=true to reject low-entropy keys.", msg,
-                        STRICT_MODE_PROPERTY);
-                }
-                return new SecretKeySpec(keyBytes, "AES");
-            }
-            // 否则使用 PBKDF2 派生
+            // P0: Always derive key via PBKDF2 for security - removed direct use shortcut
+            // The direct use of raw key bytes was a security risk as low-entropy
+            // passwords could be used directly as AES keys.
             byte[] salt = getSalt();
             PBEKeySpec spec = new PBEKeySpec(rawKeyMaterial.toCharArray(), salt, PBKDF2_ITERATIONS, PBKDF2_KEY_LENGTH);
             SecretKeyFactory factory = SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256");

@@ -35,7 +35,10 @@ public class SqlSlowQueryInterceptor implements StatementInspector {
     private static final long serialVersionUID = 1L;
     private static final Logger log = LoggerFactory.getLogger(SqlSlowQueryInterceptor.class);
 
-    /** 代理类缓存，避免每次 prepareStatement 创建新的代理类。 */
+    /**
+     * 代理类缓存，避免每次 prepareStatement 创建新的代理类。 P1: 使用大小限制的 ConcurrentHashMap，超过限制时清除以防止内存泄漏。
+     */
+    private static final int MAX_PROXY_CLASS_CACHE_SIZE = 256;
     private static final ConcurrentMap<Class<?>, Class<?>> PROXY_CLASS_CACHE = new ConcurrentHashMap<>();
 
     /** 预编译的 SQL 消毒正则表达式 */
@@ -44,6 +47,9 @@ public class SqlSlowQueryInterceptor implements StatementInspector {
     private static final Pattern HEX_LITERAL_PATTERN = Pattern.compile("X'[0-9a-fA-F]+'");
     private static final Pattern UNICODE_STRING_PATTERN = Pattern.compile("N'[^']*'");
     private static final Pattern NUMBER_LITERAL_PATTERN = Pattern.compile("\\b\\d+\\.?\\d*(?:[eE][+-]?\\d+)?\\b");
+    /** P1: LIMIT/OFFSET 数字保护模式，保留这些数字以便调试 */
+    private static final Pattern LIMIT_OFFSET_PATTERN =
+        Pattern.compile("(?i)(?:LIMIT|OFFSET|FETCH\\s+(?:FIRST|NEXT))\\s+\\d+(?:\\s+ROWS)?");
 
     private final long slowQueryThresholdMs;
 
@@ -92,6 +98,10 @@ public class SqlSlowQueryInterceptor implements StatementInspector {
 
         private Object wrapPreparedStatement(Object stmt, String sql) {
             Class<?> stmtClass = stmt.getClass();
+            // P1: Evict cache if too large to prevent memory leak
+            if (PROXY_CLASS_CACHE.size() > MAX_PROXY_CLASS_CACHE_SIZE) {
+                PROXY_CLASS_CACHE.clear();
+            }
             Class<?> proxyClass = PROXY_CLASS_CACHE.computeIfAbsent(stmtClass,
                 clz -> Proxy.getProxyClass(clz.getClassLoader(), clz.getInterfaces()));
             try {
@@ -142,13 +152,13 @@ public class SqlSlowQueryInterceptor implements StatementInspector {
      * 消毒 SQL 语句，移除可能包含的参数值以防止敏感数据泄露到日志。
      *
      * <p>
-     * 替换规则：
+     * P1: 保留 LIMIT/OFFSET 后的数字字面量，仅替换其他数字字面量。 替换规则：
      * <ul>
      * <li>单引号字符串（支持转义单引号 ''）→ ?</li>
      * <li>PostgreSQL 美元引用（$1, $2 等）→ ?</li>
      * <li>十六进制字面量（X'...'）→ ?</li>
      * <li>Unicode 字符串（N'...'）→ ?</li>
-     * <li>数字字面量 → ?</li>
+     * <li>数字字面量（排除 LIMIT/OFFSET 后的数字）→ ?</li>
      * </ul>
      *
      * @param sql 原始 SQL 语句
@@ -158,12 +168,30 @@ public class SqlSlowQueryInterceptor implements StatementInspector {
         if (sql == null) {
             return "null";
         }
-        String sanitized = SINGLE_QUOTE_PATTERN.matcher(sql).replaceAll("?") // 单引号字符串
-        ;
+        String sanitized = SINGLE_QUOTE_PATTERN.matcher(sql).replaceAll("?"); // 单引号字符串
         sanitized = DOLLAR_PARAM_PATTERN.matcher(sanitized).replaceAll("?"); // PostgreSQL 美元引用参数
         sanitized = HEX_LITERAL_PATTERN.matcher(sanitized).replaceAll("?"); // 十六进制字面量
         sanitized = UNICODE_STRING_PATTERN.matcher(sanitized).replaceAll("?"); // Unicode 字符串
-        sanitized = NUMBER_LITERAL_PATTERN.matcher(sanitized).replaceAll("?"); // 数字字面量（含科学计数法）
-        return sanitized;
+        // P1: Preserve LIMIT/OFFSET numbers by first protecting them, then replacing other numbers
+        // Use a marker to temporarily protect LIMIT/OFFSET numbers
+        java.util.List<String> protectedParts = new java.util.ArrayList<>();
+        java.util.regex.Matcher limitMatcher = LIMIT_OFFSET_PATTERN.matcher(sanitized);
+        StringBuilder sb = new StringBuilder();
+        int lastEnd = 0;
+        while (limitMatcher.find()) {
+            sb.append(sanitized, lastEnd, limitMatcher.start());
+            sb.append("\0PROTECTED_").append(protectedParts.size()).append("\0");
+            protectedParts.add(limitMatcher.group());
+            lastEnd = limitMatcher.end();
+        }
+        sb.append(sanitized.substring(lastEnd));
+        String result = sb.toString();
+        // Replace remaining number literals
+        result = NUMBER_LITERAL_PATTERN.matcher(result).replaceAll("?");
+        // Restore protected parts
+        for (int i = 0; i < protectedParts.size(); i++) {
+            result = result.replace("\0PROTECTED_" + i + "\0", protectedParts.get(i));
+        }
+        return result;
     }
 }

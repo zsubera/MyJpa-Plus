@@ -195,7 +195,9 @@ public sealed interface ConditionNode permits ConditionNode.SimpleNode, Conditio
 
         @Override
         public String toString() {
-            return "MultiLikeNode[keyword='" + keyword + "', fields=" + java.util.Arrays.toString(fieldNames) + "]";
+            // P1: Mask keyword to prevent sensitive data leakage to logs
+            return "MultiLikeNode[keyword='" + "***(" + keyword.length() + " chars)" + "', fields="
+                + java.util.Arrays.toString(fieldNames) + "]";
         }
     }
 
@@ -471,12 +473,42 @@ public sealed interface ConditionNode permits ConditionNode.SimpleNode, Conditio
             if (params == null) {
                 throw new IllegalArgumentException("params must not be null");
             }
+            // P0: Validate function name against whitelist to prevent SQL injection
+            String upperName = functionName.toUpperCase();
+            if (!ConditionBuilder.SAFE_FUNCTION_NAMES.contains(upperName)) {
+                String msg =
+                    "Unsafe function name: '" + functionName + "'. " + "Only whitelisted functions are allowed. "
+                        + "To add a function to the whitelist, call ConditionBuilder.SAFE_FUNCTION_NAMES.add(\""
+                        + upperName + "\").";
+                if (ConditionBuilder.WHITELIST_ENFORCED) {
+                    throw new com.zsubera.jpa.exception.MyJpaPlusException(msg,
+                        com.zsubera.jpa.exception.MyJpaPlusException.ErrorCode.SECURITY, null, null);
+                }
+                SECURITY_LOG.warn("SECURITY: {}", msg);
+            }
             return new FuncNode(functionName, params);
         }
 
         @Override
         public String toString() {
-            return "FuncNode[" + functionName + "(" + java.util.Arrays.toString(params) + ")]";
+            // P1: Mask function parameters to prevent sensitive data leakage to logs
+            StringBuilder sb = new StringBuilder("FuncNode[");
+            sb.append(functionName).append("(");
+            for (int i = 0; i < params.length; i++) {
+                if (i > 0) {
+                    sb.append(", ");
+                }
+                Object param = params[i];
+                if (param == null) {
+                    sb.append("null");
+                } else if (param instanceof String) {
+                    sb.append("String[***]");
+                } else {
+                    sb.append(param.getClass().getSimpleName()).append("[***]");
+                }
+            }
+            sb.append(")]");
+            return sb.toString();
         }
     }
 

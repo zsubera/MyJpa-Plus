@@ -57,6 +57,12 @@ public class SoftDeleteJpaRepository<T, ID> extends SimpleJpaRepository<T, ID> {
     private static volatile boolean autoFilterEnabled = true;
 
     /**
+     * P1: Thread-local override for auto-filter. When set (non-null), overrides the global setting. This allows
+     * per-request control of soft delete filtering behavior.
+     */
+    private static final ThreadLocal<Boolean> autoFilterOverride = new ThreadLocal<>();
+
+    /**
      * 设置全局自动过滤开关。由自动配置类在启动时调用。
      *
      * @param enabled 是否启用自动过滤
@@ -72,6 +78,20 @@ public class SoftDeleteJpaRepository<T, ID> extends SimpleJpaRepository<T, ID> {
      */
     public static boolean isAutoFilterEnabled() {
         return autoFilterEnabled;
+    }
+
+    /**
+     * P1: Set thread-local auto-filter override for the current thread. When set, this overrides the global
+     * autoFilterEnabled setting.
+     *
+     * @param enabled 是否启用自动过滤，传 null 清除覆盖
+     */
+    public static void setAutoFilterOverride(Boolean enabled) {
+        if (enabled == null) {
+            autoFilterOverride.remove();
+        } else {
+            autoFilterOverride.set(enabled);
+        }
     }
 
     @SuppressFBWarnings("EI_EXPOSE_REP2")
@@ -94,7 +114,10 @@ public class SoftDeleteJpaRepository<T, ID> extends SimpleJpaRepository<T, ID> {
      * @return 如果应该应用过滤返回 true
      */
     private boolean shouldApplySoftDeleteFilter() {
-        return autoFilterEnabled && SoftDeleteHelper.findSoftDeleteField(domainClass) != null
+        // P1: Check thread-local override first, then global setting
+        Boolean override = autoFilterOverride.get();
+        boolean effectiveAutoFilter = (override != null) ? override : autoFilterEnabled;
+        return effectiveAutoFilter && SoftDeleteHelper.findSoftDeleteField(domainClass) != null
             && !SoftDeleteContext.isIgnoreSoftDelete();
     }
 
@@ -246,6 +269,73 @@ public class SoftDeleteJpaRepository<T, ID> extends SimpleJpaRepository<T, ID> {
         } else {
             throw new org.springframework.dao.EmptyResultDataAccessException(
                 String.format("No %s entity with id %s exists!", domainClass.getSimpleName(), id), 1);
+        }
+    }
+
+    // P0: Override bulk delete methods to use soft delete
+
+    /**
+     * 覆写 deleteAll() 以支持软删除。遍历所有实体并逐个执行软删除。
+     *
+     * <p>
+     * 当软删除过滤启用时，仅删除未被软删除的实体。当软删除过滤禁用时，执行标准的硬删除。
+     */
+    @Override
+    public void deleteAll() {
+        if (shouldApplySoftDeleteFilter()) {
+            findAll().forEach(this::delete);
+        } else {
+            super.deleteAll();
+        }
+    }
+
+    /**
+     * 覆写 deleteAllById() 以支持软删除。逐个查找并软删除指定 ID 的实体。
+     *
+     * @param ids 要删除的实体 ID 集合
+     */
+    @Override
+    public void deleteAllById(Iterable<? extends ID> ids) {
+        if (ids == null) {
+            throw new IllegalArgumentException("ids must not be null");
+        }
+        for (ID id : ids) {
+            deleteById(id);
+        }
+    }
+
+    /**
+     * 覆写 deleteInBatch() 以支持软删除。使用 SoftDeleteHelper 批量软删除。
+     *
+     * @param entities 要删除的实体集合
+     */
+    @Override
+    public void deleteInBatch(Iterable<T> entities) {
+        if (entities == null) {
+            throw new IllegalArgumentException("entities must not be null");
+        }
+        if (shouldApplySoftDeleteFilter()) {
+            java.util.List<T> entityList = new java.util.ArrayList<>();
+            entities.forEach(entityList::add);
+            if (!entityList.isEmpty()) {
+                for (T entity : entityList) {
+                    delete(entity);
+                }
+            }
+        } else {
+            super.deleteInBatch(entities);
+        }
+    }
+
+    /**
+     * 覆写 deleteAllInBatch() 以支持软删除。查找所有实体并逐个软删除。
+     */
+    @Override
+    public void deleteAllInBatch() {
+        if (shouldApplySoftDeleteFilter()) {
+            findAll().forEach(this::delete);
+        } else {
+            super.deleteAllInBatch();
         }
     }
 }

@@ -72,6 +72,9 @@ public class AuditEntityListener implements ApplicationContextAware {
     private static volatile ApplicationContext applicationContext;
     private static volatile AuditUserProvider userProvider;
 
+    /** P1: Configurable timezone for audit timestamps. Defaults to system timezone. */
+    private static volatile java.time.ZoneId auditZoneId = java.time.ZoneId.systemDefault();
+
     @Override
     public void setApplicationContext(ApplicationContext ctx) {
         applicationContext = ctx;
@@ -83,6 +86,17 @@ public class AuditEntityListener implements ApplicationContextAware {
     public static void destroy() {
         applicationContext = null;
         userProvider = null;
+    }
+
+    /**
+     * P1: 设置审计时间戳使用的时区。由自动配置类调用。
+     *
+     * @param zoneId 时区 ID，如 "UTC"、"Asia/Shanghai"
+     */
+    public static void setAuditZoneId(java.time.ZoneId zoneId) {
+        if (zoneId != null) {
+            auditZoneId = zoneId;
+        }
     }
 
     /**
@@ -218,7 +232,8 @@ public class AuditEntityListener implements ApplicationContextAware {
                 if (fieldType == Instant.class) {
                     field.set(entity, instant);
                 } else if (fieldType == LocalDateTime.class) {
-                    field.set(entity, LocalDateTime.ofInstant(instant, java.time.ZoneId.systemDefault()));
+                    // P1: Use configurable timezone instead of system default
+                    field.set(entity, LocalDateTime.ofInstant(instant, auditZoneId));
                 } else if (fieldType == Date.class) {
                     field.set(entity, Date.from(instant));
                 }

@@ -43,9 +43,18 @@ public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> {
      * 用于校验接受原始 {@code String} 字段名的方法（如 {@link #multiLike(String, String...)}），防止 SQL 注入。
      *
      * <p>
-     * <strong>注意：</strong>此正则不允许点号（{@code .}），因为嵌套属性应通过 {@link SFunction} 方法引用处理。
+     * <strong>注意：</strong>此正则不允许点号（{@code .}），因为嵌套属性应通过 {@link SFunction} 方法引用处理。 如需支持嵌套路径（如 "address.city"），请使用
+     * {@link #SAFE_NESTED_FIELD_NAME_PATTERN}。
      */
     Pattern SAFE_FIELD_NAME_PATTERN = Pattern.compile("^[a-zA-Z_][a-zA-Z0-9_]*$");
+
+    /**
+     * P2: 安全嵌套字段名正则表达式：允许字母、数字、下划线和点号。
+     *
+     * <p>
+     * 用于校验需要支持嵌套属性路径的场景（如 JPA 嵌入对象的字段引用 {@code "address.city"}）。 点号分隔的每一段必须以字母或下划线开头。
+     */
+    Pattern SAFE_NESTED_FIELD_NAME_PATTERN = Pattern.compile("^[a-zA-Z_][a-zA-Z0-9_.]*$");
 
     /**
      * 安全数据库函数名白名单。仅允许调用以下常见安全函数。

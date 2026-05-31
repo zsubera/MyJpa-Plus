@@ -102,8 +102,10 @@ public class MyJpaPlusException extends RuntimeException {
     public String toString() {
         StringBuilder sb = new StringBuilder(getClass().getName());
         sb.append(" [").append(errorCode).append("]");
+        // P1: Filter sensitive information from context in toString()
         if (context != null) {
-            sb.append(" context=").append(context);
+            // Mask context to prevent sensitive data leakage - only show length
+            sb.append(" context=").append("[length=").append(context.length()).append("]");
         }
         String message = getMessage();
         if (message != null) {

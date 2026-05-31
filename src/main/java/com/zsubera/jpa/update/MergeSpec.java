@@ -387,16 +387,29 @@ public class MergeSpec<T> {
     /**
      * 检查 JTA 环境中是否有活动事务。
      *
+     * <p>
+     * P1: 使用 JPA 标准 API 检测事务状态，避免硬依赖 Hibernate。 先尝试 TransactionSynchronizationManager（Spring 环境）， 再尝试
+     * EntityManager.getTransaction().isActive()（RESOURCE_LOCAL）， 最后回退到 Hibernate Session 检测（JTA 环境）。
+     *
      * @param em 实体管理器
      * @return 如果有活动事务返回 true
      */
     private static boolean isJtaTransactionActive(EntityManager em) {
+        // First try standard JPA API
         try {
-            // 通过 Hibernate Session 检查事务状态
+            EntityTransaction tx = em.getTransaction();
+            if (tx != null) {
+                return tx.isActive();
+            }
+        } catch (Exception ignored) {
+            // JTA environment may throw on getTransaction()
+        }
+        // Fallback: try Hibernate Session (only if Hibernate is on classpath)
+        try {
             org.hibernate.Session session = em.unwrap(org.hibernate.Session.class);
             return session.getTransaction() != null && session.getTransaction().isActive();
         } catch (Exception e) {
-            // 无法确定事务状态，假设没有活动事务
+            // Cannot determine transaction state
             return false;
         }
     }
@@ -486,12 +499,6 @@ public class MergeSpec<T> {
                         && !f.isAnnotationPresent(jakarta.persistence.ManyToMany.class)
                         && !f.isAnnotationPresent(jakarta.persistence.OneToOne.class)
                         && !f.isAnnotationPresent(jakarta.persistence.EmbeddedId.class)) {
-                        if (f.isAnnotationPresent(jakarta.persistence.Embedded.class)) {
-                            log.debug(
-                                "Skipping @Embedded field '{}' in MergeSpec - use @AttributeOverride for column mapping",
-                                f.getName());
-                            continue;
-                        }
                         try {
                             f.setAccessible(true);
                         } catch (InaccessibleObjectException e) {
@@ -507,9 +514,33 @@ public class MergeSpec<T> {
         });
         for (Field f : allFields) {
             try {
-                Object value = f.get(entity);
-                String columnName = resolveColumnName(f);
-                fieldValues.add(new EntityFieldValue(f.getName(), columnName, value));
+                // P2: Handle @Embedded fields by recursively extracting their sub-fields
+                if (f.isAnnotationPresent(jakarta.persistence.Embedded.class)) {
+                    Object embeddedValue = f.get(entity);
+                    if (embeddedValue != null) {
+                        jakarta.persistence.AttributeOverride[] overrides =
+                            f.getAnnotationsByType(jakarta.persistence.AttributeOverride.class);
+                        java.util.Map<String, String> overrideMap = new java.util.LinkedHashMap<>();
+                        for (jakarta.persistence.AttributeOverride override : overrides) {
+                            overrideMap.put(override.name(), override.column().name());
+                        }
+                        for (Field subField : embeddedValue.getClass().getDeclaredFields()) {
+                            if (!java.lang.reflect.Modifier.isStatic(subField.getModifiers())
+                                && !subField.isSynthetic()) {
+                                subField.setAccessible(true);
+                                Object subValue = subField.get(embeddedValue);
+                                String columnName =
+                                    overrideMap.getOrDefault(subField.getName(), resolveColumnName(subField));
+                                fieldValues.add(
+                                    new EntityFieldValue(f.getName() + "." + subField.getName(), columnName, subValue));
+                            }
+                        }
+                    }
+                } else {
+                    Object value = f.get(entity);
+                    String columnName = resolveColumnName(f);
+                    fieldValues.add(new EntityFieldValue(f.getName(), columnName, value));
+                }
             } catch (IllegalAccessException e) {
                 throw new MyJpaPlusException("Failed to access field: " + f.getName(), e);
             }
@@ -939,12 +970,6 @@ public class MergeSpec<T> {
                         && !f.isAnnotationPresent(jakarta.persistence.ManyToMany.class)
                         && !f.isAnnotationPresent(jakarta.persistence.OneToOne.class)
                         && !f.isAnnotationPresent(jakarta.persistence.EmbeddedId.class)) {
-                        if (f.isAnnotationPresent(jakarta.persistence.Embedded.class)) {
-                            log.debug(
-                                "Skipping @Embedded field '{}' in MergeSpec - use @AttributeOverride for column mapping",
-                                f.getName());
-                            continue;
-                        }
                         try {
                             f.setAccessible(true);
                         } catch (InaccessibleObjectException e) {
@@ -960,9 +985,33 @@ public class MergeSpec<T> {
         });
         for (Field f : allFields) {
             try {
-                Object value = f.get(entity);
-                String columnName = resolveColumnName(f);
-                fieldValues.add(new EntityFieldValue(f.getName(), columnName, value));
+                // P2: Handle @Embedded fields by recursively extracting their sub-fields
+                if (f.isAnnotationPresent(jakarta.persistence.Embedded.class)) {
+                    Object embeddedValue = f.get(entity);
+                    if (embeddedValue != null) {
+                        jakarta.persistence.AttributeOverride[] overrides =
+                            f.getAnnotationsByType(jakarta.persistence.AttributeOverride.class);
+                        java.util.Map<String, String> overrideMap = new java.util.LinkedHashMap<>();
+                        for (jakarta.persistence.AttributeOverride override : overrides) {
+                            overrideMap.put(override.name(), override.column().name());
+                        }
+                        for (Field subField : embeddedValue.getClass().getDeclaredFields()) {
+                            if (!java.lang.reflect.Modifier.isStatic(subField.getModifiers())
+                                && !subField.isSynthetic()) {
+                                subField.setAccessible(true);
+                                Object subValue = subField.get(embeddedValue);
+                                String columnName =
+                                    overrideMap.getOrDefault(subField.getName(), resolveColumnName(subField));
+                                fieldValues.add(
+                                    new EntityFieldValue(f.getName() + "." + subField.getName(), columnName, subValue));
+                            }
+                        }
+                    }
+                } else {
+                    Object value = f.get(entity);
+                    String columnName = resolveColumnName(f);
+                    fieldValues.add(new EntityFieldValue(f.getName(), columnName, value));
+                }
             } catch (IllegalAccessException e) {
                 throw new MyJpaPlusException("Failed to access field: " + f.getName(), e);
             }

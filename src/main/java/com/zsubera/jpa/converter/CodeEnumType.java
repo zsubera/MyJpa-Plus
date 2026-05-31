@@ -151,7 +151,23 @@ public class CodeEnumType implements UserType<Object>, DynamicParameterizedType 
     @Override
     public Object nullSafeGet(ResultSet rs, int position, SharedSessionContractImplementor session, Object owner)
         throws SQLException {
-        String value = rs.getString(position);
+        // P1: Handle different SQL types robustly
+        String value;
+        if (sqlType == Types.BIGINT) {
+            long longVal = rs.getLong(position);
+            if (rs.wasNull()) {
+                return null;
+            }
+            value = String.valueOf(longVal);
+        } else if (sqlType == Types.INTEGER) {
+            int intVal = rs.getInt(position);
+            if (rs.wasNull()) {
+                return null;
+            }
+            value = String.valueOf(intVal);
+        } else {
+            value = rs.getString(position);
+        }
         if (value == null || value.trim().isEmpty()) {
             return null;
         }
@@ -258,16 +274,24 @@ public class CodeEnumType implements UserType<Object>, DynamicParameterizedType 
             throw new HibernateException(
                 String.format("No enum constant with ordinal '%s' in %s", code, enumClass.getSimpleName()));
         }
-        try {
-            for (Object enumConstant : enumClass.getEnumConstants()) {
-                Object codeValue = codeField.get(enumConstant);
-                if (code.equals(String.valueOf(codeValue))) {
-                    return enumConstant;
+        // P2: Use ENUM_CODE_CACHE for O(1) lookup instead of linear scan
+        ConcurrentMap<String, Object> codeMap = ENUM_CODE_CACHE.computeIfAbsent(enumClass, cls -> {
+            ConcurrentMap<String, Object> map = new ConcurrentHashMap<>();
+            for (Object constant : cls.getEnumConstants()) {
+                try {
+                    Object codeValue = codeField.get(constant);
+                    if (codeValue != null) {
+                        map.put(String.valueOf(codeValue), constant);
+                    }
+                } catch (IllegalAccessException e) {
+                    log.warn("Failed to read @CodeEnumValue field for enum {}", cls.getSimpleName(), e);
                 }
             }
-        } catch (IllegalAccessException e) {
-            throw new HibernateException(
-                String.format("Failed to read @CodeEnumValue field for enum %s", enumClass.getSimpleName()), e);
+            return map;
+        });
+        Object result = codeMap.get(code);
+        if (result != null) {
+            return result;
         }
         throw new HibernateException(
             String.format("No enum constant with code '%s' in %s", code, enumClass.getSimpleName()));

@@ -254,6 +254,11 @@ public class CteSpec {
         if (results.isEmpty()) {
             return null;
         }
+        // P2: Warn when multiple results are returned but only first is used
+        if (results.size() > 1) {
+            log.warn("CteSpec.getSingleResult() returned {} results but only the first is used. "
+                + "Consider adding LIMIT 1 to your query or using getResultList() instead.", results.size());
+        }
         Object row = results.get(0);
         if (row instanceof Object[] arr) {
             return arr;

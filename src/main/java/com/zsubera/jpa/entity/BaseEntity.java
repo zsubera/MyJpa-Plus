@@ -159,11 +159,13 @@ public abstract class BaseEntity implements Serializable {
      * @return 如果两个实体的 ID 相等则返回 true
      */
     @Override
+    @SuppressWarnings("rawtypes")
     public boolean equals(Object o) {
         if (this == o) {
             return true;
         }
-        if (o == null || getClass() != o.getClass()) {
+        // P0: Use instanceof check instead of getClass() comparison for Hibernate proxy compatibility
+        if (!(o instanceof BaseEntity)) {
             return false;
         }
         BaseEntity that = (BaseEntity)o;
