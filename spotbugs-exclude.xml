@@ -47,6 +47,14 @@
         <Bug pattern="CT_CONSTRUCTOR_THROW"/>
     </Match>
 
+    <!-- Exclude CT_CONSTRUCTOR_THROW for ServiceImpl -->
+    <!-- This is a base class designed to be extended. The constructor validates the repository parameter.
+         Subclass constructors are managed by Spring, so the Finalizer attack risk is not applicable. -->
+    <Match>
+        <Class name="com.zsubera.jpa.service.ServiceImpl"/>
+        <Bug pattern="CT_CONSTRUCTOR_THROW"/>
+    </Match>
+
     <!-- Exclude ST_WRITE_TO_STATIC_FROM_INSTANCE_METHOD for AuditEntityListener -->
     <!-- setApplicationContext() writes to a static volatile field by design: Spring calls this method
          on a single instance to initialize the static context for use in @PrePersist/@PreUpdate callbacks.

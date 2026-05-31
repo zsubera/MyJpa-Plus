@@ -85,7 +85,9 @@ public class ProjectionSpec<T> {
                     cachedConditions = group.conditions();
                 } catch (IllegalArgumentException e) {
                     throw e;
-                } catch (Exception e) {
+                } catch (MyJpaPlusException e) {
+                    throw e;
+                } catch (RuntimeException e) {
                     cachedConditions = Collections.emptyList();
                     throw new MyJpaPlusException("Failed to configure join conditions", e);
                 }

@@ -59,6 +59,10 @@ public class CodeEnumType implements UserType<Object>, DynamicParameterizedType 
 
     private static final ConcurrentMap<Class<?>, Field> CODE_FIELD_CACHE = new ConcurrentHashMap<>();
 
+    /** 枚举类 -> (code -> enum constant) 的缓存，用于 nullSafeGet 的 O(1) 查找。 */
+    private static final ConcurrentMap<Class<?>, ConcurrentMap<String, Object>> ENUM_CODE_CACHE =
+        new ConcurrentHashMap<>();
+
     private Class<?> enumClass;
     private Field codeField;
     private int sqlType;
@@ -163,15 +167,24 @@ public class CodeEnumType implements UserType<Object>, DynamicParameterizedType 
                 String.format("No enum constant with ordinal '%s' in %s", trimmedValue, enumClass.getSimpleName()));
         }
 
-        try {
-            for (Object enumConstant : enumClass.getEnumConstants()) {
-                Object codeValue = codeField.get(enumConstant);
-                if (codeValue != null && trimmedValue.equals(String.valueOf(codeValue))) {
-                    return enumConstant;
+        // 使用缓存进行 O(1) 查找，避免每次线性扫描
+        ConcurrentMap<String, Object> codeMap = ENUM_CODE_CACHE.computeIfAbsent(enumClass, cls -> {
+            ConcurrentMap<String, Object> map = new ConcurrentHashMap<>();
+            for (Object constant : cls.getEnumConstants()) {
+                try {
+                    Object codeValue = codeField.get(constant);
+                    if (codeValue != null) {
+                        map.put(String.valueOf(codeValue), constant);
+                    }
+                } catch (IllegalAccessException e) {
+                    log.warn("Failed to read @CodeEnumValue field for enum {}", cls.getSimpleName(), e);
                 }
             }
-        } catch (IllegalAccessException e) {
-            throw new HibernateException("Failed to read @CodeEnumValue field", e);
+            return map;
+        });
+        Object result = codeMap.get(trimmedValue);
+        if (result != null) {
+            return result;
         }
         throw new HibernateException(
             String.format("No enum constant with code '%s' in %s", trimmedValue, enumClass.getSimpleName()));
@@ -238,7 +251,8 @@ public class CodeEnumType implements UserType<Object>, DynamicParameterizedType 
             } catch (NumberFormatException e) {
                 log.warn("Failed to parse cached ordinal '{}' for enum {}", code, enumClass.getSimpleName(), e);
             }
-            return null;
+            throw new HibernateException(
+                String.format("No enum constant with ordinal '%s' in %s", code, enumClass.getSimpleName()));
         }
         try {
             for (Object enumConstant : enumClass.getEnumConstants()) {
@@ -248,8 +262,10 @@ public class CodeEnumType implements UserType<Object>, DynamicParameterizedType 
                 }
             }
         } catch (IllegalAccessException e) {
-            log.warn("Failed to read @CodeEnumValue field for enum {}", enumClass.getSimpleName(), e);
+            throw new HibernateException(
+                String.format("Failed to read @CodeEnumValue field for enum %s", enumClass.getSimpleName()), e);
         }
-        return null;
+        throw new HibernateException(
+            String.format("No enum constant with code '%s' in %s", code, enumClass.getSimpleName()));
     }
 }

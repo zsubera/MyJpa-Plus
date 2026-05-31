@@ -204,6 +204,51 @@ public class MyJpaTemplate {
         return new DeleteSpec<>(entityClass);
     }
 
+    // ---- 批量保存方法 ----
+
+    /**
+     * 批量保存实体，使用 EntityManager flush/clear 进行分批处理。
+     *
+     * <p>
+     * 此方法适用于大批量插入场景，通过定期 flush 和 clear EntityManager 来：
+     * <ul>
+     * <li>减少内存占用（清除一级缓存中的实体）</li>
+     * <li>提高数据库交互效率（批量发送 INSERT 语句）</li>
+     * </ul>
+     *
+     * <p>
+     * <strong>注意：</strong>此方法使用 {@code merge()} 操作，对于新实体会执行 INSERT，对于已存在的实体会执行 UPDATE。 如果确定所有实体都是新建的，可以考虑使用原生 JDBC
+     * 批处理以获得更好的性能。
+     *
+     * @param entities 要保存的实体列表
+     * @param batchSize 每批大小，建议值为 50-200
+     * @param <T> 实体类型
+     * @return 保存后的实体列表
+     * @throws IllegalArgumentException 如果 entities 为 null 或 batchSize 不是正数
+     */
+    @Transactional
+    public <T> List<T> saveAllBatched(Iterable<T> entities, int batchSize) {
+        if (entities == null) {
+            throw new IllegalArgumentException("entities must not be null");
+        }
+        if (batchSize <= 0) {
+            throw new IllegalArgumentException("batchSize must be positive");
+        }
+        java.util.ArrayList<T> result = new java.util.ArrayList<>();
+        int count = 0;
+        for (T entity : entities) {
+            result.add(entityManager.merge(entity));
+            count++;
+            if (count % batchSize == 0) {
+                entityManager.flush();
+                entityManager.clear();
+            }
+        }
+        entityManager.flush();
+        entityManager.clear();
+        return result;
+    }
+
     // ---- 便捷查询方法 ----
 
     /**
@@ -1018,6 +1063,10 @@ public class MyJpaTemplate {
      * @return PlatformTransactionManager 实例，或 null
      */
     private org.springframework.transaction.PlatformTransactionManager getTransactionManager() {
+        if (applicationContext == null) {
+            log.debug("ApplicationContext not available, cannot resolve TransactionManager");
+            return null;
+        }
         try {
             return applicationContext.getBean(org.springframework.transaction.PlatformTransactionManager.class);
         } catch (Exception e) {

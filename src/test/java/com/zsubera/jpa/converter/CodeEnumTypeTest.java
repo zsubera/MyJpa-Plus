@@ -244,8 +244,8 @@ class CodeEnumTypeTest {
     }
 
     @Test
-    @DisplayName("assemble 无效 code 应返回 null")
-    void shouldAssembleInvalidCodeReturnNull() {
+    @DisplayName("assemble 无效 code 应抛出 HibernateException")
+    void shouldThrowForInvalidCodeOnAssemble() {
         CodeEnumType type = new CodeEnumType();
         try {
             java.lang.reflect.Field enumClassField = CodeEnumType.class.getDeclaredField("enumClass");
@@ -260,8 +260,7 @@ class CodeEnumTypeTest {
             useOrdinalField.setAccessible(true);
             useOrdinalField.set(type, false);
 
-            Object result = type.assemble("999", null);
-            assertNull(result);
+            assertThrows(org.hibernate.HibernateException.class, () -> type.assemble("999", null));
         } catch (Exception e) {
             fail("反射设置字段失败: " + e.getMessage());
         }

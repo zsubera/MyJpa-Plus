@@ -70,19 +70,25 @@ public class AuditEntityListener implements ApplicationContextAware {
     }
 
     /**
-     * 获取 AuditUserProvider 实例（延迟初始化）。
+     * 获取 AuditUserProvider 实例（延迟初始化，线程安全）。
      *
      * @return AuditUserProvider 实例，如果未配置则返回 null
      */
     private static AuditUserProvider getUserProvider() {
-        if (userProvider == null && applicationContext != null) {
-            try {
-                userProvider = applicationContext.getBean(AuditUserProvider.class);
-            } catch (Exception e) {
-                log.debug("No AuditUserProvider bean found, createdBy/updatedBy will not be auto-filled");
+        AuditUserProvider provider = userProvider;
+        if (provider == null && applicationContext != null) {
+            synchronized (AuditEntityListener.class) {
+                provider = userProvider;
+                if (provider == null) {
+                    try {
+                        userProvider = provider = applicationContext.getBean(AuditUserProvider.class);
+                    } catch (Exception e) {
+                        log.debug("No AuditUserProvider bean found, createdBy/updatedBy will not be auto-filled");
+                    }
+                }
             }
         }
-        return userProvider;
+        return provider;
     }
 
     /**
@@ -139,6 +145,9 @@ public class AuditEntityListener implements ApplicationContextAware {
     /**
      * 解析实体类的审计字段。
      *
+     * <p>
+     * 预设置 {@code setAccessible(true)} 以减少每次实体操作的反射开销。
+     *
      * @param entityClass 实体类
      * @return 审计字段信息
      */
@@ -147,12 +156,16 @@ public class AuditEntityListener implements ApplicationContextAware {
             AuditFields fields = new AuditFields();
             for (Field field : cls.getDeclaredFields()) {
                 if (field.isAnnotationPresent(CreatedAt.class)) {
+                    field.setAccessible(true);
                     fields.createdAt = field;
                 } else if (field.isAnnotationPresent(UpdatedAt.class)) {
+                    field.setAccessible(true);
                     fields.updatedAt = field;
                 } else if (field.isAnnotationPresent(CreatedBy.class)) {
+                    field.setAccessible(true);
                     fields.createdBy = field;
                 } else if (field.isAnnotationPresent(UpdatedBy.class)) {
+                    field.setAccessible(true);
                     fields.updatedBy = field;
                 }
             }
@@ -163,13 +176,15 @@ public class AuditEntityListener implements ApplicationContextAware {
     /**
      * 设置字段值。
      *
+     * <p>
+     * 注意：字段的可访问性已在 {@link #resolveAuditFields(Class)} 中预设置，无需重复调用。
+     *
      * @param entity 实体实例
      * @param field 要设置的字段
      * @param value 要设置的值
      */
     private static void setFieldValue(Object entity, Field field, Object value) {
         try {
-            field.setAccessible(true);
             Class<?> fieldType = field.getType();
             if (value instanceof Instant instant) {
                 if (fieldType == Instant.class) {

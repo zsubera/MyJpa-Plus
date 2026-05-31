@@ -3,6 +3,8 @@ package com.zsubera.jpa.service;
 import com.zsubera.jpa.repository.MyJpaRepository;
 import java.util.List;
 import java.util.Optional;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.transaction.annotation.Transactional;
@@ -45,6 +47,8 @@ import org.springframework.transaction.annotation.Transactional;
  * @param <ID> ID 类型
  */
 public class ServiceImpl<T, ID> implements IService<T, ID> {
+
+    private static final Logger log = LoggerFactory.getLogger(ServiceImpl.class);
 
     private MyJpaRepository<T, ID> repository;
 
@@ -167,6 +171,8 @@ public class ServiceImpl<T, ID> implements IService<T, ID> {
     @Override
     @Transactional
     public void deleteAll() {
+        log.warn("deleteAll() called on {}. Consider using DeleteSpec with allowUnconditional() for safer operation.",
+            getRepository().getClass().getSimpleName());
         getRepository().deleteAll();
     }
 }
