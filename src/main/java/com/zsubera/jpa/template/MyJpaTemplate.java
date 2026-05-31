@@ -78,6 +78,9 @@ public class MyJpaTemplate {
     /** 深度分页的 offset 阈值，超过此值会记录警告日志。 */
     public static final int DEFAULT_DEEP_PAGINATION_OFFSET_THRESHOLD = 100000;
 
+    /** 表示禁用限制的特殊值，用于 {@link #deepPaginationOffsetLimit} 和 {@link #maxBulkOperationRows}。 */
+    public static final int DISABLED = -1;
+
     /** 深度分页警告日志的最小间隔（毫秒），防止日志泛滥。 */
     private static final long DEEP_PAGINATION_WARN_INTERVAL_MS = 60_000; // 1 分钟
 
@@ -93,10 +96,10 @@ public class MyJpaTemplate {
 
     private volatile int maxResults = DEFAULT_MAX_RESULTS;
     private volatile int deepPaginationOffsetThreshold = DEFAULT_DEEP_PAGINATION_OFFSET_THRESHOLD;
-    /** 深度分页硬限制。{@code -1} 表示禁用（仅记录警告）。 */
-    private volatile int deepPaginationOffsetLimit = -1;
-    /** 批量操作最大影响行数限制。{@code -1} 表示禁用（不限制）。 */
-    private volatile int maxBulkOperationRows = -1;
+    /** 深度分页硬限制。{@code DISABLED} 表示禁用（仅记录警告）。 */
+    private volatile int deepPaginationOffsetLimit = DISABLED;
+    /** 批量操作最大影响行数限制。{@code DISABLED} 表示禁用（不限制）。 */
+    private volatile int maxBulkOperationRows = DISABLED;
 
     /** 创建 MyJpaTemplate 实例，使用默认配置。 */
     public MyJpaTemplate() {
@@ -421,6 +424,8 @@ public class MyJpaTemplate {
         if (spec == null) {
             throw new IllegalArgumentException("spec must not be null");
         }
+        log.warn("findAllStream(Class, QuerySpec) is deprecated and will be removed in 2.0. "
+            + "Use findAllStream(Class, QuerySpec, Consumer) for safe Stream lifecycle management.");
         return doFindStream(entityClass, spec);
     }
 
@@ -831,20 +836,7 @@ public class MyJpaTemplate {
         if (batchSize <= 0) {
             throw new IllegalArgumentException("batchSize must be positive");
         }
-        int totalUpdated = 0;
-        int batchUpdated;
-        do {
-            batchUpdated = spec.executeLimited(entityManager, batchSize);
-            totalUpdated += batchUpdated;
-            if (batchUpdated > 0) {
-                entityManager.flush();
-                entityManager.clear();
-                if (log.isDebugEnabled()) {
-                    log.debug("Batch update: {} rows updated in this batch (total: {})", batchUpdated, totalUpdated);
-                }
-            }
-        } while (batchUpdated >= batchSize);
-        return totalUpdated;
+        return executeBatchInternal(batchSize, "update", size -> spec.executeLimited(entityManager, size));
     }
 
     /**
@@ -874,20 +866,34 @@ public class MyJpaTemplate {
         if (batchSize <= 0) {
             throw new IllegalArgumentException("batchSize must be positive");
         }
-        int totalDeleted = 0;
-        int batchDeleted;
+        return executeBatchInternal(batchSize, "delete", size -> spec.executeLimited(entityManager, size));
+    }
+
+    /**
+     * 分批执行操作的通用实现。
+     *
+     * @param batchSize 每批操作的行数
+     * @param operationName 操作名称（用于日志）
+     * @param batchExecutor 批次执行器，接收 batchSize 返回受影响行数
+     * @return 受影响的总行数
+     */
+    private int executeBatchInternal(int batchSize, String operationName,
+        java.util.function.IntUnaryOperator batchExecutor) {
+        int total = 0;
+        int batchResult;
         do {
-            batchDeleted = spec.executeLimited(entityManager, batchSize);
-            totalDeleted += batchDeleted;
-            if (batchDeleted > 0) {
+            batchResult = batchExecutor.applyAsInt(batchSize);
+            total += batchResult;
+            if (batchResult > 0) {
                 entityManager.flush();
                 entityManager.clear();
                 if (log.isDebugEnabled()) {
-                    log.debug("Batch delete: {} rows deleted in this batch (total: {})", batchDeleted, totalDeleted);
+                    log.debug("Batch {}: {} rows {}ed in this batch (total: {})", operationName, batchResult,
+                        operationName, total);
                 }
             }
-        } while (batchDeleted >= batchSize);
-        return totalDeleted;
+        } while (batchResult >= batchSize);
+        return total;
     }
 
     // ---- 分批提交事务的批量操作 ----
@@ -913,17 +919,8 @@ public class MyJpaTemplate {
         if (batchSize <= 0) {
             throw new IllegalArgumentException("batchSize must be positive");
         }
-        int totalUpdated = 0;
-        int batchUpdated;
-        do {
-            batchUpdated = executeInNewTransaction(em -> spec.executeLimited(em, batchSize));
-            totalUpdated += batchUpdated;
-            if (batchUpdated > 0 && log.isDebugEnabled()) {
-                log.debug("Batch update committed: {} rows updated in this batch (total: {})", batchUpdated,
-                    totalUpdated);
-            }
-        } while (batchUpdated >= batchSize);
-        return totalUpdated;
+        return executeBatchInSeparateTransactionsInternal(batchSize, "update",
+            size -> executeInNewTransaction(em -> spec.executeLimited(em, size)));
     }
 
     /**
@@ -947,17 +944,31 @@ public class MyJpaTemplate {
         if (batchSize <= 0) {
             throw new IllegalArgumentException("batchSize must be positive");
         }
-        int totalDeleted = 0;
-        int batchDeleted;
+        return executeBatchInSeparateTransactionsInternal(batchSize, "delete",
+            size -> executeInNewTransaction(em -> spec.executeLimited(em, size)));
+    }
+
+    /**
+     * 分批在独立事务中执行操作的通用实现。
+     *
+     * @param batchSize 每批操作的行数
+     * @param operationName 操作名称（用于日志）
+     * @param batchExecutor 批次执行器
+     * @return 受影响的总行数
+     */
+    private int executeBatchInSeparateTransactionsInternal(int batchSize, String operationName,
+        java.util.function.IntUnaryOperator batchExecutor) {
+        int total = 0;
+        int batchResult;
         do {
-            batchDeleted = executeInNewTransaction(em -> spec.executeLimited(em, batchSize));
-            totalDeleted += batchDeleted;
-            if (batchDeleted > 0 && log.isDebugEnabled()) {
-                log.debug("Batch delete committed: {} rows deleted in this batch (total: {})", batchDeleted,
-                    totalDeleted);
+            batchResult = batchExecutor.applyAsInt(batchSize);
+            total += batchResult;
+            if (batchResult > 0 && log.isDebugEnabled()) {
+                log.debug("Batch {} committed: {} rows {}ed in this batch (total: {})", operationName, batchResult,
+                    operationName, total);
             }
-        } while (batchDeleted >= batchSize);
-        return totalDeleted;
+        } while (batchResult >= batchSize);
+        return total;
     }
 
     /**
@@ -994,7 +1005,7 @@ public class MyJpaTemplate {
         try {
             return applicationContext.getBean(org.springframework.transaction.PlatformTransactionManager.class);
         } catch (Exception e) {
-            log.debug("No PlatformTransactionManager found, executing without separate transaction");
+            log.debug("TransactionManager not available: {}", e.getMessage());
             return null;
         }
     }

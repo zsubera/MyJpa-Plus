@@ -112,35 +112,48 @@ public abstract class AbstractBulkOperationSpec<T, SELF extends AbstractBulkOper
      * @return the number of affected rows
      */
     protected int executeInTransaction(EntityManager em, Function<EntityManager, Integer> operation) {
-        // Check if Spring manages the transaction first (container-managed JTA or
-        // Spring tx)
-        boolean springTxActive = TransactionSynchronizationManager.isActualTransactionActive();
-        if (springTxActive) {
-            // Spring transaction is active — delegate to it, don't touch EntityTransaction
-            // directly
+        // Check if Spring manages the transaction first (container-managed JTA or Spring tx)
+        if (TransactionSynchronizationManager.isActualTransactionActive()) {
             return operation.apply(em);
         }
         // No Spring transaction — use JPA's EntityTransaction for standalone scenarios.
-        // In JTA environments, em.getTransaction() may return null; in that case,
-        // the container manages the transaction, so we execute directly.
         EntityTransaction tx = em.getTransaction();
         if (tx == null) {
-            // JTA environment: container-managed transaction
-            // Verify that a container-managed transaction is active
-            // If no active transaction, JPA operations will throw TransactionRequiredException
-            if (log.isDebugEnabled()) {
-                log.debug(
-                    "JTA environment detected (getTransaction() returned null), executing with container-managed transaction");
-            }
-            // Attempt to verify transaction is active by checking if EntityManager can perform operations
-            // This will throw TransactionRequiredException if no container transaction is active
-            try {
-                return operation.apply(em);
-            } catch (jakarta.persistence.TransactionRequiredException e) {
-                throw new MyJpaPlusException("No active transaction in JTA environment. "
-                    + "Ensure a container-managed transaction is active, " + "or use @Transactional annotation.", e);
-            }
+            return executeInJtaEnvironment(em, operation);
         }
+        return executeWithEntityTransaction(em, tx, operation);
+    }
+
+    /**
+     * 在 JTA 环境中执行操作。
+     *
+     * @param em 实体管理器
+     * @param operation 要执行的操作
+     * @return 受影响的行数
+     */
+    private int executeInJtaEnvironment(EntityManager em, Function<EntityManager, Integer> operation) {
+        if (log.isDebugEnabled()) {
+            log.debug(
+                "JTA environment detected (getTransaction() returned null), executing with container-managed transaction");
+        }
+        try {
+            return operation.apply(em);
+        } catch (jakarta.persistence.TransactionRequiredException e) {
+            throw new MyJpaPlusException("No active transaction in JTA environment. "
+                + "Ensure a container-managed transaction is active, or use @Transactional annotation.", e);
+        }
+    }
+
+    /**
+     * 使用 JPA EntityTransaction 执行操作。
+     *
+     * @param em 实体管理器
+     * @param tx 实体事务
+     * @param operation 要执行的操作
+     * @return 受影响的行数
+     */
+    private int executeWithEntityTransaction(EntityManager em, EntityTransaction tx,
+        Function<EntityManager, Integer> operation) {
         boolean isNewTransaction = !tx.isActive();
         if (isNewTransaction) {
             tx.begin();

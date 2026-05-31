@@ -35,14 +35,35 @@ public class OrGroup<T> implements ConditionBuilder<T, OrGroup<T>> {
         return new JoinGroup<>(root, joinNode);
     }
 
+    /**
+     * 在 OR 组内添加 INNER JOIN。
+     *
+     * @param field 关联字段的方法引用
+     * @param <J> 关联实体类型
+     * @return 新的 JoinGroup 实例，用于添加 JOIN 条件
+     * @throws IllegalArgumentException 如果 {@code field} 为 null
+     */
     public <J> JoinGroup<T, J> join(SFunction<T, ?> field) {
         return internalJoin(field, ConditionNode.JoinType.INNER);
     }
 
+    /**
+     * 在 OR 组内添加 LEFT JOIN。
+     *
+     * @param field 关联字段的方法引用
+     * @param <J> 关联实体类型
+     * @return 新的 JoinGroup 实例，用于添加 JOIN 条件
+     * @throws IllegalArgumentException 如果 {@code field} 为 null
+     */
     public <J> JoinGroup<T, J> leftJoin(SFunction<T, ?> field) {
         return internalJoin(field, ConditionNode.JoinType.LEFT);
     }
 
+    /**
+     * 在 OR 组内创建嵌套 OR 子组。
+     *
+     * @return 新的 OrGroup 实例，用于添加嵌套 OR 条件
+     */
     public OrGroup<T> or() {
         ConditionNode.OrNode nested = new ConditionNode.OrNode();
         root.currentGroup().add(nested);
@@ -50,6 +71,11 @@ public class OrGroup<T> implements ConditionBuilder<T, OrGroup<T>> {
         return new OrGroup<>(root);
     }
 
+    /**
+     * 结束当前 OR 组，返回父级 {@link QuerySpec}。
+     *
+     * @return 父级 QuerySpec 实例
+     */
     @SuppressFBWarnings("EI_EXPOSE_REP")
     public QuerySpec<T> endOr() {
         root.endOr();

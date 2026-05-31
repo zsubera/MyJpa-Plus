@@ -627,6 +627,9 @@ public class SubQuerySpec<S> {
                 if (fieldName == null) {
                     throw new IllegalArgumentException("fieldNames must not contain null elements");
                 }
+                if (!ConditionBuilder.SAFE_FIELD_NAME_PATTERN.matcher(fieldName).matches()) {
+                    throw new IllegalArgumentException("fieldName contains invalid characters: " + fieldName);
+                }
                 likes.add(cb.like(root.get(fieldName).as(String.class), pattern, PredicateHelper.LIKE_ESCAPE_CHAR));
             }
             if (!likes.isEmpty()) {

@@ -47,6 +47,11 @@ public class JoinGroup<T, J> implements ConditionBuilder<J, JoinGroup<T, J>> {
         return joinNode.innerConditions;
     }
 
+    /**
+     * 在 JOIN 条件组中创建 OR 子组。
+     *
+     * @return 新的 OrJoinGroup 实例，用于添加 OR 条件
+     */
     public OrJoinGroup<T, J> or() {
         ConditionNode.OrNode orNode = new ConditionNode.OrNode();
         joinNode.innerConditions.add(orNode);
@@ -187,6 +192,11 @@ public class JoinGroup<T, J> implements ConditionBuilder<J, JoinGroup<T, J>> {
         return this;
     }
 
+    /**
+     * 结束当前 JOIN 条件组，返回父级 {@link QuerySpec}。
+     *
+     * @return 父级 QuerySpec 实例
+     */
     @SuppressFBWarnings("EI_EXPOSE_REP")
     public QuerySpec<T> endJoin() {
         return root;

@@ -149,7 +149,8 @@ public class CodeEnumType implements UserType<Object>, DynamicParameterizedType 
                 if (ordinal >= 0 && ordinal < constants.length) {
                     return constants[ordinal];
                 }
-            } catch (NumberFormatException ignored) {
+            } catch (NumberFormatException e) {
+                log.warn("Failed to parse ordinal '{}' for enum {}", trimmedValue, enumClass.getSimpleName(), e);
             }
             throw new HibernateException(
                 String.format("No enum constant with ordinal '%s' in %s", trimmedValue, enumClass.getSimpleName()));
@@ -227,7 +228,8 @@ public class CodeEnumType implements UserType<Object>, DynamicParameterizedType 
                 if (ordinal >= 0 && ordinal < constants.length) {
                     return constants[ordinal];
                 }
-            } catch (NumberFormatException ignored) {
+            } catch (NumberFormatException e) {
+                log.warn("Failed to parse cached ordinal '{}' for enum {}", code, enumClass.getSimpleName(), e);
             }
             return null;
         }
@@ -238,7 +240,8 @@ public class CodeEnumType implements UserType<Object>, DynamicParameterizedType 
                     return enumConstant;
                 }
             }
-        } catch (IllegalAccessException ignored) {
+        } catch (IllegalAccessException e) {
+            log.warn("Failed to read @CodeEnumValue field for enum {}", enumClass.getSimpleName(), e);
         }
         return null;
     }

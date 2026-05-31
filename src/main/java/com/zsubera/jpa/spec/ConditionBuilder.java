@@ -11,6 +11,7 @@ import java.util.Collection;
 import java.util.List;
 import java.util.function.BiFunction;
 import java.util.function.Function;
+import java.util.regex.Pattern;
 import org.springframework.lang.Nullable;
 
 /**
@@ -29,6 +30,14 @@ import org.springframework.lang.Nullable;
  * @param <SELF> 用于流式链式调用的具体构建器类型
  */
 public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> {
+
+    /**
+     * 安全字段名正则表达式：仅允许字母、数字、下划线和点号（支持嵌套属性如 "department.name"）。
+     *
+     * <p>
+     * 用于校验接受原始 {@code String} 字段名的方法（如 {@link #multiLike(String, String...)}），防止 SQL 注入。
+     */
+    Pattern SAFE_FIELD_NAME_PATTERN = Pattern.compile("^[a-zA-Z_][a-zA-Z0-9_.]*$");
 
     /**
      * 获取当前条件列表。
@@ -781,6 +790,10 @@ public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> {
             for (int i = 0; i < fieldNames.length; i++) {
                 if (fieldNames[i] == null) {
                     throw new IllegalArgumentException("fieldNames[" + i + "] must not be null");
+                }
+                if (!SAFE_FIELD_NAME_PATTERN.matcher(fieldNames[i]).matches()) {
+                    throw new IllegalArgumentException(
+                        "fieldNames[" + i + "] contains invalid characters: " + fieldNames[i]);
                 }
             }
             conditions().add(new ConditionNode.MultiLikeNode(keyword, fieldNames));

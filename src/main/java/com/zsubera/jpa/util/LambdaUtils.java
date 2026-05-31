@@ -40,6 +40,18 @@ public final class LambdaUtils {
     /** 缓存驱逐目标比例，驱逐后缓存大小降至 maxCacheSize 的此比例 */
     private static final double EVICTION_TARGET_RATIO = 0.75;
 
+    /** 默认缓存大小 */
+    private static final int DEFAULT_CACHE_SIZE = 4096;
+
+    /** 缓存最大允许大小上限 */
+    private static final int MAX_CACHE_SIZE_UPPER_LIMIT = 65536;
+
+    /** METHOD_CACHE 默认初始容量 */
+    private static final int METHOD_CACHE_INITIAL_CAPACITY = 256;
+
+    /** METHOD_CACHE 最大容量，超过时触发驱逐 */
+    private static final int METHOD_CACHE_MAX_SIZE = 2048;
+
     /**
      * 属性名缓存的最大大小。
      *
@@ -49,16 +61,17 @@ public final class LambdaUtils {
     private static volatile int maxCacheSize;
 
     static {
-        int configured = 4096;
+        int configured = DEFAULT_CACHE_SIZE;
         String prop = System.getProperty("myjpa-plus.lambda-cache-size");
         if (prop != null) {
             try {
                 int val = Integer.parseInt(prop);
-                if (val > 0 && val <= 65536) {
+                if (val > 0 && val <= MAX_CACHE_SIZE_UPPER_LIMIT) {
                     configured = val;
-                } else if (val > 65536) {
-                    log.warn("myjpa-plus.lambda-cache-size value ({}) exceeds upper limit (65536). Using 65536.", val);
-                    configured = 65536;
+                } else if (val > MAX_CACHE_SIZE_UPPER_LIMIT) {
+                    log.warn("myjpa-plus.lambda-cache-size value ({}) exceeds upper limit ({}). Using {}.", val,
+                        MAX_CACHE_SIZE_UPPER_LIMIT, MAX_CACHE_SIZE_UPPER_LIMIT);
+                    configured = MAX_CACHE_SIZE_UPPER_LIMIT;
                 }
             } catch (NumberFormatException ignored) {
                 // use default
@@ -85,11 +98,11 @@ public final class LambdaUtils {
      * @param size 缓存最大大小
      */
     public static void setMaxCacheSize(int size) {
-        if (size > 0 && size <= 65536) {
+        if (size > 0 && size <= MAX_CACHE_SIZE_UPPER_LIMIT) {
             maxCacheSize = size;
             log.info("Lambda cache size configured to {}", size);
-        } else if (size > 65536) {
-            log.warn("Lambda cache size ({}) exceeds upper limit (65536). Ignoring.", size);
+        } else if (size > MAX_CACHE_SIZE_UPPER_LIMIT) {
+            log.warn("Lambda cache size ({}) exceeds upper limit ({}). Ignoring.", size, MAX_CACHE_SIZE_UPPER_LIMIT);
         }
     }
 
@@ -100,7 +113,7 @@ public final class LambdaUtils {
      * 与之前使用的 Collections.synchronizedMap 不同，ConcurrentHashMap 使用分段锁（Java 8+ 为 CAS + synchronized）， 在高并发场景下性能更优。当缓存大小超过
      * {@link #maxCacheSize} 时，通过 {@link #evictIfNeeded()} 驱逐旧条目。
      */
-    private static final ConcurrentHashMap<String, String> CACHE = new ConcurrentHashMap<>(4096);
+    private static final ConcurrentHashMap<String, String> CACHE = new ConcurrentHashMap<>(DEFAULT_CACHE_SIZE);
 
     /**
      * 缓存每个 lambda 类对应的 Method 对象，避免重复反射操作。
@@ -108,7 +121,7 @@ public final class LambdaUtils {
      * <p>
      * 大小限制为 2048，超过时清除旧条目以防止热部署场景下无限增长。
      */
-    private static final Map<Class<?>, Method> METHOD_CACHE = new ConcurrentHashMap<>(256);
+    private static final Map<Class<?>, Method> METHOD_CACHE = new ConcurrentHashMap<>(METHOD_CACHE_INITIAL_CAPACITY);
 
     /**
      * 关闭后台清理线程。在应用关闭或热部署环境中应调用此方法以确保资源正确释放。
@@ -192,9 +205,14 @@ public final class LambdaUtils {
                     long target = (long)(maxCacheSize * EVICTION_TARGET_RATIO);
                     long toRemove = currentSize - target;
                     if (toRemove > 0) {
-                        long[] removed = {0};
-                        CACHE.entrySet().removeIf(entry -> removed[0]++ < toRemove);
-                        log.debug("Lambda cache evicted {} entries (size: {} -> {})", removed[0], currentSize,
+                        long removed = 0;
+                        java.util.Iterator<Map.Entry<String, String>> it = CACHE.entrySet().iterator();
+                        while (it.hasNext() && removed < toRemove) {
+                            it.next();
+                            it.remove();
+                            removed++;
+                        }
+                        log.debug("Lambda cache evicted {} entries (size: {} -> {})", removed, currentSize,
                             CACHE.mappingCount());
                     }
                 }
@@ -229,16 +247,21 @@ public final class LambdaUtils {
         new java.util.concurrent.atomic.AtomicBoolean(false);
 
     private static void evictMethodCacheIfNeeded() {
-        if (METHOD_CACHE.size() > 2048 && METHOD_EVICTING.compareAndSet(false, true)) {
+        if (METHOD_CACHE.size() > METHOD_CACHE_MAX_SIZE && METHOD_EVICTING.compareAndSet(false, true)) {
             try {
                 int currentSize = METHOD_CACHE.size();
-                if (currentSize > 2048) {
-                    int target = (int)(2048 * 0.75);
+                if (currentSize > METHOD_CACHE_MAX_SIZE) {
+                    int target = (int)(METHOD_CACHE_MAX_SIZE * EVICTION_TARGET_RATIO);
                     int toRemove = currentSize - target;
                     if (toRemove > 0) {
-                        int[] removed = {0};
-                        METHOD_CACHE.entrySet().removeIf(entry -> removed[0]++ < toRemove);
-                        log.debug("Method cache evicted {} entries (size: {} -> {})", removed[0], currentSize,
+                        int removed = 0;
+                        java.util.Iterator<Map.Entry<Class<?>, Method>> it = METHOD_CACHE.entrySet().iterator();
+                        while (it.hasNext() && removed < toRemove) {
+                            it.next();
+                            it.remove();
+                            removed++;
+                        }
+                        log.debug("Method cache evicted {} entries (size: {} -> {})", removed, currentSize,
                             METHOD_CACHE.size());
                     }
                 }

@@ -259,10 +259,25 @@ public class ProjectionSpec<T> {
     /**
      * 构建并返回以 {@link Tuple} 为结果类型的类型安全查询。
      *
+     * <p>
+     * <strong>安全提示：</strong>此方法不设置 {@code maxResults}，直接调用 {@code getResultList()} 可能返回大量数据导致 OOM。 推荐使用
+     * {@link #toTupleQuery(EntityManager, int)} 重载方法显式限制返回行数。
+     *
      * @param em JPA 实体管理器
      * @return 返回 Tuple 结果的 TypedQuery 实例
      */
     public TypedQuery<Tuple> toTupleQuery(EntityManager em) {
+        return toTupleQuery(em, -1);
+    }
+
+    /**
+     * 构建并返回以 {@link Tuple} 为结果类型的类型安全查询，限制最大返回行数。
+     *
+     * @param em JPA 实体管理器
+     * @param maxResults 最大返回行数，{@code -1} 表示不限制
+     * @return 返回 Tuple 结果的 TypedQuery 实例
+     */
+    public TypedQuery<Tuple> toTupleQuery(EntityManager em, int maxResults) {
         CriteriaBuilder cb = em.getCriteriaBuilder();
         CriteriaQuery<Tuple> query = cb.createTupleQuery();
         Root<T> root = query.from(entityClass);
@@ -283,7 +298,11 @@ public class ProjectionSpec<T> {
         // Apply ORDER BY
         applyOrderBy(root, cb, query);
 
-        return em.createQuery(query);
+        TypedQuery<Tuple> typedQuery = em.createQuery(query);
+        if (maxResults > 0) {
+            typedQuery.setMaxResults(maxResults);
+        }
+        return typedQuery;
     }
 
     /**
@@ -292,6 +311,10 @@ public class ProjectionSpec<T> {
      * <p>
      * 必须先调用 {@link #asDto(Class)} 方法指定 DTO 类。
      *
+     * <p>
+     * <strong>安全提示：</strong>此方法不设置 {@code maxResults}，直接调用 {@code getResultList()} 可能返回大量数据导致 OOM。 推荐使用
+     * {@link #toDtoQuery(EntityManager, int)} 重载方法显式限制返回行数。
+     *
      * @param em JPA 实体管理器
      * @param <R> DTO 结果类型
      * @return 返回 DTO 结果的 TypedQuery 实例
@@ -299,6 +322,23 @@ public class ProjectionSpec<T> {
      */
     @SuppressWarnings("unchecked")
     public <R> TypedQuery<R> toDtoQuery(EntityManager em) {
+        return toDtoQuery(em, -1);
+    }
+
+    /**
+     * 构建并返回以 DTO 为结果类型的类型安全查询，限制最大返回行数。
+     *
+     * <p>
+     * 必须先调用 {@link #asDto(Class)} 方法指定 DTO 类。
+     *
+     * @param em JPA 实体管理器
+     * @param maxResults 最大返回行数，{@code -1} 表示不限制
+     * @param <R> DTO 结果类型
+     * @return 返回 DTO 结果的 TypedQuery 实例
+     * @throws IllegalStateException 如果未调用 {@link #asDto(Class)} 方法
+     */
+    @SuppressWarnings("unchecked")
+    public <R> TypedQuery<R> toDtoQuery(EntityManager em, int maxResults) {
         if (dtoClass == null) {
             throw new IllegalStateException("asDto() must be called before toDtoQuery()");
         }
@@ -323,7 +363,11 @@ public class ProjectionSpec<T> {
         // Apply ORDER BY
         applyOrderBy(root, cb, query);
 
-        return em.createQuery(query);
+        TypedQuery<R> typedQuery = em.createQuery(query);
+        if (maxResults > 0) {
+            typedQuery.setMaxResults(maxResults);
+        }
+        return typedQuery;
     }
 
     /**

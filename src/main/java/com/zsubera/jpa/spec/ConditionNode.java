@@ -58,6 +58,12 @@ public sealed interface ConditionNode permits ConditionNode.SimpleNode, Conditio
         }
 
         public SimpleNode(String fieldName, Object value, Op op, char escapeChar) {
+            if (fieldName == null) {
+                throw new IllegalArgumentException("fieldName must not be null");
+            }
+            if (op == null) {
+                throw new IllegalArgumentException("op must not be null");
+            }
             this.fieldName = fieldName;
             // 防御性拷贝：数组是可变的，拷贝防止外部修改影响内部状态
             if (value instanceof Object[] arr) {
@@ -111,6 +117,12 @@ public sealed interface ConditionNode permits ConditionNode.SimpleNode, Conditio
         final List<ConditionNode> innerConditions = new ArrayList<>();
 
         public JoinNode(String fieldName, JoinType joinType) {
+            if (fieldName == null) {
+                throw new IllegalArgumentException("fieldName must not be null");
+            }
+            if (joinType == null) {
+                throw new IllegalArgumentException("joinType must not be null");
+            }
             this.fieldName = fieldName;
             this.joinType = joinType;
         }
@@ -147,6 +159,12 @@ public sealed interface ConditionNode permits ConditionNode.SimpleNode, Conditio
         final String[] fieldNames;
 
         public MultiLikeNode(String keyword, String[] fieldNames) {
+            if (keyword == null) {
+                throw new IllegalArgumentException("keyword must not be null");
+            }
+            if (fieldNames == null) {
+                throw new IllegalArgumentException("fieldNames must not be null");
+            }
             this.keyword = keyword;
             this.fieldNames = fieldNames.clone();
         }
@@ -163,6 +181,12 @@ public sealed interface ConditionNode permits ConditionNode.SimpleNode, Conditio
         final CollectionOp op;
 
         public CollectionNode(String fieldName, CollectionOp op) {
+            if (fieldName == null) {
+                throw new IllegalArgumentException("fieldName must not be null");
+            }
+            if (op == null) {
+                throw new IllegalArgumentException("op must not be null");
+            }
             this.fieldName = fieldName;
             this.op = op;
         }
@@ -190,6 +214,12 @@ public sealed interface ConditionNode permits ConditionNode.SimpleNode, Conditio
         final boolean negate;
 
         public ExistsNode(Class<S> subEntity, Consumer<SubQuerySpec<S>> config, boolean negate) {
+            if (subEntity == null) {
+                throw new IllegalArgumentException("subEntity must not be null");
+            }
+            if (config == null) {
+                throw new IllegalArgumentException("config must not be null");
+            }
             this.subEntity = subEntity;
             this.config = config;
             this.negate = negate;
@@ -223,6 +253,15 @@ public sealed interface ConditionNode permits ConditionNode.SimpleNode, Conditio
 
         public InSubQueryNode(String outerFieldName, Class<S> subEntity, Consumer<SubQuerySpec<S>> config,
             boolean negate) {
+            if (outerFieldName == null) {
+                throw new IllegalArgumentException("outerFieldName must not be null");
+            }
+            if (subEntity == null) {
+                throw new IllegalArgumentException("subEntity must not be null");
+            }
+            if (config == null) {
+                throw new IllegalArgumentException("config must not be null");
+            }
             this.outerFieldName = outerFieldName;
             this.subEntity = subEntity;
             this.config = config;
@@ -258,6 +297,9 @@ public sealed interface ConditionNode permits ConditionNode.SimpleNode, Conditio
         final ConditionNode inner;
 
         public NegateNode(ConditionNode inner) {
+            if (inner == null) {
+                throw new IllegalArgumentException("inner must not be null");
+            }
             this.inner = inner;
         }
 
@@ -285,6 +327,9 @@ public sealed interface ConditionNode permits ConditionNode.SimpleNode, Conditio
          * @param asc 是否升序
          */
         public OrderNode(String fieldName, boolean asc) {
+            if (fieldName == null) {
+                throw new IllegalArgumentException("fieldName must not be null");
+            }
             this.fieldName = fieldName;
             this.asc = asc;
         }

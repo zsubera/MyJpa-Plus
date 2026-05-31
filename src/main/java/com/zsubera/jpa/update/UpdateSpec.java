@@ -261,6 +261,10 @@ public class UpdateSpec<T> extends AbstractBulkOperationSpec<T, UpdateSpec<T>> {
         if (limit <= 0) {
             throw new IllegalArgumentException("limit must be positive");
         }
+        if (!pessimisticLock) {
+            log.warn("executeLimited() with pessimisticLock=false may cause race conditions. "
+                + "Consider using pessimisticLock=true for critical operations.");
+        }
         CriteriaBuilder cb = em.getCriteriaBuilder();
 
         // Step 1: 查询符合条件的ID列表（带LIMIT）

@@ -244,8 +244,10 @@ public final class SoftDeleteHelper {
                         evicted++;
                     }
                 }
-                if (evicted > 0) {
-                    insertCounter.addAndGet(-evicted);
+                // 修正计数器：CAS 设置的 currentCount - 1 可能与实际驱逐数量不一致，
+                // 使用 addAndGet 精确调整计数器以反映实际缓存大小变化
+                if (evicted > 1) {
+                    insertCounter.addAndGet(-(evicted - 1));
                 }
             }
         }
