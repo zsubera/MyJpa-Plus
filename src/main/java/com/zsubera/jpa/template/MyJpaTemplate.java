@@ -101,6 +101,9 @@ public class MyJpaTemplate {
     /** 深度分页警告日志的最小间隔（毫秒），防止日志泛滥。 */
     private static final long DEEP_PAGINATION_WARN_INTERVAL_MS = 60_000; // 1 分钟
 
+    /** 批量执行最大迭代次数保护，防止无限循环。 */
+    private static final int MAX_BATCH_ITERATIONS = 10000;
+
     /** 上次记录深度分页警告的时间戳。 */
     private final java.util.concurrent.atomic.AtomicLong lastDeepPaginationWarnTime =
         new java.util.concurrent.atomic.AtomicLong(0);
@@ -1020,6 +1023,7 @@ public class MyJpaTemplate {
         java.util.function.IntUnaryOperator batchExecutor) {
         int total = 0;
         int batchResult;
+        int iteration = 0;
         do {
             batchResult = batchExecutor.applyAsInt(batchSize);
             total += batchResult;
@@ -1030,6 +1034,12 @@ public class MyJpaTemplate {
                     log.debug("Batch {}: {} rows {}ed in this batch (total: {})", operationName, batchResult,
                         operationName, total);
                 }
+            }
+            iteration++;
+            if (iteration >= MAX_BATCH_ITERATIONS) {
+                log.error("Batch {} reached maximum iterations ({}). Possible infinite loop. Total rows: {}",
+                    operationName, MAX_BATCH_ITERATIONS, total);
+                break;
             }
         } while (batchResult >= batchSize);
         return total;

@@ -1,9 +1,9 @@
 package com.zsubera.jpa.template;
 
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import java.util.Iterator;
+import java.util.LinkedHashMap;
 import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -53,8 +53,13 @@ public class QueryCacheManager {
     /** 默认最大缓存条目数 */
     private static final int DEFAULT_MAX_ENTRIES = 10000;
 
-    private final ConcurrentHashMap<String, CachedQueryResult<?>> store = new ConcurrentHashMap<>();
-    private volatile int maxEntries = DEFAULT_MAX_ENTRIES;
+    /** LRU 缓存，使用访问顺序实现 LRU 驱逐策略。 */
+    private final LinkedHashMap<String, CachedQueryResult<?>> store;
+
+    /** 读写锁，保证线程安全。 */
+    private final ReentrantReadWriteLock lock = new ReentrantReadWriteLock();
+
+    private volatile int maxEntries;
 
     /**
      * 创建使用默认最大条目数的 QueryCacheManager。
@@ -74,6 +79,14 @@ public class QueryCacheManager {
             throw new IllegalArgumentException("maxEntries must be positive");
         }
         this.maxEntries = maxEntries;
+        this.store = new LinkedHashMap<>(16, 0.75f, true) {
+            private static final long serialVersionUID = 1L;
+
+            @Override
+            protected boolean removeEldestEntry(Map.Entry<String, CachedQueryResult<?>> eldest) {
+                return super.size() > QueryCacheManager.this.maxEntries;
+            }
+        };
     }
 
     /**
@@ -87,7 +100,6 @@ public class QueryCacheManager {
             throw new IllegalArgumentException("maxEntries must be positive");
         }
         this.maxEntries = maxEntries;
-        evictIfNeeded();
     }
 
     /**
@@ -108,16 +120,29 @@ public class QueryCacheManager {
      */
     @SuppressWarnings("unchecked")
     public <T> T get(String key) {
-        CachedQueryResult<?> result = store.get(key);
-        if (result == null) {
-            return null;
+        lock.readLock().lock();
+        try {
+            CachedQueryResult<?> result = store.get(key);
+            if (result == null) {
+                return null;
+            }
+            if (result.isExpired()) {
+                // Upgrade to write lock for removal
+                lock.readLock().unlock();
+                lock.writeLock().lock();
+                try {
+                    store.remove(key);
+                } finally {
+                    lock.writeLock().unlock();
+                    lock.readLock().lock();
+                }
+                log.debug("Cache expired for key: {}", key);
+                return null;
+            }
+            return (T)result.getValue();
+        } finally {
+            lock.readLock().unlock();
         }
-        if (result.isExpired()) {
-            store.remove(key);
-            log.debug("Cache expired for key: {}", key);
-            return null;
-        }
-        return (T)result.getValue();
     }
 
     /**
@@ -129,9 +154,13 @@ public class QueryCacheManager {
      * @param <T> value type
      */
     public <T> void put(String key, T value, long ttlSeconds) {
-        store.put(key, new CachedQueryResult<>(value, ttlSeconds));
+        lock.writeLock().lock();
+        try {
+            store.put(key, new CachedQueryResult<>(value, ttlSeconds));
+        } finally {
+            lock.writeLock().unlock();
+        }
         log.debug("Cache put for key: {} (ttl={}s)", key, ttlSeconds);
-        evictIfNeeded();
     }
 
     /**
@@ -140,7 +169,12 @@ public class QueryCacheManager {
      * @param key cache key to evict
      */
     public void evict(String key) {
-        store.remove(key);
+        lock.writeLock().lock();
+        try {
+            store.remove(key);
+        } finally {
+            lock.writeLock().unlock();
+        }
         log.debug("Cache evicted for key: {}", key);
     }
 
@@ -148,7 +182,12 @@ public class QueryCacheManager {
      * Clears all cached entries.
      */
     public void clear() {
-        store.clear();
+        lock.writeLock().lock();
+        try {
+            store.clear();
+        } finally {
+            lock.writeLock().unlock();
+        }
         log.debug("Cache cleared");
     }
 
@@ -171,13 +210,18 @@ public class QueryCacheManager {
             return 0;
         }
         int count = 0;
-        Iterator<Map.Entry<String, CachedQueryResult<?>>> it = store.entrySet().iterator();
-        while (it.hasNext()) {
-            Map.Entry<String, CachedQueryResult<?>> entry = it.next();
-            if (entry.getKey().startsWith(keyPrefix)) {
-                it.remove();
-                count++;
+        lock.writeLock().lock();
+        try {
+            java.util.Iterator<Map.Entry<String, CachedQueryResult<?>>> it = store.entrySet().iterator();
+            while (it.hasNext()) {
+                Map.Entry<String, CachedQueryResult<?>> entry = it.next();
+                if (entry.getKey().startsWith(keyPrefix)) {
+                    it.remove();
+                    count++;
+                }
             }
+        } finally {
+            lock.writeLock().unlock();
         }
         if (count > 0) {
             log.debug("Cache evicted {} entries with prefix '{}'", count, keyPrefix);
@@ -191,25 +235,11 @@ public class QueryCacheManager {
      * @return number of entries
      */
     public int size() {
-        return store.size();
-    }
-
-    /**
-     * 当缓存条目数超过最大限制时，驱逐最早的条目（按插入顺序）。
-     */
-    private void evictIfNeeded() {
-        if (store.size() > maxEntries) {
-            int toRemove = store.size() - (int)(maxEntries * 0.75);
-            if (toRemove > 0) {
-                int removed = 0;
-                Iterator<Map.Entry<String, CachedQueryResult<?>>> it = store.entrySet().iterator();
-                while (it.hasNext() && removed < toRemove) {
-                    it.next();
-                    it.remove();
-                    removed++;
-                }
-                log.debug("Cache evicted {} entries (size: {} -> {})", removed, store.size() + removed, store.size());
-            }
+        lock.readLock().lock();
+        try {
+            return store.size();
+        } finally {
+            lock.readLock().unlock();
         }
     }
 }

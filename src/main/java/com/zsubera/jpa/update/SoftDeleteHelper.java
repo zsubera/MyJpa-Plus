@@ -167,8 +167,9 @@ public final class SoftDeleteHelper {
             Object deletedEnumValue = getEnumConstant(field.getType(), annotation.deletedValue());
             return cb.or(cb.isNull(path.get(fieldName)), cb.notEqual(path.get(fieldName), deletedEnumValue));
         }
-        // 默认：按 Boolean false 处理
-        return cb.equal(path.get(fieldName), false);
+        // 不支持的类型：抛出异常而非静默回退
+        throw new MyJpaPlusException("@SoftDelete field '" + fieldName + "' in " + entityClass.getName()
+            + " has unsupported type: " + field.getType().getName() + ". Supported types: Boolean, Integer, Enum.");
     }
 
     private static Predicate buildDeleted(CriteriaBuilder cb, Path<?> path, String fieldName, Class<?> entityClass) {
@@ -177,6 +178,10 @@ public final class SoftDeleteHelper {
             return cb.equal(path.get(fieldName), true);
         }
         SoftDelete annotation = field.getAnnotation(SoftDelete.class);
+        // Boolean 类型
+        if (field.getType() == Boolean.class || field.getType() == boolean.class) {
+            return cb.equal(path.get(fieldName), true);
+        }
         // Integer 类型
         if (field.getType() == Integer.class || field.getType() == int.class) {
             int deletedValue = (annotation != null) ? annotation.deletedIntValue() : 1;
@@ -191,8 +196,9 @@ public final class SoftDeleteHelper {
             Object deletedEnumValue = getEnumConstant(field.getType(), annotation.deletedValue());
             return cb.equal(path.get(fieldName), deletedEnumValue);
         }
-        // 默认：按 Boolean true 处理
-        return cb.equal(path.get(fieldName), true);
+        // 不支持的类型：抛出异常而非静默回退
+        throw new MyJpaPlusException("@SoftDelete field '" + fieldName + "' in " + entityClass.getName()
+            + " has unsupported type: " + field.getType().getName() + ". Supported types: Boolean, Integer, Enum.");
     }
 
     /**

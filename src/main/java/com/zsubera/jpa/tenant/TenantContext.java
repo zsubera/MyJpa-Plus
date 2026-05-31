@@ -16,6 +16,9 @@ public final class TenantContext {
 
     private static final ThreadLocal<Integer> ignoreCount = ThreadLocal.withInitial(() -> 0);
 
+    /** 安全上限：超过此值认为存在泄漏，抛出异常。 */
+    private static final int MAX_IGNORE_COUNT = 64;
+
     private TenantContext() {}
 
     /**
@@ -29,9 +32,16 @@ public final class TenantContext {
 
     /**
      * 推入忽略标记（增加计数）。当方法进入 {@code @IgnoreTenant} 注解的方法时调用。
+     *
+     * @throws IllegalStateException 如果计数超过安全上限（可能存在泄漏）
      */
     public static void pushIgnore() {
-        ignoreCount.set(ignoreCount.get() + 1);
+        int current = ignoreCount.get() == null ? 0 : ignoreCount.get();
+        if (current >= MAX_IGNORE_COUNT) {
+            throw new IllegalStateException(
+                "TenantContext ignore count exceeded maximum (" + MAX_IGNORE_COUNT + "). Possible leak detected.");
+        }
+        ignoreCount.set(current + 1);
     }
 
     /**

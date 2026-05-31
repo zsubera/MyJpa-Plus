@@ -27,6 +27,12 @@ public final class EntityClassResolver {
     private static final ConcurrentMap<Class<?>, String> ID_FIELD_CACHE =
         new ConcurrentReferenceHashMap<>(16, ConcurrentReferenceHashMap.ReferenceType.WEAK);
 
+    /** 哨兵值，表示缓存了 null 结果（无法解析实体类）。 */
+    private static final Class<?> UNRESOLVABLE_SENTINEL = Unresolvable.class;
+
+    /** 标记类，用作缓存中的 null 替代。 */
+    private static final class Unresolvable {}
+
     private EntityClassResolver() {}
 
     /**
@@ -41,15 +47,23 @@ public final class EntityClassResolver {
      */
     @SuppressWarnings("unchecked")
     static <T> Class<T> resolve(Class<?> repositoryClass) {
-        return (Class<T>)CACHE.computeIfAbsent(repositoryClass, clz -> {
-            // 1. Try direct resolution first (works for simple cases)
-            Class<?> result = tryDirectResolution(clz);
-            if (result != null) {
-                return result;
-            }
-            // 2. Fall back to full hierarchy traversal
-            return resolveThroughHierarchy(clz);
-        });
+        Class<?> cached = CACHE.get(repositoryClass);
+        if (cached != null) {
+            return cached == UNRESOLVABLE_SENTINEL ? null : (Class<T>)cached;
+        }
+        Class<?> result = doResolve(repositoryClass);
+        CACHE.put(repositoryClass, result != null ? result : UNRESOLVABLE_SENTINEL);
+        return (Class<T>)result;
+    }
+
+    private static Class<?> doResolve(Class<?> repositoryClass) {
+        // 1. Try direct resolution first (works for simple cases)
+        Class<?> result = tryDirectResolution(repositoryClass);
+        if (result != null) {
+            return result;
+        }
+        // 2. Fall back to full hierarchy traversal
+        return resolveThroughHierarchy(repositoryClass);
     }
 
     /**

@@ -39,5 +39,6 @@ public interface TenantProvider {
      *
      * @return 当前租户 ID，不能为 {@code null}
      */
+    @org.springframework.lang.NonNull
     Object getCurrentTenantId();
 }

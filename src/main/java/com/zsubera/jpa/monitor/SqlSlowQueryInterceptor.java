@@ -4,6 +4,8 @@ import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.Method;
 import java.lang.reflect.Proxy;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 import javax.sql.DataSource;
 import org.hibernate.resource.jdbc.spi.StatementInspector;
 import org.slf4j.Logger;
@@ -31,6 +33,9 @@ public class SqlSlowQueryInterceptor implements StatementInspector {
 
     private static final long serialVersionUID = 1L;
     private static final Logger log = LoggerFactory.getLogger(SqlSlowQueryInterceptor.class);
+
+    /** 代理类缓存，避免每次 prepareStatement 创建新的代理类。 */
+    private static final ConcurrentMap<Class<?>, Class<?>> PROXY_CLASS_CACHE = new ConcurrentHashMap<>();
 
     private final long slowQueryThresholdMs;
 
@@ -78,8 +83,17 @@ public class SqlSlowQueryInterceptor implements StatementInspector {
         }
 
         private Object wrapPreparedStatement(Object stmt, String sql) {
-            return Proxy.newProxyInstance(stmt.getClass().getClassLoader(), stmt.getClass().getInterfaces(),
-                new PreparedStatementTimingHandler(stmt, sql));
+            Class<?> stmtClass = stmt.getClass();
+            Class<?> proxyClass = PROXY_CLASS_CACHE.computeIfAbsent(stmtClass,
+                clz -> Proxy.getProxyClass(clz.getClassLoader(), clz.getInterfaces()));
+            try {
+                return proxyClass.getConstructor(InvocationHandler.class)
+                    .newInstance(new PreparedStatementTimingHandler(stmt, sql));
+            } catch (ReflectiveOperationException e) {
+                // Fallback to direct proxy creation
+                return Proxy.newProxyInstance(stmtClass.getClassLoader(), stmtClass.getInterfaces(),
+                    new PreparedStatementTimingHandler(stmt, sql));
+            }
         }
     }
 
@@ -120,7 +134,14 @@ public class SqlSlowQueryInterceptor implements StatementInspector {
      * 消毒 SQL 语句，移除可能包含的参数值以防止敏感数据泄露到日志。
      *
      * <p>
-     * 将 SQL 中的字符串字面量替换为 {@code ?}，数字字面量替换为 {@code ?}。
+     * 替换规则：
+     * <ul>
+     * <li>单引号字符串（支持转义单引号 ''）→ ?</li>
+     * <li>PostgreSQL 美元引用（$1, $2 等）→ ?</li>
+     * <li>十六进制字面量（X'...'）→ ?</li>
+     * <li>Unicode 字符串（N'...'）→ ?</li>
+     * <li>数字字面量 → ?</li>
+     * </ul>
      *
      * @param sql 原始 SQL 语句
      * @return 消毒后的 SQL 语句
@@ -129,9 +150,11 @@ public class SqlSlowQueryInterceptor implements StatementInspector {
         if (sql == null) {
             return "null";
         }
-        // 替换字符串字面量（单引号包围的内容，支持转义单引号 ''）
-        String sanitized = sql.replaceAll("'(?:[^']|'')*'", "?");
-        // 替换已绑定的参数占位符（如 $1, :param 等保持不变，仅替换内联值）
+        String sanitized = sql.replaceAll("'(?:[^']|'')*'", "?") // 单引号字符串
+            .replaceAll("\\$\\d+", "?") // PostgreSQL 美元引用参数
+            .replaceAll("X'[0-9a-fA-F]+'", "?") // 十六进制字面量
+            .replaceAll("N'[^']*'", "?") // Unicode 字符串
+            .replaceAll("\\b\\d+\\.?\\d*\\b", "?"); // 数字字面量
         return sanitized;
     }
 }

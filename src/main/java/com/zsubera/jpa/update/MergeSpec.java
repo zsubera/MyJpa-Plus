@@ -8,10 +8,12 @@ import jakarta.persistence.EntityManager;
 import jakarta.persistence.EntityTransaction;
 import jakarta.persistence.Id;
 import java.lang.reflect.Field;
+import java.lang.reflect.InaccessibleObjectException;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.regex.Pattern;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
@@ -49,6 +51,9 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 public class MergeSpec<T> {
 
     private static final Logger log = LoggerFactory.getLogger(MergeSpec.class);
+
+    /** 安全标识符正则：仅允许字母、数字、下划线和点号（用于 schema.table 格式）。 */
+    private static final Pattern SAFE_IDENTIFIER_PATTERN = Pattern.compile("^[a-zA-Z_][a-zA-Z0-9_.]*$");
 
     private final Class<T> entityClass;
     private T entity;
@@ -219,8 +224,9 @@ public class MergeSpec<T> {
                 params.add(fv.value());
             }
         }
-        StringBuilder sql = new StringBuilder("INSERT INTO ").append(resolveTableName()).append(" (");
-        sql.append(String.join(", ", columns));
+        String escapedTable = escapeIdentifier(resolveTableName(), "h2");
+        StringBuilder sql = new StringBuilder("INSERT INTO ").append(escapedTable).append(" (");
+        sql.append(String.join(", ", columns.stream().map(c -> escapeIdentifier(c, "h2")).toList()));
         sql.append(") VALUES (");
         for (int i = 0; i < params.size(); i++) {
             if (i > 0) {
@@ -250,7 +256,7 @@ public class MergeSpec<T> {
         for (String fieldName : updateFields) {
             for (EntityFieldValue fv : allFieldValues) {
                 if (fv.fieldName().equals(fieldName)) {
-                    setClauses.add(fv.columnName() + " = ?");
+                    setClauses.add(escapeIdentifier(fv.columnName(), "h2") + " = ?");
                     setParams.add(fv.value());
                 }
             }
@@ -263,12 +269,13 @@ public class MergeSpec<T> {
         for (String col : conflictColumns) {
             for (EntityFieldValue fv : allFieldValues) {
                 if (fv.columnName().equals(col)) {
-                    whereClauses.add(col + " = ?");
+                    whereClauses.add(escapeIdentifier(col, "h2") + " = ?");
                     whereParams.add(fv.value());
                 }
             }
         }
-        StringBuilder sql = new StringBuilder("UPDATE ").append(resolveTableName()).append(" SET ");
+        StringBuilder sql =
+            new StringBuilder("UPDATE ").append(escapeIdentifier(resolveTableName(), "h2")).append(" SET ");
         sql.append(String.join(", ", setClauses));
         sql.append(" WHERE ");
         sql.append(String.join(" AND ", whereClauses));
@@ -361,6 +368,10 @@ public class MergeSpec<T> {
      *
      * <p>
      * 对实体列表中的每个实体执行 UPSERT。所有操作在同一个事务中执行，使用 EntityManager 的 flush/clear 进行分批处理以减少内存占用。
+     *
+     * <p>
+     * <strong>线程安全说明：</strong>此方法不是线程安全的。它会临时修改实例的 {@code entity} 字段， 因此不能在多线程环境中并发调用同一 {@code MergeSpec} 实例。每个线程应使用独立的
+     * {@code MergeSpec} 实例。
      *
      * @param entities 要 UPSERT 的实体列表
      * @param em 实体管理器
@@ -458,8 +469,9 @@ public class MergeSpec<T> {
      */
     private SqlWithParams buildPostgresSql(String tableName, List<String> insertColumns,
         List<EntityFieldValue> insertFieldValues, List<String> conflictColumns, List<String> updateColumns) {
-        StringBuilder sql = new StringBuilder("INSERT INTO ").append(tableName).append(" (");
-        sql.append(String.join(", ", insertColumns));
+        String escapedTable = escapeIdentifier(tableName, "postgresql");
+        StringBuilder sql = new StringBuilder("INSERT INTO ").append(escapedTable).append(" (");
+        sql.append(String.join(", ", insertColumns.stream().map(c -> escapeIdentifier(c, "postgresql")).toList()));
         sql.append(") VALUES (");
         List<Object> params = new ArrayList<>();
         for (int i = 0; i < insertFieldValues.size(); i++) {
@@ -470,11 +482,12 @@ public class MergeSpec<T> {
             params.add(insertFieldValues.get(i).value());
         }
         sql.append(") ON CONFLICT (");
-        sql.append(String.join(", ", conflictColumns));
+        sql.append(String.join(", ", conflictColumns.stream().map(c -> escapeIdentifier(c, "postgresql")).toList()));
         sql.append(") DO UPDATE SET ");
         List<String> setClauses = new ArrayList<>();
         for (String col : updateColumns) {
-            setClauses.add(col + " = EXCLUDED." + col);
+            String escaped = escapeIdentifier(col, "postgresql");
+            setClauses.add(escaped + " = EXCLUDED." + escaped);
         }
         sql.append(String.join(", ", setClauses));
         return new SqlWithParams(sql.toString(), params);
@@ -485,8 +498,9 @@ public class MergeSpec<T> {
      */
     private SqlWithParams buildMysqlSql(String tableName, List<String> insertColumns,
         List<EntityFieldValue> insertFieldValues, List<String> updateColumns) {
-        StringBuilder sql = new StringBuilder("INSERT INTO ").append(tableName).append(" (");
-        sql.append(String.join(", ", insertColumns));
+        String escapedTable = escapeIdentifier(tableName, "mysql");
+        StringBuilder sql = new StringBuilder("INSERT INTO ").append(escapedTable).append(" (");
+        sql.append(String.join(", ", insertColumns.stream().map(c -> escapeIdentifier(c, "mysql")).toList()));
         sql.append(") VALUES (");
         List<Object> params = new ArrayList<>();
         for (int i = 0; i < insertFieldValues.size(); i++) {
@@ -499,7 +513,8 @@ public class MergeSpec<T> {
         sql.append(") ON DUPLICATE KEY UPDATE ");
         List<String> setClauses = new ArrayList<>();
         for (String col : updateColumns) {
-            setClauses.add(col + " = VALUES(" + col + ")");
+            String escaped = escapeIdentifier(col, "mysql");
+            setClauses.add(escaped + " = VALUES(" + escaped + ")");
         }
         sql.append(String.join(", ", setClauses));
         return new SqlWithParams(sql.toString(), params);
@@ -522,8 +537,9 @@ public class MergeSpec<T> {
             }
         }
         if (allConflictKeysNull) {
-            StringBuilder sql = new StringBuilder("INSERT INTO ").append(tableName).append(" (");
-            sql.append(String.join(", ", insertColumns));
+            String escapedTable = escapeIdentifier(tableName, "h2");
+            StringBuilder sql = new StringBuilder("INSERT INTO ").append(escapedTable).append(" (");
+            sql.append(String.join(", ", insertColumns.stream().map(c -> escapeIdentifier(c, "h2")).toList()));
             sql.append(") VALUES (");
             List<Object> params = new ArrayList<>();
             for (int i = 0; i < insertFieldValues.size(); i++) {
@@ -536,10 +552,11 @@ public class MergeSpec<T> {
             sql.append(")");
             return new SqlWithParams(sql.toString(), params);
         }
-        StringBuilder sql = new StringBuilder("MERGE INTO ").append(tableName).append(" (");
-        sql.append(String.join(", ", insertColumns));
+        String escapedTable = escapeIdentifier(tableName, "h2");
+        StringBuilder sql = new StringBuilder("MERGE INTO ").append(escapedTable).append(" (");
+        sql.append(String.join(", ", insertColumns.stream().map(c -> escapeIdentifier(c, "h2")).toList()));
         sql.append(") KEY (");
-        sql.append(String.join(", ", conflictColumns));
+        sql.append(String.join(", ", conflictColumns.stream().map(c -> escapeIdentifier(c, "h2")).toList()));
         sql.append(") VALUES (");
         List<Object> params = new ArrayList<>();
         for (int i = 0; i < insertFieldValues.size(); i++) {
@@ -576,6 +593,33 @@ public class MergeSpec<T> {
             return entityAnnotation.name();
         }
         return camelToSnake(entityClass.getSimpleName());
+    }
+
+    /**
+     * 验证并转义 SQL 标识符（表名、列名），防止 SQL 注入。
+     *
+     * <p>
+     * 标识符必须仅包含字母、数字、下划线和点号。不满足条件时抛出异常。 对于 PostgreSQL 使用双引号转义，对于 MySQL 使用反引号转义。
+     *
+     * @param identifier 标识符
+     * @param dialect 数据库方言
+     * @return 转义后的标识符
+     * @throws MyJpaPlusException 如果标识符包含非法字符
+     */
+    private static String escapeIdentifier(String identifier, String dialect) {
+        if (identifier == null || identifier.isEmpty()) {
+            throw new MyJpaPlusException("Identifier must not be null or empty");
+        }
+        if (!SAFE_IDENTIFIER_PATTERN.matcher(identifier).matches()) {
+            throw new MyJpaPlusException("Invalid SQL identifier: '" + identifier
+                + "'. Only alphanumeric characters, underscores, and dots are allowed.");
+        }
+        // H2 默认将标识符转为大写存储，加引号会导致大小写敏感问题，因此不加引号
+        return switch (dialect) {
+            case "postgresql" -> "\"" + identifier + "\"";
+            case "mysql" -> "`" + identifier + "`";
+            default -> identifier;
+        };
     }
 
     /**
@@ -704,7 +748,13 @@ public class MergeSpec<T> {
             }
         }
         for (Field f : allFields) {
-            f.setAccessible(true);
+            try {
+                f.setAccessible(true);
+            } catch (InaccessibleObjectException e) {
+                throw new MyJpaPlusException("Cannot access field '" + f.getName() + "' in " + entityClass.getName()
+                    + ". If using Java 17+ module system, add JVM argument: " + "--add-opens "
+                    + f.getDeclaringClass().getPackageName() + "=ALL-UNNAMED", e);
+            }
             try {
                 Object value = f.get(entity);
                 String columnName = resolveColumnName(f);

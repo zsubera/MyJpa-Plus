@@ -78,11 +78,14 @@ public class CodeEnumType implements UserType<Object>, DynamicParameterizedType 
                     cl = getClass().getClassLoader();
                 }
                 Class<?> typeClass = Class.forName(typeName, true, cl);
-                if (typeClass.isEnum()) {
-                    this.enumClass = typeClass;
-                    resolveCodeField();
-                    return;
+                // P2-2: 安全检查 - 仅允许加载枚举类型
+                if (!typeClass.isEnum()) {
+                    throw new HibernateException(
+                        "CodeEnumType only supports enum types, but got: " + typeClass.getName());
                 }
+                this.enumClass = typeClass;
+                resolveCodeField();
+                return;
             } catch (ClassNotFoundException e) {
                 log.warn("Failed to resolve enum class: {}", typeName, e);
             }

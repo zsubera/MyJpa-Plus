@@ -2,6 +2,7 @@ package com.zsubera.jpa.spec;
 
 import static com.zsubera.jpa.spec.PredicateHelper.escapeLikeWildcards;
 
+import com.zsubera.jpa.exception.MyJpaPlusException;
 import com.zsubera.jpa.util.LambdaUtils;
 import jakarta.persistence.criteria.CriteriaBuilder;
 import jakarta.persistence.criteria.Path;
@@ -10,6 +11,7 @@ import jakarta.persistence.criteria.Root;
 import java.util.Collection;
 import java.util.List;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.BiFunction;
 import java.util.function.Function;
 import java.util.regex.Pattern;
@@ -49,18 +51,35 @@ public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> {
      * 安全数据库函数名白名单。仅允许调用以下常见安全函数。
      *
      * <p>
-     * 此集合为不可变集合。如需扩展白名单，可在调用 {@code func()} 方法前自行校验函数名， 或使用正则校验 {@link #SAFE_FIELD_NAME_PATTERN} 确保函数名格式安全。 禁止调用危险函数如
+     * 此集合为线程安全的可变集合。如需扩展白名单，可直接调用 {@code SAFE_FUNCTION_NAMES.add("MY_FUNC")}。 禁止调用危险函数如
      * {@code pg_sleep}、{@code SLEEP}、{@code LOAD_FILE} 等。
+     *
+     * <p>
+     * 白名单强制执行由系统属性 {@code myjpa-plus.func.whitelist-enforced} 控制（默认 {@code true}）。 设置为 {@code false} 时仅记录警告日志，不阻断执行。
      */
-    Set<String> SAFE_FUNCTION_NAMES = Set.of("LOWER", "UPPER", "TRIM", "LTRIM", "RTRIM", "LENGTH", "CHAR_LENGTH",
-        "COALESCE", "NULLIF", "ABS", "ROUND", "CEIL", "FLOOR", "MOD", "CONCAT", "SUBSTRING", "SUBSTR", "REPLACE",
-        "LEFT", "RIGHT", "NOW", "CURRENT_TIMESTAMP", "CURRENT_DATE", "CURRENT_TIME", "EXTRACT", "DATE_FORMAT",
-        "TO_CHAR", "TO_DATE", "TO_TIMESTAMP", "CAST", "TYPEOF", "JSONB_EXISTS", "JSONB_EXTRACT_PATH_TEXT", "JSON_VALUE",
-        "ST_CONTAINS", "ST_DISTANCE", "ST_WITHIN", "ST_INTERSECTS", "ARRAY_LENGTH", "ARRAY_AGG", "STRING_AGG",
-        "GREATEST", "LEAST", "SIGN", "POWER", "SQRT", "LOG", "LN", "EXP", "POSITION", "OVERLAY", "TRANSLATE", "REVERSE",
-        "REPEAT", "SPACE", "YEAR", "MONTH", "DAY", "HOUR", "MINUTE", "SECOND", "ADD_MONTHS", "ADD_DAYS", "DATE_DIFF",
-        "DATEDIFF", "IFNULL", "IF", "NVL", "NVL2", "DECODE", "JSON_OBJECT", "JSON_ARRAY", "JSON_EXTRACT",
-        "JSON_UNQUOTE", "UUID", "UUID_GENERATE_V4", "MD5", "SHA1", "SHA2", "HEX", "UNHEX", "ENCODE");
+    Set<String> SAFE_FUNCTION_NAMES = initDefaultFunctionNames();
+
+    /** 白名单强制执行开关，通过系统属性控制。默认为 true（强制执行）。 */
+    boolean WHITELIST_ENFORCED = Boolean.parseBoolean(System.getProperty("myjpa-plus.func.whitelist-enforced", "true"));
+
+    /**
+     * 初始化默认安全函数名白名单。
+     *
+     * @return 包含默认安全函数名的可变线程安全集合
+     */
+    private static Set<String> initDefaultFunctionNames() {
+        Set<String> names = ConcurrentHashMap.newKeySet();
+        names.addAll(Set.of("LOWER", "UPPER", "TRIM", "LTRIM", "RTRIM", "LENGTH", "CHAR_LENGTH", "COALESCE", "NULLIF",
+            "ABS", "ROUND", "CEIL", "FLOOR", "MOD", "CONCAT", "SUBSTRING", "SUBSTR", "REPLACE", "LEFT", "RIGHT", "NOW",
+            "CURRENT_TIMESTAMP", "CURRENT_DATE", "CURRENT_TIME", "EXTRACT", "DATE_FORMAT", "TO_CHAR", "TO_DATE",
+            "TO_TIMESTAMP", "CAST", "TYPEOF", "JSONB_EXISTS", "JSONB_EXTRACT_PATH_TEXT", "JSON_VALUE", "ST_CONTAINS",
+            "ST_DISTANCE", "ST_WITHIN", "ST_INTERSECTS", "ARRAY_LENGTH", "ARRAY_AGG", "STRING_AGG", "GREATEST", "LEAST",
+            "SIGN", "POWER", "SQRT", "LOG", "LN", "EXP", "POSITION", "OVERLAY", "TRANSLATE", "REVERSE", "REPEAT",
+            "SPACE", "YEAR", "MONTH", "DAY", "HOUR", "MINUTE", "SECOND", "ADD_MONTHS", "ADD_DAYS", "DATE_DIFF",
+            "DATEDIFF", "IFNULL", "IF", "NVL", "NVL2", "DECODE", "JSON_OBJECT", "JSON_ARRAY", "JSON_EXTRACT",
+            "JSON_UNQUOTE", "UUID", "UUID_GENERATE_V4", "MD5", "SHA1", "SHA2", "HEX", "UNHEX", "ENCODE"));
+        return names;
+    }
 
     /**
      * 获取当前条件列表。
@@ -1277,6 +1296,11 @@ public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> {
         }
         String upperFuncName = functionName.toUpperCase();
         if (!SAFE_FUNCTION_NAMES.contains(upperFuncName)) {
+            if (WHITELIST_ENFORCED) {
+                throw new MyJpaPlusException("Function '" + functionName + "' is not in the safe function whitelist. "
+                    + "Add it via ConditionBuilder.SAFE_FUNCTION_NAMES.add(\"" + upperFuncName
+                    + "\") or set -Dmyjpa-plus.func.whitelist-enforced=false to allow.");
+            }
             Logger funcLog = LoggerFactory.getLogger(ConditionBuilder.class);
             funcLog.warn(
                 "SECURITY: Function '{}' is not in the safe function whitelist. "

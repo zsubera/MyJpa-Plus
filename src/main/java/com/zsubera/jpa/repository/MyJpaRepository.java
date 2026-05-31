@@ -108,10 +108,26 @@ public interface MyJpaRepository<T, ID> extends JpaRepository<T, ID>, JpaSpecifi
     /**
      * 查找所有未被软删除的实体，不附加额外条件。
      *
+     * <p>
+     * <strong>安全建议：</strong>此方法不限制返回结果数量，可能导致大数据集查询时的内存溢出（OOM）。 对于大数据集，推荐使用 {@link #findNotDeletedAllStream()} 进行流式查询。
+     *
      * @return 所有未删除实体的列表
      */
     default List<T> findNotDeletedAll() {
         return findAll(SoftDeleteHelper.isNotDeleted(getEntityClass()));
+    }
+
+    /**
+     * 流式查找所有未被软删除的实体。适用于处理大数据集而无需将所有数据加载到内存。
+     *
+     * <p>
+     * <strong>重要：必须使用 try-with-resources 确保 Stream 关闭。</strong>
+     *
+     * @return 未删除实体的 Stream（必须由调用方关闭）
+     */
+    default java.util.stream.Stream<T> findNotDeletedAllStream() {
+        return findAll(SoftDeleteHelper.isNotDeleted(getEntityClass()), org.springframework.data.domain.Sort.unsorted())
+            .stream();
     }
 
     /**

@@ -1,5 +1,6 @@
 package com.zsubera.jpa.converter;
 
+import com.zsubera.jpa.exception.MyJpaPlusException;
 import jakarta.persistence.AttributeConverter;
 import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
@@ -23,9 +24,12 @@ public class EncryptConverter implements AttributeConverter<String, String> {
     private static final String KEY_PROPERTY = "myjpa.encrypt.key";
     private static final String KEY_VERSION_ENV = "MYJPA_ENCRYPT_KEY_VERSION";
     private static final String KEY_VERSION_PROPERTY = "myjpa.encrypt.key.version";
+    private static final String SALT_ENV = "MYJPA_ENCRYPT_SALT";
+    private static final String SALT_PROPERTY = "myjpa.encrypt.salt";
     private static final SecureRandom SECURE_RANDOM = new SecureRandom();
     private static final int PBKDF2_ITERATIONS = 100_000;
     private static final int PBKDF2_KEY_LENGTH = 256;
+    private static final System.Logger LOG = System.getLogger("com.zsubera.jpa.converter.EncryptConverter");
 
     /** Cached key specs by version to avoid repeated environment variable reads and KDF derivation. */
     private static final ConcurrentMap<String, SecretKeySpec> KEY_CACHE = new ConcurrentHashMap<>();
@@ -77,7 +81,8 @@ public class EncryptConverter implements AttributeConverter<String, String> {
             String version = getKeyVersion();
             return version + ":" + Base64.getEncoder().encodeToString(combined);
         } catch (GeneralSecurityException e) {
-            throw new IllegalStateException("Failed to encrypt value", e);
+            LOG.log(System.Logger.Level.ERROR, "Encryption failed", e);
+            throw new MyJpaPlusException("Failed to encrypt value. Check encryption key configuration.", e);
         }
     }
 
@@ -99,9 +104,15 @@ public class EncryptConverter implements AttributeConverter<String, String> {
                 // 兼容旧格式（无版本前缀）
                 base64Data = dbData;
             }
-            byte[] combined = Base64.getDecoder().decode(base64Data);
+            byte[] combined;
+            try {
+                combined = Base64.getDecoder().decode(base64Data);
+            } catch (IllegalArgumentException e) {
+                LOG.log(System.Logger.Level.ERROR, "Invalid Base64 data in encrypted field", e);
+                throw new MyJpaPlusException("Failed to decrypt value: invalid Base64 encoding.", e);
+            }
             if (combined.length < GCM_IV_LENGTH) {
-                throw new IllegalStateException("Invalid encrypted data: decoded length (" + combined.length
+                throw new MyJpaPlusException("Invalid encrypted data: decoded length (" + combined.length
                     + ") is less than minimum required (" + GCM_IV_LENGTH + " bytes for IV). "
                     + "Data may be corrupted or not encrypted with this converter.");
             }
@@ -115,7 +126,8 @@ public class EncryptConverter implements AttributeConverter<String, String> {
             byte[] decrypted = cipher.doFinal(encrypted);
             return new String(decrypted, StandardCharsets.UTF_8);
         } catch (GeneralSecurityException e) {
-            throw new IllegalStateException("Failed to decrypt value", e);
+            LOG.log(System.Logger.Level.ERROR, "Decryption failed", e);
+            throw new MyJpaPlusException("Failed to decrypt value. Check encryption key configuration.", e);
         }
     }
 
@@ -191,16 +203,50 @@ public class EncryptConverter implements AttributeConverter<String, String> {
             byte[] keyBytes = rawKeyMaterial.getBytes(StandardCharsets.UTF_8);
             // 如果已经是有效的 AES 密钥长度，直接使用（向后兼容）
             if (keyBytes.length == 16 || keyBytes.length == 24 || keyBytes.length == 32) {
+                // P0-4: 检测是否为高熵密钥（非可打印 ASCII）
+                boolean looksLikeAscii = true;
+                for (byte b : keyBytes) {
+                    if (b < 0x20 || b > 0x7E) {
+                        looksLikeAscii = false;
+                        break;
+                    }
+                }
+                if (looksLikeAscii) {
+                    LOG.log(System.Logger.Level.WARNING,
+                        "Raw key looks like printable ASCII ({0} bytes). "
+                            + "Use Base64-encoded high-entropy key for production. "
+                            + "Set MYJPA_ENCRYPT_KEY to a Base64-encoded random key.",
+                        keyBytes.length);
+                }
                 return new SecretKeySpec(keyBytes, "AES");
             }
             // 否则使用 PBKDF2 派生
-            PBEKeySpec spec = new PBEKeySpec(rawKeyMaterial.toCharArray(),
-                "myjpa-plus".getBytes(StandardCharsets.UTF_8), PBKDF2_ITERATIONS, PBKDF2_KEY_LENGTH);
+            byte[] salt = getSalt();
+            PBEKeySpec spec = new PBEKeySpec(rawKeyMaterial.toCharArray(), salt, PBKDF2_ITERATIONS, PBKDF2_KEY_LENGTH);
             SecretKeyFactory factory = SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256");
             byte[] derived = factory.generateSecret(spec).getEncoded();
             return new SecretKeySpec(derived, "AES");
         } catch (GeneralSecurityException e) {
             throw new IllegalStateException("Failed to derive encryption key via PBKDF2", e);
         }
+    }
+
+    /**
+     * 获取 PBKDF2 盐值。优先从环境变量获取，回退到默认值。
+     *
+     * @return 盐值字节数组
+     */
+    private static byte[] getSalt() {
+        String salt = System.getenv(SALT_ENV);
+        if (salt == null || salt.isEmpty()) {
+            salt = System.getProperty(SALT_PROPERTY);
+        }
+        if (salt == null || salt.isEmpty()) {
+            LOG.log(System.Logger.Level.WARNING,
+                "Using default PBKDF2 salt. Set environment variable {0} or system property {1} for production use.",
+                SALT_ENV, SALT_PROPERTY);
+            return "myjpa-plus".getBytes(StandardCharsets.UTF_8);
+        }
+        return salt.getBytes(StandardCharsets.UTF_8);
     }
 }

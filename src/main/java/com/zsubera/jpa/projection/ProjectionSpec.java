@@ -7,6 +7,9 @@ import com.zsubera.jpa.spec.PredicateHelper;
 import com.zsubera.jpa.spec.QuerySpec;
 import com.zsubera.jpa.spec.SFunction;
 import com.zsubera.jpa.template.MyJpaTemplate;
+import com.zsubera.jpa.tenant.TenantContext;
+import com.zsubera.jpa.tenant.TenantProvider;
+import com.zsubera.jpa.update.SoftDeleteHelper;
 import com.zsubera.jpa.util.LambdaUtils;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import jakarta.persistence.EntityManager;
@@ -21,6 +24,7 @@ import java.util.function.Consumer;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
 
 /**
  * DTO 投影查询的类型安全构建器。
@@ -41,6 +45,8 @@ import org.springframework.data.domain.Pageable;
  */
 public class ProjectionSpec<T> {
 
+    private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(ProjectionSpec.class);
+
     /** 聚合函数类型。 */
     private enum AggregateType {
         COUNT, COUNT_DISTINCT, SUM, AVG, MAX, MIN
@@ -60,7 +66,19 @@ public class ProjectionSpec<T> {
     private final List<jakarta.persistence.criteria.Predicate> havingPredicates = new ArrayList<>();
     private Class<?> dtoClass;
 
-    /** 描述 JOIN 子句的内部记录类。 */
+    /** 租户过滤提供者，用于自动注入租户 WHERE 条件。 */
+    private TenantProvider tenantProvider;
+
+    /** 是否启用软删除过滤。 */
+    private boolean softDeleteEnabled = false;
+
+    /**
+     * 描述 JOIN 子句的内部记录类。
+     *
+     * <p>
+     * <strong>线程安全说明：</strong>JoinSpec 不是线程安全的。{@code cachedConditions} 字段在查询构建期间被修改， 因此不能在多线程环境中并发使用同一个 ProjectionSpec
+     * 实例。每个线程应使用独立的 ProjectionSpec 实例。
+     */
     private static final class JoinSpec {
         final String fieldName;
         final Consumer<?> config;
@@ -262,6 +280,45 @@ public class ProjectionSpec<T> {
             throw new IllegalArgumentException("dtoClass must not be null");
         }
         this.dtoClass = dtoClass;
+        return this;
+    }
+
+    /**
+     * 启用租户过滤，自动注入租户 WHERE 条件。
+     *
+     * <p>
+     * 使用示例：
+     *
+     * <pre>{@code
+     * new ProjectionSpec<>(User.class).select(User::getName).withTenantFilter(tenantProvider).toTupleQuery(em);
+     * }</pre>
+     *
+     * @param provider 租户 ID 提供者
+     * @return 当前 ProjectionSpec 实例，支持链式调用
+     * @throws IllegalArgumentException 如果 provider 为 null
+     */
+    public ProjectionSpec<T> withTenantFilter(TenantProvider provider) {
+        if (provider == null) {
+            throw new IllegalArgumentException("provider must not be null");
+        }
+        this.tenantProvider = provider;
+        return this;
+    }
+
+    /**
+     * 启用软删除过滤，自动排除已软删除的记录。
+     *
+     * <p>
+     * 使用示例：
+     *
+     * <pre>{@code
+     * new ProjectionSpec<>(User.class).select(User::getName).withSoftDeleteFilter().toTupleQuery(em);
+     * }</pre>
+     *
+     * @return 当前 ProjectionSpec 实例，支持链式调用
+     */
+    public ProjectionSpec<T> withSoftDeleteFilter() {
+        this.softDeleteEnabled = true;
         return this;
     }
 
@@ -469,6 +526,12 @@ public class ProjectionSpec<T> {
         TypedQuery<Tuple> typedQuery = em.createQuery(query);
         if (maxResults > 0) {
             typedQuery.setMaxResults(maxResults);
+            if (maxResults == MyJpaTemplate.DEFAULT_MAX_RESULTS && selections.size() > 0) {
+                log.warn(
+                    "ProjectionSpec query limited to {} rows by default. "
+                        + "Use toTupleQuery(em, -1) for unlimited results or toTupleQuery(em, N) for custom limit.",
+                    maxResults);
+            }
         }
         return typedQuery;
     }
@@ -600,55 +663,58 @@ public class ProjectionSpec<T> {
             return new PageImpl<>(allContent);
         }
 
-        // Build count and data queries sharing a single pass of join resolution per root.
-        // Count query
-        CriteriaQuery<Long> countQuery = cb.createQuery(Long.class);
-        Root<T> countRoot = countQuery.from(entityClass);
-        resolveJoins(countRoot, cb);
-        countQuery.select(cb.countDistinct(countRoot));
-        applyPredicate(countRoot, countQuery, cb);
-        Long total = em.createQuery(countQuery).getSingleResult();
+        try {
+            // Build count and data queries sharing a single pass of join resolution per root.
+            // Count query
+            CriteriaQuery<Long> countQuery = cb.createQuery(Long.class);
+            Root<T> countRoot = countQuery.from(entityClass);
+            resolveJoins(countRoot, cb);
+            countQuery.select(cb.countDistinct(countRoot));
+            applyPredicate(countRoot, countQuery, cb);
+            Long total = em.createQuery(countQuery).getSingleResult();
 
-        // Data query - build directly to avoid calling toTupleQuery() which would resolveJoins() again
-        CriteriaQuery<Tuple> dataQuery = cb.createTupleQuery();
-        Root<T> dataRoot = dataQuery.from(entityClass);
-        resolveJoins(dataRoot, cb);
+            // Data query - build directly to avoid calling toTupleQuery() which would resolveJoins() again
+            CriteriaQuery<Tuple> dataQuery = cb.createTupleQuery();
+            Root<T> dataRoot = dataQuery.from(entityClass);
+            resolveJoins(dataRoot, cb);
 
-        List<jakarta.persistence.criteria.Selection<?>> selectionList = buildSelectionList(dataRoot, cb);
-        dataQuery.multiselect(selectionList);
-        applyPredicate(dataRoot, dataQuery, cb);
+            List<jakarta.persistence.criteria.Selection<?>> selectionList = buildSelectionList(dataRoot, cb);
+            dataQuery.multiselect(selectionList);
+            dataQuery.distinct(true);
+            applyPredicate(dataRoot, dataQuery, cb);
 
-        // Apply GROUP BY
-        if (!groupByFields.isEmpty()) {
-            List<jakarta.persistence.criteria.Expression<?>> groupByExpressions = new ArrayList<>();
-            for (String gf : groupByFields) {
-                groupByExpressions.add(dataRoot.get(gf));
+            // Apply GROUP BY
+            if (!groupByFields.isEmpty()) {
+                List<jakarta.persistence.criteria.Expression<?>> groupByExpressions = new ArrayList<>();
+                for (String gf : groupByFields) {
+                    groupByExpressions.add(dataRoot.get(gf));
+                }
+                dataQuery.groupBy(groupByExpressions);
             }
-            dataQuery.groupBy(groupByExpressions);
-        }
 
-        // Apply HAVING
-        if (havingPredicateFn != null) {
-            jakarta.persistence.criteria.Predicate havingPredicate = havingPredicateFn.apply(dataRoot, cb);
-            if (havingPredicate != null) {
-                dataQuery.having(havingPredicate);
+            // Apply HAVING
+            if (havingPredicateFn != null) {
+                jakarta.persistence.criteria.Predicate havingPredicate = havingPredicateFn.apply(dataRoot, cb);
+                if (havingPredicate != null) {
+                    dataQuery.having(havingPredicate);
+                }
             }
+
+            applyOrderBy(dataRoot, cb, dataQuery);
+
+            TypedQuery<Tuple> query = em.createQuery(dataQuery);
+            if (pageable.getOffset() > Integer.MAX_VALUE) {
+                throw new IllegalArgumentException("Offset too large: " + pageable.getOffset());
+            }
+            query.setFirstResult((int)pageable.getOffset());
+            query.setMaxResults(pageable.getPageSize());
+            List<Tuple> content = query.getResultList();
+
+            return new PageImpl<>(content, pageable, total);
+        } finally {
+            // 清除 JOIN 条件缓存，释放 Consumer 引用防止内存泄漏
+            clearJoinCache();
         }
-
-        applyOrderBy(dataRoot, cb, dataQuery);
-
-        TypedQuery<Tuple> query = em.createQuery(dataQuery);
-        if (pageable.getOffset() > Integer.MAX_VALUE) {
-            throw new IllegalArgumentException("Offset too large: " + pageable.getOffset());
-        }
-        query.setFirstResult((int)pageable.getOffset());
-        query.setMaxResults(pageable.getPageSize());
-        List<Tuple> content = query.getResultList();
-
-        // 清除 JOIN 条件缓存，释放 Consumer 引用防止内存泄漏
-        clearJoinCache();
-
-        return new PageImpl<>(content, pageable, total);
     }
 
     /**
@@ -778,7 +844,7 @@ public class ProjectionSpec<T> {
     }
 
     /**
-     * 应用 WHERE 查询条件。
+     * 应用 WHERE 查询条件，包括安全过滤器（租户、软删除）。
      *
      * @param root 查询根实体
      * @param query CriteriaQuery 实例
@@ -786,9 +852,34 @@ public class ProjectionSpec<T> {
      */
     @SuppressWarnings({"rawtypes"})
     private void applyPredicate(Root<T> root, CriteriaQuery<?> query, CriteriaBuilder cb) {
-        jakarta.persistence.criteria.Predicate predicate = querySpec.toPredicate(root, (CriteriaQuery)query, cb);
-        if (predicate != null) {
-            query.where(predicate);
+        List<jakarta.persistence.criteria.Predicate> predicates = new ArrayList<>();
+
+        // 应用用户条件
+        jakarta.persistence.criteria.Predicate userPredicate = querySpec.toPredicate(root, (CriteriaQuery)query, cb);
+        if (userPredicate != null) {
+            predicates.add(userPredicate);
+        }
+
+        // 应用租户过滤
+        if (tenantProvider != null && !TenantContext.isIgnoreTenant()) {
+            Object tenantId = tenantProvider.getCurrentTenantId();
+            if (tenantId != null) {
+                predicates.add(cb.equal(root.get("tenantId"), tenantId));
+            }
+        }
+
+        // 应用软删除过滤
+        if (softDeleteEnabled) {
+            @SuppressWarnings("unchecked")
+            Specification<T> softDeleteSpec = SoftDeleteHelper.isNotDeleted((Class<T>)entityClass);
+            jakarta.persistence.criteria.Predicate softDeletePredicate = softDeleteSpec.toPredicate(root, query, cb);
+            if (softDeletePredicate != null) {
+                predicates.add(softDeletePredicate);
+            }
+        }
+
+        if (!predicates.isEmpty()) {
+            query.where(cb.and(predicates.toArray(new jakarta.persistence.criteria.Predicate[0])));
         }
     }
 

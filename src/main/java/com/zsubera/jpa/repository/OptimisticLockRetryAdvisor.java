@@ -10,6 +10,7 @@ import org.aspectj.lang.annotation.Aspect;
 import org.aspectj.lang.reflect.MethodSignature;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.stereotype.Component;
 
 /**
@@ -46,7 +47,7 @@ public class OptimisticLockRetryAdvisor {
         while (true) {
             try {
                 return pjp.proceed();
-            } catch (OptimisticLockException ex) {
+            } catch (OptimisticLockException | ObjectOptimisticLockingFailureException ex) {
                 attempt++;
                 if (attempt > maxRetries) {
                     log.warn("OptimisticLockException after {} retries for method {}.{}", maxRetries,

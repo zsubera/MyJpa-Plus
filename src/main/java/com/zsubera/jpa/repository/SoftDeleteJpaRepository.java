@@ -177,16 +177,15 @@ public class SoftDeleteJpaRepository<T, ID> extends SimpleJpaRepository<T, ID> {
         if (id == null) {
             return Optional.empty();
         }
-        // Use EntityManager.find() first to leverage JPA L1 cache, then check soft delete status
-        T entity = entityManager.find(domainClass, id);
-        if (entity == null) {
-            return Optional.empty();
+        if (!shouldApplySoftDeleteFilter()) {
+            return Optional.ofNullable(entityManager.find(domainClass, id));
         }
-        // Check if the entity is soft-deleted
-        if (shouldApplySoftDeleteFilter() && SoftDeleteHelper.isSoftDeleted(domainClass, entity)) {
-            return Optional.empty();
-        }
-        return Optional.of(entity);
+        // P0-5: Use Specification-based query to atomically filter soft-deleted records,
+        // avoiding TOCTOU race condition with EntityManager.find() + post-check.
+        String idFieldName = EntityClassResolver.resolveIdFieldName(domainClass);
+        Specification<T> spec = (root, query, cb) -> cb.and(cb.equal(root.get(idFieldName), id),
+            SoftDeleteHelper.isNotDeleted(domainClass).toPredicate(root, query, cb));
+        return findOne(spec);
     }
 
     /**
