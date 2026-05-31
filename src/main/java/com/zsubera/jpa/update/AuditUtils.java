@@ -76,6 +76,10 @@ final class AuditUtils {
      * 返回从调用者开始的最近 N 层调用栈（N 由 {@code maxStackDepth} 配置）， 格式为 {@code className.methodName:lineNumber}， 各层之间用 {@code <- }
      * 分隔。
      *
+     * <p>
+     * <strong>安全说明：</strong>返回的调用栈包含完整的类名和行号，可能泄露内部实现细节。 在生产环境中，建议通过 {@code maxStackDepth} 配置限制输出深度，
+     * 或在日志采集层对调用栈信息进行脱敏处理。默认深度为 5 层。
+     *
      * @return 格式化的调用栈字符串
      */
     static String getCallStack() {

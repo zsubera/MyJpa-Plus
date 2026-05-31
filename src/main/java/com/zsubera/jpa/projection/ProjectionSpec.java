@@ -465,7 +465,7 @@ public class ProjectionSpec<T> {
     }
 
     /**
-     * 对投影查询结果进行分页。
+     * 分页执行投影查询，返回 Tuple 结果。
      *
      * <p>
      * <strong>性能说明：</strong>JOIN 描述符通过 {@link JoinSpec#getConditions()} 缓存，避免对每个 Root（count 和 data 查询）重复调用 Consumer。
@@ -517,7 +517,19 @@ public class ProjectionSpec<T> {
         query.setMaxResults(pageable.getPageSize());
         List<Tuple> content = query.getResultList();
 
+        // 清除 JOIN 条件缓存，释放 Consumer 引用防止内存泄漏
+        clearJoinCache();
+
         return new PageImpl<>(content, pageable, total);
+    }
+
+    /**
+     * 清除 JOIN 条件缓存。在查询执行完成后调用，释放 Consumer 配置 lambda 的引用。
+     */
+    private void clearJoinCache() {
+        for (JoinSpec js : joins) {
+            js.cachedConditions = null;
+        }
     }
 
     /**

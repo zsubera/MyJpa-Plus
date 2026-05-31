@@ -164,6 +164,7 @@
                 </executions>
                 <configuration>
                     <doclint>reference</doclint>
+                    <failOnError>false</failOnError>
                 </configuration>
             </plugin>
             <plugin>

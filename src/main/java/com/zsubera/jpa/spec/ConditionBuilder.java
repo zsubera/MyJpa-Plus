@@ -606,6 +606,26 @@ public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> {
     }
 
     /**
+     * 添加不区分大小写的不等条件：{@code UPPER(field) <> UPPER(value)}。 与 {@link #eqIgnoreCase} 对称，适用于排除特定不区分大小写值的场景。
+     *
+     * @param field 实体属性的方法引用
+     * @param value 要比较的字符串值，如果为 null 则生成 IS NOT NULL 条件
+     * @return 当前构建器以支持链式调用
+     * @throws IllegalArgumentException 如果 {@code field} 为 null
+     */
+    default SELF neIgnoreCase(SFunction<E, ?> field, @Nullable String value) {
+        if (field == null) {
+            throw new IllegalArgumentException("field must not be null");
+        }
+        if (value == null) {
+            return isNotNull(field);
+        }
+        conditions().add(
+            new ConditionNode.SimpleNode(LambdaUtils.getPropertyName(field), value, ConditionNode.Op.NE_IGNORE_CASE));
+        return self();
+    }
+
+    /**
      * 添加不区分大小写的 LIKE 条件：{@code UPPER(field) LIKE UPPER('%value%')}。
      *
      * <p>
@@ -1176,7 +1196,7 @@ public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> {
     // ---- 数据库函数运算符 ----
 
     /**
-     * 添加数据库函数条件：{@code functionName(field, params...) = true}。
+     * 调用数据库函数进行条件判断。
      *
      * <p>
      * 此方法用于调用数据库特定的函数进行条件判断。例如，使用 PostgreSQL 的 {@code jsonb_exists} 函数：
@@ -1187,14 +1207,19 @@ public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> {
      * }</pre>
      *
      * <p>
-     * <strong>安全警告：</strong>请勿使用用户输入作为 {@code functionName} 参数，以防止潜在的 SQL 注入风险。 函数名仅接受字母、数字和下划线（通过
-     * {@link #SAFE_FIELD_NAME_PATTERN} 校验），建议仅使用硬编码的数据库函数名。
+     * <strong>安全警告：请勿使用用户输入作为 {@code functionName} 参数，以防止潜在的 SQL 注入风险！</strong>
+     * <ul>
+     * <li>函数名仅接受字母、数字和下划线（通过 {@link #SAFE_FIELD_NAME_PATTERN} 校验）</li>
+     * <li>请务必使用硬编码的数据库函数名常量，例如 {@code "jsonb_exists"}、{@code "ST_Contains"} 等</li>
+     * <li>绝不能将用户输入字符串直接传递给此参数</li>
+     * <li>参数值通过 JPA 参数化绑定，不受 SQL 注入影响</li>
+     * </ul>
      *
      * @param field 实体属性的方法引用，作为函数的第一个参数
      * @param functionName 数据库函数名（必须为硬编码常量，勿使用用户输入）
      * @param params 函数的额外参数
      * @return 当前构建器以支持链式调用
-     * @throws IllegalArgumentException 如果 field、functionName 或 params 为 null
+     * @throws IllegalArgumentException 如果 field、functionName 或 params 为 null，或 functionName 包含非法字符
      */
     @SuppressWarnings("unchecked")
     default SELF func(SFunction<E, ?> field, String functionName, Object... params) {

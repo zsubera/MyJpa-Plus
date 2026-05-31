@@ -544,6 +544,19 @@ public abstract class AbstractBulkOperationSpec<T, SELF extends AbstractBulkOper
     }
 
     /**
+     * 添加忽略大小写的不等于条件：{@code UPPER(field) <> UPPER(value)}。 与 {@link #eqIgnoreCase} 对称。
+     *
+     * @param field 实体属性引用
+     * @param value 比较值
+     * @return 当前构建器实例
+     */
+    public SELF neIgnoreCase(SFunction<T, ?> field, String value) {
+        String name = property(field);
+        conditionNodes.add(leaf((root, cb) -> PredicateHelper.neIgnoreCase(root, name, value, cb)));
+        return self();
+    }
+
+    /**
      * 添加忽略大小写的 LIKE 条件：{@code UPPER(field) LIKE UPPER('%value%')}。
      *
      * <p>

@@ -1,12 +1,14 @@
 package com.zsubera.jpa.service;
 
 import com.zsubera.jpa.repository.MyJpaRepository;
+import com.zsubera.jpa.spec.QuerySpec;
 import java.util.List;
 import java.util.Optional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
@@ -174,5 +176,52 @@ public class ServiceImpl<T, ID> implements IService<T, ID> {
         log.warn("deleteAll() called on {}. Consider using DeleteSpec with allowUnconditional() for safer operation.",
             getRepository().getClass().getSimpleName());
         getRepository().deleteAll();
+    }
+
+    // ---- QuerySpec 便捷方法 ----
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<T> findBySpec(QuerySpec<T> spec) {
+        if (spec == null) {
+            throw new IllegalArgumentException("spec must not be null");
+        }
+        return getRepository().findAll(spec.toSpecification());
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Optional<T> findOneBySpec(QuerySpec<T> spec) {
+        if (spec == null) {
+            throw new IllegalArgumentException("spec must not be null");
+        }
+        return getRepository().findOne(spec.toSpecification());
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public long countBySpec(QuerySpec<T> spec) {
+        if (spec == null) {
+            throw new IllegalArgumentException("spec must not be null");
+        }
+        return getRepository().count(spec.toSpecification());
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<T> findBySpec(Specification<T> spec) {
+        if (spec == null) {
+            throw new IllegalArgumentException("spec must not be null");
+        }
+        return getRepository().findAll(spec);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public long countBySpec(Specification<T> spec) {
+        if (spec == null) {
+            throw new IllegalArgumentException("spec must not be null");
+        }
+        return getRepository().count(spec);
     }
 }

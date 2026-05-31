@@ -1,9 +1,11 @@
 package com.zsubera.jpa.service;
 
+import com.zsubera.jpa.spec.QuerySpec;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
 
 /**
  * 通用 Service 接口，提供 CRUD 便捷方法。
@@ -117,4 +119,46 @@ public interface IService<T, ID> {
      * <strong>安全警告：</strong>此方法将删除表中的所有记录，操作不可逆。 请确保在生产环境中谨慎使用，建议在调用前添加额外的安全确认机制。
      */
     void deleteAll();
+
+    // ---- QuerySpec 便捷方法 ----
+
+    /**
+     * 根据查询规范查找匹配的实体列表。
+     *
+     * @param spec 查询规范
+     * @return 匹配实体列表
+     */
+    List<T> findBySpec(QuerySpec<T> spec);
+
+    /**
+     * 根据查询规范查找单个实体。
+     *
+     * @param spec 查询规范
+     * @return 匹配实体的 Optional 包装
+     */
+    Optional<T> findOneBySpec(QuerySpec<T> spec);
+
+    /**
+     * 统计匹配查询规范的实体数量。
+     *
+     * @param spec 查询规范
+     * @return 匹配实体数量
+     */
+    long countBySpec(QuerySpec<T> spec);
+
+    /**
+     * 根据 Specification 查找匹配的实体列表。
+     *
+     * @param spec 查询规范
+     * @return 匹配实体列表
+     */
+    List<T> findBySpec(Specification<T> spec);
+
+    /**
+     * 统计匹配 Specification 的实体数量。
+     *
+     * @param spec 查询规范
+     * @return 匹配实体数量
+     */
+    long countBySpec(Specification<T> spec);
 }

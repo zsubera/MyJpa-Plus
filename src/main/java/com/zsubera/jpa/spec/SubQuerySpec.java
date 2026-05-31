@@ -10,6 +10,7 @@ import jakarta.persistence.criteria.Subquery;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
+import java.util.function.Consumer;
 import org.springframework.lang.Nullable;
 
 /**
@@ -51,6 +52,8 @@ public class SubQuerySpec<S> {
     private final List<Predicate> predicates = new ArrayList<>();
     private boolean selectSet;
     private Class<?> selectType;
+    /** 缓存的 SELECT 字段名，用于 inSubQuery 两阶段类型推断中的 select 重放。 */
+    private String selectFieldName;
 
     private SubQuerySpec(Subquery<S> subquery, Root<S> root, Root<?> correlatedRoot, CriteriaBuilder cb) {
         this.subquery = subquery;
@@ -521,6 +524,18 @@ public class SubQuerySpec<S> {
     }
 
     /**
+     * 添加子查询实体的忽略大小写的不等条件。
+     *
+     * @param field 实体字段
+     * @param value 比较值
+     * @return 当前 SubQuerySpec 实例，支持链式调用
+     */
+    public SubQuerySpec<S> neIgnoreCase(SFunction<S, ?> field, String value) {
+        predicates.add(PredicateHelper.neIgnoreCase(root, property(field), value, cb));
+        return this;
+    }
+
+    /**
      * 添加子查询实体的忽略大小写的 LIKE 条件。
      *
      * <p>
@@ -868,6 +883,10 @@ public class SubQuerySpec<S> {
     /**
      * 设置此子查询的 SELECT 子句。如果未调用，子查询默认选择子查询根。
      *
+     * <p>
+     * <strong>幂等性说明：</strong>如果通过 {@link #presetSelectType(Class, String)} 已预设了 selectType（例如在 inSubQuery 的两阶段类型推断中），
+     * 则此方法在第二次调用时会跳过重复设置，避免不必要的操作。真实子查询的 SELECT 子句通过 {@link #applySelectToSubquery()} 方法在 lambda 执行后正确设置。
+     *
      * @param field 要选择的实体字段
      * @return 当前 SubQuerySpec 实例，支持链式调用
      */
@@ -876,12 +895,26 @@ public class SubQuerySpec<S> {
         if (field == null) {
             throw new IllegalArgumentException("field must not be null");
         }
+        if (selectSet) {
+            // 已设置过 select（通过 presetSelectType），跳过重复设置
+            return this;
+        }
         String propName = LambdaUtils.getPropertyName(field);
         Path selectPath = root.get(propName);
         subquery.select(selectPath);
         selectSet = true;
         selectType = selectPath.getJavaType();
+        selectFieldName = propName;
         return this;
+    }
+
+    /**
+     * 获取 SELECT 字段名。
+     *
+     * @return SELECT 字段名，如果未设置 SELECT 则返回 null
+     */
+    String getSelectFieldName() {
+        return selectFieldName;
     }
 
     /**
@@ -891,5 +924,59 @@ public class SubQuerySpec<S> {
      */
     Class<?> getSelectType() {
         return selectType;
+    }
+
+    /**
+     * 预设 SELECT 字段类型和字段名，避免 inSubQuery 场景下配置 lambda 的副作用问题。
+     *
+     * <p>
+     * 此方法用于 {@link QuerySpec#resolveInSubQueryInternal} 中的第一阶段类型推断结果传递。通过预先设置类型和字段信息， 第二阶段中 {@link #select(SFunction)}
+     * 调用将变为幂等操作（跳过重复设置），而真实子查询的 SELECT 子句通过 {@link #applySelectToSubquery()} 方法在 lambda 执行后正确设置。
+     *
+     * @param selectType SELECT 字段类型
+     * @param selectFieldName SELECT 字段名
+     */
+    void presetSelectType(Class<?> selectType, String selectFieldName) {
+        this.selectType = selectType;
+        this.selectFieldName = selectFieldName;
+        this.selectSet = true;
+    }
+
+    /**
+     * 将缓存的 SELECT 字段应用到真实子查询。
+     *
+     * <p>
+     * 用于 inSubQuery 的第二阶段：在 lambda 执行完成后，将 SELECT 子句正确设置到真实子查询上。 此方法在 {@link QuerySpec#resolveInSubQueryInternal} 中调用。
+     */
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    void applySelectToSubquery() {
+        if (selectFieldName != null && selectSet) {
+            Path selectPath = root.get(selectFieldName);
+            subquery.select(selectPath);
+        }
+    }
+
+    /**
+     * 提取配置 lambda 中 SELECT 子句的目标类型和字段名，而不执行条件构建。
+     *
+     * <p>
+     * 创建一个临时的 SubQuerySpec 实例来应用配置 lambda，仅提取 selectType 和 selectFieldName 信息。 临时实例的谓词不会被应用到任何子查询。此方法用于
+     * {@link QuerySpec#resolveInSubQueryInternal} 中， 使第二阶段的 select() 调用变为幂等操作。
+     *
+     * @param <S> 子查询实体类型
+     * @param subEntity 子查询实体类
+     * @param config 配置 lambda
+     * @param cb CriteriaBuilder 实例
+     * @return SELECT 信息的数组 [selectType, selectFieldName]，如果未调用 select() 则两者均为 null
+     */
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    static <S> Object[] extractSelectInfo(Class<S> subEntity, Consumer<SubQuerySpec<S>> config, CriteriaBuilder cb) {
+        // 创建临时子查询仅用于提取类型信息
+        jakarta.persistence.criteria.CriteriaQuery<?> tempQuery = cb.createQuery(Object.class);
+        jakarta.persistence.criteria.Subquery<S> tempSub = tempQuery.subquery(subEntity);
+        Root<S> tempRoot = tempSub.from(subEntity);
+        SubQuerySpec<S> tempSpec = SubQuerySpec.create(tempSub, tempRoot, tempRoot, cb);
+        config.accept(tempSpec);
+        return new Object[] {tempSpec.getSelectType(), tempSpec.getSelectFieldName()};
     }
 }

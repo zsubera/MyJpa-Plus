@@ -24,7 +24,7 @@ public sealed interface ConditionNode permits ConditionNode.SimpleNode, Conditio
     /** 字段-值条件的比较运算符。 */
     enum Op {
         EQ, NE, GT, GE, LT, LE, LIKE, NOT_LIKE, IN, NOT_IN, BETWEEN, NOT_BETWEEN, IS_NULL, IS_NOT_NULL, EQ_IGNORE_CASE,
-        LIKE_IGNORE_CASE
+        NE_IGNORE_CASE, LIKE_IGNORE_CASE
     }
 
     /** JOIN 节点中使用的连接类型。 */

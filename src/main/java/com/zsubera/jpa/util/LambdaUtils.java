@@ -114,7 +114,9 @@ public final class LambdaUtils {
      * 提供更好的并发读性能（读操作无锁），消除高并发场景下的同步瓶颈。
      *
      * <p>
-     * 驱逐策略：当缓存大小超过 {@link #maxCacheSize} 时，清除约 25% 的旧条目。 虽然失去了 LRU 精确排序，但在实际使用中（热点属性名高度集中），效果差异可忽略。
+     * <strong>驱逐策略说明：</strong>当缓存大小超过 {@link #maxCacheSize} 时，按迭代顺序清除约 25% 的条目。 这不是精确的 LRU（最近最少使用）策略，因为
+     * {@link ConcurrentHashMap} 不维护访问顺序。 在实际使用中（热点属性名高度集中在少数实体类上），迭代顺序驱逐与 LRU 的效果差异可忽略。 如需精确 LRU 行为，可通过
+     * {@link #setMaxCacheSize(int)} 调整缓存大小。
      */
     @SuppressWarnings("serial")
     private static final Map<String, String> CACHE = new ConcurrentHashMap<>(DEFAULT_CACHE_SIZE);

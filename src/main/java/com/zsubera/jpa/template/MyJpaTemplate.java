@@ -585,6 +585,35 @@ public class MyJpaTemplate {
     }
 
     /**
+     * 查找匹配给定 {@link Specification} 的单个实体。
+     *
+     * @param entityClass 实体类
+     * @param spec 查询规范
+     * @param <T> 实体类型
+     * @return 匹配实体的 Optional 包装
+     */
+    @Transactional(readOnly = true)
+    public <T> Optional<T> findOne(Class<T> entityClass, Specification<T> spec) {
+        if (entityClass == null) {
+            throw new IllegalArgumentException("entityClass must not be null");
+        }
+        if (spec == null) {
+            throw new IllegalArgumentException("spec must not be null");
+        }
+        CriteriaBuilder cb = entityManager.getCriteriaBuilder();
+        CriteriaQuery<T> cq = cb.createQuery(entityClass);
+        Root<T> root = cq.from(entityClass);
+        jakarta.persistence.criteria.Predicate predicate = spec.toPredicate(root, cq, cb);
+        if (predicate != null) {
+            cq.where(predicate);
+        }
+        TypedQuery<T> query = entityManager.createQuery(cq);
+        query.setMaxResults(1);
+        List<T> results = query.getResultList();
+        return results.isEmpty() ? Optional.empty() : Optional.of(results.get(0));
+    }
+
+    /**
      * 查找匹配给定 {@link Specification} 的所有实体。
      *
      * @param entityClass 实体类

@@ -5,7 +5,7 @@
 [![许可证](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 [![JDK](https://img.shields.io/badge/JDK-17%2B-green.svg)](https://adoptium.net)
 
-基于 Lambda 表达式的类型安全 JPA 工具库，专为 Spring Data JPA 设计。提供查询构建、批量操作、投影查询、通用 Service 层和审计字段自动填充。
+基于 Lambda 表达式的类型安全 JPA 工具库，专为 Spring Data JPA 设计。提供查询构建、批量操作、投影查询、查询模板和审计字段自动填充。
 
 ## 特性
 
@@ -49,11 +49,6 @@
 - **深度分页保护** — 可配置 offset 硬限制和警告日志阈值
 - **最大行数限制** — 查询默认限制返回行数（可配置）
 - **EntityGraph 支持** — 查询时指定急切加载策略
-
-### 通用 Service 层（IService / ServiceImpl）
-
-- **IService\<T, ID\>** — 提供 `save` / `findById` / `findAll` / `deleteById` 等 CRUD 接口
-- **ServiceImpl** — 基于 `MyJpaRepository` 的实现，支持构造函数注入和 Setter 注入
 
 ### 基础实体（BaseEntity）
 
@@ -304,32 +299,6 @@ List<User> saved = jpa.saveAllBatched(users, 100);
 // EntityGraph 急切加载
 List<Order> orders = jpa.findAll(Order.class, spec,
     EntityGraphHelper.of(Order.class, "withItems"));
-```
-
-### 通用 Service 层
-
-```java
-// 定义接口
-public interface UserService extends IService<User, Long> {
-    // 自定义业务方法
-}
-
-// 实现
-@Service
-public class UserServiceImpl extends ServiceImpl<User, Long> implements UserService {
-    public UserServiceImpl(UserRepository repository) {
-        super(repository);
-    }
-}
-
-// 使用
-@Autowired
-private UserService userService;
-
-User user = userService.findById(1L).orElseThrow();
-List<User> activeUsers = userService.findAll();
-userService.save(newUser);
-userService.deleteById(1L);
 ```
 
 ### 基础实体

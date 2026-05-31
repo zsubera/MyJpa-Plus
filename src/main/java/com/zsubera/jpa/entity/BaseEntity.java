@@ -138,6 +138,23 @@ public abstract class BaseEntity implements Serializable {
         this.version = version;
     }
 
+    /**
+     * 基于实体 ID 的相等性比较。
+     *
+     * <p>
+     * 仅当两个实体均已持久化（{@code id != null}）时，基于 {@code id} 进行比较。 否则返回 {@code false}（未持久化实体始终不相等）。
+     *
+     * <p>
+     * <strong>Set 使用警告：</strong>未持久化实体的 {@code equals()} 始终返回 {@code false}，这意味着：
+     * <ul>
+     * <li>将未持久化实体添加到 {@code HashSet} 中会导致重复条目</li>
+     * <li>在持久化前使用 {@code Set} 去重不会生效</li>
+     * <li>建议在实体持久化后再进行 Set 操作，或使用 {@code List} 替代</li>
+     * </ul>
+     *
+     * @param o 要比较的对象
+     * @return 如果两个实体的 ID 相等则返回 true
+     */
     @Override
     public boolean equals(Object o) {
         if (this == o) {

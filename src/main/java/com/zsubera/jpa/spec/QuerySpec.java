@@ -747,10 +747,16 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
      *
      * @param other 另一个 QuerySpec 实例
      * @return 当前 QuerySpec 实例，支持链式调用
+     * @throws IllegalStateException 如果另一个 spec 存在未关闭的 or() 组
      */
     public QuerySpec<T> then(QuerySpec<T> other) {
         if (other == null) {
             return this;
+        }
+        // 验证另一个 spec 的组已正确关闭，防止状态不一致
+        if (!other.groupStack.isEmpty()) {
+            throw new IllegalStateException(
+                "Cannot merge a QuerySpec with unclosed or() groups. Close all groups with endOr() before calling then().");
         }
         this.conditions.addAll(other.conditions);
         if (other.distinct) {
@@ -1161,14 +1167,17 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
      * IN 子查询解析的内部实现。
      *
      * <p>
-     * 使用两阶段类型推断：
+     * 使用类型预提取方案，减少配置 lambda 的副作用影响：
      * <ol>
-     * <li>第一阶段：应用配置以确定 SELECT 字段类型</li>
-     * <li>第二阶段：使用正确的返回类型创建子查询</li>
+     * <li>第一阶段：通过 {@link SubQuerySpec#extractSelectInfo} 提取 SELECT 字段类型和字段名</li>
+     * <li>第二阶段：使用正确的返回类型创建子查询，预设 selectType 使 select() 调用变为幂等操作，再执行配置 lambda 构建条件</li>
+     * <li>最后：通过 {@link SubQuerySpec#applySelectToSubquery()} 将 SELECT 子句正确设置到真实子查询</li>
      * </ol>
      *
      * <p>
-     * <strong>注意：</strong>配置 lambda 会被调用两次（每阶段一次）。这是类型推断的必要代价，无法避免。 请确保配置 lambda 没有副作用（如计数器递增、发送消息等），因为它会被执行两次。
+     * <strong>注意：</strong>配置 lambda 会被执行两次——第一阶段用于提取类型信息，第二阶段用于构建子查询条件。 第二阶段中 {@code select()} 调用因 selectType
+     * 已预设而变为幂等操作（跳过重复的 subquery.select() 调用）。条件方法（如 {@code eq()}、{@code gt()} 等）在第二阶段中正常构建到真实子查询的 Root 上。真实子查询的 SELECT
+     * 子句在 lambda 执行完成后通过 {@link SubQuerySpec#applySelectToSubquery()} 正确设置。
      *
      * @param <S> 子查询实体类型
      * @param node IN 子查询条件节点
@@ -1180,18 +1189,15 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
     @SuppressWarnings({"unchecked", "rawtypes"})
     private <S> Predicate resolveInSubQueryInternal(ConditionNode.InSubQueryNode<S> node, Path<?> outerPath,
         CriteriaQuery<?> query, CriteriaBuilder cb) {
-        // 第一阶段：使用临时子查询确定 SELECT 类型
-        jakarta.persistence.criteria.Subquery<S> tempSubquery = query.subquery(node.subEntity);
-        Root<S> tempRoot = tempSubquery.from(node.subEntity);
-        SubQuerySpec<S> tempSpec = SubQuerySpec.create(tempSubquery, tempRoot, tempRoot, cb);
-        node.config.accept(tempSpec);
-        Class<?> selectType = tempSpec.getSelectType();
+        // 第一阶段：提取 SELECT 类型和字段名（通过临时 SubQuerySpec）
+        Object[] selectInfo = SubQuerySpec.extractSelectInfo(node.subEntity, node.config, cb);
+        Class<?> selectType = (Class<?>)selectInfo[0];
+        String selectFieldName = (String)selectInfo[1];
 
         // 第二阶段：使用正确的返回类型创建子查询
         jakarta.persistence.criteria.Subquery<?> subquery;
         Root<S> subRoot;
         if (selectType != null) {
-            // SELECT 了特定字段，使用字段类型作为子查询返回类型
             subquery = (jakarta.persistence.criteria.Subquery)query.subquery(selectType);
             subRoot = (Root<S>)subquery.from(node.subEntity);
         } else {
@@ -1199,11 +1205,18 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
             subRoot = (Root<S>)subquery.from(node.subEntity);
         }
 
-        // 创建正式的 SubQuerySpec 并重新应用配置
+        // 创建正式的 SubQuerySpec，预设 selectType 使 select() 变为幂等操作
         SubQuerySpec<S> subSpec = SubQuerySpec.create((Subquery<S>)subquery, subRoot, subRoot, cb);
+        if (selectType != null) {
+            subSpec.presetSelectType(selectType, selectFieldName);
+        }
         node.config.accept(subSpec);
         subSpec.applyWhere();
-        if (!subSpec.isSelectSet()) {
+
+        // 将 SELECT 子句正确设置到真实子查询
+        if (selectType != null) {
+            subSpec.applySelectToSubquery();
+        } else if (!subSpec.isSelectSet()) {
             // 默认选择子查询实体的根（用于 EXISTS 风格）
             ((jakarta.persistence.criteria.Subquery<S>)subquery).select(subRoot);
         }

@@ -316,6 +316,26 @@ public final class PredicateHelper {
     }
 
     /**
+     * 构建忽略大小写的不等于谓词。
+     *
+     * <p>
+     * 通过 {@code UPPER()} 函数将双方转换为大写后进行比较。与 {@link #eqIgnoreCase} 对称。
+     *
+     * @param path 实体路径
+     * @param fieldName 字段名
+     * @param value 比较值（可以为 null）
+     * @param cb CriteriaBuilder 实例
+     * @return 忽略大小写的不等于谓词
+     */
+    public static Predicate neIgnoreCase(Path<?> path, String fieldName, String value, CriteriaBuilder cb) {
+        Path<?> fp = path.get(fieldName);
+        if (value == null) {
+            return cb.isNotNull(fp);
+        }
+        return cb.notEqual(cb.upper(fp.as(String.class)), value.toUpperCase(java.util.Locale.ROOT));
+    }
+
+    /**
      * 构建忽略大小写的 LIKE 谓词。
      *
      * <p>
@@ -530,6 +550,9 @@ public final class PredicateHelper {
                 return cb.notLike(fieldPath.as(String.class), (String)node.value);
             case EQ_IGNORE_CASE:
                 return cb.equal(cb.upper(fieldPath.as(String.class)),
+                    ((String)node.value).toUpperCase(java.util.Locale.ROOT));
+            case NE_IGNORE_CASE:
+                return cb.notEqual(cb.upper(fieldPath.as(String.class)),
                     ((String)node.value).toUpperCase(java.util.Locale.ROOT));
             case LIKE_IGNORE_CASE:
                 if (node.escapeChar != '\0') {
