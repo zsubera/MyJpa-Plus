@@ -815,6 +815,30 @@ public class SubQuerySpec<S> {
     }
 
     /**
+     * 仅在 {@code condition} 为 true 时添加 IN 条件（集合形式）。
+     *
+     * @param condition 是否添加条件的标志
+     * @param field 实体属性的方法引用
+     * @param values 值的集合
+     * @return 当前 SubQuerySpec 实例，支持链式调用
+     */
+    public SubQuerySpec<S> in(boolean condition, SFunction<S, ?> field, Collection<?> values) {
+        return condition ? in(field, values) : this;
+    }
+
+    /**
+     * 仅在 {@code condition} 为 true 时添加 NOT IN 条件（集合形式）。
+     *
+     * @param condition 是否添加条件的标志
+     * @param field 实体属性的方法引用
+     * @param values 值的集合
+     * @return 当前 SubQuerySpec 实例，支持链式调用
+     */
+    public SubQuerySpec<S> notIn(boolean condition, SFunction<S, ?> field, Collection<?> values) {
+        return condition ? notIn(field, values) : this;
+    }
+
+    /**
      * 仅在 {@code condition} 为 true 时添加 BETWEEN 条件。
      *
      * @param condition 是否添加条件的标志

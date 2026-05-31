@@ -72,6 +72,10 @@ public final class SoftDeleteHelper {
     private static final ConcurrentMap<Class<?>, Specification<?>> DELETED_SPEC_CACHE =
         new ConcurrentReferenceHashMap<>(16, ConcurrentReferenceHashMap.ReferenceType.WEAK);
 
+    /** 缓存: (entityClass, fieldName) -> Field 对象，避免重复反射查找。 */
+    private static final ConcurrentMap<String, Field> FIELD_OBJECT_CACHE =
+        new ConcurrentReferenceHashMap<>(64, ConcurrentReferenceHashMap.ReferenceType.WEAK);
+
     private SoftDeleteHelper() {}
 
     /**
@@ -137,9 +141,9 @@ public final class SoftDeleteHelper {
             return new QuerySpec<>();
         }
         QuerySpec<T> qs = new QuerySpec<>();
-        // 使用工厂方法创建 RawNode，避免直接访问包级私有构造函数
+        // 使用内部工厂方法创建 RawNode，不触发安全审计日志（此谓词不接受用户输入）
         qs.conditions()
-            .add(ConditionNode.ofRawPredicate((path, cb) -> buildNotDeleted(cb, path, fieldName, entityClass)));
+            .add(ConditionNode.ofInternalPredicate((path, cb) -> buildNotDeleted(cb, path, fieldName, entityClass)));
         return qs;
     }
 
@@ -251,12 +255,11 @@ public final class SoftDeleteHelper {
                     try {
                         field.setAccessible(true);
                     } catch (SecurityException e) {
-                        log.warn(
-                            "Cannot set accessible on field '{}' in {}. "
-                                + "If using Java 17+ module system, add JVM argument: "
+                        throw new IllegalStateException(
+                            "Cannot set accessible on @SoftDelete field '" + field.getName() + "' in "
+                                + cls.getSimpleName() + ". " + "If using Java 17+ module system, add JVM argument: "
                                 + "--add-opens java.base/java.lang.reflect=ALL-UNNAMED",
-                            field.getName(), cls.getSimpleName());
-                        return NO_FIELD_SENTINEL;
+                            e);
                     }
                     return field.getName();
                 }
@@ -290,15 +293,18 @@ public final class SoftDeleteHelper {
     }
 
     private static Field getField(Class<?> entityClass, String fieldName) {
-        Class<?> current = entityClass;
-        while (current != null && current != Object.class) {
-            try {
-                return current.getDeclaredField(fieldName);
-            } catch (NoSuchFieldException e) {
-                current = current.getSuperclass();
+        String cacheKey = entityClass.getName() + "#" + fieldName;
+        return FIELD_OBJECT_CACHE.computeIfAbsent(cacheKey, k -> {
+            Class<?> current = entityClass;
+            while (current != null && current != Object.class) {
+                try {
+                    return current.getDeclaredField(fieldName);
+                } catch (NoSuchFieldException e) {
+                    current = current.getSuperclass();
+                }
             }
-        }
-        return null;
+            return null;
+        });
     }
 
     /**

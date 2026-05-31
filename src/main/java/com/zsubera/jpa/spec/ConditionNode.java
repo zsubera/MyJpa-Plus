@@ -357,6 +357,27 @@ public sealed interface ConditionNode permits ConditionNode.SimpleNode, Conditio
     }
 
     /**
+     * 创建内部谓词节点的工厂方法（不触发安全审计日志）。
+     *
+     * <p>
+     * 此方法仅供框架内部使用（如 {@code SoftDeleteHelper}、{@code TenantHelper}）， 这些组件的谓词函数不接受用户输入，不存在 SQL 注入风险。
+     *
+     * <p>
+     * <strong>注意：</strong>外部代码不应使用此方法。如需创建原始谓词，请使用 {@link #ofRawPredicate(BiFunction)}。
+     *
+     * @param fn 谓词函数
+     * @return 新的 RawNode 实例
+     * @throws IllegalArgumentException 如果 fn 为 null
+     */
+    static ConditionNode
+        ofInternalPredicate(BiFunction<jakarta.persistence.criteria.Path<?>, CriteriaBuilder, Predicate> fn) {
+        if (fn == null) {
+            throw new IllegalArgumentException("Predicate function must not be null");
+        }
+        return new RawNode(fn);
+    }
+
+    /**
      * 获取调用栈摘要，用于安全审计日志。
      *
      * @return 调用栈摘要字符串
@@ -409,12 +430,21 @@ public sealed interface ConditionNode permits ConditionNode.SimpleNode, Conditio
      *
      * <p>
      * 用于调用数据库特定函数进行条件判断。第一个参数为字段名，后续参数为函数的额外参数。
+     *
+     * <p>
+     * <strong>安全说明：</strong>构造函数为包级私有，外部代码必须通过 {@link #of(String, Object[])} 工厂方法创建实例， 该方法会验证函数名是否在白名单中。
      */
     final class FuncNode implements ConditionNode {
         final String functionName;
         final Object[] params;
 
-        public FuncNode(String functionName, Object[] params) {
+        /**
+         * 包级私有构造函数，防止外部代码绕过白名单验证。
+         *
+         * @param functionName 数据库函数名
+         * @param params 函数参数
+         */
+        FuncNode(String functionName, Object[] params) {
             if (functionName == null) {
                 throw new IllegalArgumentException("functionName must not be null");
             }
@@ -423,6 +453,25 @@ public sealed interface ConditionNode permits ConditionNode.SimpleNode, Conditio
             }
             this.functionName = functionName;
             this.params = params.clone();
+        }
+
+        /**
+         * 创建 FuncNode 实例的工厂方法，验证函数名是否在安全白名单中。
+         *
+         * @param functionName 数据库函数名
+         * @param params 函数参数
+         * @return 新的 FuncNode 实例
+         * @throws IllegalArgumentException 如果 functionName 或 params 为 null
+         * @throws com.zsubera.jpa.exception.MyJpaPlusException 如果函数名不在白名单中且白名单强制执行已启用
+         */
+        public static FuncNode of(String functionName, Object[] params) {
+            if (functionName == null) {
+                throw new IllegalArgumentException("functionName must not be null");
+            }
+            if (params == null) {
+                throw new IllegalArgumentException("params must not be null");
+            }
+            return new FuncNode(functionName, params);
         }
 
         @Override

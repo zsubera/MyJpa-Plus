@@ -41,30 +41,62 @@ public class EncryptConverter implements AttributeConverter<String, String> {
     /** Cached key version to avoid repeated environment variable reads. */
     private static volatile String cachedKeyVersion;
 
+    /** 上次刷新密钥版本的时间戳。 */
+    private static volatile long lastKeyVersionRefresh;
+
+    /** 密钥版本缓存刷新间隔（毫秒），默认 5 分钟。 */
+    private static final long KEY_VERSION_REFRESH_INTERVAL_MS = 300_000L;
+
     /**
      * 清除所有缓存的密钥和版本信息。仅用于测试环境。
      */
     static void clearCacheForTesting() {
         KEY_CACHE.clear();
         cachedKeyVersion = null;
+        lastKeyVersionRefresh = 0;
+    }
+
+    /**
+     * 强制刷新密钥版本缓存。在密钥轮换后调用此方法使新密钥立即生效。
+     *
+     * <p>
+     * 此方法线程安全，可在运行时调用以支持在线密钥轮换。
+     */
+    public static void refreshKeyVersion() {
+        cachedKeyVersion = null;
+        KEY_CACHE.clear();
+        lastKeyVersionRefresh = System.currentTimeMillis();
+        LOG.log(System.Logger.Level.INFO, "Encryption key version cache refreshed");
     }
 
     /**
      * 获取当前密钥版本标识。结果缓存以避免每次操作读取环境变量。
      *
+     * <p>
+     * 缓存每 {@link #KEY_VERSION_REFRESH_INTERVAL_MS} 自动刷新一次，确保密钥轮换后新版本能在合理时间内生效。
+     *
      * @return 密钥版本标识
      */
     private static String getKeyVersion() {
+        long now = System.currentTimeMillis();
         String version = cachedKeyVersion;
-        if (version != null) {
+        if (version != null && (now - lastKeyVersionRefresh) < KEY_VERSION_REFRESH_INTERVAL_MS) {
             return version;
         }
-        version = System.getenv(KEY_VERSION_ENV);
-        if (version == null || version.isEmpty()) {
-            version = System.getProperty(KEY_VERSION_PROPERTY);
+        // 定期刷新或首次加载
+        synchronized (EncryptConverter.class) {
+            version = cachedKeyVersion;
+            if (version != null && (now - lastKeyVersionRefresh) < KEY_VERSION_REFRESH_INTERVAL_MS) {
+                return version;
+            }
+            version = System.getenv(KEY_VERSION_ENV);
+            if (version == null || version.isEmpty()) {
+                version = System.getProperty(KEY_VERSION_PROPERTY);
+            }
+            cachedKeyVersion = (version != null && !version.isEmpty()) ? version : "v1";
+            lastKeyVersionRefresh = now;
+            return cachedKeyVersion;
         }
-        cachedKeyVersion = (version != null && !version.isEmpty()) ? version : "v1";
-        return cachedKeyVersion;
     }
 
     @Override
@@ -296,5 +328,34 @@ public class EncryptConverter implements AttributeConverter<String, String> {
         byte[] saltBytes = new byte[16];
         SECURE_RANDOM.nextBytes(saltBytes);
         return Base64.getEncoder().encodeToString(saltBytes);
+    }
+
+    /**
+     * 使用当前密钥重新加密已加密的值。用于密钥轮换场景下的数据迁移。
+     *
+     * <p>
+     * 此方法解密旧值后使用当前密钥版本重新加密。适用于批量迁移场景：
+     *
+     * <pre>{@code
+     * // 1. 更新密钥环境变量
+     * // 2. 调用 refreshKeyVersion() 使新密钥生效
+     * EncryptConverter.refreshKeyVersion();
+     * // 3. 逐条读取旧数据并重新加密
+     * String oldEncrypted = ...; // 从数据库读取
+     * String newEncrypted = EncryptConverter.reEncrypt(oldEncrypted);
+     * // 4. 写回数据库
+     * }</pre>
+     *
+     * @param encryptedValue 旧密钥加密的值（带版本前缀格式）
+     * @return 使用当前密钥重新加密的值
+     * @throws IllegalArgumentException 如果 encryptedValue 为 null
+     * @throws com.zsubera.jpa.exception.MyJpaPlusException 如果解密或加密失败
+     */
+    public String reEncrypt(String encryptedValue) {
+        if (encryptedValue == null) {
+            throw new IllegalArgumentException("encryptedValue must not be null");
+        }
+        String decrypted = convertToEntityAttribute(encryptedValue);
+        return convertToDatabaseColumn(decrypted);
     }
 }

@@ -94,6 +94,18 @@ public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> {
             "SPACE", "YEAR", "MONTH", "DAY", "HOUR", "MINUTE", "SECOND", "ADD_MONTHS", "ADD_DAYS", "DATE_DIFF",
             "DATEDIFF", "IFNULL", "IF", "NVL", "NVL2", "DECODE", "JSON_OBJECT", "JSON_ARRAY", "JSON_EXTRACT",
             "JSON_UNQUOTE", "UUID", "UUID_GENERATE_V4", "MD5", "SHA1", "SHA2", "HEX", "UNHEX", "ENCODE"));
+        // 日期/时间截断函数
+        names.addAll(Set.of("TRUNCATE", "DATE_TRUNC", "DATE_TRUNCATE", "DATETRUNC"));
+        // 窗口函数（用于 ORDER BY 或子查询中的表达式）
+        names.addAll(Set.of("ROW_NUMBER", "RANK", "DENSE_RANK", "NTILE", "LAG", "LEAD", "FIRST_VALUE", "LAST_VALUE",
+            "NTH_VALUE"));
+        // 聚合函数
+        names.addAll(Set.of("COUNT", "SUM", "AVG", "MIN", "MAX", "GROUP_CONCAT", "LISTAGG", "ARRAY_AGG"));
+        // 数学函数
+        names.addAll(Set.of("PI", "RADIANS", "DEGREES", "SIN", "COS", "TAN", "ASIN", "ACOS", "ATAN", "ATAN2", "CBRT",
+            "FACTORIAL", "RANDOM", "RAND"));
+        // 字符串函数
+        names.addAll(Set.of("INITCAP", "LPAD", "RPAD", "ASCII", "CHR", "CONCAT_WS", "FORMAT", "INSERT", "LOCATE"));
         return names;
     }
 

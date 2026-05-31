@@ -129,24 +129,41 @@ public class QueryCacheManager {
      * Stores a value in the cache with the given TTL.
      *
      * <p>
-     * 当缓存条目数超过最大限制时，清除过期条目。如果仍超过限制，拒绝写入并记录警告。
+     * 当缓存条目数超过最大限制时，清除过期条目。如果仍超过限制，驱逐最早的条目后写入。
      *
      * @param key cache key
      * @param value value to cache
      * @param ttlSeconds time-to-live in seconds
      * @param <T> value type
+     * @return 如果成功写入返回 true，如果 key 为 null 或空返回 false
      */
-    public <T> void put(String key, T value, long ttlSeconds) {
+    public <T> boolean put(String key, T value, long ttlSeconds) {
+        if (key == null || key.isEmpty()) {
+            return false;
+        }
         // 检查是否需要清理过期条目
         if (store.size() >= maxEntries) {
             evictExpiredEntries();
         }
+        // 如果仍然满，驱逐最早写入的条目（近似 FIFO 驱逐）
         if (store.size() >= maxEntries) {
-            log.warn("Cache is full ({} entries). Consider increasing max-entries or reducing TTL.", maxEntries);
-            return;
+            evictOldestEntry();
         }
         store.put(key, new CachedQueryResult<>(value, ttlSeconds));
         log.debug("Cache put for key: {} (ttl={}s)", key, ttlSeconds);
+        return true;
+    }
+
+    /**
+     * 驱逐最早写入的缓存条目（ConcurrentHashMap 迭代顺序近似插入顺序）。
+     */
+    private void evictOldestEntry() {
+        java.util.Iterator<Map.Entry<String, CachedQueryResult<?>>> it = store.entrySet().iterator();
+        if (it.hasNext()) {
+            Map.Entry<String, CachedQueryResult<?>> eldest = it.next();
+            it.remove();
+            log.debug("Evicted oldest cache entry: {}", eldest.getKey());
+        }
     }
 
     /**

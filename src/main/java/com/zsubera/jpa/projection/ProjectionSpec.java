@@ -858,14 +858,18 @@ public class ProjectionSpec<T> {
             };
         }
         if (node instanceof ConditionNode.OrNode or) {
-            Predicate left = resolveJoinCondition(or.nodes().get(0), join, cb);
-            Predicate right = resolveJoinCondition(or.nodes().get(1), join, cb);
-            return cb.or(left, right);
+            java.util.List<Predicate> preds = new java.util.ArrayList<>();
+            for (ConditionNode child : or.nodes()) {
+                preds.add(resolveJoinCondition(child, join, cb));
+            }
+            return preds.isEmpty() ? cb.disjunction() : cb.or(preds.toArray(new Predicate[0]));
         }
         if (node instanceof ConditionNode.AndNode and) {
-            Predicate left = resolveJoinCondition(and.nodes().get(0), join, cb);
-            Predicate right = resolveJoinCondition(and.nodes().get(1), join, cb);
-            return cb.and(left, right);
+            java.util.List<Predicate> preds = new java.util.ArrayList<>();
+            for (ConditionNode child : and.nodes()) {
+                preds.add(resolveJoinCondition(child, join, cb));
+            }
+            return preds.isEmpty() ? cb.conjunction() : cb.and(preds.toArray(new Predicate[0]));
         }
         if (node instanceof ConditionNode.NegateNode negate) {
             return cb.not(resolveJoinCondition(negate.inner(), join, cb));

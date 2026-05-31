@@ -57,7 +57,8 @@ public class MergeSpec<T> {
 
     /** 缓存实体类的持久化字段列表，避免每次反射遍历。使用弱引用键防止类加载器泄漏。 */
     private static final java.util.concurrent.ConcurrentMap<Class<?>, List<java.lang.reflect.Field>> FIELD_CACHE =
-        new java.util.concurrent.ConcurrentHashMap<>();
+        new org.springframework.util.ConcurrentReferenceHashMap<>(16,
+            org.springframework.util.ConcurrentReferenceHashMap.ReferenceType.WEAK);
 
     private final Class<T> entityClass;
     private T entity;
@@ -444,28 +445,170 @@ public class MergeSpec<T> {
     }
 
     /**
-     * 对单个实体执行 UPSERT 操作。使用参数传递实体实例，避免修改共享实例字段。
+     * 对单个实体执行 UPSERT 操作。使用参数传递实体实例，避免修改共享实例字段，保证线程安全。
      *
      * @param em 实体管理器
      * @param entityToMerge 要 UPSERT 的实体
      * @return 受影响的行数
      */
     private int executeSingle(EntityManager em, T entityToMerge) {
-        T originalEntity = this.entity;
-        try {
-            this.entity = entityToMerge;
-            String dialect = detectDialect(em);
-            if ("h2".equals(dialect)) {
-                return executeH2Upsert(em);
-            }
-            SqlWithParams sqlWithParams = buildSql(em);
-            if (log.isDebugEnabled()) {
-                log.debug("Executing UPSERT SQL: {}", sqlWithParams.sql());
-            }
-            return executeNativeQuery(em, sqlWithParams.sql(), sqlWithParams.params());
-        } finally {
-            this.entity = originalEntity;
+        String dialect = detectDialect(em);
+        if ("h2".equals(dialect)) {
+            return executeH2UpsertFor(em, entityToMerge);
         }
+        SqlWithParams sqlWithParams = buildSqlFor(em, entityToMerge);
+        if (log.isDebugEnabled()) {
+            log.debug("Executing UPSERT SQL: {}", sqlWithParams.sql());
+        }
+        return executeNativeQuery(em, sqlWithParams.sql(), sqlWithParams.params());
+    }
+
+    /**
+     * 从指定实体提取字段值（线程安全版本，不访问实例字段 this.entity）。
+     *
+     * @param entity 要提取字段值的实体实例
+     * @return 字段名、列名和值的列表
+     */
+    private List<EntityFieldValue> extractFieldValuesFrom(T entity) {
+        if (entity == null) {
+            throw new IllegalArgumentException("entity must not be null");
+        }
+        List<EntityFieldValue> fieldValues = new ArrayList<>();
+        List<Field> allFields = FIELD_CACHE.computeIfAbsent(entityClass, cls -> {
+            List<Field> fields = new ArrayList<>();
+            for (Class<?> c = cls; c != null && c != Object.class; c = c.getSuperclass()) {
+                for (Field f : c.getDeclaredFields()) {
+                    if (!java.lang.reflect.Modifier.isStatic(f.getModifiers())
+                        && !java.lang.reflect.Modifier.isTransient(f.getModifiers())
+                        && !f.isAnnotationPresent(jakarta.persistence.Transient.class)
+                        && !f.isAnnotationPresent(jakarta.persistence.OneToMany.class)
+                        && !f.isAnnotationPresent(jakarta.persistence.ManyToOne.class)
+                        && !f.isAnnotationPresent(jakarta.persistence.ManyToMany.class)
+                        && !f.isAnnotationPresent(jakarta.persistence.OneToOne.class)
+                        && !f.isAnnotationPresent(jakarta.persistence.EmbeddedId.class)) {
+                        if (f.isAnnotationPresent(jakarta.persistence.Embedded.class)) {
+                            log.debug(
+                                "Skipping @Embedded field '{}' in MergeSpec - use @AttributeOverride for column mapping",
+                                f.getName());
+                            continue;
+                        }
+                        try {
+                            f.setAccessible(true);
+                        } catch (InaccessibleObjectException e) {
+                            throw new MyJpaPlusException("Cannot access field '" + f.getName() + "' in " + cls.getName()
+                                + ". If using Java 17+ module system, add JVM argument: " + "--add-opens "
+                                + f.getDeclaringClass().getPackageName() + "=ALL-UNNAMED", e);
+                        }
+                        fields.add(f);
+                    }
+                }
+            }
+            return fields;
+        });
+        for (Field f : allFields) {
+            try {
+                Object value = f.get(entity);
+                String columnName = resolveColumnName(f);
+                fieldValues.add(new EntityFieldValue(f.getName(), columnName, value));
+            } catch (IllegalAccessException e) {
+                throw new MyJpaPlusException("Failed to access field: " + f.getName(), e);
+            }
+        }
+        return fieldValues;
+    }
+
+    /**
+     * 为指定实体构建 UPSERT SQL（线程安全版本）。
+     *
+     * @param em 实体管理器
+     * @param entity 要 UPSERT 的实体
+     * @return SQL 和参数
+     */
+    private SqlWithParams buildSqlFor(EntityManager em, T entity) {
+        List<String> effectiveConflictFields =
+            conflictFields.isEmpty() ? resolveIdColumnNames() : new ArrayList<>(conflictFields);
+        Set<String> conflictSet = new LinkedHashSet<>(effectiveConflictFields);
+        List<EntityFieldValue> allFieldValues = extractFieldValuesFrom(entity);
+        List<String> insertColumns = new ArrayList<>();
+        List<EntityFieldValue> insertFieldValues = new ArrayList<>();
+        for (EntityFieldValue fv : allFieldValues) {
+            if (fv.value() != null || !isAutoGeneratedId(fv.fieldName())) {
+                insertColumns.add(fv.columnName());
+                insertFieldValues.add(fv);
+            }
+        }
+        List<String> effectiveUpdateFields =
+            explicitUpdateFields ? updateFields : allNonConflictColumns(allFieldValues, conflictSet);
+        Set<String> conflictFieldNames = new LinkedHashSet<>();
+        for (String col : effectiveConflictFields) {
+            for (EntityFieldValue fv : allFieldValues) {
+                if (fv.columnName().equals(col)) {
+                    conflictFieldNames.add(fv.fieldName());
+                }
+            }
+        }
+        String tableName = resolveTableName();
+        String dialect = detectDialect(em);
+        return switch (dialect) {
+            case "postgresql" -> buildPostgresSql(tableName, insertColumns, insertFieldValues, effectiveConflictFields,
+                effectiveUpdateFields);
+            case "mysql" -> buildMysqlSql(tableName, insertColumns, insertFieldValues, effectiveUpdateFields);
+            case "h2" -> buildH2Sql(tableName, insertColumns, insertFieldValues, effectiveConflictFields,
+                effectiveUpdateFields, allFieldValues, conflictFieldNames);
+            default -> throw new MyJpaPlusException(
+                "Unsupported database dialect: " + dialect + ". Supported dialects: postgresql, mysql, h2");
+        };
+    }
+
+    /**
+     * 为指定实体执行 H2 UPSERT（线程安全版本）。
+     *
+     * @param em 实体管理器
+     * @param entity 要 UPSERT 的实体
+     * @return 受影响的行数
+     */
+    private int executeH2UpsertFor(EntityManager em, T entity) {
+        List<String> effectiveConflictFields =
+            conflictFields.isEmpty() ? resolveIdColumnNames() : new ArrayList<>(conflictFields);
+        List<EntityFieldValue> allFieldValues = extractFieldValuesFrom(entity);
+        boolean allConflictKeysNull = true;
+        for (EntityFieldValue fv : allFieldValues) {
+            if (effectiveConflictFields.contains(fv.columnName()) && fv.value() != null) {
+                allConflictKeysNull = false;
+                break;
+            }
+        }
+        if (allConflictKeysNull) {
+            return executeSimpleInsert(em, allFieldValues);
+        }
+        if (explicitUpdateFields) {
+            int maxRetries = 3;
+            for (int attempt = 0; attempt < maxRetries; attempt++) {
+                try {
+                    int updated = executeConditionalUpdate(em, allFieldValues, effectiveConflictFields);
+                    if (updated > 0) {
+                        return updated;
+                    }
+                    return executeSimpleInsert(em, allFieldValues);
+                } catch (jakarta.persistence.PersistenceException e) {
+                    if (attempt < maxRetries - 1 && e.getMessage() != null
+                        && e.getMessage().toLowerCase().contains("unique")) {
+                        if (log.isDebugEnabled()) {
+                            log.debug("H2 UPSERT race condition detected on attempt {}/{}, retrying", attempt + 1,
+                                maxRetries);
+                        }
+                        continue;
+                    }
+                    throw e;
+                }
+            }
+            return executeSimpleInsert(em, allFieldValues);
+        }
+        SqlWithParams sqlWithParams = buildSqlFor(em, entity);
+        if (log.isDebugEnabled()) {
+            log.debug("Executing H2 MERGE SQL: {}", sqlWithParams.sql());
+        }
+        return executeNativeQuery(em, sqlWithParams.sql(), sqlWithParams.params());
     }
 
     /**

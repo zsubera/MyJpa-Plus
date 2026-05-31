@@ -17,9 +17,9 @@ class MaskSerializerTest {
     }
 
     @Test
-    @DisplayName("PHONE mask: short phone returns as-is")
+    @DisplayName("PHONE mask: short phone returns partial mask")
     void shouldNotMaskShortPhone() {
-        assertEquals("12345", MaskSerializer.mask("12345", MaskType.PHONE));
+        assertEquals("12***", MaskSerializer.mask("12345", MaskType.PHONE));
     }
 
     @Test
@@ -47,9 +47,9 @@ class MaskSerializerTest {
     }
 
     @Test
-    @DisplayName("ID_CARD mask: short value returns as-is")
+    @DisplayName("ID_CARD mask: short value returns partial mask")
     void shouldNotMaskShortIdCard() {
-        assertEquals("1234567", MaskSerializer.mask("1234567", MaskType.ID_CARD));
+        assertEquals("1*****7", MaskSerializer.mask("1234567", MaskType.ID_CARD));
     }
 
     @Test

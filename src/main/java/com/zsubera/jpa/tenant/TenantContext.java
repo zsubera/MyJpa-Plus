@@ -1,5 +1,8 @@
 package com.zsubera.jpa.tenant;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 /**
  * 租户过滤上下文，使用 ThreadLocal 计数器控制是否跳过自动过滤。
  *
@@ -13,6 +16,8 @@ package com.zsubera.jpa.tenant;
  * @see TenantProvider
  */
 public final class TenantContext {
+
+    private static final Logger log = LoggerFactory.getLogger(TenantContext.class);
 
     private static final ThreadLocal<Integer> ignoreCount = ThreadLocal.withInitial(() -> 0);
 
@@ -53,6 +58,7 @@ public final class TenantContext {
     public static void popIgnore() {
         Integer count = ignoreCount.get();
         if (count == null || count <= 0) {
+            // 计数器已归零或未初始化，说明存在异常场景下的计数漂移，强制清除
             ignoreCount.remove();
             return;
         }
@@ -60,6 +66,21 @@ public final class TenantContext {
             ignoreCount.remove();
         } else {
             ignoreCount.set(count - 1);
+        }
+    }
+
+    /**
+     * 检查计数器健康状态。当计数异常偏高时记录警告日志。
+     *
+     * <p>
+     * 建议在 AOP 切面的 finally 块中调用此方法，以便及时发现计数漂移问题。
+     */
+    public static void checkHealth() {
+        int current = ignoreCount.get();
+        if (current > MAX_IGNORE_COUNT / 2) {
+            log.warn("TenantContext ignore count ({}) is unusually high (max={}). "
+                + "This may indicate a counter drift caused by exceptions in @IgnoreTenant methods. "
+                + "Consider calling reset() to clear the counter.", current, MAX_IGNORE_COUNT);
         }
     }
 

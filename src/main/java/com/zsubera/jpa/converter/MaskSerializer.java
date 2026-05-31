@@ -48,8 +48,11 @@ public class MaskSerializer extends JsonSerializer<String> {
     }
 
     private static String maskPhone(String phone) {
+        if (phone.length() < 3) {
+            return "*".repeat(phone.length());
+        }
         if (phone.length() < 7) {
-            return phone;
+            return phone.substring(0, 2) + "*".repeat(phone.length() - 2);
         }
         return phone.substring(0, 3) + "****" + phone.substring(phone.length() - 4);
     }
@@ -68,8 +71,11 @@ public class MaskSerializer extends JsonSerializer<String> {
     }
 
     private static String maskIdCard(String idCard) {
+        if (idCard.length() < 4) {
+            return "*".repeat(idCard.length());
+        }
         if (idCard.length() < 8) {
-            return idCard;
+            return idCard.substring(0, 1) + "*".repeat(idCard.length() - 2) + idCard.substring(idCard.length() - 1);
         }
         return idCard.substring(0, 3) + "*".repeat(idCard.length() - 7) + idCard.substring(idCard.length() - 4);
     }
@@ -88,8 +94,11 @@ public class MaskSerializer extends JsonSerializer<String> {
     }
 
     private static String maskBankCard(String bankCard) {
+        if (bankCard.length() < 4) {
+            return "*".repeat(bankCard.length());
+        }
         if (bankCard.length() < 8) {
-            return bankCard;
+            return "*".repeat(bankCard.length() - 2) + bankCard.substring(bankCard.length() - 2);
         }
         return "*".repeat(bankCard.length() - 4) + bankCard.substring(bankCard.length() - 4);
     }

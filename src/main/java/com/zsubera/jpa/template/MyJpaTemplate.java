@@ -511,7 +511,7 @@ public class MyJpaTemplate {
         log.warn("findAllStream(Class, QuerySpec) is deprecated and will be removed in 2.0. "
             + "Use findAllStream(Class, QuerySpec, Consumer) for safe Stream lifecycle management. "
             + "This method returns a Stream that must be closed by the caller to avoid connection leaks.");
-        return doFindStream(entityClass, spec);
+        return doFindStream(entityClass, spec, null);
     }
 
     /**
@@ -567,7 +567,44 @@ public class MyJpaTemplate {
         if (consumer == null) {
             throw new IllegalArgumentException("consumer must not be null");
         }
-        try (Stream<T> stream = doFindStream(entityClass, spec)) {
+        try (Stream<T> stream = doFindStream(entityClass, spec, null)) {
+            consumer.accept(stream);
+        }
+    }
+
+    /**
+     * 安全版本的流式查询，支持 EntityGraph 急切加载。
+     *
+     * <p>
+     * 与 {@link #findAllStream(Class, QuerySpec, Consumer)} 相同，但额外支持通过 {@link EntityGraphHelper} 指定急切加载的关联关系。
+     *
+     * <pre>{@code
+     * EntityGraphHelper<User> graph = EntityGraphHelper.forEntity(User.class).add("roles");
+     * jpa.findAllStream(User.class, spec, graph, stream -> {
+     *     stream.forEach(this::processUser);
+     * });
+     * }</pre>
+     *
+     * @param entityClass 实体类
+     * @param spec 查询规范
+     * @param entityGraph 实体图（可为 null，null 时不应用实体图）
+     * @param consumer Stream 消费者（在 try-with-resources 中执行）
+     * @param <T> 实体类型
+     * @throws IllegalArgumentException 如果 entityClass、spec 或 consumer 为 null
+     */
+    @Transactional(readOnly = true)
+    public <T> void findAllStream(Class<T> entityClass, QuerySpec<T> spec, EntityGraphHelper<T> entityGraph,
+        Consumer<Stream<T>> consumer) {
+        if (entityClass == null) {
+            throw new IllegalArgumentException("entityClass must not be null");
+        }
+        if (spec == null) {
+            throw new IllegalArgumentException("spec must not be null");
+        }
+        if (consumer == null) {
+            throw new IllegalArgumentException("consumer must not be null");
+        }
+        try (Stream<T> stream = doFindStream(entityClass, spec, entityGraph)) {
             consumer.accept(stream);
         }
     }
@@ -577,11 +614,12 @@ public class MyJpaTemplate {
      *
      * @param entityClass 实体类
      * @param spec 查询规范
+     * @param entityGraph 实体图（可为 null）
      * @param <T> 实体类型
      * @return 匹配实体的 Stream（必须由调用方关闭）
      */
-    private <T> Stream<T> doFindStream(Class<T> entityClass, QuerySpec<T> spec) {
-        TypedQuery<T> query = buildTypedQuery(entityClass, spec, null, null);
+    private <T> Stream<T> doFindStream(Class<T> entityClass, QuerySpec<T> spec, EntityGraphHelper<T> entityGraph) {
+        TypedQuery<T> query = buildTypedQuery(entityClass, spec, entityGraph, null);
         return query.getResultStream();
     }
 
@@ -1266,12 +1304,15 @@ public class MyJpaTemplate {
      * @param operation 要执行的操作
      * @param <R> 返回类型
      * @return 操作结果
+     * @throws IllegalStateException 如果 TransactionManager 不可用
      */
     private <R> R executeInNewTransaction(java.util.function.Function<EntityManager, R> operation) {
         org.springframework.transaction.PlatformTransactionManager txManager = getTransactionManager();
         if (txManager == null) {
-            // 如果没有 TransactionManager，直接在当前上下文中执行
-            return operation.apply(entityManager);
+            throw new IllegalStateException(
+                "PlatformTransactionManager not available. Cannot execute in new transaction. "
+                    + "Ensure @Transactional support is enabled or configure a PlatformTransactionManager bean. "
+                    + "If running outside a Spring context, use MergeSpec.executeInTransaction() instead.");
         }
         org.springframework.transaction.support.TransactionTemplate txTemplate =
             new org.springframework.transaction.support.TransactionTemplate(txManager);
