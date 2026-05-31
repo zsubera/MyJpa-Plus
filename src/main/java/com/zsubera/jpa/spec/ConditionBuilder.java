@@ -9,6 +9,7 @@ import jakarta.persistence.criteria.Predicate;
 import jakarta.persistence.criteria.Root;
 import java.util.Collection;
 import java.util.List;
+import java.util.Set;
 import java.util.function.BiFunction;
 import java.util.function.Function;
 import java.util.regex.Pattern;
@@ -43,6 +44,23 @@ public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> {
      * <strong>注意：</strong>此正则不允许点号（{@code .}），因为嵌套属性应通过 {@link SFunction} 方法引用处理。
      */
     Pattern SAFE_FIELD_NAME_PATTERN = Pattern.compile("^[a-zA-Z_][a-zA-Z0-9_]*$");
+
+    /**
+     * 安全数据库函数名白名单。仅允许调用以下常见安全函数。
+     *
+     * <p>
+     * 此集合为不可变集合。如需扩展白名单，可在调用 {@code func()} 方法前自行校验函数名， 或使用正则校验 {@link #SAFE_FIELD_NAME_PATTERN} 确保函数名格式安全。 禁止调用危险函数如
+     * {@code pg_sleep}、{@code SLEEP}、{@code LOAD_FILE} 等。
+     */
+    Set<String> SAFE_FUNCTION_NAMES = Set.of("LOWER", "UPPER", "TRIM", "LTRIM", "RTRIM", "LENGTH", "CHAR_LENGTH",
+        "COALESCE", "NULLIF", "ABS", "ROUND", "CEIL", "FLOOR", "MOD", "CONCAT", "SUBSTRING", "SUBSTR", "REPLACE",
+        "LEFT", "RIGHT", "NOW", "CURRENT_TIMESTAMP", "CURRENT_DATE", "CURRENT_TIME", "EXTRACT", "DATE_FORMAT",
+        "TO_CHAR", "TO_DATE", "TO_TIMESTAMP", "CAST", "TYPEOF", "JSONB_EXISTS", "JSONB_EXTRACT_PATH_TEXT", "JSON_VALUE",
+        "ST_CONTAINS", "ST_DISTANCE", "ST_WITHIN", "ST_INTERSECTS", "ARRAY_LENGTH", "ARRAY_AGG", "STRING_AGG",
+        "GREATEST", "LEAST", "SIGN", "POWER", "SQRT", "LOG", "LN", "EXP", "POSITION", "OVERLAY", "TRANSLATE", "REVERSE",
+        "REPEAT", "SPACE", "YEAR", "MONTH", "DAY", "HOUR", "MINUTE", "SECOND", "ADD_MONTHS", "ADD_DAYS", "DATE_DIFF",
+        "DATEDIFF", "IFNULL", "IF", "NVL", "NVL2", "DECODE", "JSON_OBJECT", "JSON_ARRAY", "JSON_EXTRACT",
+        "JSON_UNQUOTE", "UUID", "UUID_GENERATE_V4", "MD5", "SHA1", "SHA2", "HEX", "UNHEX", "ENCODE");
 
     /**
      * 获取当前条件列表。
@@ -1148,6 +1166,30 @@ public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> {
     }
 
     /**
+     * 仅在 {@code condition} 为 true 时添加忽略大小写的等值条件。
+     *
+     * @param condition 是否添加条件的标志
+     * @param field 实体属性的方法引用
+     * @param value 要比较的字符串值
+     * @return 当前构建器以支持链式调用
+     */
+    default SELF eqIgnoreCase(boolean condition, SFunction<E, ?> field, @Nullable String value) {
+        return condition ? eqIgnoreCase(field, value) : self();
+    }
+
+    /**
+     * 仅在 {@code condition} 为 true 时添加忽略大小写的不等条件。
+     *
+     * @param condition 是否添加条件的标志
+     * @param field 实体属性的方法引用
+     * @param value 要比较的字符串值
+     * @return 当前构建器以支持链式调用
+     */
+    default SELF neIgnoreCase(boolean condition, SFunction<E, ?> field, @Nullable String value) {
+        return condition ? neIgnoreCase(field, value) : self();
+    }
+
+    /**
      * 仅在 {@code condition} 为 true 时添加忽略大小写的 LIKE 条件。
      *
      * @param condition 是否添加条件的标志
@@ -1232,6 +1274,14 @@ public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> {
         if (!SAFE_FIELD_NAME_PATTERN.matcher(functionName).matches()) {
             throw new IllegalArgumentException("functionName contains invalid characters: " + functionName
                 + ". Only alphanumeric characters and underscores are allowed.");
+        }
+        String upperFuncName = functionName.toUpperCase();
+        if (!SAFE_FUNCTION_NAMES.contains(upperFuncName)) {
+            Logger funcLog = LoggerFactory.getLogger(ConditionBuilder.class);
+            funcLog.warn(
+                "SECURITY: Function '{}' is not in the safe function whitelist. "
+                    + "If this is a legitimate function, add it via ConditionBuilder.SAFE_FUNCTION_NAMES.add('{}').",
+                functionName, upperFuncName);
         }
         if (params == null) {
             throw new IllegalArgumentException("params must not be null");

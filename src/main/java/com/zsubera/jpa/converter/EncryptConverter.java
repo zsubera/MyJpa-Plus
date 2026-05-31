@@ -17,7 +17,25 @@ public class EncryptConverter implements AttributeConverter<String, String> {
     private static final int GCM_TAG_LENGTH = 128;
     private static final String KEY_ENV = "MYJPA_ENCRYPT_KEY";
     private static final String KEY_PROPERTY = "myjpa.encrypt.key";
+    private static final String KEY_VERSION_ENV = "MYJPA_ENCRYPT_KEY_VERSION";
+    private static final String KEY_VERSION_PROPERTY = "myjpa.encrypt.key.version";
     private static final SecureRandom SECURE_RANDOM = new SecureRandom();
+
+    /**
+     * 获取当前密钥版本标识。用于在加密数据前添加版本前缀，支持密钥轮换。
+     *
+     * <p>
+     * 配置优先级：环境变量 {@code MYJPA_ENCRYPT_KEY_VERSION} > 系统属性 {@code myjpa.encrypt.key.version} > 默认值 "v1"。
+     *
+     * @return 密钥版本标识
+     */
+    private static String getKeyVersion() {
+        String version = System.getenv(KEY_VERSION_ENV);
+        if (version == null || version.isEmpty()) {
+            version = System.getProperty(KEY_VERSION_PROPERTY);
+        }
+        return (version != null && !version.isEmpty()) ? version : "v1";
+    }
 
     @Override
     public String convertToDatabaseColumn(String attribute) {
@@ -34,7 +52,8 @@ public class EncryptConverter implements AttributeConverter<String, String> {
             byte[] combined = new byte[iv.length + encrypted.length];
             System.arraycopy(iv, 0, combined, 0, iv.length);
             System.arraycopy(encrypted, 0, combined, iv.length, encrypted.length);
-            return Base64.getEncoder().encodeToString(combined);
+            String version = getKeyVersion();
+            return version + ":" + Base64.getEncoder().encodeToString(combined);
         } catch (GeneralSecurityException e) {
             throw new IllegalStateException("Failed to encrypt value", e);
         }
@@ -46,7 +65,17 @@ public class EncryptConverter implements AttributeConverter<String, String> {
             return null;
         }
         try {
-            byte[] combined = Base64.getDecoder().decode(dbData);
+            // 支持带版本前缀和不带版本前缀两种格式
+            String base64Data;
+            if (dbData.contains(":")) {
+                // 带版本前缀格式: "v1:base64data"
+                int colonIndex = dbData.indexOf(':');
+                base64Data = dbData.substring(colonIndex + 1);
+            } else {
+                // 兼容旧格式（无版本前缀）
+                base64Data = dbData;
+            }
+            byte[] combined = Base64.getDecoder().decode(base64Data);
             byte[] iv = new byte[GCM_IV_LENGTH];
             System.arraycopy(combined, 0, iv, 0, GCM_IV_LENGTH);
             byte[] encrypted = new byte[combined.length - GCM_IV_LENGTH];

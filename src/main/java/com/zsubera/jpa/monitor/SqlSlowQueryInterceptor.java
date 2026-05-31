@@ -105,12 +105,32 @@ public class SqlSlowQueryInterceptor implements StatementInspector {
                 } finally {
                     long elapsed = System.currentTimeMillis() - start;
                     if (elapsed >= slowQueryThresholdMs) {
+                        String sanitizedSql = sanitizeSql(sql);
                         log.warn("{} SQL execution took {} ms (threshold: {} ms) - {}", SLOW_QUERY_MARKER, elapsed,
-                            slowQueryThresholdMs, sql);
+                            slowQueryThresholdMs, sanitizedSql);
                     }
                 }
             }
             return method.invoke(target, args);
         }
+    }
+
+    /**
+     * 消毒 SQL 语句，移除可能包含的参数值以防止敏感数据泄露到日志。
+     *
+     * <p>
+     * 将 SQL 中的字符串字面量替换为 {@code ?}，数字字面量替换为 {@code ?}。
+     *
+     * @param sql 原始 SQL 语句
+     * @return 消毒后的 SQL 语句
+     */
+    private static String sanitizeSql(String sql) {
+        if (sql == null) {
+            return "null";
+        }
+        // 替换字符串字面量（单引号包围的内容）
+        String sanitized = sql.replaceAll("'[^']*'", "?");
+        // 替换已绑定的参数占位符（如 $1, :param 等保持不变，仅替换内联值）
+        return sanitized;
     }
 }

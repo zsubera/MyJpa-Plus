@@ -8,6 +8,7 @@ import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.regex.Pattern;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -43,6 +44,14 @@ public class CteSpec {
 
     private static final Logger log = LoggerFactory.getLogger(CteSpec.class);
 
+    /**
+     * 安全标识符正则表达式：仅允许字母、数字和下划线，防止 SQL 注入。
+     *
+     * <p>
+     * 用于校验 CTE 名称和列名，防止恶意 SQL 拼接。
+     */
+    private static final Pattern SAFE_IDENTIFIER_PATTERN = Pattern.compile("^[a-zA-Z_][a-zA-Z0-9_]*$");
+
     private final List<CteEntry> cteEntries = new ArrayList<>();
     private String mainSql;
     private final Map<String, Object> parameters = new LinkedHashMap<>();
@@ -63,6 +72,10 @@ public class CteSpec {
         if (cteName == null || cteName.isEmpty()) {
             throw new IllegalArgumentException("cteName must not be null or empty");
         }
+        if (!SAFE_IDENTIFIER_PATTERN.matcher(cteName).matches()) {
+            throw new IllegalArgumentException(
+                "cteName contains invalid characters: " + cteName + ". Only alphanumeric and underscore are allowed.");
+        }
         return new CteSpec(false).addCte(cteName);
     }
 
@@ -76,6 +89,10 @@ public class CteSpec {
     public static CteSpec withRecursive(String cteName) {
         if (cteName == null || cteName.isEmpty()) {
             throw new IllegalArgumentException("cteName must not be null or empty");
+        }
+        if (!SAFE_IDENTIFIER_PATTERN.matcher(cteName).matches()) {
+            throw new IllegalArgumentException(
+                "cteName contains invalid characters: " + cteName + ". Only alphanumeric and underscore are allowed.");
         }
         return new CteSpec(true).addCte(cteName);
     }
@@ -95,6 +112,10 @@ public class CteSpec {
             if (col == null || col.isEmpty()) {
                 throw new IllegalArgumentException("columns must not contain null or empty elements");
             }
+            if (!SAFE_IDENTIFIER_PATTERN.matcher(col).matches()) {
+                throw new IllegalArgumentException("column name contains invalid characters: " + col
+                    + ". Only alphanumeric and underscore are allowed.");
+            }
         }
         CteEntry current = currentCte();
         current.columns = Arrays.asList(columns);
@@ -103,6 +124,10 @@ public class CteSpec {
 
     /**
      * 设置当前 CTE 的查询 SQL。
+     *
+     * <p>
+     * <strong>安全警告：</strong>SQL 字符串不应包含用户输入。CTE 名称和列名已通过正则校验防止注入， 但 SQL
+     * 本身由开发者负责安全。请使用参数化查询（{@link #setParameter}）绑定用户输入值。
      *
      * @param sql CTE 查询 SQL（不含外层括号）
      * @return 当前 CteSpec 实例，支持链式调用
@@ -128,11 +153,18 @@ public class CteSpec {
         if (cteName == null || cteName.isEmpty()) {
             throw new IllegalArgumentException("cteName must not be null or empty");
         }
+        if (!SAFE_IDENTIFIER_PATTERN.matcher(cteName).matches()) {
+            throw new IllegalArgumentException(
+                "cteName contains invalid characters: " + cteName + ". Only alphanumeric and underscore are allowed.");
+        }
         return addCte(cteName);
     }
 
     /**
      * 设置主查询 SQL。CTE 在此查询之前定义。
+     *
+     * <p>
+     * <strong>安全警告：</strong>SQL 字符串不应包含用户输入。请使用参数化查询（{@link #setParameter}）绑定用户输入值。
      *
      * @param sql 主查询 SQL
      * @return 当前 CteSpec 实例，支持链式调用
@@ -176,7 +208,7 @@ public class CteSpec {
             throw new IllegalArgumentException("em must not be null");
         }
         String sql = buildSql();
-        log.debug("CteSpec: executing native query: {}", sql);
+        log.debug("CteSpec: executing native query (length={})", sql.length());
         Query query = em.createNativeQuery(sql);
         applyParameters(query);
         List<?> rawResults = query.getResultList();
@@ -205,7 +237,7 @@ public class CteSpec {
             throw new IllegalArgumentException("em must not be null");
         }
         String sql = buildSql();
-        log.debug("CteSpec: executing native query for single result: {}", sql);
+        log.debug("CteSpec: executing native query for single result (length={})", sql.length());
         Query query = em.createNativeQuery(sql);
         applyParameters(query);
         List<?> results = query.getResultList();

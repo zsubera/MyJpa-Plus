@@ -21,11 +21,19 @@ import java.util.function.Function;
  * }  // 将抛出 IllegalArgumentException</pre>
  *
  * <p>
- * {@link Serializable} 接口通过 Java 的 {@link java.lang.invoke.SerializedLambda} 机制
- * 在运行时启用属性名称提取，允许在不硬编码字段名字符串的情况下进行类型安全的查询构建。
+ * <strong>为什么继承 {@link Serializable}：</strong>
+ *
+ * <p>
+ * {@link Serializable} 接口是 Lambda 属性名提取机制的核心要求。Java 编译器对实现 {@code Serializable} 的函数式接口 特殊处理——生成的 Lambda 类会包含
+ * {@link java.lang.invoke.SerializedLambda} 元数据， 其中包含实现方法的类名和方法名（如 {@code User.getName}）。 运行时通过 {@code writeReplace()}
+ * 反射机制提取此元数据， 再将 getter 方法名转换为属性名（{@code getName} → {@code name}）。
+ *
+ * <p>
+ * 如果不继承 {@code Serializable}，编译器不会生成 {@code SerializedLambda} 元数据， 属性名提取将失败。
  *
  * @param <T> 实体类型
  * @param <R> 属性返回类型
+ * @see LambdaUtils#getPropertyName(SFunction)
  */
 @FunctionalInterface
 public interface SFunction<T, R> extends Function<T, R>, Serializable {}

@@ -349,8 +349,13 @@ public class ProjectionSpec<T> {
     /**
      * 直接访问底层的 {@link QuerySpec} 以进行链式调用。
      *
+     * <p>
+     * <strong>注意：</strong>此方法暴露了内部可变状态。推荐使用 {@link #where(Consumer)} 方法通过消费者函数配置条件。
+     *
      * @return 底层的 QuerySpec 实例
+     * @deprecated 使用 {@link #where(Consumer)} 方法替代，该方法通过消费者函数配置条件，避免暴露内部状态。
      */
+    @Deprecated(since = "1.2.0", forRemoval = false)
     @SuppressFBWarnings("EI_EXPOSE_REP")
     public QuerySpec<T> conditions() {
         return querySpec;

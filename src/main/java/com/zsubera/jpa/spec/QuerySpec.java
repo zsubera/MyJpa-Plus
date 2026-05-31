@@ -138,6 +138,16 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
     /**
      * 设置生成查询的超时时间（秒）。 由 {@link #applyQuerySettings(TypedQuery)} 和 {@link com.zsubera.jpa.template.MyJpaTemplate} 应用。
      *
+     * <p>
+     * <strong>数据库兼容性说明：</strong>不同数据库对查询超时的支持方式不同：
+     * <ul>
+     * <li>PostgreSQL: 通过 {@code jakarta.persistence.query.timeout} hint 设置（毫秒），支持语句级超时</li>
+     * <li>MySQL: 通过 {@code jakarta.persistence.query.timeout} hint 设置，但支持有限</li>
+     * <li>H2: 支持查询超时</li>
+     * <li>Oracle: 通过 {@code jakarta.persistence.query.timeout} hint 设置</li>
+     * </ul>
+     * 超时值通过 JPA hint {@code jakarta.persistence.query.timeout} 传递（转换为毫秒）， 实际行为取决于 JPA 提供者和数据库的实现。
+     *
      * @param seconds 超时时间（秒），必须为正数且不超过 300 秒
      * @return 当前 QuerySpec 实例，支持链式调用
      * @throws IllegalArgumentException 如果 seconds 不是正数或超过 300 秒
@@ -230,7 +240,10 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
     }
 
     /**
-     * 添加 HAVING 条件，与 {@link #groupBy} 配合使用。 该函数在执行时接收查询根对象和 CriteriaBuilder。
+     * 添加 HAVING 条件，与 {@link #groupBy} 配合使用。 多个 HAVING 条件之间为 AND 关系。
+     *
+     * <p>
+     * 如需 OR 关系的 HAVING 条件，请使用 {@link #havingOr(BiFunction)} 方法。
      *
      * @param condition HAVING 条件函数
      * @return 当前 QuerySpec 实例，支持链式调用
@@ -835,8 +848,16 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
                 paths.add(root.get(field));
             }
             query.groupBy(paths.toArray(new Expression[0]));
-            for (BiFunction<Path<T>, CriteriaBuilder, Predicate> having : havingConditions) {
-                query.having(having.apply(root, cb));
+            if (!havingConditions.isEmpty()) {
+                List<Predicate> havingPredicates = new ArrayList<>();
+                for (BiFunction<Path<T>, CriteriaBuilder, Predicate> having : havingConditions) {
+                    havingPredicates.add(having.apply(root, cb));
+                }
+                if (havingPredicates.size() == 1) {
+                    query.having(havingPredicates.get(0));
+                } else {
+                    query.having(cb.and(havingPredicates.toArray(new Predicate[0])));
+                }
             }
         }
     }

@@ -135,7 +135,10 @@ public class UpdateSpec<T> extends AbstractBulkOperationSpec<T, UpdateSpec<T>> {
      * @param expression SQL 表达式字符串（使用参数名而非直接拼接值）
      * @return 当前构建器实例，支持链式调用
      * @throws IllegalArgumentException 如果 field 或 expression 为 null
+     * @deprecated 使用 {@link #setAdd(SFunction, Number)} 和 {@link #setSubtract(SFunction, Number)} 替代简单的加减操作。
+     *             对于复杂表达式，此方法仍然可用但不推荐，因为它接受原始 SQL 字符串存在注入风险。
      */
+    @Deprecated(since = "1.2.0", forRemoval = false)
     public UpdateSpec<T> setExpression(SFunction<T, ?> field, String expression) {
         if (field == null) {
             throw new IllegalArgumentException("field must not be null");

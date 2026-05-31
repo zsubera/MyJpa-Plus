@@ -7,6 +7,8 @@ import java.util.Collection;
 import java.util.List;
 import java.util.function.BiFunction;
 import java.util.function.Consumer;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * 条件节点类型的密封层次结构，由 {@link QuerySpec}、{@link ConditionBuilder} 及相关类使用， 用于构建延迟执行的
@@ -18,6 +20,9 @@ import java.util.function.Consumer;
 public sealed interface ConditionNode permits ConditionNode.SimpleNode, ConditionNode.JoinNode, ConditionNode.OrNode,
     ConditionNode.AndNode, ConditionNode.MultiLikeNode, ConditionNode.CollectionNode, ConditionNode.ExistsNode,
     ConditionNode.InSubQueryNode, ConditionNode.RawNode, ConditionNode.NegateNode, ConditionNode.FuncNode {
+
+    /** Logger for security audit warnings. */
+    Logger SECURITY_LOG = LoggerFactory.getLogger("com.zsubera.jpa.security");
 
     // ---- 操作枚举 ----
 
@@ -326,7 +331,38 @@ public sealed interface ConditionNode permits ConditionNode.SimpleNode, Conditio
      */
     static ConditionNode
         ofRawPredicate(BiFunction<jakarta.persistence.criteria.Path<?>, CriteriaBuilder, Predicate> fn) {
+        if (fn == null) {
+            throw new IllegalArgumentException("Predicate function must not be null");
+        }
+        SECURITY_LOG.warn("SECURITY: RawNode.ofRawPredicate() called - this bypasses type safety. "
+            + "Use type-safe methods (eq, likeSafe, etc.) instead. Call stack: {}", getCallStackSummary());
         return new RawNode(fn);
+    }
+
+    /**
+     * 获取调用栈摘要，用于安全审计日志。
+     *
+     * @return 调用栈摘要字符串
+     */
+    private static String getCallStackSummary() {
+        StackTraceElement[] stack = Thread.currentThread().getStackTrace();
+        StringBuilder sb = new StringBuilder();
+        int count = 0;
+        for (StackTraceElement element : stack) {
+            String className = element.getClassName();
+            if (className.startsWith("com.zsubera.jpa.") && !className.endsWith("ConditionNode")) {
+                if (count > 0) {
+                    sb.append(" <- ");
+                }
+                sb.append(className.substring(className.lastIndexOf('.') + 1)).append(".")
+                    .append(element.getMethodName());
+                count++;
+                if (count >= 3) {
+                    break;
+                }
+            }
+        }
+        return sb.length() > 0 ? sb.toString() : "unknown";
     }
 
     /** 取反组节点：NOT（内部条件）。 */

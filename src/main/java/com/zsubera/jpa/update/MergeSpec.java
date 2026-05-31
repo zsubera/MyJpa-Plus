@@ -28,6 +28,15 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
  * </ul>
  *
  * <p>
+ * <strong>并发安全说明：</strong>UPSERT 操作在高并发场景下存在竞态条件。 两个并发事务可能同时检测到"不存在"并尝试插入，导致唯一约束冲突。 建议在高并发场景下：
+ * <ul>
+ * <li>使用数据库级别的唯一约束保护冲突键</li>
+ * <li>在 UPSERT 前使用悲观锁（{@code SELECT ... FOR UPDATE}）</li>
+ * <li>在应用层使用分布式锁保护整个 UPSERT 流程</li>
+ * <li>捕获唯一约束异常并重试</li>
+ * </ul>
+ *
+ * <p>
  * 示例：
  *
  * <pre>{@code
@@ -343,6 +352,47 @@ public class MergeSpec<T> {
     }
 
     /**
+     * 批量执行 UPSERT 操作。
+     *
+     * <p>
+     * 对实体列表中的每个实体执行 UPSERT。所有操作在同一个事务中执行，使用 EntityManager 的 flush/clear 进行分批处理以减少内存占用。
+     *
+     * @param entities 要 UPSERT 的实体列表
+     * @param em 实体管理器
+     * @param batchSize 每批大小，建议值为 50-200
+     * @return 受影响的总行数
+     * @throws IllegalArgumentException 如果 entities 为 null 或 batchSize 不是正数
+     */
+    public int executeBatch(List<T> entities, EntityManager em, int batchSize) {
+        if (entities == null || entities.isEmpty()) {
+            throw new IllegalArgumentException("entities must not be null or empty");
+        }
+        if (em == null) {
+            throw new IllegalArgumentException("em must not be null");
+        }
+        if (batchSize <= 0) {
+            throw new IllegalArgumentException("batchSize must be positive");
+        }
+        int total = 0;
+        int count = 0;
+        for (T ent : entities) {
+            this.entity = ent;
+            total += execute(em);
+            count++;
+            if (count % batchSize == 0) {
+                em.flush();
+                em.clear();
+                if (log.isDebugEnabled()) {
+                    log.debug("Batch UPSERT: {} entities processed (total affected: {})", count, total);
+                }
+            }
+        }
+        em.flush();
+        em.clear();
+        return total;
+    }
+
+    /**
      * SQL 构建结果，包含 SQL 语句和有序的参数值。
      *
      * @param sql SQL 语句（使用 ? 占位符）
@@ -610,7 +660,8 @@ public class MergeSpec<T> {
                     && !f.isAnnotationPresent(jakarta.persistence.Transient.class)
                     && !f.isAnnotationPresent(jakarta.persistence.OneToMany.class)
                     && !f.isAnnotationPresent(jakarta.persistence.ManyToOne.class)
-                    && !f.isAnnotationPresent(jakarta.persistence.ManyToMany.class)) {
+                    && !f.isAnnotationPresent(jakarta.persistence.ManyToMany.class)
+                    && !f.isAnnotationPresent(jakarta.persistence.OneToOne.class)) {
                     allFields.add(f);
                 }
             }

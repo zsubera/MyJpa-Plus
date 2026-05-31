@@ -1,30 +1,90 @@
 package com.zsubera.jpa.template;
 
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import java.util.Iterator;
+import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * ConcurrentHashMap-based query result cache with TTL expiration.
+ * 查询结果缓存管理器，基于 ConcurrentHashMap 实现，支持 TTL 过期和最大条目数限制。
  *
  * <p>
- * Used by {@link MyJpaTemplate} (or directly) to cache query results. Entries are lazily evicted on access when their
- * TTL has expired.
+ * 由 {@link MyJpaTemplate}（或直接）使用以缓存查询结果。条目在访问时懒驱逐（TTL 过期）。 当缓存条目数超过最大限制时，按插入顺序驱逐最早的条目（近似 LRU）。
  *
  * <p>
- * Example usage:
+ * 示例用法：
  *
  * <pre>{@code
  * QueryCacheManager cache = new QueryCacheManager();
  * cache.put("active-users", userList, 60);
  * List<User> cached = cache.get("active-users");
  * }</pre>
+ *
+ * <p>
+ * 配置示例（application.yml）：
+ *
+ * <pre>{@code
+ * myjpa-plus:
+ *   cache:
+ *     max-entries: 10000
+ * }</pre>
  */
+@SuppressFBWarnings(value = "CT_CONSTRUCTOR_THROW",
+    justification = "Constructor validates parameters via IllegalArgumentException which is standard Java practice")
 public class QueryCacheManager {
 
     private static final Logger log = LoggerFactory.getLogger(QueryCacheManager.class);
 
+    /** 默认最大缓存条目数 */
+    private static final int DEFAULT_MAX_ENTRIES = 10000;
+
     private final ConcurrentHashMap<String, CachedQueryResult<?>> store = new ConcurrentHashMap<>();
+    private volatile int maxEntries = DEFAULT_MAX_ENTRIES;
+
+    /**
+     * 创建使用默认最大条目数的 QueryCacheManager。
+     */
+    public QueryCacheManager() {
+        this(DEFAULT_MAX_ENTRIES);
+    }
+
+    /**
+     * 创建使用指定最大条目数的 QueryCacheManager。
+     *
+     * @param maxEntries 最大缓存条目数
+     * @throws IllegalArgumentException 如果 maxEntries 不是正数
+     */
+    public QueryCacheManager(int maxEntries) {
+        if (maxEntries <= 0) {
+            throw new IllegalArgumentException("maxEntries must be positive");
+        }
+        this.maxEntries = maxEntries;
+    }
+
+    /**
+     * 设置最大缓存条目数。
+     *
+     * @param maxEntries 最大缓存条目数
+     * @throws IllegalArgumentException 如果 maxEntries 不是正数
+     */
+    public void setMaxEntries(int maxEntries) {
+        if (maxEntries <= 0) {
+            throw new IllegalArgumentException("maxEntries must be positive");
+        }
+        this.maxEntries = maxEntries;
+        evictIfNeeded();
+    }
+
+    /**
+     * 获取最大缓存条目数。
+     *
+     * @return 最大缓存条目数
+     */
+    public int getMaxEntries() {
+        return maxEntries;
+    }
 
     /**
      * Retrieves a cached value by key. Returns null if the key is absent or the entry has expired.
@@ -58,6 +118,7 @@ public class QueryCacheManager {
     public <T> void put(String key, T value, long ttlSeconds) {
         store.put(key, new CachedQueryResult<>(value, ttlSeconds));
         log.debug("Cache put for key: {} (ttl={}s)", key, ttlSeconds);
+        evictIfNeeded();
     }
 
     /**
@@ -85,5 +146,24 @@ public class QueryCacheManager {
      */
     public int size() {
         return store.size();
+    }
+
+    /**
+     * 当缓存条目数超过最大限制时，驱逐最早的条目（按插入顺序）。
+     */
+    private void evictIfNeeded() {
+        if (store.size() > maxEntries) {
+            int toRemove = store.size() - (int)(maxEntries * 0.75);
+            if (toRemove > 0) {
+                int removed = 0;
+                Iterator<Map.Entry<String, CachedQueryResult<?>>> it = store.entrySet().iterator();
+                while (it.hasNext() && removed < toRemove) {
+                    it.next();
+                    it.remove();
+                    removed++;
+                }
+                log.debug("Cache evicted {} entries (size: {} -> {})", removed, store.size() + removed, store.size());
+            }
+        }
     }
 }

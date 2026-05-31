@@ -33,6 +33,17 @@ import org.springframework.transaction.annotation.Transactional;
  * 使用此模板可以避免手动将 {@code EntityManager} 传递给 {@link UpdateSpec} 和 {@link DeleteSpec}。 只需注入此模板即可使用其方法。
  *
  * <p>
+ * <strong>API 选择指南：</strong>
+ * <ul>
+ * <li><strong>简单查询</strong>：使用 {@link com.zsubera.jpa.repository.MyJpaRepository}，直接调用 {@code findAll(spec)} 等方法</li>
+ * <li><strong>需要安全限制的查询</strong>：使用 {@code MyJpaTemplate}，提供内置的结果数量限制、深度分页保护和批量操作限制</li>
+ * <li><strong>大数据量操作</strong>：使用 {@link #findAllStream(Class, QuerySpec, Consumer)} 进行流式查询，避免内存溢出</li>
+ * </ul>
+ *
+ * <p>
+ * <strong>注意：</strong>直接使用 {@code Repository.findAll(spec)} 可能导致全表查询和内存溢出（OOM）。 推荐使用此模板进行查询，它提供了内置的结果数量限制和分页支持。
+ *
+ * <p>
  * <strong>生产安全：</strong>此模板为生产环境强制执行安全限制：
  *
  * <ul>
@@ -1009,6 +1020,125 @@ public class MyJpaTemplate {
     }
 
     // ---- 分批提交事务的批量操作 ----
+
+    /**
+     * 批量操作的执行结果记录。
+     *
+     * @param totalRows 受影响的总行数
+     * @param batchCount 执行的批次数
+     * @param success 是否全部成功
+     * @param failedBatchIndex 失败的批次索引（从 0 开始），如果全部成功则为 -1
+     * @param failureCause 失败原因，如果全部成功则为 null
+     */
+    @edu.umd.cs.findbugs.annotations.SuppressFBWarnings(value = {"EI_EXPOSE_REP", "EI_EXPOSE_REP2"},
+        justification = "Record components are inherently exposed; failureCause is intentionally part of the result")
+    public record BatchResult(int totalRows, int batchCount, boolean success, int failedBatchIndex,
+        Throwable failureCause) {
+    }
+
+    /**
+     * 批次执行失败时的处理策略。
+     */
+    public enum BatchFailureStrategy {
+        /** 继续执行剩余批次（默认）。 */
+        CONTINUE,
+        /** 立即中止，已提交的批次不会回滚。 */
+        ABORT,
+    }
+
+    /**
+     * 分批执行批量更新，每批在独立事务中提交，支持失败回调。
+     *
+     * <p>
+     * 与 {@link #executeBatch(UpdateSpec, int)} 不同，此方法每批操作完成后立即提交事务， 避免长事务导致的数据库锁等待超时问题。适用于大数据量操作场景。
+     *
+     * <p>
+     * <strong>注意：</strong>如果某批操作失败，已提交的批次不会回滚。调用方可通过 {@link BatchResult} 获取执行状态。
+     *
+     * @param spec 要执行的 UpdateSpec
+     * @param batchSize 每批更新的行数
+     * @param failureStrategy 失败时的处理策略
+     * @param <T> 实体类型
+     * @return 批量执行结果
+     */
+    public <T> BatchResult executeBatchInSeparateTransactions(UpdateSpec<T> spec, int batchSize,
+        BatchFailureStrategy failureStrategy) {
+        if (spec == null) {
+            throw new IllegalArgumentException("spec must not be null");
+        }
+        if (batchSize <= 0) {
+            throw new IllegalArgumentException("batchSize must be positive");
+        }
+        if (failureStrategy == null) {
+            throw new IllegalArgumentException("failureStrategy must not be null");
+        }
+        return executeBatchInSeparateTransactionsWithResult(batchSize, "update",
+            size -> executeInNewTransaction(em -> spec.executeLimited(em, size)), failureStrategy);
+    }
+
+    /**
+     * 分批执行批量删除，每批在独立事务中提交，支持失败回调。
+     *
+     * @param spec 要执行的 DeleteSpec
+     * @param batchSize 每批删除的行数
+     * @param failureStrategy 失败时的处理策略
+     * @param <T> 实体类型
+     * @return 批量执行结果
+     */
+    public <T> BatchResult executeBatchInSeparateTransactions(DeleteSpec<T> spec, int batchSize,
+        BatchFailureStrategy failureStrategy) {
+        if (spec == null) {
+            throw new IllegalArgumentException("spec must not be null");
+        }
+        if (batchSize <= 0) {
+            throw new IllegalArgumentException("batchSize must be positive");
+        }
+        if (failureStrategy == null) {
+            throw new IllegalArgumentException("failureStrategy must not be null");
+        }
+        return executeBatchInSeparateTransactionsWithResult(batchSize, "delete",
+            size -> executeInNewTransaction(em -> spec.executeLimited(em, size)), failureStrategy);
+    }
+
+    /**
+     * 分批在独立事务中执行操作的通用实现，返回详细结果。
+     *
+     * @param batchSize 每批操作的行数
+     * @param operationName 操作名称（用于日志）
+     * @param batchExecutor 批次执行器
+     * @param failureStrategy 失败时的处理策略
+     * @return 批量执行结果
+     */
+    private BatchResult executeBatchInSeparateTransactionsWithResult(int batchSize, String operationName,
+        java.util.function.IntUnaryOperator batchExecutor, BatchFailureStrategy failureStrategy) {
+        int total = 0;
+        int batchCount = 0;
+        int failedBatchIndex = -1;
+        Throwable failureCause = null;
+        int batchResult;
+        do {
+            try {
+                batchResult = batchExecutor.applyAsInt(batchSize);
+                total += batchResult;
+                batchCount++;
+                if (batchResult > 0 && log.isDebugEnabled()) {
+                    log.debug("Batch {} committed: {} rows {}ed in this batch (total: {})", operationName, batchResult,
+                        operationName, total);
+                }
+            } catch (RuntimeException e) {
+                failedBatchIndex = batchCount;
+                failureCause = e;
+                log.error("Batch {} failed at batch index {}: {}", operationName, batchCount, e.getMessage(), e);
+                if (failureStrategy == BatchFailureStrategy.ABORT) {
+                    break;
+                }
+                // CONTINUE: skip this batch and try next
+                batchResult = 0;
+                batchCount++;
+            }
+        } while (batchResult >= batchSize);
+        return new BatchResult(total, batchCount, failedBatchIndex == -1, failedBatchIndex, failureCause);
+    }
 
     /**
      * 分批执行批量更新，每批在独立事务中提交。
