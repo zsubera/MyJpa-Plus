@@ -13,7 +13,6 @@ import java.lang.reflect.Modifier;
 import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
-import java.util.concurrent.atomic.AtomicInteger;
 import org.slf4j.Logger;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.util.ConcurrentReferenceHashMap;
@@ -53,11 +52,8 @@ public final class SoftDeleteHelper {
     private static final int MAX_CACHE_SIZE = 1024;
     private static final Logger log = org.slf4j.LoggerFactory.getLogger(SoftDeleteHelper.class);
 
-    // 没有@SoftDelete字段的实体的哨兵值（避免在 中出现空缓存）
+    // 没有@SoftDelete字段的实体的哨兵值（避免在缓存中出现空缓存）
     private static final String NO_FIELD_SENTINEL = "\0";
-
-    // 缓存插入计数器，用于避免频繁调用 ConcurrentReferenceHashMap.size()（该方法遍历所有桶）
-    private static final AtomicInteger insertCounter = new AtomicInteger(0);
 
     // 缓存：entityClass ->字段名（或“无字段”的哨兵）
     // 使用ConcurrentHashMap实现线程安全访问;实体类别数量在实际中是有限的
@@ -227,32 +223,21 @@ public final class SoftDeleteHelper {
      * @return 字段名称，如果未找到 {@code @SoftDelete} 字段则返回 {@code null}
      */
     public static String findSoftDeleteField(Class<?> entityClass) {
-        // 使用计数器检查缓存大小，避免频繁调用 ConcurrentReferenceHashMap.size()（该方法遍历所有桶）
-        // 使用 compareAndSet 保护驱逐逻辑，避免多线程竞态条件
-        int currentCount = insertCounter.get();
-        if (currentCount > MAX_CACHE_SIZE) {
-            if (insertCounter.compareAndSet(currentCount, currentCount - 1)) {
-                log.warn(
-                    "SoftDeleteHelper field cache insert count ({}) exceeds limit ({}). "
-                        + "This may indicate a class loader leak or excessive entity classes.",
-                    currentCount, MAX_CACHE_SIZE);
-                // Evict stale entries (null key/value) to prevent unbounded growth
-                int evicted = 0;
-                for (var entry : FIELD_CACHE.entrySet()) {
-                    if (entry.getKey() == null || entry.getValue() == null) {
-                        FIELD_CACHE.remove(entry.getKey());
-                        evicted++;
-                    }
-                }
-                // 修正计数器：CAS 设置的 currentCount - 1 可能与实际驱逐数量不一致，
-                // 使用 addAndGet 精确调整计数器以反映实际缓存大小变化
-                if (evicted > 1) {
-                    insertCounter.addAndGet(-(evicted - 1));
+        // 使用 cache.size() 检查缓存大小，超过阈值时记录警告
+        int currentSize = FIELD_CACHE.size();
+        if (currentSize > MAX_CACHE_SIZE) {
+            log.warn(
+                "SoftDeleteHelper field cache size ({}) exceeds limit ({}). "
+                    + "This may indicate a class loader leak or excessive entity classes.",
+                currentSize, MAX_CACHE_SIZE);
+            // Evict stale entries (null key/value) to prevent unbounded growth
+            for (var entry : FIELD_CACHE.entrySet()) {
+                if (entry.getKey() == null || entry.getValue() == null) {
+                    FIELD_CACHE.remove(entry.getKey());
                 }
             }
         }
         String result = FIELD_CACHE.computeIfAbsent(entityClass, cls -> {
-            insertCounter.incrementAndGet();
             // Try getter-based resolution first (Java 17+ compatible)
             String viaGetter = resolveSoftDeleteFieldNameViaGetter(cls);
             if (viaGetter != null) {

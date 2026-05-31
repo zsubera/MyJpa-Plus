@@ -46,4 +46,13 @@
         <Class name="com.zsubera.jpa.update.OrConditionBuilder"/>
         <Bug pattern="CT_CONSTRUCTOR_THROW"/>
     </Match>
+
+    <!-- Exclude ST_WRITE_TO_STATIC_FROM_INSTANCE_METHOD for AuditEntityListener -->
+    <!-- setApplicationContext() writes to a static volatile field by design: Spring calls this method
+         on a single instance to initialize the static context for use in @PrePersist/@PreUpdate callbacks.
+         The field is declared volatile to ensure visibility across threads. -->
+    <Match>
+        <Class name="com.zsubera.jpa.annotation.AuditEntityListener"/>
+        <Bug pattern="ST_WRITE_TO_STATIC_FROM_INSTANCE_METHOD"/>
+    </Match>
 </FindBugsFilter>

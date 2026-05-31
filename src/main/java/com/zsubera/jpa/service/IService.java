@@ -112,6 +112,9 @@ public interface IService<T, ID> {
 
     /**
      * 删除所有实体。
+     *
+     * <p>
+     * <strong>安全警告：</strong>此方法将删除表中的所有记录，操作不可逆。 请确保在生产环境中谨慎使用，建议在调用前添加额外的安全确认机制。
      */
     void deleteAll();
 }

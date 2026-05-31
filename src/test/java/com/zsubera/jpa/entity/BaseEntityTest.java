@@ -80,9 +80,13 @@ class BaseEntityTest {
     }
 
     @Test
-    void hashCode_withoutId_usesSuperHashCode() {
-        ConcreteEntity entity = new ConcreteEntity();
-        assertEquals(System.identityHashCode(entity), entity.hashCode());
+    void hashCode_withoutId_usesClassHashCode() {
+        ConcreteEntity entity1 = new ConcreteEntity();
+        ConcreteEntity entity2 = new ConcreteEntity();
+        // When id is null, hashCode is based on the class (fixed value),
+        // ensuring equals/hashCode contract: all unpersisted entities have the same hashCode
+        assertEquals(entity1.hashCode(), entity2.hashCode());
+        assertEquals(ConcreteEntity.class.hashCode(), entity1.hashCode());
     }
 
     @Test

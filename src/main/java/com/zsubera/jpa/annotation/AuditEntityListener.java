@@ -61,7 +61,7 @@ public class AuditEntityListener implements ApplicationContextAware {
     /** 实体类 -> 审计字段的缓存。 */
     private static final Map<Class<?>, AuditFields> AUDIT_FIELDS_CACHE = new ConcurrentHashMap<>();
 
-    private static ApplicationContext applicationContext;
+    private static volatile ApplicationContext applicationContext;
     private static volatile AuditUserProvider userProvider;
 
     @Override

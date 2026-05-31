@@ -725,7 +725,12 @@ public class MyJpaTemplate {
 
         // 数据查询 - 复用 buildSpecificationQuery 避免重复的查询构建逻辑
         TypedQuery<T> query = buildSpecificationQuery(entityClass, spec, pageable.getSort(), pageable.getPageSize());
-        query.setFirstResult(Math.toIntExact(pageable.getOffset()));
+        try {
+            query.setFirstResult(Math.toIntExact(pageable.getOffset()));
+        } catch (ArithmeticException e) {
+            throw new IllegalArgumentException("Page offset (" + pageable.getOffset() + ") exceeds Integer.MAX_VALUE. "
+                + "JPA setFirstResult() does not support offsets larger than Integer.MAX_VALUE.", e);
+        }
         if (querySpec != null) {
             querySpec.applyQuerySettings(query);
         }

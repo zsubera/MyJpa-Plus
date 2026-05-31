@@ -1195,8 +1195,12 @@ public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> {
         if (field == null) {
             throw new IllegalArgumentException("field must not be null");
         }
-        if (functionName == null) {
-            throw new IllegalArgumentException("functionName must not be null");
+        if (functionName == null || functionName.isEmpty()) {
+            throw new IllegalArgumentException("functionName must not be null or empty");
+        }
+        if (!SAFE_FIELD_NAME_PATTERN.matcher(functionName).matches()) {
+            throw new IllegalArgumentException("functionName contains invalid characters: " + functionName
+                + ". Only alphanumeric characters and underscores are allowed.");
         }
         if (params == null) {
             throw new IllegalArgumentException("params must not be null");

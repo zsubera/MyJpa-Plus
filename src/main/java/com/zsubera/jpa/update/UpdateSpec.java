@@ -231,9 +231,9 @@ public class UpdateSpec<T> extends AbstractBulkOperationSpec<T, UpdateSpec<T>> {
             // 使用 Path.set(Object) 重载，避免 Expression<?> 的歧义
             jakarta.persistence.criteria.Path<Object> path =
                 (jakarta.persistence.criteria.Path)root.get(esc.fieldName());
-            if (exprResult instanceof jakarta.persistence.criteria.Expression) {
-                // 强制使用 Expression 重载
-                ((CriteriaUpdate)update).set(path, exprResult);
+            if (exprResult instanceof jakarta.persistence.criteria.Expression<?> expression) {
+                // 使用 raw type 显式调用 Expression 重载，避免编译器歧义
+                ((CriteriaUpdate)update).set(path, (jakarta.persistence.criteria.Expression)expression);
             } else {
                 update.set(path, exprResult);
             }

@@ -44,7 +44,7 @@ public class ProjectionSpec<T> {
 
     /** 聚合函数类型。 */
     private enum AggregateType {
-        COUNT, SUM, AVG, MAX, MIN
+        COUNT, COUNT_DISTINCT, SUM, AVG, MAX, MIN
     }
 
     /** 描述聚合选择的内部记录类。 */
@@ -164,6 +164,19 @@ public class ProjectionSpec<T> {
      */
     public ProjectionSpec<T> selectCount() {
         aggregateSelections.add(new AggregateSelection(AggregateType.COUNT, "count", null));
+        return this;
+    }
+
+    /**
+     * 添加 COUNT(DISTINCT *) 聚合投影，别名为 {@code "count"}。
+     *
+     * <p>
+     * 与 {@link #selectCount()} 不同，此方法使用 {@code COUNT(DISTINCT root)} 进行去重计数， 适用于 JOIN 产生重复行的场景。
+     *
+     * @return 当前 ProjectionSpec 实例，支持链式调用
+     */
+    public ProjectionSpec<T> selectCountDistinct() {
+        aggregateSelections.add(new AggregateSelection(AggregateType.COUNT_DISTINCT, "count", null));
         return this;
     }
 
@@ -521,10 +534,31 @@ public class ProjectionSpec<T> {
         for (AggregateSelection agg : aggregateSelections) {
             jakarta.persistence.criteria.Expression<?> expr = switch (agg.type()) {
                 case COUNT -> cb.count(root);
-                case SUM -> cb.sum(root.get(agg.fieldName() != null ? agg.fieldName() : "id"));
-                case AVG -> cb.avg(root.get(agg.fieldName() != null ? agg.fieldName() : "id"));
-                case MAX -> cb.max(root.get(agg.fieldName() != null ? agg.fieldName() : "id"));
-                case MIN -> cb.min(root.get(agg.fieldName() != null ? agg.fieldName() : "id"));
+                case COUNT_DISTINCT -> cb.countDistinct(root);
+                case SUM -> {
+                    if (agg.fieldName() == null) {
+                        throw new IllegalArgumentException("SUM aggregate requires a field name");
+                    }
+                    yield cb.sum(root.get(agg.fieldName()));
+                }
+                case AVG -> {
+                    if (agg.fieldName() == null) {
+                        throw new IllegalArgumentException("AVG aggregate requires a field name");
+                    }
+                    yield cb.avg(root.get(agg.fieldName()));
+                }
+                case MAX -> {
+                    if (agg.fieldName() == null) {
+                        throw new IllegalArgumentException("MAX aggregate requires a field name");
+                    }
+                    yield cb.max(root.get(agg.fieldName()));
+                }
+                case MIN -> {
+                    if (agg.fieldName() == null) {
+                        throw new IllegalArgumentException("MIN aggregate requires a field name");
+                    }
+                    yield cb.min(root.get(agg.fieldName()));
+                }
             };
             selectionList.add(expr.alias(agg.alias()));
         }

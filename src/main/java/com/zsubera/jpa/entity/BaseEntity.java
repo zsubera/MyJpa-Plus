@@ -29,7 +29,18 @@ import java.util.Objects;
  * 开箱即用地提供 {@code id}、{@code createdAt}、{@code updatedAt}、 {@code createdBy}、{@code updatedBy} 和 {@code version} 字段。
  *
  * <p>
- * {@code equals} 和 {@code hashCode} 在 {@code id} 非空（已持久化实体）时基于 {@code id} 字段， 否则回退到对象标识比较。
+ * {@code createdAt} 和 {@code updatedAt} 通过 {@link PrePersist} 和 {@link PreUpdate} 自动填充。 {@code createdBy} 和
+ * {@code updatedBy} 不在此类中自动填充，需要通过以下方式之一配置：
+ * <ul>
+ * <li>使用 {@link com.zsubera.jpa.annotation.AuditEntityListener} + {@link com.zsubera.jpa.annotation.AuditUserProvider}
+ * 自动填充</li>
+ * <li>在业务代码中手动设置</li>
+ * <li>通过 AOP 切面拦截填充</li>
+ * </ul>
+ *
+ * <p>
+ * {@code equals} 和 {@code hashCode} 在 {@code id} 非空（已持久化实体）时基于 {@code id} 字段， 否则使用固定 hashCode（基于实体类），确保 equals/hashCode
+ * 契约成立。
  */
 @MappedSuperclass
 public abstract class BaseEntity implements Serializable {
@@ -123,7 +134,7 @@ public abstract class BaseEntity implements Serializable {
             return false;
         }
         // Use id-based comparison only if both entities are persisted (id != null).
-        // Otherwise fall back to identity comparison.
+        // Otherwise fall back to identity comparison (always false for different instances).
         Long id = getId();
         Long thatId = that.getId();
         if (id != null && thatId != null) {
@@ -135,6 +146,12 @@ public abstract class BaseEntity implements Serializable {
     @Override
     public int hashCode() {
         Long id = getId();
-        return id != null ? Objects.hashCode(id) : super.hashCode();
+        if (id != null) {
+            return Objects.hashCode(id);
+        }
+        // Fixed hash code for unpersisted entities to satisfy the equals/hashCode contract:
+        // All unpersisted entities of the same class have the same hashCode,
+        // and equals() returns false between them (identity comparison).
+        return getClass().hashCode();
     }
 }

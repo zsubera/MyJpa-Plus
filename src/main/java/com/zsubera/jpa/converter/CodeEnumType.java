@@ -90,10 +90,17 @@ public class CodeEnumType implements UserType<Object>, DynamicParameterizedType 
         this.codeField = resolveCodeField(enumClass);
         this.useOrdinal = (codeField == null);
         if (useOrdinal) {
-            this.sqlType = Types.CHAR;
+            this.sqlType = Types.INTEGER;
         } else {
             Class<?> fieldType = codeField.getType();
-            this.sqlType = (fieldType == String.class) ? Types.VARCHAR : Types.CHAR;
+            if (fieldType == String.class) {
+                this.sqlType = Types.VARCHAR;
+            } else if (fieldType == int.class || fieldType == Integer.class || fieldType == long.class
+                || fieldType == Long.class) {
+                this.sqlType = Types.INTEGER;
+            } else {
+                this.sqlType = Types.CHAR;
+            }
         }
     }
 

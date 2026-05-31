@@ -11,14 +11,35 @@ import org.springframework.transaction.annotation.Transactional;
  * 通用 Service 实现类，基于 {@link MyJpaRepository} 实现 CRUD 操作。
  *
  * <p>
- * 使用示例：
+ * 支持两种注入方式：
+ *
+ * <p>
+ * <strong>方式一：构造函数注入（推荐）</strong>
  *
  * <pre>{@code
  * @Service
  * public class UserServiceImpl extends ServiceImpl<User, Long> implements UserService {
- *     // 实现自定义业务方法
+ *     public UserServiceImpl(UserRepository repository) {
+ *         super(repository);
+ *     }
  * }
  * }</pre>
+ *
+ * <p>
+ * <strong>方式二：Setter 注入</strong>
+ *
+ * <pre>
+ * {
+ *     &#64;code
+ *     &#64;Service
+ *     public class UserServiceImpl extends ServiceImpl<User, Long> implements UserService {
+ *         @Autowired
+ *         public void setUserRepository(UserRepository repository) {
+ *             setRepository(repository);
+ *         }
+ *     }
+ * }
+ * </pre>
  *
  * @param <T> 实体类型
  * @param <ID> ID 类型
@@ -26,6 +47,26 @@ import org.springframework.transaction.annotation.Transactional;
 public class ServiceImpl<T, ID> implements IService<T, ID> {
 
     private MyJpaRepository<T, ID> repository;
+
+    /**
+     * 创建 ServiceImpl 实例（无参构造函数，用于 Setter 注入方式）。
+     */
+    protected ServiceImpl() {
+        // 用于 Setter 注入方式
+    }
+
+    /**
+     * 创建 ServiceImpl 实例（构造函数注入，推荐方式）。
+     *
+     * @param repository 仓库实例
+     * @throws IllegalArgumentException 如果 repository 为 null
+     */
+    protected ServiceImpl(MyJpaRepository<T, ID> repository) {
+        if (repository == null) {
+            throw new IllegalArgumentException("repository must not be null");
+        }
+        this.repository = repository;
+    }
 
     /**
      * 设置仓库实例。
@@ -67,6 +108,14 @@ public class ServiceImpl<T, ID> implements IService<T, ID> {
         return getRepository().findById(id);
     }
 
+    /**
+     * 查找所有实体。
+     *
+     * <p>
+     * <strong>安全警告：</strong>此方法将加载所有实体到内存，对于大数据量表可能导致内存溢出。 建议使用 {@link #findAll(Pageable)} 分页查询替代。
+     *
+     * @return 所有实体列表
+     */
     @Override
     @Transactional(readOnly = true)
     public List<T> findAll() {
