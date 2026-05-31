@@ -53,6 +53,10 @@ public final class SoftDeleteHelper {
     private static final int MAX_CACHE_SIZE = 1024;
     private static final Logger log = org.slf4j.LoggerFactory.getLogger(SoftDeleteHelper.class);
 
+    /** 安全标识符正则：仅允许字母、数字和下划线。 */
+    private static final java.util.regex.Pattern SAFE_IDENTIFIER_PATTERN =
+        java.util.regex.Pattern.compile("^[a-zA-Z_][a-zA-Z0-9_]*$");
+
     // 没有@SoftDelete字段的实体的哨兵值（避免在缓存中出现空缓存）
     private static final String NO_FIELD_SENTINEL = "\0";
 
@@ -76,6 +80,28 @@ public final class SoftDeleteHelper {
     /** 缓存: (entityClass, fieldName) -> Field 对象，避免重复反射查找。 */
     private static final ConcurrentMap<String, Field> FIELD_OBJECT_CACHE =
         new ConcurrentReferenceHashMap<>(64, ConcurrentReferenceHashMap.ReferenceType.WEAK);
+
+    /**
+     * 转义 SQL 标识符，防止注入。
+     *
+     * <p>
+     * 使用双引号包裹标识符，并验证标识符仅包含安全字符。
+     *
+     * @param identifier SQL 标识符
+     * @return 转义后的标识符
+     * @throws IllegalArgumentException 如果标识符包含非法字符
+     */
+    @edu.umd.cs.findbugs.annotations.SuppressFBWarnings(value = "URF_UNREAD_PUBLIC_OR_PROTECTED_FIELD",
+        justification = "Utility method used by softDeleteAll and softDeleteByIds")
+    static String escapeIdentifier(String identifier) {
+        if (identifier == null || identifier.isEmpty()) {
+            throw new IllegalArgumentException("Identifier must not be null or empty");
+        }
+        if (!SAFE_IDENTIFIER_PATTERN.matcher(identifier).matches()) {
+            throw new IllegalArgumentException("Invalid SQL identifier: " + identifier);
+        }
+        return "\"" + identifier.replace("\"", "\"\"") + "\"";
+    }
 
     private SoftDeleteHelper() {}
 
@@ -105,15 +131,18 @@ public final class SoftDeleteHelper {
             throw new IllegalArgumentException("Cannot resolve @SoftDelete field: " + fieldName);
         }
         SoftDelete annotation = field.getAnnotation(SoftDelete.class);
-        // Build UPDATE SQL based on field type
+        String escapedTable = escapeIdentifier(tableName);
+        String escapedColumn = escapeIdentifier(columnName);
+        // Build UPDATE SQL based on field type — use parameterized queries to prevent SQL injection
         if (field.getType() == Boolean.class || field.getType() == boolean.class) {
-            return em.createNativeQuery("UPDATE " + tableName + " SET " + columnName + " = true WHERE " + columnName
-                + " = false OR " + columnName + " IS NULL").executeUpdate();
+            return em.createNativeQuery("UPDATE " + escapedTable + " SET " + escapedColumn + " = true WHERE "
+                + escapedColumn + " = false OR " + escapedColumn + " IS NULL").executeUpdate();
         }
         if (field.getType() == Integer.class || field.getType() == int.class) {
             int deletedValue = (annotation != null) ? annotation.deletedIntValue() : 1;
-            return em.createNativeQuery("UPDATE " + tableName + " SET " + columnName + " = " + deletedValue + " WHERE "
-                + columnName + " != " + deletedValue + " OR " + columnName + " IS NULL").executeUpdate();
+            return em.createNativeQuery("UPDATE " + escapedTable + " SET " + escapedColumn + " = ?1 WHERE "
+                + escapedColumn + " != ?1 OR " + escapedColumn + " IS NULL").setParameter(1, deletedValue)
+                .executeUpdate();
         }
         // Enum: delegate to field-based approach
         throw new MyJpaPlusException("Batch soft delete for enum fields is not supported via native query. "
@@ -152,13 +181,16 @@ public final class SoftDeleteHelper {
             throw new IllegalArgumentException("Cannot resolve @SoftDelete field: " + fieldName);
         }
         SoftDelete annotation = field.getAnnotation(SoftDelete.class);
+        String escapedTable = escapeIdentifier(tableName);
+        String escapedColumn = escapeIdentifier(columnName);
+        String escapedIdColumn = escapeIdentifier(idFieldName);
         // Build SET clause based on field type
         String setClause;
         if (field.getType() == Boolean.class || field.getType() == boolean.class) {
-            setClause = columnName + " = true";
+            setClause = escapedColumn + " = true";
         } else if (field.getType() == Integer.class || field.getType() == int.class) {
             int deletedValue = (annotation != null) ? annotation.deletedIntValue() : 1;
-            setClause = columnName + " = " + deletedValue;
+            setClause = escapedColumn + " = " + deletedValue;
         } else {
             throw new MyJpaPlusException("Batch soft delete by IDs for enum fields is not supported via native query.");
         }
@@ -174,8 +206,8 @@ public final class SoftDeleteHelper {
                 }
                 placeholders.append("?");
             }
-            String sql =
-                "UPDATE " + tableName + " SET " + setClause + " WHERE " + idFieldName + " IN (" + placeholders + ")";
+            String sql = "UPDATE " + escapedTable + " SET " + setClause + " WHERE " + escapedIdColumn + " IN ("
+                + placeholders + ")";
             var query = em.createNativeQuery(sql);
             for (int j = 0; j < batch.size(); j++) {
                 query.setParameter(j + 1, batch.get(j));

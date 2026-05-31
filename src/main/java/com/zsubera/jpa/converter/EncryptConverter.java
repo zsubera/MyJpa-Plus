@@ -28,7 +28,7 @@ public class EncryptConverter implements AttributeConverter<String, String> {
     private static final String SALT_PROPERTY = "myjpa.encrypt.salt";
     private static final String STRICT_MODE_PROPERTY = "myjpa-plus.encrypt.strict-mode";
     private static final SecureRandom SECURE_RANDOM = new SecureRandom();
-    private static final int PBKDF2_ITERATIONS = 100_000;
+    private static final int PBKDF2_ITERATIONS = 600_000;
     private static final int PBKDF2_KEY_LENGTH = 256;
     private static final System.Logger LOG = System.getLogger("com.zsubera.jpa.converter.EncryptConverter");
 
@@ -71,8 +71,9 @@ public class EncryptConverter implements AttributeConverter<String, String> {
     public static void refreshKeyVersion() {
         cachedKeyVersion = null;
         KEY_CACHE.clear();
+        SALT_CACHE.clear();
         lastKeyVersionRefresh = System.currentTimeMillis();
-        LOG.log(System.Logger.Level.INFO, "Encryption key version cache refreshed");
+        LOG.log(System.Logger.Level.INFO, "Encryption key version cache and salt cache refreshed");
     }
 
     /**

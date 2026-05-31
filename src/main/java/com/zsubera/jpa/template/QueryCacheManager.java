@@ -141,15 +141,17 @@ public class QueryCacheManager {
         if (key == null || key.isEmpty()) {
             return false;
         }
-        // 检查是否需要清理过期条目
-        if (store.size() >= maxEntries) {
-            evictExpiredEntries();
-        }
-        // 如果仍然满，驱逐最早写入的条目（近似 FIFO 驱逐）
-        if (store.size() >= maxEntries) {
-            evictOldestEntry();
-        }
-        store.put(key, new CachedQueryResult<>(value, ttlSeconds));
+        // P-1: Use atomic compute to ensure thread-safe cache insertion with size limit
+        store.compute(key, (k, existing) -> {
+            if (existing == null && store.size() >= maxEntries) {
+                // New entry: check capacity and evict if needed
+                evictExpiredEntries();
+                if (store.size() >= maxEntries) {
+                    evictOldestEntry();
+                }
+            }
+            return new CachedQueryResult<>(value, ttlSeconds);
+        });
         log.debug("Cache put for key: {} (ttl={}s)", key, ttlSeconds);
         return true;
     }

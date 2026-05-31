@@ -512,6 +512,11 @@ public class ProjectionSpec<T> {
      * @return 返回 Tuple 结果的 TypedQuery 实例
      */
     public TypedQuery<Tuple> toTupleQuery(EntityManager em, int maxResults) {
+        // B-17: Validate selections are not empty
+        if (selections.isEmpty() && aggregateSelections.isEmpty()) {
+            throw new IllegalArgumentException("ProjectionSpec must have at least one selection. "
+                + "Use select() or addAggregation() before executing.");
+        }
         CriteriaBuilder cb = em.getCriteriaBuilder();
         CriteriaQuery<Tuple> query = cb.createTupleQuery();
         Root<T> root = query.from(entityClass);

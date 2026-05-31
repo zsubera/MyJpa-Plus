@@ -59,6 +59,10 @@ public final class PageableHelper {
         if (pageable == null) {
             return Pageable.unpaged();
         }
+        // B-27: Add null check for querySpec parameter
+        if (querySpec == null) {
+            return pageable;
+        }
         Sort querySpecSort = querySpec.getSort();
         Sort pageableSort = pageable.getSort();
         Sort combined;

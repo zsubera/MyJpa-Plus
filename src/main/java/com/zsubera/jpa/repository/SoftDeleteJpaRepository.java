@@ -1,5 +1,6 @@
 package com.zsubera.jpa.repository;
 
+import com.zsubera.jpa.exception.MyJpaPlusException;
 import com.zsubera.jpa.update.SoftDeleteHelper;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import jakarta.persistence.EntityManager;
@@ -331,16 +332,48 @@ public class SoftDeleteJpaRepository<T, ID> extends SimpleJpaRepository<T, ID> {
             throw new IllegalArgumentException("entities must not be null");
         }
         if (shouldApplySoftDeleteFilter()) {
-            java.util.List<T> entityList = new java.util.ArrayList<>();
-            entities.forEach(entityList::add);
-            if (!entityList.isEmpty()) {
-                for (T entity : entityList) {
-                    delete(entity);
+            // B-12: Use batch UPDATE instead of N+1 individual deletes
+            java.util.List<ID> idList = new java.util.ArrayList<>();
+            String idFieldName = EntityClassResolver.resolveIdFieldName(domainClass);
+            for (T entity : entities) {
+                try {
+                    java.lang.reflect.Field idField = findIdField(domainClass, idFieldName);
+                    if (idField != null) {
+                        idField.setAccessible(true);
+                        @SuppressWarnings("unchecked")
+                        ID id = (ID)idField.get(entity);
+                        if (id != null) {
+                            idList.add(id);
+                        }
+                    }
+                } catch (IllegalAccessException e) {
+                    throw new MyJpaPlusException("Failed to access ID field for batch delete", e);
                 }
+            }
+            if (!idList.isEmpty()) {
+                SoftDeleteHelper.softDeleteByIds(entityManager, domainClass, idList);
             }
         } else {
             super.deleteInBatch(entities);
         }
+    }
+
+    /**
+     * 查找实体类中的 @Id 字段。
+     */
+    private static java.lang.reflect.Field findIdField(Class<?> entityClass, String idFieldName) {
+        for (Class<?> c = entityClass; c != null && c != Object.class; c = c.getSuperclass()) {
+            try {
+                java.lang.reflect.Field f = c.getDeclaredField(idFieldName);
+                if (f.isAnnotationPresent(jakarta.persistence.Id.class)
+                    || f.isAnnotationPresent(jakarta.persistence.EmbeddedId.class)) {
+                    return f;
+                }
+            } catch (NoSuchFieldException ignored) {
+                // continue
+            }
+        }
+        return null;
     }
 
     /**

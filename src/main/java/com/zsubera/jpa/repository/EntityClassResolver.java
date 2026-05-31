@@ -74,21 +74,31 @@ public final class EntityClassResolver {
      * @throws IllegalStateException 如果实体类没有{@code @Id}或{@code @EmbeddedId}注解的字段
      */
     public static String resolveIdFieldName(Class<?> entityClass) {
-        return ID_FIELD_CACHE.computeIfAbsent(entityClass, cls -> {
-            for (Class<?> c = cls; c != null && c != Object.class; c = c.getSuperclass()) {
-                for (Field f : c.getDeclaredFields()) {
-                    if (f.isAnnotationPresent(Id.class)) {
-                        return f.getName();
-                    }
-                    // Support @EmbeddedId composite keys
-                    if (f.isAnnotationPresent(jakarta.persistence.EmbeddedId.class)) {
-                        return f.getName();
-                    }
+        // B-14: Use try-catch around computeIfAbsent to prevent cache corruption
+        // when the mapping function throws an exception
+        String cached = ID_FIELD_CACHE.get(entityClass);
+        if (cached != null) {
+            return cached;
+        }
+        String result = doResolveIdFieldName(entityClass);
+        ID_FIELD_CACHE.put(entityClass, result);
+        return result;
+    }
+
+    private static String doResolveIdFieldName(Class<?> entityClass) {
+        for (Class<?> c = entityClass; c != null && c != Object.class; c = c.getSuperclass()) {
+            for (Field f : c.getDeclaredFields()) {
+                if (f.isAnnotationPresent(Id.class)) {
+                    return f.getName();
+                }
+                // Support @EmbeddedId composite keys
+                if (f.isAnnotationPresent(jakarta.persistence.EmbeddedId.class)) {
+                    return f.getName();
                 }
             }
-            throw new IllegalStateException("No @Id or @EmbeddedId field found in " + cls.getName()
-                + ". Ensure the entity has a field annotated with @jakarta.persistence.Id or @jakarta.persistence.EmbeddedId");
-        });
+        }
+        throw new IllegalStateException("No @Id or @EmbeddedId field found in " + entityClass.getName()
+            + ". Ensure the entity has a field annotated with @jakarta.persistence.Id or @jakarta.persistence.EmbeddedId");
     }
 
     /**

@@ -1,5 +1,6 @@
 package com.zsubera.jpa.template;
 
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import java.time.Instant;
 
 /**
@@ -7,6 +8,8 @@ import java.time.Instant;
  *
  * @param <T> the type of the cached result
  */
+@SuppressFBWarnings(value = "CT_CONSTRUCTOR_THROW",
+    justification = "Constructor validates parameters via IllegalArgumentException which is standard Java practice")
 public class CachedQueryResult<T> {
 
     private final T value;
@@ -20,6 +23,10 @@ public class CachedQueryResult<T> {
      * @param ttlSeconds time-to-live in seconds
      */
     public CachedQueryResult(T value, long ttlSeconds) {
+        // B-26: Validate value is non-null to prevent caching null results
+        if (value == null) {
+            throw new IllegalArgumentException("CachedQueryResult value must not be null");
+        }
         this.value = value;
         this.createdAt = Instant.now();
         this.ttlSeconds = ttlSeconds;

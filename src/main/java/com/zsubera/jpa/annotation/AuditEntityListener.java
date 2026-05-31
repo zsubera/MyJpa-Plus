@@ -186,29 +186,40 @@ public class AuditEntityListener implements ApplicationContextAware {
         return AUDIT_FIELDS_CACHE.computeIfAbsent(entityClass, cls -> {
             AuditFields fields = new AuditFields();
             boolean extendsBaseEntity = com.zsubera.jpa.entity.BaseEntity.class.isAssignableFrom(cls);
-            for (Field field : cls.getDeclaredFields()) {
-                if (field.isAnnotationPresent(CreatedAt.class)) {
-                    // Skip createdAt if entity extends BaseEntity (already handled by @PrePersist)
-                    if (extendsBaseEntity && "createdAt".equals(field.getName())
-                        && field.getDeclaringClass() == com.zsubera.jpa.entity.BaseEntity.class) {
-                        continue;
+            // B-7: Traverse complete class hierarchy to find audit fields in parent classes
+            for (Class<?> c = cls; c != null && c != Object.class; c = c.getSuperclass()) {
+                for (Field field : c.getDeclaredFields()) {
+                    if (field.isAnnotationPresent(CreatedAt.class)) {
+                        // Skip createdAt if entity extends BaseEntity (already handled by @PrePersist)
+                        if (extendsBaseEntity && "createdAt".equals(field.getName())
+                            && field.getDeclaringClass() == com.zsubera.jpa.entity.BaseEntity.class) {
+                            continue;
+                        }
+                        if (fields.createdAt == null) {
+                            field.setAccessible(true);
+                            fields.createdAt = field;
+                        }
+                    } else if (field.isAnnotationPresent(UpdatedAt.class)) {
+                        // Skip updatedAt if entity extends BaseEntity (already handled by @PreUpdate)
+                        if (extendsBaseEntity && "updatedAt".equals(field.getName())
+                            && field.getDeclaringClass() == com.zsubera.jpa.entity.BaseEntity.class) {
+                            continue;
+                        }
+                        if (fields.updatedAt == null) {
+                            field.setAccessible(true);
+                            fields.updatedAt = field;
+                        }
+                    } else if (field.isAnnotationPresent(CreatedBy.class)) {
+                        if (fields.createdBy == null) {
+                            field.setAccessible(true);
+                            fields.createdBy = field;
+                        }
+                    } else if (field.isAnnotationPresent(UpdatedBy.class)) {
+                        if (fields.updatedBy == null) {
+                            field.setAccessible(true);
+                            fields.updatedBy = field;
+                        }
                     }
-                    field.setAccessible(true);
-                    fields.createdAt = field;
-                } else if (field.isAnnotationPresent(UpdatedAt.class)) {
-                    // Skip updatedAt if entity extends BaseEntity (already handled by @PreUpdate)
-                    if (extendsBaseEntity && "updatedAt".equals(field.getName())
-                        && field.getDeclaringClass() == com.zsubera.jpa.entity.BaseEntity.class) {
-                        continue;
-                    }
-                    field.setAccessible(true);
-                    fields.updatedAt = field;
-                } else if (field.isAnnotationPresent(CreatedBy.class)) {
-                    field.setAccessible(true);
-                    fields.createdBy = field;
-                } else if (field.isAnnotationPresent(UpdatedBy.class)) {
-                    field.setAccessible(true);
-                    fields.updatedBy = field;
                 }
             }
             return fields;

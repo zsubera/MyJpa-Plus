@@ -52,6 +52,10 @@ public class SqlSlowQueryInterceptor implements StatementInspector {
     private static final Pattern HEX_LITERAL_PATTERN = Pattern.compile("X'[0-9a-fA-F]+'");
     private static final Pattern UNICODE_STRING_PATTERN = Pattern.compile("N'[^']*'");
     private static final Pattern NUMBER_LITERAL_PATTERN = Pattern.compile("\\b\\d+\\.?\\d*(?:[eE][+-]?\\d+)?\\b");
+    // B-22: Add patterns for backtick identifiers (MySQL) and bracket identifiers (SQL Server)
+    private static final Pattern BACKTICK_IDENTIFIER_PATTERN = Pattern.compile("`[^`]*`");
+    private static final Pattern BRACKET_IDENTIFIER_PATTERN = Pattern.compile("\\[[^\\]]*\\]");
+    private static final Pattern COMMENT_PATTERN = Pattern.compile("(?:--[^\n]*|/\\*[\\s\\S]*?\\*/)");
     /** P1: LIMIT/OFFSET 数字保护模式，保留这些数字以便调试 */
     private static final Pattern LIMIT_OFFSET_PATTERN =
         Pattern.compile("(?i)(?:LIMIT|OFFSET|FETCH\\s+(?:FIRST|NEXT))\\s+\\d+(?:\\s+ROWS)?");
@@ -173,10 +177,14 @@ public class SqlSlowQueryInterceptor implements StatementInspector {
         if (sql == null) {
             return "null";
         }
-        String sanitized = SINGLE_QUOTE_PATTERN.matcher(sql).replaceAll("?"); // 单引号字符串
+        // B-22: Enhanced SQL sanitization covering more dialects
+        String sanitized = COMMENT_PATTERN.matcher(sql).replaceAll(""); // Remove comments
+        sanitized = SINGLE_QUOTE_PATTERN.matcher(sanitized).replaceAll("?"); // 单引号字符串
         sanitized = DOLLAR_PARAM_PATTERN.matcher(sanitized).replaceAll("?"); // PostgreSQL 美元引用参数
         sanitized = HEX_LITERAL_PATTERN.matcher(sanitized).replaceAll("?"); // 十六进制字面量
         sanitized = UNICODE_STRING_PATTERN.matcher(sanitized).replaceAll("?"); // Unicode 字符串
+        sanitized = BACKTICK_IDENTIFIER_PATTERN.matcher(sanitized).replaceAll("?"); // MySQL 反引号标识符
+        sanitized = BRACKET_IDENTIFIER_PATTERN.matcher(sanitized).replaceAll("?"); // SQL Server 方括号标识符
         // P1: Preserve LIMIT/OFFSET numbers by first protecting them, then replacing other numbers
         // Use a marker to temporarily protect LIMIT/OFFSET numbers
         java.util.List<String> protectedParts = new java.util.ArrayList<>();

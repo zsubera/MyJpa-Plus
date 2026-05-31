@@ -164,8 +164,10 @@ public abstract class BaseEntity implements Serializable {
         if (this == o) {
             return true;
         }
-        // P0: Use instanceof check instead of getClass() comparison for Hibernate proxy compatibility
-        if (!(o instanceof BaseEntity)) {
+        // B-24: Use getClass() for strict type equality to prevent cross-subclass comparison.
+        // This is safer than instanceof for JPA entities where different entity types
+        // should never be considered equal even if they share the same ID.
+        if (o == null || getClass() != o.getClass()) {
             return false;
         }
         BaseEntity that = (BaseEntity)o;

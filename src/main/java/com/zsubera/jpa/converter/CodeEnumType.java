@@ -218,7 +218,7 @@ public class CodeEnumType implements UserType<Object>, DynamicParameterizedType 
             return;
         }
         if (useOrdinal) {
-            st.setString(index, String.valueOf(((Enum<?>)value).ordinal()));
+            st.setInt(index, ((Enum<?>)value).ordinal());
         } else {
             try {
                 Object codeValue = codeField.get(value);

@@ -52,8 +52,11 @@ public class MergeSpec<T> {
 
     private static final Logger log = LoggerFactory.getLogger(MergeSpec.class);
 
-    /** 安全标识符正则：仅允许字母、数字、下划线和点号（用于 schema.table 格式）。 */
-    private static final Pattern SAFE_IDENTIFIER_PATTERN = Pattern.compile("^[a-zA-Z_][a-zA-Z0-9_.]*$");
+    /** 安全标识符正则：仅允许字母、数字和下划线（表名/列名不允许点号）。 */
+    private static final Pattern SAFE_IDENTIFIER_PATTERN = Pattern.compile("^[a-zA-Z_][a-zA-Z0-9_]*$");
+
+    /** 安全标识符段正则：用于校验 schema.table 格式中每一段。 */
+    private static final Pattern SAFE_IDENTIFIER_PART_PATTERN = Pattern.compile("^[a-zA-Z_][a-zA-Z0-9_]*$");
 
     /** 缓存实体类的持久化字段列表，避免每次反射遍历。使用弱引用键防止类加载器泄漏。 */
     private static final java.util.concurrent.ConcurrentMap<Class<?>, List<java.lang.reflect.Field>> FIELD_CACHE =
@@ -225,7 +228,9 @@ public class MergeSpec<T> {
                     throw e;
                 }
             }
-            return executeSimpleInsert(em, allFieldValues);
+            // B-10: After retries exhausted, try MERGE again instead of direct INSERT
+            SqlWithParams retrySql = buildSql(em);
+            return executeNativeQuery(em, retrySql.sql(), retrySql.params());
         }
         SqlWithParams sqlWithParams = buildSql(em);
         if (log.isDebugEnabled()) {
@@ -711,7 +716,9 @@ public class MergeSpec<T> {
                     throw e;
                 }
             }
-            return executeSimpleInsert(em, allFieldValues);
+            // B-10: After retries exhausted, try MERGE again instead of direct INSERT
+            SqlWithParams retrySql = buildSql(em);
+            return executeNativeQuery(em, retrySql.sql(), retrySql.params());
         }
         SqlWithParams sqlWithParams = buildSqlFor(em, entity);
         if (log.isDebugEnabled()) {
@@ -918,9 +925,13 @@ public class MergeSpec<T> {
         if (identifier == null || identifier.isEmpty()) {
             throw new MyJpaPlusException("Identifier must not be null or empty");
         }
-        if (!SAFE_IDENTIFIER_PATTERN.matcher(identifier).matches()) {
-            throw new MyJpaPlusException("Invalid SQL identifier: '" + identifier
-                + "'. Only alphanumeric characters, underscores, and dots are allowed.");
+        // B-6: Validate each segment separately to prevent schema injection via dots
+        String[] parts = identifier.split("\\.");
+        for (String part : parts) {
+            if (!SAFE_IDENTIFIER_PART_PATTERN.matcher(part).matches()) {
+                throw new MyJpaPlusException("Invalid SQL identifier: '" + identifier
+                    + "'. Each part must contain only alphanumeric characters and underscores.");
+            }
         }
         // Always quote identifiers to handle reserved words and case sensitivity.
         // P0-4: H2 identifiers are now quoted with double quotes to prevent reserved word conflicts.
@@ -996,6 +1007,10 @@ public class MergeSpec<T> {
                 if (f.isAnnotationPresent(Id.class)) {
                     jakarta.persistence.GeneratedValue gva = f.getAnnotation(jakarta.persistence.GeneratedValue.class);
                     return gva != null;
+                }
+                // B-30: Also check @EmbeddedId
+                if (f.isAnnotationPresent(jakarta.persistence.EmbeddedId.class)) {
+                    return true;
                 }
             } catch (NoSuchFieldException ignored) {
                 // 继续检查父类
