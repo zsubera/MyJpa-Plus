@@ -16,9 +16,14 @@ import org.slf4j.LoggerFactory;
  * SQL 慢查询拦截器。
  *
  * <p>
- * 实现 Hibernate {@link StatementInspector} 接口用于注册，实际计时通过 JDBC {@link DataSource} 代理完成。代理会拦截 {@code prepareStatement()}
- * 返回的 {@code PreparedStatement}，在 {@code executeQuery()}、{@code executeUpdate()} 和 {@code execute()}
- * 调用前后测量耗时，超过阈值时记录警告日志。
+ * P1-5: <strong>此功能仅限 Hibernate 环境。</strong>实现了 Hibernate {@link StatementInspector} 接口用于注册， 实际计时通过 JDBC
+ * {@link DataSource} 代理完成。在非 Hibernate JPA 实现（如 EclipseLink、OpenJPA）上， {@link StatementInspector} 接口不可用，此类应通过
+ * {@code @ConditionalOnClass(StatementInspector.class)} 条件装配来跳过自动配置。代理会拦截 {@code prepareStatement()} 返回的
+ * {@code PreparedStatement}， 在 {@code executeQuery()}、{@code executeUpdate()} 和 {@code execute()} 调用前后测量耗时，超过阈值时记录警告日志。
+ *
+ * <p>
+ * <strong>非 Hibernate 环境替代方案：</strong>如果需要在非 Hibernate 环境中监控慢查询， 可以使用 {@link #wrapDataSource(DataSource)} 方法手动包装
+ * {@link DataSource}， 该方法使用标准 JDBC 代理实现，不依赖 Hibernate。
  *
  * <p>
  * 使用方式：

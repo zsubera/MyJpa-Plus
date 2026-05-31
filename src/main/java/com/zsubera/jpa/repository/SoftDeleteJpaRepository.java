@@ -219,18 +219,14 @@ public class SoftDeleteJpaRepository<T, ID> extends SimpleJpaRepository<T, ID> {
     }
 
     /**
-     * 覆盖 deleteById() 以支持软删除过滤。
+     * 覆写 deleteById() 以支持软删除过滤。
      *
      * <p>
-     * 默认的 {@link SimpleJpaRepository#deleteById(Object)} 会尝试删除实体， 但如果实体已被软删除，{@link #findById(Object)} 会返回
-     * {@link Optional#empty()}，导致抛出 {@link org.springframework.dao.EmptyResultDataAccessException}。
-     * 此实现会在删除前检查实体是否存在（未被软删除），如果不存在则记录警告并跳过删除。
-     *
-     * <p>
-     * <strong>注意：</strong>当实体不存在或已被软删除时，此方法静默返回（不抛出异常）。 如果需要区分"实体不存在"和"实体已被软删除"的情况，请使用
-     * {@link #deleteByIdOrThrow(Object)} 方法。
+     * P0-6: 此方法在实体不存在或已被软删除时抛出 {@link org.springframework.dao.EmptyResultDataAccessException}。 如需静默版本（不抛异常），请使用
+     * {@link #deleteByIdIfExists(Object)}。
      *
      * @param id 实体 ID，不能为 {@code null}
+     * @throws org.springframework.dao.EmptyResultDataAccessException 如果实体不存在或已被软删除
      */
     @Override
     public void deleteById(ID id) {
@@ -240,13 +236,28 @@ public class SoftDeleteJpaRepository<T, ID> extends SimpleJpaRepository<T, ID> {
         Optional<T> entity = findById(id);
         if (entity.isPresent()) {
             delete(entity.get());
-        } else if (shouldApplySoftDeleteFilter()) {
-            log.warn("Attempted to delete entity with id {} but it was not found (possibly soft-deleted). "
-                + "Use @IgnoreSoftDelete to bypass soft-delete filtering if needed.", id);
         } else {
             throw new org.springframework.dao.EmptyResultDataAccessException(
                 String.format("No %s entity with id %s exists!", domainClass.getSimpleName(), id), 1);
         }
+    }
+
+    /**
+     * P0-6: 静默版本的按 ID 删除。实体不存在或已软删除时不抛异常。
+     *
+     * @param id 实体 ID，不能为 {@code null}
+     * @return 如果成功删除返回 true，如果实体不存在或已软删除返回 false
+     */
+    public boolean deleteByIdIfExists(ID id) {
+        if (id == null) {
+            throw new IllegalArgumentException("ID must not be null");
+        }
+        Optional<T> entity = findById(id);
+        if (entity.isPresent()) {
+            delete(entity.get());
+            return true;
+        }
+        return false;
     }
 
     /**
@@ -272,25 +283,23 @@ public class SoftDeleteJpaRepository<T, ID> extends SimpleJpaRepository<T, ID> {
         }
     }
 
-    // P0: Override bulk delete methods to use soft delete
-
     /**
-     * 覆写 deleteAll() 以支持软删除。遍历所有实体并逐个执行软删除。
+     * P0-5: 覆写 deleteAll() 以支持软删除。使用批量 UPDATE 替代逐条操作以避免 N+1 查询。
      *
      * <p>
-     * 当软删除过滤启用时，仅删除未被软删除的实体。当软删除过滤禁用时，执行标准的硬删除。
+     * 当软删除过滤启用时，使用 SoftDeleteHelper.softDeleteAll() 批量更新。 当软删除过滤禁用时，执行标准的硬删除。
      */
     @Override
     public void deleteAll() {
         if (shouldApplySoftDeleteFilter()) {
-            findAll().forEach(this::delete);
+            SoftDeleteHelper.softDeleteAll(entityManager, domainClass);
         } else {
             super.deleteAll();
         }
     }
 
     /**
-     * 覆写 deleteAllById() 以支持软删除。逐个查找并软删除指定 ID 的实体。
+     * P0-5: 覆写 deleteAllById() 以支持软删除。使用批量 UPDATE 替代逐条操作以避免 N+1 查询。
      *
      * @param ids 要删除的实体 ID 集合
      */
@@ -299,8 +308,15 @@ public class SoftDeleteJpaRepository<T, ID> extends SimpleJpaRepository<T, ID> {
         if (ids == null) {
             throw new IllegalArgumentException("ids must not be null");
         }
-        for (ID id : ids) {
-            deleteById(id);
+        java.util.List<ID> idList = new java.util.ArrayList<>();
+        ids.forEach(idList::add);
+        if (idList.isEmpty()) {
+            return;
+        }
+        if (shouldApplySoftDeleteFilter()) {
+            SoftDeleteHelper.softDeleteByIds(entityManager, domainClass, idList);
+        } else {
+            super.deleteAllById(idList);
         }
     }
 
@@ -328,12 +344,12 @@ public class SoftDeleteJpaRepository<T, ID> extends SimpleJpaRepository<T, ID> {
     }
 
     /**
-     * 覆写 deleteAllInBatch() 以支持软删除。查找所有实体并逐个软删除。
+     * P0-5: 覆写 deleteAllInBatch() 以支持软删除。使用批量 UPDATE 替代逐条操作以避免 N+1 查询。
      */
     @Override
     public void deleteAllInBatch() {
         if (shouldApplySoftDeleteFilter()) {
-            findAll().forEach(this::delete);
+            SoftDeleteHelper.softDeleteAll(entityManager, domainClass);
         } else {
             super.deleteAllInBatch();
         }

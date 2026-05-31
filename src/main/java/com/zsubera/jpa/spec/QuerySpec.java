@@ -203,7 +203,8 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
      */
     public void applyQuerySettings(TypedQuery<?> query) {
         if (queryTimeout != null) {
-            query.setHint("jakarta.persistence.query.timeout", (int)(queryTimeout * 1000L));
+            // P1-3: Use Math.toIntExact() to prevent integer overflow on large timeout values
+            query.setHint("jakarta.persistence.query.timeout", Math.toIntExact(queryTimeout * 1000L));
         }
         if (lockMode != null) {
             query.setLockMode(lockMode);
@@ -780,6 +781,11 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
         this.orderNodes.addAll(other.orderNodes);
         // 复制查询设置：仅当当前实例未设置时，采用另一个实例的值
         if (other.queryTimeout != null && this.queryTimeout == null) {
+            // P1-3: Validate timeout range when copying from another spec
+            if (other.queryTimeout < 0 || other.queryTimeout > MAX_TIMEOUT_SECONDS) {
+                throw new IllegalArgumentException(
+                    "queryTimeout from source spec is out of range: " + other.queryTimeout);
+            }
             this.queryTimeout = other.queryTimeout;
         }
         if (other.lockMode != null && this.lockMode == null) {

@@ -302,6 +302,9 @@ public final class LambdaUtils {
         if (methodName.startsWith("is") && methodName.length() > 2 && Character.isUpperCase(methodName.charAt(2))) {
             return Introspector.decapitalize(methodName.substring(2));
         }
+        // P2-2: Support Java Record accessor methods (record fields are accessed directly, no get/is prefix)
+        // Record accessors have the same name as the field (e.g., "name" for a Record component named "name")
+        // This is the fallback for method names that don't match get/is patterns
         return methodName;
     }
 }

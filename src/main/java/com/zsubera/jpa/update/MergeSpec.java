@@ -209,9 +209,16 @@ public class MergeSpec<T> {
                 } catch (jakarta.persistence.PersistenceException e) {
                     if (attempt < maxRetries - 1 && e.getMessage() != null
                         && e.getMessage().toLowerCase().contains("unique")) {
+                        long backoffMs = (long)(10 * Math.pow(2, attempt)); // 10ms, 20ms, 40ms
                         if (log.isDebugEnabled()) {
-                            log.debug("H2 UPSERT race condition detected on attempt {}/{}, retrying", attempt + 1,
-                                maxRetries);
+                            log.debug("H2 UPSERT race condition detected on attempt {}/{}, retrying after {}ms",
+                                attempt + 1, maxRetries, backoffMs);
+                        }
+                        try {
+                            Thread.sleep(backoffMs);
+                        } catch (InterruptedException ie) {
+                            Thread.currentThread().interrupt();
+                            throw e;
                         }
                         continue;
                     }
@@ -406,12 +413,17 @@ public class MergeSpec<T> {
         }
         // Fallback: try Hibernate Session (only if Hibernate is on classpath)
         try {
+            Class.forName("org.hibernate.Session");
             org.hibernate.Session session = em.unwrap(org.hibernate.Session.class);
             return session.getTransaction() != null && session.getTransaction().isActive();
+        } catch (ClassNotFoundException e) {
+            // Hibernate not on classpath
+            log.debug("Hibernate not available for transaction state detection");
         } catch (Exception e) {
             // Cannot determine transaction state
-            return false;
+            log.debug("Cannot determine transaction state via Hibernate: {}", e.getMessage());
         }
+        return false;
     }
 
     /**
@@ -454,6 +466,65 @@ public class MergeSpec<T> {
         }
         em.flush();
         em.clear();
+        return total;
+    }
+
+    /**
+     * 分批在独立事务中执行 UPSERT 操作。每批操作完成后立即提交事务，避免长事务导致的数据库锁等待超时问题。
+     *
+     * <p>
+     * 适用于大数据量 UPSERT 场景。与 {@link #executeBatch(List, EntityManager, int)} 不同， 此方法每批操作完成后立即提交事务，已提交的批次不会因后续批次失败而回滚。
+     *
+     * @param entities 要 UPSERT 的实体列表
+     * @param em 实体管理器
+     * @param batchSize 每批大小，建议值为 50-200
+     * @return 受影响的总行数
+     * @throws IllegalArgumentException 如果 entities 为 null 或 batchSize 不是正数
+     */
+    public int executeBatchInSeparateTransactions(List<T> entities, EntityManager em, int batchSize) {
+        if (entities == null || entities.isEmpty()) {
+            throw new IllegalArgumentException("entities must not be null or empty");
+        }
+        if (em == null) {
+            throw new IllegalArgumentException("em must not be null");
+        }
+        if (batchSize <= 0) {
+            throw new IllegalArgumentException("batchSize must be positive");
+        }
+        int total = 0;
+        int count = 0;
+        for (T ent : entities) {
+            EntityTransaction tx = em.getTransaction();
+            boolean isNew = false;
+            if (tx != null && !tx.isActive()) {
+                tx.begin();
+                isNew = true;
+            }
+            try {
+                total += executeSingle(em, ent);
+                count++;
+                if (isNew) {
+                    em.flush();
+                    tx.commit();
+                }
+                if (count % batchSize == 0) {
+                    em.clear();
+                    if (log.isDebugEnabled()) {
+                        log.debug("Batch UPSERT (separate tx): {} entities processed (total affected: {})", count,
+                            total);
+                    }
+                }
+            } catch (RuntimeException e) {
+                if (isNew && tx.isActive()) {
+                    try {
+                        tx.rollback();
+                    } catch (Exception rollbackEx) {
+                        e.addSuppressed(rollbackEx);
+                    }
+                }
+                throw e;
+            }
+        }
         return total;
     }
 
@@ -624,9 +695,16 @@ public class MergeSpec<T> {
                 } catch (jakarta.persistence.PersistenceException e) {
                     if (attempt < maxRetries - 1 && e.getMessage() != null
                         && e.getMessage().toLowerCase().contains("unique")) {
+                        long backoffMs = (long)(10 * Math.pow(2, attempt)); // 10ms, 20ms, 40ms
                         if (log.isDebugEnabled()) {
-                            log.debug("H2 UPSERT race condition detected on attempt {}/{}, retrying", attempt + 1,
-                                maxRetries);
+                            log.debug("H2 UPSERT race condition detected on attempt {}/{}, retrying after {}ms",
+                                attempt + 1, maxRetries, backoffMs);
+                        }
+                        try {
+                            Thread.sleep(backoffMs);
+                        } catch (InterruptedException ie) {
+                            Thread.currentThread().interrupt();
+                            throw e;
                         }
                         continue;
                     }
@@ -845,12 +923,12 @@ public class MergeSpec<T> {
                 + "'. Only alphanumeric characters, underscores, and dots are allowed.");
         }
         // Always quote identifiers to handle reserved words and case sensitivity.
-        // H2 default mode stores identifiers in uppercase; quoting makes it case-sensitive,
-        // so H2 identifiers are NOT quoted to preserve backward compatibility.
+        // P0-4: H2 identifiers are now quoted with double quotes to prevent reserved word conflicts.
+        // H2 default mode stores identifiers in uppercase, so we convert to uppercase before quoting.
         return switch (dialect) {
             case "postgresql" -> "\"" + identifier.replace("\"", "\"\"") + "\"";
             case "mysql" -> "`" + identifier.replace("`", "``") + "`";
-            case "h2" -> identifier;
+            case "h2" -> "\"" + identifier.toUpperCase().replace("\"", "\"\"") + "\"";
             default -> "\"" + identifier.replace("\"", "\"\"") + "\"";
         };
     }
@@ -957,66 +1035,7 @@ public class MergeSpec<T> {
         if (entity == null) {
             throw new IllegalStateException("Entity must be specified via withEntity() before extracting field values");
         }
-        List<EntityFieldValue> fieldValues = new ArrayList<>();
-        List<Field> allFields = FIELD_CACHE.computeIfAbsent(entityClass, cls -> {
-            List<Field> fields = new ArrayList<>();
-            for (Class<?> c = cls; c != null && c != Object.class; c = c.getSuperclass()) {
-                for (Field f : c.getDeclaredFields()) {
-                    if (!java.lang.reflect.Modifier.isStatic(f.getModifiers())
-                        && !java.lang.reflect.Modifier.isTransient(f.getModifiers())
-                        && !f.isAnnotationPresent(jakarta.persistence.Transient.class)
-                        && !f.isAnnotationPresent(jakarta.persistence.OneToMany.class)
-                        && !f.isAnnotationPresent(jakarta.persistence.ManyToOne.class)
-                        && !f.isAnnotationPresent(jakarta.persistence.ManyToMany.class)
-                        && !f.isAnnotationPresent(jakarta.persistence.OneToOne.class)
-                        && !f.isAnnotationPresent(jakarta.persistence.EmbeddedId.class)) {
-                        try {
-                            f.setAccessible(true);
-                        } catch (InaccessibleObjectException e) {
-                            throw new MyJpaPlusException("Cannot access field '" + f.getName() + "' in " + cls.getName()
-                                + ". If using Java 17+ module system, add JVM argument: " + "--add-opens "
-                                + f.getDeclaringClass().getPackageName() + "=ALL-UNNAMED", e);
-                        }
-                        fields.add(f);
-                    }
-                }
-            }
-            return fields;
-        });
-        for (Field f : allFields) {
-            try {
-                // P2: Handle @Embedded fields by recursively extracting their sub-fields
-                if (f.isAnnotationPresent(jakarta.persistence.Embedded.class)) {
-                    Object embeddedValue = f.get(entity);
-                    if (embeddedValue != null) {
-                        jakarta.persistence.AttributeOverride[] overrides =
-                            f.getAnnotationsByType(jakarta.persistence.AttributeOverride.class);
-                        java.util.Map<String, String> overrideMap = new java.util.LinkedHashMap<>();
-                        for (jakarta.persistence.AttributeOverride override : overrides) {
-                            overrideMap.put(override.name(), override.column().name());
-                        }
-                        for (Field subField : embeddedValue.getClass().getDeclaredFields()) {
-                            if (!java.lang.reflect.Modifier.isStatic(subField.getModifiers())
-                                && !subField.isSynthetic()) {
-                                subField.setAccessible(true);
-                                Object subValue = subField.get(embeddedValue);
-                                String columnName =
-                                    overrideMap.getOrDefault(subField.getName(), resolveColumnName(subField));
-                                fieldValues.add(
-                                    new EntityFieldValue(f.getName() + "." + subField.getName(), columnName, subValue));
-                            }
-                        }
-                    }
-                } else {
-                    Object value = f.get(entity);
-                    String columnName = resolveColumnName(f);
-                    fieldValues.add(new EntityFieldValue(f.getName(), columnName, value));
-                }
-            } catch (IllegalAccessException e) {
-                throw new MyJpaPlusException("Failed to access field: " + f.getName(), e);
-            }
-        }
-        return fieldValues;
+        return extractFieldValuesFrom(entity);
     }
 
     /**
@@ -1040,47 +1059,65 @@ public class MergeSpec<T> {
      * @return 数据库方言标识（postgresql、mysql 或 h2）
      */
     private String detectDialect(EntityManager em) {
+        // Priority 1: Detect from JDBC URL in EntityManagerFactory properties (no Hibernate dependency)
         try {
+            Object jdbcUrl = em.getEntityManagerFactory().getProperties().get("jakarta.persistence.jdbc.url");
+            if (jdbcUrl == null) {
+                jdbcUrl = em.getEntityManagerFactory().getProperties().get("hibernate.connection.url");
+            }
+            if (jdbcUrl != null) {
+                String url = jdbcUrl.toString().toLowerCase();
+                if (url.contains("postgresql")) {
+                    return "postgresql";
+                }
+                if (url.contains("mysql")) {
+                    return "mysql";
+                }
+                if (url.contains("h2")) {
+                    return "h2";
+                }
+            }
+        } catch (Exception ex) {
+            log.debug("Failed to detect dialect from properties: {}", ex.getMessage());
+        }
+
+        // Priority 2: Detect via JDBC Connection.getMetaData() through EntityManager.unwrap()
+        try {
+            java.sql.Connection conn = em.unwrap(java.sql.Connection.class);
+            if (conn != null) {
+                String productName = conn.getMetaData().getDatabaseProductName().toLowerCase();
+                return mapDialect(productName);
+            }
+        } catch (Exception e) {
+            log.debug("Failed to detect dialect via JDBC Connection.unwrap(): {}", e.getMessage());
+        }
+
+        // Priority 3: Hibernate fallback (only if Hibernate is on classpath)
+        try {
+            Class.forName("org.hibernate.Session");
             org.hibernate.Session session = em.unwrap(org.hibernate.Session.class);
             String[] dialectHolder = new String[1];
             session.doWork(connection -> {
                 dialectHolder[0] = connection.getMetaData().getDatabaseProductName().toLowerCase();
             });
             return mapDialect(dialectHolder[0]);
+        } catch (ClassNotFoundException e) {
+            log.debug("Hibernate not available on classpath");
         } catch (Exception e) {
-            try {
-                Object jdbcUrl = em.getEntityManagerFactory().getProperties().get("jakarta.persistence.jdbc.url");
-                if (jdbcUrl == null) {
-                    jdbcUrl = em.getEntityManagerFactory().getProperties().get("hibernate.connection.url");
-                }
-                if (jdbcUrl != null) {
-                    String url = jdbcUrl.toString().toLowerCase();
-                    if (url.contains("postgresql")) {
-                        return "postgresql";
-                    }
-                    if (url.contains("mysql")) {
-                        return "mysql";
-                    }
-                    if (url.contains("h2")) {
-                        return "h2";
-                    }
-                }
-            } catch (Exception ex) {
-                log.debug("Failed to detect dialect from properties: {}", ex.getMessage());
-            }
-            log.warn(
-                "Failed to detect database dialect: {}. "
-                    + "Set system property 'myjpa-plus.dialect' to 'postgresql', 'mysql', or 'h2' to specify manually.",
-                e.getMessage());
-            String manualDialect = System.getProperty("myjpa-plus.dialect");
-            if (manualDialect != null && !manualDialect.isEmpty()) {
-                String mapped = mapDialect(manualDialect.toLowerCase());
-                log.info("Using manually configured dialect: {}", mapped);
-                return mapped;
-            }
-            throw new MyJpaPlusException("Failed to detect database dialect and no manual dialect configured. "
-                + "Set system property 'myjpa-plus.dialect' to 'postgresql', 'mysql', or 'h2'.", e);
+            log.debug("Hibernate dialect detection failed: {}", e.getMessage());
         }
+
+        // Priority 4: Manual configuration
+        log.warn("Failed to detect database dialect automatically. "
+            + "Set system property 'myjpa-plus.dialect' to 'postgresql', 'mysql', or 'h2' to specify manually.");
+        String manualDialect = System.getProperty("myjpa-plus.dialect");
+        if (manualDialect != null && !manualDialect.isEmpty()) {
+            String mapped = mapDialect(manualDialect.toLowerCase());
+            log.info("Using manually configured dialect: {}", mapped);
+            return mapped;
+        }
+        throw new MyJpaPlusException("Failed to detect database dialect and no manual dialect configured. "
+            + "Set system property 'myjpa-plus.dialect' to 'postgresql', 'mysql', or 'h2'.");
     }
 
     /**

@@ -314,14 +314,19 @@ public class CteSpec {
     private static final java.util.List<String> DANGEROUS_KEYWORDS =
         java.util.List.of("DROP", "TRUNCATE", "GRANT", "REVOKE", "EXEC", "EXECUTE", "xp_cmdshell", "sp_executesql");
 
+    /** P2-3: SQL 注入模式检测正则表达式。 */
+    private static final Pattern COMMENT_INJECTION_PATTERN = Pattern.compile("/\\*|\\*/|--\\s");
+    private static final Pattern SEMICOLON_INJECTION_PATTERN = Pattern.compile(";\\s*\\w");
+
     /**
-     * 检测 SQL 中是否包含危险关键字，记录安全警告日志。
+     * Detect SQL injection attempts and log security warnings.
      *
      * <p>
-     * 此方法为启发式防护，不能替代参数化查询。仅用于检测明显的 SQL 注入尝试。
+     * This is a heuristic defense, not a replacement for parameterized queries. Only detects obvious SQL injection
+     * attempts. P2-3: Added comment injection and semicolon injection detection.
      *
-     * @param sql 要检查的 SQL 字符串
-     * @param context 上下文描述（用于日志）
+     * @param sql the SQL string to check
+     * @param context context description for logging
      */
     private static void checkSqlSafety(String sql, String context) {
         String upperSql = sql.toUpperCase();
@@ -332,6 +337,20 @@ public class CteSpec {
                         + "Ensure this is intentional and not user input. SQL: {}",
                     context, keyword, sql.length() > 100 ? sql.substring(0, 100) + "..." : sql);
             }
+        }
+        // P2-3: Detect comment injection attempts
+        if (COMMENT_INJECTION_PATTERN.matcher(sql).find()) {
+            log.warn(
+                "SECURITY: {} SQL contains potential comment injection patterns (/*, */, --). "
+                    + "Ensure this is intentional and not user input. SQL: {}",
+                context, sql.length() > 100 ? sql.substring(0, 100) + "..." : sql);
+        }
+        // P2-3: Detect semicolon injection attempts
+        if (SEMICOLON_INJECTION_PATTERN.matcher(sql).find()) {
+            log.warn(
+                "SECURITY: {} SQL contains potential semicolon injection pattern. "
+                    + "Ensure this is intentional and not user input. SQL: {}",
+                context, sql.length() > 100 ? sql.substring(0, 100) + "..." : sql);
         }
     }
 

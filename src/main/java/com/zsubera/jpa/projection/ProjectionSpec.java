@@ -166,6 +166,29 @@ public class ProjectionSpec<T> {
     }
 
     /**
+     * P1-4: 创建默认启用软删除和租户过滤的 ProjectionSpec 实例。
+     *
+     * <p>
+     * 使用此工厂方法可避免手动调用 {@link #withSoftDeleteFilter()} 和 {@link #withTenantFilter(TenantProvider)}，
+     * 减少开发者遗忘启用安全过滤的风险。软删除过滤仅在实体有 {@code @SoftDelete} 字段时启用。
+     *
+     * @param entityClass 要查询的实体类
+     * @param provider 租户提供者（可为 null，为 null 时不启用租户过滤）
+     * @return 配置好的 ProjectionSpec 实例
+     */
+    public static <T> ProjectionSpec<T> withDefaults(Class<T> entityClass, TenantProvider provider) {
+        ProjectionSpec<T> spec = new ProjectionSpec<>(entityClass);
+        // Auto-enable soft delete filter if entity has @SoftDelete field
+        if (SoftDeleteHelper.findSoftDeleteField(entityClass) != null) {
+            spec.softDeleteEnabled = true;
+        }
+        if (provider != null) {
+            spec.tenantProvider = provider;
+        }
+        return spec;
+    }
+
+    /**
      * 向 SELECT 子句添加要查询的字段。
      *
      * @param field 实体属性的方法引用

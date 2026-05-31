@@ -1,5 +1,10 @@
 package com.zsubera.jpa.codegen;
 
+import java.io.IOException;
+import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.List;
 
 /**
@@ -7,8 +12,20 @@ import java.util.List;
  * definitions, and package name.
  *
  * <p>
- * This is a lightweight code generation helper — not a Maven plugin. It produces Java source code as strings that can
+ * This is a lightweight code generation helper -- not a Maven plugin. It produces Java source code as strings that can
  * be written to files or used for scaffolding.
+ *
+ * <p>
+ * P2-7: Supports loading custom templates from external files or classpath. Templates support the following
+ * placeholders:
+ * <ul>
+ * <li>{@code ${package}} -- target package name</li>
+ * <li>{@code ${className}} -- class name</li>
+ * <li>{@code ${tableName}} -- table name</li>
+ * <li>{@code ${fields}} -- field declarations</li>
+ * <li>{@code ${gettersSetters}} -- getter/setter methods</li>
+ * <li>{@code ${imports}} -- extra import statements</li>
+ * </ul>
  *
  * <p>
  * Example usage:
@@ -19,6 +36,10 @@ import java.util.List;
  * String entitySrc = EntityCodeGenerator.generateEntity("products", columns, "com.example.domain");
  * String repoSrc =
  *     EntityCodeGenerator.generateRepository("products", columns, "com.example.domain", "com.example.repo");
+ *
+ * // P2-7: Use custom template
+ * String template = Files.readString(Path.of("templates/entity.java.tmpl"));
+ * String entitySrc = EntityCodeGenerator.generateEntity("products", columns, "com.example.domain", template);
  * }</pre>
  */
 public final class EntityCodeGenerator {
@@ -57,6 +78,45 @@ public final class EntityCodeGenerator {
 
         public boolean isNullable() {
             return nullable;
+        }
+    }
+
+    /**
+     * P2-7: Load template from classpath.
+     *
+     * @param classpathLocation classpath location (e.g. "templates/entity.java.tmpl")
+     * @return template content string
+     * @throws IllegalArgumentException if classpathLocation is null or file not found
+     */
+    public static String loadTemplateFromClasspath(String classpathLocation) {
+        if (classpathLocation == null || classpathLocation.isBlank()) {
+            throw new IllegalArgumentException("classpathLocation must not be blank");
+        }
+        try (InputStream is = EntityCodeGenerator.class.getClassLoader().getResourceAsStream(classpathLocation)) {
+            if (is == null) {
+                throw new IllegalArgumentException("Template not found on classpath: " + classpathLocation);
+            }
+            return new String(is.readAllBytes(), StandardCharsets.UTF_8);
+        } catch (IOException e) {
+            throw new IllegalArgumentException("Failed to read template from classpath: " + classpathLocation, e);
+        }
+    }
+
+    /**
+     * P2-7: Load template from file system.
+     *
+     * @param templatePath template file path
+     * @return template content string
+     * @throws IllegalArgumentException if templatePath is null or file not found
+     */
+    public static String loadTemplateFromFile(Path templatePath) {
+        if (templatePath == null) {
+            throw new IllegalArgumentException("templatePath must not be null");
+        }
+        try {
+            return Files.readString(templatePath, StandardCharsets.UTF_8);
+        } catch (IOException e) {
+            throw new IllegalArgumentException("Failed to read template from file: " + templatePath, e);
         }
     }
 
@@ -131,6 +191,40 @@ public final class EntityCodeGenerator {
     }
 
     /**
+     * P2-7: Generate entity class source code using a custom template.
+     *
+     * <p>
+     * Template placeholders:
+     * <ul>
+     * <li>{@code ${package}} -- target package name</li>
+     * <li>{@code ${className}} -- class name</li>
+     * <li>{@code ${tableName}} -- table name</li>
+     * <li>{@code ${fields}} -- field declarations (with annotations)</li>
+     * <li>{@code ${gettersSetters}} -- getter/setter methods</li>
+     * <li>{@code ${imports}} -- extra import statements</li>
+     * </ul>
+     *
+     * @param tableName database table name
+     * @param columns column definitions
+     * @param entityPackage target Java package
+     * @param template custom template string
+     * @return generated Java source code string
+     */
+    public static String generateEntity(String tableName, List<ColumnDef> columns, String entityPackage,
+        String template) {
+        if (template == null || template.isBlank()) {
+            return generateEntity(tableName, columns, entityPackage);
+        }
+        String className = toClassName(tableName);
+        String imports = buildExtraImports(columns);
+        String fields = buildFields(columns);
+        String gettersSetters = buildGettersSetters(columns);
+        return template.replace("${package}", entityPackage).replace("${className}", className)
+            .replace("${tableName}", tableName).replace("${imports}", imports).replace("${fields}", fields)
+            .replace("${gettersSetters}", gettersSetters);
+    }
+
+    /**
      * Generates a Spring Data JPA repository interface source code string.
      *
      * @param tableName the database table name (used to derive the entity class name)
@@ -167,6 +261,27 @@ public final class EntityCodeGenerator {
             .append(", Long> {\n");
         sb.append("}\n");
         return sb.toString();
+    }
+
+    /**
+     * P2-7: Generate repository interface source code using a custom template.
+     *
+     * @param tableName database table name
+     * @param columns column definitions
+     * @param entityPackage entity class Java package
+     * @param repoPackage repository interface target Java package
+     * @param template custom template string
+     * @return generated Java source code string
+     */
+    public static String generateRepository(String tableName, List<ColumnDef> columns, String entityPackage,
+        String repoPackage, String template) {
+        if (template == null || template.isBlank()) {
+            return generateRepository(tableName, columns, entityPackage, repoPackage);
+        }
+        String className = toClassName(tableName);
+        String repoName = className + "Repository";
+        return template.replace("${package}", repoPackage).replace("${entityPackage}", entityPackage)
+            .replace("${className}", className).replace("${repoName}", repoName).replace("${tableName}", tableName);
     }
 
     /**
@@ -216,5 +331,58 @@ public final class EntityCodeGenerator {
         if (needsInstant) {
             sb.append("import java.time.Instant;\n");
         }
+    }
+
+    private static String buildExtraImports(List<ColumnDef> columns) {
+        StringBuilder sb = new StringBuilder();
+        if (columns.stream().anyMatch(c -> "BigDecimal".equals(c.getJavaType()))) {
+            sb.append("import java.math.BigDecimal;\n");
+        }
+        if (columns.stream().anyMatch(c -> "LocalDate".equals(c.getJavaType()))) {
+            sb.append("import java.time.LocalDate;\n");
+        }
+        if (columns.stream().anyMatch(c -> "LocalDateTime".equals(c.getJavaType()))) {
+            sb.append("import java.time.LocalDateTime;\n");
+        }
+        if (columns.stream().anyMatch(c -> "Instant".equals(c.getJavaType()))) {
+            sb.append("import java.time.Instant;\n");
+        }
+        return sb.toString();
+    }
+
+    private static String buildFields(List<ColumnDef> columns) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("    @Id\n");
+        sb.append("    @GeneratedValue(strategy = GenerationType.IDENTITY)\n");
+        sb.append("    private Long id;\n\n");
+        for (ColumnDef col : columns) {
+            if (!col.isNullable()) {
+                sb.append("    @Column(nullable = false)\n");
+            }
+            sb.append("    private ").append(col.getJavaType()).append(" ").append(col.getName()).append(";\n\n");
+        }
+        return sb.toString();
+    }
+
+    private static String buildGettersSetters(List<ColumnDef> columns) {
+        StringBuilder sb = new StringBuilder();
+        // id getter/setter
+        sb.append("    public Long getId() {\n");
+        sb.append("        return id;\n");
+        sb.append("    }\n\n");
+        sb.append("    public void setId(Long id) {\n");
+        sb.append("        this.id = id;\n");
+        sb.append("    }\n\n");
+        for (ColumnDef col : columns) {
+            String capitalName = capitalize(col.getName());
+            sb.append("    public ").append(col.getJavaType()).append(" get").append(capitalName).append("() {\n");
+            sb.append("        return ").append(col.getName()).append(";\n");
+            sb.append("    }\n\n");
+            sb.append("    public void set").append(capitalName).append("(").append(col.getJavaType()).append(" ")
+                .append(col.getName()).append(") {\n");
+            sb.append("        this.").append(col.getName()).append(" = ").append(col.getName()).append(";\n");
+            sb.append("    }\n\n");
+        }
+        return sb.toString();
     }
 }

@@ -99,17 +99,14 @@ class EncryptConverterTest {
     }
 
     @Test
-    @DisplayName("short key is derived via PBKDF2")
-    void shouldDeriveShortKeyViaPBKDF2() {
+    @DisplayName("short key is rejected with minimum length validation")
+    void shouldRejectShortKey() {
         System.setProperty("myjpa.encrypt.key", "short");
         EncryptConverter.clearCacheForTesting();
         EncryptConverter shortKeyConverter = new EncryptConverter();
-        // Short keys are now derived via PBKDF2WithHmacSHA256, so they should work
-        String original = "test-data";
-        String encrypted = shortKeyConverter.convertToDatabaseColumn(original);
-        assertNotNull(encrypted);
-        String decrypted = shortKeyConverter.convertToEntityAttribute(encrypted);
-        assertEquals(original, decrypted);
+        // P0-3: Short keys are now rejected to prevent weak key dictionary attacks
+        assertThrows(com.zsubera.jpa.exception.MyJpaPlusException.class,
+            () -> shortKeyConverter.convertToDatabaseColumn("test-data"));
     }
 
     @Test

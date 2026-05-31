@@ -939,6 +939,33 @@ public class MyJpaTemplate {
     }
 
     /**
+     * P2-6: 批量执行 UPSERT 操作，使用 EntityManager flush/clear 进行分批处理。
+     *
+     * <p>
+     * 此方法在单个事务中执行所有批次，通过定期 flush 和 clear EntityManager 减少内存占用。
+     *
+     * @param mergeSpec MergeSpec 实例（已配置冲突列和更新列）
+     * @param entities 要 UPSERT 的实体列表
+     * @param batchSize 每批大小，建议值为 50-200
+     * @param <T> 实体类型
+     * @return 受影响的总行数
+     * @throws IllegalArgumentException 如果任何参数为 null 或 batchSize 不是正数
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public <T> int executeBatch(com.zsubera.jpa.update.MergeSpec<T> mergeSpec, List<T> entities, int batchSize) {
+        if (mergeSpec == null) {
+            throw new IllegalArgumentException("mergeSpec must not be null");
+        }
+        if (entities == null || entities.isEmpty()) {
+            throw new IllegalArgumentException("entities must not be null or empty");
+        }
+        if (batchSize <= 0) {
+            throw new IllegalArgumentException("batchSize must be positive");
+        }
+        return mergeSpec.executeBatch(entities, entityManager, batchSize);
+    }
+
+    /**
      * 使用给定的 {@link UpdateSpec} 执行批量更新，限制最大影响行数。
      *
      * <p>

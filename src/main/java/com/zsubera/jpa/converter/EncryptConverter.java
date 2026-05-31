@@ -32,6 +32,9 @@ public class EncryptConverter implements AttributeConverter<String, String> {
     private static final int PBKDF2_KEY_LENGTH = 256;
     private static final System.Logger LOG = System.getLogger("com.zsubera.jpa.converter.EncryptConverter");
 
+    /** P0-3: Minimum key length in characters to prevent weak key attacks. */
+    private static final int MIN_KEY_LENGTH = 8;
+
     /** 严格模式开关，通过系统属性控制。默认为 false。 */
     private static final boolean STRICT_MODE = Boolean.parseBoolean(System.getProperty(STRICT_MODE_PROPERTY, "false"));
 
@@ -46,6 +49,9 @@ public class EncryptConverter implements AttributeConverter<String, String> {
 
     /** 密钥版本缓存刷新间隔（毫秒），默认 5 分钟。 */
     private static final long KEY_VERSION_REFRESH_INTERVAL_MS = 300_000L;
+
+    /** P1-1: Thread-safe salt cache to replace System.setProperty() usage. */
+    private static final ConcurrentMap<String, byte[]> SALT_CACHE = new ConcurrentHashMap<>();
 
     /**
      * 清除所有缓存的密钥和版本信息。仅用于测试环境。
@@ -209,6 +215,7 @@ public class EncryptConverter implements AttributeConverter<String, String> {
                     String entryVersion = entry.substring(0, colonIdx).trim();
                     String entryKey = entry.substring(colonIdx + 1).trim();
                     if (entryVersion.equals(version)) {
+                        validateKeyLength(entryKey);
                         return entryKey;
                     }
                 }
@@ -219,7 +226,22 @@ public class EncryptConverter implements AttributeConverter<String, String> {
         if (version != null && !version.equals("v1") && !version.equals("default")) {
             logVersionMismatch(version);
         }
+        validateKeyLength(allKeys);
         return allKeys;
+    }
+
+    /**
+     * P0-3: Validate minimum key length to prevent weak key dictionary attacks.
+     *
+     * @param key the raw key material to validate
+     * @throws MyJpaPlusException if key is shorter than {@link #MIN_KEY_LENGTH}
+     */
+    private static void validateKeyLength(String key) {
+        if (key != null && key.length() < MIN_KEY_LENGTH) {
+            throw new MyJpaPlusException("Encryption key must be at least " + MIN_KEY_LENGTH + " characters. "
+                + "Current length: " + key.length() + ". "
+                + "Short keys are vulnerable to dictionary attacks even with PBKDF2 derivation.");
+        }
     }
 
     private static void logVersionMismatch(String version) {
@@ -279,18 +301,14 @@ public class EncryptConverter implements AttributeConverter<String, String> {
                 throw new IllegalStateException("PBKDF2 salt must be configured in production. "
                     + "Set environment variable " + SALT_ENV + " or system property " + SALT_PROPERTY);
             }
-            // 生成随机盐值，缓存在系统属性中确保同一 JVM 内一致
-            String internalSaltProp = "myjpa.encrypt.salt.internal";
-            String randomSalt = System.getProperty(internalSaltProp);
-            if (randomSalt == null || randomSalt.isEmpty()) {
-                randomSalt = generateRandomSalt();
-                System.setProperty(internalSaltProp, randomSalt);
-            }
-            LOG.log(System.Logger.Level.WARNING,
-                "SECURITY: Using randomly generated PBKDF2 salt. "
+            // P1-1: Use ConcurrentHashMap for thread-safe salt caching instead of System.setProperty()
+            return SALT_CACHE.computeIfAbsent("internal", k -> {
+                byte[] randomSalt = generateRandomSalt().getBytes(StandardCharsets.UTF_8);
+                LOG.log(System.Logger.Level.WARNING, "SECURITY: Using randomly generated PBKDF2 salt. "
                     + "Set environment variable {0} or system property {1} for consistent encryption across restarts.",
-                SALT_ENV, SALT_PROPERTY);
-            return randomSalt.getBytes(StandardCharsets.UTF_8);
+                    SALT_ENV, SALT_PROPERTY);
+                return randomSalt;
+            });
         }
         return salt.getBytes(StandardCharsets.UTF_8);
     }

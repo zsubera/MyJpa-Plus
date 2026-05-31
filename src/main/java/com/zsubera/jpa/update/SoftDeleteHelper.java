@@ -4,6 +4,7 @@ import com.zsubera.jpa.annotation.SoftDelete;
 import com.zsubera.jpa.exception.MyJpaPlusException;
 import com.zsubera.jpa.spec.ConditionNode;
 import com.zsubera.jpa.spec.QuerySpec;
+import jakarta.persistence.EntityManager;
 import jakarta.persistence.criteria.CriteriaBuilder;
 import jakarta.persistence.criteria.Path;
 import jakarta.persistence.criteria.Predicate;
@@ -77,6 +78,193 @@ public final class SoftDeleteHelper {
         new ConcurrentReferenceHashMap<>(64, ConcurrentReferenceHashMap.ReferenceType.WEAK);
 
     private SoftDeleteHelper() {}
+
+    /**
+     * P0-5: Batch soft delete all entities of the given class using a single UPDATE statement.
+     *
+     * @param em EntityManager instance
+     * @param entityClass the entity class
+     * @param <T> entity type
+     * @return number of affected rows
+     */
+    public static <T> int softDeleteAll(EntityManager em, Class<T> entityClass) {
+        if (em == null) {
+            throw new IllegalArgumentException("em must not be null");
+        }
+        if (entityClass == null) {
+            throw new IllegalArgumentException("entityClass must not be null");
+        }
+        String fieldName = findSoftDeleteField(entityClass);
+        if (fieldName == null) {
+            throw new IllegalArgumentException("Entity " + entityClass.getSimpleName() + " has no @SoftDelete field");
+        }
+        String tableName = resolveTableName(entityClass);
+        String columnName = resolveColumnName(entityClass, fieldName);
+        Field field = getField(entityClass, fieldName);
+        if (field == null) {
+            throw new IllegalArgumentException("Cannot resolve @SoftDelete field: " + fieldName);
+        }
+        SoftDelete annotation = field.getAnnotation(SoftDelete.class);
+        // Build UPDATE SQL based on field type
+        if (field.getType() == Boolean.class || field.getType() == boolean.class) {
+            return em.createNativeQuery("UPDATE " + tableName + " SET " + columnName + " = true WHERE " + columnName
+                + " = false OR " + columnName + " IS NULL").executeUpdate();
+        }
+        if (field.getType() == Integer.class || field.getType() == int.class) {
+            int deletedValue = (annotation != null) ? annotation.deletedIntValue() : 1;
+            return em.createNativeQuery("UPDATE " + tableName + " SET " + columnName + " = " + deletedValue + " WHERE "
+                + columnName + " != " + deletedValue + " OR " + columnName + " IS NULL").executeUpdate();
+        }
+        // Enum: delegate to field-based approach
+        throw new MyJpaPlusException("Batch soft delete for enum fields is not supported via native query. "
+            + "Use deleteAll() which handles enum fields via entity loading.");
+    }
+
+    /**
+     * P0-5: Batch soft delete entities by IDs using a single UPDATE statement.
+     *
+     * @param em EntityManager instance
+     * @param entityClass the entity class
+     * @param ids the IDs of entities to soft delete
+     * @param <T> entity type
+     * @param <ID> ID type
+     * @return number of affected rows
+     */
+    public static <T, ID> int softDeleteByIds(EntityManager em, Class<T> entityClass, List<ID> ids) {
+        if (em == null) {
+            throw new IllegalArgumentException("em must not be null");
+        }
+        if (entityClass == null) {
+            throw new IllegalArgumentException("entityClass must not be null");
+        }
+        if (ids == null || ids.isEmpty()) {
+            return 0;
+        }
+        String fieldName = findSoftDeleteField(entityClass);
+        if (fieldName == null) {
+            throw new IllegalArgumentException("Entity " + entityClass.getSimpleName() + " has no @SoftDelete field");
+        }
+        String tableName = resolveTableName(entityClass);
+        String columnName = resolveColumnName(entityClass, fieldName);
+        String idFieldName = resolveIdColumnName(entityClass);
+        Field field = getField(entityClass, fieldName);
+        if (field == null) {
+            throw new IllegalArgumentException("Cannot resolve @SoftDelete field: " + fieldName);
+        }
+        SoftDelete annotation = field.getAnnotation(SoftDelete.class);
+        // Build SET clause based on field type
+        String setClause;
+        if (field.getType() == Boolean.class || field.getType() == boolean.class) {
+            setClause = columnName + " = true";
+        } else if (field.getType() == Integer.class || field.getType() == int.class) {
+            int deletedValue = (annotation != null) ? annotation.deletedIntValue() : 1;
+            setClause = columnName + " = " + deletedValue;
+        } else {
+            throw new MyJpaPlusException("Batch soft delete by IDs for enum fields is not supported via native query.");
+        }
+        // Use IN clause with batch splitting for large ID lists
+        int total = 0;
+        int batchSize = 1000;
+        for (int i = 0; i < ids.size(); i += batchSize) {
+            List<ID> batch = ids.subList(i, Math.min(i + batchSize, ids.size()));
+            StringBuilder placeholders = new StringBuilder();
+            for (int j = 0; j < batch.size(); j++) {
+                if (j > 0) {
+                    placeholders.append(", ");
+                }
+                placeholders.append("?");
+            }
+            String sql =
+                "UPDATE " + tableName + " SET " + setClause + " WHERE " + idFieldName + " IN (" + placeholders + ")";
+            var query = em.createNativeQuery(sql);
+            for (int j = 0; j < batch.size(); j++) {
+                query.setParameter(j + 1, batch.get(j));
+            }
+            total += query.executeUpdate();
+        }
+        return total;
+    }
+
+    /**
+     * Resolve the database table name for the entity class.
+     */
+    private static String resolveTableName(Class<?> entityClass) {
+        jakarta.persistence.Table tableAnnotation = entityClass.getAnnotation(jakarta.persistence.Table.class);
+        if (tableAnnotation != null && !tableAnnotation.name().isEmpty()) {
+            StringBuilder tableName = new StringBuilder();
+            if (!tableAnnotation.catalog().isEmpty()) {
+                tableName.append(tableAnnotation.catalog()).append('.');
+            }
+            if (!tableAnnotation.schema().isEmpty()) {
+                tableName.append(tableAnnotation.schema()).append('.');
+            }
+            tableName.append(tableAnnotation.name());
+            return tableName.toString();
+        }
+        jakarta.persistence.Entity entityAnnotation = entityClass.getAnnotation(jakarta.persistence.Entity.class);
+        if (entityAnnotation != null && !entityAnnotation.name().isEmpty()) {
+            return entityAnnotation.name();
+        }
+        return camelToSnake(entityClass.getSimpleName());
+    }
+
+    /**
+     * Resolve the database column name for a field.
+     */
+    private static String resolveColumnName(Class<?> entityClass, String fieldName) {
+        Field field = getField(entityClass, fieldName);
+        if (field != null) {
+            jakarta.persistence.Column columnAnnotation = field.getAnnotation(jakarta.persistence.Column.class);
+            if (columnAnnotation != null && !columnAnnotation.name().isEmpty()) {
+                return columnAnnotation.name();
+            }
+        }
+        return fieldName;
+    }
+
+    /**
+     * Resolve the ID column name for the entity class.
+     */
+    private static String resolveIdColumnName(Class<?> entityClass) {
+        for (Class<?> c = entityClass; c != null && c != Object.class; c = c.getSuperclass()) {
+            for (Field f : c.getDeclaredFields()) {
+                if (f.isAnnotationPresent(jakarta.persistence.Id.class)) {
+                    jakarta.persistence.Column columnAnnotation = f.getAnnotation(jakarta.persistence.Column.class);
+                    if (columnAnnotation != null && !columnAnnotation.name().isEmpty()) {
+                        return columnAnnotation.name();
+                    }
+                    return f.getName();
+                }
+            }
+        }
+        throw new IllegalStateException("No @Id field found in " + entityClass.getName());
+    }
+
+    /**
+     * Convert camelCase to snake_case.
+     */
+    private static String camelToSnake(String name) {
+        if (name == null || name.isEmpty()) {
+            return name;
+        }
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < name.length(); i++) {
+            char c = name.charAt(i);
+            if (Character.isUpperCase(c)) {
+                if (i > 0) {
+                    char prev = name.charAt(i - 1);
+                    boolean nextIsLower = (i + 1 < name.length()) && Character.isLowerCase(name.charAt(i + 1));
+                    if (Character.isLowerCase(prev) || (Character.isUpperCase(prev) && nextIsLower)) {
+                        sb.append('_');
+                    }
+                }
+                sb.append(Character.toLowerCase(c));
+            } else {
+                sb.append(c);
+            }
+        }
+        return sb.toString();
+    }
 
     /**
      * 返回排除软删除记录的 {@link Specification}。

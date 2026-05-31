@@ -21,8 +21,44 @@ public final class TenantContext {
 
     private static final ThreadLocal<Integer> ignoreCount = ThreadLocal.withInitial(() -> 0);
 
-    /** 安全上限：超过此值认为存在泄漏，抛出异常。 */
-    private static final int MAX_IGNORE_COUNT = 64;
+    /** P2-4: 安全上限，可通过系统属性 myjpa-plus.tenant.max-ignore-count 配置。 */
+    private static volatile int maxIgnoreCount;
+
+    static {
+        int configured = 64;
+        String prop = System.getProperty("myjpa-plus.tenant.max-ignore-count");
+        if (prop != null) {
+            try {
+                int val = Integer.parseInt(prop);
+                if (val > 0 && val <= 1024) {
+                    configured = val;
+                }
+            } catch (NumberFormatException ignored) {
+                // use default
+            }
+        }
+        maxIgnoreCount = configured;
+    }
+
+    /**
+     * P2-4: 获取最大忽略计数。
+     *
+     * @return 最大忽略计数
+     */
+    public static int getMaxIgnoreCount() {
+        return maxIgnoreCount;
+    }
+
+    /**
+     * P2-4: 设置最大忽略计数。由自动配置类调用。
+     *
+     * @param count 最大忽略计数（1-1024）
+     */
+    public static void setMaxIgnoreCount(int count) {
+        if (count > 0 && count <= 1024) {
+            maxIgnoreCount = count;
+        }
+    }
 
     private TenantContext() {}
 
@@ -42,9 +78,9 @@ public final class TenantContext {
      */
     public static void pushIgnore() {
         int current = ignoreCount.get();
-        if (current >= MAX_IGNORE_COUNT) {
+        if (current >= maxIgnoreCount) {
             throw new IllegalStateException(
-                "TenantContext ignore count exceeded maximum (" + MAX_IGNORE_COUNT + "). Possible leak detected.");
+                "TenantContext ignore count exceeded maximum (" + maxIgnoreCount + "). Possible leak detected.");
         }
         ignoreCount.set(current + 1);
     }
@@ -77,10 +113,10 @@ public final class TenantContext {
      */
     public static void checkHealth() {
         int current = ignoreCount.get();
-        if (current > MAX_IGNORE_COUNT / 2) {
+        if (current > maxIgnoreCount / 2) {
             log.warn("TenantContext ignore count ({}) is unusually high (max={}). "
                 + "This may indicate a counter drift caused by exceptions in @IgnoreTenant methods. "
-                + "Consider calling reset() to clear the counter.", current, MAX_IGNORE_COUNT);
+                + "Consider calling reset() to clear the counter.", current, maxIgnoreCount);
         }
     }
 
