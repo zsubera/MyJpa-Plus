@@ -501,6 +501,13 @@ public class MergeSpec<T> {
         if (batchSize <= 0) {
             throw new IllegalArgumentException("batchSize must be positive");
         }
+        // P1: If Spring transaction is active, warn and execute within it (no separate tx possible)
+        if (TransactionSynchronizationManager.isActualTransactionActive()) {
+            log.warn("executeBatchInSeparateTransactions called within an active Spring transaction. "
+                + "All operations will execute within the existing transaction. "
+                + "Use executeBatch() for Spring-managed transactions.");
+            return executeBatch(entities, em, batchSize);
+        }
         int total = 0;
         int count = 0;
         EntityTransaction tx = null;
@@ -516,6 +523,10 @@ public class MergeSpec<T> {
                 if (tx != null && !tx.isActive()) {
                     tx.begin();
                     txStarted = true;
+                } else if (tx == null) {
+                    // JTA environment: cannot manage transactions directly
+                    throw new MyJpaPlusException("Cannot manage transactions in JTA environment. "
+                        + "Use @Transactional annotation or MyJpaTemplate.executeBatch() instead.");
                 }
             }
             try {

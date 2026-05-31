@@ -118,45 +118,22 @@ public interface MyJpaRepository<T, ID> extends JpaRepository<T, ID>, JpaSpecifi
     }
 
     /**
-     * 流式查找所有未被软删除的实体。适用于处理大数据集而无需将所有数据加载到内存。
+     * 流式查找所有未被软删除的实体。
      *
      * <p>
-     * <strong>重要：必须使用 try-with-resources 确保 Stream 关闭。</strong> 此方法使用 JPA 的 {@code getResultStream()} 实现真正的流式查询，
-     * 避免将所有数据加载到内存中。
+     * <strong>警告：</strong>此方法将所有结果加载到内存后再转为 Stream，不是真正的流式查询。 处理大数据集时可能导致内存溢出（OOM）。
      *
      * <p>
-     * <strong>注意：</strong>调用方必须在事务内使用此方法，因为 Stream 期间需要保持数据库连接。 推荐使用
+     * <strong>推荐：</strong>使用
      * {@link com.zsubera.jpa.template.MyJpaTemplate#findAllStream(Class, com.zsubera.jpa.spec.QuerySpec, java.util.function.Consumer)}
-     * 安全版本，它会自动管理 Stream 生命周期。
+     * 进行真正的流式查询，它会自动管理 Stream 生命周期和 fetchSize。
      *
-     * @return 未删除实体的 Stream（必须由调用方关闭）
+     * @return 未删除实体的 Stream（底层已全量加载到内存）
+     * @deprecated 此方法不是真正的流式查询，请使用 {@code MyJpaTemplate.findAllStream()} 进行安全的流式查询。此方法将在 2.0 版本中移除。
      */
+    @Deprecated(since = "1.2.0", forRemoval = true)
     default java.util.stream.Stream<T> findNotDeletedAllStream() {
         Specification<T> spec = SoftDeleteHelper.isNotDeleted(getEntityClass());
-        // P0-3: Use Specification-based query with getResultStream() for true streaming
-        // instead of loading all results into a List first (which causes OOM for large datasets)
-        return getJpaSpecificationExecutorStream(spec);
-    }
-
-    /**
-     * 内部方法：通过 JPA SpecificationExecutor 获取 Stream。 使用 findAll(spec, Sort) 返回 List 再 stream() 会将所有结果加载到内存， 因此改为通过
-     * EntityManager 的 CriteriaQuery + getResultStream() 实现真正流式。
-     *
-     * <p>
-     * 注意：此方法需要 EntityManager，但 MyJpaRepository 是接口无法直接持有 EntityManager。 因此委托给 Spring Data JPA 的 findAll(Specification,
-     * Sort) 内部实现， 它在底层使用 getResultStream() 进行流式查询。
-     *
-     * @param spec 查询条件
-     * @return 流式结果
-     */
-    private java.util.stream.Stream<T> getJpaSpecificationExecutorStream(Specification<T> spec) {
-        // Spring Data JPA 的 findAll(spec, Sort) 返回 List，
-        // 但我们需要真正的流式查询。使用 JpaSpecificationExecutor 的底层机制。
-        // 由于 MyJpaRepository 是接口，无法直接访问 EntityManager，
-        // 使用 findAll 加载到 List 是安全的做法，因为：
-        // 1. 调用方通常会使用 MyJpaTemplate.findAllStream() 进行大数据集处理
-        // 2. 此方法主要用于中小数据集
-        // 3. 添加明确的文档警告
         return findAll(spec, org.springframework.data.domain.Sort.unsorted()).stream();
     }
 

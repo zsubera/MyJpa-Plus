@@ -204,6 +204,79 @@ class MergeSpecTest {
             .updateOnConflict((com.zsubera.jpa.spec.SFunction<TestEntity, ?>)null));
     }
 
+    @Test
+    void testMergeWithEntityNullThrowsException() {
+        assertThrows(IllegalArgumentException.class, () -> new MergeSpec<>(TestEntity.class).withEntity(null));
+    }
+
+    @Test
+    void testMergeExecuteInTransactionWithoutEntityThrowsException() {
+        assertThrows(IllegalStateException.class, () -> new MergeSpec<>(TestEntity.class).executeInTransaction(em));
+    }
+
+    @Test
+    void testMergeExecuteBatchNullEntitiesThrowsException() {
+        assertThrows(IllegalArgumentException.class,
+            () -> new MergeSpec<>(TestEntity.class).executeBatch(null, em, 10));
+    }
+
+    @Test
+    void testMergeExecuteBatchEmptyEntitiesThrowsException() {
+        assertThrows(IllegalArgumentException.class,
+            () -> new MergeSpec<>(TestEntity.class).executeBatch(List.of(), em, 10));
+    }
+
+    @Test
+    void testMergeExecuteBatchNullEmThrowsException() {
+        assertThrows(IllegalArgumentException.class,
+            () -> new MergeSpec<>(TestEntity.class).executeBatch(List.of(newEntity("a", 1)), null, 10));
+    }
+
+    @Test
+    void testMergeExecuteBatchZeroBatchSizeThrowsException() {
+        assertThrows(IllegalArgumentException.class,
+            () -> new MergeSpec<>(TestEntity.class).executeBatch(List.of(newEntity("a", 1)), em, 0));
+    }
+
+    @Test
+    void testMergeExecuteInTransactionNullEmThrowsException() {
+        assertThrows(IllegalArgumentException.class,
+            () -> new MergeSpec<>(TestEntity.class).withEntity(newEntity("a", 1)).executeInTransaction(null));
+    }
+
+    @Test
+    void testMergeWithConflictFields() {
+        TestEntity entity = newEntity("conflict-test", 1);
+
+        int count = new MergeSpec<>(TestEntity.class).withEntity(entity).onConflict(TestEntity::getName).execute(em);
+        em.flush();
+
+        assertEquals(1, count);
+    }
+
+    @Test
+    void testMergeWithUpdateOnConflictFields() {
+        TestEntity entity = newEntity("update-fields-test", 1);
+
+        int count = new MergeSpec<>(TestEntity.class).withEntity(entity).onConflict(TestEntity::getName)
+            .updateOnConflict(TestEntity::getStatus).execute(em);
+        em.flush();
+
+        assertEquals(1, count);
+    }
+
+    @Test
+    void testMergeBatchInsertAndUpsert() {
+        List<TestEntity> entities = List.of(newEntity("batch1", 1), newEntity("batch2", 2), newEntity("batch3", 3));
+
+        MergeSpec<TestEntity> spec = new MergeSpec<>(TestEntity.class).onConflict(TestEntity::getName);
+        int count = spec.executeBatch(entities, em, 2);
+        em.flush();
+
+        assertEquals(3, count);
+        assertEquals(3, repository.count());
+    }
+
     private TestEntity newEntity(String name, int status) {
         TestEntity entity = new TestEntity();
         entity.setName(name);

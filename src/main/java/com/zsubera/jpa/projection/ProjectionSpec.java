@@ -63,8 +63,8 @@ public class ProjectionSpec<T> {
     private final List<JoinSpec> joins = new ArrayList<>();
     private final List<OrderSpec> orderSpecs = new ArrayList<>();
     private final List<String> groupByFields = new ArrayList<>();
-    private final List<jakarta.persistence.criteria.Predicate> havingPredicates = new ArrayList<>();
     private Class<?> dtoClass;
+    private boolean distinct = false;
 
     /** 租户过滤提供者，用于自动注入租户 WHERE 条件。 */
     private TenantProvider tenantProvider;
@@ -199,6 +199,16 @@ public class ProjectionSpec<T> {
             throw new IllegalArgumentException("field must not be null");
         }
         selections.put(LambdaUtils.getPropertyName(field), field);
+        return this;
+    }
+
+    /**
+     * 启用 SELECT DISTINCT 查询，去除重复结果。
+     *
+     * @return 当前 ProjectionSpec 实例，支持链式调用
+     */
+    public ProjectionSpec<T> distinct() {
+        this.distinct = true;
         return this;
     }
 
@@ -529,6 +539,11 @@ public class ProjectionSpec<T> {
             List<jakarta.persistence.criteria.Selection<?>> selectionList = buildSelectionList(root, cb);
             query.multiselect(selectionList);
 
+            // Apply DISTINCT
+            if (distinct) {
+                query.distinct(true);
+            }
+
             // Apply WHERE
             applyPredicate(root, query, cb);
 
@@ -640,6 +655,11 @@ public class ProjectionSpec<T> {
             query.select((CompoundSelection<R>)cb.construct(dtoClass,
                 selectionList.toArray(new jakarta.persistence.criteria.Selection[0])));
 
+            // Apply DISTINCT
+            if (distinct) {
+                query.distinct(true);
+            }
+
             // Apply WHERE
             applyPredicate(root, query, cb);
 
@@ -725,7 +745,7 @@ public class ProjectionSpec<T> {
                 if (havingPredicate != null) {
                     havingCountQuery.having(havingPredicate);
                 }
-                havingCountQuery.select(cb.count(havingRoot));
+                havingCountQuery.select(cb.countDistinct(havingRoot));
                 total = em.createQuery(havingCountQuery).getSingleResult();
             } else {
                 countQuery.select(cb.countDistinct(countRoot));

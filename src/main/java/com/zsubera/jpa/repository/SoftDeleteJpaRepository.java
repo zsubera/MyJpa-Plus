@@ -340,6 +340,10 @@ public class SoftDeleteJpaRepository<T, ID> extends SimpleJpaRepository<T, ID> {
                             idList.add(id);
                         }
                     }
+                } catch (java.lang.reflect.InaccessibleObjectException e) {
+                    throw new IllegalStateException("Cannot access ID field '" + idFieldName + "'. "
+                        + "In Java 17+ module system, add JVM argument: --add-opens " + domainClass.getPackageName()
+                        + "=ALL-UNNAMED", e);
                 } catch (IllegalAccessException e) {
                     throw new MyJpaPlusException("Failed to access ID field for batch delete", e);
                 }

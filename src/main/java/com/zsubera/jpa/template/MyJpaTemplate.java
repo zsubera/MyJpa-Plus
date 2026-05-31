@@ -621,7 +621,43 @@ public class MyJpaTemplate {
      */
     private <T> Stream<T> doFindStream(Class<T> entityClass, QuerySpec<T> spec, EntityGraphHelper<T> entityGraph) {
         TypedQuery<T> query = buildTypedQuery(entityClass, spec, entityGraph, null);
+        // P0: Set fetchSize for streaming queries. PostgreSQL requires fetchSize > 0 for true streaming;
+        // MySQL uses Integer.MIN_VALUE for streaming mode; other databases use default.
+        int fetchSize = determineFetchSize();
+        if (fetchSize != 0) {
+            query.setHint("jakarta.persistence.query.fetchSize", fetchSize);
+        }
         return query.getResultStream();
+    }
+
+    /**
+     * Determine appropriate fetchSize for streaming queries based on database dialect.
+     *
+     * <p>
+     * PostgreSQL requires fetchSize > 0 to enable server-side cursors for streaming. MySQL uses Integer.MIN_VALUE to
+     * enable streaming mode. Other databases use default (no hint).
+     *
+     * @return fetchSize value, 0 means no hint will be set
+     */
+    private int determineFetchSize() {
+        try {
+            Object urlObj = entityManager.getEntityManagerFactory().getProperties().get("jakarta.persistence.jdbc.url");
+            if (urlObj == null) {
+                urlObj = entityManager.getEntityManagerFactory().getProperties().get("hibernate.connection.url");
+            }
+            if (urlObj != null) {
+                String lower = urlObj.toString().toLowerCase();
+                if (lower.contains("postgresql")) {
+                    return 100;
+                }
+                if (lower.contains("mysql")) {
+                    return Integer.MIN_VALUE;
+                }
+            }
+        } catch (Exception e) {
+            log.debug("Failed to determine fetchSize from JDBC URL: {}", e.getMessage());
+        }
+        return 0;
     }
 
     /**

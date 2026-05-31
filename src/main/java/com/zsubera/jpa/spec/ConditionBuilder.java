@@ -51,9 +51,9 @@ public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> {
      * P2: 安全嵌套字段名正则表达式：允许字母、数字、下划线和点号。
      *
      * <p>
-     * 用于校验需要支持嵌套属性路径的场景（如 JPA 嵌入对象的字段引用 {@code "address.city"}）。 点号分隔的每一段必须以字母或下划线开头。
+     * 用于校验需要支持嵌套属性路径的场景（如 JPA 嵌入对象的字段引用 {@code "address.city"}）。 点号分隔的每一段必须以字母或下划线开头，不允许连续点号。
      */
-    Pattern SAFE_NESTED_FIELD_NAME_PATTERN = Pattern.compile("^[a-zA-Z_][a-zA-Z0-9_.]*$");
+    Pattern SAFE_NESTED_FIELD_NAME_PATTERN = Pattern.compile("^[a-zA-Z_][a-zA-Z0-9_]*(\\.[a-zA-Z_][a-zA-Z0-9_]*)*$");
 
     /**
      * 安全数据库函数名白名单。仅允许调用以下常见安全函数。
@@ -720,6 +720,21 @@ public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> {
         conditions().add(new ConditionNode.SimpleNode(LambdaUtils.getPropertyName(field), "%" + escaped + "%",
             ConditionNode.Op.LIKE_IGNORE_CASE, PredicateHelper.LIKE_ESCAPE_CHAR));
         return self();
+    }
+
+    /**
+     * 添加不区分大小写的包含匹配条件：{@code UPPER(field) LIKE UPPER('%value%')}。
+     *
+     * <p>
+     * 值中的 {@code %} 或 {@code _} 字符会被转义，作为字面量处理，防止 LIKE 注入。
+     *
+     * @param field 实体属性的方法引用
+     * @param value 要匹配的原始字符串值（通配符会被转义）
+     * @return 当前构建器以支持链式调用
+     * @throws IllegalArgumentException 如果 {@code field} 或 {@code value} 为 null
+     */
+    default SELF containsIgnoreCase(SFunction<E, ?> field, String value) {
+        return likeIgnoreCase(field, value);
     }
 
     // ---- 集合空值检查 ----

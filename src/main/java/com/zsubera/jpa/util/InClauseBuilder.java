@@ -268,7 +268,7 @@ public final class InClauseBuilder {
                 "IN clause has {} values (hard limit: {}), which may cause severe database performance degradation. "
                     + "Consider using temporary tables or subqueries.",
                 values.size(), hardLimit);
-        } else if (values.size() > Math.min(warningThreshold, 10_000)) {
+        } else if (values.size() > 10_000) {
             log.warn("IN clause has {} values, which may cause performance issues. "
                 + "Consider using temporary tables or subqueries for better performance.", values.size());
         }
@@ -304,7 +304,7 @@ public final class InClauseBuilder {
                 "NOT IN clause has {} values (hard limit: {}), which may cause severe database performance degradation. "
                     + "Consider using temporary tables or subqueries.",
                 values.size(), hardLimit);
-        } else if (values.size() > Math.min(warningThreshold, 10_000)) {
+        } else if (values.size() > 10_000) {
             log.warn("NOT IN clause has {} values, which may cause performance issues. "
                 + "Consider using temporary tables or subqueries for better performance.", values.size());
         }
