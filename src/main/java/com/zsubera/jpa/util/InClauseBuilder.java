@@ -283,7 +283,6 @@ public final class InClauseBuilder {
             batch.add(v);
             if (batch.size() >= maxInClauseSize) {
                 batchPredicates.add(buildSingleIn(cb, path, batch));
-                // 创建新列表以释放旧批次的引用，防止内存泄漏
                 batch = new ArrayList<>(maxInClauseSize);
             }
         }

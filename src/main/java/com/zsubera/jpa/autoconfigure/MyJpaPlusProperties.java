@@ -120,6 +120,11 @@ public class MyJpaPlusProperties {
          */
         private int lambdaCacheSize = 4096;
 
+        /**
+         * 查询超时默认时间（秒）。设置后所有查询将自动应用此超时。 设置为 {@code -1} 表示不设置默认超时。 默认值：{@code -1}（不设置）
+         */
+        private int defaultTimeoutSeconds = -1;
+
         public int getMaxResults() {
             return maxResults;
         }
@@ -184,6 +189,17 @@ public class MyJpaPlusProperties {
                 throw new IllegalArgumentException("lambdaCacheSize must be positive");
             }
             this.lambdaCacheSize = lambdaCacheSize;
+        }
+
+        public int getDefaultTimeoutSeconds() {
+            return defaultTimeoutSeconds;
+        }
+
+        public void setDefaultTimeoutSeconds(int defaultTimeoutSeconds) {
+            if (defaultTimeoutSeconds <= 0 && defaultTimeoutSeconds != -1) {
+                throw new IllegalArgumentException("defaultTimeoutSeconds must be positive or -1 (disabled)");
+            }
+            this.defaultTimeoutSeconds = defaultTimeoutSeconds;
         }
     }
 

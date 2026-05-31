@@ -27,6 +27,9 @@ public class OptimisticLockRetryAdvisor {
 
     private static final Logger log = LoggerFactory.getLogger(OptimisticLockRetryAdvisor.class);
 
+    /** 最大退避延迟上限（毫秒），防止指数退避无限增长。 */
+    private static final long MAX_BACKOFF_MS = 30_000;
+
     /**
      * Intercepts methods annotated with {@link RetryOnOptimisticLock} and retries on {@link OptimisticLockException}.
      *
@@ -54,7 +57,7 @@ public class OptimisticLockRetryAdvisor {
                         method.getDeclaringClass().getSimpleName(), method.getName());
                     throw ex;
                 }
-                long baseDelay = backoffMs * (1L << (attempt - 1));
+                long baseDelay = Math.min(backoffMs * (1L << (attempt - 1)), MAX_BACKOFF_MS);
                 // Add random jitter (0-25% of base delay) to prevent thundering herd
                 long jitter = (long)(baseDelay * 0.25 * ThreadLocalRandom.current().nextDouble());
                 long delay = baseDelay + jitter;

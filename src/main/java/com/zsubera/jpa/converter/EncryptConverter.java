@@ -212,6 +212,13 @@ public class EncryptConverter implements AttributeConverter<String, String> {
                     }
                 }
                 if (looksLikeAscii) {
+                    int uniqueChars = (int)new String(keyBytes, StandardCharsets.US_ASCII).chars().distinct().count();
+                    String profile = System.getProperty("spring.profiles.active", "");
+                    if (uniqueChars < 10 && (profile.contains("prod") || profile.contains("production"))) {
+                        throw new IllegalStateException("Encryption key has low entropy (" + uniqueChars
+                            + " unique characters). " + "Use Base64-encoded high-entropy key for production. "
+                            + "Set MYJPA_ENCRYPT_KEY to a Base64-encoded random key.");
+                    }
                     LOG.log(System.Logger.Level.WARNING,
                         "Raw key looks like printable ASCII ({0} bytes). "
                             + "Use Base64-encoded high-entropy key for production. "
@@ -232,9 +239,10 @@ public class EncryptConverter implements AttributeConverter<String, String> {
     }
 
     /**
-     * 获取 PBKDF2 盐值。优先从环境变量获取，回退到默认值。
+     * 获取 PBKDF2 盐值。优先从环境变量获取，回退到系统属性。 生产环境（spring.profiles.active 包含 prod/production）强制要求配置盐值。
      *
      * @return 盐值字节数组
+     * @throws IllegalStateException 生产环境未配置盐值时抛出
      */
     private static byte[] getSalt() {
         String salt = System.getenv(SALT_ENV);
@@ -242,6 +250,11 @@ public class EncryptConverter implements AttributeConverter<String, String> {
             salt = System.getProperty(SALT_PROPERTY);
         }
         if (salt == null || salt.isEmpty()) {
+            String profile = System.getProperty("spring.profiles.active", "");
+            if (profile.contains("prod") || profile.contains("production")) {
+                throw new IllegalStateException("PBKDF2 salt must be configured in production. "
+                    + "Set environment variable " + SALT_ENV + " or system property " + SALT_PROPERTY);
+            }
             LOG.log(System.Logger.Level.WARNING,
                 "Using default PBKDF2 salt. Set environment variable {0} or system property {1} for production use.",
                 SALT_ENV, SALT_PROPERTY);

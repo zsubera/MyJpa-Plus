@@ -36,7 +36,7 @@ public final class TenantContext {
      * @throws IllegalStateException 如果计数超过安全上限（可能存在泄漏）
      */
     public static void pushIgnore() {
-        int current = ignoreCount.get() == null ? 0 : ignoreCount.get();
+        int current = ignoreCount.get();
         if (current >= MAX_IGNORE_COUNT) {
             throw new IllegalStateException(
                 "TenantContext ignore count exceeded maximum (" + MAX_IGNORE_COUNT + "). Possible leak detected.");

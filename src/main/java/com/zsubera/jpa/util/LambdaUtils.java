@@ -50,7 +50,7 @@ public final class LambdaUtils {
     private static final int METHOD_CACHE_INITIAL_CAPACITY = 256;
 
     /** METHOD_CACHE 最大容量，超过时触发驱逐 */
-    private static final int METHOD_CACHE_MAX_SIZE = 2048;
+    private static final int METHOD_CACHE_MAX_SIZE = 4096;
 
     /**
      * 属性名缓存的最大大小。
@@ -220,13 +220,23 @@ public final class LambdaUtils {
     private static final java.util.concurrent.atomic.AtomicBoolean CACHE_EVICTING =
         new java.util.concurrent.atomic.AtomicBoolean(false);
 
+    /** 调用计数器，用于采样驱逐检查 */
+    private static final java.util.concurrent.atomic.AtomicInteger CALL_COUNTER =
+        new java.util.concurrent.atomic.AtomicInteger(0);
+
+    /** 采样间隔：每 N 次调用检查一次驱逐 */
+    private static final int EVICTION_CHECK_INTERVAL = 100;
+
     /**
-     * 驱逐主缓存中的旧条目，防止缓存无限增长。
+     * 驱逐主缓存中的旧条目，防止缓存无限增长。使用采样策略，每 100 次调用检查一次。
      *
      * <p>
      * 当缓存大小超过 {@link #maxCacheSize} 时，清除约 25% 的条目。 使用 CAS 确保只有一个线程执行驱逐。
      */
     private static void evictCacheIfNeeded() {
+        if (CALL_COUNTER.incrementAndGet() % EVICTION_CHECK_INTERVAL != 0) {
+            return;
+        }
         if (CACHE.size() > maxCacheSize && CACHE_EVICTING.compareAndSet(false, true)) {
             try {
                 int currentSize = CACHE.size();
@@ -252,6 +262,9 @@ public final class LambdaUtils {
     }
 
     private static void evictMethodCacheIfNeeded() {
+        if (CALL_COUNTER.get() % EVICTION_CHECK_INTERVAL != 0) {
+            return;
+        }
         if (METHOD_CACHE.size() > METHOD_CACHE_MAX_SIZE && METHOD_EVICTING.compareAndSet(false, true)) {
             try {
                 int currentSize = METHOD_CACHE.size();

@@ -55,6 +55,10 @@ public class MergeSpec<T> {
     /** 安全标识符正则：仅允许字母、数字、下划线和点号（用于 schema.table 格式）。 */
     private static final Pattern SAFE_IDENTIFIER_PATTERN = Pattern.compile("^[a-zA-Z_][a-zA-Z0-9_.]*$");
 
+    /** 缓存实体类的持久化字段列表，避免每次反射遍历。 */
+    private static final java.util.concurrent.ConcurrentMap<Class<?>, List<java.lang.reflect.Field>> FIELD_CACHE =
+        new java.util.concurrent.ConcurrentHashMap<>();
+
     private final Class<T> entityClass;
     private T entity;
     private final List<String> conflictFields = new ArrayList<>();
@@ -192,12 +196,26 @@ public class MergeSpec<T> {
         if (explicitUpdateFields) {
             // Use UPDATE-then-INSERT strategy for partial column updates.
             // H2 MERGE INTO replaces the entire row, which doesn't support partial updates.
-            // Note: This approach has a potential race condition in high-concurrency scenarios.
-            // For production use with concurrent access, consider using PostgreSQL or MySQL
-            // which support INSERT ... ON CONFLICT/DO UPDATE with partial column updates.
-            int updated = executeConditionalUpdate(em, allFieldValues, effectiveConflictFields);
-            if (updated > 0) {
-                return updated;
+            // Retry logic handles rare race conditions in concurrent scenarios.
+            int maxRetries = 3;
+            for (int attempt = 0; attempt < maxRetries; attempt++) {
+                try {
+                    int updated = executeConditionalUpdate(em, allFieldValues, effectiveConflictFields);
+                    if (updated > 0) {
+                        return updated;
+                    }
+                    return executeSimpleInsert(em, allFieldValues);
+                } catch (jakarta.persistence.PersistenceException e) {
+                    if (attempt < maxRetries - 1 && e.getMessage() != null
+                        && e.getMessage().toLowerCase().contains("unique")) {
+                        if (log.isDebugEnabled()) {
+                            log.debug("H2 UPSERT race condition detected on attempt {}/{}, retrying", attempt + 1,
+                                maxRetries);
+                        }
+                        continue;
+                    }
+                    throw e;
+                }
             }
             return executeSimpleInsert(em, allFieldValues);
         }
@@ -296,7 +314,7 @@ public class MergeSpec<T> {
      * @return 受影响的行数
      */
     private int executeNativeQuery(EntityManager em, String sql, List<Object> params) {
-        var query = em.createNativeQuery(sql, entityClass);
+        var query = em.createNativeQuery(sql);
         for (int i = 0; i < params.size(); i++) {
             query.setParameter(i + 1, params.get(i));
         }
@@ -614,11 +632,14 @@ public class MergeSpec<T> {
             throw new MyJpaPlusException("Invalid SQL identifier: '" + identifier
                 + "'. Only alphanumeric characters, underscores, and dots are allowed.");
         }
-        // H2 默认将标识符转为大写存储，加引号会导致大小写敏感问题，因此不加引号
+        // Always quote identifiers to handle reserved words and case sensitivity.
+        // H2 default mode stores identifiers in uppercase; quoting makes it case-sensitive,
+        // so H2 identifiers are NOT quoted to preserve backward compatibility.
         return switch (dialect) {
-            case "postgresql" -> "\"" + identifier + "\"";
-            case "mysql" -> "`" + identifier + "`";
-            default -> identifier;
+            case "postgresql" -> "\"" + identifier.replace("\"", "\"\"") + "\"";
+            case "mysql" -> "`" + identifier.replace("`", "``") + "`";
+            case "h2" -> identifier;
+            default -> "\"" + identifier.replace("\"", "\"\"") + "\"";
         };
     }
 
@@ -725,36 +746,38 @@ public class MergeSpec<T> {
             throw new IllegalStateException("Entity must be specified via withEntity() before extracting field values");
         }
         List<EntityFieldValue> fieldValues = new ArrayList<>();
-        List<Field> allFields = new ArrayList<>();
-        for (Class<?> c = entityClass; c != null && c != Object.class; c = c.getSuperclass()) {
-            for (Field f : c.getDeclaredFields()) {
-                if (!java.lang.reflect.Modifier.isStatic(f.getModifiers())
-                    && !java.lang.reflect.Modifier.isTransient(f.getModifiers())
-                    && !f.isAnnotationPresent(jakarta.persistence.Transient.class)
-                    && !f.isAnnotationPresent(jakarta.persistence.OneToMany.class)
-                    && !f.isAnnotationPresent(jakarta.persistence.ManyToOne.class)
-                    && !f.isAnnotationPresent(jakarta.persistence.ManyToMany.class)
-                    && !f.isAnnotationPresent(jakarta.persistence.OneToOne.class)
-                    && !f.isAnnotationPresent(jakarta.persistence.EmbeddedId.class)) {
-                    // Skip @Embedded fields - they require special handling via @AttributeOverride
-                    if (f.isAnnotationPresent(jakarta.persistence.Embedded.class)) {
-                        log.debug(
-                            "Skipping @Embedded field '{}' in MergeSpec - use @AttributeOverride for column mapping",
-                            f.getName());
-                        continue;
+        List<Field> allFields = FIELD_CACHE.computeIfAbsent(entityClass, cls -> {
+            List<Field> fields = new ArrayList<>();
+            for (Class<?> c = cls; c != null && c != Object.class; c = c.getSuperclass()) {
+                for (Field f : c.getDeclaredFields()) {
+                    if (!java.lang.reflect.Modifier.isStatic(f.getModifiers())
+                        && !java.lang.reflect.Modifier.isTransient(f.getModifiers())
+                        && !f.isAnnotationPresent(jakarta.persistence.Transient.class)
+                        && !f.isAnnotationPresent(jakarta.persistence.OneToMany.class)
+                        && !f.isAnnotationPresent(jakarta.persistence.ManyToOne.class)
+                        && !f.isAnnotationPresent(jakarta.persistence.ManyToMany.class)
+                        && !f.isAnnotationPresent(jakarta.persistence.OneToOne.class)
+                        && !f.isAnnotationPresent(jakarta.persistence.EmbeddedId.class)) {
+                        if (f.isAnnotationPresent(jakarta.persistence.Embedded.class)) {
+                            log.debug(
+                                "Skipping @Embedded field '{}' in MergeSpec - use @AttributeOverride for column mapping",
+                                f.getName());
+                            continue;
+                        }
+                        try {
+                            f.setAccessible(true);
+                        } catch (InaccessibleObjectException e) {
+                            throw new MyJpaPlusException("Cannot access field '" + f.getName() + "' in " + cls.getName()
+                                + ". If using Java 17+ module system, add JVM argument: " + "--add-opens "
+                                + f.getDeclaringClass().getPackageName() + "=ALL-UNNAMED", e);
+                        }
+                        fields.add(f);
                     }
-                    allFields.add(f);
                 }
             }
-        }
+            return fields;
+        });
         for (Field f : allFields) {
-            try {
-                f.setAccessible(true);
-            } catch (InaccessibleObjectException e) {
-                throw new MyJpaPlusException("Cannot access field '" + f.getName() + "' in " + entityClass.getName()
-                    + ". If using Java 17+ module system, add JVM argument: " + "--add-opens "
-                    + f.getDeclaringClass().getPackageName() + "=ALL-UNNAMED", e);
-            }
             try {
                 Object value = f.get(entity);
                 String columnName = resolveColumnName(f);

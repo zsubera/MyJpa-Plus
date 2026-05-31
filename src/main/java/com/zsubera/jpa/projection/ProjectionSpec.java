@@ -493,47 +493,51 @@ public class ProjectionSpec<T> {
         CriteriaQuery<Tuple> query = cb.createTupleQuery();
         Root<T> root = query.from(entityClass);
 
-        // Apply joins (side effects on root)
-        resolveJoins(root, cb);
+        try {
+            // Apply joins (side effects on root)
+            resolveJoins(root, cb);
 
-        // Apply selections
-        List<jakarta.persistence.criteria.Selection<?>> selectionList = buildSelectionList(root, cb);
-        query.multiselect(selectionList);
+            // Apply selections
+            List<jakarta.persistence.criteria.Selection<?>> selectionList = buildSelectionList(root, cb);
+            query.multiselect(selectionList);
 
-        // Apply WHERE
-        applyPredicate(root, query, cb);
+            // Apply WHERE
+            applyPredicate(root, query, cb);
 
-        // Apply GROUP BY
-        if (!groupByFields.isEmpty()) {
-            List<jakarta.persistence.criteria.Expression<?>> groupByExpressions = new ArrayList<>();
-            for (String field : groupByFields) {
-                groupByExpressions.add(root.get(field));
+            // Apply GROUP BY
+            if (!groupByFields.isEmpty()) {
+                List<jakarta.persistence.criteria.Expression<?>> groupByExpressions = new ArrayList<>();
+                for (String field : groupByFields) {
+                    groupByExpressions.add(root.get(field));
+                }
+                query.groupBy(groupByExpressions);
             }
-            query.groupBy(groupByExpressions);
-        }
 
-        // Apply HAVING
-        if (havingPredicateFn != null) {
-            jakarta.persistence.criteria.Predicate havingPredicate = havingPredicateFn.apply(root, cb);
-            if (havingPredicate != null) {
-                query.having(havingPredicate);
+            // Apply HAVING
+            if (havingPredicateFn != null) {
+                jakarta.persistence.criteria.Predicate havingPredicate = havingPredicateFn.apply(root, cb);
+                if (havingPredicate != null) {
+                    query.having(havingPredicate);
+                }
             }
-        }
 
-        // Apply ORDER BY
-        applyOrderBy(root, cb, query);
+            // Apply ORDER BY
+            applyOrderBy(root, cb, query);
 
-        TypedQuery<Tuple> typedQuery = em.createQuery(query);
-        if (maxResults > 0) {
-            typedQuery.setMaxResults(maxResults);
-            if (maxResults == MyJpaTemplate.DEFAULT_MAX_RESULTS && selections.size() > 0) {
-                log.warn(
-                    "ProjectionSpec query limited to {} rows by default. "
-                        + "Use toTupleQuery(em, -1) for unlimited results or toTupleQuery(em, N) for custom limit.",
-                    maxResults);
+            TypedQuery<Tuple> typedQuery = em.createQuery(query);
+            if (maxResults > 0) {
+                typedQuery.setMaxResults(maxResults);
+                if (maxResults == MyJpaTemplate.DEFAULT_MAX_RESULTS && selections.size() > 0) {
+                    log.warn(
+                        "ProjectionSpec query limited to {} rows by default. "
+                            + "Use toTupleQuery(em, -1) for unlimited results or toTupleQuery(em, N) for custom limit.",
+                        maxResults);
+                }
             }
+            return typedQuery;
+        } finally {
+            clearJoinCache();
         }
-        return typedQuery;
     }
 
     /**
@@ -599,42 +603,46 @@ public class ProjectionSpec<T> {
         CriteriaQuery<R> query = (CriteriaQuery<R>)cb.createQuery(dtoClass);
         Root<T> root = query.from(entityClass);
 
-        // Apply joins
-        resolveJoins(root, cb);
+        try {
+            // Apply joins
+            resolveJoins(root, cb);
 
-        // Apply selections as constructor arguments
-        List<jakarta.persistence.criteria.Selection<?>> selectionList = buildSelectionList(root, cb);
-        query.select((CompoundSelection<R>)cb.construct(dtoClass,
-            selectionList.toArray(new jakarta.persistence.criteria.Selection[0])));
+            // Apply selections as constructor arguments
+            List<jakarta.persistence.criteria.Selection<?>> selectionList = buildSelectionList(root, cb);
+            query.select((CompoundSelection<R>)cb.construct(dtoClass,
+                selectionList.toArray(new jakarta.persistence.criteria.Selection[0])));
 
-        // Apply WHERE
-        applyPredicate(root, query, cb);
+            // Apply WHERE
+            applyPredicate(root, query, cb);
 
-        // Apply GROUP BY
-        if (!groupByFields.isEmpty()) {
-            List<jakarta.persistence.criteria.Expression<?>> groupByExpressions = new ArrayList<>();
-            for (String gf : groupByFields) {
-                groupByExpressions.add(root.get(gf));
+            // Apply GROUP BY
+            if (!groupByFields.isEmpty()) {
+                List<jakarta.persistence.criteria.Expression<?>> groupByExpressions = new ArrayList<>();
+                for (String gf : groupByFields) {
+                    groupByExpressions.add(root.get(gf));
+                }
+                query.groupBy(groupByExpressions);
             }
-            query.groupBy(groupByExpressions);
-        }
 
-        // Apply HAVING
-        if (havingPredicateFn != null) {
-            jakarta.persistence.criteria.Predicate havingPredicate = havingPredicateFn.apply(root, cb);
-            if (havingPredicate != null) {
-                query.having(havingPredicate);
+            // Apply HAVING
+            if (havingPredicateFn != null) {
+                jakarta.persistence.criteria.Predicate havingPredicate = havingPredicateFn.apply(root, cb);
+                if (havingPredicate != null) {
+                    query.having(havingPredicate);
+                }
             }
-        }
 
-        // Apply ORDER BY
-        applyOrderBy(root, cb, query);
+            // Apply ORDER BY
+            applyOrderBy(root, cb, query);
 
-        TypedQuery<R> typedQuery = em.createQuery(query);
-        if (maxResults > 0) {
-            typedQuery.setMaxResults(maxResults);
+            TypedQuery<R> typedQuery = em.createQuery(query);
+            if (maxResults > 0) {
+                typedQuery.setMaxResults(maxResults);
+            }
+            return typedQuery;
+        } finally {
+            clearJoinCache();
         }
-        return typedQuery;
     }
 
     /**
@@ -665,13 +673,37 @@ public class ProjectionSpec<T> {
 
         try {
             // Build count and data queries sharing a single pass of join resolution per root.
+            Long total;
             // Count query
             CriteriaQuery<Long> countQuery = cb.createQuery(Long.class);
             Root<T> countRoot = countQuery.from(entityClass);
             resolveJoins(countRoot, cb);
-            countQuery.select(cb.countDistinct(countRoot));
-            applyPredicate(countRoot, countQuery, cb);
-            Long total = em.createQuery(countQuery).getSingleResult();
+            if (!groupByFields.isEmpty() && havingPredicateFn != null) {
+                // When GROUP BY + HAVING is present, use a separate count query that
+                // groups by the same fields and applies HAVING, then counts the groups
+                CriteriaQuery<Long> havingCountQuery = cb.createQuery(Long.class);
+                Root<T> havingRoot = havingCountQuery.from(entityClass);
+                resolveJoins(havingRoot, cb);
+                // Apply WHERE predicates
+                applyPredicate(havingRoot, havingCountQuery, cb);
+                // Apply GROUP BY
+                List<jakarta.persistence.criteria.Expression<?>> groupByExpressions = new ArrayList<>();
+                for (String gf : groupByFields) {
+                    groupByExpressions.add(havingRoot.get(gf));
+                }
+                havingCountQuery.groupBy(groupByExpressions);
+                // Apply HAVING
+                jakarta.persistence.criteria.Predicate havingPredicate = havingPredicateFn.apply(havingRoot, cb);
+                if (havingPredicate != null) {
+                    havingCountQuery.having(havingPredicate);
+                }
+                havingCountQuery.select(cb.count(havingRoot));
+                total = em.createQuery(havingCountQuery).getSingleResult();
+            } else {
+                countQuery.select(cb.countDistinct(countRoot));
+                applyPredicate(countRoot, countQuery, cb);
+                total = em.createQuery(countQuery).getSingleResult();
+            }
 
             // Data query - build directly to avoid calling toTupleQuery() which would resolveJoins() again
             CriteriaQuery<Tuple> dataQuery = cb.createTupleQuery();
@@ -864,7 +896,10 @@ public class ProjectionSpec<T> {
         if (tenantProvider != null && !TenantContext.isIgnoreTenant()) {
             Object tenantId = tenantProvider.getCurrentTenantId();
             if (tenantId != null) {
-                predicates.add(cb.equal(root.get("tenantId"), tenantId));
+                String tenantFieldName = resolveTenantFieldName(entityClass);
+                if (tenantFieldName != null) {
+                    predicates.add(cb.equal(root.get(tenantFieldName), tenantId));
+                }
             }
         }
 
@@ -899,5 +934,22 @@ public class ProjectionSpec<T> {
             }
             query.orderBy(orders);
         }
+    }
+
+    /**
+     * 解析实体类中 @TenantId 注解标记的字段名。
+     *
+     * @param entityClass 实体类
+     * @return 租户字段名，如果未找到则返回 null
+     */
+    private static String resolveTenantFieldName(Class<?> entityClass) {
+        for (Class<?> c = entityClass; c != null && c != Object.class; c = c.getSuperclass()) {
+            for (java.lang.reflect.Field f : c.getDeclaredFields()) {
+                if (f.isAnnotationPresent(com.zsubera.jpa.annotation.TenantId.class)) {
+                    return f.getName();
+                }
+            }
+        }
+        return null;
     }
 }

@@ -72,7 +72,8 @@ public class SubQuerySpec<S> {
      * @return 新的 SubQuerySpec 实例
      * @throws IllegalArgumentException 如果任何参数为 null
      */
-    static <S> SubQuerySpec<S> create(Subquery<S> subquery, Root<S> root, Root<?> correlatedRoot, CriteriaBuilder cb) {
+    public static <S> SubQuerySpec<S> create(Subquery<S> subquery, Root<S> root, Root<?> correlatedRoot,
+        CriteriaBuilder cb) {
         if (subquery == null) {
             throw new IllegalArgumentException("subquery must not be null");
         }
@@ -88,7 +89,10 @@ public class SubQuerySpec<S> {
         return new SubQuerySpec<>(subquery, root, correlatedRoot, cb);
     }
 
-    void applyWhere() {
+    /**
+     * 将已添加的谓词应用到子查询的 WHERE 子句。
+     */
+    public void applyWhere() {
         if (!predicates.isEmpty()) {
             subquery.where(cb.and(predicates.toArray(new Predicate[0])));
         }
@@ -101,7 +105,12 @@ public class SubQuerySpec<S> {
         predicates.clear();
     }
 
-    boolean isSelectSet() {
+    /**
+     * 检查是否已设置 SELECT 子句。
+     *
+     * @return 如果已设置 SELECT 返回 true
+     */
+    public boolean isSelectSet() {
         return selectSet;
     }
 

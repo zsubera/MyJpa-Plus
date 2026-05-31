@@ -11,6 +11,7 @@ import jakarta.persistence.TypedQuery;
 import jakarta.persistence.criteria.CriteriaBuilder;
 import jakarta.persistence.criteria.CriteriaQuery;
 import jakarta.persistence.criteria.Root;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.function.Consumer;
@@ -292,10 +293,12 @@ public class MyJpaTemplate {
         // 软删除场景：使用 Specification 查询以自动过滤已删除记录
         String idFieldName = EntityClassResolver.resolveIdFieldName(entityClass);
         Specification<T> idSpec = (root, query, cb) -> cb.equal(root.get(idFieldName), id);
+        Specification<T> softDeleteSpec = com.zsubera.jpa.update.SoftDeleteHelper.isNotDeleted(entityClass);
+        Specification<T> combinedSpec = idSpec.and(softDeleteSpec);
         CriteriaBuilder cb = entityManager.getCriteriaBuilder();
         CriteriaQuery<T> cq = cb.createQuery(entityClass);
         Root<T> root = cq.from(entityClass);
-        jakarta.persistence.criteria.Predicate predicate = idSpec.toPredicate(root, cq, cb);
+        jakarta.persistence.criteria.Predicate predicate = combinedSpec.toPredicate(root, cq, cb);
         if (predicate != null) {
             cq.where(predicate);
         }
@@ -1285,5 +1288,108 @@ public class MyJpaTemplate {
             log.debug("TransactionManager not available: {}", e.getMessage());
             return null;
         }
+    }
+
+    /**
+     * 分页查找匹配给定 {@link Specification} 的实体，不执行 count 查询。 使用多查一条记录的方式判断是否有下一页，适用于不需要总记录数的场景。
+     *
+     * @param entityClass 实体类
+     * @param spec 查询规范
+     * @param pageable 分页信息
+     * @param <T> 实体类型
+     * @return 匹配实体的 Slice 结果（无 count 查询）
+     * @throws IllegalArgumentException 如果任何参数为 null
+     */
+    @Transactional(readOnly = true)
+    public <T> org.springframework.data.domain.Slice<T> findSlice(Class<T> entityClass, Specification<T> spec,
+        Pageable pageable) {
+        if (entityClass == null) {
+            throw new IllegalArgumentException("entityClass must not be null");
+        }
+        if (spec == null) {
+            throw new IllegalArgumentException("spec must not be null");
+        }
+        if (pageable == null) {
+            throw new IllegalArgumentException("pageable must not be null");
+        }
+        CriteriaBuilder cb = entityManager.getCriteriaBuilder();
+        CriteriaQuery<T> cq = cb.createQuery(entityClass);
+        Root<T> root = cq.from(entityClass);
+        jakarta.persistence.criteria.Predicate predicate = spec.toPredicate(root, cq, cb);
+        if (predicate != null) {
+            cq.where(predicate);
+        }
+        applySort(cq, root, cb, pageable.getSort());
+        TypedQuery<T> query = entityManager.createQuery(cq);
+        try {
+            query.setFirstResult(Math.toIntExact(pageable.getOffset()));
+        } catch (ArithmeticException e) {
+            throw new IllegalArgumentException("Page offset exceeds Integer.MAX_VALUE.", e);
+        }
+        query.setMaxResults(pageable.getPageSize() + 1);
+        List<T> content = query.getResultList();
+        boolean hasNext = content.size() > pageable.getPageSize();
+        if (hasNext) {
+            content = content.subList(0, pageable.getPageSize());
+        }
+        return new org.springframework.data.domain.SliceImpl<>(content, pageable, hasNext);
+    }
+
+    /**
+     * 根据 ID 集合批量查找实体。
+     *
+     * @param entityClass 实体类
+     * @param ids ID 集合
+     * @param <T> 实体类型
+     * @param <ID> ID 类型
+     * @return 匹配实体列表
+     * @throws IllegalArgumentException 如果任何参数为 null 或 ids 为空
+     */
+    @Transactional(readOnly = true)
+    public <T, ID> List<T> findAllById(Class<T> entityClass, Collection<ID> ids) {
+        if (entityClass == null) {
+            throw new IllegalArgumentException("entityClass must not be null");
+        }
+        if (ids == null || ids.isEmpty()) {
+            throw new IllegalArgumentException("ids must not be null or empty");
+        }
+        String idFieldName = EntityClassResolver.resolveIdFieldName(entityClass);
+        CriteriaBuilder cb = entityManager.getCriteriaBuilder();
+        CriteriaQuery<T> cq = cb.createQuery(entityClass);
+        Root<T> root = cq.from(entityClass);
+        cq.where(root.get(idFieldName).in(ids));
+        return entityManager.createQuery(cq).getResultList();
+    }
+
+    /**
+     * 根据 ID 集合批量查找未被软删除的实体。
+     *
+     * @param entityClass 实体类
+     * @param ids ID 集合
+     * @param <T> 实体类型
+     * @param <ID> ID 类型
+     * @return 匹配的未删除实体列表
+     * @throws IllegalArgumentException 如果任何参数为 null 或 ids 为空
+     */
+    @Transactional(readOnly = true)
+    public <T, ID> List<T> findNotDeletedAllById(Class<T> entityClass, Collection<ID> ids) {
+        if (entityClass == null) {
+            throw new IllegalArgumentException("entityClass must not be null");
+        }
+        if (ids == null || ids.isEmpty()) {
+            throw new IllegalArgumentException("ids must not be null or empty");
+        }
+        String idFieldName = EntityClassResolver.resolveIdFieldName(entityClass);
+        Specification<T> idSpec = (root, query, cb) -> root.get(idFieldName).in(ids);
+        Specification<T> softDeleteSpec = com.zsubera.jpa.update.SoftDeleteHelper.isNotDeleted(entityClass);
+        Specification<T> combinedSpec = idSpec.and(softDeleteSpec);
+        CriteriaBuilder cb = entityManager.getCriteriaBuilder();
+        CriteriaQuery<T> cq = cb.createQuery(entityClass);
+        Root<T> root = cq.from(entityClass);
+        jakarta.persistence.criteria.Predicate predicate = combinedSpec.toPredicate(root, cq, cb);
+        if (predicate != null) {
+            cq.where(predicate);
+        }
+        return entityManager.createQuery(cq).getResultList();
     }
 }

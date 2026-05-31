@@ -705,6 +705,70 @@ public abstract class AbstractBulkOperationSpec<T, SELF extends AbstractBulkOper
     }
 
     /**
+     * 添加 EXISTS 子查询条件。
+     *
+     * @param subEntity 子查询实体类型
+     * @param config 子查询配置消费者
+     * @param <S> 子查询实体类型
+     * @return 当前构建器实例
+     * @throws IllegalArgumentException 如果任何参数为 null
+     */
+    public <S> SELF exists(Class<S> subEntity, Consumer<com.zsubera.jpa.spec.SubQuerySpec<S>> config) {
+        if (subEntity == null) {
+            throw new IllegalArgumentException("subEntity must not be null");
+        }
+        if (config == null) {
+            throw new IllegalArgumentException("config must not be null");
+        }
+        conditionNodes.add(leaf((root, cb) -> {
+            jakarta.persistence.criteria.CriteriaQuery<?> tempQuery = cb.createQuery(entityClass);
+            jakarta.persistence.criteria.Subquery<S> subquery = tempQuery.subquery(subEntity);
+            Root<S> subRoot = subquery.from(subEntity);
+            com.zsubera.jpa.spec.SubQuerySpec<S> subSpec =
+                com.zsubera.jpa.spec.SubQuerySpec.create(subquery, subRoot, root, cb);
+            config.accept(subSpec);
+            subSpec.applyWhere();
+            if (!subSpec.isSelectSet()) {
+                subquery.select(subRoot);
+            }
+            return cb.exists(subquery);
+        }));
+        return self();
+    }
+
+    /**
+     * 添加 NOT EXISTS 子查询条件。
+     *
+     * @param subEntity 子查询实体类型
+     * @param config 子查询配置消费者
+     * @param <S> 子查询实体类型
+     * @return 当前构建器实例
+     * @throws IllegalArgumentException 如果任何参数为 null
+     */
+    public <S> SELF notExists(Class<S> subEntity, Consumer<com.zsubera.jpa.spec.SubQuerySpec<S>> config) {
+        if (subEntity == null) {
+            throw new IllegalArgumentException("subEntity must not be null");
+        }
+        if (config == null) {
+            throw new IllegalArgumentException("config must not be null");
+        }
+        conditionNodes.add(leaf((root, cb) -> {
+            jakarta.persistence.criteria.CriteriaQuery<?> tempQuery = cb.createQuery(entityClass);
+            jakarta.persistence.criteria.Subquery<S> subquery = tempQuery.subquery(subEntity);
+            Root<S> subRoot = subquery.from(subEntity);
+            com.zsubera.jpa.spec.SubQuerySpec<S> subSpec =
+                com.zsubera.jpa.spec.SubQuerySpec.create(subquery, subRoot, root, cb);
+            config.accept(subSpec);
+            subSpec.applyWhere();
+            if (!subSpec.isSelectSet()) {
+                subquery.select(subRoot);
+            }
+            return cb.not(cb.exists(subquery));
+        }));
+        return self();
+    }
+
+    /**
      * 添加集合为空条件：{@code field IS EMPTY}。
      *
      * @param field 实体集合属性引用

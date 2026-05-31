@@ -6,6 +6,7 @@ import java.lang.reflect.Method;
 import java.lang.reflect.Proxy;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
+import java.util.regex.Pattern;
 import javax.sql.DataSource;
 import org.hibernate.resource.jdbc.spi.StatementInspector;
 import org.slf4j.Logger;
@@ -36,6 +37,13 @@ public class SqlSlowQueryInterceptor implements StatementInspector {
 
     /** 代理类缓存，避免每次 prepareStatement 创建新的代理类。 */
     private static final ConcurrentMap<Class<?>, Class<?>> PROXY_CLASS_CACHE = new ConcurrentHashMap<>();
+
+    /** 预编译的 SQL 消毒正则表达式 */
+    private static final Pattern SINGLE_QUOTE_PATTERN = Pattern.compile("'(?:[^']|'')*'");
+    private static final Pattern DOLLAR_PARAM_PATTERN = Pattern.compile("\\$\\d+");
+    private static final Pattern HEX_LITERAL_PATTERN = Pattern.compile("X'[0-9a-fA-F]+'");
+    private static final Pattern UNICODE_STRING_PATTERN = Pattern.compile("N'[^']*'");
+    private static final Pattern NUMBER_LITERAL_PATTERN = Pattern.compile("\\b\\d+\\.?\\d*(?:[eE][+-]?\\d+)?\\b");
 
     private final long slowQueryThresholdMs;
 
@@ -150,11 +158,12 @@ public class SqlSlowQueryInterceptor implements StatementInspector {
         if (sql == null) {
             return "null";
         }
-        String sanitized = sql.replaceAll("'(?:[^']|'')*'", "?") // 单引号字符串
-            .replaceAll("\\$\\d+", "?") // PostgreSQL 美元引用参数
-            .replaceAll("X'[0-9a-fA-F]+'", "?") // 十六进制字面量
-            .replaceAll("N'[^']*'", "?") // Unicode 字符串
-            .replaceAll("\\b\\d+\\.?\\d*\\b", "?"); // 数字字面量
+        String sanitized = SINGLE_QUOTE_PATTERN.matcher(sql).replaceAll("?") // 单引号字符串
+        ;
+        sanitized = DOLLAR_PARAM_PATTERN.matcher(sanitized).replaceAll("?"); // PostgreSQL 美元引用参数
+        sanitized = HEX_LITERAL_PATTERN.matcher(sanitized).replaceAll("?"); // 十六进制字面量
+        sanitized = UNICODE_STRING_PATTERN.matcher(sanitized).replaceAll("?"); // Unicode 字符串
+        sanitized = NUMBER_LITERAL_PATTERN.matcher(sanitized).replaceAll("?"); // 数字字面量（含科学计数法）
         return sanitized;
     }
 }

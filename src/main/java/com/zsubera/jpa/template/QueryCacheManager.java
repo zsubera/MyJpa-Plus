@@ -131,10 +131,14 @@ public class QueryCacheManager {
                 lock.readLock().unlock();
                 lock.writeLock().lock();
                 try {
-                    store.remove(key);
+                    // Re-check after acquiring write lock (another thread may have already removed it)
+                    CachedQueryResult<?> rechecked = store.get(key);
+                    if (rechecked != null && rechecked.isExpired()) {
+                        store.remove(key);
+                    }
+                    lock.readLock().lock();
                 } finally {
                     lock.writeLock().unlock();
-                    lock.readLock().lock();
                 }
                 log.debug("Cache expired for key: {}", key);
                 return null;
