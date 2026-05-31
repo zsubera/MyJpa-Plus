@@ -66,6 +66,28 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
     /** 查询超时时间上限（秒） */
     private static final int MAX_TIMEOUT_SECONDS = 300;
 
+    /**
+     * 阻止序列化。QuerySpec 包含不可序列化的内部状态（如 lambda、SFunction）， 不应被序列化。在分布式会话或缓存场景中，请使用可序列化的查询参数重新构建 QuerySpec。
+     *
+     * @param oos 对象输出流
+     * @throws java.io.IOException 始终抛出，表示不支持序列化
+     */
+    private void writeObject(java.io.ObjectOutputStream oos) throws java.io.IOException {
+        throw new java.io.NotSerializableException(
+            "QuerySpec is not serializable. It contains non-serializable lambda references. "
+                + "Reconstruct QuerySpec from serializable query parameters instead.");
+    }
+
+    /**
+     * 阻止反序列化。
+     *
+     * @param ois 对象输入流
+     * @throws java.io.IOException 始终抛出，表示不支持序列化
+     */
+    private void readObject(java.io.ObjectInputStream ois) throws java.io.IOException {
+        throw new java.io.NotSerializableException("QuerySpec is not serializable.");
+    }
+
     private final List<ConditionNode> conditions = new ArrayList<>();
     private final Deque<List<ConditionNode>> groupStack = new ArrayDeque<>();
     private boolean distinct = false;

@@ -6,6 +6,7 @@ import com.zsubera.jpa.spec.ConditionNode;
 import com.zsubera.jpa.spec.PredicateHelper;
 import com.zsubera.jpa.spec.QuerySpec;
 import com.zsubera.jpa.spec.SFunction;
+import com.zsubera.jpa.template.MyJpaTemplate;
 import com.zsubera.jpa.util.LambdaUtils;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import jakarta.persistence.EntityManager;
@@ -260,14 +261,14 @@ public class ProjectionSpec<T> {
      * 构建并返回以 {@link Tuple} 为结果类型的类型安全查询。
      *
      * <p>
-     * <strong>安全提示：</strong>此方法不设置 {@code maxResults}，直接调用 {@code getResultList()} 可能返回大量数据导致 OOM。 推荐使用
-     * {@link #toTupleQuery(EntityManager, int)} 重载方法显式限制返回行数。
+     * <strong>安全提示：</strong>此方法使用默认最大行数限制（{@value MyJpaTemplate#DEFAULT_MAX_RESULTS}）。 如需自定义限制，请使用
+     * {@link #toTupleQuery(EntityManager, int)} 重载方法。
      *
      * @param em JPA 实体管理器
      * @return 返回 Tuple 结果的 TypedQuery 实例
      */
     public TypedQuery<Tuple> toTupleQuery(EntityManager em) {
-        return toTupleQuery(em, -1);
+        return toTupleQuery(em, MyJpaTemplate.DEFAULT_MAX_RESULTS);
     }
 
     /**
@@ -312,8 +313,8 @@ public class ProjectionSpec<T> {
      * 必须先调用 {@link #asDto(Class)} 方法指定 DTO 类。
      *
      * <p>
-     * <strong>安全提示：</strong>此方法不设置 {@code maxResults}，直接调用 {@code getResultList()} 可能返回大量数据导致 OOM。 推荐使用
-     * {@link #toDtoQuery(EntityManager, int)} 重载方法显式限制返回行数。
+     * <strong>安全提示：</strong>此方法使用默认最大行数限制（{@value MyJpaTemplate#DEFAULT_MAX_RESULTS}）。 如需自定义限制，请使用
+     * {@link #toDtoQuery(EntityManager, int)} 重载方法。
      *
      * @param em JPA 实体管理器
      * @param <R> DTO 结果类型
@@ -322,7 +323,7 @@ public class ProjectionSpec<T> {
      */
     @SuppressWarnings("unchecked")
     public <R> TypedQuery<R> toDtoQuery(EntityManager em) {
-        return toDtoQuery(em, -1);
+        return toDtoQuery(em, MyJpaTemplate.DEFAULT_MAX_RESULTS);
     }
 
     /**
@@ -371,22 +372,20 @@ public class ProjectionSpec<T> {
     }
 
     /**
-     * Paginate projection results.
+     * 对投影查询结果进行分页。
      *
      * <p>
-     * <strong>PERF-3 note:</strong> Join descriptors are extracted once and reused for both count and data queries to
-     * avoid redundant JOIN resolution. The data query is built directly instead of delegating to
-     * {@link #toTupleQuery(EntityManager)} to avoid a second {@code resolveJoins()} call.
+     * <strong>性能说明：</strong>JOIN 描述符通过 {@link JoinSpec#getConditions()} 缓存，避免对每个 Root（count 和 data 查询）重复调用 Consumer。
+     * 数据查询直接构建而非委托给 {@link #toTupleQuery(EntityManager)}，避免第二次 {@code resolveJoins()} 调用。
      *
      * <p>
-     * <strong>PERF-4 note:</strong> Uses {@code countDistinct(root)} for accurate counting when JOINs may produce
-     * duplicate rows. For one-to-many JOINs with complex primary keys, consider using subquery counting via
-     * {@code QuerySpec} directly.
+     * <strong>计数说明：</strong>使用 {@code countDistinct(root)} 进行精确计数，避免 JOIN 产生重复行。 对于一对多 JOIN 和复杂主键的场景，考虑使用
+     * {@code QuerySpec} 直接进行子查询计数。
      *
-     * @param em JPA entity manager
-     * @param pageable pagination info
-     * @return paginated projection results
-     * @throws IllegalArgumentException if pagination offset is too large
+     * @param em JPA 实体管理器
+     * @param pageable 分页信息
+     * @return 分页投影查询结果
+     * @throws IllegalArgumentException 如果分页 offset 过大
      */
     public Page<Tuple> findPage(EntityManager em, Pageable pageable) {
         CriteriaBuilder cb = em.getCriteriaBuilder();

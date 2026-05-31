@@ -32,12 +32,15 @@ import org.springframework.lang.Nullable;
 public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> {
 
     /**
-     * 安全字段名正则表达式：仅允许字母、数字、下划线和点号（支持嵌套属性如 "department.name"）。
+     * 安全字段名正则表达式：仅允许字母、数字和下划线。
      *
      * <p>
      * 用于校验接受原始 {@code String} 字段名的方法（如 {@link #multiLike(String, String...)}），防止 SQL 注入。
+     *
+     * <p>
+     * <strong>注意：</strong>此正则不允许点号（{@code .}），因为嵌套属性应通过 {@link SFunction} 方法引用处理。
      */
-    Pattern SAFE_FIELD_NAME_PATTERN = Pattern.compile("^[a-zA-Z_][a-zA-Z0-9_.]*$");
+    Pattern SAFE_FIELD_NAME_PATTERN = Pattern.compile("^[a-zA-Z_][a-zA-Z0-9_]*$");
 
     /**
      * 获取当前条件列表。
@@ -370,6 +373,38 @@ public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> {
         conditions().add(new ConditionNode.SimpleNode(LambdaUtils.getPropertyName(field),
             "%" + escapeLikeWildcards(value), ConditionNode.Op.LIKE, PredicateHelper.LIKE_ESCAPE_CHAR));
         return self();
+    }
+
+    /**
+     * 添加前缀匹配 LIKE 条件（别名方法，等价于 {@link #startsWith}）。
+     *
+     * <p>
+     * 此方法为 MyBatis-Plus 风格的命名别名，方便从 MyBatis-Plus 迁移的用户使用。
+     *
+     * @param field 实体属性的方法引用
+     * @param value 前缀字符串值
+     * @return 当前构建器以支持链式调用
+     * @throws IllegalArgumentException 如果 {@code field} 或 {@code value} 为 null
+     * @see #startsWith(SFunction, String)
+     */
+    default SELF likeRight(SFunction<E, ?> field, String value) {
+        return startsWith(field, value);
+    }
+
+    /**
+     * 添加后缀匹配 LIKE 条件（别名方法，等价于 {@link #endsWith}）。
+     *
+     * <p>
+     * 此方法为 MyBatis-Plus 风格的命名别名，方便从 MyBatis-Plus 迁移的用户使用。
+     *
+     * @param field 实体属性的方法引用
+     * @param value 后缀字符串值
+     * @return 当前构建器以支持链式调用
+     * @throws IllegalArgumentException 如果 {@code field} 或 {@code value} 为 null
+     * @see #endsWith(SFunction, String)
+     */
+    default SELF likeLeft(SFunction<E, ?> field, String value) {
+        return endsWith(field, value);
     }
 
     /**

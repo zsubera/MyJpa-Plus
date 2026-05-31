@@ -7,6 +7,7 @@ import jakarta.persistence.Id;
 import jakarta.persistence.MappedSuperclass;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreUpdate;
+import jakarta.persistence.Version;
 import java.io.Serializable;
 import java.time.Instant;
 import java.util.Objects;
@@ -25,7 +26,7 @@ import java.util.Objects;
  * }</pre>
  *
  * <p>
- * 开箱即用地提供 {@code id}、{@code createdAt} 和 {@code updatedAt} 字段。
+ * 开箱即用地提供 {@code id}、{@code createdAt}、{@code updatedAt}、 {@code createdBy}、{@code updatedBy} 和 {@code version} 字段。
  *
  * <p>
  * {@code equals} 和 {@code hashCode} 在 {@code id} 非空（已持久化实体）时基于 {@code id} 字段， 否则回退到对象标识比较。
@@ -43,6 +44,15 @@ public abstract class BaseEntity implements Serializable {
     private Instant createdAt;
 
     private Instant updatedAt;
+
+    @Column(updatable = false, length = 64)
+    private String createdBy;
+
+    @Column(length = 64)
+    private String updatedBy;
+
+    @Version
+    private Long version;
 
     @PrePersist
     protected void prePersist() {
@@ -78,6 +88,30 @@ public abstract class BaseEntity implements Serializable {
 
     protected void setUpdatedAt(Instant updatedAt) {
         this.updatedAt = updatedAt;
+    }
+
+    public String getCreatedBy() {
+        return createdBy;
+    }
+
+    protected void setCreatedBy(String createdBy) {
+        this.createdBy = createdBy;
+    }
+
+    public String getUpdatedBy() {
+        return updatedBy;
+    }
+
+    protected void setUpdatedBy(String updatedBy) {
+        this.updatedBy = updatedBy;
+    }
+
+    public Long getVersion() {
+        return version;
+    }
+
+    protected void setVersion(Long version) {
+        this.version = version;
     }
 
     @Override

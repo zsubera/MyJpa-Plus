@@ -193,6 +193,10 @@ public class SoftDeleteJpaRepository<T, ID> extends SimpleJpaRepository<T, ID> {
      * {@link Optional#empty()}，导致抛出 {@link org.springframework.dao.EmptyResultDataAccessException}。
      * 此实现会在删除前检查实体是否存在（未被软删除），如果不存在则记录警告并跳过删除。
      *
+     * <p>
+     * <strong>注意：</strong>当实体不存在或已被软删除时，此方法静默返回（不抛出异常）。 如果需要区分"实体不存在"和"实体已被软删除"的情况，请使用
+     * {@link #deleteByIdOrThrow(Object)} 方法。
+     *
      * @param id 实体 ID，不能为 {@code null}
      */
     @Override
@@ -206,6 +210,29 @@ public class SoftDeleteJpaRepository<T, ID> extends SimpleJpaRepository<T, ID> {
         } else if (shouldApplySoftDeleteFilter()) {
             log.warn("Attempted to delete entity with id {} but it was not found (possibly soft-deleted). "
                 + "Use @IgnoreSoftDelete to bypass soft-delete filtering if needed.", id);
+        } else {
+            throw new org.springframework.dao.EmptyResultDataAccessException(
+                String.format("No %s entity with id %s exists!", domainClass.getSimpleName(), id), 1);
+        }
+    }
+
+    /**
+     * 根据 ID 删除实体，如果实体不存在则抛出异常。
+     *
+     * <p>
+     * 与 {@link #deleteById(Object)} 不同，此方法在实体不存在时始终抛出 {@link org.springframework.dao.EmptyResultDataAccessException}，
+     * 无论软删除过滤是否启用。
+     *
+     * @param id 实体 ID，不能为 {@code null}
+     * @throws org.springframework.dao.EmptyResultDataAccessException 如果实体不存在
+     */
+    public void deleteByIdOrThrow(ID id) {
+        if (id == null) {
+            throw new IllegalArgumentException("ID must not be null");
+        }
+        Optional<T> entity = findById(id);
+        if (entity.isPresent()) {
+            delete(entity.get());
         } else {
             throw new org.springframework.dao.EmptyResultDataAccessException(
                 String.format("No %s entity with id %s exists!", domainClass.getSimpleName(), id), 1);

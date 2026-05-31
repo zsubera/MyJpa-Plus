@@ -15,7 +15,7 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
-import org.springframework.context.annotation.ComponentScan;
+import org.springframework.context.annotation.Import;
 import org.springframework.context.event.ContextClosedEvent;
 import org.springframework.context.event.EventListener;
 
@@ -23,8 +23,8 @@ import org.springframework.context.event.EventListener;
  * MyJpa-Plus 的自动配置类。
  *
  * <p>
- * 当 Spring Data JPA 和 {@link EntityManager} 在类路径上时自动激活。 通过组件扫描注册所有 MyJpa-Plus 的 Bean，并启用 {@link MyJpaPlusProperties}
- * 进行外部配置。
+ * 当 Spring Data JPA 和 {@link EntityManager} 在类路径上时自动激活。 通过 {@link Import} 显式注册所有 MyJpa-Plus 的 Bean，并启用
+ * {@link MyJpaPlusProperties} 进行外部配置。
  *
  * <p>
  * 配置选项（前缀：{@code myjpa-plus}）：
@@ -41,7 +41,7 @@ import org.springframework.context.event.EventListener;
 @AutoConfiguration
 @ConditionalOnClass({EntityManager.class})
 @EnableConfigurationProperties(MyJpaPlusProperties.class)
-@ComponentScan(basePackages = "com.zsubera.jpa.autoconfigure")
+@Import({SoftDeleteFilterBean.class, MyJpaPlusAutoConfiguration.ModuleCompatibilityChecker.class})
 @SuppressFBWarnings(value = "CT_CONSTRUCTOR_THROW",
     justification = "Constructor validates parameters before assignment")
 public class MyJpaPlusAutoConfiguration {

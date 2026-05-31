@@ -91,8 +91,11 @@ public sealed interface ConditionNode permits ConditionNode.SimpleNode, Conditio
             } else if (value instanceof String) {
                 // 完全掩码：防止密码、token 等敏感数据泄露到日志系统
                 maskedValue = "***";
+            } else if (value instanceof Number) {
+                // 数字类型掩码：防止业务数据泄露到日志
+                maskedValue = "N***";
             } else {
-                maskedValue = value.toString();
+                maskedValue = value.getClass().getSimpleName() + "***";
             }
             return "SimpleNode[" + fieldName + " " + op + " " + maskedValue + "]";
         }
@@ -275,10 +278,27 @@ public sealed interface ConditionNode permits ConditionNode.SimpleNode, Conditio
         }
     }
 
-    /** 原始谓词函数（复杂条件的应急方案）。 */
+    /**
+     * 原始谓词函数（复杂条件的应急方案）。
+     *
+     * <p>
+     * <strong>安全警告：</strong>此类仅用于内部实现复杂条件逻辑，不应在外部直接使用。 它通过 BiFunction 构建原始条件，绕过类型安全机制，存在潜在的 SQL 注入风险。
+     *
+     * <p>
+     * 外部用户应使用类型安全的条件方法（如 {@code eq()}、{@code likeSafe()} 等）。 如果必须使用原始谓词，请确保不将用户输入直接拼接到字段名中。
+     */
     final class RawNode implements ConditionNode {
         final BiFunction<jakarta.persistence.criteria.Path<?>, CriteriaBuilder, Predicate> fn;
 
+        /**
+         * 创建原始谓词节点。
+         *
+         * <p>
+         * <strong>安全警告：</strong>此构造函数仅用于内部实现，外部用户应使用类型安全的条件方法。
+         *
+         * @param fn 谓词函数
+         * @throws IllegalArgumentException 如果 fn 为 null
+         */
         public RawNode(BiFunction<jakarta.persistence.criteria.Path<?>, CriteriaBuilder, Predicate> fn) {
             if (fn == null) {
                 throw new IllegalArgumentException("Predicate function must not be null");

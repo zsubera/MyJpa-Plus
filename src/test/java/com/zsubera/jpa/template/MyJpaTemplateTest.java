@@ -3,6 +3,7 @@ package com.zsubera.jpa.template;
 import static org.junit.jupiter.api.Assertions.*;
 
 import com.zsubera.jpa.spec.QuerySpec;
+import com.zsubera.jpa.spec.TestApplication;
 import com.zsubera.jpa.spec.TestEntity;
 import com.zsubera.jpa.spec.TestEntityRepository;
 import com.zsubera.jpa.update.DeleteSpec;
@@ -10,26 +11,26 @@ import com.zsubera.jpa.update.UpdateSpec;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.autoconfigure.SpringBootApplication;
-import org.springframework.boot.autoconfigure.domain.EntityScan;
 import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
-import org.springframework.context.annotation.Import;
+import org.springframework.boot.test.context.TestConfiguration;
+import org.springframework.context.annotation.Bean;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
-import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
 import org.springframework.test.context.ContextConfiguration;
 
 @DataJpaTest
-@ContextConfiguration(classes = MyJpaTemplateTest.TestConfig.class)
-@Import(MyJpaTemplate.class)
+@ContextConfiguration(classes = {TestApplication.class, MyJpaTemplateTest.TestConfig.class})
 class MyJpaTemplateTest {
 
-    @SpringBootApplication
-    @EntityScan(basePackageClasses = TestEntity.class)
-    @EnableJpaRepositories(basePackageClasses = TestEntityRepository.class)
-    static class TestConfig {}
+    @TestConfiguration
+    static class TestConfig {
+        @Bean
+        public MyJpaTemplate myJpaTemplate() {
+            return new MyJpaTemplate();
+        }
+    }
 
     @Autowired
     private MyJpaTemplate template;

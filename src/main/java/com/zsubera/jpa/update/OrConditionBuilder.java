@@ -35,7 +35,7 @@ public class OrConditionBuilder<T, SELF extends AbstractBulkOperationSpec<T, SEL
     /**
      * 添加等于条件：{@code field = value}。
      *
-     * @param field 实体属性引用
+     * @param field 实体属性的方法引用
      * @param value 比较值
      * @return 当前构建器实例
      */
@@ -48,7 +48,7 @@ public class OrConditionBuilder<T, SELF extends AbstractBulkOperationSpec<T, SEL
     /**
      * 添加不等于条件：{@code field != value}。
      *
-     * @param field 实体属性引用
+     * @param field 实体属性的方法引用
      * @param value 比较值
      * @return 当前构建器实例
      */
@@ -61,7 +61,7 @@ public class OrConditionBuilder<T, SELF extends AbstractBulkOperationSpec<T, SEL
     /**
      * 添加大于条件：{@code field > value}。
      *
-     * @param field 实体属性引用
+     * @param field 实体属性的方法引用
      * @param value 比较值
      * @return 当前构建器实例
      * @throws IllegalArgumentException 如果 value 为 null
@@ -78,7 +78,7 @@ public class OrConditionBuilder<T, SELF extends AbstractBulkOperationSpec<T, SEL
     /**
      * 添加大于等于条件：{@code field >= value}。
      *
-     * @param field 实体属性引用
+     * @param field 实体属性的方法引用
      * @param value 比较值
      * @return 当前构建器实例
      * @throws IllegalArgumentException 如果 value 为 null
@@ -95,7 +95,7 @@ public class OrConditionBuilder<T, SELF extends AbstractBulkOperationSpec<T, SEL
     /**
      * 添加小于条件：{@code field < value}。
      *
-     * @param field 实体属性引用
+     * @param field 实体属性的方法引用
      * @param value 比较值
      * @return 当前构建器实例
      * @throws IllegalArgumentException 如果 value 为 null
@@ -112,7 +112,7 @@ public class OrConditionBuilder<T, SELF extends AbstractBulkOperationSpec<T, SEL
     /**
      * 添加小于等于条件：{@code field <= value}。
      *
-     * @param field 实体属性引用
+     * @param field 实体属性的方法引用
      * @param value 比较值
      * @return 当前构建器实例
      * @throws IllegalArgumentException 如果 value 为 null
@@ -129,7 +129,7 @@ public class OrConditionBuilder<T, SELF extends AbstractBulkOperationSpec<T, SEL
     /**
      * 添加 LIKE 条件：{@code field LIKE value}。
      *
-     * @param field 实体属性引用
+     * @param field 实体属性的方法引用
      * @param value 匹配模式
      * @return 当前构建器实例
      * @throws IllegalArgumentException 如果 value 为 null
@@ -145,7 +145,7 @@ public class OrConditionBuilder<T, SELF extends AbstractBulkOperationSpec<T, SEL
     /**
      * 添加 NOT LIKE 条件：{@code field NOT LIKE value}。
      *
-     * @param field 实体属性引用
+     * @param field 实体属性的方法引用
      * @param value 匹配模式
      * @return 当前构建器实例
      * @throws IllegalArgumentException 如果 value 为 null
@@ -163,7 +163,7 @@ public class OrConditionBuilder<T, SELF extends AbstractBulkOperationSpec<T, SEL
      * <p>
      * 此方法是 {@link #like(SFunction, String)} 的安全版本，适用于处理用户输入。
      *
-     * @param field 实体属性引用
+     * @param field 实体属性的方法引用
      * @param value 要匹配的原始字符串值（通配符会被转义）
      * @return 当前构建器实例
      * @throws IllegalArgumentException 如果 value 为 null
@@ -184,7 +184,7 @@ public class OrConditionBuilder<T, SELF extends AbstractBulkOperationSpec<T, SEL
      * <p>
      * 此方法是 {@link #notLike(SFunction, String)} 的安全版本，适用于处理用户输入。
      *
-     * @param field 实体属性引用
+     * @param field 实体属性的方法引用
      * @param value 要匹配的原始字符串值（通配符会被转义）
      * @return 当前构建器实例
      * @throws IllegalArgumentException 如果 value 为 null
@@ -202,7 +202,7 @@ public class OrConditionBuilder<T, SELF extends AbstractBulkOperationSpec<T, SEL
     /**
      * 添加前缀匹配条件：{@code field LIKE 'value%'}。
      *
-     * @param field 实体属性引用
+     * @param field 实体属性的方法引用
      * @param value 前缀值
      * @return 当前构建器实例
      * @throws IllegalArgumentException 如果 value 为 null
@@ -219,7 +219,7 @@ public class OrConditionBuilder<T, SELF extends AbstractBulkOperationSpec<T, SEL
     /**
      * 添加后缀匹配条件：{@code field LIKE '%value'}。
      *
-     * @param field 实体属性引用
+     * @param field 实体属性的方法引用
      * @param value 后缀值
      * @return 当前构建器实例
      * @throws IllegalArgumentException 如果 value 为 null
@@ -236,7 +236,7 @@ public class OrConditionBuilder<T, SELF extends AbstractBulkOperationSpec<T, SEL
     /**
      * 添加包含条件：{@code field LIKE '%value%'}。
      *
-     * @param field 实体属性引用
+     * @param field 实体属性的方法引用
      * @param value 包含的值
      * @return 当前构建器实例
      * @throws IllegalArgumentException 如果 value 为 null
@@ -253,7 +253,7 @@ public class OrConditionBuilder<T, SELF extends AbstractBulkOperationSpec<T, SEL
     /**
      * 添加忽略大小写的等于条件：{@code UPPER(field) = UPPER(value)}。
      *
-     * @param field 实体属性引用
+     * @param field 实体属性的方法引用
      * @param value 比较值（不可为 null，如需检查 null 请使用 isNull()）
      * @return 当前构建器实例
      * @throws IllegalArgumentException 如果 value 为 null
@@ -274,7 +274,7 @@ public class OrConditionBuilder<T, SELF extends AbstractBulkOperationSpec<T, SEL
      * <p>
      * 值中的 {@code %} 或 {@code _} 字符会被转义，作为字面量处理，防止 LIKE 注入。
      *
-     * @param field 实体属性引用
+     * @param field 实体属性的方法引用
      * @param value 要匹配的原始字符串值（通配符会被转义）
      * @return 当前构建器实例
      * @throws IllegalArgumentException 如果 value 为 null
@@ -293,7 +293,7 @@ public class OrConditionBuilder<T, SELF extends AbstractBulkOperationSpec<T, SEL
     /**
      * 添加 IN 条件：{@code field IN (values)}。
      *
-     * @param field 实体属性引用
+     * @param field 实体属性的方法引用
      * @param values 值数组
      * @return 当前构建器实例
      * @throws IllegalArgumentException 如果 values 为 null 或空
@@ -310,7 +310,7 @@ public class OrConditionBuilder<T, SELF extends AbstractBulkOperationSpec<T, SEL
     /**
      * 添加 NOT IN 条件：{@code field NOT IN (values)}。
      *
-     * @param field 实体属性引用
+     * @param field 实体属性的方法引用
      * @param values 值数组
      * @return 当前构建器实例
      * @throws IllegalArgumentException 如果 values 为 null 或空
@@ -327,7 +327,7 @@ public class OrConditionBuilder<T, SELF extends AbstractBulkOperationSpec<T, SEL
     /**
      * 添加 IS NULL 条件：{@code field IS NULL}。
      *
-     * @param field 实体属性引用
+     * @param field 实体属性的方法引用
      * @return 当前构建器实例
      */
     public OrConditionBuilder<T, SELF> isNull(SFunction<T, ?> field) {
@@ -339,7 +339,7 @@ public class OrConditionBuilder<T, SELF extends AbstractBulkOperationSpec<T, SEL
     /**
      * 添加 IS NOT NULL 条件：{@code field IS NOT NULL}。
      *
-     * @param field 实体属性引用
+     * @param field 实体属性的方法引用
      * @return 当前构建器实例
      */
     public OrConditionBuilder<T, SELF> isNotNull(SFunction<T, ?> field) {
@@ -351,7 +351,7 @@ public class OrConditionBuilder<T, SELF extends AbstractBulkOperationSpec<T, SEL
     /**
      * 添加 BETWEEN 条件：{@code field BETWEEN start AND end}。
      *
-     * @param field 实体属性引用
+     * @param field 实体属性的方法引用
      * @param start 范围起始值
      * @param end 范围结束值
      * @return 当前构建器实例
@@ -368,7 +368,7 @@ public class OrConditionBuilder<T, SELF extends AbstractBulkOperationSpec<T, SEL
     /**
      * 添加 NOT BETWEEN 条件：{@code field NOT BETWEEN start AND end}。
      *
-     * @param field 实体属性引用
+     * @param field 实体属性的方法引用
      * @param start 范围起始值
      * @param end 范围结束值
      * @return 当前构建器实例
@@ -385,7 +385,7 @@ public class OrConditionBuilder<T, SELF extends AbstractBulkOperationSpec<T, SEL
     /**
      * 添加集合为空条件：{@code field IS EMPTY}。
      *
-     * @param field 实体属性引用
+     * @param field 实体属性的方法引用
      * @return 当前构建器实例
      */
     public OrConditionBuilder<T, SELF> isEmpty(SFunction<T, ?> field) {
@@ -397,7 +397,7 @@ public class OrConditionBuilder<T, SELF extends AbstractBulkOperationSpec<T, SEL
     /**
      * 添加集合非空条件：{@code field IS NOT EMPTY}。
      *
-     * @param field 实体属性引用
+     * @param field 实体属性的方法引用
      * @return 当前构建器实例
      */
     public OrConditionBuilder<T, SELF> isNotEmpty(SFunction<T, ?> field) {

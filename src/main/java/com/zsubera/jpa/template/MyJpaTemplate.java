@@ -81,6 +81,12 @@ public class MyJpaTemplate {
     /** 表示禁用限制的特殊值，用于 {@link #deepPaginationOffsetLimit} 和 {@link #maxBulkOperationRows}。 */
     public static final int DISABLED = -1;
 
+    /** 批量操作默认最大影响行数。 */
+    public static final int DEFAULT_MAX_BULK_OPERATION_ROWS = 10000;
+
+    /** 深度分页默认硬限制（offset）。 */
+    public static final int DEFAULT_DEEP_PAGINATION_OFFSET_LIMIT = 1000000;
+
     /** 深度分页警告日志的最小间隔（毫秒），防止日志泛滥。 */
     private static final long DEEP_PAGINATION_WARN_INTERVAL_MS = 60_000; // 1 分钟
 
@@ -96,10 +102,10 @@ public class MyJpaTemplate {
 
     private volatile int maxResults = DEFAULT_MAX_RESULTS;
     private volatile int deepPaginationOffsetThreshold = DEFAULT_DEEP_PAGINATION_OFFSET_THRESHOLD;
-    /** 深度分页硬限制。{@code DISABLED} 表示禁用（仅记录警告）。 */
-    private volatile int deepPaginationOffsetLimit = DISABLED;
-    /** 批量操作最大影响行数限制。{@code DISABLED} 表示禁用（不限制）。 */
-    private volatile int maxBulkOperationRows = DISABLED;
+    /** 深度分页硬限制。默认 1000000，{@code DISABLED} 表示禁用（仅记录警告）。 */
+    private volatile int deepPaginationOffsetLimit = DEFAULT_DEEP_PAGINATION_OFFSET_LIMIT;
+    /** 批量操作最大影响行数限制。默认 10000，{@code DISABLED} 表示不限制。 */
+    private volatile int maxBulkOperationRows = DEFAULT_MAX_BULK_OPERATION_ROWS;
 
     /** 创建 MyJpaTemplate 实例，使用默认配置。 */
     public MyJpaTemplate() {
@@ -408,6 +414,10 @@ public class MyJpaTemplate {
      * <strong>警告：未关闭 Stream 会导致数据库连接泄漏！</strong>底层的 EntityManager 和事务必须在 Stream 处理的整个期间保持活动状态。 推荐使用
      * {@link #findAllStream(Class, QuerySpec, Consumer)} 安全版本，它会自动管理 Stream 生命周期。
      *
+     * <p>
+     * <strong>风险说明：</strong>此方法直接返回 Stream，调用方必须负责关闭。 如果调用方忘记关闭 Stream 或在关闭前发生异常，数据库连接将泄漏。 安全版本
+     * {@link #findAllStream(Class, QuerySpec, Consumer)} 使用 try-with-resources 自动管理资源， 应优先使用。
+     *
      * @param entityClass 实体类
      * @param spec 查询规范
      * @param <T> 实体类型
@@ -425,7 +435,8 @@ public class MyJpaTemplate {
             throw new IllegalArgumentException("spec must not be null");
         }
         log.warn("findAllStream(Class, QuerySpec) is deprecated and will be removed in 2.0. "
-            + "Use findAllStream(Class, QuerySpec, Consumer) for safe Stream lifecycle management.");
+            + "Use findAllStream(Class, QuerySpec, Consumer) for safe Stream lifecycle management. "
+            + "This method returns a Stream that must be closed by the caller to avoid connection leaks.");
         return doFindStream(entityClass, spec);
     }
 

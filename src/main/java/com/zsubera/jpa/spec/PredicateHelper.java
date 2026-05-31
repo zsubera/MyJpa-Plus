@@ -64,10 +64,17 @@ public final class PredicateHelper {
                     + start.getClass().getName() + " and " + end.getClass().getName());
             }
             // Use BigDecimal for precise cross-numeric-type comparison to avoid precision loss
-            java.math.BigDecimal startDecimal = new java.math.BigDecimal(start.toString());
-            java.math.BigDecimal endDecimal = new java.math.BigDecimal(end.toString());
-            if (startDecimal.compareTo(endDecimal) > 0) {
-                throw new IllegalArgumentException("start must not be greater than end");
+            try {
+                java.math.BigDecimal startDecimal = new java.math.BigDecimal(start.toString());
+                java.math.BigDecimal endDecimal = new java.math.BigDecimal(end.toString());
+                if (startDecimal.compareTo(endDecimal) > 0) {
+                    throw new IllegalArgumentException("start must not be greater than end");
+                }
+            } catch (NumberFormatException e) {
+                // Fallback to toString comparison if BigDecimal conversion fails
+                if (((Comparable)start).compareTo(end) > 0) {
+                    throw new IllegalArgumentException("start must not be greater than end");
+                }
             }
             return;
         }

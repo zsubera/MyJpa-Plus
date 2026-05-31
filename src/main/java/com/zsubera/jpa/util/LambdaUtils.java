@@ -191,6 +191,10 @@ public final class LambdaUtils {
      * <p>
      * 当缓存大小超过限制时，使用 CAS 操作确保只有一个线程执行驱逐， 驱逐后缓存大小降至 {@link #EVICTION_TARGET_RATIO} 水平。 使用
      * {@link java.util.concurrent.atomic.AtomicBoolean} 防止多线程同时驱逐导致的缓存雪崩。
+     *
+     * <p>
+     * <strong>已知限制：</strong>当前驱逐策略使用迭代器顺序删除，不保证 LRU（最近最少使用）语义。 在极端高并发场景下，热点条目可能被意外驱逐。 对于大多数应用场景，此策略已足够，
+     * 因为热点条目会被快速重新加载到缓存中。 如需真正的 LRU 语义，可考虑使用 Caffeine 或其他专业缓存库。
      */
     private static final java.util.concurrent.atomic.AtomicBoolean EVICTING =
         new java.util.concurrent.atomic.AtomicBoolean(false);
