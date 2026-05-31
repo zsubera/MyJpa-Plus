@@ -1,6 +1,7 @@
 package com.zsubera.jpa.autoconfigure;
 
 import com.zsubera.jpa.annotation.AuditEntityListener;
+import com.zsubera.jpa.monitor.SqlSlowQueryInterceptor;
 import com.zsubera.jpa.repository.SoftDeleteJpaRepository;
 import com.zsubera.jpa.template.MyJpaTemplate;
 import com.zsubera.jpa.util.InClauseBuilder;
@@ -9,11 +10,14 @@ import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import jakarta.persistence.EntityManager;
 import java.lang.invoke.SerializedLambda;
 import java.lang.reflect.Method;
+import javax.sql.DataSource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.config.BeanPostProcessor;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
@@ -37,6 +41,8 @@ import org.springframework.context.event.EventListener;
  * <li>{@code myjpa-plus.query.in-clause-max-size} — IN 子句最大参数数量（默认：1000）
  * <li>{@code myjpa-plus.query.in-clause-hard-limit} — IN 子句硬限制（默认：5000）
  * <li>{@code myjpa-plus.query.lambda-cache-size} — Lambda 缓存大小（默认：4096）
+ * <li>{@code myjpa-plus.monitoring.enabled} — 启用 SQL 慢查询监控（默认：false）
+ * <li>{@code myjpa-plus.monitoring.slow-query-threshold-ms} — 慢查询阈值，单位毫秒（默认：1000）
  * </ul>
  */
 @AutoConfiguration
@@ -143,6 +149,49 @@ public class MyJpaPlusAutoConfiguration {
             template.setDeepPaginationOffsetLimit(limit);
         }
         return template;
+    }
+
+    /**
+     * 创建 SQL 慢查询拦截器 Bean。
+     *
+     * @param properties 配置属性
+     * @return SqlSlowQueryInterceptor 实例
+     */
+    @Bean
+    @ConditionalOnMissingBean(SqlSlowQueryInterceptor.class)
+    @ConditionalOnProperty(prefix = "myjpa-plus.monitoring", name = "enabled", havingValue = "true")
+    public SqlSlowQueryInterceptor sqlSlowQueryInterceptor(MyJpaPlusProperties properties) {
+        long threshold = properties.getMonitoring().getSlowQueryThresholdMs();
+        log.info("SqlSlowQueryInterceptor enabled (threshold={} ms)", threshold);
+        return new SqlSlowQueryInterceptor(threshold);
+    }
+
+    /**
+     * 用于在监控启用时将 DataSource 包装为慢查询代理的 BeanPostProcessor。
+     */
+    @Bean
+    @ConditionalOnProperty(prefix = "myjpa-plus.monitoring", name = "enabled", havingValue = "true")
+    public BeanPostProcessor dataSourceSlowQueryProxyPostProcessor(SqlSlowQueryInterceptor interceptor) {
+        return new DataSourceSlowQueryProxyPostProcessor(interceptor);
+    }
+
+    @SuppressFBWarnings("EQ_UNUSUAL")
+    static class DataSourceSlowQueryProxyPostProcessor implements BeanPostProcessor {
+
+        private final SqlSlowQueryInterceptor interceptor;
+
+        @SuppressFBWarnings("EI_EXPOSE_REP2")
+        DataSourceSlowQueryProxyPostProcessor(SqlSlowQueryInterceptor interceptor) {
+            this.interceptor = interceptor;
+        }
+
+        @Override
+        public Object postProcessAfterInitialization(Object bean, String beanName) {
+            if (bean instanceof DataSource ds && !java.lang.reflect.Proxy.isProxyClass(ds.getClass())) {
+                return interceptor.wrapDataSource(ds);
+            }
+            return bean;
+        }
     }
 
     /**

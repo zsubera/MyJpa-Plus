@@ -43,6 +43,9 @@ public class MyJpaPlusProperties {
     /** 查询相关配置。 */
     private Query query = new Query();
 
+    /** 监控相关配置。 */
+    private Monitoring monitoring = new Monitoring();
+
     @SuppressFBWarnings("EI_EXPOSE_REP")
     public SoftDelete getSoftDelete() {
         return softDelete;
@@ -61,6 +64,16 @@ public class MyJpaPlusProperties {
     @SuppressFBWarnings("EI_EXPOSE_REP2")
     public void setQuery(Query query) {
         this.query = query;
+    }
+
+    @SuppressFBWarnings("EI_EXPOSE_REP")
+    public Monitoring getMonitoring() {
+        return monitoring;
+    }
+
+    @SuppressFBWarnings("EI_EXPOSE_REP2")
+    public void setMonitoring(Monitoring monitoring) {
+        this.monitoring = monitoring;
     }
 
     public static class SoftDelete {
@@ -171,6 +184,33 @@ public class MyJpaPlusProperties {
                 throw new IllegalArgumentException("lambdaCacheSize must be positive");
             }
             this.lambdaCacheSize = lambdaCacheSize;
+        }
+    }
+
+    public static class Monitoring {
+        /** 慢查询阈值（毫秒）。执行时间超过此值的 SQL 将被记录为警告。 默认值：{@code 1000} */
+        private long slowQueryThresholdMs = 1000;
+
+        /** 是否启用 SQL 慢查询监控。启用后会通过 DataSource 代理拦截 JDBC 执行并记录慢查询。 默认值：{@code false} */
+        private boolean enabled = false;
+
+        public long getSlowQueryThresholdMs() {
+            return slowQueryThresholdMs;
+        }
+
+        public void setSlowQueryThresholdMs(long slowQueryThresholdMs) {
+            if (slowQueryThresholdMs <= 0) {
+                throw new IllegalArgumentException("slowQueryThresholdMs must be positive");
+            }
+            this.slowQueryThresholdMs = slowQueryThresholdMs;
+        }
+
+        public boolean isEnabled() {
+            return enabled;
+        }
+
+        public void setEnabled(boolean enabled) {
+            this.enabled = enabled;
         }
     }
 }

@@ -55,6 +55,20 @@
         <Bug pattern="CT_CONSTRUCTOR_THROW"/>
     </Match>
 
+    <!-- Exclude CT_CONSTRUCTOR_THROW for SqlSlowQueryInterceptor -->
+    <!-- Constructor validates configuration parameters, and the class is managed by the monitoring framework -->
+    <Match>
+        <Class name="com.zsubera.jpa.monitor.SqlSlowQueryInterceptor"/>
+        <Bug pattern="CT_CONSTRUCTOR_THROW"/>
+    </Match>
+
+    <!-- Exclude CT_CONSTRUCTOR_THROW for MergeSpec -->
+    <!-- Constructor validates entityClass parameter; defensive null check is intentional -->
+    <Match>
+        <Class name="com.zsubera.jpa.update.MergeSpec"/>
+        <Bug pattern="CT_CONSTRUCTOR_THROW"/>
+    </Match>
+
     <!-- Exclude ST_WRITE_TO_STATIC_FROM_INSTANCE_METHOD for AuditEntityListener -->
     <!-- setApplicationContext() writes to a static volatile field by design: Spring calls this method
          on a single instance to initialize the static context for use in @PrePersist/@PreUpdate callbacks.

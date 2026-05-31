@@ -1,0 +1,220 @@
+package com.zsubera.jpa.codegen;
+
+import java.util.List;
+
+/**
+ * Utility class that generates JPA entity class and repository interface source code strings from table name, column
+ * definitions, and package name.
+ *
+ * <p>
+ * This is a lightweight code generation helper — not a Maven plugin. It produces Java source code as strings that can
+ * be written to files or used for scaffolding.
+ *
+ * <p>
+ * Example usage:
+ *
+ * <pre>{@code
+ * List<EntityCodeGenerator.ColumnDef> columns = List.of(new EntityCodeGenerator.ColumnDef("name", "String", false),
+ *     new EntityCodeGenerator.ColumnDef("price", "BigDecimal", true));
+ * String entitySrc = EntityCodeGenerator.generateEntity("products", columns, "com.example.domain");
+ * String repoSrc =
+ *     EntityCodeGenerator.generateRepository("products", columns, "com.example.domain", "com.example.repo");
+ * }</pre>
+ */
+public final class EntityCodeGenerator {
+
+    private EntityCodeGenerator() {}
+
+    /**
+     * Column definition used for code generation.
+     */
+    public static final class ColumnDef {
+
+        private final String name;
+        private final String javaType;
+        private final boolean nullable;
+
+        /**
+         * Creates a column definition.
+         *
+         * @param name column/field name (snake_case for table, camelCase for Java)
+         * @param javaType Java type simple name (e.g. "String", "Long", "BigDecimal")
+         * @param nullable whether the column is nullable
+         */
+        public ColumnDef(String name, String javaType, boolean nullable) {
+            this.name = name;
+            this.javaType = javaType;
+            this.nullable = nullable;
+        }
+
+        public String getName() {
+            return name;
+        }
+
+        public String getJavaType() {
+            return javaType;
+        }
+
+        public boolean isNullable() {
+            return nullable;
+        }
+    }
+
+    /**
+     * Generates a JPA entity class source code string.
+     *
+     * @param tableName the database table name
+     * @param columns list of column definitions (excluding the id column which is auto-generated)
+     * @param entityPackage the target Java package for the entity
+     * @return Java source code string for the entity class
+     */
+    public static String generateEntity(String tableName, List<ColumnDef> columns, String entityPackage) {
+        if (tableName == null || tableName.isBlank()) {
+            throw new IllegalArgumentException("tableName must not be blank");
+        }
+        if (columns == null) {
+            throw new IllegalArgumentException("columns must not be null");
+        }
+        if (entityPackage == null || entityPackage.isBlank()) {
+            throw new IllegalArgumentException("entityPackage must not be blank");
+        }
+
+        String className = toClassName(tableName);
+        StringBuilder sb = new StringBuilder();
+
+        sb.append("package ").append(entityPackage).append(";\n\n");
+        sb.append("import jakarta.persistence.Column;\n");
+        sb.append("import jakarta.persistence.Entity;\n");
+        sb.append("import jakarta.persistence.GeneratedValue;\n");
+        sb.append("import jakarta.persistence.GenerationType;\n");
+        sb.append("import jakarta.persistence.Id;\n");
+        sb.append("import jakarta.persistence.Table;\n");
+        appendExtraImports(sb, columns);
+        sb.append("\n");
+
+        sb.append("@Entity\n");
+        sb.append("@Table(name = \"").append(tableName).append("\")\n");
+        sb.append("public class ").append(className).append(" {\n\n");
+
+        sb.append("    @Id\n");
+        sb.append("    @GeneratedValue(strategy = GenerationType.IDENTITY)\n");
+        sb.append("    private Long id;\n\n");
+
+        for (ColumnDef col : columns) {
+            if (!col.isNullable()) {
+                sb.append("    @Column(nullable = false)\n");
+            }
+            sb.append("    private ").append(col.getJavaType()).append(" ").append(col.getName()).append(";\n\n");
+        }
+
+        // getters and setters for id
+        sb.append("    public Long getId() {\n");
+        sb.append("        return id;\n");
+        sb.append("    }\n\n");
+        sb.append("    public void setId(Long id) {\n");
+        sb.append("        this.id = id;\n");
+        sb.append("    }\n\n");
+
+        for (ColumnDef col : columns) {
+            String capitalName = capitalize(col.getName());
+            sb.append("    public ").append(col.getJavaType()).append(" get").append(capitalName).append("() {\n");
+            sb.append("        return ").append(col.getName()).append(";\n");
+            sb.append("    }\n\n");
+            sb.append("    public void set").append(capitalName).append("(").append(col.getJavaType()).append(" ")
+                .append(col.getName()).append(") {\n");
+            sb.append("        this.").append(col.getName()).append(" = ").append(col.getName()).append(";\n");
+            sb.append("    }\n\n");
+        }
+
+        sb.append("}\n");
+        return sb.toString();
+    }
+
+    /**
+     * Generates a Spring Data JPA repository interface source code string.
+     *
+     * @param tableName the database table name (used to derive the entity class name)
+     * @param columns list of column definitions (currently unused but reserved for future query method generation)
+     * @param entityPackage the Java package of the entity class
+     * @param repoPackage the target Java package for the repository interface
+     * @return Java source code string for the repository interface
+     */
+    public static String generateRepository(String tableName, List<ColumnDef> columns, String entityPackage,
+        String repoPackage) {
+        if (tableName == null || tableName.isBlank()) {
+            throw new IllegalArgumentException("tableName must not be blank");
+        }
+        if (columns == null) {
+            throw new IllegalArgumentException("columns must not be null");
+        }
+        if (entityPackage == null || entityPackage.isBlank()) {
+            throw new IllegalArgumentException("entityPackage must not be blank");
+        }
+        if (repoPackage == null || repoPackage.isBlank()) {
+            throw new IllegalArgumentException("repoPackage must not be blank");
+        }
+
+        String className = toClassName(tableName);
+        String repoName = className + "Repository";
+
+        StringBuilder sb = new StringBuilder();
+        sb.append("package ").append(repoPackage).append(";\n\n");
+        sb.append("import ").append(entityPackage).append(".").append(className).append(";\n");
+        sb.append("import com.zsubera.jpa.repository.MyJpaRepository;\n");
+        sb.append("import org.springframework.stereotype.Repository;\n\n");
+        sb.append("@Repository\n");
+        sb.append("public interface ").append(repoName).append(" extends MyJpaRepository<").append(className)
+            .append(", Long> {\n");
+        sb.append("}\n");
+        return sb.toString();
+    }
+
+    /**
+     * Converts a snake_case table name to a PascalCase class name.
+     *
+     * @param tableName table name (e.g. "user_accounts")
+     * @return class name (e.g. "UserAccounts")
+     */
+    static String toClassName(String tableName) {
+        StringBuilder sb = new StringBuilder();
+        boolean capitalizeNext = true;
+        for (char c : tableName.toCharArray()) {
+            if (c == '_') {
+                capitalizeNext = true;
+            } else if (capitalizeNext) {
+                sb.append(Character.toUpperCase(c));
+                capitalizeNext = false;
+            } else {
+                sb.append(c);
+            }
+        }
+        return sb.toString();
+    }
+
+    private static String capitalize(String name) {
+        if (name == null || name.isEmpty()) {
+            return name;
+        }
+        return Character.toUpperCase(name.charAt(0)) + name.substring(1);
+    }
+
+    private static void appendExtraImports(StringBuilder sb, List<ColumnDef> columns) {
+        boolean needsBigDecimal = columns.stream().anyMatch(c -> "BigDecimal".equals(c.getJavaType()));
+        boolean needsLocalDate = columns.stream().anyMatch(c -> "LocalDate".equals(c.getJavaType()));
+        boolean needsLocalDateTime = columns.stream().anyMatch(c -> "LocalDateTime".equals(c.getJavaType()));
+        boolean needsInstant = columns.stream().anyMatch(c -> "Instant".equals(c.getJavaType()));
+
+        if (needsBigDecimal) {
+            sb.append("import java.math.BigDecimal;\n");
+        }
+        if (needsLocalDate) {
+            sb.append("import java.time.LocalDate;\n");
+        }
+        if (needsLocalDateTime) {
+            sb.append("import java.time.LocalDateTime;\n");
+        }
+        if (needsInstant) {
+            sb.append("import java.time.Instant;\n");
+        }
+    }
+}
