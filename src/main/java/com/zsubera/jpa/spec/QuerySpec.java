@@ -1418,4 +1418,212 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
         }
         return cb.min((Expression)root.get(LambdaUtils.getPropertyName(field)));
     }
+
+    // ---- 类型安全的 HAVING 辅助方法 ----
+
+    /**
+     * 添加 HAVING COUNT 条件：{@code HAVING COUNT(field) op value}。
+     *
+     * <p>
+     * 使用示例：
+     *
+     * <pre>{@code
+     * qs.groupBy(User::getDepartment).havingCount(User::getId, ConditionNode.Op.GT, 5L);
+     * // 生成: HAVING COUNT(user.id) > 5
+     * }</pre>
+     *
+     * @param field 要计数的字段方法引用
+     * @param op 比较运算符
+     * @param value 比较值
+     * @return 当前 QuerySpec 实例，支持链式调用
+     * @throws IllegalArgumentException 如果任何参数为 null
+     */
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    public QuerySpec<T> havingCount(SFunction<T, ?> field, ConditionNode.Op op, long value) {
+        if (field == null) {
+            throw new IllegalArgumentException("field must not be null");
+        }
+        if (op == null) {
+            throw new IllegalArgumentException("op must not be null");
+        }
+        validateHavingOperator(op);
+        String fieldName = LambdaUtils.getPropertyName(field);
+        havingConditions.add((root, cb) -> {
+            Expression<Long> countExpr = cb.count(root.get(fieldName));
+            return compareExpression(cb, countExpr, op, value);
+        });
+        return this;
+    }
+
+    /**
+     * 添加 HAVING SUM 条件：{@code HAVING SUM(field) op value}。
+     *
+     * <p>
+     * 使用示例：
+     *
+     * <pre>{@code
+     * qs.groupBy(Order::getCustomerId).havingSum(Order::getAmount, ConditionNode.Op.GT, 1000.0);
+     * // 生成: HAVING SUM(order.amount) > 1000.0
+     * }</pre>
+     *
+     * @param field 要求和的字段方法引用
+     * @param op 比较运算符
+     * @param value 比较值
+     * @return 当前 QuerySpec 实例，支持链式调用
+     * @throws IllegalArgumentException 如果任何参数为 null
+     */
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    public QuerySpec<T> havingSum(SFunction<T, ?> field, ConditionNode.Op op, Number value) {
+        if (field == null) {
+            throw new IllegalArgumentException("field must not be null");
+        }
+        if (op == null) {
+            throw new IllegalArgumentException("op must not be null");
+        }
+        if (value == null) {
+            throw new IllegalArgumentException("value must not be null");
+        }
+        validateHavingOperator(op);
+        String fieldName = LambdaUtils.getPropertyName(field);
+        havingConditions.add((root, cb) -> {
+            Expression<? extends Number> sumExpr = cb.sum((Expression)root.get(fieldName));
+            return compareExpression(cb, sumExpr, op, value);
+        });
+        return this;
+    }
+
+    /**
+     * 添加 HAVING AVG 条件：{@code HAVING AVG(field) op value}。
+     *
+     * @param field 要求平均值的字段方法引用
+     * @param op 比较运算符
+     * @param value 比较值
+     * @return 当前 QuerySpec 实例，支持链式调用
+     * @throws IllegalArgumentException 如果任何参数为 null
+     */
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    public QuerySpec<T> havingAvg(SFunction<T, ?> field, ConditionNode.Op op, Number value) {
+        if (field == null) {
+            throw new IllegalArgumentException("field must not be null");
+        }
+        if (op == null) {
+            throw new IllegalArgumentException("op must not be null");
+        }
+        if (value == null) {
+            throw new IllegalArgumentException("value must not be null");
+        }
+        validateHavingOperator(op);
+        String fieldName = LambdaUtils.getPropertyName(field);
+        havingConditions.add((root, cb) -> {
+            Expression<Double> avgExpr = cb.avg((Expression)root.get(fieldName));
+            return compareExpression(cb, avgExpr, op, value);
+        });
+        return this;
+    }
+
+    /**
+     * 添加 HAVING MAX 条件：{@code HAVING MAX(field) op value}。
+     *
+     * @param field 要求最大值的字段方法引用
+     * @param op 比较运算符
+     * @param value 比较值
+     * @return 当前 QuerySpec 实例，支持链式调用
+     * @throws IllegalArgumentException 如果任何参数为 null
+     */
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    public <Y extends Comparable<? super Y>> QuerySpec<T> havingMax(SFunction<T, ?> field, ConditionNode.Op op,
+        Y value) {
+        if (field == null) {
+            throw new IllegalArgumentException("field must not be null");
+        }
+        if (op == null) {
+            throw new IllegalArgumentException("op must not be null");
+        }
+        if (value == null) {
+            throw new IllegalArgumentException("value must not be null");
+        }
+        validateHavingOperator(op);
+        String fieldName = LambdaUtils.getPropertyName(field);
+        havingConditions.add((root, cb) -> {
+            Expression<Y> maxExpr = cb.max((Expression)root.get(fieldName));
+            return compareComparable(cb, maxExpr, op, value);
+        });
+        return this;
+    }
+
+    /**
+     * 添加 HAVING MIN 条件：{@code HAVING MIN(field) op value}。
+     *
+     * @param field 要求最小值的字段方法引用
+     * @param op 比较运算符
+     * @param value 比较值
+     * @return 当前 QuerySpec 实例，支持链式调用
+     * @throws IllegalArgumentException 如果任何参数为 null
+     */
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    public <Y extends Comparable<? super Y>> QuerySpec<T> havingMin(SFunction<T, ?> field, ConditionNode.Op op,
+        Y value) {
+        if (field == null) {
+            throw new IllegalArgumentException("field must not be null");
+        }
+        if (op == null) {
+            throw new IllegalArgumentException("op must not be null");
+        }
+        if (value == null) {
+            throw new IllegalArgumentException("value must not be null");
+        }
+        validateHavingOperator(op);
+        String fieldName = LambdaUtils.getPropertyName(field);
+        havingConditions.add((root, cb) -> {
+            Expression<Y> minExpr = cb.min((Expression)root.get(fieldName));
+            return compareComparable(cb, minExpr, op, value);
+        });
+        return this;
+    }
+
+    /**
+     * 验证 HAVING 子句支持的运算符。
+     */
+    private static void validateHavingOperator(ConditionNode.Op op) {
+        switch (op) {
+            case GT, GE, LT, LE, EQ, NE -> {
+                /* supported */ }
+            default -> throw new IllegalArgumentException(
+                "Unsupported operator for HAVING: " + op + ". Supported operators: GT, GE, LT, LE, EQ, NE");
+        }
+    }
+
+    /**
+     * 比较数值表达式与给定值。
+     */
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    private static Predicate compareExpression(CriteriaBuilder cb, Expression<? extends Number> expr,
+        ConditionNode.Op op, Number value) {
+        return switch (op) {
+            case GT -> cb.greaterThan((Expression)expr, (Comparable)value);
+            case GE -> cb.greaterThanOrEqualTo((Expression)expr, (Comparable)value);
+            case LT -> cb.lessThan((Expression)expr, (Comparable)value);
+            case LE -> cb.lessThanOrEqualTo((Expression)expr, (Comparable)value);
+            case EQ -> cb.equal(expr, value);
+            case NE -> cb.notEqual(expr, value);
+            default -> throw new IllegalArgumentException("Unsupported operator for HAVING: " + op);
+        };
+    }
+
+    /**
+     * 比较可比较表达式与给定值。
+     */
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    private static <Y extends Comparable<? super Y>> Predicate compareComparable(CriteriaBuilder cb, Expression<Y> expr,
+        ConditionNode.Op op, Y value) {
+        return switch (op) {
+            case GT -> cb.greaterThan(expr, value);
+            case GE -> cb.greaterThanOrEqualTo(expr, value);
+            case LT -> cb.lessThan(expr, value);
+            case LE -> cb.lessThanOrEqualTo(expr, value);
+            case EQ -> cb.equal(expr, value);
+            case NE -> cb.notEqual(expr, value);
+            default -> throw new IllegalArgumentException("Unsupported operator for HAVING: " + op);
+        };
+    }
 }

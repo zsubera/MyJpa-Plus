@@ -5,8 +5,6 @@ import com.zsubera.jpa.spec.SFunction;
 import java.beans.Introspector;
 import java.lang.invoke.SerializedLambda;
 import java.lang.reflect.Method;
-import java.util.Collections;
-import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import org.slf4j.Logger;
@@ -109,23 +107,17 @@ public final class LambdaUtils {
     }
 
     /**
-     * 使用 LRU 驱逐策略的属性名缓存。
+     * 使用 {@link ConcurrentHashMap} 实现的属性名缓存。
      *
      * <p>
-     * 使用 {@link LinkedHashMap} 的访问顺序模式（{@code accessOrder=true}）实现 LRU 语义： 每次 {@code get()} 或 {@code computeIfAbsent()}
-     * 访问条目时，该条目会被移到末尾。 当缓存大小超过 {@link #maxCacheSize} 时，{@code removeEldestEntry()} 自动移除最久未访问的条目。
+     * 与之前使用的 {@link Collections#synchronizedMap} 包装 {@link LinkedHashMap} 相比， {@link ConcurrentHashMap}
+     * 提供更好的并发读性能（读操作无锁），消除高并发场景下的同步瓶颈。
      *
      * <p>
-     * 使用 {@link Collections#synchronizedMap} 包装以确保线程安全。 与 {@link ConcurrentHashMap} 相比，读操作会获取同步锁，但 LRU 语义确保热点条目不会被意外驱逐。
+     * 驱逐策略：当缓存大小超过 {@link #maxCacheSize} 时，清除约 25% 的旧条目。 虽然失去了 LRU 精确排序，但在实际使用中（热点属性名高度集中），效果差异可忽略。
      */
     @SuppressWarnings("serial")
-    private static final Map<String, String> CACHE =
-        Collections.synchronizedMap(new LinkedHashMap<>(DEFAULT_CACHE_SIZE, 0.75f, true) {
-            @Override
-            protected boolean removeEldestEntry(Map.Entry<String, String> eldest) {
-                return size() > maxCacheSize;
-            }
-        });
+    private static final Map<String, String> CACHE = new ConcurrentHashMap<>(DEFAULT_CACHE_SIZE);
 
     /**
      * 缓存每个 lambda 类对应的 Method 对象，避免重复反射操作。
@@ -182,6 +174,7 @@ public final class LambdaUtils {
             SerializedLambda lambda = (SerializedLambda)writeReplace.invoke(fn);
             String key = lambda.getImplClass() + "#" + lambda.getImplMethodName();
             String result = CACHE.computeIfAbsent(key, k -> methodToProperty(lambda.getImplMethodName()));
+            evictCacheIfNeeded();
             evictMethodCacheIfNeeded();
             return result;
         } catch (ReflectiveOperationException e) {
@@ -220,6 +213,41 @@ public final class LambdaUtils {
      */
     private static final java.util.concurrent.atomic.AtomicBoolean METHOD_EVICTING =
         new java.util.concurrent.atomic.AtomicBoolean(false);
+
+    /** 主缓存驱逐锁 */
+    private static final java.util.concurrent.atomic.AtomicBoolean CACHE_EVICTING =
+        new java.util.concurrent.atomic.AtomicBoolean(false);
+
+    /**
+     * 驱逐主缓存中的旧条目，防止缓存无限增长。
+     *
+     * <p>
+     * 当缓存大小超过 {@link #maxCacheSize} 时，清除约 25% 的条目。 使用 CAS 确保只有一个线程执行驱逐。
+     */
+    private static void evictCacheIfNeeded() {
+        if (CACHE.size() > maxCacheSize && CACHE_EVICTING.compareAndSet(false, true)) {
+            try {
+                int currentSize = CACHE.size();
+                if (currentSize > maxCacheSize) {
+                    int target = (int)(maxCacheSize * EVICTION_TARGET_RATIO);
+                    int toRemove = currentSize - target;
+                    if (toRemove > 0) {
+                        int removed = 0;
+                        java.util.Iterator<Map.Entry<String, String>> it = CACHE.entrySet().iterator();
+                        while (it.hasNext() && removed < toRemove) {
+                            it.next();
+                            it.remove();
+                            removed++;
+                        }
+                        log.debug("Property name cache evicted {} entries (size: {} -> {})", removed, currentSize,
+                            CACHE.size());
+                    }
+                }
+            } finally {
+                CACHE_EVICTING.set(false);
+            }
+        }
+    }
 
     private static void evictMethodCacheIfNeeded() {
         if (METHOD_CACHE.size() > METHOD_CACHE_MAX_SIZE && METHOD_EVICTING.compareAndSet(false, true)) {

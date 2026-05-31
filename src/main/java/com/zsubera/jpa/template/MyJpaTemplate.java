@@ -254,6 +254,9 @@ public class MyJpaTemplate {
     /**
      * 根据 ID 查找实体。
      *
+     * <p>
+     * 对于非软删除实体，直接使用 {@link EntityManager#find(Class, Object)} 以获得最佳性能。 对于软删除实体，使用 Specification 查询以自动过滤已删除记录。
+     *
      * @param entityClass 实体类
      * @param id 实体 ID
      * @param <T> 实体类型
@@ -268,6 +271,11 @@ public class MyJpaTemplate {
         if (id == null) {
             throw new IllegalArgumentException("id must not be null");
         }
+        // 非软删除场景：直接使用 entityManager.find()，性能最优
+        if (com.zsubera.jpa.update.SoftDeleteHelper.findSoftDeleteField(entityClass) == null) {
+            return Optional.ofNullable(entityManager.find(entityClass, id));
+        }
+        // 软删除场景：使用 Specification 查询以自动过滤已删除记录
         String idFieldName = EntityClassResolver.resolveIdFieldName(entityClass);
         Specification<T> idSpec = (root, query, cb) -> cb.equal(root.get(idFieldName), id);
         CriteriaBuilder cb = entityManager.getCriteriaBuilder();

@@ -284,15 +284,15 @@ public final class SoftDeleteHelper {
     }
 
     private static Field getField(Class<?> entityClass, String fieldName) {
-        try {
-            return entityClass.getDeclaredField(fieldName);
-        } catch (NoSuchFieldException e) {
-            Class<?> sup = entityClass.getSuperclass();
-            if (sup != null && sup != Object.class) {
-                return getField(sup, fieldName);
+        Class<?> current = entityClass;
+        while (current != null && current != Object.class) {
+            try {
+                return current.getDeclaredField(fieldName);
+            } catch (NoSuchFieldException e) {
+                current = current.getSuperclass();
             }
-            return null;
         }
+        return null;
     }
 
     /**

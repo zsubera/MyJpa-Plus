@@ -280,7 +280,7 @@ public final class InClauseBuilder {
         }
         int estimatedBatches = (values.size() + maxInClauseSize - 1) / maxInClauseSize;
         List<Predicate> batchPredicates = new ArrayList<>(estimatedBatches);
-        List<Object> batch = new ArrayList<>(maxInClauseSize);
+        List<Object> batch = new ArrayList<>(Math.min(values.size(), maxInClauseSize));
         for (Object v : values) {
             batch.add(v);
             if (batch.size() >= maxInClauseSize) {
@@ -316,7 +316,7 @@ public final class InClauseBuilder {
         }
         int estimatedBatches = (values.size() + maxInClauseSize - 1) / maxInClauseSize;
         List<Predicate> batchPredicates = new ArrayList<>(estimatedBatches);
-        List<Object> batch = new ArrayList<>(maxInClauseSize);
+        List<Object> batch = new ArrayList<>(Math.min(values.size(), maxInClauseSize));
         for (Object v : values) {
             batch.add(v);
             if (batch.size() >= maxInClauseSize) {

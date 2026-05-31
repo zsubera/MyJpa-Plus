@@ -1188,4 +1188,109 @@ public class QuerySpecTest {
         entity.setStatus(status);
         return entity;
     }
+
+    // ---- Type-safe HAVING helper tests ----
+
+    @Test
+    void testHavingCount() {
+        // GROUP BY with type-safe HAVING COUNT - verify specification is created
+        QuerySpec<TestEntity> qs = new QuerySpec<TestEntity>().groupBy(TestEntity::getStatus)
+            .havingCount(TestEntity::getId, ConditionNode.Op.GT, 2L);
+        assertNotNull(qs.toSpecification(), "Specification with havingCount should be created");
+    }
+
+    @Test
+    void testHavingSum() {
+        // GROUP BY with type-safe HAVING SUM
+        QuerySpec<TestEntity> qs = new QuerySpec<TestEntity>().groupBy(TestEntity::getParent)
+            .havingSum(TestEntity::getStatus, ConditionNode.Op.GT, 25);
+        assertNotNull(qs.toSpecification(), "Specification with havingSum should be created");
+    }
+
+    @Test
+    void testHavingAvg() {
+        // GROUP BY with type-safe HAVING AVG
+        QuerySpec<TestEntity> qs = new QuerySpec<TestEntity>().groupBy(TestEntity::getParent)
+            .havingAvg(TestEntity::getStatus, ConditionNode.Op.GT, 15);
+        assertNotNull(qs.toSpecification(), "Specification with havingAvg should be created");
+    }
+
+    @Test
+    void testHavingMax() {
+        // GROUP BY with type-safe HAVING MAX
+        QuerySpec<TestEntity> qs = new QuerySpec<TestEntity>().groupBy(TestEntity::getParent)
+            .havingMax(TestEntity::getStatus, ConditionNode.Op.GE, 5);
+        assertNotNull(qs.toSpecification(), "Specification with havingMax should be created");
+    }
+
+    @Test
+    void testHavingMin() {
+        // GROUP BY with type-safe HAVING MIN
+        QuerySpec<TestEntity> qs = new QuerySpec<TestEntity>().groupBy(TestEntity::getParent)
+            .havingMin(TestEntity::getStatus, ConditionNode.Op.LE, 5);
+        assertNotNull(qs.toSpecification(), "Specification with havingMin should be created");
+    }
+
+    @Test
+    void testHavingCountNullValidation() {
+        assertThrows(IllegalArgumentException.class, () -> new QuerySpec<TestEntity>().groupBy(TestEntity::getStatus)
+            .havingCount(null, ConditionNode.Op.GT, 5L));
+        assertThrows(IllegalArgumentException.class,
+            () -> new QuerySpec<TestEntity>().groupBy(TestEntity::getStatus).havingCount(TestEntity::getId, null, 5L));
+    }
+
+    @Test
+    void testHavingSumNullValidation() {
+        assertThrows(IllegalArgumentException.class,
+            () -> new QuerySpec<TestEntity>().groupBy(TestEntity::getStatus).havingSum(null, ConditionNode.Op.GT, 10));
+        assertThrows(IllegalArgumentException.class, () -> new QuerySpec<TestEntity>().groupBy(TestEntity::getStatus)
+            .havingSum(TestEntity::getStatus, null, 10));
+        assertThrows(IllegalArgumentException.class, () -> new QuerySpec<TestEntity>().groupBy(TestEntity::getStatus)
+            .havingSum(TestEntity::getStatus, ConditionNode.Op.GT, null));
+    }
+
+    @Test
+    void testHavingUnsupportedOperator() {
+        // BETWEEN is not supported for HAVING
+        assertThrows(IllegalArgumentException.class, () -> new QuerySpec<TestEntity>().groupBy(TestEntity::getStatus)
+            .havingCount(TestEntity::getId, ConditionNode.Op.BETWEEN, 1L));
+    }
+
+    @Test
+    void testHavingChainable() {
+        // Verify HAVING methods support chaining
+        QuerySpec<TestEntity> qs = new QuerySpec<TestEntity>().groupBy(TestEntity::getStatus)
+            .havingCount(TestEntity::getId, ConditionNode.Op.GT, 1L)
+            .havingSum(TestEntity::getStatus, ConditionNode.Op.GT, 10).orderByAsc(TestEntity::getStatus);
+        assertNotNull(qs.toSpecification(), "Chained HAVING specification should be created");
+    }
+
+    @Test
+    void testSimpleNodeDefensiveCopyCollection() {
+        // Verify that SimpleNode performs defensive copy on Collection values
+        java.util.List<String> values = new java.util.ArrayList<>();
+        values.add("a");
+        values.add("b");
+        ConditionNode.SimpleNode node = new ConditionNode.SimpleNode("name", values, ConditionNode.Op.IN);
+        // Modify original list
+        values.add("c");
+        // Node should still have 2 items (defensive copy)
+        assertTrue(node.value instanceof java.util.List);
+        assertEquals(2, ((java.util.List<?>)node.value).size(),
+            "SimpleNode should perform defensive copy on Collection values");
+    }
+
+    @Test
+    void testSimpleNodeToStringMasking() {
+        // Verify toString() masks values properly
+        ConditionNode.SimpleNode nullNode = new ConditionNode.SimpleNode("name", null, ConditionNode.Op.IS_NULL);
+        assertTrue(nullNode.toString().contains("null"));
+
+        ConditionNode.SimpleNode stringNode = new ConditionNode.SimpleNode("name", "secret", ConditionNode.Op.EQ);
+        assertTrue(stringNode.toString().contains("***"));
+        assertFalse(stringNode.toString().contains("secret"));
+
+        ConditionNode.SimpleNode numberNode = new ConditionNode.SimpleNode("status", 42, ConditionNode.Op.EQ);
+        assertTrue(numberNode.toString().contains("Integer[***]"));
+    }
 }

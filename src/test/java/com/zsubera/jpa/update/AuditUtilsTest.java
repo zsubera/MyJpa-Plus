@@ -44,7 +44,56 @@ class AuditUtilsTest {
     void getCallStack_maxDepthRespected() {
         String stack = AuditUtils.getCallStack();
         String[] frames = stack.split(" <- ");
-        // Should not exceed MAX_STACK_DEPTH (10)
-        assertTrue(frames.length <= 10, "Stack depth should not exceed 10, but got " + frames.length);
+        // Should not exceed default max depth (5)
+        assertTrue(frames.length <= 5, "Stack depth should not exceed 5, but got " + frames.length);
+    }
+
+    @Test
+    void setMaxStackDepth_validValue() {
+        int original = AuditUtils.getMaxStackDepth();
+        try {
+            AuditUtils.setMaxStackDepth(10);
+            assertEquals(10, AuditUtils.getMaxStackDepth());
+        } finally {
+            AuditUtils.setMaxStackDepth(original);
+        }
+    }
+
+    @Test
+    void setMaxStackDepth_invalidValueIgnored() {
+        int original = AuditUtils.getMaxStackDepth();
+        try {
+            AuditUtils.setMaxStackDepth(0);
+            assertEquals(original, AuditUtils.getMaxStackDepth(), "Invalid value should be ignored");
+
+            AuditUtils.setMaxStackDepth(-1);
+            assertEquals(original, AuditUtils.getMaxStackDepth(), "Negative value should be ignored");
+
+            AuditUtils.setMaxStackDepth(21);
+            assertEquals(original, AuditUtils.getMaxStackDepth(), "Value exceeding limit should be ignored");
+        } finally {
+            AuditUtils.setMaxStackDepth(original);
+        }
+    }
+
+    @Test
+    void getCallStack_respectsConfiguredDepth() {
+        int original = AuditUtils.getMaxStackDepth();
+        try {
+            AuditUtils.setMaxStackDepth(2);
+            String stack = AuditUtils.getCallStack();
+            String[] frames = stack.split(" <- ");
+            assertTrue(frames.length <= 2,
+                "Stack depth should respect configured limit of 2, but got " + frames.length);
+        } finally {
+            AuditUtils.setMaxStackDepth(original);
+        }
+    }
+
+    @Test
+    void getMaxStackDepth_defaultValue() {
+        // The default value should be 5 (unless overridden by system property)
+        int depth = AuditUtils.getMaxStackDepth();
+        assertTrue(depth > 0 && depth <= 20, "Default depth should be between 1 and 20");
     }
 }

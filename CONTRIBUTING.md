@@ -64,6 +64,22 @@ mvn install -DskipTests -Ddependency-check.skip=true -Dgpg.skip=true
 5. 在 `AbstractBulkOperationSpec` 中添加对应方法
 6. 在 `QuerySpecTest` 中添加测试
 
+### 新增条件类型同步检查清单
+
+新增条件类型时，请确保同步更新以下 **6 个位置**：
+
+| 序号 | 文件 | 位置 | 说明 |
+|------|------|------|------|
+| 1 | `ConditionNode.java` | `Op` 枚举 | 添加新的枚举值 |
+| 2 | `ConditionBuilder.java` | `default` 方法 | 添加类型安全的条件方法 |
+| 3 | `QuerySpec.java` | `resolveSimple()` | 添加对应的 `case` 处理 |
+| 4 | `UpdateSpec.java` | 条件方法 | 添加对应的条件方法（继承自 AbstractBulkOperationSpec） |
+| 5 | `DeleteSpec.java` | 条件方法 | 添加对应的条件方法（继承自 AbstractBulkOperationSpec） |
+| 6 | `QuerySpecTest.java` | 测试用例 | 添加对应的测试 |
+
+> **注意：**`AbstractBulkOperationSpec` 是 `UpdateSpec` 和 `DeleteSpec` 的基类，条件方法定义在此基类中。
+> `SubQuerySpec` 也需同步更新（如果新条件适用于子查询场景）。
+
 ## 枚举转换开发
 
 新增枚举支持时，需确保：

@@ -65,11 +65,13 @@ public sealed interface ConditionNode permits ConditionNode.SimpleNode, Conditio
                 throw new IllegalArgumentException("op must not be null");
             }
             this.fieldName = fieldName;
-            // 防御性拷贝：数组是可变的，拷贝防止外部修改影响内部状态
+            // 防御性拷贝：数组和集合是可变的，拷贝防止外部修改影响内部状态
             if (value instanceof Object[] arr) {
                 this.value = arr.clone();
             } else if (value instanceof Comparable<?>[] arr) {
                 this.value = arr.clone();
+            } else if (value instanceof Collection<?> col) {
+                this.value = new ArrayList<>(col);
             } else {
                 this.value = value;
             }
@@ -91,9 +93,6 @@ public sealed interface ConditionNode permits ConditionNode.SimpleNode, Conditio
             } else if (value instanceof String str) {
                 // 字符串完全掩码：防止密码、token 等敏感数据泄露到日志系统
                 maskedValue = "***(" + str.length() + " chars)";
-            } else if (value instanceof Number) {
-                // 数字类型显示类型名，便于调试时识别数值类型
-                maskedValue = value.getClass().getSimpleName() + "[***]";
             } else {
                 maskedValue = value.getClass().getSimpleName() + "[***]";
             }
@@ -286,7 +285,10 @@ public sealed interface ConditionNode permits ConditionNode.SimpleNode, Conditio
      *
      * <p>
      * 外部用户应使用类型安全的条件方法（如 {@code eq()}、{@code likeSafe()} 等）。 如果必须使用原始谓词，请确保不将用户输入直接拼接到字段名中。
+     *
+     * @deprecated 此类计划在 2.0 版本中完全移除。请使用类型安全的条件方法替代。
      */
+    @Deprecated(since = "1.1.0", forRemoval = true)
     final class RawNode implements ConditionNode {
         final BiFunction<jakarta.persistence.criteria.Path<?>, CriteriaBuilder, Predicate> fn;
 

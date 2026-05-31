@@ -123,6 +123,14 @@ public class UpdateSpec<T> extends AbstractBulkOperationSpec<T, UpdateSpec<T>> {
      *     .execute(em);
      * }</pre>
      *
+     * <p>
+     * <strong>安全警告：</strong>此方法接受原始 SQL 表达式字符串，存在潜在的 SQL 注入风险。 请遵循以下安全最佳实践：
+     * <ul>
+     * <li>使用命名参数（如 {@code :amount}）而非直接拼接用户输入值</li>
+     * <li>表达式应为硬编码的常量字符串，不要将用户输入直接拼接到表达式中</li>
+     * <li>对于简单的加减操作，推荐使用 {@link #setAdd} 和 {@link #setSubtract} 方法</li>
+     * </ul>
+     *
      * @param field 实体属性的方法引用
      * @param expression SQL 表达式字符串（使用参数名而非直接拼接值）
      * @return 当前构建器实例，支持链式调用

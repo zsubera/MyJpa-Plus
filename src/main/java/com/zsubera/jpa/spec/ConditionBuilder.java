@@ -705,8 +705,7 @@ public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> {
      * @param fn 接收实体路径和条件构建器的函数，返回谓词
      * @return 当前构建器以支持链式调用
      * @throws IllegalArgumentException 如果 {@code fn} 为 null
-     * @deprecated 推荐使用类型安全的 {@link #eq(SFunction, Object)}、{@link #like(SFunction, String)} 等方法替代。 此方法绕过类型安全机制，存在潜在的
-     *             SQL 注入风险。
+     * @throws UnsupportedOperationException 始终抛出，此方法已在 1.1.0 版本移除
      * @see #eq(SFunction, Object)
      * @see #ne(SFunction, Object)
      */
@@ -717,9 +716,8 @@ public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> {
             throw new IllegalArgumentException("fn must not be null");
         }
         deprecationLog("where(BiFunction)", "eq(), likeSafe(), contains(), etc.");
-        throw new UnsupportedOperationException("where(BiFunction) has been removed for security reasons. "
-            + "This method bypasses type safety and exposes SQL injection risk. "
-            + "Use type-safe methods like eq(), likeSafe(), contains(), etc. instead.");
+        throw new UnsupportedOperationException("where(BiFunction) was removed in 1.1.0 for security reasons. "
+            + "Use type-safe methods: eq(), ne(), likeSafe(), contains(), startsWith(), endsWith(), in(), between(), etc.");
     }
 
     /**
@@ -752,8 +750,7 @@ public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> {
      * @param fn 接收 Root 的函数，返回谓词
      * @return 当前构建器以支持链式调用
      * @throws IllegalArgumentException 如果 {@code fn} 为 null
-     * @deprecated 推荐使用类型安全的 {@link #eq(SFunction, Object)}、{@link #like(SFunction, String)} 等方法替代。 此方法绕过类型安全机制，存在潜在的
-     *             SQL 注入风险。
+     * @throws UnsupportedOperationException 始终抛出，此方法已在 1.1.0 版本移除
      * @see #eq(SFunction, Object)
      * @see #ne(SFunction, Object)
      */
@@ -764,9 +761,8 @@ public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> {
             throw new IllegalArgumentException("fn must not be null");
         }
         deprecationLog("where(Function)", "eq(), likeSafe(), contains(), etc.");
-        throw new UnsupportedOperationException("where(Function) has been removed for security reasons. "
-            + "This method bypasses type safety and exposes SQL injection risk. "
-            + "Use type-safe methods like eq(), likeSafe(), contains(), etc. instead.");
+        throw new UnsupportedOperationException("where(Function) was removed in 1.1.0 for security reasons. "
+            + "Use type-safe methods: eq(), ne(), likeSafe(), contains(), startsWith(), endsWith(), in(), between(), etc.");
     }
 
     // ---- 多字段搜索 ----
@@ -1190,8 +1186,12 @@ public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> {
      * // 生成: jsonb_exists(user.metadata, 'key') = true
      * }</pre>
      *
+     * <p>
+     * <strong>安全警告：</strong>请勿使用用户输入作为 {@code functionName} 参数，以防止潜在的 SQL 注入风险。 函数名仅接受字母、数字和下划线（通过
+     * {@link #SAFE_FIELD_NAME_PATTERN} 校验），建议仅使用硬编码的数据库函数名。
+     *
      * @param field 实体属性的方法引用，作为函数的第一个参数
-     * @param functionName 数据库函数名
+     * @param functionName 数据库函数名（必须为硬编码常量，勿使用用户输入）
      * @param params 函数的额外参数
      * @return 当前构建器以支持链式调用
      * @throws IllegalArgumentException 如果 field、functionName 或 params 为 null
