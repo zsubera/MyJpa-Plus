@@ -19,13 +19,11 @@ import java.lang.annotation.Target;
  * </ul>
  *
  * <p>
- * <strong>注意：</strong>此注解不会自动向所有查询注入 WHERE 条件。要过滤掉软删除的记录， 必须显式使用库提供的辅助方法：
- *
+ * <strong>注意：</strong>
  * <ul>
- * <li>{@code repository.findNotDeletedAll()} — 查找所有未删除的实体
- * <li>{@code repository.findNotDeletedAll(spec)} — 带额外过滤条件
- * <li>{@code SoftDeleteHelper.isNotDeleted(entityClass)} — 获取 {@code Specification} 过滤器
- * <li>{@code SoftDeleteHelper.notDeletedQuery(entityClass)} — 构建带过滤条件的 {@code QuerySpec}
+ * <li>此注解不会自动向所有查询注入 WHERE 条件。要过滤掉软删除的记录， 必须显式使用库提供的辅助方法</li>
+ * <li>当数据库列存储字符编码（如 CHAR(1) 存储 '0'/'1'）时，枚举字段需要配合 {@link com.zsubera.jpa.converter.CodeEnum @CodeEnum} 和
+ * {@link com.zsubera.jpa.converter.CodeEnumValue @CodeEnumValue} 注解使用</li>
  * </ul>
  *
  * <p>
@@ -57,19 +55,27 @@ import java.lang.annotation.Target;
  * </pre>
  *
  * <p>
- * 使用示例（枚举类型）：
+ * 使用示例（枚举类型 + 字符编码列）：
  *
  * <pre>
  * {
  *     &#64;code
  *     &#64;Entity
- *     public class Article {
- *         @SoftDelete(deletedValue = "DELETED")
- *         private DelFlag delFlag = DelFlag.EXIST;
+ *     public class User {
+ *         &#64;SoftDelete(deletedValue = "DELETED")
+ *         private DelFlag delFlag;
  *     }
  *
+ *     // 创建转换器
+ *     &#64;Converter(autoApply = true)
+ *     public class DelFlagConverter extends CodeEnumAttributeConverter&lt;DelFlag&gt; {}
+ *
  *     public enum DelFlag {
- *         EXIST, DELETED
+ *         EXIST(0, "存在"), DELETED(1, "删除");
+ *
+ *         @CodeEnumValue
+ *         private final int code;
+ *         // ...
  *     }
  * }
  * </pre>

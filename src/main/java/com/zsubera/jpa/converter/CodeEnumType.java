@@ -20,45 +20,38 @@ import org.slf4j.LoggerFactory;
  * 通用枚举 Hibernate {@link UserType} 实现，配合 {@link CodeEnumValue} 注解使用。
  *
  * <p>
- * 解决 Hibernate 6 将数据库中 CHAR(1) 类型的枚举列（存储 '0'、'1' 等编码）映射为 TINYINT， 导致 {@code ArrayIndexOutOfBoundsException} 的问题。
- *
- * <p>
- * <strong>使用方式：</strong>
+ * <strong>使用方式：只需在枚举的 code 字段上加 {@code @CodeEnumValue}，无需创建转换器类！</strong>
  *
  * <pre>
  * {
  *     &#64;code
- *     // 1. 枚举的 code 字段上加 @CodeEnumValue
  *     public enum StatusEnum {
  *         ACTIVE(0, "正常"), DELETED(1, "已删除");
  *
- *         &#64;CodeEnumValue
+ *         &#64;CodeEnumValue // 只需这一步！
  *         private final int code;
  *         private final String desc;
- *         // ...
  *     }
  *
- *     // 2. 实体字段上加 @Type(CodeEnumType.class)
+ *     // 实体中使用 @CodeEnum 注解
  *     &#64;Entity
  *     public class User {
- *         &#64;Type(CodeEnumType.class)
- *         &#64;Column(name = "status")
+ *         @CodeEnum
  *         private StatusEnum status;
  *     }
  * }
  * </pre>
  *
  * <p>
- * <strong>支持的 code 字段类型：</strong>
- * <ul>
- * <li>{@code int} / {@code Integer} — 数据库列为 CHAR/VARCHAR</li>
- * <li>{@code long} / {@code Long} — 数据库列为 CHAR/VARCHAR</li>
- * <li>{@code String} — 数据库列为 VARCHAR</li>
- * </ul>
+ * <strong>何时必须加 {@code @CodeEnumValue}：</strong>当枚举的 {@code code} 值与 {@code ordinal()} 不同时。
+ *
+ * <p>
+ * <strong>何时可加可不加：</strong>当枚举的 {@code code} 值与 {@code ordinal()} 相同时，建议加上保持一致性。
  *
  * @author myjpa-plus
  * @since 1.1.0
  * @see CodeEnumValue
+ * @see CodeEnum
  */
 public class CodeEnumType implements UserType<Object>, DynamicParameterizedType {
 
@@ -69,13 +62,18 @@ public class CodeEnumType implements UserType<Object>, DynamicParameterizedType 
     private Class<?> enumClass;
     private Field codeField;
     private int sqlType;
+    private boolean useOrdinal;
 
     @Override
     public void setParameterValues(Properties parameters) {
         String typeName = parameters.getProperty(DynamicParameterizedType.RETURNED_CLASS);
         if (typeName != null) {
             try {
-                Class<?> typeClass = Class.forName(typeName);
+                ClassLoader cl = Thread.currentThread().getContextClassLoader();
+                if (cl == null) {
+                    cl = getClass().getClassLoader();
+                }
+                Class<?> typeClass = Class.forName(typeName, true, cl);
                 if (typeClass.isEnum()) {
                     this.enumClass = typeClass;
                     resolveCodeField();
@@ -85,40 +83,20 @@ public class CodeEnumType implements UserType<Object>, DynamicParameterizedType 
                 log.warn("Failed to resolve enum class: {}", typeName, e);
             }
         }
-        for (String key : parameters.stringPropertyNames()) {
-            String value = parameters.getProperty(key);
-            if (value != null && !value.isEmpty()) {
-                try {
-                    Class<?> typeClass = Class.forName(value);
-                    if (typeClass.isEnum()) {
-                        this.enumClass = typeClass;
-                        resolveCodeField();
-                        return;
-                    }
-                } catch (ClassNotFoundException ignored) {
-                    // 继续尝试下一个参数
-                }
-            }
-        }
         throw new HibernateException("CodeEnumType cannot resolve enum class.");
     }
 
     private void resolveCodeField() {
         this.codeField = resolveCodeField(enumClass);
-        if (this.codeField == null) {
-            throw new HibernateException(
-                String.format("Enum %s must have a field annotated with @CodeEnumValue", enumClass.getSimpleName()));
+        this.useOrdinal = (codeField == null);
+        if (useOrdinal) {
+            this.sqlType = Types.CHAR;
+        } else {
+            Class<?> fieldType = codeField.getType();
+            this.sqlType = (fieldType == String.class) ? Types.VARCHAR : Types.CHAR;
         }
-        Class<?> fieldType = codeField.getType();
-        this.sqlType = (fieldType == String.class) ? Types.VARCHAR : Types.CHAR;
     }
 
-    /**
-     * 从枚举类解析 {@link CodeEnumValue} 注解标记的字段。
-     *
-     * @param enumClass 枚举类
-     * @return {@code @CodeEnumValue} 标记的字段，如果没有则返回 {@code null}
-     */
     public static Field resolveCodeField(Class<?> enumClass) {
         return CODE_FIELD_CACHE.computeIfAbsent(enumClass, cls -> {
             for (Field field : cls.getDeclaredFields()) {
@@ -131,12 +109,6 @@ public class CodeEnumType implements UserType<Object>, DynamicParameterizedType 
         });
     }
 
-    /**
-     * 检查枚举类是否有 {@link CodeEnumValue} 注解标记的字段。
-     *
-     * @param enumClass 枚举类
-     * @return 如果有 {@code @CodeEnumValue} 字段返回 {@code true}
-     */
     public static boolean hasCodeEnumValue(Class<?> enumClass) {
         return resolveCodeField(enumClass) != null;
     }
@@ -148,8 +120,6 @@ public class CodeEnumType implements UserType<Object>, DynamicParameterizedType 
 
     @Override
     public Class<Object> returnedClass() {
-        // 返回具体的枚举类型，而不是 Object.class
-        // 这样 Hibernate 才能正确设置字段值
         return (Class<Object>)(Class<?>)enumClass;
     }
 
@@ -171,6 +141,20 @@ public class CodeEnumType implements UserType<Object>, DynamicParameterizedType 
             return null;
         }
         String trimmedValue = value.trim();
+
+        if (useOrdinal) {
+            try {
+                int ordinal = Integer.parseInt(trimmedValue);
+                Object[] constants = enumClass.getEnumConstants();
+                if (ordinal >= 0 && ordinal < constants.length) {
+                    return constants[ordinal];
+                }
+            } catch (NumberFormatException ignored) {
+            }
+            throw new HibernateException(
+                String.format("No enum constant with ordinal '%s' in %s", trimmedValue, enumClass.getSimpleName()));
+        }
+
         try {
             for (Object enumConstant : enumClass.getEnumConstants()) {
                 Object codeValue = codeField.get(enumConstant);
@@ -192,11 +176,15 @@ public class CodeEnumType implements UserType<Object>, DynamicParameterizedType 
             st.setNull(index, sqlType);
             return;
         }
-        try {
-            Object codeValue = codeField.get(value);
-            st.setString(index, codeValue != null ? String.valueOf(codeValue) : null);
-        } catch (IllegalAccessException e) {
-            throw new HibernateException("Failed to read @CodeEnumValue field", e);
+        if (useOrdinal) {
+            st.setString(index, String.valueOf(((Enum<?>)value).ordinal()));
+        } else {
+            try {
+                Object codeValue = codeField.get(value);
+                st.setString(index, codeValue != null ? String.valueOf(codeValue) : null);
+            } catch (IllegalAccessException e) {
+                throw new HibernateException("Failed to read @CodeEnumValue field", e);
+            }
         }
     }
 
@@ -215,6 +203,9 @@ public class CodeEnumType implements UserType<Object>, DynamicParameterizedType 
         if (value == null) {
             return null;
         }
+        if (useOrdinal) {
+            return String.valueOf(((Enum<?>)value).ordinal());
+        }
         try {
             Object codeValue = codeField.get(value);
             return codeValue != null ? String.valueOf(codeValue) : null;
@@ -229,6 +220,17 @@ public class CodeEnumType implements UserType<Object>, DynamicParameterizedType 
             return null;
         }
         String code = cached.toString();
+        if (useOrdinal) {
+            try {
+                int ordinal = Integer.parseInt(code);
+                Object[] constants = enumClass.getEnumConstants();
+                if (ordinal >= 0 && ordinal < constants.length) {
+                    return constants[ordinal];
+                }
+            } catch (NumberFormatException ignored) {
+            }
+            return null;
+        }
         try {
             for (Object enumConstant : enumClass.getEnumConstants()) {
                 Object codeValue = codeField.get(enumConstant);
@@ -237,7 +239,6 @@ public class CodeEnumType implements UserType<Object>, DynamicParameterizedType 
                 }
             }
         } catch (IllegalAccessException ignored) {
-            // 返回 null
         }
         return null;
     }
