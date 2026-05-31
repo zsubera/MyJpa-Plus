@@ -26,10 +26,14 @@ public class EncryptConverter implements AttributeConverter<String, String> {
     private static final String KEY_VERSION_PROPERTY = "myjpa.encrypt.key.version";
     private static final String SALT_ENV = "MYJPA_ENCRYPT_SALT";
     private static final String SALT_PROPERTY = "myjpa.encrypt.salt";
+    private static final String STRICT_MODE_PROPERTY = "myjpa-plus.encrypt.strict-mode";
     private static final SecureRandom SECURE_RANDOM = new SecureRandom();
     private static final int PBKDF2_ITERATIONS = 100_000;
     private static final int PBKDF2_KEY_LENGTH = 256;
     private static final System.Logger LOG = System.getLogger("com.zsubera.jpa.converter.EncryptConverter");
+
+    /** 严格模式开关，通过系统属性控制。默认为 false。 */
+    private static final boolean STRICT_MODE = Boolean.parseBoolean(System.getProperty(STRICT_MODE_PROPERTY, "false"));
 
     /** Cached key specs by version to avoid repeated environment variable reads and KDF derivation. */
     private static final ConcurrentMap<String, SecretKeySpec> KEY_CACHE = new ConcurrentHashMap<>();
@@ -203,7 +207,7 @@ public class EncryptConverter implements AttributeConverter<String, String> {
             byte[] keyBytes = rawKeyMaterial.getBytes(StandardCharsets.UTF_8);
             // 如果已经是有效的 AES 密钥长度，直接使用（向后兼容）
             if (keyBytes.length == 16 || keyBytes.length == 24 || keyBytes.length == 32) {
-                // P0-4: 检测是否为高熵密钥（非可打印 ASCII）
+                // 检测是否为高熵密钥（非可打印 ASCII）
                 boolean looksLikeAscii = true;
                 for (byte b : keyBytes) {
                     if (b < 0x20 || b > 0x7E) {
@@ -213,17 +217,16 @@ public class EncryptConverter implements AttributeConverter<String, String> {
                 }
                 if (looksLikeAscii) {
                     int uniqueChars = (int)new String(keyBytes, StandardCharsets.US_ASCII).chars().distinct().count();
-                    String profile = System.getProperty("spring.profiles.active", "");
-                    if (uniqueChars < 10 && (profile.contains("prod") || profile.contains("production"))) {
-                        throw new IllegalStateException("Encryption key has low entropy (" + uniqueChars
-                            + " unique characters). " + "Use Base64-encoded high-entropy key for production. "
-                            + "Set MYJPA_ENCRYPT_KEY to a Base64-encoded random key.");
-                    }
-                    LOG.log(System.Logger.Level.WARNING,
-                        "Raw key looks like printable ASCII ({0} bytes). "
+                    String msg =
+                        "Encryption key has low entropy (" + uniqueChars + " unique printable ASCII characters). "
                             + "Use Base64-encoded high-entropy key for production. "
-                            + "Set MYJPA_ENCRYPT_KEY to a Base64-encoded random key.",
-                        keyBytes.length);
+                            + "Set MYJPA_ENCRYPT_KEY to a Base64-encoded random key.";
+                    if (STRICT_MODE || isProductionEnvironment()) {
+                        throw new IllegalStateException(
+                            msg + " - rejected in " + (STRICT_MODE ? "strict mode" : "production environment"));
+                    }
+                    LOG.log(System.Logger.Level.ERROR, "SECURITY: {0}. Set -D{1}=true to reject low-entropy keys.", msg,
+                        STRICT_MODE_PROPERTY);
                 }
                 return new SecretKeySpec(keyBytes, "AES");
             }
@@ -239,7 +242,20 @@ public class EncryptConverter implements AttributeConverter<String, String> {
     }
 
     /**
+     * 检查当前是否为生产环境。
+     *
+     * @return 如果是生产环境返回 true
+     */
+    private static boolean isProductionEnvironment() {
+        String profile = System.getProperty("spring.profiles.active", "");
+        return profile.contains("prod") || profile.contains("production");
+    }
+
+    /**
      * 获取 PBKDF2 盐值。优先从环境变量获取，回退到系统属性。 生产环境（spring.profiles.active 包含 prod/production）强制要求配置盐值。
+     *
+     * <p>
+     * <strong>安全改进：</strong>非生产环境不再使用硬编码的默认盐值，而是生成随机盐值并记录警告。 随机盐值在 JVM 生命周期内保持一致（缓存在系统属性中），确保同一 JVM 内的加密/解密操作使用相同盐值。
      *
      * @return 盐值字节数组
      * @throws IllegalStateException 生产环境未配置盐值时抛出
@@ -255,11 +271,30 @@ public class EncryptConverter implements AttributeConverter<String, String> {
                 throw new IllegalStateException("PBKDF2 salt must be configured in production. "
                     + "Set environment variable " + SALT_ENV + " or system property " + SALT_PROPERTY);
             }
+            // 生成随机盐值，缓存在系统属性中确保同一 JVM 内一致
+            String internalSaltProp = "myjpa.encrypt.salt.internal";
+            String randomSalt = System.getProperty(internalSaltProp);
+            if (randomSalt == null || randomSalt.isEmpty()) {
+                randomSalt = generateRandomSalt();
+                System.setProperty(internalSaltProp, randomSalt);
+            }
             LOG.log(System.Logger.Level.WARNING,
-                "Using default PBKDF2 salt. Set environment variable {0} or system property {1} for production use.",
+                "SECURITY: Using randomly generated PBKDF2 salt. "
+                    + "Set environment variable {0} or system property {1} for consistent encryption across restarts.",
                 SALT_ENV, SALT_PROPERTY);
-            return "myjpa-plus".getBytes(StandardCharsets.UTF_8);
+            return randomSalt.getBytes(StandardCharsets.UTF_8);
         }
         return salt.getBytes(StandardCharsets.UTF_8);
+    }
+
+    /**
+     * 生成随机盐值（Base64 编码的 16 字节随机数据）。
+     *
+     * @return Base64 编码的随机盐值字符串
+     */
+    private static String generateRandomSalt() {
+        byte[] saltBytes = new byte[16];
+        SECURE_RANDOM.nextBytes(saltBytes);
+        return Base64.getEncoder().encodeToString(saltBytes);
     }
 }

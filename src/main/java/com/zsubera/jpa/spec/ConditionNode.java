@@ -144,6 +144,13 @@ public sealed interface ConditionNode permits ConditionNode.SimpleNode, Conditio
     final class OrNode implements ConditionNode {
         final List<ConditionNode> nodes = new ArrayList<>();
 
+        /** 返回 OR 组中的子条件列表。 */
+        @edu.umd.cs.findbugs.annotations.SuppressFBWarnings(value = "EI_EXPOSE_REP",
+            justification = "Nodes list is intentionally exposed for condition tree traversal by QuerySpec and ProjectionSpec")
+        public List<ConditionNode> nodes() {
+            return nodes;
+        }
+
         @Override
         public String toString() {
             return "OrNode" + nodes;
@@ -153,6 +160,13 @@ public sealed interface ConditionNode permits ConditionNode.SimpleNode, Conditio
     /** 条件的 AND 组。 */
     final class AndNode implements ConditionNode {
         final List<ConditionNode> nodes = new ArrayList<>();
+
+        /** 返回 AND 组中的子条件列表。 */
+        @edu.umd.cs.findbugs.annotations.SuppressFBWarnings(value = "EI_EXPOSE_REP",
+            justification = "Nodes list is intentionally exposed for condition tree traversal by QuerySpec and ProjectionSpec")
+        public List<ConditionNode> nodes() {
+            return nodes;
+        }
 
         @Override
         public String toString() {
@@ -377,6 +391,11 @@ public sealed interface ConditionNode permits ConditionNode.SimpleNode, Conditio
                 throw new IllegalArgumentException("inner must not be null");
             }
             this.inner = inner;
+        }
+
+        /** 返回被取反的内部条件。 */
+        public ConditionNode inner() {
+            return inner;
         }
 
         @Override

@@ -1,9 +1,7 @@
 package com.zsubera.jpa.template;
 
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import java.util.LinkedHashMap;
 import java.util.Map;
-import java.util.concurrent.locks.ReentrantReadWriteLock;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -53,11 +51,8 @@ public class QueryCacheManager {
     /** 默认最大缓存条目数 */
     private static final int DEFAULT_MAX_ENTRIES = 10000;
 
-    /** LRU 缓存，使用访问顺序实现 LRU 驱逐策略。 */
-    private final LinkedHashMap<String, CachedQueryResult<?>> store;
-
-    /** 读写锁，保证线程安全。 */
-    private final ReentrantReadWriteLock lock = new ReentrantReadWriteLock();
+    /** LRU 缓存，使用 ConcurrentHashMap 实现线程安全的无锁读取。 */
+    private final java.util.concurrent.ConcurrentMap<String, CachedQueryResult<?>> store;
 
     private volatile int maxEntries;
 
@@ -79,14 +74,7 @@ public class QueryCacheManager {
             throw new IllegalArgumentException("maxEntries must be positive");
         }
         this.maxEntries = maxEntries;
-        this.store = new LinkedHashMap<>(16, 0.75f, true) {
-            private static final long serialVersionUID = 1L;
-
-            @Override
-            protected boolean removeEldestEntry(Map.Entry<String, CachedQueryResult<?>> eldest) {
-                return super.size() > QueryCacheManager.this.maxEntries;
-            }
-        };
+        this.store = new java.util.concurrent.ConcurrentHashMap<>();
     }
 
     /**
@@ -114,43 +102,34 @@ public class QueryCacheManager {
     /**
      * Retrieves a cached value by key. Returns null if the key is absent or the entry has expired.
      *
+     * <p>
+     * <strong>线程安全说明：</strong>使用 ConcurrentHashMap 实现无锁读取，过期条目在访问时懒驱逐。 使用 {@code remove(key, value)}
+     * 原子操作确保仅移除未被其他线程替换的过期条目。
+     *
      * @param key cache key
      * @param <T> expected value type
      * @return cached value, or null if absent/expired
      */
     @SuppressWarnings("unchecked")
     public <T> T get(String key) {
-        lock.readLock().lock();
-        try {
-            CachedQueryResult<?> result = store.get(key);
-            if (result == null) {
-                return null;
-            }
-            if (result.isExpired()) {
-                // Upgrade to write lock for removal
-                lock.readLock().unlock();
-                lock.writeLock().lock();
-                try {
-                    // Re-check after acquiring write lock (another thread may have already removed it)
-                    CachedQueryResult<?> rechecked = store.get(key);
-                    if (rechecked != null && rechecked.isExpired()) {
-                        store.remove(key);
-                    }
-                    lock.readLock().lock();
-                } finally {
-                    lock.writeLock().unlock();
-                }
-                log.debug("Cache expired for key: {}", key);
-                return null;
-            }
-            return (T)result.getValue();
-        } finally {
-            lock.readLock().unlock();
+        CachedQueryResult<?> result = store.get(key);
+        if (result == null) {
+            return null;
         }
+        if (result.isExpired()) {
+            // 原子移除：仅当条目未被其他线程替换时才移除
+            store.remove(key, result);
+            log.debug("Cache expired for key: {}", key);
+            return null;
+        }
+        return (T)result.getValue();
     }
 
     /**
      * Stores a value in the cache with the given TTL.
+     *
+     * <p>
+     * 当缓存条目数超过最大限制时，清除过期条目。如果仍超过限制，拒绝写入并记录警告。
      *
      * @param key cache key
      * @param value value to cache
@@ -158,13 +137,29 @@ public class QueryCacheManager {
      * @param <T> value type
      */
     public <T> void put(String key, T value, long ttlSeconds) {
-        lock.writeLock().lock();
-        try {
-            store.put(key, new CachedQueryResult<>(value, ttlSeconds));
-        } finally {
-            lock.writeLock().unlock();
+        // 检查是否需要清理过期条目
+        if (store.size() >= maxEntries) {
+            evictExpiredEntries();
         }
+        if (store.size() >= maxEntries) {
+            log.warn("Cache is full ({} entries). Consider increasing max-entries or reducing TTL.", maxEntries);
+            return;
+        }
+        store.put(key, new CachedQueryResult<>(value, ttlSeconds));
         log.debug("Cache put for key: {} (ttl={}s)", key, ttlSeconds);
+    }
+
+    /**
+     * 清除所有过期条目。
+     */
+    private void evictExpiredEntries() {
+        java.util.Iterator<Map.Entry<String, CachedQueryResult<?>>> it = store.entrySet().iterator();
+        while (it.hasNext()) {
+            Map.Entry<String, CachedQueryResult<?>> entry = it.next();
+            if (entry.getValue().isExpired()) {
+                it.remove();
+            }
+        }
     }
 
     /**
@@ -173,12 +168,7 @@ public class QueryCacheManager {
      * @param key cache key to evict
      */
     public void evict(String key) {
-        lock.writeLock().lock();
-        try {
-            store.remove(key);
-        } finally {
-            lock.writeLock().unlock();
-        }
+        store.remove(key);
         log.debug("Cache evicted for key: {}", key);
     }
 
@@ -186,12 +176,7 @@ public class QueryCacheManager {
      * Clears all cached entries.
      */
     public void clear() {
-        lock.writeLock().lock();
-        try {
-            store.clear();
-        } finally {
-            lock.writeLock().unlock();
-        }
+        store.clear();
         log.debug("Cache cleared");
     }
 
@@ -214,18 +199,13 @@ public class QueryCacheManager {
             return 0;
         }
         int count = 0;
-        lock.writeLock().lock();
-        try {
-            java.util.Iterator<Map.Entry<String, CachedQueryResult<?>>> it = store.entrySet().iterator();
-            while (it.hasNext()) {
-                Map.Entry<String, CachedQueryResult<?>> entry = it.next();
-                if (entry.getKey().startsWith(keyPrefix)) {
-                    it.remove();
-                    count++;
-                }
+        java.util.Iterator<Map.Entry<String, CachedQueryResult<?>>> it = store.entrySet().iterator();
+        while (it.hasNext()) {
+            Map.Entry<String, CachedQueryResult<?>> entry = it.next();
+            if (entry.getKey().startsWith(keyPrefix)) {
+                it.remove();
+                count++;
             }
-        } finally {
-            lock.writeLock().unlock();
         }
         if (count > 0) {
             log.debug("Cache evicted {} entries with prefix '{}'", count, keyPrefix);
@@ -239,11 +219,6 @@ public class QueryCacheManager {
      * @return number of entries
      */
     public int size() {
-        lock.readLock().lock();
-        try {
-            return store.size();
-        } finally {
-            lock.readLock().unlock();
-        }
+        return store.size();
     }
 }

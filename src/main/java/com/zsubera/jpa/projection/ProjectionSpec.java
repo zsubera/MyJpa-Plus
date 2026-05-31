@@ -836,8 +836,7 @@ public class ProjectionSpec<T> {
      * 解析单个 JOIN 条件节点为 Predicate。
      *
      * <p>
-     * 支持 {@link ConditionNode.SimpleNode} 和 {@link ConditionNode.CollectionNode} 两种类型。 SimpleNode 通过 Op 枚举分派到对应的
-     * CriteriaBuilder 操作。
+     * 支持所有 ConditionNode 类型的递归解析：SimpleNode、CollectionNode、OrNode、AndNode、NegateNode。
      *
      * @param node 条件节点
      * @param join JOIN 路径
@@ -858,8 +857,22 @@ public class ProjectionSpec<T> {
                     cb.isNotEmpty((Expression<java.util.Collection<?>>)(Expression<?>)join.get(cn.fieldName()));
             };
         }
-        throw new IllegalArgumentException("Unsupported ConditionNode type in JOIN clause: "
-            + node.getClass().getSimpleName() + ". Only SimpleNode and CollectionNode are supported.");
+        if (node instanceof ConditionNode.OrNode or) {
+            Predicate left = resolveJoinCondition(or.nodes().get(0), join, cb);
+            Predicate right = resolveJoinCondition(or.nodes().get(1), join, cb);
+            return cb.or(left, right);
+        }
+        if (node instanceof ConditionNode.AndNode and) {
+            Predicate left = resolveJoinCondition(and.nodes().get(0), join, cb);
+            Predicate right = resolveJoinCondition(and.nodes().get(1), join, cb);
+            return cb.and(left, right);
+        }
+        if (node instanceof ConditionNode.NegateNode negate) {
+            return cb.not(resolveJoinCondition(negate.inner(), join, cb));
+        }
+        throw new IllegalArgumentException(
+            "Unsupported ConditionNode type in JOIN clause: " + node.getClass().getSimpleName()
+                + ". Supported types: SimpleNode, CollectionNode, OrNode, AndNode, NegateNode.");
     }
 
     /**

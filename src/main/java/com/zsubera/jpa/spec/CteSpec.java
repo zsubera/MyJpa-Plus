@@ -129,6 +129,10 @@ public class CteSpec {
      * <strong>安全警告：</strong>SQL 字符串不应包含用户输入。CTE 名称和列名已通过正则校验防止注入， 但 SQL
      * 本身由开发者负责安全。请使用参数化查询（{@link #setParameter}）绑定用户输入值。
      *
+     * <p>
+     * <strong>SQL 注入防护：</strong>此方法会检测 SQL 中是否包含危险关键字（DROP、TRUNCATE、GRANT、REVOKE、EXEC），
+     * 并在检测到时记录安全警告日志。此检测为启发式防护，不能替代参数化查询。
+     *
      * @param sql CTE 查询 SQL（不含外层括号）
      * @return 当前 CteSpec 实例，支持链式调用
      * @throws IllegalArgumentException 如果 sql 为 null 或空
@@ -137,6 +141,7 @@ public class CteSpec {
         if (sql == null || sql.isEmpty()) {
             throw new IllegalArgumentException("sql must not be null or empty");
         }
+        checkSqlSafety(sql, "CTE");
         CteEntry current = currentCte();
         current.sql = sql;
         return this;
@@ -166,6 +171,10 @@ public class CteSpec {
      * <p>
      * <strong>安全警告：</strong>SQL 字符串不应包含用户输入。请使用参数化查询（{@link #setParameter}）绑定用户输入值。
      *
+     * <p>
+     * <strong>SQL 注入防护：</strong>此方法会检测 SQL 中是否包含危险关键字（DROP、TRUNCATE、GRANT、REVOKE、EXEC），
+     * 并在检测到时记录安全警告日志。此检测为启发式防护，不能替代参数化查询。
+     *
      * @param sql 主查询 SQL
      * @return 当前 CteSpec 实例，支持链式调用
      * @throws IllegalArgumentException 如果 sql 为 null 或空
@@ -174,6 +183,7 @@ public class CteSpec {
         if (sql == null || sql.isEmpty()) {
             throw new IllegalArgumentException("sql must not be null or empty");
         }
+        checkSqlSafety(sql, "main query");
         this.mainSql = sql;
         return this;
     }
@@ -294,6 +304,31 @@ public class CteSpec {
     }
 
     // ---- 内部方法 ----
+
+    /** 危险 SQL 关键字黑名单，用于启发式 SQL 注入检测。 */
+    private static final java.util.List<String> DANGEROUS_KEYWORDS =
+        java.util.List.of("DROP", "TRUNCATE", "GRANT", "REVOKE", "EXEC", "EXECUTE", "xp_cmdshell", "sp_executesql");
+
+    /**
+     * 检测 SQL 中是否包含危险关键字，记录安全警告日志。
+     *
+     * <p>
+     * 此方法为启发式防护，不能替代参数化查询。仅用于检测明显的 SQL 注入尝试。
+     *
+     * @param sql 要检查的 SQL 字符串
+     * @param context 上下文描述（用于日志）
+     */
+    private static void checkSqlSafety(String sql, String context) {
+        String upperSql = sql.toUpperCase();
+        for (String keyword : DANGEROUS_KEYWORDS) {
+            if (upperSql.contains(keyword)) {
+                log.warn(
+                    "SECURITY: {} SQL contains potentially dangerous keyword '{}'. "
+                        + "Ensure this is intentional and not user input. SQL: {}",
+                    context, keyword, sql.length() > 100 ? sql.substring(0, 100) + "..." : sql);
+            }
+        }
+    }
 
     private CteSpec addCte(String cteName) {
         cteEntries.add(new CteEntry(cteName));

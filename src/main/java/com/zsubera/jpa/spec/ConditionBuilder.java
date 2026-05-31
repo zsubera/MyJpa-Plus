@@ -60,7 +60,23 @@ public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> {
     Set<String> SAFE_FUNCTION_NAMES = initDefaultFunctionNames();
 
     /** 白名单强制执行开关，通过系统属性控制。默认为 true（强制执行）。 */
-    boolean WHITELIST_ENFORCED = Boolean.parseBoolean(System.getProperty("myjpa-plus.func.whitelist-enforced", "true"));
+    boolean WHITELIST_ENFORCED = initWhitelistEnforced();
+
+    /**
+     * 初始化白名单强制执行开关，并在启动时检查安全配置。
+     *
+     * @return 是否强制执行白名单
+     */
+    private static boolean initWhitelistEnforced() {
+        boolean enforced = Boolean.parseBoolean(System.getProperty("myjpa-plus.func.whitelist-enforced", "true"));
+        if (!enforced) {
+            Logger initLog = LoggerFactory.getLogger(ConditionBuilder.class);
+            initLog.warn("SECURITY: Function whitelist enforcement is disabled via system property "
+                + "'myjpa-plus.func.whitelist-enforced=false'. "
+                + "This reduces SQL injection protection. Enable in production environments.");
+        }
+        return enforced;
+    }
 
     /**
      * 初始化默认安全函数名白名单。

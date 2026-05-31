@@ -235,10 +235,14 @@ public class MyJpaTemplate {
      * <strong>注意：</strong>此方法使用 {@code merge()} 操作，对于新实体会执行 INSERT，对于已存在的实体会执行 UPDATE。 如果确定所有实体都是新建的，可以考虑使用原生 JDBC
      * 批处理以获得更好的性能。
      *
+     * <p>
+     * <strong>返回值说明：</strong>返回的实体处于 detached 状态（一级缓存已清除）。 访问延迟加载的关联属性将抛出 {@code LazyInitializationException}。
+     * 如需使用返回的实体，请先通过 {@code entityManager.merge()} 重新关联到持久化上下文。
+     *
      * @param entities 要保存的实体列表
      * @param batchSize 每批大小，建议值为 50-200
      * @param <T> 实体类型
-     * @return 保存后的实体列表
+     * @return 保存后的实体列表（detached 状态）
      * @throws IllegalArgumentException 如果 entities 为 null 或 batchSize 不是正数
      */
     @Transactional
@@ -803,11 +807,9 @@ public class MyJpaTemplate {
         CriteriaBuilder cb = entityManager.getCriteriaBuilder();
 
         if (pageable.isUnpaged()) {
-            log.warn(
-                "Pageable.unpaged() used with pagination method - returning all results up to {} limit. "
-                    + "Consider using findAll() with explicit maxResults or findAllStream() for large datasets.",
-                this.maxResults);
-            TypedQuery<T> typedQuery = buildSpecificationQuery(entityClass, spec, null, this.maxResults);
+            log.debug("Pageable.unpaged() used with pagination method - returning all results without limit. "
+                + "Consider using findAll() with explicit maxResults or findAllStream() for large datasets.");
+            TypedQuery<T> typedQuery = buildSpecificationQuery(entityClass, spec, null, null);
             if (querySpec != null) {
                 querySpec.applyQuerySettings(typedQuery);
             }
@@ -1236,12 +1238,19 @@ public class MyJpaTemplate {
         java.util.function.IntUnaryOperator batchExecutor) {
         int total = 0;
         int batchResult;
+        int iteration = 0;
         do {
             batchResult = batchExecutor.applyAsInt(batchSize);
             total += batchResult;
             if (batchResult > 0 && log.isDebugEnabled()) {
                 log.debug("Batch {} committed: {} rows {}ed in this batch (total: {})", operationName, batchResult,
                     operationName, total);
+            }
+            iteration++;
+            if (iteration >= MAX_BATCH_ITERATIONS) {
+                log.error("Batch {} reached maximum iterations ({}). Possible infinite loop. Total rows: {}",
+                    operationName, MAX_BATCH_ITERATIONS, total);
+                break;
             }
         } while (batchResult >= batchSize);
         return total;
@@ -1338,6 +1347,9 @@ public class MyJpaTemplate {
     /**
      * 根据 ID 集合批量查找实体。
      *
+     * <p>
+     * 使用 {@link com.zsubera.jpa.util.InClauseBuilder} 自动处理大型 IN 子句的分批， 避免超出数据库的参数数量限制（Oracle: 1000, SQL Server: 2100）。
+     *
      * @param entityClass 实体类
      * @param ids ID 集合
      * @param <T> 实体类型
@@ -1357,12 +1369,15 @@ public class MyJpaTemplate {
         CriteriaBuilder cb = entityManager.getCriteriaBuilder();
         CriteriaQuery<T> cq = cb.createQuery(entityClass);
         Root<T> root = cq.from(entityClass);
-        cq.where(root.get(idFieldName).in(ids));
+        cq.where(com.zsubera.jpa.util.InClauseBuilder.in(cb, root.get(idFieldName), ids.toArray()));
         return entityManager.createQuery(cq).getResultList();
     }
 
     /**
      * 根据 ID 集合批量查找未被软删除的实体。
+     *
+     * <p>
+     * 使用 {@link com.zsubera.jpa.util.InClauseBuilder} 自动处理大型 IN 子句的分批， 避免超出数据库的参数数量限制。
      *
      * @param entityClass 实体类
      * @param ids ID 集合
@@ -1380,7 +1395,8 @@ public class MyJpaTemplate {
             throw new IllegalArgumentException("ids must not be null or empty");
         }
         String idFieldName = EntityClassResolver.resolveIdFieldName(entityClass);
-        Specification<T> idSpec = (root, query, cb) -> root.get(idFieldName).in(ids);
+        Specification<T> idSpec =
+            (root, query, cb) -> com.zsubera.jpa.util.InClauseBuilder.in(cb, root.get(idFieldName), ids.toArray());
         Specification<T> softDeleteSpec = com.zsubera.jpa.update.SoftDeleteHelper.isNotDeleted(entityClass);
         Specification<T> combinedSpec = idSpec.and(softDeleteSpec);
         CriteriaBuilder cb = entityManager.getCriteriaBuilder();

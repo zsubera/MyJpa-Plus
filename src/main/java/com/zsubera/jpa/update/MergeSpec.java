@@ -55,7 +55,7 @@ public class MergeSpec<T> {
     /** 安全标识符正则：仅允许字母、数字、下划线和点号（用于 schema.table 格式）。 */
     private static final Pattern SAFE_IDENTIFIER_PATTERN = Pattern.compile("^[a-zA-Z_][a-zA-Z0-9_.]*$");
 
-    /** 缓存实体类的持久化字段列表，避免每次反射遍历。 */
+    /** 缓存实体类的持久化字段列表，避免每次反射遍历。使用弱引用键防止类加载器泄漏。 */
     private static final java.util.concurrent.ConcurrentMap<Class<?>, List<java.lang.reflect.Field>> FIELD_CACHE =
         new java.util.concurrent.ConcurrentHashMap<>();
 
@@ -324,9 +324,14 @@ public class MergeSpec<T> {
     /**
      * 在事务中执行 UPSERT 操作。如果没有活动事务，则自动创建新事务。
      *
+     * <p>
+     * <strong>JTA 环境说明：</strong>在 JTA 环境中（{@code em.getTransaction()} 返回 null），如果没有活动事务， 将抛出明确的异常，而不是尝试执行后失败。请确保使用
+     * {@code @Transactional} 注解或手动开始事务。
+     *
      * @param em 实体管理器
      * @return 受影响的行数
      * @throws IllegalStateException 如果未指定实体
+     * @throws MyJpaPlusException 如果在 JTA 环境中没有活动事务
      */
     public int executeInTransaction(EntityManager em) {
         if (em == null) {
@@ -340,15 +345,12 @@ public class MergeSpec<T> {
         }
         EntityTransaction tx = em.getTransaction();
         if (tx == null) {
-            if (log.isDebugEnabled()) {
-                log.debug("JTA environment detected, executing with container-managed transaction");
+            // JTA 环境：检查是否有活动事务
+            if (!isJtaTransactionActive(em)) {
+                throw new MyJpaPlusException("JTA environment detected but no active transaction. "
+                    + "Use @Transactional annotation or manually begin a transaction before calling executeInTransaction().");
             }
-            try {
-                return execute(em);
-            } catch (jakarta.persistence.TransactionRequiredException e) {
-                throw new MyJpaPlusException("No active transaction in JTA environment. "
-                    + "Ensure a container-managed transaction is active, or use @Transactional annotation.", e);
-            }
+            return execute(em);
         }
         boolean isNewTransaction = !tx.isActive();
         if (isNewTransaction) {
@@ -382,14 +384,30 @@ public class MergeSpec<T> {
     }
 
     /**
+     * 检查 JTA 环境中是否有活动事务。
+     *
+     * @param em 实体管理器
+     * @return 如果有活动事务返回 true
+     */
+    private static boolean isJtaTransactionActive(EntityManager em) {
+        try {
+            // 通过 Hibernate Session 检查事务状态
+            org.hibernate.Session session = em.unwrap(org.hibernate.Session.class);
+            return session.getTransaction() != null && session.getTransaction().isActive();
+        } catch (Exception e) {
+            // 无法确定事务状态，假设没有活动事务
+            return false;
+        }
+    }
+
+    /**
      * 批量执行 UPSERT 操作。
      *
      * <p>
      * 对实体列表中的每个实体执行 UPSERT。所有操作在同一个事务中执行，使用 EntityManager 的 flush/clear 进行分批处理以减少内存占用。
      *
      * <p>
-     * <strong>线程安全说明：</strong>此方法不是线程安全的。它会临时修改实例的 {@code entity} 字段， 因此不能在多线程环境中并发调用同一 {@code MergeSpec} 实例。每个线程应使用独立的
-     * {@code MergeSpec} 实例。
+     * <strong>线程安全说明：</strong>此方法使用局部变量而非修改实例字段，支持在多线程环境中并发调用同一 {@code MergeSpec} 实例。
      *
      * @param entities 要 UPSERT 的实体列表
      * @param em 实体管理器
@@ -409,26 +427,45 @@ public class MergeSpec<T> {
         }
         int total = 0;
         int count = 0;
-        T originalEntity = this.entity;
-        try {
-            for (T ent : entities) {
-                this.entity = ent;
-                total += execute(em);
-                count++;
-                if (count % batchSize == 0) {
-                    em.flush();
-                    em.clear();
-                    if (log.isDebugEnabled()) {
-                        log.debug("Batch UPSERT: {} entities processed (total affected: {})", count, total);
-                    }
+        for (T ent : entities) {
+            total += executeSingle(em, ent);
+            count++;
+            if (count % batchSize == 0) {
+                em.flush();
+                em.clear();
+                if (log.isDebugEnabled()) {
+                    log.debug("Batch UPSERT: {} entities processed (total affected: {})", count, total);
                 }
             }
-            em.flush();
-            em.clear();
+        }
+        em.flush();
+        em.clear();
+        return total;
+    }
+
+    /**
+     * 对单个实体执行 UPSERT 操作。使用参数传递实体实例，避免修改共享实例字段。
+     *
+     * @param em 实体管理器
+     * @param entityToMerge 要 UPSERT 的实体
+     * @return 受影响的行数
+     */
+    private int executeSingle(EntityManager em, T entityToMerge) {
+        T originalEntity = this.entity;
+        try {
+            this.entity = entityToMerge;
+            String dialect = detectDialect(em);
+            if ("h2".equals(dialect)) {
+                return executeH2Upsert(em);
+            }
+            SqlWithParams sqlWithParams = buildSql(em);
+            if (log.isDebugEnabled()) {
+                log.debug("Executing UPSERT SQL: {}", sqlWithParams.sql());
+            }
+            return executeNativeQuery(em, sqlWithParams.sql(), sqlWithParams.params());
         } finally {
             this.entity = originalEntity;
         }
-        return total;
     }
 
     /**
@@ -617,7 +654,8 @@ public class MergeSpec<T> {
      * 验证并转义 SQL 标识符（表名、列名），防止 SQL 注入。
      *
      * <p>
-     * 标识符必须仅包含字母、数字、下划线和点号。不满足条件时抛出异常。 对于 PostgreSQL 使用双引号转义，对于 MySQL 使用反引号转义。
+     * 标识符必须仅包含字母、数字、下划线和点号。不满足条件时抛出异常。 对于 PostgreSQL 使用双引号转义，对于 MySQL 使用反引号转义。 H2 默认模式将标识符存储为大写，引用会使标识符变为大小写敏感，因此 H2
+     * 标识符不加引号以保持向后兼容。
      *
      * @param identifier 标识符
      * @param dialect 数据库方言
