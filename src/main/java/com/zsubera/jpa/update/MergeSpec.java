@@ -163,8 +163,8 @@ public class MergeSpec<T> {
             return executeH2Upsert(em);
         }
         SqlWithParams sqlWithParams = buildSql(em);
-        if (log.isDebugEnabled()) {
-            log.debug("Executing UPSERT SQL: {}", sqlWithParams.sql());
+        if (log.isTraceEnabled()) {
+            log.trace("Executing UPSERT SQL: {}", sqlWithParams.sql());
         }
         return executeNativeQuery(em, sqlWithParams.sql(), sqlWithParams.params());
     }
@@ -233,8 +233,8 @@ public class MergeSpec<T> {
             return executeNativeQuery(em, retrySql.sql(), retrySql.params());
         }
         SqlWithParams sqlWithParams = buildSql(em);
-        if (log.isDebugEnabled()) {
-            log.debug("Executing H2 MERGE SQL: {}", sqlWithParams.sql());
+        if (log.isTraceEnabled()) {
+            log.trace("Executing H2 MERGE SQL: {}", sqlWithParams.sql());
         }
         return executeNativeQuery(em, sqlWithParams.sql(), sqlWithParams.params());
     }
@@ -266,8 +266,8 @@ public class MergeSpec<T> {
             sql.append("?");
         }
         sql.append(")");
-        if (log.isDebugEnabled()) {
-            log.debug("Executing H2 INSERT SQL: {}", sql);
+        if (log.isTraceEnabled()) {
+            log.trace("Executing H2 INSERT SQL: {}", sql);
         }
         return executeNativeQuery(em, sql.toString(), params);
     }
@@ -312,8 +312,8 @@ public class MergeSpec<T> {
         sql.append(String.join(" AND ", whereClauses));
         List<Object> allParams = new ArrayList<>(setParams);
         allParams.addAll(whereParams);
-        if (log.isDebugEnabled()) {
-            log.debug("Executing H2 UPDATE SQL: {}", sql);
+        if (log.isTraceEnabled()) {
+            log.trace("Executing H2 UPDATE SQL: {}", sql);
         }
         return executeNativeQuery(em, sql.toString(), allParams);
     }
@@ -415,6 +415,8 @@ public class MergeSpec<T> {
             }
         } catch (Exception ignored) {
             // JTA environment may throw on getTransaction()
+            // P2: Log at debug level for diagnostics
+            log.debug("getTransaction() threw exception in JTA environment: {}", ignored.getMessage());
         }
         // Fallback: try Hibernate Session (only if Hibernate is on classpath)
         try {
@@ -480,6 +482,9 @@ public class MergeSpec<T> {
      * <p>
      * 适用于大数据量 UPSERT 场景。与 {@link #executeBatch(List, EntityManager, int)} 不同， 此方法每批操作完成后立即提交事务，已提交的批次不会因后续批次失败而回滚。
      *
+     * <p>
+     * <strong>P0-1 修复：</strong>改为按 batchSize 分批提交事务，每 batchSize 个实体提交一次，而非每个实体提交一次。
+     *
      * @param entities 要 UPSERT 的实体列表
      * @param em 实体管理器
      * @param batchSize 每批大小，建议值为 50-200
@@ -498,20 +503,24 @@ public class MergeSpec<T> {
         }
         int total = 0;
         int count = 0;
+        EntityTransaction tx = null;
+        boolean txStarted = false;
         for (T ent : entities) {
-            EntityTransaction tx = em.getTransaction();
-            boolean isNew = false;
-            if (tx != null && !tx.isActive()) {
-                tx.begin();
-                isNew = true;
+            // 每 batchSize 个实体开始一个新事务
+            if (count % batchSize == 0) {
+                if (txStarted && tx != null && tx.isActive()) {
+                    em.flush();
+                    tx.commit();
+                }
+                tx = em.getTransaction();
+                if (tx != null && !tx.isActive()) {
+                    tx.begin();
+                    txStarted = true;
+                }
             }
             try {
                 total += executeSingle(em, ent);
                 count++;
-                if (isNew) {
-                    em.flush();
-                    tx.commit();
-                }
                 if (count % batchSize == 0) {
                     em.clear();
                     if (log.isDebugEnabled()) {
@@ -520,7 +529,7 @@ public class MergeSpec<T> {
                     }
                 }
             } catch (RuntimeException e) {
-                if (isNew && tx.isActive()) {
+                if (txStarted && tx != null && tx.isActive()) {
                     try {
                         tx.rollback();
                     } catch (Exception rollbackEx) {
@@ -529,6 +538,11 @@ public class MergeSpec<T> {
                 }
                 throw e;
             }
+        }
+        // 提交最后一批
+        if (txStarted && tx != null && tx.isActive()) {
+            em.flush();
+            tx.commit();
         }
         return total;
     }
@@ -546,14 +560,17 @@ public class MergeSpec<T> {
             return executeH2UpsertFor(em, entityToMerge);
         }
         SqlWithParams sqlWithParams = buildSqlFor(em, entityToMerge);
-        if (log.isDebugEnabled()) {
-            log.debug("Executing UPSERT SQL: {}", sqlWithParams.sql());
+        if (log.isTraceEnabled()) {
+            log.trace("Executing UPSERT SQL: {}", sqlWithParams.sql());
         }
         return executeNativeQuery(em, sqlWithParams.sql(), sqlWithParams.params());
     }
 
     /**
      * 从指定实体提取字段值（线程安全版本，不访问实例字段 this.entity）。
+     *
+     * <p>
+     * <strong>P1-4 改进：</strong>优先使用 getter 方法获取字段值，回退到字段反射。 在 Java 17+ 模块系统下，getter 方法通常不需要 {@code --add-opens} 参数。
      *
      * @param entity 要提取字段值的实体实例
      * @return 字段名、列名和值的列表
@@ -575,13 +592,7 @@ public class MergeSpec<T> {
                         && !f.isAnnotationPresent(jakarta.persistence.ManyToMany.class)
                         && !f.isAnnotationPresent(jakarta.persistence.OneToOne.class)
                         && !f.isAnnotationPresent(jakarta.persistence.EmbeddedId.class)) {
-                        try {
-                            f.setAccessible(true);
-                        } catch (InaccessibleObjectException e) {
-                            throw new MyJpaPlusException("Cannot access field '" + f.getName() + "' in " + cls.getName()
-                                + ". If using Java 17+ module system, add JVM argument: " + "--add-opens "
-                                + f.getDeclaringClass().getPackageName() + "=ALL-UNNAMED", e);
-                        }
+                        // P1-4: Don't call setAccessible in cache population; defer to runtime
                         fields.add(f);
                     }
                 }
@@ -592,7 +603,7 @@ public class MergeSpec<T> {
             try {
                 // P2: Handle @Embedded fields by recursively extracting their sub-fields
                 if (f.isAnnotationPresent(jakarta.persistence.Embedded.class)) {
-                    Object embeddedValue = f.get(entity);
+                    Object embeddedValue = getFieldValue(entity, f);
                     if (embeddedValue != null) {
                         jakarta.persistence.AttributeOverride[] overrides =
                             f.getAnnotationsByType(jakarta.persistence.AttributeOverride.class);
@@ -603,8 +614,7 @@ public class MergeSpec<T> {
                         for (Field subField : embeddedValue.getClass().getDeclaredFields()) {
                             if (!java.lang.reflect.Modifier.isStatic(subField.getModifiers())
                                 && !subField.isSynthetic()) {
-                                subField.setAccessible(true);
-                                Object subValue = subField.get(embeddedValue);
+                                Object subValue = getFieldValue(embeddedValue, subField);
                                 String columnName =
                                     overrideMap.getOrDefault(subField.getName(), resolveColumnName(subField));
                                 fieldValues.add(
@@ -613,15 +623,62 @@ public class MergeSpec<T> {
                         }
                     }
                 } else {
-                    Object value = f.get(entity);
+                    Object value = getFieldValue(entity, f);
                     String columnName = resolveColumnName(f);
                     fieldValues.add(new EntityFieldValue(f.getName(), columnName, value));
                 }
-            } catch (IllegalAccessException e) {
-                throw new MyJpaPlusException("Failed to access field: " + f.getName(), e);
+            } catch (Exception e) {
+                throw new MyJpaPlusException(
+                    "Failed to access field: " + f.getName() + ". If using Java 17+ module system, add JVM argument: "
+                        + "--add-opens " + f.getDeclaringClass().getPackageName() + "=ALL-UNNAMED",
+                    e);
             }
         }
         return fieldValues;
+    }
+
+    /**
+     * P1-4: 获取实体字段值，优先使用 getter 方法，回退到字段反射。
+     *
+     * @param entity 实体实例
+     * @param field 字段
+     * @return 字段值
+     * @throws Exception 如果无法访问字段
+     */
+    private Object getFieldValue(Object entity, Field field) throws Exception {
+        Class<?> cls = entity.getClass();
+        String fieldName = field.getName();
+        // 尝试 getXxx() getter 方法
+        String getterName = "get" + Character.toUpperCase(fieldName.charAt(0)) + fieldName.substring(1);
+        try {
+            java.lang.reflect.Method getter = cls.getMethod(getterName);
+            return getter.invoke(entity);
+        } catch (NoSuchMethodException ignored) {
+            // getter 不可用
+        } catch (java.lang.reflect.InvocationTargetException e) {
+            throw e.getTargetException() != null ? new Exception(e.getTargetException()) : e;
+        }
+        // 尝试 isXxx() getter（boolean 类型）
+        if (field.getType() == boolean.class || field.getType() == Boolean.class) {
+            String isGetterName = "is" + Character.toUpperCase(fieldName.charAt(0)) + fieldName.substring(1);
+            try {
+                java.lang.reflect.Method isGetter = cls.getMethod(isGetterName);
+                return isGetter.invoke(entity);
+            } catch (NoSuchMethodException ignored) {
+                // is-getter 不可用
+            } catch (java.lang.reflect.InvocationTargetException e) {
+                throw e.getTargetException() != null ? new Exception(e.getTargetException()) : e;
+            }
+        }
+        // 回退到字段反射
+        try {
+            field.setAccessible(true);
+        } catch (InaccessibleObjectException e) {
+            throw new MyJpaPlusException("Cannot access field '" + fieldName + "' in " + cls.getName()
+                + ". If using Java 17+ module system, add JVM argument: " + "--add-opens "
+                + field.getDeclaringClass().getPackageName() + "=ALL-UNNAMED", e);
+        }
+        return field.get(entity);
     }
 
     /**
@@ -716,13 +773,14 @@ public class MergeSpec<T> {
                     throw e;
                 }
             }
-            // B-10: After retries exhausted, try MERGE again instead of direct INSERT
-            SqlWithParams retrySql = buildSql(em);
+            // B-10: After retries exhausted, try MERGE again using the thread-safe buildSqlFor method
+            // (not buildSql which uses shared this.entity field — unsafe in concurrent batch scenarios)
+            SqlWithParams retrySql = buildSqlFor(em, entity);
             return executeNativeQuery(em, retrySql.sql(), retrySql.params());
         }
         SqlWithParams sqlWithParams = buildSqlFor(em, entity);
-        if (log.isDebugEnabled()) {
-            log.debug("Executing H2 MERGE SQL: {}", sqlWithParams.sql());
+        if (log.isTraceEnabled()) {
+            log.trace("Executing H2 MERGE SQL: {}", sqlWithParams.sql());
         }
         return executeNativeQuery(em, sqlWithParams.sql(), sqlWithParams.params());
     }

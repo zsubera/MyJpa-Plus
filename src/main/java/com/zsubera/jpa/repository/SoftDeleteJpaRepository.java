@@ -207,16 +207,10 @@ public class SoftDeleteJpaRepository<T, ID> extends SimpleJpaRepository<T, ID> {
         // P0-5: Use Specification-based query to atomically filter soft-deleted records,
         // avoiding TOCTOU race condition with EntityManager.find() + post-check.
         String idFieldName = EntityClassResolver.resolveIdFieldName(domainClass);
-        Specification<T> spec = (root, query, cb) -> {
-            jakarta.persistence.criteria.Predicate idPredicate = cb.equal(root.get(idFieldName), id);
-            jakarta.persistence.criteria.Predicate softDeletePredicate =
-                SoftDeleteHelper.isNotDeleted(domainClass).toPredicate(root, query, cb);
-            if (softDeletePredicate != null) {
-                return cb.and(idPredicate, softDeletePredicate);
-            }
-            return idPredicate;
-        };
-        return findOne(spec);
+        // P2: Use Specification.where() chain for cleaner code instead of anonymous lambda
+        Specification<T> idSpec = Specification.where((root, query, cb) -> cb.equal(root.get(idFieldName), id));
+        Specification<T> softDeleteSpec = SoftDeleteHelper.isNotDeleted(domainClass);
+        return findOne(idSpec.and(softDeleteSpec));
     }
 
     /**

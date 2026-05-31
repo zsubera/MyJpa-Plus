@@ -41,6 +41,9 @@ public class EncryptConverter implements AttributeConverter<String, String> {
     /** Cached key specs by version to avoid repeated environment variable reads and KDF derivation. */
     private static final ConcurrentMap<String, SecretKeySpec> KEY_CACHE = new ConcurrentHashMap<>();
 
+    /** P1-3: Maximum number of cached key specs to prevent memory exhaustion from malicious version prefixes. */
+    private static final int MAX_KEY_CACHE_SIZE = 16;
+
     /** Cached key version to avoid repeated environment variable reads. */
     private static volatile String cachedKeyVersion;
 
@@ -53,6 +56,9 @@ public class EncryptConverter implements AttributeConverter<String, String> {
     /** P1-1: Thread-safe salt cache to replace System.setProperty() usage. */
     private static final ConcurrentMap<String, byte[]> SALT_CACHE = new ConcurrentHashMap<>();
 
+    /** P1-2: Flag to track if key validation has been performed. */
+    private static volatile boolean keyValidated = false;
+
     /**
      * 清除所有缓存的密钥和版本信息。仅用于测试环境。
      */
@@ -60,6 +66,7 @@ public class EncryptConverter implements AttributeConverter<String, String> {
         KEY_CACHE.clear();
         cachedKeyVersion = null;
         lastKeyVersionRefresh = 0;
+        keyValidated = false;
     }
 
     /**
@@ -74,6 +81,38 @@ public class EncryptConverter implements AttributeConverter<String, String> {
         SALT_CACHE.clear();
         lastKeyVersionRefresh = System.currentTimeMillis();
         LOG.log(System.Logger.Level.INFO, "Encryption key version cache and salt cache refreshed");
+    }
+
+    /**
+     * P1-2: Validate encryption key configuration at startup. This method should be called during application
+     * initialization to detect missing key configuration early.
+     *
+     * <p>
+     * If the key is not configured and strict mode is enabled, throws IllegalStateException. Otherwise logs a warning.
+     */
+    public static void validateKeyConfiguration() {
+        if (keyValidated) {
+            return;
+        }
+        String keyEnv = System.getenv(KEY_ENV);
+        String keyProp = System.getProperty(KEY_PROPERTY);
+        if ((keyEnv == null || keyEnv.isEmpty()) && (keyProp == null || keyProp.isEmpty())) {
+            if (STRICT_MODE) {
+                throw new IllegalStateException("Encryption key not configured. Set environment variable " + KEY_ENV
+                    + " or system property " + KEY_PROPERTY + " before starting the application. "
+                    + "Strict mode is enabled, application cannot start without encryption key.");
+            }
+            LOG.log(System.Logger.Level.WARNING,
+                "SECURITY: Encryption key not configured. Set environment variable {0} or system property {1}.",
+                KEY_ENV, KEY_PROPERTY);
+        } else {
+            String key = (keyEnv != null && !keyEnv.isEmpty()) ? keyEnv : keyProp;
+            if (key != null && key.length() < MIN_KEY_LENGTH) {
+                throw new MyJpaPlusException("Encryption key must be at least " + MIN_KEY_LENGTH + " characters. "
+                    + "Current length: " + key.length() + ".");
+            }
+        }
+        keyValidated = true;
     }
 
     /**
@@ -183,9 +222,24 @@ public class EncryptConverter implements AttributeConverter<String, String> {
 
     /**
      * 获取指定版本的密钥规范。支持多版本密钥配置（格式：v1:key1,v2:key2）。 使用 PBKDF2WithHmacSHA256 进行密钥派生。
+     *
+     * <p>
+     * P1-3: KEY_CACHE 大小限制为 {@value #MAX_KEY_CACHE_SIZE} 个条目。超出限制时拒绝解密未知版本， 防止恶意构造大量不同版本号前缀的加密数据导致 CPU 耗尽和 OOM。
      */
     private static SecretKeySpec getKeySpec(String version) {
-        return KEY_CACHE.computeIfAbsent(version != null ? version : "default", v -> {
+        String cacheKey = version != null ? version : "default";
+        SecretKeySpec existing = KEY_CACHE.get(cacheKey);
+        if (existing != null) {
+            return existing;
+        }
+        // P1-3: Check cache size limit before adding new entries
+        if (KEY_CACHE.size() >= MAX_KEY_CACHE_SIZE && !KEY_CACHE.containsKey(cacheKey)) {
+            throw new MyJpaPlusException(
+                "Encryption key cache is full (" + MAX_KEY_CACHE_SIZE + " entries). " + "Cannot load key version '"
+                    + cacheKey + "'. " + "This may indicate a malicious attempt to exhaust CPU via PBKDF2 derivation. "
+                    + "Clear cache or increase MAX_KEY_CACHE_SIZE if this is legitimate key rotation.");
+        }
+        return KEY_CACHE.computeIfAbsent(cacheKey, v -> {
             String rawKey = resolveRawKey(v);
             return deriveKey(rawKey);
         });
@@ -268,7 +322,8 @@ public class EncryptConverter implements AttributeConverter<String, String> {
             byte[] derived = factory.generateSecret(spec).getEncoded();
             return new SecretKeySpec(derived, "AES");
         } catch (GeneralSecurityException e) {
-            throw new IllegalStateException("Failed to derive encryption key via PBKDF2", e);
+            // P2: Use MyJpaPlusException consistently instead of IllegalStateException
+            throw new MyJpaPlusException("Failed to derive encryption key via PBKDF2", e);
         }
     }
 
@@ -286,7 +341,11 @@ public class EncryptConverter implements AttributeConverter<String, String> {
      * 获取 PBKDF2 盐值。优先从环境变量获取，回退到系统属性。 生产环境（spring.profiles.active 包含 prod/production）强制要求配置盐值。
      *
      * <p>
-     * <strong>安全改进：</strong>非生产环境不再使用硬编码的默认盐值，而是生成随机盐值并记录警告。 随机盐值在 JVM 生命周期内保持一致（缓存在系统属性中），确保同一 JVM 内的加密/解密操作使用相同盐值。
+     * <strong>安全改进：</strong>非生产环境不再使用硬编码的默认盐值，而是生成随机盐值并记录警告。 随机盐值在 JVM 生命周期内保持一致（缓存在 SALT_CACHE 中），确保同一 JVM
+     * 内的加密/解密操作使用相同盐值。
+     *
+     * <p>
+     * <strong>P1-3 改进：</strong>非生产环境的随机盐值会持久化到本地文件（{@code $TMPDIR/.myjpa-salt}）， 确保跨 JVM 重启后盐值保持一致，避免之前加密的数据无法解密。
      *
      * @return 盐值字节数组
      * @throws IllegalStateException 生产环境未配置盐值时抛出
@@ -304,10 +363,45 @@ public class EncryptConverter implements AttributeConverter<String, String> {
             }
             // P1-1: Use ConcurrentHashMap for thread-safe salt caching instead of System.setProperty()
             return SALT_CACHE.computeIfAbsent("internal", k -> {
+                // P1-3: Try to load persisted salt from local file for cross-restart consistency
+                java.io.File saltFile = new java.io.File(System.getProperty("java.io.tmpdir"), ".myjpa-salt");
+                if (saltFile.exists()) {
+                    try {
+                        byte[] fileSalt = java.nio.file.Files.readAllBytes(saltFile.toPath());
+                        if (fileSalt.length > 0) {
+                            LOG.log(System.Logger.Level.INFO, "Loaded persisted PBKDF2 salt from {0}",
+                                saltFile.getAbsolutePath());
+                            return fileSalt;
+                        }
+                    } catch (java.io.IOException e) {
+                        LOG.log(System.Logger.Level.WARNING, "Failed to read salt file: {0}", e.getMessage());
+                    }
+                }
                 byte[] randomSalt = generateRandomSalt().getBytes(StandardCharsets.UTF_8);
-                LOG.log(System.Logger.Level.WARNING, "SECURITY: Using randomly generated PBKDF2 salt. "
-                    + "Set environment variable {0} or system property {1} for consistent encryption across restarts.",
-                    SALT_ENV, SALT_PROPERTY);
+                // Try to persist the salt for cross-restart consistency
+                try {
+                    java.nio.file.Files.write(saltFile.toPath(), randomSalt);
+                    // P2: Set POSIX file permissions (rw-------) on salt file for security
+                    try {
+                        java.util.Set<java.nio.file.attribute.PosixFilePermission> perms =
+                            java.util.EnumSet.of(java.nio.file.attribute.PosixFilePermission.OWNER_READ,
+                                java.nio.file.attribute.PosixFilePermission.OWNER_WRITE);
+                        java.nio.file.Files.setPosixFilePermissions(saltFile.toPath(), perms);
+                    } catch (UnsupportedOperationException | java.io.IOException permEx) {
+                        // POSIX permissions not supported on this OS (e.g., Windows)
+                        LOG.log(System.Logger.Level.DEBUG, "Cannot set POSIX permissions on salt file: {0}",
+                            permEx.getMessage());
+                    }
+                    LOG.log(System.Logger.Level.WARNING,
+                        "SECURITY: Generated and persisted PBKDF2 salt to {0}. "
+                            + "Set environment variable {1} for consistent encryption across environments.",
+                        saltFile.getAbsolutePath(), SALT_ENV);
+                } catch (java.io.IOException e) {
+                    LOG.log(System.Logger.Level.ERROR,
+                        "SECURITY: Using non-persisted random salt. Previous encrypted data WILL BE UNRECOVERABLE after restart. "
+                            + "Set environment variable {0} or system property {1}",
+                        SALT_ENV, SALT_PROPERTY);
+                }
                 return randomSalt;
             });
         }

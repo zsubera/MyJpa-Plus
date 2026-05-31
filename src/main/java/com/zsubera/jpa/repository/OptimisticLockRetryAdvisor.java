@@ -30,6 +30,9 @@ public class OptimisticLockRetryAdvisor {
     /** 最大退避延迟上限（毫秒），防止指数退避无限增长。 */
     private static final long MAX_BACKOFF_MS = 30_000;
 
+    /** P1-6: Maximum allowed retries hard limit to prevent infinite loops. */
+    private static final int MAX_RETRIES_LIMIT = 100;
+
     /**
      * Intercepts methods annotated with {@link RetryOnOptimisticLock} and retries on {@link OptimisticLockException}.
      *
@@ -50,6 +53,12 @@ public class OptimisticLockRetryAdvisor {
         if (maxRetries < 0) {
             throw new IllegalStateException(
                 "@RetryOnOptimisticLock.maxRetries must be non-negative, got: " + maxRetries);
+        }
+        // P1-6: Hard limit on maxRetries to prevent infinite loops
+        if (maxRetries > MAX_RETRIES_LIMIT) {
+            throw new IllegalArgumentException(
+                "@RetryOnOptimisticLock.maxRetries exceeds hard limit of " + MAX_RETRIES_LIMIT + ", got: " + maxRetries
+                    + ". Consider using a lower value to prevent excessive retry attempts.");
         }
         if (backoffMs <= 0) {
             throw new IllegalStateException("@RetryOnOptimisticLock.backoffMs must be positive, got: " + backoffMs);

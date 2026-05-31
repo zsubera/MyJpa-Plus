@@ -724,8 +724,10 @@ public abstract class AbstractBulkOperationSpec<T, SELF extends AbstractBulkOper
             jakarta.persistence.criteria.CriteriaQuery<?> tempQuery = cb.createQuery(entityClass);
             jakarta.persistence.criteria.Subquery<S> subquery = tempQuery.subquery(subEntity);
             Root<S> subRoot = subquery.from(subEntity);
+            // P0-2: Use subquery.correlate() to establish correct correlation with outer query
+            Root<?> correlatedOuter = subquery.correlate(root);
             com.zsubera.jpa.spec.SubQuerySpec<S> subSpec =
-                com.zsubera.jpa.spec.SubQuerySpec.create(subquery, subRoot, root, cb);
+                com.zsubera.jpa.spec.SubQuerySpec.create(subquery, subRoot, correlatedOuter, cb);
             config.accept(subSpec);
             subSpec.applyWhere();
             if (!subSpec.isSelectSet()) {
@@ -756,8 +758,10 @@ public abstract class AbstractBulkOperationSpec<T, SELF extends AbstractBulkOper
             jakarta.persistence.criteria.CriteriaQuery<?> tempQuery = cb.createQuery(entityClass);
             jakarta.persistence.criteria.Subquery<S> subquery = tempQuery.subquery(subEntity);
             Root<S> subRoot = subquery.from(subEntity);
+            // P0-2: Use subquery.correlate() to establish correct correlation with outer query
+            Root<?> correlatedOuter = subquery.correlate(root);
             com.zsubera.jpa.spec.SubQuerySpec<S> subSpec =
-                com.zsubera.jpa.spec.SubQuerySpec.create(subquery, subRoot, root, cb);
+                com.zsubera.jpa.spec.SubQuerySpec.create(subquery, subRoot, correlatedOuter, cb);
             config.accept(subSpec);
             subSpec.applyWhere();
             if (!subSpec.isSelectSet()) {

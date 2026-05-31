@@ -53,8 +53,8 @@ public final class SoftDeleteHelper {
     private static final int MAX_CACHE_SIZE = 1024;
     private static final Logger log = org.slf4j.LoggerFactory.getLogger(SoftDeleteHelper.class);
 
-    /** 安全标识符正则：仅允许字母、数字和下划线。 */
-    private static final java.util.regex.Pattern SAFE_IDENTIFIER_PATTERN =
+    /** 安全标识符段正则：用于校验 schema.table 格式中每一段。 */
+    private static final java.util.regex.Pattern SAFE_IDENTIFIER_PART_PATTERN =
         java.util.regex.Pattern.compile("^[a-zA-Z_][a-zA-Z0-9_]*$");
 
     // 没有@SoftDelete字段的实体的哨兵值（避免在缓存中出现空缓存）
@@ -85,7 +85,7 @@ public final class SoftDeleteHelper {
      * 转义 SQL 标识符，防止注入。
      *
      * <p>
-     * 使用双引号包裹标识符，并验证标识符仅包含安全字符。
+     * 使用双引号包裹标识符，并验证标识符仅包含安全字符。 支持 schema.table 格式（按点号分段校验每一段）。
      *
      * @param identifier SQL 标识符
      * @return 转义后的标识符
@@ -97,8 +97,13 @@ public final class SoftDeleteHelper {
         if (identifier == null || identifier.isEmpty()) {
             throw new IllegalArgumentException("Identifier must not be null or empty");
         }
-        if (!SAFE_IDENTIFIER_PATTERN.matcher(identifier).matches()) {
-            throw new IllegalArgumentException("Invalid SQL identifier: " + identifier);
+        // P0-2: Support schema.table format by validating each segment separately
+        String[] parts = identifier.split("\\.");
+        for (String part : parts) {
+            if (!SAFE_IDENTIFIER_PART_PATTERN.matcher(part).matches()) {
+                throw new IllegalArgumentException("Invalid SQL identifier: '" + identifier
+                    + "'. Each part must contain only alphanumeric characters and underscores.");
+            }
         }
         return "\"" + identifier.replace("\"", "\"\"") + "\"";
     }
@@ -184,19 +189,27 @@ public final class SoftDeleteHelper {
         String escapedTable = escapeIdentifier(tableName);
         String escapedColumn = escapeIdentifier(columnName);
         String escapedIdColumn = escapeIdentifier(idFieldName);
-        // Build SET clause based on field type
+        // P1-4: Use named parameters instead of positional parameters to avoid index conflicts
+        // in some JPA implementations (especially when combining SET and IN clause parameters)
+        String setParamName = "deletedValue";
         String setClause;
+        boolean useParamBinding = false;
+        Object deletedParamValue = null;
         if (field.getType() == Boolean.class || field.getType() == boolean.class) {
             setClause = escapedColumn + " = true";
         } else if (field.getType() == Integer.class || field.getType() == int.class) {
             int deletedValue = (annotation != null) ? annotation.deletedIntValue() : 1;
-            setClause = escapedColumn + " = " + deletedValue;
+            // P1-4: Use named parameter to avoid positional parameter conflicts
+            setClause = escapedColumn + " = :" + setParamName;
+            useParamBinding = true;
+            deletedParamValue = deletedValue;
         } else {
             throw new MyJpaPlusException("Batch soft delete by IDs for enum fields is not supported via native query.");
         }
+        // P1-8: Use InClauseBuilder.getMaxInClauseSize() instead of hardcoded 1000
+        int batchSize = com.zsubera.jpa.util.InClauseBuilder.getMaxInClauseSize();
         // Use IN clause with batch splitting for large ID lists
         int total = 0;
-        int batchSize = 1000;
         for (int i = 0; i < ids.size(); i += batchSize) {
             List<ID> batch = ids.subList(i, Math.min(i + batchSize, ids.size()));
             StringBuilder placeholders = new StringBuilder();
@@ -204,13 +217,16 @@ public final class SoftDeleteHelper {
                 if (j > 0) {
                     placeholders.append(", ");
                 }
-                placeholders.append("?");
+                placeholders.append(":id").append(j);
             }
             String sql = "UPDATE " + escapedTable + " SET " + setClause + " WHERE " + escapedIdColumn + " IN ("
                 + placeholders + ")";
             var query = em.createNativeQuery(sql);
+            if (useParamBinding) {
+                query.setParameter(setParamName, deletedParamValue);
+            }
             for (int j = 0; j < batch.size(); j++) {
-                query.setParameter(j + 1, batch.get(j));
+                query.setParameter("id" + j, batch.get(j));
             }
             total += query.executeUpdate();
         }

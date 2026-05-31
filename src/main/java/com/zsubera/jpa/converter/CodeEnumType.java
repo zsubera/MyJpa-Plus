@@ -251,6 +251,8 @@ public class CodeEnumType implements UserType<Object>, DynamicParameterizedType 
             Object codeValue = codeField.get(value);
             return codeValue != null ? String.valueOf(codeValue) : null;
         } catch (IllegalAccessException e) {
+            // P2: Log warning instead of silently swallowing exception
+            log.warn("Failed to access code field for enum {}: {}", value.getClass().getSimpleName(), e.getMessage());
             return null;
         }
     }

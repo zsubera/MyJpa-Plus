@@ -245,7 +245,7 @@ public class MyJpaTemplate {
      * @return 保存后的实体列表（detached 状态）
      * @throws IllegalArgumentException 如果 entities 为 null 或 batchSize 不是正数
      */
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public <T> List<T> saveAllBatched(Iterable<T> entities, int batchSize) {
         if (entities == null) {
             throw new IllegalArgumentException("entities must not be null");
@@ -511,6 +511,7 @@ public class MyJpaTemplate {
         log.warn("findAllStream(Class, QuerySpec) is deprecated and will be removed in 2.0. "
             + "Use findAllStream(Class, QuerySpec, Consumer) for safe Stream lifecycle management. "
             + "This method returns a Stream that must be closed by the caller to avoid connection leaks.");
+        // P1-5: This method is kept for backward compatibility. In 2.0, it will throw UnsupportedOperationException.
         return doFindStream(entityClass, spec, null);
     }
 
@@ -1361,8 +1362,11 @@ public class MyJpaTemplate {
         }
         try {
             return applicationContext.getBean(org.springframework.transaction.PlatformTransactionManager.class);
-        } catch (Exception e) {
-            log.debug("TransactionManager not available: {}", e.getMessage());
+        } catch (org.springframework.beans.factory.NoSuchBeanDefinitionException e) {
+            log.debug("PlatformTransactionManager bean not found: {}", e.getMessage());
+            return null;
+        } catch (org.springframework.beans.BeansException e) {
+            log.debug("Failed to resolve TransactionManager: {}", e.getMessage());
             return null;
         }
     }
@@ -1437,7 +1441,8 @@ public class MyJpaTemplate {
         CriteriaBuilder cb = entityManager.getCriteriaBuilder();
         CriteriaQuery<T> cq = cb.createQuery(entityClass);
         Root<T> root = cq.from(entityClass);
-        cq.where(com.zsubera.jpa.util.InClauseBuilder.in(cb, root.get(idFieldName), ids.toArray()));
+        // P2: Pass ids Collection directly to avoid unnecessary toArray() conversion
+        cq.where(com.zsubera.jpa.util.InClauseBuilder.in(cb, root.get(idFieldName), ids));
         return entityManager.createQuery(cq).getResultList();
     }
 
@@ -1463,8 +1468,9 @@ public class MyJpaTemplate {
             throw new IllegalArgumentException("ids must not be null or empty");
         }
         String idFieldName = EntityClassResolver.resolveIdFieldName(entityClass);
+        // P2: Pass ids Collection directly to avoid unnecessary toArray() conversion
         Specification<T> idSpec =
-            (root, query, cb) -> com.zsubera.jpa.util.InClauseBuilder.in(cb, root.get(idFieldName), ids.toArray());
+            (root, query, cb) -> com.zsubera.jpa.util.InClauseBuilder.in(cb, root.get(idFieldName), ids);
         Specification<T> softDeleteSpec = com.zsubera.jpa.update.SoftDeleteHelper.isNotDeleted(entityClass);
         Specification<T> combinedSpec = idSpec.and(softDeleteSpec);
         CriteriaBuilder cb = entityManager.getCriteriaBuilder();

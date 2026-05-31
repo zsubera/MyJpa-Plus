@@ -61,8 +61,15 @@ public final class EntityCodeGenerator {
          * @param name column/field name (snake_case for table, camelCase for Java)
          * @param javaType Java type simple name (e.g. "String", "Long", "BigDecimal")
          * @param nullable whether the column is nullable
+         * @throws IllegalArgumentException if name or javaType is null or empty
          */
         public ColumnDef(String name, String javaType, boolean nullable) {
+            if (name == null || name.isEmpty()) {
+                throw new IllegalArgumentException("name must not be null or empty");
+            }
+            if (javaType == null || javaType.isEmpty()) {
+                throw new IllegalArgumentException("javaType must not be null or empty");
+            }
             this.name = name;
             this.javaType = javaType;
             this.nullable = nullable;

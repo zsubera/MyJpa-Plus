@@ -2,7 +2,6 @@ package com.zsubera.jpa.spec;
 
 import static com.zsubera.jpa.spec.PredicateHelper.escapeLikeWildcards;
 
-import com.zsubera.jpa.exception.MyJpaPlusException;
 import com.zsubera.jpa.util.LambdaUtils;
 import jakarta.persistence.criteria.CriteriaBuilder;
 import jakarta.persistence.criteria.Path;
@@ -1331,19 +1330,6 @@ public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> {
             throw new IllegalArgumentException("functionName contains invalid characters: " + functionName
                 + ". Only alphanumeric characters and underscores are allowed.");
         }
-        String upperFuncName = functionName.toUpperCase();
-        if (!SAFE_FUNCTION_NAMES.contains(upperFuncName)) {
-            if (WHITELIST_ENFORCED) {
-                throw new MyJpaPlusException("Function '" + functionName + "' is not in the safe function whitelist. "
-                    + "Add it via ConditionBuilder.SAFE_FUNCTION_NAMES.add(\"" + upperFuncName
-                    + "\") or set -Dmyjpa-plus.func.whitelist-enforced=false to allow.");
-            }
-            Logger funcLog = LoggerFactory.getLogger(ConditionBuilder.class);
-            funcLog.warn(
-                "SECURITY: Function '{}' is not in the safe function whitelist. "
-                    + "If this is a legitimate function, add it via ConditionBuilder.SAFE_FUNCTION_NAMES.add('{}').",
-                functionName, upperFuncName);
-        }
         if (params == null) {
             throw new IllegalArgumentException("params must not be null");
         }
@@ -1351,7 +1337,10 @@ public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> {
         Object[] allParams = new Object[params.length + 1];
         allParams[0] = name;
         System.arraycopy(params, 0, allParams, 1, params.length);
-        conditions().add(new ConditionNode.FuncNode(functionName, allParams));
+        // P2: Use FuncNode.of() factory method for security whitelist validation
+        // instead of bypassing it with direct constructor call.
+        // FuncNode.of() handles whitelist checking and logging internally.
+        conditions().add(ConditionNode.FuncNode.of(functionName, allParams));
         return self();
     }
 
