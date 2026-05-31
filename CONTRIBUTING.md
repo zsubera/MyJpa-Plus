@@ -37,13 +37,17 @@ mvn install -DskipTests -Ddependency-check.skip=true -Dgpg.skip=true
 
 | 包 | 职责 |
 |---|------|
-| `com.zsubera.jpa.spec` | 核心查询构建：QuerySpec、ConditionBuilder、ConditionNode |
-| `com.zsubera.jpa.update` | 批量操作：UpdateSpec、DeleteSpec |
+| `com.zsubera.jpa.spec` | 核心查询构建：QuerySpec、ConditionBuilder（含子接口）、ConditionNode、ConditionNodeResolver、CteSpec |
+| `com.zsubera.jpa.update` | 批量操作：UpdateSpec、DeleteSpec、MergeSpec |
 | `com.zsubera.jpa.repository` | 扩展 Repository：MyJpaRepository、SoftDeleteJpaRepository |
 | `com.zsubera.jpa.projection` | 投影查询：ProjectionSpec |
 | `com.zsubera.jpa.template` | MyJpaTemplate |
-| `com.zsubera.jpa.converter` | 枚举转换：@CodeEnum、@CodeEnumValue、CodeEnumType |
-| `com.zsubera.jpa.annotation` | 注解：@SoftDelete、@IgnoreSoftDelete |
+| `com.zsubera.jpa.converter` | 枚举转换与序列化：@CodeEnum、@CodeEnumValue、CodeEnumType、EncryptConverter、MaskSerializer |
+| `com.zsubera.jpa.annotation` | 注解：@SoftDelete、@IgnoreSoftDelete、@TenantId、@IgnoreTenant、@Encrypt、@Mask、@RetryOnOptimisticLock |
+| `com.zsubera.jpa.tenant` | 多租户：TenantProvider、TenantContext |
+| `com.zsubera.jpa.monitor` | SQL 监控：SqlSlowQueryInterceptor |
+| `com.zsubera.jpa.codegen` | 代码生成：EntityCodeGenerator |
+| `com.zsubera.jpa.cache` | 查询缓存：QueryCacheManager |
 | `com.zsubera.jpa.util` | 工具类：LambdaUtils、InClauseBuilder |
 
 ## 代码风格
@@ -51,9 +55,9 @@ mvn install -DskipTests -Ddependency-check.skip=true -Dgpg.skip=true
 - 使用方法引用（`Entity::getField`）确保类型安全 — 切勿硬编码字段名字符串
 - 为公开 API 参数添加 null 校验
 - 遵循现有包结构
-- 所有条件方法应作为默认方法归属于 `ConditionBuilder` 接口
+- 所有条件方法应作为默认方法归属于 `ConditionBuilder` 接口或其子接口（`EqualityConditions`、`StringConditions`、`ComparisonConditions` 等）
 - `ConditionNode` 是 sealed 接口，所有实现类必须为 `final`
-- 新增条件类型需同步更新：ConditionBuilder、ConditionNode.Op、QuerySpec.resolveSimple()、SubQuerySpec、AbstractBulkOperationSpec
+- 新增条件类型需同步更新：ConditionBuilder（含子接口）、ConditionNode.Op、ConditionNodeResolver、SubQuerySpec、AbstractBulkOperationSpec
 
 ## 添加新运算符
 
@@ -72,7 +76,7 @@ mvn install -DskipTests -Ddependency-check.skip=true -Dgpg.skip=true
 |------|------|------|------|
 | 1 | `ConditionNode.java` | `Op` 枚举 | 添加新的枚举值 |
 | 2 | `ConditionBuilder.java` | `default` 方法 | 添加类型安全的条件方法 |
-| 3 | `QuerySpec.java` | `resolveSimple()` | 添加对应的 `case` 处理 |
+| 3 | `ConditionNodeResolver.java` | `resolve()` | 添加对应的 `case` 处理 |
 | 4 | `UpdateSpec.java` | 条件方法 | 添加对应的条件方法（继承自 AbstractBulkOperationSpec） |
 | 5 | `DeleteSpec.java` | 条件方法 | 添加对应的条件方法（继承自 AbstractBulkOperationSpec） |
 | 6 | `QuerySpecTest.java` | 测试用例 | 添加对应的测试 |

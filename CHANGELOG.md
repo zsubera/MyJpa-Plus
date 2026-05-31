@@ -1,5 +1,49 @@
 # MyJpa-Plus 更新日志
 
+## [1.2.0] - 2026-05-31
+
+### 新增
+- **UPSERT/MERGE 支持** — `MergeSpec` 构建器，支持 PostgreSQL `ON CONFLICT`、MySQL `ON DUPLICATE KEY`、H2 `MERGE`
+- **多租户支持** — `@TenantId` + `TenantProvider` + `@IgnoreTenant`，自动在查询中追加租户过滤条件
+- **CTE 支持** — `CteSpec` 支持普通和递归 Common Table Expression
+- **SQL 慢查询监控** — `SqlSlowQueryInterceptor` + `myjpa-plus.monitoring` 配置
+- **字段加密** — `@Encrypt` 注解 + `EncryptConverter`（AES/GCM，随机 IV）
+- **字段脱敏** — `@Mask` 注解 + `MaskSerializer`（Jackson，支持 PHONE/EMAIL/ID_CARD/NAME）
+- **乐观锁自动重试** — `@RetryOnOptimisticLock` 注解，指数退避
+- **代码生成器** — `EntityCodeGenerator` 工具类，生成实体和 Repository 源码
+- **查询结果缓存** — `QueryCacheManager`，TTL 过期策略
+- **数据库函数调用** — `func(field, functionName, comparisonOp, value)` 条件方法
+- **DTO 分页查询** — `ProjectionSpec.findDtoPage()` 返回 `Page<DTO>`
+- **DTO 列表查询** — `ProjectionSpec.toDtoList()` / `findOneDto()`
+- **Case-insensitive 字符串方法** — `containsIgnoreCase`、`startsWithIgnoreCase`、`endsWithIgnoreCase`
+- **FuncNode 完整实现** — ConditionBuilder.func() + ConditionNodeResolver 解析
+- **SoftDelete Integer/Enum 测试覆盖** — 新增 12 个测试用例
+
+### 变更
+- **统一三种条件评估模型** — SubQuerySpec 和 AbstractBulkOperationSpec 改用 ConditionNode AST，与 QuerySpec 统一
+- **ConditionBuilder 接口拆分** — 拆分为 8 个子接口（EqualityConditions、StringConditions 等），ConditionBuilder 继承全部
+- **ConditionNodeResolver 独立** — AST 解析逻辑从 QuerySpec 提取到独立的 ConditionNodeResolver 类
+- **likeIgnoreCase 行为修正** — 不再自动包裹 %，与 likeSafe 保持一致
+- **deepPaginationOffsetLimit 默认值统一** — 改为 -1（禁用），与 Spring Boot 配置一致
+- **maxBulkOperationRows 可配置** — 新增 `myjpa-plus.query.max-bulk-operation-rows` 配置项
+- **TransactionTemplate 缓存** — MyJpaTemplate 使用 DCL 懒加载缓存，避免重复创建
+- **CodeEnumType.assemble() 使用缓存** — 复用 ENUM_CODE_CACHE，O(1) 查找
+- **AuditEntityListener 支持实体继承** — 遍历整个类层次结构扫描审计字段
+- **spring-configuration-metadata.json 补全** — 记录全部 8 个配置项
+
+### 修复
+- 移除所有 `@Deprecated(forRemoval=true)` 方法（like、notLike、rawLike、where 等）
+- 修复 LambdaUtils.shutdown() 注释与实际实现不一致
+- 修复 SpotBugs 新增的 4 个问题（EncryptConverter、SqlSlowQueryInterceptor、MergeSpec）
+
+### 破坏性变更
+- `like()` 和 `notLike()` 已移除，使用 `likeSafe()` / `notLikeSafe()` 替代
+- `rawLike()` 已移除，使用 `contains()` / `startsWith()` / `endsWith()` 替代
+- `where(BiFunction)` 和 `where(Function)` 已移除，使用类型安全的条件方法替代
+- `findAllStream(Class, QuerySpec)` 已移除，使用 `findAllStream(Class, QuerySpec, Consumer)` 替代
+- `ConditionNode.RawNode` 已移除
+- `likeIgnoreCase()` 不再自动包裹 `%`，需要显式使用 `containsIgnoreCase()` 获取原来的行为
+
 ## [1.1.0] - 2026-05-31
 
 ### 新增
