@@ -1170,4 +1170,42 @@ public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> {
     default SELF isNotEmpty(boolean condition, SFunction<E, ?> field) {
         return condition ? isNotEmpty(field) : self();
     }
+
+    // ---- 数据库函数运算符 ----
+
+    /**
+     * 添加数据库函数条件：{@code functionName(field, params...) = true}。
+     *
+     * <p>
+     * 此方法用于调用数据库特定的函数进行条件判断。例如，使用 PostgreSQL 的 {@code jsonb_exists} 函数：
+     *
+     * <pre>{@code
+     * qs.func(User::getMetadata, "jsonb_exists", "key")
+     * // 生成: jsonb_exists(user.metadata, 'key') = true
+     * }</pre>
+     *
+     * @param field 实体属性的方法引用，作为函数的第一个参数
+     * @param functionName 数据库函数名
+     * @param params 函数的额外参数
+     * @return 当前构建器以支持链式调用
+     * @throws IllegalArgumentException 如果 field、functionName 或 params 为 null
+     */
+    @SuppressWarnings("unchecked")
+    default SELF func(SFunction<E, ?> field, String functionName, Object... params) {
+        if (field == null) {
+            throw new IllegalArgumentException("field must not be null");
+        }
+        if (functionName == null) {
+            throw new IllegalArgumentException("functionName must not be null");
+        }
+        if (params == null) {
+            throw new IllegalArgumentException("params must not be null");
+        }
+        String name = LambdaUtils.getPropertyName(field);
+        Object[] allParams = new Object[params.length + 1];
+        allParams[0] = name;
+        System.arraycopy(params, 0, allParams, 1, params.length);
+        conditions().add(new ConditionNode.FuncNode(functionName, allParams));
+        return self();
+    }
 }

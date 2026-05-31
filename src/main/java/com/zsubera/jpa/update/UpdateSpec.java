@@ -49,6 +49,18 @@ public class UpdateSpec<T> extends AbstractBulkOperationSpec<T, UpdateSpec<T>> {
     }
 
     /**
+     * 表达式 SET 子句，支持原子操作如 SET balance = balance + 100。
+     *
+     * <p>
+     * 使用 BiFunction 而非直接使用 Expression，避免类型擦除问题。
+     */
+    private record ExpressionSetClause(String fieldName,
+        java.util.function.BiFunction<jakarta.persistence.criteria.Root<?>, CriteriaBuilder, ?> exprFn) {
+    }
+
+    private final List<ExpressionSetClause> expressionSetClauses = new ArrayList<>();
+
+    /**
      * 创建指定实体类型的更新规范构建器。
      *
      * @param entityClass 要更新的实体类
@@ -101,6 +113,90 @@ public class UpdateSpec<T> extends AbstractBulkOperationSpec<T, UpdateSpec<T>> {
     }
 
     /**
+     * 在 UPDATE 子句中使用原子表达式设置字段值：{@code SET field = expression}。
+     *
+     * <p>
+     * 使用示例（原子递增）：
+     *
+     * <pre>{@code
+     * new UpdateSpec<>(Account.class).setExpression(Account::getBalance, "balance + :amount").eq(Account::getId, accountId)
+     *     .execute(em);
+     * }</pre>
+     *
+     * @param field 实体属性的方法引用
+     * @param expression SQL 表达式字符串（使用参数名而非直接拼接值）
+     * @return 当前构建器实例，支持链式调用
+     * @throws IllegalArgumentException 如果 field 或 expression 为 null
+     */
+    public UpdateSpec<T> setExpression(SFunction<T, ?> field, String expression) {
+        if (field == null) {
+            throw new IllegalArgumentException("field must not be null");
+        }
+        if (expression == null) {
+            throw new IllegalArgumentException("expression must not be null");
+        }
+        String name = LambdaUtils.getPropertyName(field);
+        expressionSetClauses.add(new ExpressionSetClause(name, (root, cb) -> cb.literal(expression)));
+        return this;
+    }
+
+    /**
+     * 原子递增字段值：{@code SET field = field + amount}。
+     *
+     * <p>
+     * 使用示例：
+     *
+     * <pre>{@code
+     * new UpdateSpec<>(Account.class).setAdd(Account::getBalance, 100).eq(Account::getId, accountId).execute(em);
+     * // 生成: UPDATE account SET balance = balance + 100 WHERE id = ?
+     * }</pre>
+     *
+     * @param field 实体属性的方法引用
+     * @param amount 要增加的数值
+     * @return 当前构建器实例，支持链式调用
+     * @throws IllegalArgumentException 如果 field 或 amount 为 null
+     */
+    public UpdateSpec<T> setAdd(SFunction<T, ?> field, Number amount) {
+        if (field == null) {
+            throw new IllegalArgumentException("field must not be null");
+        }
+        if (amount == null) {
+            throw new IllegalArgumentException("amount must not be null");
+        }
+        String name = LambdaUtils.getPropertyName(field);
+        expressionSetClauses.add(new ExpressionSetClause(name, (root, cb) -> cb.sum(root.get(name), amount)));
+        return this;
+    }
+
+    /**
+     * 原子递减字段值：{@code SET field = field - amount}。
+     *
+     * <p>
+     * 使用示例：
+     *
+     * <pre>{@code
+     * new UpdateSpec<>(Account.class).setSubtract(Account::getBalance, 50).eq(Account::getId, accountId).execute(em);
+     * // 生成: UPDATE account SET balance = balance - 50 WHERE id = ?
+     * }</pre>
+     *
+     * @param field 实体属性的方法引用
+     * @param amount 要减少的数值
+     * @return 当前构建器实例，支持链式调用
+     * @throws IllegalArgumentException 如果 field 或 amount 为 null
+     */
+    public UpdateSpec<T> setSubtract(SFunction<T, ?> field, Number amount) {
+        if (field == null) {
+            throw new IllegalArgumentException("field must not be null");
+        }
+        if (amount == null) {
+            throw new IllegalArgumentException("amount must not be null");
+        }
+        String name = LambdaUtils.getPropertyName(field);
+        expressionSetClauses.add(new ExpressionSetClause(name, (root, cb) -> cb.diff(root.get(name), amount)));
+        return this;
+    }
+
+    /**
      * 执行 UPDATE 语句并返回受影响的行数。
      *
      * <p>
@@ -122,6 +218,29 @@ public class UpdateSpec<T> extends AbstractBulkOperationSpec<T, UpdateSpec<T>> {
     }
 
     /**
+     * 将表达式 SET 子句应用到 CriteriaUpdate。
+     *
+     * @param update CriteriaUpdate 实例
+     * @param root 查询根
+     * @param cb CriteriaBuilder
+     */
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    private void applyExpressionSetClauses(CriteriaUpdate<T> update, Root<T> root, CriteriaBuilder cb) {
+        for (ExpressionSetClause esc : expressionSetClauses) {
+            Object exprResult = esc.exprFn().apply(root, cb);
+            // 使用 Path.set(Object) 重载，避免 Expression<?> 的歧义
+            jakarta.persistence.criteria.Path<Object> path =
+                (jakarta.persistence.criteria.Path)root.get(esc.fieldName());
+            if (exprResult instanceof jakarta.persistence.criteria.Expression) {
+                // 强制使用 Expression 重载
+                ((CriteriaUpdate)update).set(path, exprResult);
+            } else {
+                update.set(path, exprResult);
+            }
+        }
+    }
+
+    /**
      * 构建 {@link CriteriaUpdate} 对象但不执行。
      *
      * @param em 实体管理器
@@ -129,7 +248,7 @@ public class UpdateSpec<T> extends AbstractBulkOperationSpec<T, UpdateSpec<T>> {
      * @throws IllegalStateException 如果未指定 SET 子句或没有 WHERE 条件
      */
     public CriteriaUpdate<T> toUpdate(EntityManager em) {
-        if (setClauses.isEmpty()) {
+        if (setClauses.isEmpty() && expressionSetClauses.isEmpty()) {
             throw new IllegalStateException("At least one set() clause is required");
         }
         CriteriaBuilder cb = em.getCriteriaBuilder();
@@ -138,6 +257,7 @@ public class UpdateSpec<T> extends AbstractBulkOperationSpec<T, UpdateSpec<T>> {
         for (SetClause sc : setClauses) {
             update.set(root.get(sc.fieldName), sc.value);
         }
+        applyExpressionSetClauses(update, root, cb);
         Predicate[] predicates = buildPredicates(root, cb);
         if (predicates.length == 0) {
             throw new IllegalStateException(
@@ -164,7 +284,7 @@ public class UpdateSpec<T> extends AbstractBulkOperationSpec<T, UpdateSpec<T>> {
             throw new IllegalStateException("Unconditional UPDATE is not allowed. "
                 + "Call .allowUnconditional(true) to explicitly confirm this operation.");
         }
-        if (setClauses.isEmpty()) {
+        if (setClauses.isEmpty() && expressionSetClauses.isEmpty()) {
             throw new IllegalStateException("At least one set() clause is required");
         }
         // 审计日志：记录无条件更新操作及调用栈，便于生产环境追踪危险操作
@@ -176,6 +296,7 @@ public class UpdateSpec<T> extends AbstractBulkOperationSpec<T, UpdateSpec<T>> {
         for (SetClause sc : setClauses) {
             update.set(root.get(sc.fieldName), sc.value);
         }
+        applyExpressionSetClauses(update, root, cb);
         return em.createQuery(update).executeUpdate();
     }
 
@@ -255,7 +376,7 @@ public class UpdateSpec<T> extends AbstractBulkOperationSpec<T, UpdateSpec<T>> {
      * @throws IllegalStateException 如果未指定 SET 子句
      */
     public int executeLimited(EntityManager em, int limit, boolean pessimisticLock) {
-        if (setClauses.isEmpty()) {
+        if (setClauses.isEmpty() && expressionSetClauses.isEmpty()) {
             throw new IllegalStateException("At least one set() clause is required");
         }
         if (limit <= 0) {
@@ -300,6 +421,7 @@ public class UpdateSpec<T> extends AbstractBulkOperationSpec<T, UpdateSpec<T>> {
         for (SetClause sc : setClauses) {
             update.set(updateRoot.get(sc.fieldName), sc.value);
         }
+        applyExpressionSetClauses(update, updateRoot, cb);
         update.where(InClauseBuilder.in(cb, updateRoot.get(idFieldName), ids));
         return em.createQuery(update).executeUpdate();
     }

@@ -42,8 +42,18 @@ import org.springframework.data.domain.Pageable;
  */
 public class ProjectionSpec<T> {
 
+    /** 聚合函数类型。 */
+    private enum AggregateType {
+        COUNT, SUM, AVG, MAX, MIN
+    }
+
+    /** 描述聚合选择的内部记录类。 */
+    private record AggregateSelection(AggregateType type, String alias, String fieldName) {
+    }
+
     private final Class<T> entityClass;
     private final Map<String, SFunction<T, ?>> selections = new LinkedHashMap<>();
+    private final List<AggregateSelection> aggregateSelections = new ArrayList<>();
     private final QuerySpec<T> querySpec = new QuerySpec<>();
     private final List<JoinSpec> joins = new ArrayList<>();
     private final List<OrderSpec> orderSpecs = new ArrayList<>();
@@ -144,6 +154,80 @@ public class ProjectionSpec<T> {
             throw new IllegalArgumentException("field must not be null");
         }
         selections.put(LambdaUtils.getPropertyName(field), field);
+        return this;
+    }
+
+    /**
+     * 添加 COUNT(*) 聚合投影，别名为 {@code "count"}。
+     *
+     * @return 当前 ProjectionSpec 实例，支持链式调用
+     */
+    public ProjectionSpec<T> selectCount() {
+        aggregateSelections.add(new AggregateSelection(AggregateType.COUNT, "count", null));
+        return this;
+    }
+
+    /**
+     * 添加 SUM(field) 聚合投影，别名为 {@code "sum_<fieldName>"}。
+     *
+     * @param field 要求和的实体属性方法引用
+     * @return 当前 ProjectionSpec 实例，支持链式调用
+     * @throws IllegalArgumentException 如果 field 为 null
+     */
+    public ProjectionSpec<T> selectSum(SFunction<T, ?> field) {
+        if (field == null) {
+            throw new IllegalArgumentException("field must not be null");
+        }
+        String name = LambdaUtils.getPropertyName(field);
+        aggregateSelections.add(new AggregateSelection(AggregateType.SUM, "sum_" + name, name));
+        return this;
+    }
+
+    /**
+     * 添加 AVG(field) 聚合投影，别名为 {@code "avg_<fieldName>"}。
+     *
+     * @param field 要求平均值的实体属性方法引用
+     * @return 当前 ProjectionSpec 实例，支持链式调用
+     * @throws IllegalArgumentException 如果 field 为 null
+     */
+    public ProjectionSpec<T> selectAvg(SFunction<T, ?> field) {
+        if (field == null) {
+            throw new IllegalArgumentException("field must not be null");
+        }
+        String name = LambdaUtils.getPropertyName(field);
+        aggregateSelections.add(new AggregateSelection(AggregateType.AVG, "avg_" + name, name));
+        return this;
+    }
+
+    /**
+     * 添加 MAX(field) 聚合投影，别名为 {@code "max_<fieldName>"}。
+     *
+     * @param field 要求最大值的实体属性方法引用
+     * @return 当前 ProjectionSpec 实例，支持链式调用
+     * @throws IllegalArgumentException 如果 field 为 null
+     */
+    public ProjectionSpec<T> selectMax(SFunction<T, ?> field) {
+        if (field == null) {
+            throw new IllegalArgumentException("field must not be null");
+        }
+        String name = LambdaUtils.getPropertyName(field);
+        aggregateSelections.add(new AggregateSelection(AggregateType.MAX, "max_" + name, name));
+        return this;
+    }
+
+    /**
+     * 添加 MIN(field) 聚合投影，别名为 {@code "min_<fieldName>"}。
+     *
+     * @param field 要求最小值的实体属性方法引用
+     * @return 当前 ProjectionSpec 实例，支持链式调用
+     * @throws IllegalArgumentException 如果 field 为 null
+     */
+    public ProjectionSpec<T> selectMin(SFunction<T, ?> field) {
+        if (field == null) {
+            throw new IllegalArgumentException("field must not be null");
+        }
+        String name = LambdaUtils.getPropertyName(field);
+        aggregateSelections.add(new AggregateSelection(AggregateType.MIN, "min_" + name, name));
         return this;
     }
 
@@ -287,10 +371,7 @@ public class ProjectionSpec<T> {
         resolveJoins(root, cb);
 
         // Apply selections
-        List<jakarta.persistence.criteria.Selection<?>> selectionList = new ArrayList<>();
-        for (String alias : selections.keySet()) {
-            selectionList.add(root.get(alias).alias(alias));
-        }
+        List<jakarta.persistence.criteria.Selection<?>> selectionList = buildSelectionList(root, cb);
         query.multiselect(selectionList);
 
         // Apply WHERE
@@ -351,10 +432,7 @@ public class ProjectionSpec<T> {
         resolveJoins(root, cb);
 
         // Apply selections as constructor arguments
-        List<jakarta.persistence.criteria.Selection<?>> selectionList = new ArrayList<>();
-        for (String fieldName : selections.keySet()) {
-            selectionList.add(root.get(fieldName));
-        }
+        List<jakarta.persistence.criteria.Selection<?>> selectionList = buildSelectionList(root, cb);
         query.select((CompoundSelection<R>)cb.construct(dtoClass,
             selectionList.toArray(new jakarta.persistence.criteria.Selection[0])));
 
@@ -411,10 +489,7 @@ public class ProjectionSpec<T> {
         Root<T> dataRoot = dataQuery.from(entityClass);
         resolveJoins(dataRoot, cb);
 
-        List<jakarta.persistence.criteria.Selection<?>> selectionList = new ArrayList<>();
-        for (String alias : selections.keySet()) {
-            selectionList.add(dataRoot.get(alias).alias(alias));
-        }
+        List<jakarta.persistence.criteria.Selection<?>> selectionList = buildSelectionList(dataRoot, cb);
         dataQuery.multiselect(selectionList);
         applyPredicate(dataRoot, dataQuery, cb);
         applyOrderBy(dataRoot, cb, dataQuery);
@@ -428,6 +503,32 @@ public class ProjectionSpec<T> {
         List<Tuple> content = query.getResultList();
 
         return new PageImpl<>(content, pageable, total);
+    }
+
+    /**
+     * 构建包含普通字段和聚合字段的选择列表。
+     *
+     * @param root 查询根实体
+     * @param cb CriteriaBuilder 实例
+     * @return 包含所有选择项的列表
+     */
+    @SuppressWarnings("unchecked")
+    private List<jakarta.persistence.criteria.Selection<?>> buildSelectionList(Root<T> root, CriteriaBuilder cb) {
+        List<jakarta.persistence.criteria.Selection<?>> selectionList = new ArrayList<>();
+        for (String alias : selections.keySet()) {
+            selectionList.add(root.get(alias).alias(alias));
+        }
+        for (AggregateSelection agg : aggregateSelections) {
+            jakarta.persistence.criteria.Expression<?> expr = switch (agg.type()) {
+                case COUNT -> cb.count(root);
+                case SUM -> cb.sum(root.get(agg.fieldName() != null ? agg.fieldName() : "id"));
+                case AVG -> cb.avg(root.get(agg.fieldName() != null ? agg.fieldName() : "id"));
+                case MAX -> cb.max(root.get(agg.fieldName() != null ? agg.fieldName() : "id"));
+                case MIN -> cb.min(root.get(agg.fieldName() != null ? agg.fieldName() : "id"));
+            };
+            selectionList.add(expr.alias(agg.alias()));
+        }
+        return selectionList;
     }
 
     /**

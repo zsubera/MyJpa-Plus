@@ -17,7 +17,7 @@ import java.util.function.Consumer;
  */
 public sealed interface ConditionNode permits ConditionNode.SimpleNode, ConditionNode.JoinNode, ConditionNode.OrNode,
     ConditionNode.AndNode, ConditionNode.MultiLikeNode, ConditionNode.CollectionNode, ConditionNode.ExistsNode,
-    ConditionNode.InSubQueryNode, ConditionNode.RawNode, ConditionNode.NegateNode {
+    ConditionNode.InSubQueryNode, ConditionNode.RawNode, ConditionNode.NegateNode, ConditionNode.FuncNode {
 
     // ---- Operation enums ----
 
@@ -326,6 +326,33 @@ public sealed interface ConditionNode permits ConditionNode.SimpleNode, Conditio
         @Override
         public String toString() {
             return "NegateNode[" + inner + "]";
+        }
+    }
+
+    /**
+     * 数据库函数调用节点：{@code functionName(field, params...)}。
+     *
+     * <p>
+     * 用于调用数据库特定函数进行条件判断。第一个参数为字段名，后续参数为函数的额外参数。
+     */
+    final class FuncNode implements ConditionNode {
+        final String functionName;
+        final Object[] params;
+
+        public FuncNode(String functionName, Object[] params) {
+            if (functionName == null) {
+                throw new IllegalArgumentException("functionName must not be null");
+            }
+            if (params == null) {
+                throw new IllegalArgumentException("params must not be null");
+            }
+            this.functionName = functionName;
+            this.params = params.clone();
+        }
+
+        @Override
+        public String toString() {
+            return "FuncNode[" + functionName + "(" + java.util.Arrays.toString(params) + ")]";
         }
     }
 

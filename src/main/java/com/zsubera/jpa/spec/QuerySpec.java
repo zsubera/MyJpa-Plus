@@ -897,6 +897,9 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
                 resolveNode(((ConditionNode.NegateNode)node).inner, path, rootPath, query, cb, joinCache, pathPrefix);
             return inner != null ? cb.not(inner) : null;
         }
+        if (node instanceof ConditionNode.FuncNode fn) {
+            return resolveFuncNode(fn, path, cb);
+        }
         throw new IllegalArgumentException("Unknown ConditionNode type: " + node.getClass().getName());
     }
 
@@ -911,6 +914,36 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
     @SuppressWarnings({"unchecked", "rawtypes"})
     private Predicate resolveSimple(ConditionNode.SimpleNode node, Path<?> path, CriteriaBuilder cb) {
         return PredicateHelper.resolveSimplePredicate(path, node, cb);
+    }
+
+    /**
+     * 解析数据库函数调用节点。
+     *
+     * <p>
+     * 将 FuncNode 转换为 JPA CriteriaBuilder 的函数调用。第一个参数为字段名，后续参数为函数的额外参数。
+     *
+     * @param node 函数调用节点
+     * @param path 当前路径
+     * @param cb Criteria 构建器
+     * @return 生成的 Predicate
+     */
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    private Predicate resolveFuncNode(ConditionNode.FuncNode node, Path<?> path, CriteriaBuilder cb) {
+        // 构建函数参数列表
+        jakarta.persistence.criteria.Expression<?>[] args =
+            new jakarta.persistence.criteria.Expression[node.params.length];
+        for (int i = 0; i < node.params.length; i++) {
+            Object param = node.params[i];
+            if (param instanceof String fieldName && i == 0) {
+                // 第一个参数是字段名
+                args[i] = path.get(fieldName);
+            } else {
+                args[i] = cb.literal(param);
+            }
+        }
+        // 使用 cb.function() 调用数据库函数
+        jakarta.persistence.criteria.Expression<Boolean> funcExpr = cb.function(node.functionName, Boolean.class, args);
+        return cb.isTrue(funcExpr);
     }
 
     /**

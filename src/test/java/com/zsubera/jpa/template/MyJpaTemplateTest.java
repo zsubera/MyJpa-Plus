@@ -16,6 +16,7 @@ import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.test.context.ContextConfiguration;
@@ -411,5 +412,350 @@ class MyJpaTemplateTest {
         template.setDeepPaginationOffsetThreshold(2);
         Page<TestEntity> page = template.findPage(TestEntity.class, spec, PageRequest.of(0, 10));
         assertEquals(5, page.getTotalElements());
+    }
+
+    // ---- findById 测试 ----
+
+    @Test
+    void testFindById() {
+        TestEntity e = new TestEntity();
+        e.setName("findById");
+        e.setStatus(1);
+        e = repository.save(e);
+
+        var result = template.findById(TestEntity.class, e.getId());
+        assertTrue(result.isPresent());
+        assertEquals("findById", result.get().getName());
+    }
+
+    @Test
+    void testFindByIdNotFound() {
+        var result = template.findById(TestEntity.class, 99999L);
+        assertTrue(result.isEmpty());
+    }
+
+    @Test
+    void testFindByIdWithNullClass() {
+        assertThrows(IllegalArgumentException.class, () -> template.findById(null, 1L));
+    }
+
+    @Test
+    void testFindByIdWithNullId() {
+        assertThrows(IllegalArgumentException.class, () -> template.findById(TestEntity.class, null));
+    }
+
+    // ---- findOne 测试 ----
+
+    @Test
+    void testFindOne() {
+        TestEntity e = new TestEntity();
+        e.setName("findOne");
+        e.setStatus(1);
+        repository.save(e);
+
+        QuerySpec<TestEntity> qs = new QuerySpec<>();
+        qs.eq(TestEntity::getName, "findOne");
+        var result = template.findOne(TestEntity.class, qs);
+        assertTrue(result.isPresent());
+        assertEquals(1, result.get().getStatus());
+    }
+
+    @Test
+    void testFindOneNotFound() {
+        QuerySpec<TestEntity> qs = new QuerySpec<>();
+        qs.eq(TestEntity::getName, "nonexistent");
+        var result = template.findOne(TestEntity.class, qs);
+        assertTrue(result.isEmpty());
+    }
+
+    @Test
+    void testFindOneWithNullClass() {
+        QuerySpec<TestEntity> qs = new QuerySpec<>();
+        assertThrows(IllegalArgumentException.class, () -> template.findOne(null, qs));
+    }
+
+    @Test
+    void testFindOneWithNullSpec() {
+        assertThrows(IllegalArgumentException.class, () -> template.findOne(TestEntity.class, null));
+    }
+
+    // ---- count 测试 ----
+
+    @Test
+    void testCountWithQuerySpec() {
+        for (int i = 0; i < 3; i++) {
+            TestEntity e = new TestEntity();
+            e.setName("count" + i);
+            e.setStatus(10);
+            repository.save(e);
+        }
+
+        QuerySpec<TestEntity> qs = new QuerySpec<>();
+        qs.eq(TestEntity::getStatus, 10);
+        long count = template.count(TestEntity.class, qs);
+        assertEquals(3, count);
+    }
+
+    @Test
+    void testCountWithSpecification() {
+        for (int i = 0; i < 2; i++) {
+            TestEntity e = new TestEntity();
+            e.setName("countSpec" + i);
+            e.setStatus(20);
+            repository.save(e);
+        }
+
+        Specification<TestEntity> spec = (root, query, cb) -> cb.equal(root.get("status"), 20);
+        long count = template.count(TestEntity.class, spec);
+        assertEquals(2, count);
+    }
+
+    @Test
+    void testCountWithNullClass() {
+        QuerySpec<TestEntity> qs = new QuerySpec<>();
+        assertThrows(IllegalArgumentException.class, () -> template.count(null, qs));
+    }
+
+    @Test
+    void testCountWithNullSpec() {
+        assertThrows(IllegalArgumentException.class,
+            () -> template.count(TestEntity.class, (QuerySpec<TestEntity>)null));
+    }
+
+    // ---- executeWithMaxRows 测试 ----
+
+    @Test
+    void testExecuteWithMaxRowsUpdate() {
+        for (int i = 0; i < 5; i++) {
+            TestEntity e = new TestEntity();
+            e.setName("maxRows" + i);
+            e.setStatus(0);
+            repository.save(e);
+        }
+        repository.flush();
+
+        UpdateSpec<TestEntity> spec =
+            template.update(TestEntity.class).set(TestEntity::getStatus, 1).eq(TestEntity::getStatus, 0);
+        // 使用 -1 表示使用全局配置
+        int count = template.executeWithMaxRows(spec, -1);
+        // 全局配置默认 maxBulkOperationRows=10000，所以应该全部更新
+        assertTrue(count > 0);
+    }
+
+    @Test
+    void testExecuteWithMaxRowsDelete() {
+        for (int i = 0; i < 5; i++) {
+            TestEntity e = new TestEntity();
+            e.setName("maxRowsDel" + i);
+            e.setStatus(0);
+            repository.save(e);
+        }
+        repository.flush();
+
+        DeleteSpec<TestEntity> spec = template.delete(TestEntity.class).eq(TestEntity::getStatus, 0);
+        // 使用 -1 表示使用全局配置
+        int count = template.executeWithMaxRows(spec, -1);
+        assertTrue(count > 0);
+    }
+
+    @Test
+    void testExecuteWithMaxRowsInvalidValue() {
+        UpdateSpec<TestEntity> spec = template.update(TestEntity.class).set(TestEntity::getStatus, 1);
+        assertThrows(IllegalArgumentException.class, () -> template.executeWithMaxRows(spec, 0));
+        assertThrows(IllegalArgumentException.class, () -> template.executeWithMaxRows(spec, -2));
+    }
+
+    // ---- executeBatchInSeparateTransactions 测试 ----
+
+    @Test
+    void testExecuteBatchInSeparateTransactionsUpdate() {
+        for (int i = 0; i < 5; i++) {
+            TestEntity e = new TestEntity();
+            e.setName("sepTx" + i);
+            e.setStatus(0);
+            repository.save(e);
+        }
+        repository.flush();
+
+        UpdateSpec<TestEntity> spec =
+            template.update(TestEntity.class).set(TestEntity::getStatus, 1).eq(TestEntity::getStatus, 0);
+        int count = template.executeBatchInSeparateTransactions(spec, 2);
+        assertTrue(count > 0, "Should update at least one row");
+    }
+
+    @Test
+    void testExecuteBatchInSeparateTransactionsDelete() {
+        for (int i = 0; i < 5; i++) {
+            TestEntity e = new TestEntity();
+            e.setName("sepTxDel" + i);
+            e.setStatus(0);
+            repository.save(e);
+        }
+        repository.flush();
+
+        DeleteSpec<TestEntity> spec = template.delete(TestEntity.class).eq(TestEntity::getStatus, 0);
+        int count = template.executeBatchInSeparateTransactions(spec, 2);
+        assertEquals(5, count);
+
+        // 验证所有记录都已删除
+        List<TestEntity> remaining =
+            repository.findAll().stream().filter(e -> e.getName().startsWith("sepTxDel")).toList();
+        assertEquals(0, remaining.size());
+    }
+
+    @Test
+    void testExecuteBatchInSeparateTransactionsInvalidArgs() {
+        UpdateSpec<TestEntity> spec = template.update(TestEntity.class).set(TestEntity::getStatus, 1);
+        assertThrows(IllegalArgumentException.class, () -> template.executeBatchInSeparateTransactions(spec, 0));
+        assertThrows(IllegalArgumentException.class, () -> template.executeBatchInSeparateTransactions(spec, -1));
+    }
+
+    // ---- 深度分页硬限制测试 ----
+
+    @Test
+    void testDeepPaginationHardLimitExceeded() {
+        template.setDeepPaginationOffsetLimit(100);
+        template.setDeepPaginationOffsetThreshold(50);
+
+        Specification<TestEntity> spec = (root, query, cb) -> cb.conjunction();
+        // offset 超过硬限制应抛出异常
+        assertThrows(IllegalArgumentException.class,
+            () -> template.findPage(TestEntity.class, spec, PageRequest.of(100, 10)));
+    }
+
+    @Test
+    void testDeepPaginationHardLimitDisabled() {
+        template.setDeepPaginationOffsetLimit(-1);
+        template.setDeepPaginationOffsetThreshold(2);
+
+        for (int i = 0; i < 3; i++) {
+            TestEntity e = new TestEntity();
+            e.setName("hardLimit" + i);
+            e.setStatus(i);
+            repository.save(e);
+        }
+
+        Specification<TestEntity> spec = (root, query, cb) -> cb.conjunction();
+        // 硬限制禁用时不应抛出异常
+        Page<TestEntity> page = template.findPage(TestEntity.class, spec, PageRequest.of(0, 10));
+        assertEquals(3, page.getTotalElements());
+    }
+
+    // ---- 配置参数高级测试 ----
+
+    @Test
+    void testSetDeepPaginationOffsetLimit() {
+        MyJpaTemplate custom = new MyJpaTemplate();
+        custom.setDeepPaginationOffsetLimit(5000);
+        assertNotNull(custom);
+    }
+
+    @Test
+    void testSetDeepPaginationOffsetLimitInvalid() {
+        MyJpaTemplate custom = new MyJpaTemplate();
+        assertThrows(IllegalArgumentException.class, () -> custom.setDeepPaginationOffsetLimit(0));
+        assertThrows(IllegalArgumentException.class, () -> custom.setDeepPaginationOffsetLimit(-2));
+    }
+
+    @Test
+    void testSetMaxBulkOperationRows() {
+        MyJpaTemplate custom = new MyJpaTemplate();
+        custom.setMaxBulkOperationRows(5000);
+        assertNotNull(custom);
+    }
+
+    @Test
+    void testSetMaxBulkOperationRowsInvalid() {
+        MyJpaTemplate custom = new MyJpaTemplate();
+        assertThrows(IllegalArgumentException.class, () -> custom.setMaxBulkOperationRows(0));
+        assertThrows(IllegalArgumentException.class, () -> custom.setMaxBulkOperationRows(-2));
+    }
+
+    // ---- null 参数测试 ----
+
+    @Test
+    void testFindAllWithNullClass() {
+        QuerySpec<TestEntity> qs = new QuerySpec<>();
+        assertThrows(IllegalArgumentException.class, () -> template.findAll(null, qs));
+    }
+
+    @Test
+    void testFindAllWithNullSpec() {
+        assertThrows(IllegalArgumentException.class,
+            () -> template.findAll(TestEntity.class, (QuerySpec<TestEntity>)null));
+    }
+
+    @Test
+    void testFindAllWithPaginationNullClass() {
+        QuerySpec<TestEntity> qs = new QuerySpec<>();
+        assertThrows(IllegalArgumentException.class, () -> template.findAll(null, qs, PageRequest.of(0, 10)));
+    }
+
+    @Test
+    void testFindAllWithPaginationNullPageable() {
+        QuerySpec<TestEntity> qs = new QuerySpec<>();
+        assertThrows(IllegalArgumentException.class, () -> template.findAll(TestEntity.class, qs, (Pageable)null));
+    }
+
+    @Test
+    void testExecuteUpdateSpecNull() {
+        assertThrows(IllegalArgumentException.class, () -> template.execute((UpdateSpec<TestEntity>)null));
+    }
+
+    @Test
+    void testExecuteDeleteSpecNull() {
+        assertThrows(IllegalArgumentException.class, () -> template.execute((DeleteSpec<TestEntity>)null));
+    }
+
+    @Test
+    void testExecuteBatchUpdateNull() {
+        assertThrows(IllegalArgumentException.class, () -> template.executeBatch((UpdateSpec<TestEntity>)null, 10));
+    }
+
+    @Test
+    void testExecuteBatchDeleteNull() {
+        assertThrows(IllegalArgumentException.class, () -> template.executeBatch((DeleteSpec<TestEntity>)null, 10));
+    }
+
+    @Test
+    void testExecuteBatchUpdateInvalidBatchSize() {
+        UpdateSpec<TestEntity> spec = template.update(TestEntity.class).set(TestEntity::getStatus, 1);
+        assertThrows(IllegalArgumentException.class, () -> template.executeBatch(spec, 0));
+    }
+
+    @Test
+    void testExecuteBatchDeleteInvalidBatchSize() {
+        DeleteSpec<TestEntity> spec = template.delete(TestEntity.class);
+        assertThrows(IllegalArgumentException.class, () -> template.executeBatch(spec, -1));
+    }
+
+    @Test
+    void testFindPageWithNullClass() {
+        Specification<TestEntity> spec = (root, query, cb) -> cb.conjunction();
+        assertThrows(IllegalArgumentException.class, () -> template.findPage(null, spec, PageRequest.of(0, 10)));
+    }
+
+    @Test
+    void testFindPageWithNullSpec() {
+        assertThrows(IllegalArgumentException.class,
+            () -> template.findPage(TestEntity.class, (Specification<TestEntity>)null, PageRequest.of(0, 10)));
+    }
+
+    @Test
+    void testFindPageWithNullPageable() {
+        Specification<TestEntity> spec = (root, query, cb) -> cb.conjunction();
+        assertThrows(IllegalArgumentException.class, () -> template.findPage(TestEntity.class, spec, null));
+    }
+
+    @Test
+    void testFindWithSpecificationNullClass() {
+        Specification<TestEntity> spec = (root, query, cb) -> cb.conjunction();
+        assertThrows(IllegalArgumentException.class, () -> template.find(null, spec));
+    }
+
+    @Test
+    void testFindWithSpecificationNullSpec() {
+        assertThrows(IllegalArgumentException.class,
+            () -> template.find(TestEntity.class, (Specification<TestEntity>)null));
     }
 }
