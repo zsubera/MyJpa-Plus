@@ -177,12 +177,16 @@ public class SoftDeleteJpaRepository<T, ID> extends SimpleJpaRepository<T, ID> {
         if (id == null) {
             return Optional.empty();
         }
-        // 构建只包含 ID 条件的 Specification，软删除过滤由 findOne 自动处理
-        Specification<T> spec = (root, query, cb) -> {
-            String idFieldName = EntityClassResolver.resolveIdFieldName(domainClass);
-            return cb.equal(root.get(idFieldName), id);
-        };
-        return findOne(spec);
+        // Use EntityManager.find() first to leverage JPA L1 cache, then check soft delete status
+        T entity = entityManager.find(domainClass, id);
+        if (entity == null) {
+            return Optional.empty();
+        }
+        // Check if the entity is soft-deleted
+        if (shouldApplySoftDeleteFilter() && SoftDeleteHelper.isSoftDeleted(domainClass, entity)) {
+            return Optional.empty();
+        }
+        return Optional.of(entity);
     }
 
     /**

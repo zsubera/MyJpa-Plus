@@ -47,9 +47,6 @@ public final class InClauseBuilder {
     /** IN 子句值数量的上限，超过此限制将抛出异常 */
     private static final int MAX_ALLOWED_VALUE = 100_000;
 
-    /** 性能警告阈值，超过此值将记录警告日志 */
-    private static final int PERFORMANCE_WARNING_THRESHOLD = 10_000;
-
     /**
      * IN 子句的硬限制。超过此限制时将抛出异常，防止数据库性能问题。
      *
@@ -265,12 +262,13 @@ public final class InClauseBuilder {
                 + ". Consider using temporary tables or subqueries for better performance. "
                 + "You can adjust the limit via -Dmyjpa-plus.in-clause-hard-limit=<value>.");
         }
-        if (values.size() > hardLimit / 2) {
+        int warningThreshold = hardLimit / 2;
+        if (values.size() > warningThreshold) {
             log.warn(
                 "IN clause has {} values (hard limit: {}), which may cause severe database performance degradation. "
                     + "Consider using temporary tables or subqueries.",
                 values.size(), hardLimit);
-        } else if (values.size() > PERFORMANCE_WARNING_THRESHOLD) {
+        } else if (values.size() > Math.min(warningThreshold, 10_000)) {
             log.warn("IN clause has {} values, which may cause performance issues. "
                 + "Consider using temporary tables or subqueries for better performance.", values.size());
         }
@@ -301,12 +299,13 @@ public final class InClauseBuilder {
                 + ". Consider using temporary tables or subqueries for better performance. "
                 + "You can adjust the limit via -Dmyjpa-plus.in-clause-hard-limit=<value>.");
         }
-        if (values.size() > hardLimit / 2) {
+        int warningThreshold = hardLimit / 2;
+        if (values.size() > warningThreshold) {
             log.warn(
                 "NOT IN clause has {} values (hard limit: {}), which may cause severe database performance degradation. "
                     + "Consider using temporary tables or subqueries.",
                 values.size(), hardLimit);
-        } else if (values.size() > PERFORMANCE_WARNING_THRESHOLD) {
+        } else if (values.size() > Math.min(warningThreshold, 10_000)) {
             log.warn("NOT IN clause has {} values, which may cause performance issues. "
                 + "Consider using temporary tables or subqueries for better performance.", values.size());
         }

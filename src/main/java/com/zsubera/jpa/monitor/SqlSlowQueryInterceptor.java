@@ -99,14 +99,15 @@ public class SqlSlowQueryInterceptor implements StatementInspector {
         public Object invoke(Object proxy, Method method, Object[] args) throws Throwable {
             String name = method.getName();
             if ("executeQuery".equals(name) || "executeUpdate".equals(name) || "execute".equals(name)) {
-                long start = System.currentTimeMillis();
+                long start = System.nanoTime();
                 try {
                     return method.invoke(target, args);
                 } finally {
-                    long elapsed = System.currentTimeMillis() - start;
-                    if (elapsed >= slowQueryThresholdMs) {
+                    long elapsedNanos = System.nanoTime() - start;
+                    long elapsedMs = java.util.concurrent.TimeUnit.NANOSECONDS.toMillis(elapsedNanos);
+                    if (elapsedMs >= slowQueryThresholdMs) {
                         String sanitizedSql = sanitizeSql(sql);
-                        log.warn("{} SQL execution took {} ms (threshold: {} ms) - {}", SLOW_QUERY_MARKER, elapsed,
+                        log.warn("{} SQL execution took {} ms (threshold: {} ms) - {}", SLOW_QUERY_MARKER, elapsedMs,
                             slowQueryThresholdMs, sanitizedSql);
                     }
                 }
@@ -128,8 +129,8 @@ public class SqlSlowQueryInterceptor implements StatementInspector {
         if (sql == null) {
             return "null";
         }
-        // 替换字符串字面量（单引号包围的内容）
-        String sanitized = sql.replaceAll("'[^']*'", "?");
+        // 替换字符串字面量（单引号包围的内容，支持转义单引号 ''）
+        String sanitized = sql.replaceAll("'(?:[^']|'')*'", "?");
         // 替换已绑定的参数占位符（如 $1, :param 等保持不变，仅替换内联值）
         return sanitized;
     }

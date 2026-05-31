@@ -99,8 +99,9 @@ public class CodeEnumType implements UserType<Object>, DynamicParameterizedType 
             Class<?> fieldType = codeField.getType();
             if (fieldType == String.class) {
                 this.sqlType = Types.VARCHAR;
-            } else if (fieldType == int.class || fieldType == Integer.class || fieldType == long.class
-                || fieldType == Long.class) {
+            } else if (fieldType == long.class || fieldType == Long.class) {
+                this.sqlType = Types.BIGINT;
+            } else if (fieldType == int.class || fieldType == Integer.class) {
                 this.sqlType = Types.INTEGER;
             } else {
                 this.sqlType = Types.CHAR;

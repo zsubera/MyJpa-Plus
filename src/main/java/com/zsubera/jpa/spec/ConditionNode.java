@@ -172,6 +172,9 @@ public sealed interface ConditionNode permits ConditionNode.SimpleNode, Conditio
             if (fieldNames == null) {
                 throw new IllegalArgumentException("fieldNames must not be null");
             }
+            if (fieldNames.length == 0) {
+                throw new IllegalArgumentException("fieldNames must not be empty");
+            }
             this.keyword = keyword;
             this.fieldNames = fieldNames.clone();
         }

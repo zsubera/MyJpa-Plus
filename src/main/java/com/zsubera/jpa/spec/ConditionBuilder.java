@@ -257,7 +257,7 @@ public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> {
      * @return 当前构建器以支持链式调用
      * @throws IllegalArgumentException 如果 {@code field} 或 {@code value} 为 null
      * @deprecated 不转义通配符，存在 LIKE 注入风险。请使用 {@link #likeSafe}、{@link #contains}、{@link #startsWith}、 {@link #endsWith}
-     *             等安全替代方法。
+     *             等安全替代方法。此方法将在 2.0 版本中移除。
      * @see #likeSafe(SFunction, String)
      * @see #contains(SFunction, String)
      * @see #startsWith(SFunction, String)

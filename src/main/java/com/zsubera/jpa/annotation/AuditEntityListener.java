@@ -78,6 +78,14 @@ public class AuditEntityListener implements ApplicationContextAware {
     }
 
     /**
+     * 清理静态资源引用。在 Bean 销毁时调用，防止内存泄漏。
+     */
+    public static void destroy() {
+        applicationContext = null;
+        userProvider = null;
+    }
+
+    /**
      * 获取 AuditUserProvider 实例（延迟初始化，线程安全）。
      *
      * @return AuditUserProvider 实例，如果未配置则返回 null
@@ -154,7 +162,8 @@ public class AuditEntityListener implements ApplicationContextAware {
      * 解析实体类的审计字段。
      *
      * <p>
-     * 预设置 {@code setAccessible(true)} 以减少每次实体操作的反射开销。
+     * 预设置 {@code setAccessible(true)} 以减少每次实体操作的反射开销。 当实体继承 {@link com.zsubera.jpa.entity.BaseEntity} 时，跳过
+     * createdAt/updatedAt 字段， 因为这些字段已由 BaseEntity 的 {@code @PrePersist}/{@code @PreUpdate} 方法自动填充。
      *
      * @param entityClass 实体类
      * @return 审计字段信息
@@ -162,11 +171,22 @@ public class AuditEntityListener implements ApplicationContextAware {
     private static AuditFields resolveAuditFields(Class<?> entityClass) {
         return AUDIT_FIELDS_CACHE.computeIfAbsent(entityClass, cls -> {
             AuditFields fields = new AuditFields();
+            boolean extendsBaseEntity = com.zsubera.jpa.entity.BaseEntity.class.isAssignableFrom(cls);
             for (Field field : cls.getDeclaredFields()) {
                 if (field.isAnnotationPresent(CreatedAt.class)) {
+                    // Skip createdAt if entity extends BaseEntity (already handled by @PrePersist)
+                    if (extendsBaseEntity && "createdAt".equals(field.getName())
+                        && field.getDeclaringClass() == com.zsubera.jpa.entity.BaseEntity.class) {
+                        continue;
+                    }
                     field.setAccessible(true);
                     fields.createdAt = field;
                 } else if (field.isAnnotationPresent(UpdatedAt.class)) {
+                    // Skip updatedAt if entity extends BaseEntity (already handled by @PreUpdate)
+                    if (extendsBaseEntity && "updatedAt".equals(field.getName())
+                        && field.getDeclaringClass() == com.zsubera.jpa.entity.BaseEntity.class) {
+                        continue;
+                    }
                     field.setAccessible(true);
                     fields.updatedAt = field;
                 } else if (field.isAnnotationPresent(CreatedBy.class)) {

@@ -536,7 +536,7 @@ public class SubQuerySpec<S> {
     }
 
     /**
-     * 添加子查询实体的忽略大小写的 LIKE 条件。
+     * 添加子查询实体的忽略大小写包含条件：{@code UPPER(field) LIKE '%value%'}。
      *
      * <p>
      * 值中的 {@code %} 或 {@code _} 字符会被转义，作为字面量处理，防止 LIKE 注入。
@@ -546,7 +546,7 @@ public class SubQuerySpec<S> {
      * @return 当前 SubQuerySpec 实例，支持链式调用
      * @throws IllegalArgumentException 如果 value 为 null
      */
-    public SubQuerySpec<S> likeIgnoreCase(SFunction<S, ?> field, String value) {
+    public SubQuerySpec<S> containsIgnoreCase(SFunction<S, ?> field, String value) {
         if (value == null) {
             throw new IllegalArgumentException("value must not be null");
         }
@@ -554,6 +554,23 @@ public class SubQuerySpec<S> {
         predicates.add(PredicateHelper.likeIgnoreCase(root, property(field), "%" + escaped + "%", cb,
             PredicateHelper.LIKE_ESCAPE_CHAR));
         return this;
+    }
+
+    /**
+     * 添加子查询实体的忽略大小写的 LIKE 条件。
+     *
+     * <p>
+     * 值中的 {@code %} 或 {@code _} 字符会被转义，作为字面量处理，防止 LIKE 注入。
+     *
+     * @param field 实体字段
+     * @param value 要匹配的原始字符串值（通配符会被转义）
+     * @return 当前 SubQuerySpec 实例，支持链式调用
+     * @throws IllegalArgumentException 如果 value 为 null
+     * @deprecated 使用 {@link #containsIgnoreCase(SFunction, String)} 替代，方法名更准确地反映了行为（包含匹配而非 LIKE 模式匹配）。
+     */
+    @Deprecated(since = "1.2.0", forRemoval = true)
+    public SubQuerySpec<S> likeIgnoreCase(SFunction<S, ?> field, String value) {
+        return containsIgnoreCase(field, value);
     }
 
     // ---- 集合空检查 ----

@@ -705,6 +705,38 @@ public abstract class AbstractBulkOperationSpec<T, SELF extends AbstractBulkOper
     }
 
     /**
+     * 添加集合为空条件：{@code field IS EMPTY}。
+     *
+     * @param field 实体集合属性引用
+     * @return 当前构建器实例
+     * @throws IllegalArgumentException 如果 field 为 null
+     */
+    public SELF isEmpty(SFunction<T, ?> field) {
+        if (field == null) {
+            throw new IllegalArgumentException("field must not be null");
+        }
+        String name = property(field);
+        conditionNodes.add(leaf((root, cb) -> PredicateHelper.isEmpty(root, name, cb)));
+        return self();
+    }
+
+    /**
+     * 添加集合不为空条件：{@code field IS NOT EMPTY}。
+     *
+     * @param field 实体集合属性引用
+     * @return 当前构建器实例
+     * @throws IllegalArgumentException 如果 field 为 null
+     */
+    public SELF isNotEmpty(SFunction<T, ?> field) {
+        if (field == null) {
+            throw new IllegalArgumentException("field must not be null");
+        }
+        String name = property(field);
+        conditionNodes.add(leaf((root, cb) -> PredicateHelper.isNotEmpty(root, name, cb)));
+        return self();
+    }
+
+    /**
      * 添加自定义条件。
      *
      * <p>

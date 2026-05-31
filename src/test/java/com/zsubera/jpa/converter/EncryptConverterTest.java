@@ -15,12 +15,14 @@ class EncryptConverterTest {
     @BeforeEach
     void setUp() {
         System.setProperty("myjpa.encrypt.key", TEST_KEY);
+        EncryptConverter.clearCacheForTesting();
         converter = new EncryptConverter();
     }
 
     @AfterEach
     void tearDown() {
         System.clearProperty("myjpa.encrypt.key");
+        EncryptConverter.clearCacheForTesting();
     }
 
     @Test
@@ -91,22 +93,30 @@ class EncryptConverterTest {
     @DisplayName("missing key throws NullPointerException")
     void shouldThrowWhenKeyNotSet() {
         System.clearProperty("myjpa.encrypt.key");
+        EncryptConverter.clearCacheForTesting();
         EncryptConverter noKeyConverter = new EncryptConverter();
         assertThrows(NullPointerException.class, () -> noKeyConverter.convertToDatabaseColumn("test"));
     }
 
     @Test
-    @DisplayName("invalid key length throws IllegalStateException")
-    void shouldThrowForInvalidKeyLength() {
+    @DisplayName("short key is derived via PBKDF2")
+    void shouldDeriveShortKeyViaPBKDF2() {
         System.setProperty("myjpa.encrypt.key", "short");
-        EncryptConverter badKeyConverter = new EncryptConverter();
-        assertThrows(IllegalStateException.class, () -> badKeyConverter.convertToDatabaseColumn("test"));
+        EncryptConverter.clearCacheForTesting();
+        EncryptConverter shortKeyConverter = new EncryptConverter();
+        // Short keys are now derived via PBKDF2WithHmacSHA256, so they should work
+        String original = "test-data";
+        String encrypted = shortKeyConverter.convertToDatabaseColumn(original);
+        assertNotNull(encrypted);
+        String decrypted = shortKeyConverter.convertToEntityAttribute(encrypted);
+        assertEquals(original, decrypted);
     }
 
     @Test
     @DisplayName("256-bit key supported")
     void shouldSupport256BitKey() {
         System.setProperty("myjpa.encrypt.key", "12345678901234561234567890123456");
+        EncryptConverter.clearCacheForTesting();
         EncryptConverter aes256 = new EncryptConverter();
         String original = "test-data";
         String encrypted = aes256.convertToDatabaseColumn(original);
@@ -118,6 +128,7 @@ class EncryptConverterTest {
     @DisplayName("env variable key supported")
     void shouldSupportEnvVariableKey() {
         System.clearProperty("myjpa.encrypt.key");
+        EncryptConverter.clearCacheForTesting();
         EncryptConverter envConverter = new EncryptConverter();
         String envKey = System.getenv("MYJPA_ENCRYPT_KEY");
         if (envKey != null && (envKey.length() == 16 || envKey.length() == 24 || envKey.length() == 32)) {

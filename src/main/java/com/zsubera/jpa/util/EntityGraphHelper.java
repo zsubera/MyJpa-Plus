@@ -118,6 +118,35 @@ public final class EntityGraphHelper<T> {
     }
 
     /**
+     * 移除指定的属性路径。
+     *
+     * @param attributePath 要移除的属性路径
+     * @return 当前实例，支持链式调用
+     * @throws IllegalArgumentException 如果 attributePath 为 null 或空
+     */
+    public EntityGraphHelper<T> remove(String attributePath) {
+        if (attributePath == null || attributePath.isEmpty()) {
+            throw new IllegalArgumentException("attributePath must not be null or empty");
+        }
+        attributePaths.remove(attributePath);
+        if (attributePath.equals(lastAddedPath)) {
+            lastAddedPath = null;
+        }
+        return this;
+    }
+
+    /**
+     * 清除所有属性路径。
+     *
+     * @return 当前实例，支持链式调用
+     */
+    public EntityGraphHelper<T> clear() {
+        attributePaths.clear();
+        lastAddedPath = null;
+        return this;
+    }
+
+    /**
      * 在上一次添加的路径基础上进行嵌套。等价于 {@code add("parent.child")} 的链式写法。
      *
      * <p>

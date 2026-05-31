@@ -41,6 +41,9 @@ public class MaskSerializer extends JsonSerializer<String> {
             case EMAIL -> maskEmail(value);
             case ID_CARD -> maskIdCard(value);
             case NAME -> maskName(value);
+            case BANK_CARD -> maskBankCard(value);
+            case ADDRESS -> maskAddress(value);
+            case LICENSE_PLATE -> maskLicensePlate(value);
         };
     }
 
@@ -72,13 +75,37 @@ public class MaskSerializer extends JsonSerializer<String> {
     }
 
     private static String maskName(String name) {
-        if (name.length() <= 1) {
+        int codePointCount = name.codePointCount(0, name.length());
+        if (codePointCount <= 1) {
             return name;
         }
-        if (name.length() == 2) {
-            return name.charAt(0) + "*";
+        if (codePointCount == 2) {
+            return new String(Character.toChars(name.codePointAt(0))) + "*";
         }
-        return name.charAt(0) + "*".repeat(name.length() - 2) + name.charAt(name.length() - 1);
+        int lastCodePointIndex = name.offsetByCodePoints(0, codePointCount - 1);
+        return new String(Character.toChars(name.codePointAt(0))) + "*".repeat(codePointCount - 2)
+            + new String(Character.toChars(name.codePointAt(lastCodePointIndex)));
+    }
+
+    private static String maskBankCard(String bankCard) {
+        if (bankCard.length() < 8) {
+            return bankCard;
+        }
+        return "*".repeat(bankCard.length() - 4) + bankCard.substring(bankCard.length() - 4);
+    }
+
+    private static String maskAddress(String address) {
+        if (address.length() <= 6) {
+            return address;
+        }
+        return address.substring(0, 6) + "*".repeat(address.length() - 6);
+    }
+
+    private static String maskLicensePlate(String plate) {
+        if (plate.length() < 3) {
+            return plate;
+        }
+        return plate.substring(0, 2) + "*".repeat(plate.length() - 3) + plate.charAt(plate.length() - 1);
     }
 
     public static class MaskModule extends SimpleModule {

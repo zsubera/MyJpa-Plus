@@ -163,9 +163,10 @@ public abstract class BaseEntity implements Serializable {
         if (this == o) {
             return true;
         }
-        if (!(o instanceof BaseEntity that)) {
+        if (o == null || getClass() != o.getClass()) {
             return false;
         }
+        BaseEntity that = (BaseEntity)o;
         // Use id-based comparison only if both entities are persisted (id != null).
         // Otherwise fall back to identity comparison (always false for different instances).
         Long id = getId();

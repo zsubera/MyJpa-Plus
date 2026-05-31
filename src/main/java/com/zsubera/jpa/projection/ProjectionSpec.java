@@ -56,6 +56,8 @@ public class ProjectionSpec<T> {
     private final QuerySpec<T> querySpec = new QuerySpec<>();
     private final List<JoinSpec> joins = new ArrayList<>();
     private final List<OrderSpec> orderSpecs = new ArrayList<>();
+    private final List<String> groupByFields = new ArrayList<>();
+    private final List<jakarta.persistence.criteria.Predicate> havingPredicates = new ArrayList<>();
     private Class<?> dtoClass;
 
     /** 描述 JOIN 子句的内部记录类。 */
@@ -264,6 +266,53 @@ public class ProjectionSpec<T> {
     }
 
     /**
+     * 添加 GROUP BY 字段。
+     *
+     * @param field 要分组的实体属性方法引用
+     * @return 当前 ProjectionSpec 实例，支持链式调用
+     * @throws IllegalArgumentException 如果 field 为 null
+     */
+    public ProjectionSpec<T> groupBy(SFunction<T, ?> field) {
+        if (field == null) {
+            throw new IllegalArgumentException("field must not be null");
+        }
+        groupByFields.add(LambdaUtils.getPropertyName(field));
+        return this;
+    }
+
+    /**
+     * 添加 HAVING 条件。多个 HAVING 条件之间为 AND 关系。
+     *
+     * <p>
+     * 使用示例：
+     *
+     * <pre>{@code
+     * new ProjectionSpec<>(Order.class).select(Order::getCustomerId).selectCount(Order::getId)
+     *     .groupBy(Order::getCustomerId).having((root, cb) -> cb.greaterThan(cb.count(root.get("id")), 5L))
+     *     .toTupleQuery(em);
+     * }</pre>
+     *
+     * @param predicate HAVING 条件函数
+     * @return 当前 ProjectionSpec 实例，支持链式调用
+     * @throws IllegalArgumentException 如果 predicate 为 null
+     */
+    public ProjectionSpec<T> having(java.util.function.BiFunction<jakarta.persistence.criteria.Root<T>, CriteriaBuilder,
+        jakarta.persistence.criteria.Predicate> predicate) {
+        if (predicate == null) {
+            throw new IllegalArgumentException("predicate must not be null");
+        }
+        // Store the predicate function for later application
+        // We'll apply it during query building when we have the root and cb
+        this.havingPredicateFn = predicate;
+        return this;
+    }
+
+    /** HAVING 条件函数引用，延迟应用。 */
+    @SuppressWarnings("rawtypes")
+    private java.util.function.BiFunction<jakarta.persistence.criteria.Root<T>, CriteriaBuilder,
+        jakarta.persistence.criteria.Predicate> havingPredicateFn;
+
+    /**
      * 添加 INNER JOIN 关联查询，可对关联实体设置条件。
      *
      * @param field 一对多或一对一关系的方法引用
@@ -397,6 +446,23 @@ public class ProjectionSpec<T> {
         // Apply WHERE
         applyPredicate(root, query, cb);
 
+        // Apply GROUP BY
+        if (!groupByFields.isEmpty()) {
+            List<jakarta.persistence.criteria.Expression<?>> groupByExpressions = new ArrayList<>();
+            for (String field : groupByFields) {
+                groupByExpressions.add(root.get(field));
+            }
+            query.groupBy(groupByExpressions);
+        }
+
+        // Apply HAVING
+        if (havingPredicateFn != null) {
+            jakarta.persistence.criteria.Predicate havingPredicate = havingPredicateFn.apply(root, cb);
+            if (havingPredicate != null) {
+                query.having(havingPredicate);
+            }
+        }
+
         // Apply ORDER BY
         applyOrderBy(root, cb, query);
 
@@ -405,6 +471,28 @@ public class ProjectionSpec<T> {
             typedQuery.setMaxResults(maxResults);
         }
         return typedQuery;
+    }
+
+    /**
+     * 流式查询 Tuple 结果，适用于处理大数据集。
+     *
+     * <p>
+     * <strong>重要：必须使用 try-with-resources 确保资源关闭：</strong>
+     *
+     * <pre>{@code
+     * try (Stream<Tuple> stream = projection.getResultStream(em)) {
+     *     stream.forEach(row -> process(row));
+     * }
+     * }</pre>
+     *
+     * @param em JPA 实体管理器
+     * @return Tuple 结果的 Stream（必须由调用方关闭）
+     */
+    public java.util.stream.Stream<Tuple> getResultStream(EntityManager em) {
+        if (em == null) {
+            throw new IllegalArgumentException("em must not be null");
+        }
+        return toTupleQuery(em, -1).getResultStream();
     }
 
     /**
@@ -459,6 +547,23 @@ public class ProjectionSpec<T> {
         // Apply WHERE
         applyPredicate(root, query, cb);
 
+        // Apply GROUP BY
+        if (!groupByFields.isEmpty()) {
+            List<jakarta.persistence.criteria.Expression<?>> groupByExpressions = new ArrayList<>();
+            for (String gf : groupByFields) {
+                groupByExpressions.add(root.get(gf));
+            }
+            query.groupBy(groupByExpressions);
+        }
+
+        // Apply HAVING
+        if (havingPredicateFn != null) {
+            jakarta.persistence.criteria.Predicate havingPredicate = havingPredicateFn.apply(root, cb);
+            if (havingPredicate != null) {
+                query.having(havingPredicate);
+            }
+        }
+
         // Apply ORDER BY
         applyOrderBy(root, cb, query);
 
@@ -512,6 +617,24 @@ public class ProjectionSpec<T> {
         List<jakarta.persistence.criteria.Selection<?>> selectionList = buildSelectionList(dataRoot, cb);
         dataQuery.multiselect(selectionList);
         applyPredicate(dataRoot, dataQuery, cb);
+
+        // Apply GROUP BY
+        if (!groupByFields.isEmpty()) {
+            List<jakarta.persistence.criteria.Expression<?>> groupByExpressions = new ArrayList<>();
+            for (String gf : groupByFields) {
+                groupByExpressions.add(dataRoot.get(gf));
+            }
+            dataQuery.groupBy(groupByExpressions);
+        }
+
+        // Apply HAVING
+        if (havingPredicateFn != null) {
+            jakarta.persistence.criteria.Predicate havingPredicate = havingPredicateFn.apply(dataRoot, cb);
+            if (havingPredicate != null) {
+                dataQuery.having(havingPredicate);
+            }
+        }
+
         applyOrderBy(dataRoot, cb, dataQuery);
 
         TypedQuery<Tuple> query = em.createQuery(dataQuery);

@@ -1,5 +1,27 @@
 package com.zsubera.jpa.annotation;
 
+/**
+ * 脱敏类型枚举。
+ *
+ * <p>
+ * 定义常见的数据脱敏模式，配合 {@link Mask} 注解使用。
+ *
+ * @author myjpa-plus
+ * @since 1.0.0
+ */
 public enum MaskType {
-    PHONE, EMAIL, ID_CARD, NAME
+    /** 手机号脱敏：保留前 3 位和后 4 位，中间用 **** 替代。例如：138****1234 */
+    PHONE,
+    /** 邮箱脱敏：保留首字符和 @ 后的域名。例如：j***@example.com */
+    EMAIL,
+    /** 身份证号脱敏：保留前 3 位和后 4 位。例如：110***********1234 */
+    ID_CARD,
+    /** 姓名脱敏：保留首尾字符，中间用 * 替代。例如：张*明、张* */
+    NAME,
+    /** 银行卡号脱敏：保留后 4 位。例如：************1234 */
+    BANK_CARD,
+    /** 地址脱敏：保留前 6 个字符。例如：北京市朝阳区**** */
+    ADDRESS,
+    /** 车牌号脱敏：保留前 2 位和后 1 位。例如：京A***5 */
+    LICENSE_PLATE
 }

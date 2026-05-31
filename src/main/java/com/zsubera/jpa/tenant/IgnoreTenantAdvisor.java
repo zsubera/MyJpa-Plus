@@ -9,6 +9,7 @@ import org.aspectj.lang.reflect.MethodSignature;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
+import org.springframework.core.annotation.AnnotationUtils;
 import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 
@@ -41,26 +42,24 @@ public class IgnoreTenantAdvisor {
         MethodSignature signature = (MethodSignature)pjp.getSignature();
         Method method = signature.getMethod();
 
-        boolean hasAnnotation = false;
-        try {
-            hasAnnotation = method.isAnnotationPresent(IgnoreTenant.class);
-            if (!hasAnnotation) {
-                Class<?> declaringClass = method.getDeclaringClass();
-                hasAnnotation = declaringClass.isAnnotationPresent(IgnoreTenant.class);
-            }
+        // Quick check: skip processing if no @IgnoreTenant annotation present
+        // Uses AnnotationUtils for proper resolution through CGLIB proxies and interfaces
+        boolean hasAnnotation = AnnotationUtils.findAnnotation(method, IgnoreTenant.class) != null
+            || AnnotationUtils.findAnnotation(method.getDeclaringClass(), IgnoreTenant.class) != null;
 
-            if (hasAnnotation) {
-                TenantContext.pushIgnore();
-                if (log.isTraceEnabled()) {
-                    log.trace("Tenant filter bypassed for method: {}.{}", method.getDeclaringClass().getSimpleName(),
-                        method.getName());
-                }
+        if (!hasAnnotation) {
+            return pjp.proceed();
+        }
+
+        TenantContext.pushIgnore();
+        try {
+            if (log.isTraceEnabled()) {
+                log.trace("Tenant filter bypassed for method: {}.{}", method.getDeclaringClass().getSimpleName(),
+                    method.getName());
             }
             return pjp.proceed();
         } finally {
-            if (hasAnnotation) {
-                TenantContext.popIgnore();
-            }
+            TenantContext.popIgnore();
         }
     }
 }

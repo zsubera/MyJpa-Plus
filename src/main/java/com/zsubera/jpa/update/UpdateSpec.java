@@ -138,17 +138,11 @@ public class UpdateSpec<T> extends AbstractBulkOperationSpec<T, UpdateSpec<T>> {
      * @deprecated 使用 {@link #setAdd(SFunction, Number)} 和 {@link #setSubtract(SFunction, Number)} 替代简单的加减操作。
      *             对于复杂表达式，此方法仍然可用但不推荐，因为它接受原始 SQL 字符串存在注入风险。
      */
-    @Deprecated(since = "1.2.0", forRemoval = false)
+    @Deprecated(since = "1.2.0", forRemoval = true)
     public UpdateSpec<T> setExpression(SFunction<T, ?> field, String expression) {
-        if (field == null) {
-            throw new IllegalArgumentException("field must not be null");
-        }
-        if (expression == null) {
-            throw new IllegalArgumentException("expression must not be null");
-        }
-        String name = LambdaUtils.getPropertyName(field);
-        expressionSetClauses.add(new ExpressionSetClause(name, (root, cb) -> cb.literal(expression)));
-        return this;
+        throw new UnsupportedOperationException(
+            "setExpression() is removed due to SQL injection risk and incorrect implementation (uses cb.literal() instead of cb.expression()). "
+                + "Use setAdd() or setSubtract() for arithmetic operations, or use CriteriaBuilder directly for complex expressions.");
     }
 
     /**

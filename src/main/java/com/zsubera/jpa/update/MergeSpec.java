@@ -185,6 +185,11 @@ public class MergeSpec<T> {
             return executeSimpleInsert(em, allFieldValues);
         }
         if (explicitUpdateFields) {
+            // Use UPDATE-then-INSERT strategy for partial column updates.
+            // H2 MERGE INTO replaces the entire row, which doesn't support partial updates.
+            // Note: This approach has a potential race condition in high-concurrency scenarios.
+            // For production use with concurrent access, consider using PostgreSQL or MySQL
+            // which support INSERT ... ON CONFLICT/DO UPDATE with partial column updates.
             int updated = executeConditionalUpdate(em, allFieldValues, effectiveConflictFields);
             if (updated > 0) {
                 return updated;
@@ -375,20 +380,25 @@ public class MergeSpec<T> {
         }
         int total = 0;
         int count = 0;
-        for (T ent : entities) {
-            this.entity = ent;
-            total += execute(em);
-            count++;
-            if (count % batchSize == 0) {
-                em.flush();
-                em.clear();
-                if (log.isDebugEnabled()) {
-                    log.debug("Batch UPSERT: {} entities processed (total affected: {})", count, total);
+        T originalEntity = this.entity;
+        try {
+            for (T ent : entities) {
+                this.entity = ent;
+                total += execute(em);
+                count++;
+                if (count % batchSize == 0) {
+                    em.flush();
+                    em.clear();
+                    if (log.isDebugEnabled()) {
+                        log.debug("Batch UPSERT: {} entities processed (total affected: {})", count, total);
+                    }
                 }
             }
+            em.flush();
+            em.clear();
+        } finally {
+            this.entity = originalEntity;
         }
-        em.flush();
-        em.clear();
         return total;
     }
 
@@ -551,7 +561,15 @@ public class MergeSpec<T> {
     private String resolveTableName() {
         jakarta.persistence.Table tableAnnotation = entityClass.getAnnotation(jakarta.persistence.Table.class);
         if (tableAnnotation != null && !tableAnnotation.name().isEmpty()) {
-            return tableAnnotation.name();
+            StringBuilder tableName = new StringBuilder();
+            if (!tableAnnotation.catalog().isEmpty()) {
+                tableName.append(tableAnnotation.catalog()).append('.');
+            }
+            if (!tableAnnotation.schema().isEmpty()) {
+                tableName.append(tableAnnotation.schema()).append('.');
+            }
+            tableName.append(tableAnnotation.name());
+            return tableName.toString();
         }
         jakarta.persistence.Entity entityAnnotation = entityClass.getAnnotation(jakarta.persistence.Entity.class);
         if (entityAnnotation != null && !entityAnnotation.name().isEmpty()) {
@@ -567,12 +585,23 @@ public class MergeSpec<T> {
      * @return 蛇形命名字符串
      */
     private static String camelToSnake(String name) {
+        if (name == null || name.isEmpty()) {
+            return name;
+        }
         StringBuilder sb = new StringBuilder();
         for (int i = 0; i < name.length(); i++) {
             char c = name.charAt(i);
             if (Character.isUpperCase(c)) {
+                // Add underscore before uppercase letter if:
+                // - Not at the start
+                // - Previous char is lowercase (e.g., "camelCase" -> "camel_case")
+                // - Next char is lowercase and previous is uppercase (e.g., "XMLParser" -> "xml_parser")
                 if (i > 0) {
-                    sb.append('_');
+                    char prev = name.charAt(i - 1);
+                    boolean nextIsLower = (i + 1 < name.length()) && Character.isLowerCase(name.charAt(i + 1));
+                    if (Character.isLowerCase(prev) || (Character.isUpperCase(prev) && nextIsLower)) {
+                        sb.append('_');
+                    }
                 }
                 sb.append(Character.toLowerCase(c));
             } else {
@@ -661,7 +690,15 @@ public class MergeSpec<T> {
                     && !f.isAnnotationPresent(jakarta.persistence.OneToMany.class)
                     && !f.isAnnotationPresent(jakarta.persistence.ManyToOne.class)
                     && !f.isAnnotationPresent(jakarta.persistence.ManyToMany.class)
-                    && !f.isAnnotationPresent(jakarta.persistence.OneToOne.class)) {
+                    && !f.isAnnotationPresent(jakarta.persistence.OneToOne.class)
+                    && !f.isAnnotationPresent(jakarta.persistence.EmbeddedId.class)) {
+                    // Skip @Embedded fields - they require special handling via @AttributeOverride
+                    if (f.isAnnotationPresent(jakarta.persistence.Embedded.class)) {
+                        log.debug(
+                            "Skipping @Embedded field '{}' in MergeSpec - use @AttributeOverride for column mapping",
+                            f.getName());
+                        continue;
+                    }
                     allFields.add(f);
                 }
             }
@@ -728,8 +765,18 @@ public class MergeSpec<T> {
             } catch (Exception ex) {
                 log.debug("Failed to detect dialect from properties: {}", ex.getMessage());
             }
-            log.warn("Failed to detect database dialect, defaulting to h2: {}", e.getMessage());
-            return "h2";
+            log.warn(
+                "Failed to detect database dialect: {}. "
+                    + "Set system property 'myjpa-plus.dialect' to 'postgresql', 'mysql', or 'h2' to specify manually.",
+                e.getMessage());
+            String manualDialect = System.getProperty("myjpa-plus.dialect");
+            if (manualDialect != null && !manualDialect.isEmpty()) {
+                String mapped = mapDialect(manualDialect.toLowerCase());
+                log.info("Using manually configured dialect: {}", mapped);
+                return mapped;
+            }
+            throw new MyJpaPlusException("Failed to detect database dialect and no manual dialect configured. "
+                + "Set system property 'myjpa-plus.dialect' to 'postgresql', 'mysql', or 'h2'.", e);
         }
     }
 

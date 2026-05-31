@@ -130,6 +130,48 @@ public class JoinGroup<T, J> implements ConditionBuilder<J, JoinGroup<T, J>> {
     }
 
     /**
+     * 添加嵌套 FETCH JOIN（INNER），通过 {@code JOIN FETCH} 预加载关联实体。
+     *
+     * <p>
+     * FETCH JOIN 会将关联实体与主实体在同一查询中加载，避免 N+1 查询问题。
+     *
+     * @param field 关联字段的方法引用
+     * @param <J2> 关联实体类型
+     * @return 新的 JoinGroup 实例
+     * @throws IllegalArgumentException 如果 field 为 null
+     */
+    public <J2> JoinGroup<T, J2> fetchJoin(SFunction<J, ?> field) {
+        if (field == null) {
+            throw new IllegalArgumentException("field must not be null");
+        }
+        ConditionNode.JoinNode nestedJoin =
+            new ConditionNode.JoinNode(LambdaUtils.getPropertyName(field), ConditionNode.JoinType.FETCH);
+        joinNode.innerConditions.add(nestedJoin);
+        return new JoinGroup<>(root, nestedJoin);
+    }
+
+    /**
+     * 添加嵌套 LEFT FETCH JOIN，通过 {@code LEFT JOIN FETCH} 预加载关联实体。
+     *
+     * <p>
+     * LEFT FETCH JOIN 在预加载关联实体的同时，不会过滤掉没有关联的主实体。
+     *
+     * @param field 关联字段的方法引用
+     * @param <J2> 关联实体类型
+     * @return 新的 JoinGroup 实例
+     * @throws IllegalArgumentException 如果 field 为 null
+     */
+    public <J2> JoinGroup<T, J2> leftFetchJoin(SFunction<J, ?> field) {
+        if (field == null) {
+            throw new IllegalArgumentException("field must not be null");
+        }
+        ConditionNode.JoinNode nestedJoin =
+            new ConditionNode.JoinNode(LambdaUtils.getPropertyName(field), ConditionNode.JoinType.LEFT_FETCH);
+        joinNode.innerConditions.add(nestedJoin);
+        return new JoinGroup<>(root, nestedJoin);
+    }
+
+    /**
      * 使用消费者构建嵌套 INNER JOIN，自动关闭关联组。
      *
      * <p>

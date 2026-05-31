@@ -3,6 +3,7 @@ package com.zsubera.jpa.repository;
 import com.zsubera.jpa.annotation.RetryOnOptimisticLock;
 import jakarta.persistence.OptimisticLockException;
 import java.lang.reflect.Method;
+import java.util.concurrent.ThreadLocalRandom;
 import org.aspectj.lang.ProceedingJoinPoint;
 import org.aspectj.lang.annotation.Around;
 import org.aspectj.lang.annotation.Aspect;
@@ -52,7 +53,10 @@ public class OptimisticLockRetryAdvisor {
                         method.getDeclaringClass().getSimpleName(), method.getName());
                     throw ex;
                 }
-                long delay = backoffMs * (1L << (attempt - 1));
+                long baseDelay = backoffMs * (1L << (attempt - 1));
+                // Add random jitter (0-25% of base delay) to prevent thundering herd
+                long jitter = (long)(baseDelay * 0.25 * ThreadLocalRandom.current().nextDouble());
+                long delay = baseDelay + jitter;
                 log.debug("OptimisticLockException on attempt {}/{} for method {}.{}, retrying in {}ms", attempt,
                     maxRetries, method.getDeclaringClass().getSimpleName(), method.getName(), delay);
                 try {

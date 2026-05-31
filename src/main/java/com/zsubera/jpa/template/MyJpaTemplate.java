@@ -877,6 +877,22 @@ public class MyJpaTemplate {
     }
 
     /**
+     * 使用给定的 {@link com.zsubera.jpa.update.MergeSpec} 执行 UPSERT 操作。
+     *
+     * @param spec 要执行的 MergeSpec
+     * @param <T> 实体类型
+     * @return 受影响的行数
+     * @throws IllegalArgumentException 如果 spec 为 null
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public <T> int execute(com.zsubera.jpa.update.MergeSpec<T> spec) {
+        if (spec == null) {
+            throw new IllegalArgumentException("spec must not be null");
+        }
+        return spec.executeInTransaction(entityManager);
+    }
+
+    /**
      * 使用给定的 {@link UpdateSpec} 执行批量更新，限制最大影响行数。
      *
      * <p>
@@ -1115,8 +1131,9 @@ public class MyJpaTemplate {
         int batchCount = 0;
         int failedBatchIndex = -1;
         Throwable failureCause = null;
+        boolean shouldContinue = true;
         int batchResult;
-        do {
+        while (shouldContinue) {
             try {
                 batchResult = batchExecutor.applyAsInt(batchSize);
                 total += batchResult;
@@ -1128,15 +1145,19 @@ public class MyJpaTemplate {
             } catch (RuntimeException e) {
                 failedBatchIndex = batchCount;
                 failureCause = e;
-                log.error("Batch {} failed at batch index {}: {}", operationName, batchCount, e.getMessage(), e);
+                batchCount++;
+                log.error("Batch {} failed at batch index {}: {}", operationName, failedBatchIndex, e.getMessage(), e);
                 if (failureStrategy == BatchFailureStrategy.ABORT) {
-                    break;
+                    shouldContinue = false;
+                    continue;
                 }
                 // CONTINUE: skip this batch and try next
                 batchResult = 0;
-                batchCount++;
             }
-        } while (batchResult >= batchSize);
+            if (batchResult < batchSize) {
+                shouldContinue = false;
+            }
+        }
         return new BatchResult(total, batchCount, failedBatchIndex == -1, failedBatchIndex, failureCause);
     }
 

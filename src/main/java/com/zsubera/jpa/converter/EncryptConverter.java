@@ -6,8 +6,12 @@ import java.security.GeneralSecurityException;
 import java.security.SecureRandom;
 import java.util.Base64;
 import java.util.Objects;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 import javax.crypto.Cipher;
+import javax.crypto.SecretKeyFactory;
 import javax.crypto.spec.GCMParameterSpec;
+import javax.crypto.spec.PBEKeySpec;
 import javax.crypto.spec.SecretKeySpec;
 
 public class EncryptConverter implements AttributeConverter<String, String> {
@@ -20,21 +24,39 @@ public class EncryptConverter implements AttributeConverter<String, String> {
     private static final String KEY_VERSION_ENV = "MYJPA_ENCRYPT_KEY_VERSION";
     private static final String KEY_VERSION_PROPERTY = "myjpa.encrypt.key.version";
     private static final SecureRandom SECURE_RANDOM = new SecureRandom();
+    private static final int PBKDF2_ITERATIONS = 100_000;
+    private static final int PBKDF2_KEY_LENGTH = 256;
+
+    /** Cached key specs by version to avoid repeated environment variable reads and KDF derivation. */
+    private static final ConcurrentMap<String, SecretKeySpec> KEY_CACHE = new ConcurrentHashMap<>();
+
+    /** Cached key version to avoid repeated environment variable reads. */
+    private static volatile String cachedKeyVersion;
 
     /**
-     * 获取当前密钥版本标识。用于在加密数据前添加版本前缀，支持密钥轮换。
-     *
-     * <p>
-     * 配置优先级：环境变量 {@code MYJPA_ENCRYPT_KEY_VERSION} > 系统属性 {@code myjpa.encrypt.key.version} > 默认值 "v1"。
+     * 清除所有缓存的密钥和版本信息。仅用于测试环境。
+     */
+    static void clearCacheForTesting() {
+        KEY_CACHE.clear();
+        cachedKeyVersion = null;
+    }
+
+    /**
+     * 获取当前密钥版本标识。结果缓存以避免每次操作读取环境变量。
      *
      * @return 密钥版本标识
      */
     private static String getKeyVersion() {
-        String version = System.getenv(KEY_VERSION_ENV);
+        String version = cachedKeyVersion;
+        if (version != null) {
+            return version;
+        }
+        version = System.getenv(KEY_VERSION_ENV);
         if (version == null || version.isEmpty()) {
             version = System.getProperty(KEY_VERSION_PROPERTY);
         }
-        return (version != null && !version.isEmpty()) ? version : "v1";
+        cachedKeyVersion = (version != null && !version.isEmpty()) ? version : "v1";
+        return cachedKeyVersion;
     }
 
     @Override
@@ -67,20 +89,27 @@ public class EncryptConverter implements AttributeConverter<String, String> {
         try {
             // 支持带版本前缀和不带版本前缀两种格式
             String base64Data;
+            String version = null;
             if (dbData.contains(":")) {
                 // 带版本前缀格式: "v1:base64data"
                 int colonIndex = dbData.indexOf(':');
+                version = dbData.substring(0, colonIndex);
                 base64Data = dbData.substring(colonIndex + 1);
             } else {
                 // 兼容旧格式（无版本前缀）
                 base64Data = dbData;
             }
             byte[] combined = Base64.getDecoder().decode(base64Data);
+            if (combined.length < GCM_IV_LENGTH) {
+                throw new IllegalStateException("Invalid encrypted data: decoded length (" + combined.length
+                    + ") is less than minimum required (" + GCM_IV_LENGTH + " bytes for IV). "
+                    + "Data may be corrupted or not encrypted with this converter.");
+            }
             byte[] iv = new byte[GCM_IV_LENGTH];
             System.arraycopy(combined, 0, iv, 0, GCM_IV_LENGTH);
             byte[] encrypted = new byte[combined.length - GCM_IV_LENGTH];
             System.arraycopy(combined, GCM_IV_LENGTH, encrypted, 0, encrypted.length);
-            SecretKeySpec keySpec = getKeySpec();
+            SecretKeySpec keySpec = getKeySpec(version);
             Cipher cipher = Cipher.getInstance(ALGORITHM);
             cipher.init(Cipher.DECRYPT_MODE, keySpec, new GCMParameterSpec(GCM_TAG_LENGTH, iv));
             byte[] decrypted = cipher.doFinal(encrypted);
@@ -90,17 +119,88 @@ public class EncryptConverter implements AttributeConverter<String, String> {
         }
     }
 
+    /**
+     * 获取当前版本的密钥规范。结果缓存以避免重复 KDF 派生。
+     */
     private static SecretKeySpec getKeySpec() {
-        String key = System.getenv(KEY_ENV);
-        if (key == null || key.isEmpty()) {
-            key = System.getProperty(KEY_PROPERTY);
+        return getKeySpec(getKeyVersion());
+    }
+
+    /**
+     * 获取指定版本的密钥规范。支持多版本密钥配置（格式：v1:key1,v2:key2）。 使用 PBKDF2WithHmacSHA256 进行密钥派生。
+     */
+    private static SecretKeySpec getKeySpec(String version) {
+        return KEY_CACHE.computeIfAbsent(version != null ? version : "default", v -> {
+            String rawKey = resolveRawKey(v);
+            return deriveKey(rawKey);
+        });
+    }
+
+    /**
+     * 从环境变量解析原始密钥。支持多版本格式（v1:key1,v2:key2）。
+     */
+    private static String resolveRawKey(String version) {
+        String keyEnv = System.getenv(KEY_ENV);
+        String keyProp = System.getProperty(KEY_PROPERTY);
+
+        // 尝试多版本格式: "v1:key1,v2:key2"
+        String allKeys = keyEnv;
+        if (allKeys == null || allKeys.isEmpty()) {
+            allKeys = keyProp;
         }
-        Objects.requireNonNull(key,
+        Objects.requireNonNull(allKeys,
             "Encryption key not set. Set environment variable " + KEY_ENV + " or system property " + KEY_PROPERTY);
-        byte[] keyBytes = key.getBytes(StandardCharsets.UTF_8);
-        if (keyBytes.length != 16 && keyBytes.length != 24 && keyBytes.length != 32) {
-            throw new IllegalStateException("Encryption key must be 16, 24, or 32 bytes, got " + keyBytes.length);
+
+        // 解析多版本密钥
+        if (allKeys.contains(":") && allKeys.contains(",")) {
+            String[] entries = allKeys.split(",");
+            for (String entry : entries) {
+                entry = entry.trim();
+                int colonIdx = entry.indexOf(':');
+                if (colonIdx > 0) {
+                    String entryVersion = entry.substring(0, colonIdx).trim();
+                    String entryKey = entry.substring(colonIdx + 1).trim();
+                    if (entryVersion.equals(version)) {
+                        return entryKey;
+                    }
+                }
+            }
         }
-        return new SecretKeySpec(keyBytes, "AES");
+
+        // 单密钥模式：如果指定了版本但没有找到对应密钥，使用主密钥
+        if (version != null && !version.equals("v1") && !version.equals("default")) {
+            logVersionMismatch(version);
+        }
+        return allKeys;
+    }
+
+    private static void logVersionMismatch(String version) {
+        // 使用 java.util.logging 避免引入额外依赖
+        System.getLogger("com.zsubera.jpa.converter.EncryptConverter").log(System.Logger.Level.WARNING,
+            "Key version '{0}' not found in multi-key configuration. Using primary key.", version);
+    }
+
+    /**
+     * 使用 PBKDF2WithHmacSHA256 从原始密钥材料派生 AES 密钥。
+     *
+     * @param rawKeyMaterial 原始密钥材料（密码或编码密钥）
+     * @return 派生的 AES 密钥规范
+     */
+    private static SecretKeySpec deriveKey(String rawKeyMaterial) {
+        try {
+            byte[] keyBytes = rawKeyMaterial.getBytes(StandardCharsets.UTF_8);
+            // 如果已经是有效的 AES 密钥长度，直接使用（向后兼容）
+            if (keyBytes.length == 16 || keyBytes.length == 24 || keyBytes.length == 32) {
+                return new SecretKeySpec(keyBytes, "AES");
+            }
+            // 否则使用 PBKDF2 派生
+            PBEKeySpec spec = new PBEKeySpec(rawKeyMaterial.toCharArray(),
+                "myjpa-plus".getBytes(StandardCharsets.UTF_8), PBKDF2_ITERATIONS, PBKDF2_KEY_LENGTH);
+            SecretKeyFactory factory = SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256");
+            byte[] derived = factory.generateSecret(spec).getEncoded();
+            return new SecretKeySpec(derived, "AES");
+        } catch (GeneralSecurityException e) {
+            throw new IllegalStateException("Failed to derive encryption key via PBKDF2", e);
+        }
     }
 }

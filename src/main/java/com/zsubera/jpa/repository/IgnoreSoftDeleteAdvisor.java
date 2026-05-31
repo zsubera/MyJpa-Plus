@@ -8,6 +8,7 @@ import org.aspectj.lang.annotation.Aspect;
 import org.aspectj.lang.reflect.MethodSignature;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.core.annotation.AnnotationUtils;
 import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 
@@ -37,6 +38,9 @@ public class IgnoreSoftDeleteAdvisor {
      * 切面范围覆盖所有 {@code JpaRepository} 子接口，确保 {@code @IgnoreSoftDelete} 注解在 {@link SoftDeleteJpaRepository} 和
      * {@link com.zsubera.jpa.repository.MyJpaRepository} 上均生效。
      *
+     * <p>
+     * 优化：使用 AnnotationUtils.findAnnotation() 进行精确注解检测，避免对无注解方法的不必要处理。
+     *
      * @param pjp 连接点
      * @return 方法执行结果
      * @throws Throwable 方法执行异常
@@ -46,30 +50,25 @@ public class IgnoreSoftDeleteAdvisor {
         MethodSignature signature = (MethodSignature)pjp.getSignature();
         Method method = signature.getMethod();
 
-        // Compute hasAnnotation inside try block to ensure cleanup in finally
-        boolean hasAnnotation = false;
-        try {
-            // Check method-level annotation
-            hasAnnotation = method.isAnnotationPresent(IgnoreSoftDelete.class);
-            // Check interface-level annotation
-            if (!hasAnnotation) {
-                Class<?> declaringClass = method.getDeclaringClass();
-                hasAnnotation = declaringClass.isAnnotationPresent(IgnoreSoftDelete.class);
-            }
+        // Quick check: skip processing if no @IgnoreSoftDelete annotation present
+        // Uses AnnotationUtils for proper resolution through CGLIB proxies and interfaces
+        boolean hasAnnotation = AnnotationUtils.findAnnotation(method, IgnoreSoftDelete.class) != null
+            || AnnotationUtils.findAnnotation(method.getDeclaringClass(), IgnoreSoftDelete.class) != null;
 
-            if (hasAnnotation) {
-                SoftDeleteContext.pushIgnore();
-                if (log.isTraceEnabled()) {
-                    log.trace("Soft delete filter bypassed for method: {}.{}",
-                        method.getDeclaringClass().getSimpleName(), method.getName());
-                }
+        if (!hasAnnotation) {
+            return pjp.proceed();
+        }
+
+        SoftDeleteContext.pushIgnore();
+        try {
+            if (log.isTraceEnabled()) {
+                log.trace("Soft delete filter bypassed for method: {}.{}", method.getDeclaringClass().getSimpleName(),
+                    method.getName());
             }
             return pjp.proceed();
         } finally {
             // 使用 popIgnore() 替代 clear()，支持嵌套调用场景
-            if (hasAnnotation) {
-                SoftDeleteContext.popIgnore();
-            }
+            SoftDeleteContext.popIgnore();
         }
     }
 }

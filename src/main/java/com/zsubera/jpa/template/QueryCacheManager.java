@@ -14,6 +14,19 @@ import org.slf4j.LoggerFactory;
  * 由 {@link MyJpaTemplate}（或直接）使用以缓存查询结果。条目在访问时懒驱逐（TTL 过期）。 当缓存条目数超过最大限制时，按插入顺序驱逐最早的条目（近似 LRU）。
  *
  * <p>
+ * <strong>事务集成说明：</strong>当前缓存实现独立于事务生命周期。写操作（INSERT/UPDATE/DELETE）后， 相关缓存条目不会自动失效。建议在事务提交后手动调用
+ * {@link #evictByPrefix(String)} 清除相关缓存。
+ *
+ * <pre>{@code
+ * @Transactional
+ * public void updateUser(User user) {
+ *     userRepository.save(user);
+ *     // 事务提交后清除相关缓存
+ *     cache.evictByPrefix("User:");
+ * }
+ * }</pre>
+ *
+ * <p>
  * 示例用法：
  *
  * <pre>{@code
@@ -137,6 +150,39 @@ public class QueryCacheManager {
     public void clear() {
         store.clear();
         log.debug("Cache cleared");
+    }
+
+    /**
+     * 按键前缀批量驱逐缓存条目。适用于实体变更后清除相关查询缓存。
+     *
+     * <p>
+     * 示例：
+     *
+     * <pre>{@code
+     * // User 实体更新后，清除所有以 "User:" 开头的缓存
+     * cache.evictByPrefix("User:");
+     * }</pre>
+     *
+     * @param keyPrefix 缓存键前缀
+     * @return 被驱逐的条目数
+     */
+    public int evictByPrefix(String keyPrefix) {
+        if (keyPrefix == null || keyPrefix.isEmpty()) {
+            return 0;
+        }
+        int count = 0;
+        Iterator<Map.Entry<String, CachedQueryResult<?>>> it = store.entrySet().iterator();
+        while (it.hasNext()) {
+            Map.Entry<String, CachedQueryResult<?>> entry = it.next();
+            if (entry.getKey().startsWith(keyPrefix)) {
+                it.remove();
+                count++;
+            }
+        }
+        if (count > 0) {
+            log.debug("Cache evicted {} entries with prefix '{}'", count, keyPrefix);
+        }
+        return count;
     }
 
     /**

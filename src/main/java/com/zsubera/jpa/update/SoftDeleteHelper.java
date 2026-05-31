@@ -270,7 +270,7 @@ public final class SoftDeleteHelper {
     private static String resolveSoftDeleteFieldNameViaGetter(Class<?> entityClass) {
         for (Method m : entityClass.getMethods()) {
             SoftDelete ann = m.getAnnotation(SoftDelete.class);
-            if (ann != null) {
+            if (ann != null && m.getParameterCount() == 0) {
                 String name = m.getName();
                 if (name.startsWith("get") && name.length() > 3) {
                     return Character.toLowerCase(name.charAt(3)) + name.substring(4);
@@ -341,7 +341,7 @@ public final class SoftDeleteHelper {
             if (value instanceof Integer intValue && field.isAnnotationPresent(SoftDelete.class)) {
                 SoftDelete annotation = field.getAnnotation(SoftDelete.class);
                 if (annotation != null) {
-                    return intValue == annotation.deletedIntValue();
+                    return intValue.equals(annotation.deletedIntValue());
                 }
             }
             // Enum type

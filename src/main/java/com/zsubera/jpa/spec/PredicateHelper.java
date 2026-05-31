@@ -549,12 +549,21 @@ public final class PredicateHelper {
                 }
                 return cb.notLike(fieldPath.as(String.class), (String)node.value);
             case EQ_IGNORE_CASE:
+                if (node.value == null) {
+                    return cb.isNull(fieldPath);
+                }
                 return cb.equal(cb.upper(fieldPath.as(String.class)),
                     ((String)node.value).toUpperCase(java.util.Locale.ROOT));
             case NE_IGNORE_CASE:
+                if (node.value == null) {
+                    return cb.isNotNull(fieldPath);
+                }
                 return cb.notEqual(cb.upper(fieldPath.as(String.class)),
                     ((String)node.value).toUpperCase(java.util.Locale.ROOT));
             case LIKE_IGNORE_CASE:
+                if (node.value == null) {
+                    return cb.isNull(fieldPath);
+                }
                 if (node.escapeChar != '\0') {
                     return cb.like(cb.upper(fieldPath.as(String.class)),
                         ((String)node.value).toUpperCase(java.util.Locale.ROOT), node.escapeChar);
