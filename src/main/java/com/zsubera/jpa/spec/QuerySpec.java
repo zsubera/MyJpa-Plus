@@ -704,9 +704,14 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
     /**
      * 将此 QuerySpec 转换为 Spring Data {@link Specification}。
      *
+     * <p>
+     * 转换前会验证所有条件组已正确关闭（通过 {@link #validateCleanState()}）。
+     *
      * @return Specification 实例
+     * @throws IllegalStateException 如果存在未关闭的 or() 组
      */
     public Specification<T> toSpecification() {
+        validateCleanState();
         return this;
     }
 
@@ -1161,6 +1166,9 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
      * <li>第一阶段：应用配置以确定 SELECT 字段类型</li>
      * <li>第二阶段：使用正确的返回类型创建子查询</li>
      * </ol>
+     *
+     * <p>
+     * <strong>注意：</strong>配置 lambda 会被调用两次（每阶段一次）。这是类型推断的必要代价，无法避免。 请确保配置 lambda 没有副作用（如计数器递增、发送消息等），因为它会被执行两次。
      *
      * @param <S> 子查询实体类型
      * @param node IN 子查询条件节点

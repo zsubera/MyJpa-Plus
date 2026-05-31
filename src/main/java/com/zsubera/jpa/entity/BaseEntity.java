@@ -81,6 +81,19 @@ public abstract class BaseEntity implements Serializable {
         return id;
     }
 
+    /**
+     * 设置实体 ID。
+     *
+     * <p>
+     * <strong>设计说明：</strong>此方法为 {@code protected} 访问级别，这是有意的设计决策：
+     * <ul>
+     * <li>ID 通常由 JPA 框架通过 {@code @GeneratedValue} 自动管理，不应由业务代码手动设置</li>
+     * <li>子类可以在特定场景（如数据导入、测试）中访问此方法</li>
+     * <li>如需在测试中设置 ID，可通过反射或使用测试工具类</li>
+     * </ul>
+     *
+     * @param id 实体 ID
+     */
     protected void setId(Long id) {
         this.id = id;
     }

@@ -14,8 +14,8 @@ final class AuditUtils {
     /** 跳过的栈帧数（getStackTrace + getCallStack） */
     private static final int STACK_SKIP = 2;
 
-    /** 最大调用栈深度（从调用者开始的层数） */
-    private static final int MAX_STACK_DEPTH = 10;
+    /** 最大调用栈深度（从调用者开始的层数），限制日志长度 */
+    private static final int MAX_STACK_DEPTH = 5;
 
     private AuditUtils() {}
 

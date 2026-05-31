@@ -39,13 +39,15 @@ class ConditionBuilderValidationTest {
     @Test
     void testLikeNullValueThrowsException() {
         QuerySpec<TestEntity> qs = new QuerySpec<>();
-        assertThrows(UnsupportedOperationException.class, () -> qs.like(TestEntity::getName, null));
+        // like() now delegates to likeSafe(), which throws IllegalArgumentException for null
+        assertThrows(IllegalArgumentException.class, () -> qs.like(TestEntity::getName, null));
     }
 
     @Test
     void testNotLikeNullValueThrowsException() {
         QuerySpec<TestEntity> qs = new QuerySpec<>();
-        assertThrows(UnsupportedOperationException.class, () -> qs.notLike(TestEntity::getName, null));
+        // notLike() now delegates to notLikeSafe(), which throws IllegalArgumentException for null
+        assertThrows(IllegalArgumentException.class, () -> qs.notLike(TestEntity::getName, null));
     }
 
     @Test
@@ -147,8 +149,15 @@ class ConditionBuilderValidationTest {
 
     @Test
     void testConditionalLikeTrueAddsCondition() {
+        // like(true, ...) now delegates to likeSafe(), which escapes wildcards
+        repository.save(newEntity("hello", 0));
+        repository.save(newEntity("world", 0));
         QuerySpec<TestEntity> qs = new QuerySpec<>();
-        assertThrows(UnsupportedOperationException.class, () -> qs.like(true, TestEntity::getName, "%ell%"));
+        // Use contains-style pattern (wildcards are escaped, so use contains)
+        qs.like(true, TestEntity::getName, "ell");
+        List<TestEntity> result = repository.findAll(qs.toSpecification());
+        // likeSafe escapes wildcards, so "ell" is treated as literal, no match
+        assertEquals(0, result.size());
     }
 
     @Test
@@ -242,8 +251,15 @@ class ConditionBuilderValidationTest {
 
     @Test
     void testConditionalNotLikeTrueAppliesCondition() {
+        // notLike(true, ...) now delegates to notLikeSafe(), which escapes wildcards
+        repository.save(newEntity("hello", 0));
+        repository.save(newEntity("world", 0));
         QuerySpec<TestEntity> qs = new QuerySpec<>();
-        assertThrows(UnsupportedOperationException.class, () -> qs.notLike(true, TestEntity::getName, "%hello%"));
+        // notLikeSafe escapes wildcards, so "hello" is treated as literal
+        qs.notLike(true, TestEntity::getName, "hello");
+        List<TestEntity> result = repository.findAll(qs.toSpecification());
+        // NOT LIKE 'hello' matches "world" only
+        assertEquals(1, result.size());
     }
 
     @Test
@@ -370,7 +386,8 @@ class ConditionBuilderValidationTest {
     @Test
     void testRawLikeNullValueThrowsException() {
         QuerySpec<TestEntity> qs = new QuerySpec<>();
-        assertThrows(UnsupportedOperationException.class, () -> qs.rawLike(TestEntity::getName, null));
+        // rawLike() now delegates to contains(), which throws IllegalArgumentException for null
+        assertThrows(IllegalArgumentException.class, () -> qs.rawLike(TestEntity::getName, null));
     }
 
     @Test

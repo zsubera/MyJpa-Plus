@@ -1,5 +1,6 @@
 package com.zsubera.jpa.autoconfigure;
 
+import com.zsubera.jpa.annotation.AuditEntityListener;
 import com.zsubera.jpa.repository.SoftDeleteJpaRepository;
 import com.zsubera.jpa.template.MyJpaTemplate;
 import com.zsubera.jpa.util.InClauseBuilder;
@@ -109,6 +110,21 @@ public class MyJpaPlusAutoConfiguration {
                         + "--add-opens java.base/java.lang.invoke=ALL-UNNAMED");
             }
         }
+    }
+
+    /**
+     * 创建 AuditEntityListener Bean。
+     *
+     * <p>
+     * 通过自动配置注册而非 {@code @Component}，避免与 JPA {@code @EntityListeners} 机制的身份混淆。 该 Bean 实现
+     * {@code ApplicationContextAware}，通过静态变量桥接 Spring 上下文与 JPA 实体监听器。
+     *
+     * @return AuditEntityListener 实例
+     */
+    @Bean
+    @ConditionalOnMissingBean(AuditEntityListener.class)
+    public AuditEntityListener auditEntityListener() {
+        return new AuditEntityListener();
     }
 
     /**

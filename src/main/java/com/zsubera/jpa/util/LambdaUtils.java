@@ -5,6 +5,8 @@ import com.zsubera.jpa.spec.SFunction;
 import java.beans.Introspector;
 import java.lang.invoke.SerializedLambda;
 import java.lang.reflect.Method;
+import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import org.slf4j.Logger;
@@ -107,13 +109,23 @@ public final class LambdaUtils {
     }
 
     /**
-     * 使用 ConcurrentHashMap 实现线程安全的属性名缓存。
+     * 使用 LRU 驱逐策略的属性名缓存。
      *
      * <p>
-     * 与之前使用的 Collections.synchronizedMap 不同，ConcurrentHashMap 使用分段锁（Java 8+ 为 CAS + synchronized）， 在高并发场景下性能更优。当缓存大小超过
-     * {@link #maxCacheSize} 时，通过 {@link #evictIfNeeded()} 驱逐旧条目。
+     * 使用 {@link LinkedHashMap} 的访问顺序模式（{@code accessOrder=true}）实现 LRU 语义： 每次 {@code get()} 或 {@code computeIfAbsent()}
+     * 访问条目时，该条目会被移到末尾。 当缓存大小超过 {@link #maxCacheSize} 时，{@code removeEldestEntry()} 自动移除最久未访问的条目。
+     *
+     * <p>
+     * 使用 {@link Collections#synchronizedMap} 包装以确保线程安全。 与 {@link ConcurrentHashMap} 相比，读操作会获取同步锁，但 LRU 语义确保热点条目不会被意外驱逐。
      */
-    private static final ConcurrentHashMap<String, String> CACHE = new ConcurrentHashMap<>(DEFAULT_CACHE_SIZE);
+    @SuppressWarnings("serial")
+    private static final Map<String, String> CACHE =
+        Collections.synchronizedMap(new LinkedHashMap<>(DEFAULT_CACHE_SIZE, 0.75f, true) {
+            @Override
+            protected boolean removeEldestEntry(Map.Entry<String, String> eldest) {
+                return size() > maxCacheSize;
+            }
+        });
 
     /**
      * 缓存每个 lambda 类对应的 Method 对象，避免重复反射操作。
@@ -130,10 +142,11 @@ public final class LambdaUtils {
      * 已在 {@code MyJpaPlusAutoConfiguration} 中通过 {@code DisposableBean} 自动注册关闭钩子。
      *
      * <p>
-     * 当前实现为空操作，因为缓存清理已通过 {@link ConcurrentHashMap} 的 {@code clear()} 方法在 {@link #evictIfNeeded()} 中自动处理。
+     * 当前实现为空操作，因为主缓存使用 {@link LinkedHashMap} 的 LRU 驱逐策略（通过 {@code removeEldestEntry()} 自动清理）， METHOD_CACHE 的清理已在
+     * {@link #evictMethodCacheIfNeeded()} 中自动处理。
      */
     public static void shutdown() {
-        // 空操作：缓存清理已通过 ConcurrentHashMap 的 clear() 方法在 evictIfNeeded() 中自动处理
+        // 空操作：主缓存使用 LinkedHashMap LRU 自动驱逐，METHOD_CACHE 通过 evictMethodCacheIfNeeded() 自动清理
     }
 
     private LambdaUtils() {}
@@ -169,7 +182,6 @@ public final class LambdaUtils {
             SerializedLambda lambda = (SerializedLambda)writeReplace.invoke(fn);
             String key = lambda.getImplClass() + "#" + lambda.getImplMethodName();
             String result = CACHE.computeIfAbsent(key, k -> methodToProperty(lambda.getImplMethodName()));
-            evictIfNeeded();
             evictMethodCacheIfNeeded();
             return result;
         } catch (ReflectiveOperationException e) {
@@ -182,47 +194,6 @@ public final class LambdaUtils {
             throw new MyJpaPlusException("Failed to extract property name due to security restriction. "
                 + "If using Java 17+ module system, add JVM argument: "
                 + "--add-opens java.base/java.lang.invoke=ALL-UNNAMED", e);
-        }
-    }
-
-    /**
-     * 驱逐旧缓存条目，确保缓存大小不超过 {@link #maxCacheSize}。
-     *
-     * <p>
-     * 当缓存大小超过限制时，使用 CAS 操作确保只有一个线程执行驱逐， 驱逐后缓存大小降至 {@link #EVICTION_TARGET_RATIO} 水平。 使用
-     * {@link java.util.concurrent.atomic.AtomicBoolean} 防止多线程同时驱逐导致的缓存雪崩。
-     *
-     * <p>
-     * <strong>已知限制：</strong>当前驱逐策略使用迭代器顺序删除，不保证 LRU（最近最少使用）语义。 在极端高并发场景下，热点条目可能被意外驱逐。 对于大多数应用场景，此策略已足够，
-     * 因为热点条目会被快速重新加载到缓存中。 如需真正的 LRU 语义，可考虑使用 Caffeine 或其他专业缓存库。
-     */
-    private static final java.util.concurrent.atomic.AtomicBoolean EVICTING =
-        new java.util.concurrent.atomic.AtomicBoolean(false);
-
-    private static void evictIfNeeded() {
-        long currentSize = CACHE.mappingCount();
-        if (currentSize > maxCacheSize && EVICTING.compareAndSet(false, true)) {
-            try {
-                // 双重检查：获取锁后再次检查大小
-                currentSize = CACHE.mappingCount();
-                if (currentSize > maxCacheSize) {
-                    long target = (long)(maxCacheSize * EVICTION_TARGET_RATIO);
-                    long toRemove = currentSize - target;
-                    if (toRemove > 0) {
-                        long removed = 0;
-                        java.util.Iterator<Map.Entry<String, String>> it = CACHE.entrySet().iterator();
-                        while (it.hasNext() && removed < toRemove) {
-                            it.next();
-                            it.remove();
-                            removed++;
-                        }
-                        log.debug("Lambda cache evicted {} entries (size: {} -> {})", removed, currentSize,
-                            CACHE.mappingCount());
-                    }
-                }
-            } finally {
-                EVICTING.set(false);
-            }
         }
     }
 

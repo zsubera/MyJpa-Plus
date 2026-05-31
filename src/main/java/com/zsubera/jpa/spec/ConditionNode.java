@@ -19,7 +19,7 @@ public sealed interface ConditionNode permits ConditionNode.SimpleNode, Conditio
     ConditionNode.AndNode, ConditionNode.MultiLikeNode, ConditionNode.CollectionNode, ConditionNode.ExistsNode,
     ConditionNode.InSubQueryNode, ConditionNode.RawNode, ConditionNode.NegateNode, ConditionNode.FuncNode {
 
-    // ---- Operation enums ----
+    // ---- 操作枚举 ----
 
     /** 字段-值条件的比较运算符。 */
     enum Op {
@@ -37,7 +37,7 @@ public sealed interface ConditionNode permits ConditionNode.SimpleNode, Conditio
         IS_EMPTY, IS_NOT_EMPTY
     }
 
-    // ---- Node types ----
+    // ---- 节点类型 ----
 
     /**
      * 单个字段-值比较条件。
@@ -88,14 +88,14 @@ public sealed interface ConditionNode permits ConditionNode.SimpleNode, Conditio
                 maskedValue = "BETWEEN[" + arr.length + " items]";
             } else if (value instanceof Collection<?> col) {
                 maskedValue = "IN[" + col.size() + " items]";
-            } else if (value instanceof String) {
-                // 完全掩码：防止密码、token 等敏感数据泄露到日志系统
-                maskedValue = "***";
+            } else if (value instanceof String str) {
+                // 字符串完全掩码：防止密码、token 等敏感数据泄露到日志系统
+                maskedValue = "***(" + str.length() + " chars)";
             } else if (value instanceof Number) {
-                // 数字类型掩码：防止业务数据泄露到日志
-                maskedValue = "N***";
+                // 数字类型显示类型名，便于调试时识别数值类型
+                maskedValue = value.getClass().getSimpleName() + "[***]";
             } else {
-                maskedValue = value.getClass().getSimpleName() + "***";
+                maskedValue = value.getClass().getSimpleName() + "[***]";
             }
             return "SimpleNode[" + fieldName + " " + op + " " + maskedValue + "]";
         }
@@ -294,12 +294,12 @@ public sealed interface ConditionNode permits ConditionNode.SimpleNode, Conditio
          * 创建原始谓词节点。
          *
          * <p>
-         * <strong>安全警告：</strong>此构造函数仅用于内部实现，外部用户应使用类型安全的条件方法。
+         * <strong>安全警告：</strong>此构造函数为包级私有，防止外部代码直接创建 RawNode 实例。 外部代码应使用 {@link #ofRawPredicate(BiFunction)} 工厂方法。
          *
          * @param fn 谓词函数
          * @throws IllegalArgumentException 如果 fn 为 null
          */
-        public RawNode(BiFunction<jakarta.persistence.criteria.Path<?>, CriteriaBuilder, Predicate> fn) {
+        RawNode(BiFunction<jakarta.persistence.criteria.Path<?>, CriteriaBuilder, Predicate> fn) {
             if (fn == null) {
                 throw new IllegalArgumentException("Predicate function must not be null");
             }
@@ -310,6 +310,21 @@ public sealed interface ConditionNode permits ConditionNode.SimpleNode, Conditio
         public String toString() {
             return "RawNode[fn=" + fn.getClass().getName() + "]";
         }
+    }
+
+    /**
+     * 创建原始谓词节点的工厂方法。
+     *
+     * <p>
+     * <strong>安全警告：</strong>此方法绕过类型安全机制，存在潜在的 SQL 注入风险。 仅在类型安全的条件方法（如 {@code eq()}、{@code likeSafe()} 等）无法满足需求时使用。
+     *
+     * @param fn 谓词函数
+     * @return 新的 RawNode 实例
+     * @throws IllegalArgumentException 如果 fn 为 null
+     */
+    static ConditionNode
+        ofRawPredicate(BiFunction<jakarta.persistence.criteria.Path<?>, CriteriaBuilder, Predicate> fn) {
+        return new RawNode(fn);
     }
 
     /** 取反组节点：NOT（内部条件）。 */

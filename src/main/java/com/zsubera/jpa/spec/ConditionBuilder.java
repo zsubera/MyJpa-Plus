@@ -12,6 +12,8 @@ import java.util.List;
 import java.util.function.BiFunction;
 import java.util.function.Function;
 import java.util.regex.Pattern;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.lang.Nullable;
 
 /**
@@ -245,8 +247,8 @@ public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> {
      */
     @Deprecated(since = "1.1.0", forRemoval = true)
     default SELF like(SFunction<E, ?> field, String value) {
-        throw new UnsupportedOperationException(
-            "like() 已在 1.1.0 版本移除，请使用 likeSafe()、contains()、startsWith() 或 endsWith()。");
+        deprecationLog("like()", "likeSafe(), contains(), startsWith(), endsWith()");
+        return likeSafe(field, value);
     }
 
     /**
@@ -263,7 +265,8 @@ public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> {
      */
     @Deprecated(since = "1.1.0", forRemoval = true)
     default SELF rawLike(SFunction<E, ?> field, String value) {
-        throw new UnsupportedOperationException("rawLike() 已在 1.1.0 版本移除，请使用 contains()、startsWith() 或 endsWith()。");
+        deprecationLog("rawLike()", "contains(), startsWith(), endsWith()");
+        return contains(field, value);
     }
 
     /**
@@ -308,7 +311,8 @@ public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> {
      */
     @Deprecated(since = "1.1.0", forRemoval = true)
     default SELF notLike(SFunction<E, ?> field, String value) {
-        throw new UnsupportedOperationException("notLike() 已在 1.1.0 版本移除，请使用 notLikeSafe() 或其他安全方法。");
+        deprecationLog("notLike()", "notLikeSafe()");
+        return notLikeSafe(field, value);
     }
 
     /**
@@ -712,6 +716,7 @@ public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> {
         if (fn == null) {
             throw new IllegalArgumentException("fn must not be null");
         }
+        deprecationLog("where(BiFunction)", "eq(), likeSafe(), contains(), etc.");
         throw new UnsupportedOperationException("where(BiFunction) has been removed for security reasons. "
             + "This method bypasses type safety and exposes SQL injection risk. "
             + "Use type-safe methods like eq(), likeSafe(), contains(), etc. instead.");
@@ -758,6 +763,7 @@ public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> {
         if (fn == null) {
             throw new IllegalArgumentException("fn must not be null");
         }
+        deprecationLog("where(Function)", "eq(), likeSafe(), contains(), etc.");
         throw new UnsupportedOperationException("where(Function) has been removed for security reasons. "
             + "This method bypasses type safety and exposes SQL injection risk. "
             + "Use type-safe methods like eq(), likeSafe(), contains(), etc. instead.");
@@ -1211,5 +1217,19 @@ public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> {
         System.arraycopy(params, 0, allParams, 1, params.length);
         conditions().add(new ConditionNode.FuncNode(functionName, allParams));
         return self();
+    }
+
+    // ---- 内部辅助方法 ----
+
+    /**
+     * 记录废弃方法的警告日志。
+     *
+     * @param deprecatedMethod 已废弃的方法名
+     * @param replacement 推荐的替代方法
+     */
+    private static void deprecationLog(String deprecatedMethod, String replacement) {
+        Logger log = LoggerFactory.getLogger(ConditionBuilder.class);
+        log.warn("ConditionBuilder.{} is deprecated and will be removed in v2.0. Use {} instead.", deprecatedMethod,
+            replacement);
     }
 }

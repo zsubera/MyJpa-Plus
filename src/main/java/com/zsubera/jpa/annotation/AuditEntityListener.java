@@ -7,12 +7,11 @@ import java.time.Instant;
 import java.time.LocalDateTime;
 import java.util.Date;
 import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.ApplicationContext;
 import org.springframework.context.ApplicationContextAware;
-import org.springframework.stereotype.Component;
+import org.springframework.util.ConcurrentReferenceHashMap;
 
 /**
  * JPA 实体监听器，自动填充审计字段。
@@ -44,22 +43,31 @@ import org.springframework.stereotype.Component;
  *         &#64;CreatedBy
  *         private String createdBy;
  *
- *         @UpdatedBy
+ *         &#64;UpdatedBy
  *         private String updatedBy;
  *     }
  * }
  * </pre>
  *
+ * <p>
+ * <strong>注意：</strong>此类不使用 {@code @Component} 注解，而是通过 {@link com.zsubera.jpa.autoconfigure.MyJpaPlusAutoConfiguration}
+ * 注册为 Bean。 这是因为 JPA {@code @EntityListeners} 机制与 Spring {@code @Component} 的生命周期不同， 同时使用会导致两个身份混淆。
+ *
  * @author myjpa-plus
  * @since 1.3.0
  */
-@Component
 public class AuditEntityListener implements ApplicationContextAware {
 
     private static final Logger log = LoggerFactory.getLogger(AuditEntityListener.class);
 
-    /** 实体类 -> 审计字段的缓存。 */
-    private static final Map<Class<?>, AuditFields> AUDIT_FIELDS_CACHE = new ConcurrentHashMap<>();
+    /**
+     * 实体类 -> 审计字段的缓存。
+     *
+     * <p>
+     * 使用弱引用键（{@link ConcurrentReferenceHashMap.ReferenceType#WEAK}）， 允许 GC 在热部署场景下回收旧类加载器的条目，防止类加载器泄漏。
+     */
+    private static final Map<Class<?>, AuditFields> AUDIT_FIELDS_CACHE =
+        new ConcurrentReferenceHashMap<>(16, ConcurrentReferenceHashMap.ReferenceType.WEAK);
 
     private static volatile ApplicationContext applicationContext;
     private static volatile AuditUserProvider userProvider;

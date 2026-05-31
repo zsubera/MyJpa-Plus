@@ -725,8 +725,8 @@ public class QuerySpecTest {
         QuerySpec<TestEntity> qs = new QuerySpec<>();
         qs.or();
         qs.eq(TestEntity::getName, "test");
-        Exception e = assertThrows(Exception.class, () -> repository.findAll(qs.toSpecification()));
-        assertInstanceOf(IllegalStateException.class, e.getCause());
+        // toSpecification() now calls validateCleanState() directly, throwing IllegalStateException
+        assertThrows(IllegalStateException.class, () -> qs.toSpecification());
     }
 
     @Test
@@ -961,24 +961,38 @@ public class QuerySpecTest {
         repository.save(newEntity("hello", 0));
         repository.save(newEntity("world", 0));
         repository.save(newEntity("hel%lo", 0));
+        // rawLike() now delegates to contains(), which escapes wildcards
         QuerySpec<TestEntity> qs = new QuerySpec<>();
-        assertThrows(UnsupportedOperationException.class, () -> qs.rawLike(TestEntity::getName, "hel"));
+        qs.rawLike(TestEntity::getName, "hel");
+        List<TestEntity> result = repository.findAll(qs.toSpecification());
+        // contains("hel") matches "hello" and "hel%lo" (wildcards are escaped)
+        assertEquals(2, result.size());
     }
 
     @Test
     void testRawLikeEscapesWildcard() {
         repository.save(newEntity("100%", 0));
         repository.save(newEntity("100x", 0));
+        // rawLike() now delegates to contains(), which escapes wildcards
         QuerySpec<TestEntity> qs = new QuerySpec<>();
-        assertThrows(UnsupportedOperationException.class, () -> qs.rawLike(TestEntity::getName, "100%"));
+        qs.rawLike(TestEntity::getName, "100%");
+        List<TestEntity> result = repository.findAll(qs.toSpecification());
+        // contains("100%") with escaped wildcard matches only "100%"
+        assertEquals(1, result.size());
+        assertEquals("100%", result.get(0).getName());
     }
 
     @Test
     void testRawLikeEscapesUnderscore() {
         repository.save(newEntity("a_b", 0));
         repository.save(newEntity("axb", 0));
+        // rawLike() now delegates to contains(), which escapes wildcards
         QuerySpec<TestEntity> qs = new QuerySpec<>();
-        assertThrows(UnsupportedOperationException.class, () -> qs.rawLike(TestEntity::getName, "a_b"));
+        qs.rawLike(TestEntity::getName, "a_b");
+        List<TestEntity> result = repository.findAll(qs.toSpecification());
+        // contains("a_b") with escaped underscore matches only "a_b"
+        assertEquals(1, result.size());
+        assertEquals("a_b", result.get(0).getName());
     }
 
     @Test

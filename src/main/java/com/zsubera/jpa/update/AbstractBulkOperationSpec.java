@@ -198,9 +198,22 @@ public abstract class AbstractBulkOperationSpec<T, SELF extends AbstractBulkOper
     /**
      * 执行批量操作。要求底层 {@link EntityManager} 中存在活动事务。
      *
+     * <p>
+     * <strong>注意：</strong>此方法不会自动管理事务。调用方需确保：
+     * <ul>
+     * <li>在调用前开启事务</li>
+     * <li>在调用后提交或回滚事务</li>
+     * <li>捕获异常并处理事务回滚</li>
+     * </ul>
+     *
+     * <p>
+     * 当在已有活动事务的环境中调用时（嵌套调用），此方法直接执行操作但不提交也不回滚。 操作失败时异常会向上传播，由外层事务管理器处理。如需自动事务管理，请使用
+     * {@link #executeInTransaction(EntityManager)} 方法。
+     *
      * @param em 实体管理器
      * @return 受影响的行数
      * @throws jakarta.persistence.TransactionRequiredException 如果没有活动事务
+     * @see #executeInTransaction(EntityManager)
      */
     public abstract int execute(EntityManager em);
 

@@ -373,9 +373,12 @@ class JoinGroupTest {
         child.setParent(parent);
         repository.save(child);
 
+        // rawLike() now delegates to contains(), which works normally
         QuerySpec<TestEntity> qs = new QuerySpec<>();
         JoinGroup<TestEntity, ParentEntity> jg = qs.join(TestEntity::getParent);
-        assertThrows(UnsupportedOperationException.class, () -> jg.rawLike(ParentEntity::getCategory, "adm"));
+        jg.rawLike(ParentEntity::getCategory, "adm");
+        List<TestEntity> result = repository.findAll(qs.toSpecification());
+        assertEquals(1, result.size());
     }
 
     @Test

@@ -137,8 +137,9 @@ public final class SoftDeleteHelper {
             return new QuerySpec<>();
         }
         QuerySpec<T> qs = new QuerySpec<>();
-        // 直接添加 RawNode 而非调用已弃用的 where() 方法，避免安全警告日志
-        qs.conditions().add(new ConditionNode.RawNode((path, cb) -> buildNotDeleted(cb, path, fieldName, entityClass)));
+        // 使用工厂方法创建 RawNode，避免直接访问包级私有构造函数
+        qs.conditions()
+            .add(ConditionNode.ofRawPredicate((path, cb) -> buildNotDeleted(cb, path, fieldName, entityClass)));
         return qs;
     }
 
@@ -224,18 +225,13 @@ public final class SoftDeleteHelper {
      */
     public static String findSoftDeleteField(Class<?> entityClass) {
         // 使用 cache.size() 检查缓存大小，超过阈值时记录警告
+        // ConcurrentReferenceHashMap 使用弱引用键，GC 会自动回收不再引用的条目
+        // 这里的大小检查仅用于诊断目的，不需要手动清理
         int currentSize = FIELD_CACHE.size();
         if (currentSize > MAX_CACHE_SIZE) {
-            log.warn(
-                "SoftDeleteHelper field cache size ({}) exceeds limit ({}). "
-                    + "This may indicate a class loader leak or excessive entity classes.",
-                currentSize, MAX_CACHE_SIZE);
-            // Evict stale entries (null key/value) to prevent unbounded growth
-            for (var entry : FIELD_CACHE.entrySet()) {
-                if (entry.getKey() == null || entry.getValue() == null) {
-                    FIELD_CACHE.remove(entry.getKey());
-                }
-            }
+            log.warn("SoftDeleteHelper field cache size ({}) exceeds limit ({}). "
+                + "This may indicate a class loader leak or excessive entity classes. "
+                + "Weak reference entries will be cleaned by GC automatically.", currentSize, MAX_CACHE_SIZE);
         }
         String result = FIELD_CACHE.computeIfAbsent(entityClass, cls -> {
             // Try getter-based resolution first (Java 17+ compatible)

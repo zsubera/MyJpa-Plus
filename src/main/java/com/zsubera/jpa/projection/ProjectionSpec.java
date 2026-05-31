@@ -14,7 +14,6 @@ import jakarta.persistence.Tuple;
 import jakarta.persistence.TypedQuery;
 import jakarta.persistence.criteria.*;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -64,7 +63,7 @@ public class ProjectionSpec<T> {
         final String fieldName;
         final Consumer<?> config;
         final boolean left;
-        /** Cached conditions from the first Consumer invocation to avoid re-computation. */
+        /** 缓存的条件列表，避免重复调用 Consumer 配置函数。 */
         List<ConditionNode> cachedConditions;
 
         <E> JoinSpec(String fieldName, Consumer<ProjectionJoinGroup<E>> config, boolean left) {
@@ -88,7 +87,8 @@ public class ProjectionSpec<T> {
                 } catch (MyJpaPlusException e) {
                     throw e;
                 } catch (RuntimeException e) {
-                    cachedConditions = Collections.emptyList();
+                    // 不设置 cachedConditions，让异常自然传播
+                    // 重试时会重新执行配置 lambda
                     throw new MyJpaPlusException("Failed to configure join conditions", e);
                 }
             }
@@ -571,8 +571,7 @@ public class ProjectionSpec<T> {
      * 解析并应用所有 JOIN 子句。
      *
      * <p>
-     * Uses cached conditions from {@link JoinSpec#getConditions()} to avoid re-invoking the Consumer for each Root
-     * (count vs data query).
+     * 使用 {@link JoinSpec#getConditions()} 缓存的条件，避免对每个 Root（count 和 data 查询）重复调用 Consumer 配置函数。
      *
      * @param root 查询根实体
      * @param cb CriteriaBuilder 实例

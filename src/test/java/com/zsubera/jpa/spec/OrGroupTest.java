@@ -282,16 +282,24 @@ class OrGroupTest {
     void testOrGroupRawLike() {
         repository.save(newEntity("hello", 0));
         repository.save(newEntity("world", 0));
+        // rawLike() now delegates to contains(), which wraps with % on both sides
         QuerySpec<TestEntity> qs = new QuerySpec<>();
-        assertThrows(UnsupportedOperationException.class, () -> qs.or(g -> g.rawLike(TestEntity::getName, "hel")));
+        qs.or(g -> g.rawLike(TestEntity::getName, "hel"));
+        List<TestEntity> result = repository.findAll(qs.toSpecification());
+        // contains("hel") matches "hello" (contains "hel" substring)
+        assertEquals(1, result.size());
     }
 
     @Test
     void testOrGroupRawLikeEscapesWildcard() {
         repository.save(newEntity("100%", 0));
         repository.save(newEntity("100x", 0));
+        // rawLike() now delegates to contains(), which escapes wildcards
         QuerySpec<TestEntity> qs = new QuerySpec<>();
-        assertThrows(UnsupportedOperationException.class, () -> qs.or(g -> g.rawLike(TestEntity::getName, "100%")));
+        qs.or(g -> g.rawLike(TestEntity::getName, "100%"));
+        List<TestEntity> result = repository.findAll(qs.toSpecification());
+        assertEquals(1, result.size());
+        assertEquals("100%", result.get(0).getName());
     }
 
     @Test

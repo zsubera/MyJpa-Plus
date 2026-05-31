@@ -638,15 +638,29 @@ public class MyJpaTemplate {
         if (predicate != null) {
             cq.where(predicate);
         }
-        if (sort != null && sort.isSorted()) {
-            cq.orderBy(sort.stream().map(order -> order.isAscending() ? cb.asc(root.get(order.getProperty()))
-                : cb.desc(root.get(order.getProperty()))).toList());
-        }
+        applySort(cq, root, cb, sort);
         TypedQuery<T> query = entityManager.createQuery(cq);
         if (maxResults != null) {
             query.setMaxResults(maxResults);
         }
         return query;
+    }
+
+    /**
+     * 将 Spring Data {@link org.springframework.data.domain.Sort} 应用到 JPA CriteriaQuery。
+     *
+     * @param query CriteriaQuery 实例
+     * @param root 查询根实体
+     * @param cb CriteriaBuilder 实例
+     * @param sort 排序规则（可为 null 或未排序）
+     * @param <T> 实体类型
+     */
+    private <T> void applySort(CriteriaQuery<T> query, Root<T> root, CriteriaBuilder cb,
+        @Nullable org.springframework.data.domain.Sort sort) {
+        if (sort != null && sort.isSorted()) {
+            query.orderBy(sort.stream().map(order -> order.isAscending() ? cb.asc(root.get(order.getProperty()))
+                : cb.desc(root.get(order.getProperty()))).toList());
+        }
     }
 
     /**
@@ -880,7 +894,7 @@ public class MyJpaTemplate {
      * <strong>长事务风险：</strong>如果数据量非常大，事务日志可能撑爆，导致数据库锁等待超时。 对于大数据量操作，建议：
      * <ul>
      * <li>使用较小的 batchSize（如 1000-5000）</li>
-     * <li>考虑使用外部事务管理进行分批提交</li>
+     * <li><strong>推荐：</strong>使用 {@link #executeBatchInSeparateTransactions(UpdateSpec, int)} 进行分批提交，避免长事务</li>
      * <li>监控数据库事务日志使用情况</li>
      * </ul>
      *
@@ -910,7 +924,7 @@ public class MyJpaTemplate {
      * <strong>长事务风险：</strong>如果数据量非常大，事务日志可能撑爆，导致数据库锁等待超时。 对于大数据量操作，建议：
      * <ul>
      * <li>使用较小的 batchSize（如 1000-5000）</li>
-     * <li>考虑使用外部事务管理进行分批提交</li>
+     * <li><strong>推荐：</strong>使用 {@link #executeBatchInSeparateTransactions(DeleteSpec, int)} 进行分批提交，避免长事务</li>
      * <li>监控数据库事务日志使用情况</li>
      * </ul>
      *
