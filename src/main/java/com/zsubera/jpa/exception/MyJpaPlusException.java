@@ -1,6 +1,7 @@
 package com.zsubera.jpa.exception;
 
 import java.io.Serial;
+import java.util.regex.Pattern;
 
 /**
  * MyJpa-Plus 库的基础异常类。所有库特定的异常都继承此类， 允许使用者通过捕获单一类型来处理所有库错误。
@@ -118,15 +119,21 @@ public class MyJpaPlusException extends RuntimeException {
      * B-12: 对上下文信息进行脱敏处理，防止敏感数据泄露到日志或监控系统。
      *
      * <p>
-     * 脱敏策略：截断过长内容，移除可能包含 SQL 参数值的模式。
+     * 脱敏策略：截断过长内容，检测并替换敏感数据模式（password=, token=, key=, secret= 等）。
      *
      * @param ctx 原始上下文
      * @return 脱敏后的上下文
      */
     private static String sanitizeContext(String ctx) {
-        if (ctx.length() > 200) {
-            return ctx.substring(0, 200) + "...(truncated)";
+        // P1-10: Detect and mask sensitive data patterns
+        String sanitized = SENSITIVE_DATA_PATTERN.matcher(ctx).replaceAll("$1***");
+        if (sanitized.length() > 200) {
+            return sanitized.substring(0, 200) + "...(truncated)";
         }
-        return ctx;
+        return sanitized;
     }
+
+    /** P1-10: 敏感数据模式检测正则：匹配 password=, token=, key=, secret=, credential= 等模式。 */
+    private static final Pattern SENSITIVE_DATA_PATTERN =
+        Pattern.compile("(?i)(password|token|key|secret|credential|api[_-]?key|auth)[=:]\\s*\\S+");
 }

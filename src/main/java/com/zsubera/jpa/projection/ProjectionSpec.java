@@ -829,6 +829,8 @@ public class ProjectionSpec<T> {
         for (JoinSpec js : joins) {
             js.cachedConditions = null;
         }
+        // P0-1: 清除 LEFT JOIN 过滤条件缓存
+        leftJoinFilterPredicates.clear();
     }
 
     /**
@@ -879,10 +881,23 @@ public class ProjectionSpec<T> {
     }
 
     /**
+     * P0-1: 存储 LEFT JOIN 的过滤条件，需要在 WHERE 子句中应用而非 ON 子句。
+     *
+     * <p>
+     * 对于 LEFT JOIN，用户提供的过滤条件（如 {@code j.eq(Department::getActive, true)}）应放在 WHERE 子句中， 而非 ON 子句。在 ON 子句中，LEFT JOIN
+     * 会保留左表所有行（右表列为 NULL），导致过滤条件无效。 在 WHERE 子句中，会正确过滤掉不匹配的整行。
+     */
+    private final List<Predicate> leftJoinFilterPredicates = new ArrayList<>();
+
+    /**
      * 解析并应用所有 JOIN 子句。
      *
      * <p>
      * 使用 {@link JoinSpec#getConditions()} 缓存的条件，避免对每个 Root（count 和 data 查询）重复调用 Consumer 配置函数。
+     *
+     * <p>
+     * <strong>P0-1 修复：</strong>对于 INNER JOIN，条件放在 ON 子句中（与 WHERE 等价）。 对于 LEFT JOIN，过滤条件收集到
+     * {@link #leftJoinFilterPredicates} 中，在 WHERE 子句中应用， 确保 LEFT JOIN 的过滤语义正确。
      *
      * @param root 查询根实体
      * @param cb CriteriaBuilder 实例
@@ -899,7 +914,14 @@ public class ProjectionSpec<T> {
                 onPredicates.add(resolveJoinCondition(node, join, cb));
             }
             if (!onPredicates.isEmpty()) {
-                join.on(cb.and(onPredicates.toArray(new Predicate[0])));
+                if (js.left) {
+                    // P0-1: LEFT JOIN 过滤条件应放在 WHERE 子句中，而非 ON 子句
+                    // 在 ON 子句中，LEFT JOIN 保留左表所有行（右表列为 NULL），过滤条件无效
+                    leftJoinFilterPredicates.addAll(onPredicates);
+                } else {
+                    // INNER JOIN: ON 和 WHERE 等价，保持原有行为
+                    join.on(cb.and(onPredicates.toArray(new Predicate[0])));
+                }
             }
         }
         return joinMap;
@@ -975,6 +997,9 @@ public class ProjectionSpec<T> {
     @SuppressWarnings({"rawtypes"})
     private void applyPredicate(Root<T> root, CriteriaQuery<?> query, CriteriaBuilder cb) {
         List<jakarta.persistence.criteria.Predicate> predicates = new ArrayList<>();
+
+        // P0-1: 应用 LEFT JOIN 过滤条件（从 ON 子句移到 WHERE 子句）
+        predicates.addAll(leftJoinFilterPredicates);
 
         // 应用用户条件
         jakarta.persistence.criteria.Predicate userPredicate = querySpec.toPredicate(root, (CriteriaQuery)query, cb);

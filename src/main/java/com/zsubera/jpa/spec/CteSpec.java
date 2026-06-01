@@ -57,8 +57,8 @@ public class CteSpec {
     private final Map<String, Object> parameters = new LinkedHashMap<>();
     private boolean recursive;
 
-    /** B-11: 严格模式开关。启用后，未绑定的命名参数将抛出异常而非仅记录警告。 */
-    private static volatile boolean strictMode = false;
+    /** P1-6: 严格模式开关。默认为 true，启用后未绑定的命名参数将抛出异常。 */
+    private static volatile boolean strictMode = true;
 
     /**
      * 设置严格模式。启用后，未绑定的命名参数将抛出异常。
@@ -324,6 +324,35 @@ public class CteSpec {
     }
 
     /**
+     * P2-28: 安全的流式查询消费者重载，自动管理资源关闭。
+     *
+     * <p>
+     * 此方法使用 try-with-resources 确保 Stream 正确关闭，避免资源泄漏。 推荐使用此方法替代直接使用 {@link #getResultStream(EntityManager)}。
+     *
+     * <pre>{@code
+     * cteSpec.getResultStream(em, row -> {
+     *     System.out.println("Row: " + Arrays.toString(row));
+     * });
+     * }</pre>
+     *
+     * @param em EntityManager 实例
+     * @param consumer 行消费者
+     * @throws IllegalStateException 如果 CTE 或主查询未完整配置
+     * @throws IllegalArgumentException 如果 em 或 consumer 为 null
+     */
+    public void getResultStream(EntityManager em, java.util.function.Consumer<Object[]> consumer) {
+        if (em == null) {
+            throw new IllegalArgumentException("em must not be null");
+        }
+        if (consumer == null) {
+            throw new IllegalArgumentException("consumer must not be null");
+        }
+        try (java.util.stream.Stream<Object[]> stream = getResultStream(em)) {
+            stream.forEach(consumer);
+        }
+    }
+
+    /**
      * P0-7: 根据数据库类型设置合适的 fetchSize，以支持流式查询。
      *
      * <p>
@@ -418,6 +447,14 @@ public class CteSpec {
     private static final Pattern COMMENT_INJECTION_PATTERN = Pattern.compile("/\\*|\\*/|--\\s");
     private static final Pattern SEMICOLON_INJECTION_PATTERN = Pattern.compile(";\\s*\\w");
 
+    /** P1-6: UNION SELECT 注入检测模式。仅检测 UNION SELECT（不含 ALL），因为 UNION ALL SELECT 是 CTE 递归的合法模式。 */
+    private static final Pattern UNION_SELECT_PATTERN =
+        Pattern.compile("\\bUNION\\s+SELECT\\b", Pattern.CASE_INSENSITIVE);
+
+    /** P1-6: WAITFOR DELAY 时间盲注检测模式（SQL Server）。 */
+    private static final Pattern WAITFOR_DELAY_PATTERN =
+        Pattern.compile("\\bWAITFOR\\s+DELAY\\b", Pattern.CASE_INSENSITIVE);
+
     /**
      * P0-1: 检测 SQL 注入尝试。strictMode=true 时抛出异常，否则仅记录警告日志。
      *
@@ -461,6 +498,24 @@ public class CteSpec {
         if (SEMICOLON_INJECTION_PATTERN.matcher(sql).find()) {
             String message = "SECURITY: " + context + " SQL contains potential semicolon injection pattern. "
                 + "Ensure this is intentional and not user input. SQL: " + truncated;
+            if (strictMode) {
+                throw new SecurityException(message);
+            }
+            log.warn(message);
+        }
+        // P1-6: Detect UNION SELECT injection attempts
+        if (UNION_SELECT_PATTERN.matcher(sql).find()) {
+            String message = "SECURITY: " + context + " SQL contains potential UNION SELECT injection pattern. "
+                + "Ensure this is intentional and not user input. SQL: " + truncated;
+            if (strictMode) {
+                throw new SecurityException(message);
+            }
+            log.warn(message);
+        }
+        // P1-6: Detect WAITFOR DELAY time-based blind SQL injection (SQL Server)
+        if (WAITFOR_DELAY_PATTERN.matcher(sql).find()) {
+            String message = "SECURITY: " + context
+                + " SQL contains WAITFOR DELAY pattern (time-based blind SQL injection). " + "SQL: " + truncated;
             if (strictMode) {
                 throw new SecurityException(message);
             }

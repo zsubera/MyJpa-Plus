@@ -75,8 +75,12 @@ public class OptimisticLockRetryAdvisor {
                         method.getDeclaringClass().getSimpleName(), method.getName());
                     throw ex;
                 }
-                // P0: Cap the shift amount to prevent Long overflow (1L << 46 is safe, 1L << 47 overflows)
-                long baseDelay = Math.min(backoffMs * (1L << Math.min(attempt - 1, 46)), MAX_BACKOFF_MS);
+                // P0-3: Cap the shift amount to prevent Long overflow.
+                // backoffMs * (1L << shift) must not overflow. Since MAX_BACKOFF_MS is 30_000,
+                // the effective delay is always capped, but we prevent the intermediate multiplication
+                // from overflowing by capping shift at 44 (safe for any backoffMs up to ~500,000).
+                int shift = Math.min(attempt - 1, 44);
+                long baseDelay = Math.min(backoffMs * (1L << shift), MAX_BACKOFF_MS);
                 // O-09: Jitter can be positive or negative (spread ±10% of base delay)
                 // to prevent thundering herd when multiple threads retry simultaneously
                 long jitter = (long)(baseDelay * (ThreadLocalRandom.current().nextDouble() - 0.5) * 0.2);

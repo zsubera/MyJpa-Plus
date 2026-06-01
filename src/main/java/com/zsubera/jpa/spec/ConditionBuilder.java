@@ -949,7 +949,9 @@ public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> {
                 if (fieldNames[i] == null) {
                     throw new IllegalArgumentException("fieldNames[" + i + "] must not be null");
                 }
-                if (!SAFE_FIELD_NAME_PATTERN.matcher(fieldNames[i]).matches()) {
+                // P1-16: Use SAFE_NESTED_FIELD_NAME_PATTERN to support dot-notation field names
+                // (e.g., "address.city" for embedded objects)
+                if (!SAFE_NESTED_FIELD_NAME_PATTERN.matcher(fieldNames[i]).matches()) {
                     throw new IllegalArgumentException(
                         "fieldNames[" + i + "] contains invalid characters: " + fieldNames[i]);
                 }

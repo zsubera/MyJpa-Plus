@@ -4,6 +4,8 @@ import com.zsubera.jpa.annotation.SoftDelete;
 import com.zsubera.jpa.exception.MyJpaPlusException;
 import com.zsubera.jpa.spec.ConditionNode;
 import com.zsubera.jpa.spec.QuerySpec;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.criteria.CriteriaBuilder;
 import jakarta.persistence.criteria.Path;
@@ -166,7 +168,7 @@ public final class SoftDeleteHelper {
                 + escapedColumn + " != ?1 OR " + escapedColumn + " IS NULL").setParameter(1, deletedValue)
                 .executeUpdate();
         }
-        // P1-3: Enum type support via ordinal value
+        // P0-2: Enum type support - check @Enumerated annotation for STRING vs ORDINAL
         if (Enum.class.isAssignableFrom(field.getType())) {
             if (annotation == null || annotation.deletedValue().isEmpty()) {
                 throw new MyJpaPlusException("@SoftDelete on enum field '" + fieldName + "' in " + entityClass.getName()
@@ -174,10 +176,16 @@ public final class SoftDeleteHelper {
             }
             @SuppressWarnings({"unchecked", "rawtypes"})
             Enum<?> deletedEnumValue = Enum.valueOf((Class<Enum>)field.getType(), annotation.deletedValue());
-            // Use ordinal value for native SQL to avoid JPA enum mapping issues
-            int ordinal = deletedEnumValue.ordinal();
+            // P0-2: Check @Enumerated annotation to determine correct value type
+            Enumerated enumerated = field.getAnnotation(Enumerated.class);
+            Object dbValue;
+            if (enumerated != null && enumerated.value() == EnumType.STRING) {
+                dbValue = deletedEnumValue.name();
+            } else {
+                dbValue = deletedEnumValue.ordinal();
+            }
             return em.createNativeQuery("UPDATE " + escapedTable + " SET " + escapedColumn + " = ?1 WHERE "
-                + escapedColumn + " != ?1 OR " + escapedColumn + " IS NULL").setParameter(1, ordinal).executeUpdate();
+                + escapedColumn + " != ?1 OR " + escapedColumn + " IS NULL").setParameter(1, dbValue).executeUpdate();
         }
         throw new MyJpaPlusException("@SoftDelete field '" + fieldName + "' in " + entityClass.getName()
             + " has unsupported type: " + field.getType().getName() + ". Supported types: Boolean, Integer, Enum.");
@@ -185,6 +193,18 @@ public final class SoftDeleteHelper {
 
     /**
      * P0-5: Batch soft delete entities by IDs using a single UPDATE statement.
+     *
+     * <p>
+     * <strong>P1-12 限制说明：</strong>此方法使用原生 SQL 批量更新，绕过 JPA 生命周期回调（如 {@code @PreUpdate}、{@code @PostUpdate}）。
+     * 如果实体需要触发生命周期回调（如审计字段自动填充），请使用 {@code CriteriaUpdate} 替代方案：
+     *
+     * <pre>{@code
+     * CriteriaBuilder cb = em.getCriteriaBuilder();
+     * CriteriaUpdate<Entity> update = cb.createCriteriaUpdate(Entity.class);
+     * Root<Entity> root = update.from(Entity.class);
+     * update.set("deleted", true).where(root.get("id").in(ids));
+     * em.createQuery(update).executeUpdate();
+     * }</pre>
      *
      * @param em EntityManager instance
      * @param entityClass the entity class
@@ -233,17 +253,22 @@ public final class SoftDeleteHelper {
             useParamBinding = true;
             deletedParamValue = deletedValue;
         } else if (Enum.class.isAssignableFrom(field.getType())) {
-            // P1-3: Enum type support via ordinal value
+            // P0-2: Enum type support - check @Enumerated annotation for STRING vs ORDINAL
             if (annotation == null || annotation.deletedValue().isEmpty()) {
                 throw new MyJpaPlusException("@SoftDelete on enum field '" + fieldName + "' in " + entityClass.getName()
                     + " must specify deletedValue");
             }
             @SuppressWarnings({"unchecked", "rawtypes"})
             Enum<?> deletedEnumValue = Enum.valueOf((Class<Enum>)field.getType(), annotation.deletedValue());
-            int ordinal = deletedEnumValue.ordinal();
+            // P0-2: Check @Enumerated annotation to determine correct value type
+            Enumerated enumerated = field.getAnnotation(Enumerated.class);
+            if (enumerated != null && enumerated.value() == EnumType.STRING) {
+                deletedParamValue = deletedEnumValue.name();
+            } else {
+                deletedParamValue = deletedEnumValue.ordinal();
+            }
             setClause = escapedColumn + " = :" + setParamName;
             useParamBinding = true;
-            deletedParamValue = ordinal;
         } else {
             throw new MyJpaPlusException("@SoftDelete field '" + fieldName + "' in " + entityClass.getName()
                 + " has unsupported type: " + field.getType().getName() + ". Supported types: Boolean, Integer, Enum.");

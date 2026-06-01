@@ -1153,6 +1153,22 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
     /**
      * EXISTS 子查询解析的内部实现。
      *
+     * <p>
+     * <strong>P1-11 Hibernate 特定行为说明：</strong>当从 {@code Join} 路径（而非 {@code Root} 路径）执行 EXISTS 子查询时， 此方法使用 Hibernate
+     * 特定的反射 API（{@code getParent()}）获取 Join 的父 {@code Root} 进行关联。 此行为在非 Hibernate JPA 实现（如 EclipseLink、OpenJPA）上不可用，将抛出
+     * {@code IllegalArgumentException}。
+     *
+     * <p>
+     * <strong>替代方案：</strong>如果需要在非 Hibernate 环境中使用 EXISTS 子查询，请确保使用 {@code Root} 级别的查询：
+     *
+     * <pre>{@code
+     * // 推荐：使用 Root 级别的 EXISTS（所有 JPA 实现兼容）
+     * qs.exists(User.class, sub -> sub.eq(User::getActive, true));
+     *
+     * // 不推荐：从 Join 路径执行 EXISTS（仅 Hibernate 兼容）
+     * qs.join(User::getDepartment, j -> j.exists(Manager.class, sub -> ...));
+     * }</pre>
+     *
      * @param <S> 子查询实体类型
      * @param node EXISTS 条件节点
      * @param rootPath 外部查询的根路径（用于关联）

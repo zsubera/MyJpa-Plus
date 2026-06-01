@@ -114,6 +114,13 @@ public class EncryptConverter implements AttributeConverter<String, String> {
                 throw new MyJpaPlusException("Encryption key must be at least " + MIN_KEY_LENGTH + " characters. "
                     + "Current length: " + key.length() + ".");
             }
+            // P1-7: Warn when system property is used for key configuration
+            // System properties are JVM-wide visible and may be exposed in process listings
+            if (keyProp != null && !keyProp.isEmpty() && (keyEnv == null || keyEnv.isEmpty())) {
+                LOG.log(System.Logger.Level.WARNING, "SECURITY: Encryption key configured via system property '{0}'. "
+                    + "System properties are JVM-wide visible and may be exposed in process listings (e.g., /proc/PID/cmdline). "
+                    + "Use environment variable '{1}' for production environments.", KEY_PROPERTY, KEY_ENV);
+            }
         }
         keyValidated = true;
     }
@@ -446,12 +453,27 @@ public class EncryptConverter implements AttributeConverter<String, String> {
                     return randomSalt;
                 }
             }
-            // P1-1: Use file lock to prevent multi-process race condition
+            // P1-13: Use file lock with retry for Windows compatibility
+            // Windows file locks may be unreliable with tryLock(), so we retry
             java.nio.file.Path saltPath = saltFile.toPath();
             try (java.nio.channels.FileChannel channel =
                 java.nio.channels.FileChannel.open(saltPath, java.nio.file.StandardOpenOption.CREATE,
                     java.nio.file.StandardOpenOption.WRITE, java.nio.file.StandardOpenOption.READ)) {
-                java.nio.channels.FileLock lock = channel.tryLock();
+                // P1-13: Retry loop for Windows file lock reliability (3 attempts, 200ms delay)
+                java.nio.channels.FileLock lock = null;
+                for (int attempt = 0; attempt < 3; attempt++) {
+                    lock = channel.tryLock();
+                    if (lock != null) {
+                        break;
+                    }
+                    // Could not acquire lock, wait and retry
+                    try {
+                        Thread.sleep(200);
+                    } catch (InterruptedException ie) {
+                        Thread.currentThread().interrupt();
+                        break;
+                    }
+                }
                 if (lock != null) {
                     try {
                         // Re-check if another process already wrote the salt

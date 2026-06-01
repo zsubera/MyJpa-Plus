@@ -42,6 +42,10 @@ public class UpdateSpec<T> extends AbstractBulkOperationSpec<T, UpdateSpec<T>> {
 
     private static final Logger log = LoggerFactory.getLogger(UpdateSpec.class);
 
+    /** P2-23: 缓存已验证的字段类型，避免重复反射查找。 */
+    private static final java.util.concurrent.ConcurrentMap<String, Boolean> NUMERIC_FIELD_CACHE =
+        new java.util.concurrent.ConcurrentHashMap<>();
+
     private final List<SetClause> setClauses = new ArrayList<>();
     private boolean allowUnconditional = false;
 
@@ -443,12 +447,25 @@ public class UpdateSpec<T> extends AbstractBulkOperationSpec<T, UpdateSpec<T>> {
      * @throws IllegalArgumentException if the field is not a numeric type
      */
     private void validateNumericField(String fieldName, String operation) {
+        // P2-23: Use cached validation result to avoid repeated reflection
+        String cacheKey = entityClass.getName() + "#" + fieldName;
+        Boolean cachedResult = NUMERIC_FIELD_CACHE.get(cacheKey);
+        if (cachedResult != null) {
+            if (!cachedResult) {
+                throw new IllegalArgumentException(
+                    operation + "() requires a numeric field, but field '" + fieldName + "' in "
+                        + entityClass.getSimpleName() + " is not numeric." + " Use set() for non-numeric fields.");
+            }
+            return;
+        }
         for (Class<?> c = entityClass; c != null && c != Object.class; c = c.getSuperclass()) {
             try {
                 java.lang.reflect.Field f = c.getDeclaredField(fieldName);
                 Class<?> type = f.getType();
-                if (!Number.class.isAssignableFrom(type) && type != int.class && type != long.class
-                    && type != double.class && type != float.class && type != short.class && type != byte.class) {
+                boolean isNumeric = Number.class.isAssignableFrom(type) || type == int.class || type == long.class
+                    || type == double.class || type == float.class || type == short.class || type == byte.class;
+                NUMERIC_FIELD_CACHE.put(cacheKey, isNumeric);
+                if (!isNumeric) {
                     throw new IllegalArgumentException(operation + "() requires a numeric field, but field '"
                         + fieldName + "' in " + entityClass.getSimpleName() + " has type: " + type.getSimpleName()
                         + ". Use set() for non-numeric fields.");
@@ -459,6 +476,7 @@ public class UpdateSpec<T> extends AbstractBulkOperationSpec<T, UpdateSpec<T>> {
             }
         }
         // Field not found via reflection — may be a property without a direct field; skip validation
+        NUMERIC_FIELD_CACHE.put(cacheKey, true);
         log.debug("Cannot validate numeric type for field '{}' via reflection; skipping validation", fieldName);
     }
 

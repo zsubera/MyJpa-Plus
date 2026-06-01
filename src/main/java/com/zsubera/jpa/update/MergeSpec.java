@@ -61,6 +61,9 @@ public class MergeSpec<T> {
     /** B-08: Unicode 标识符正则：允许 Unicode 字母、数字和下划线，支持国际化标识符。 */
     private static final Pattern UNICODE_IDENTIFIER_PART_PATTERN = Pattern.compile("^[\\p{L}_][\\p{L}\\p{N}_]*$");
 
+    /** P1-5: 常见 Unicode 同形字符检测：这些字符与 ASCII 字符视觉相似，可能用于绕过安全检查。 */
+    private static final Pattern HOMOGLYPH_PATTERN = Pattern.compile("[\\u0400-\\u04FF\\u0370-\\u03FF\\u0530-\\u058F]");
+
     /** B-08: 是否启用 Unicode 标识符支持。可通过系统属性 myjpa-plus.merge.unicode-identifiers=true 启用。 */
     private static volatile boolean unicodeIdentifiers = false;
 
@@ -212,79 +215,16 @@ public class MergeSpec<T> {
      * <li>否则使用 MERGE INTO 替换整行</li>
      * </ol>
      *
+     * <p>
+     * <strong>P2-25 改进：</strong>此方法委托给 {@link #executeH2UpsertFor(EntityManager, Object)} 以消除代码重复。
+     *
      * @param em 实体管理器
      * @return 受影响的行数
      */
     private int executeH2Upsert(EntityManager em) {
-        // P0-5: Snapshot entity reference for thread safety
+        // P2-5: Delegate to thread-safe executeH2UpsertFor to eliminate code duplication
         T entitySnapshot = this.entity;
-        List<String> effectiveConflictFields =
-            conflictFields.isEmpty() ? resolveIdColumnNames() : new ArrayList<>(conflictFields);
-        List<EntityFieldValue> allFieldValues = extractFieldValuesFrom(entitySnapshot);
-        boolean allConflictKeysNull = true;
-        for (EntityFieldValue fv : allFieldValues) {
-            if (effectiveConflictFields.contains(fv.columnName()) && fv.value() != null) {
-                allConflictKeysNull = false;
-                break;
-            }
-        }
-        if (allConflictKeysNull) {
-            return executeSimpleInsert(em, allFieldValues);
-        }
-        if (explicitUpdateFields) {
-            // Use UPDATE-then-INSERT strategy for partial column updates.
-            // H2 MERGE INTO replaces the entire row, which doesn't support partial updates.
-            // Retry logic handles rare race conditions in concurrent scenarios.
-            int maxRetries = 3;
-            for (int attempt = 0; attempt < maxRetries; attempt++) {
-                try {
-                    int updated = executeConditionalUpdate(em, allFieldValues, effectiveConflictFields);
-                    if (updated > 0) {
-                        return updated;
-                    }
-                    return executeSimpleInsert(em, allFieldValues);
-                } catch (jakarta.persistence.PersistenceException e) {
-                    if (attempt < maxRetries - 1 && e.getMessage() != null
-                        && e.getMessage().toLowerCase().contains("unique")) {
-                        long backoffMs = (long)(10 * Math.pow(2, attempt))
-                            + java.util.concurrent.ThreadLocalRandom.current().nextLong(0, 10);
-                        if (log.isDebugEnabled()) {
-                            log.debug("H2 UPSERT race condition detected on attempt {}/{}, retrying after {}ms",
-                                attempt + 1, maxRetries, backoffMs);
-                        }
-                        try {
-                            // P1-9: Thread.sleep() is acceptable here as retry backoff is short (10-40ms).
-                            // In Java 21+ virtual thread environments, consider using
-                            // CompletableFuture.delayedExecutor() for non-blocking delay.
-                            Thread.sleep(backoffMs);
-                        } catch (InterruptedException ie) {
-                            Thread.currentThread().interrupt();
-                            // P1-9: Add InterruptedException as suppressed exception to preserve
-                            // diagnostic information
-                            e.addSuppressed(ie);
-                            throw e;
-                        }
-                        continue;
-                    }
-                    throw e;
-                }
-            }
-            // P0-2: When explicitUpdateFields=true, cannot fall back to MERGE INTO
-            // because it would overwrite all columns, violating partial update contract
-            if (explicitUpdateFields) {
-                throw new IllegalStateException("H2 UPSERT retry limit (" + maxRetries + ") exhausted. "
-                    + "Cannot fall back to MERGE INTO because explicit update fields are specified. "
-                    + "MERGE INTO would overwrite all columns, violating partial update contract.");
-            }
-            log.warn("H2 UPSERT retry limit ({}) exhausted. Falling back to MERGE INTO syntax.", maxRetries);
-            SqlWithParams retrySql = buildSqlFor(em, entitySnapshot);
-            return executeNativeQuery(em, retrySql.sql(), retrySql.params());
-        }
-        SqlWithParams sqlWithParams = buildSqlFor(em, entitySnapshot);
-        if (log.isTraceEnabled()) {
-            log.trace("Executing H2 MERGE SQL: {}", sqlWithParams.sql());
-        }
-        return executeNativeQuery(em, sqlWithParams.sql(), sqlWithParams.params());
+        return executeH2UpsertFor(em, entitySnapshot);
     }
 
     /**
@@ -516,6 +456,13 @@ public class MergeSpec<T> {
         if (batchSize <= 0) {
             throw new IllegalArgumentException("batchSize must be positive");
         }
+        // P0-4: Warn about large entity lists that may cause OOM
+        if (entities.size() > 10_000) {
+            log.warn(
+                "Large entity list size ({}). This may cause excessive memory usage. "
+                    + "Consider using executeBatchInSeparateTransactions() or processing entities in smaller chunks.",
+                entities.size());
+        }
         int total = 0;
         int count = 0;
         for (T ent : entities) {
@@ -545,6 +492,17 @@ public class MergeSpec<T> {
      *
      * <p>
      * <strong>P0-1 修复：</strong>改为按 batchSize 分批提交事务，每 batchSize 个实体提交一次，而非每个实体提交一次。
+     *
+     * <p>
+     * <strong>P1-8 事务管理限制说明：</strong>
+     * <ul>
+     * <li>此方法绕过 Spring 事务管理，直接使用 JPA {@code EntityTransaction}。在 Spring 管理的事务中调用时， 将回退到
+     * {@link #executeBatch(List, EntityManager, int)} 方法。</li>
+     * <li>此方法不兼容 Extended Persistence Context（如 {@code @PersistenceContext(type = EXTENDED)}）， 因为每个批次的
+     * {@code em.clear()} 会清除扩展持久化上下文中的所有托管实体。</li>
+     * <li>在 JTA 环境中无法直接管理事务，将抛出 {@link MyJpaPlusException}。请使用 {@code @Transactional} 注解或
+     * {@link com.zsubera.jpa.template.MyJpaTemplate#executeBatch} 替代。</li>
+     * </ul>
      *
      * @param entities 要 UPSERT 的实体列表
      * @param em 实体管理器
@@ -1109,6 +1067,12 @@ public class MergeSpec<T> {
                 throw new MyJpaPlusException("Invalid SQL identifier: '" + identifier
                     + "'. Each part must contain only alphanumeric characters and underscores." + (unicodeIdentifiers
                         ? "" : " Use myjpa-plus.merge.unicode-identifiers=true for Unicode support."));
+            }
+            // P1-5: Detect Unicode homoglyphs that may be used for security bypass
+            // Cyrillic, Greek, and Armenian characters look similar to Latin characters
+            if (unicodeIdentifiers && HOMOGLYPH_PATTERN.matcher(part).find()) {
+                log.warn("SECURITY: Identifier '{}' contains Unicode homoglyph characters "
+                    + "(Cyrillic/Greek/Armenian). This may indicate a homoglyph attack attempt.", part);
             }
         }
         // Always quote identifiers to handle reserved words and case sensitivity.

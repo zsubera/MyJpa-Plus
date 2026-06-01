@@ -479,10 +479,9 @@ public sealed interface ConditionNode permits ConditionNode.SimpleNode, Conditio
             // P0: Validate function name against whitelist to prevent SQL injection
             String upperName = functionName.toUpperCase();
             if (!ConditionBuilder.SAFE_FUNCTION_NAMES.contains(upperName)) {
-                String msg =
-                    "Unsafe function name: '" + functionName + "'. " + "Only whitelisted functions are allowed. "
-                        + "To add a function to the whitelist, call ConditionBuilder.SAFE_FUNCTION_NAMES.add(\""
-                        + upperName + "\").";
+                // P1-9: Use generic error message to avoid exposing bypass method details
+                String msg = "Function not in whitelist: '" + functionName + "'. "
+                    + "Only whitelisted functions are allowed. Contact administrator to add new functions.";
                 if (ConditionBuilder.WHITELIST_ENFORCED) {
                     throw new com.zsubera.jpa.exception.MyJpaPlusException(msg,
                         com.zsubera.jpa.exception.MyJpaPlusException.ErrorCode.SECURITY, null, null);
