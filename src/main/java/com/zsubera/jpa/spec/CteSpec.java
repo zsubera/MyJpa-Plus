@@ -313,12 +313,41 @@ public class CteSpec {
         log.debug("CteSpec: executing native stream query (length={})", sql.length());
         Query query = em.createNativeQuery(sql);
         applyParameters(query);
+        // P0-7: 设置 fetchSize 以支持流式查询，避免 PostgreSQL 驱动将整个结果集加载到内存
+        applyFetchSize(em, query);
         return query.getResultStream().map(row -> {
             if (row instanceof Object[] arr) {
                 return arr;
             }
             return new Object[] {row};
         });
+    }
+
+    /**
+     * P0-7: 根据数据库类型设置合适的 fetchSize，以支持流式查询。
+     *
+     * <p>
+     * PostgreSQL 驱动在 fetchSize=0 时会将整个结果集加载到内存，失去流式查询的意义。 此方法检测数据库类型并设置适当的 fetchSize 值。
+     *
+     * @param em EntityManager 实例
+     * @param query JPA Query 实例
+     */
+    private void applyFetchSize(EntityManager em, Query query) {
+        try {
+            String productName = em.unwrap(org.hibernate.Session.class)
+                .doReturningWork(connection -> connection.getMetaData().getDatabaseProductName());
+            if (productName != null) {
+                String lower = productName.toLowerCase();
+                if (lower.contains("postgresql") || lower.contains("mysql")) {
+                    // PostgreSQL/MySQL 需要设置 fetchSize 才能流式返回结果
+                    if (query instanceof org.hibernate.query.NativeQuery<?> nativeQuery) {
+                        nativeQuery.setFetchSize(100);
+                    }
+                }
+            }
+        } catch (Exception e) {
+            log.debug("CteSpec: Cannot determine database product name for fetchSize: {}", e.getMessage());
+        }
     }
 
     /**
@@ -371,47 +400,71 @@ public class CteSpec {
 
     // ---- 内部方法 ----
 
-    /** 危险 SQL 关键字黑名单，用于启发式 SQL 注入检测。 */
-    private static final java.util.List<String> DANGEROUS_KEYWORDS =
-        java.util.List.of("DROP", "TRUNCATE", "GRANT", "REVOKE", "EXEC", "EXECUTE", "xp_cmdshell", "sp_executesql");
+    /**
+     * P0-1: 危险 SQL 关键字检测正则表达式，使用单词边界匹配避免子字符串误报。
+     *
+     * <p>
+     * 使用 {@code \b} 单词边界确保仅匹配独立关键字（如 "DROP"），而非子字符串（如 "DROPDOWN" 中的 "DROP"）。 xp_cmdshell 和 sp_executesql
+     * 不使用单词边界，因为它们是完整的存储过程名称。
+     */
+    private static final Pattern DANGEROUS_KEYWORD_PATTERN =
+        Pattern.compile("\\b(DROP|TRUNCATE|GRANT|REVOKE|ALTER|CREATE|EXEC|EXECUTE)\\b", Pattern.CASE_INSENSITIVE);
+
+    /** 危险存储过程名称，使用子字符串匹配。 */
+    private static final Pattern DANGEROUS_PROCEDURE_PATTERN =
+        Pattern.compile("(xp_cmdshell|sp_executesql)", Pattern.CASE_INSENSITIVE);
 
     /** P2-3: SQL 注入模式检测正则表达式。 */
     private static final Pattern COMMENT_INJECTION_PATTERN = Pattern.compile("/\\*|\\*/|--\\s");
     private static final Pattern SEMICOLON_INJECTION_PATTERN = Pattern.compile(";\\s*\\w");
 
     /**
-     * Detect SQL injection attempts and log security warnings.
+     * P0-1: 检测 SQL 注入尝试。strictMode=true 时抛出异常，否则仅记录警告日志。
      *
      * <p>
-     * This is a heuristic defense, not a replacement for parameterized queries. Only detects obvious SQL injection
-     * attempts. P2-3: Added comment injection and semicolon injection detection.
+     * 使用单词边界正则匹配（非子字符串匹配）避免误报。此检测为启发式防护，不能替代参数化查询。
      *
      * @param sql the SQL string to check
      * @param context context description for logging
+     * @throws SecurityException 如果 strictMode=true 且检测到危险模式
      */
     private static void checkSqlSafety(String sql, String context) {
-        String upperSql = sql.toUpperCase();
-        for (String keyword : DANGEROUS_KEYWORDS) {
-            if (upperSql.contains(keyword)) {
-                log.warn(
-                    "SECURITY: {} SQL contains potentially dangerous keyword '{}'. "
-                        + "Ensure this is intentional and not user input. SQL: {}",
-                    context, keyword, sql.length() > 100 ? sql.substring(0, 100) + "..." : sql);
+        String truncated = sql.length() > 100 ? sql.substring(0, 100) + "..." : sql;
+        // P0-1: 使用单词边界正则匹配，避免子字符串误报（如 "DROPDOWN" 中的 "DROP"）
+        if (DANGEROUS_KEYWORD_PATTERN.matcher(sql).find()) {
+            String message = "SECURITY: " + context + " SQL contains potentially dangerous DDL/admin keyword. "
+                + "Ensure this is intentional and not user input. SQL: " + truncated;
+            if (strictMode) {
+                throw new SecurityException(message);
             }
+            log.warn(message);
+        }
+        if (DANGEROUS_PROCEDURE_PATTERN.matcher(sql).find()) {
+            String message = "SECURITY: " + context
+                + " SQL contains dangerous stored procedure name (xp_cmdshell/sp_executesql). " + "SQL: " + truncated;
+            if (strictMode) {
+                throw new SecurityException(message);
+            }
+            log.warn(message);
         }
         // P2-3: Detect comment injection attempts
         if (COMMENT_INJECTION_PATTERN.matcher(sql).find()) {
-            log.warn(
-                "SECURITY: {} SQL contains potential comment injection patterns (/*, */, --). "
-                    + "Ensure this is intentional and not user input. SQL: {}",
-                context, sql.length() > 100 ? sql.substring(0, 100) + "..." : sql);
+            String message =
+                "SECURITY: " + context + " SQL contains potential comment injection patterns (/*, */, --). "
+                    + "Ensure this is intentional and not user input. SQL: " + truncated;
+            if (strictMode) {
+                throw new SecurityException(message);
+            }
+            log.warn(message);
         }
         // P2-3: Detect semicolon injection attempts
         if (SEMICOLON_INJECTION_PATTERN.matcher(sql).find()) {
-            log.warn(
-                "SECURITY: {} SQL contains potential semicolon injection pattern. "
-                    + "Ensure this is intentional and not user input. SQL: {}",
-                context, sql.length() > 100 ? sql.substring(0, 100) + "..." : sql);
+            String message = "SECURITY: " + context + " SQL contains potential semicolon injection pattern. "
+                + "Ensure this is intentional and not user input. SQL: " + truncated;
+            if (strictMode) {
+                throw new SecurityException(message);
+            }
+            log.warn(message);
         }
     }
 

@@ -216,9 +216,11 @@ public class MergeSpec<T> {
      * @return 受影响的行数
      */
     private int executeH2Upsert(EntityManager em) {
+        // P0-5: Snapshot entity reference for thread safety
+        T entitySnapshot = this.entity;
         List<String> effectiveConflictFields =
             conflictFields.isEmpty() ? resolveIdColumnNames() : new ArrayList<>(conflictFields);
-        List<EntityFieldValue> allFieldValues = extractFieldValues();
+        List<EntityFieldValue> allFieldValues = extractFieldValuesFrom(entitySnapshot);
         boolean allConflictKeysNull = true;
         for (EntityFieldValue fv : allFieldValues) {
             if (effectiveConflictFields.contains(fv.columnName()) && fv.value() != null) {
@@ -244,7 +246,8 @@ public class MergeSpec<T> {
                 } catch (jakarta.persistence.PersistenceException e) {
                     if (attempt < maxRetries - 1 && e.getMessage() != null
                         && e.getMessage().toLowerCase().contains("unique")) {
-                        long backoffMs = (long)(10 * Math.pow(2, attempt)); // 10ms, 20ms, 40ms
+                        long backoffMs = (long)(10 * Math.pow(2, attempt))
+                            + java.util.concurrent.ThreadLocalRandom.current().nextLong(0, 10);
                         if (log.isDebugEnabled()) {
                             log.debug("H2 UPSERT race condition detected on attempt {}/{}, retrying after {}ms",
                                 attempt + 1, maxRetries, backoffMs);
@@ -274,10 +277,10 @@ public class MergeSpec<T> {
                     + "MERGE INTO would overwrite all columns, violating partial update contract.");
             }
             log.warn("H2 UPSERT retry limit ({}) exhausted. Falling back to MERGE INTO syntax.", maxRetries);
-            SqlWithParams retrySql = buildSql(em);
+            SqlWithParams retrySql = buildSqlFor(em, entitySnapshot);
             return executeNativeQuery(em, retrySql.sql(), retrySql.params());
         }
-        SqlWithParams sqlWithParams = buildSql(em);
+        SqlWithParams sqlWithParams = buildSqlFor(em, entitySnapshot);
         if (log.isTraceEnabled()) {
             log.trace("Executing H2 MERGE SQL: {}", sqlWithParams.sql());
         }
@@ -837,7 +840,8 @@ public class MergeSpec<T> {
                 } catch (jakarta.persistence.PersistenceException e) {
                     if (attempt < maxRetries - 1 && e.getMessage() != null
                         && e.getMessage().toLowerCase().contains("unique")) {
-                        long backoffMs = (long)(10 * Math.pow(2, attempt)); // 10ms, 20ms, 40ms
+                        long backoffMs = (long)(10 * Math.pow(2, attempt))
+                            + java.util.concurrent.ThreadLocalRandom.current().nextLong(0, 10);
                         if (log.isDebugEnabled()) {
                             log.debug("H2 UPSERT race condition detected on attempt {}/{}, retrying after {}ms",
                                 attempt + 1, maxRetries, backoffMs);

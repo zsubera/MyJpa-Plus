@@ -60,6 +60,15 @@ public class SqlSlowQueryInterceptor implements StatementInspector {
     /** P1: LIMIT/OFFSET 数字保护模式，保留这些数字以便调试 */
     private static final Pattern LIMIT_OFFSET_PATTERN =
         Pattern.compile("(?i)(?:LIMIT|OFFSET|FETCH\\s+(?:FIRST|NEXT))\\s+\\d+(?:\\s+ROWS)?");
+    // P1-7: PostgreSQL 美元引用字符串（$$...$$ 和 $tag$...$tag$）
+    private static final Pattern DOLLAR_QUOTE_PATTERN = Pattern.compile("\\$\\$[^$]*\\$\\$|\\$\\w+\\$[^$]*\\$\\w+\\$");
+    // P1-7: Oracle q'[]' 引用字符串
+    private static final Pattern Q_QUOTE_PATTERN =
+        Pattern.compile("q'\\[.*?\\]'|q'\\(.*?\\)'|q'\\{.*?\\}'|q'<.*?>'", Pattern.CASE_INSENSITIVE);
+
+    /** P2: 代理类缓存驱逐锁，确保只有一个线程执行驱逐 */
+    private static final java.util.concurrent.atomic.AtomicBoolean EVICTING =
+        new java.util.concurrent.atomic.AtomicBoolean(false);
 
     private final long slowQueryThresholdMs;
 
@@ -108,15 +117,25 @@ public class SqlSlowQueryInterceptor implements StatementInspector {
 
         private Object wrapPreparedStatement(Object stmt, String sql) {
             Class<?> stmtClass = stmt.getClass();
-            // P2-6: Use partial eviction (25%) with improved cache size limit
+            // P2-6: 使用采样策略检查缓存大小，避免每次调用都检查
             if (PROXY_CLASS_CACHE.size() > MAX_PROXY_CLASS_CACHE_SIZE) {
-                int toRemove = PROXY_CLASS_CACHE.size() / 4;
-                java.util.Iterator<?> it = PROXY_CLASS_CACHE.keySet().iterator();
-                int removed = 0;
-                while (it.hasNext() && removed < toRemove) {
-                    it.next();
-                    it.remove();
-                    removed++;
+                // 使用 CAS 确保只有一个线程执行驱逐
+                if (EVICTING.compareAndSet(false, true)) {
+                    try {
+                        int currentSize = PROXY_CLASS_CACHE.size();
+                        if (currentSize > MAX_PROXY_CLASS_CACHE_SIZE) {
+                            int toRemove = currentSize / 4;
+                            java.util.Iterator<?> it = PROXY_CLASS_CACHE.keySet().iterator();
+                            int removed = 0;
+                            while (it.hasNext() && removed < toRemove) {
+                                it.next();
+                                it.remove();
+                                removed++;
+                            }
+                        }
+                    } finally {
+                        EVICTING.set(false);
+                    }
                 }
             }
             Class<?> proxyClass = PROXY_CLASS_CACHE.computeIfAbsent(stmtClass,
@@ -187,6 +206,8 @@ public class SqlSlowQueryInterceptor implements StatementInspector {
         }
         // B-22: Enhanced SQL sanitization covering more dialects
         String sanitized = COMMENT_PATTERN.matcher(sql).replaceAll(""); // Remove comments
+        sanitized = DOLLAR_QUOTE_PATTERN.matcher(sanitized).replaceAll("?"); // P1-7: PostgreSQL 美元引用字符串
+        sanitized = Q_QUOTE_PATTERN.matcher(sanitized).replaceAll("?"); // P1-7: Oracle q'[]' 引用字符串
         sanitized = SINGLE_QUOTE_PATTERN.matcher(sanitized).replaceAll("?"); // 单引号字符串
         sanitized = DOLLAR_PARAM_PATTERN.matcher(sanitized).replaceAll("?"); // PostgreSQL 美元引用参数
         sanitized = HEX_LITERAL_PATTERN.matcher(sanitized).replaceAll("?"); // 十六进制字面量

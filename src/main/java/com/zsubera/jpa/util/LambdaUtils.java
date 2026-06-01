@@ -220,8 +220,12 @@ public final class LambdaUtils {
     private static final java.util.concurrent.atomic.AtomicBoolean CACHE_EVICTING =
         new java.util.concurrent.atomic.AtomicBoolean(false);
 
-    /** 调用计数器，用于采样驱逐检查 */
+    /** 调用计数器，用于采样驱逐检查（仅用于主缓存 CACHE） */
     private static final java.util.concurrent.atomic.AtomicInteger CALL_COUNTER =
+        new java.util.concurrent.atomic.AtomicInteger(0);
+
+    /** P1: METHOD_CACHE 独立调用计数器，避免与主缓存共享计数器导致采样驱逐不精确 */
+    private static final java.util.concurrent.atomic.AtomicInteger METHOD_CALL_COUNTER =
         new java.util.concurrent.atomic.AtomicInteger(0);
 
     /** 采样间隔：每 N 次调用检查一次驱逐 */
@@ -262,7 +266,7 @@ public final class LambdaUtils {
     }
 
     private static void evictMethodCacheIfNeeded() {
-        if (CALL_COUNTER.get() % EVICTION_CHECK_INTERVAL != 0) {
+        if (METHOD_CALL_COUNTER.incrementAndGet() % EVICTION_CHECK_INTERVAL != 0) {
             return;
         }
         if (METHOD_CACHE.size() > METHOD_CACHE_MAX_SIZE && METHOD_EVICTING.compareAndSet(false, true)) {

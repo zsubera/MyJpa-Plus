@@ -117,18 +117,31 @@ public final class SoftDeleteHelper {
     /**
      * P0-5: Batch soft delete all entities of the given class using a single UPDATE statement.
      *
+     * <p>
+     * <strong>安全要求：</strong>必须传入 {@code allowUnconditional=true} 显式确认， 否则将抛出
+     * {@link IllegalStateException}。此机制防止误调用导致全表数据被意外标记为已删除。
+     *
      * @param em EntityManager instance
      * @param entityClass the entity class
+     * @param allowUnconditional must be true to allow unconditional soft delete
      * @param <T> entity type
      * @return number of affected rows
+     * @throws IllegalStateException if allowUnconditional is false
      */
-    public static <T> int softDeleteAll(EntityManager em, Class<T> entityClass) {
+    public static <T> int softDeleteAll(EntityManager em, Class<T> entityClass, boolean allowUnconditional) {
         if (em == null) {
             throw new IllegalArgumentException("em must not be null");
         }
         if (entityClass == null) {
             throw new IllegalArgumentException("entityClass must not be null");
         }
+        if (!allowUnconditional) {
+            throw new IllegalStateException(
+                "softDeleteAll without conditions is dangerous. Pass allowUnconditional=true to confirm.");
+        }
+        // 审计日志
+        log.warn("AUDIT: Executing unconditional soft DELETE on {} — this will affect ALL rows! Call stack: {}",
+            entityClass.getSimpleName(), AuditUtils.getCallStack());
         String fieldName = findSoftDeleteField(entityClass);
         if (fieldName == null) {
             throw new IllegalArgumentException("Entity " + entityClass.getSimpleName() + " has no @SoftDelete field");

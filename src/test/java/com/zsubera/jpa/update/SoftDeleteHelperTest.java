@@ -122,13 +122,20 @@ class SoftDeleteHelperTest {
     }
 
     @Test
-    void testIsSoftDeletedReturnsFalseForActiveEntity() {
+    void testNotDeletedQuery() {
         SoftDeleteTestEntity active = new SoftDeleteTestEntity();
         active.setName("active");
         active.setDeleted(false);
         repository.save(active);
 
-        assertFalse(SoftDeleteHelper.isSoftDeleted(SoftDeleteTestEntity.class, active));
+        SoftDeleteTestEntity deleted = new SoftDeleteTestEntity();
+        deleted.setName("deleted");
+        deleted.setDeleted(true);
+        repository.save(deleted);
+
+        // notDeletedQuery returns a QuerySpec with soft delete filter
+        var qs = SoftDeleteHelper.notDeletedQuery(SoftDeleteTestEntity.class);
+        assertFalse(qs.conditions().isEmpty(), "notDeletedQuery should have at least one condition");
     }
 
     @Test
@@ -170,8 +177,23 @@ class SoftDeleteHelperTest {
     @Test
     void testFindSoftDeleteFieldOnInvalidEntityDoesNotThrow() {
         // Should return null gracefully, not throw
-        String fieldName = SoftDeleteHelper.findSoftDeleteField(Object.class);
-        assertNull(fieldName);
+        assertNull(SoftDeleteHelper.findSoftDeleteField(Object.class));
+    }
+
+    @Test
+    void testSoftDeleteByIdsWithEmptyIds() {
+        // Empty IDs should return 0 without hitting the database
+        int count = SoftDeleteHelper.softDeleteByIds(org.mockito.Mockito.mock(jakarta.persistence.EntityManager.class),
+            SoftDeleteTestEntity.class, List.of());
+        assertEquals(0, count);
+    }
+
+    @Test
+    void testSoftDeleteByIdsWithNullIds() {
+        // Null IDs should return 0 without hitting the database
+        int count = SoftDeleteHelper.softDeleteByIds(org.mockito.Mockito.mock(jakarta.persistence.EntityManager.class),
+            SoftDeleteTestEntity.class, null);
+        assertEquals(0, count);
     }
 
     @Test
@@ -205,12 +227,21 @@ class SoftDeleteHelperTest {
     @Test
     void testSoftDeleteAllWithNullEmThrowsException() {
         assertThrows(IllegalArgumentException.class,
-            () -> SoftDeleteHelper.softDeleteAll(null, SoftDeleteTestEntity.class));
+            () -> SoftDeleteHelper.softDeleteAll(null, SoftDeleteTestEntity.class, true));
     }
 
     @Test
     void testSoftDeleteAllWithNullClassThrowsException() {
-        assertThrows(IllegalArgumentException.class, () -> SoftDeleteHelper.softDeleteAll(null, null));
+        assertThrows(IllegalArgumentException.class, () -> SoftDeleteHelper.softDeleteAll(null, null, true));
+    }
+
+    @Test
+    void testSoftDeleteAllWithoutAllowUnconditionalThrowsException() {
+        // P0-2: softDeleteAll without allowUnconditional=true should throw IllegalStateException
+        // Use a mock EntityManager to pass the null check for em
+        jakarta.persistence.EntityManager mockEm = org.mockito.Mockito.mock(jakarta.persistence.EntityManager.class);
+        assertThrows(IllegalStateException.class,
+            () -> SoftDeleteHelper.softDeleteAll(mockEm, SoftDeleteTestEntity.class, false));
     }
 
     @Test
@@ -234,6 +265,55 @@ class SoftDeleteHelperTest {
     void testIsDeletedWithNullClass() {
         // findSoftDeleteField throws NPE when entityClass is null
         assertThrows(NullPointerException.class, () -> SoftDeleteHelper.isDeleted(null));
+    }
+
+    @Test
+    void testIsSoftDeletedWithDeletedEntity() {
+        SoftDeleteTestEntity entity = new SoftDeleteTestEntity();
+        entity.setName("deleted");
+        entity.setDeleted(true);
+        assertTrue(SoftDeleteHelper.isSoftDeleted(SoftDeleteTestEntity.class, entity));
+    }
+
+    @Test
+    void testIsSoftDeletedWithActiveEntity() {
+        SoftDeleteTestEntity entity = new SoftDeleteTestEntity();
+        entity.setName("active");
+        entity.setDeleted(false);
+        assertFalse(SoftDeleteHelper.isSoftDeleted(SoftDeleteTestEntity.class, entity));
+    }
+
+    @Test
+    void testIsSoftDeletedWithNullEntityThrowsException() {
+        assertThrows(IllegalArgumentException.class,
+            () -> SoftDeleteHelper.isSoftDeleted(SoftDeleteTestEntity.class, null));
+    }
+
+    @Test
+    void testIsSoftDeletedWithNullClassThrowsException() {
+        assertThrows(IllegalArgumentException.class,
+            () -> SoftDeleteHelper.isSoftDeleted(null, new SoftDeleteTestEntity()));
+    }
+
+    @Test
+    void testIsSoftDeletedWithNonSoftDeleteEntity() {
+        // TestEntity has no @SoftDelete field, should return false
+        TestEntity entity = new TestEntity();
+        entity.setName("test");
+        assertFalse(SoftDeleteHelper.isSoftDeleted(TestEntity.class, entity));
+    }
+
+    @Test
+    void testFindSoftDeleteFieldWithNonSoftDeleteEntity() {
+        // TestEntity has no @SoftDelete field
+        assertNull(SoftDeleteHelper.findSoftDeleteField(TestEntity.class));
+    }
+
+    @Test
+    void testNotDeletedQueryHasConditions() {
+        // notDeletedQuery returns a QuerySpec with soft delete filter
+        var qs = SoftDeleteHelper.notDeletedQuery(SoftDeleteTestEntity.class);
+        assertFalse(qs.conditions().isEmpty(), "notDeletedQuery should have at least one condition");
     }
 
     private TestEntity newEntity(String name, int status) {

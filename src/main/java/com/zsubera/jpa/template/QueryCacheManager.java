@@ -70,6 +70,16 @@ public class QueryCacheManager {
     /** 默认最大缓存条目数 */
     private static final int DEFAULT_MAX_ENTRIES = 10000;
 
+    /** P1: 缓存键最大长度限制，防止恶意超长键导致内存问题 */
+    private static final int MAX_KEY_LENGTH = 1024;
+
+    /** P1: 驱逐检查采样间隔，每 N 次 put 检查一次驱逐，避免每次 put 都遍历全量缓存 */
+    private static final int EVICTION_CHECK_INTERVAL = 10;
+
+    /** P1: put 操作计数器，用于采样驱逐检查 */
+    private static final java.util.concurrent.atomic.AtomicInteger PUT_COUNTER =
+        new java.util.concurrent.atomic.AtomicInteger();
+
     /** LRU 缓存，使用 ConcurrentHashMap 实现线程安全的无锁读取。 */
     private final java.util.concurrent.ConcurrentMap<String, CachedQueryResult<?>> store;
 
@@ -160,10 +170,19 @@ public class QueryCacheManager {
         if (key == null || key.isEmpty()) {
             return false;
         }
-        // B-01: Evict BEFORE put to avoid modifying ConcurrentHashMap inside compute().
-        // ConcurrentHashMap.compute() holds a bucket lock; structural modifications
-        // (iterator.remove) inside the lambda cause undefined behavior per JDK spec.
-        evictIfNeeded();
+        // P1: 缓存键长度验证
+        if (key.length() > MAX_KEY_LENGTH) {
+            log.warn("Cache key length ({}) exceeds maximum ({}). Key rejected: {}...", key.length(), MAX_KEY_LENGTH,
+                key.substring(0, 64));
+            return false;
+        }
+        // P1: 采样驱逐策略 - 每 EVICTION_CHECK_INTERVAL 次 put 检查一次，避免每次 put 遍历全量缓存
+        if (PUT_COUNTER.incrementAndGet() % EVICTION_CHECK_INTERVAL == 0) {
+            evictIfNeeded();
+        } else if (store.size() >= maxEntries * 2) {
+            // 紧急驱逐：缓存严重超限时立即驱逐，防止内存溢出
+            evictIfNeeded();
+        }
         store.put(key, new CachedQueryResult<>(value, ttlSeconds));
         log.debug("Cache put for key: {} (ttl={}s)", key, ttlSeconds);
         return true;

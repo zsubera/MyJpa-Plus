@@ -320,7 +320,7 @@ public class SoftDeleteJpaRepository<T, ID> extends SimpleJpaRepository<T, ID> {
     @Override
     public void deleteAll() {
         if (shouldApplySoftDeleteFilter()) {
-            SoftDeleteHelper.softDeleteAll(entityManager, domainClass);
+            SoftDeleteHelper.softDeleteAll(entityManager, domainClass, true);
         } else {
             super.deleteAll();
         }
@@ -403,7 +403,7 @@ public class SoftDeleteJpaRepository<T, ID> extends SimpleJpaRepository<T, ID> {
     @Override
     public void deleteAllInBatch() {
         if (shouldApplySoftDeleteFilter()) {
-            SoftDeleteHelper.softDeleteAll(entityManager, domainClass);
+            SoftDeleteHelper.softDeleteAll(entityManager, domainClass, true);
         } else {
             super.deleteAllInBatch();
         }

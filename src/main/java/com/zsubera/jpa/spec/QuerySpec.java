@@ -1164,17 +1164,49 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
         CriteriaQuery<?> query, CriteriaBuilder cb) {
         jakarta.persistence.criteria.Subquery<S> subquery = query.subquery(node.subEntity);
         Root<S> subRoot = subquery.from(node.subEntity);
-        // 使用根路径进行关联，支持从 Join 路径调用
-        if (!(rootPath instanceof Root<?>)) {
-            throw new IllegalArgumentException("EXISTS correlation requires a Root path for correlation, but got "
-                + rootPath.getClass().getSimpleName() + ". This is an internal error.");
-        }
-        Root<?> correlatedOuter = subquery.correlate((Root<?>)rootPath);
-        SubQuerySpec<S> subSpec = SubQuerySpec.create(subquery, subRoot, correlatedOuter, cb);
-        node.config.accept(subSpec);
-        subSpec.applyWhere();
-        if (!subSpec.isSelectSet()) {
-            subquery.select(subRoot);
+        // P0-6: 使用根路径进行关联，支持 Root 和 Join 路径
+        if (rootPath instanceof Root<?> root) {
+            Root<?> correlatedOuter = subquery.correlate(root);
+            SubQuerySpec<S> subSpec = SubQuerySpec.create(subquery, subRoot, correlatedOuter, cb);
+            node.config.accept(subSpec);
+            subSpec.applyWhere();
+            if (!subSpec.isSelectSet()) {
+                subquery.select(subRoot);
+            }
+        } else if (rootPath instanceof jakarta.persistence.criteria.Join<?, ?>) {
+            // P0-6: 支持从 Join 路径进行 EXISTS 关联
+            // Join 路径无法直接用于 correlate（JPA Criteria API 限制），
+            // 但可以通过提取 Join 的父 From 进行关联
+            @SuppressWarnings("unchecked")
+            jakarta.persistence.criteria.Join<?, ?> join = (jakarta.persistence.criteria.Join<?, ?>)rootPath;
+            // 尝试通过 Hibernate 的 getParent() 获取父路径
+            try {
+                java.lang.reflect.Method getParent = join.getClass().getMethod("getParent");
+                Object parent = getParent.invoke(join);
+                if (parent instanceof Root<?> parentRoot) {
+                    Root<?> correlatedOuter = subquery.correlate(parentRoot);
+                    SubQuerySpec<S> subSpec = SubQuerySpec.create(subquery, subRoot, correlatedOuter, cb);
+                    node.config.accept(subSpec);
+                    subSpec.applyWhere();
+                    if (!subSpec.isSelectSet()) {
+                        subquery.select(subRoot);
+                    }
+                } else {
+                    throw new IllegalArgumentException("EXISTS correlation from nested Join paths is not supported. "
+                        + "Use a Root-based query or restructure your query to use Root-level EXISTS. "
+                        + "Example: qs.exists(User.class, sub -> sub.eq(User::getActive, true))");
+                }
+            } catch (ReflectiveOperationException e) {
+                throw new IllegalArgumentException(
+                    "EXISTS correlation from Join path is not supported by the current JPA provider. "
+                        + "Use a Root-based query for EXISTS subqueries. "
+                        + "Example: qs.exists(User.class, sub -> sub.eq(User::getActive, true))",
+                    e);
+            }
+        } else {
+            throw new IllegalArgumentException(
+                "EXISTS correlation requires a Root or Join path for correlation, but got "
+                    + rootPath.getClass().getSimpleName() + ". Use Root-based queries for EXISTS subqueries.");
         }
         return node.negate ? cb.not(cb.exists(subquery)) : cb.exists(subquery);
     }

@@ -368,7 +368,10 @@ public class EncryptConverter implements AttributeConverter<String, String> {
      * 内的加密/解密操作使用相同盐值。
      *
      * <p>
-     * <strong>P1-3 改进：</strong>非生产环境的随机盐值会持久化到本地文件（{@code $TMPDIR/.myjpa-salt}）， 确保跨 JVM 重启后盐值保持一致，避免之前加密的数据无法解密。
+     * <strong>P1-3 改进：</strong>非生产环境的随机盐值会持久化到本地文件（{@code ~/.myjpa-plus/.salt}）， 确保跨 JVM 重启后盐值保持一致，避免之前加密的数据无法解密。
+     *
+     * <p>
+     * <strong>P1-1 建议：</strong>在 Windows 环境下，建议通过环境变量 {@code MYJPA_ENCRYPT_SALT} 配置盐值， 以避免多进程间的文件锁竞争问题。
      *
      * @return 盐值字节数组
      * @throws IllegalStateException 生产环境未配置盐值时抛出
@@ -511,11 +514,11 @@ public class EncryptConverter implements AttributeConverter<String, String> {
     }
 
     /**
-     * B-07: 设置盐值文件和目录的权限。在 Unix 系统上使用 POSIX 权限，在 Windows 上使用 ACL。
+     * B-07: 设置盐值文件和目录的权限。在 Unix 系统上使用 POSIX 权限，在 Windows 上使用 Java NIO ACL。
      *
      * <p>
-     * <strong>P1-2 改进：</strong>Windows 上优先使用 Java NIO {@link java.nio.file.attribute.AclFileAttributeView} 设置 ACL
-     * 权限，失败时回退到 icacls 命令行工具。在严格模式下，如果权限设置失败会记录 WARN 级别日志。
+     * <strong>P0-3 改进：</strong>Windows 上仅使用 Java NIO {@link java.nio.file.attribute.AclFileAttributeView} 设置 ACL 权限，移除了
+     * icacls 命令行回退以防止命令注入风险。如果 NIO ACL 设置失败，仅记录 DEBUG 日志。
      *
      * @param homeDir 盐值目录
      * @param saltFile 盐值文件
@@ -523,7 +526,7 @@ public class EncryptConverter implements AttributeConverter<String, String> {
     private static void setSaltFilePermissions(java.io.File homeDir, java.io.File saltFile) {
         String os = System.getProperty("os.name", "").toLowerCase();
         if (os.contains("win")) {
-            // B-07: Windows - try Java NIO ACL first, fallback to icacls
+            // P0-3: Windows - 仅使用 Java NIO ACL，移除 icacls 命令行回退以防止命令注入风险
             setWindowsPermissionsNio(saltFile);
         } else {
             // Unix/Linux/macOS - use POSIX permissions
@@ -545,7 +548,10 @@ public class EncryptConverter implements AttributeConverter<String, String> {
     }
 
     /**
-     * P1-2: 使用 Java NIO 设置 Windows 文件 ACL 权限。优先使用 AclFileAttributeView， 失败时回退到 icacls 命令行工具。
+     * P0-3: 使用 Java NIO 设置 Windows 文件 ACL 权限。
+     *
+     * <p>
+     * <strong>P0-3 改进：</strong>移除了 icacls 命令行回退以防止命令注入风险。如果 NIO ACL 设置失败，仅记录 DEBUG 日志。
      *
      * @param saltFile 盐值文件
      */
@@ -563,36 +569,11 @@ public class EncryptConverter implements AttributeConverter<String, String> {
                     .build();
                 view.setAcl(java.util.List.of(entry));
                 LOG.log(System.Logger.Level.DEBUG, "Set Windows ACL on salt file via Java NIO");
-                return;
             }
         } catch (Exception e) {
-            LOG.log(System.Logger.Level.DEBUG, "Cannot set Windows ACL via Java NIO: {0}", e.getMessage());
-        }
-        // Fallback to icacls
-        setWindowsPermissionsIcacls(saltFile);
-    }
-
-    /**
-     * B-07: 使用 icacls 命令行工具设置 Windows 文件权限（回退方案）。
-     *
-     * @param saltFile 盐值文件
-     */
-    private static void setWindowsPermissionsIcacls(java.io.File saltFile) {
-        try {
-            String userName = System.getProperty("user.name");
-            if (userName != null && !userName.isEmpty()) {
-                ProcessBuilder pb = new ProcessBuilder("icacls", saltFile.getAbsolutePath(), "/inheritance:r",
-                    "/grant:r", userName + ":F");
-                pb.redirectErrorStream(true);
-                Process proc = pb.start();
-                proc.waitFor();
-                if (proc.exitValue() != 0) {
-                    LOG.log(System.Logger.Level.DEBUG, "Failed to set Windows ACL on salt file: icacls returned {0}",
-                        proc.exitValue());
-                }
-            }
-        } catch (Exception e) {
-            LOG.log(System.Logger.Level.DEBUG, "Cannot set Windows ACL on salt file: {0}", e.getMessage());
+            // P0-3: 仅记录日志，不回退到 icacls 命令行（防止命令注入风险）
+            LOG.log(System.Logger.Level.DEBUG, "Cannot set Windows ACL via Java NIO: {0}. "
+                + "Set environment variable {1} to ensure consistent encryption.", e.getMessage(), SALT_ENV);
         }
     }
 

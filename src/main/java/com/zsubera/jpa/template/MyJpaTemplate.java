@@ -1496,6 +1496,14 @@ public class MyJpaTemplate {
      * 使用 {@link org.springframework.transaction.support.TransactionTemplate} 创建独立事务， 每次调用都会创建新的事务上下文。 需要注入
      * {@link org.springframework.transaction.PlatformTransactionManager}。
      *
+     * <p>
+     * <strong>P1 事务传播行为说明：</strong>
+     * <ul>
+     * <li>当已有活动事务时，使用 {@code PROPAGATION_REQUIRED}（加入现有事务），所有批次在同一事务中执行。 这意味着如果某个批次失败，所有批次都会回滚。</li>
+     * <li>当没有活动事务时，使用 {@code PROPAGATION_REQUIRES_NEW}（创建新事务），每个批次在独立事务中执行。</li>
+     * <li>如果需要严格的批次隔离，请确保在没有外层事务的情况下调用此方法。</li>
+     * </ul>
+     *
      * @param operation 要执行的操作
      * @param <R> 返回类型
      * @return 操作结果

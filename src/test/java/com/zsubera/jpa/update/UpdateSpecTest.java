@@ -681,6 +681,32 @@ class UpdateSpecTest {
             () -> new UpdateSpec<>(TestEntity.class).notBetween(TestEntity::getStatus, 1, null));
     }
 
+    @Test
+    void testUpdateAllWithoutAllowUnconditionalThrowsException() {
+        assertThrows(IllegalStateException.class,
+            () -> new UpdateSpec<>(TestEntity.class).set(TestEntity::getName, "updated").updateAll(em));
+    }
+
+    @Test
+    void testUpdateAllWithAllowUnconditional() {
+        repository.save(newEntity("a", 1));
+        repository.save(newEntity("b", 2));
+
+        int count = new UpdateSpec<>(TestEntity.class).set(TestEntity::getName, "all-updated").allowUnconditional(true)
+            .updateAll(em);
+
+        assertEquals(2, count);
+        em.clear();
+        List<TestEntity> all = repository.findAll();
+        assertTrue(all.stream().allMatch(e -> "all-updated".equals(e.getName())));
+    }
+
+    @Test
+    void testUpdateAllNoSetClausesThrowsException() {
+        assertThrows(IllegalStateException.class,
+            () -> new UpdateSpec<>(TestEntity.class).allowUnconditional(true).updateAll(em));
+    }
+
     private TestEntity newEntity(String name, int status) {
         TestEntity entity = new TestEntity();
         entity.setName(name);
