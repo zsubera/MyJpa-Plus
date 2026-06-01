@@ -59,7 +59,7 @@ public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> {
      * 安全数据库函数名白名单。仅允许调用以下常见安全函数。
      *
      * <p>
-     * 此集合为线程安全的可变集合。如需扩展白名单，可直接调用 {@code SAFE_FUNCTION_NAMES.add("MY_FUNC")}。 禁止调用危险函数如
+     * P2-1: 此集合为线程安全的可变集合，通过 {@link #addSafeFunction(String)} 方法添加新函数时 会记录安全审计日志。禁止调用危险函数如
      * {@code pg_sleep}、{@code SLEEP}、{@code LOAD_FILE} 等。
      *
      * <p>

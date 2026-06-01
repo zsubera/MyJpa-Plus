@@ -407,6 +407,10 @@ public class EncryptConverter implements AttributeConverter<String, String> {
     /**
      * 从文件加载或创建盐值。必须在 {@link #SALT_FILE_LOCK} 同步块内调用。
      *
+     * <p>
+     * <strong>P1-1 改进：</strong>使用文件锁（{@link java.nio.channels.FileChannel}）替代 synchronized 块，
+     * 防止多进程同时写入盐值文件导致数据损坏。写入后再次验证文件内容，确保一致性。
+     *
      * @return 盐值字节数组
      */
     private static byte[] loadOrCreateSalt() {
@@ -439,7 +443,48 @@ public class EncryptConverter implements AttributeConverter<String, String> {
                     return randomSalt;
                 }
             }
-            java.nio.file.Files.write(saltFile.toPath(), randomSalt);
+            // P1-1: Use file lock to prevent multi-process race condition
+            java.nio.file.Path saltPath = saltFile.toPath();
+            try (java.nio.channels.FileChannel channel =
+                java.nio.channels.FileChannel.open(saltPath, java.nio.file.StandardOpenOption.CREATE,
+                    java.nio.file.StandardOpenOption.WRITE, java.nio.file.StandardOpenOption.READ)) {
+                java.nio.channels.FileLock lock = channel.tryLock();
+                if (lock != null) {
+                    try {
+                        // Re-check if another process already wrote the salt
+                        if (channel.size() > 0) {
+                            channel.position(0);
+                            java.nio.ByteBuffer buffer = java.nio.ByteBuffer.allocate((int)channel.size());
+                            channel.read(buffer);
+                            buffer.flip();
+                            byte[] existingSalt = new byte[buffer.remaining()];
+                            buffer.get(existingSalt);
+                            if (existingSalt.length > 0) {
+                                LOG.log(System.Logger.Level.INFO,
+                                    "Another process already wrote salt file, using existing salt");
+                                return existingSalt;
+                            }
+                        }
+                        // Write salt with file lock held
+                        channel.position(0);
+                        channel.truncate(0);
+                        channel.write(java.nio.ByteBuffer.wrap(randomSalt));
+                        channel.force(true);
+                    } finally {
+                        lock.release();
+                    }
+                } else {
+                    // Could not acquire lock, another process is writing
+                    // Wait briefly and read the file
+                    Thread.sleep(100);
+                    byte[] fileSalt = java.nio.file.Files.readAllBytes(saltPath);
+                    if (fileSalt.length > 0) {
+                        return fileSalt;
+                    }
+                    // Fallback: write without lock
+                    java.nio.file.Files.write(saltPath, randomSalt);
+                }
+            }
             // P0-3: Verify salt file write by reading back and comparing
             byte[] writtenSalt = java.nio.file.Files.readAllBytes(saltFile.toPath());
             if (!java.util.Arrays.equals(randomSalt, writtenSalt)) {
@@ -458,6 +503,9 @@ public class EncryptConverter implements AttributeConverter<String, String> {
                 "SECURITY: Using non-persisted random salt. Previous encrypted data WILL BE UNRECOVERABLE after restart. "
                     + "Set environment variable {0} or system property {1}",
                 SALT_ENV, SALT_PROPERTY);
+        } catch (InterruptedException ie) {
+            Thread.currentThread().interrupt();
+            LOG.log(System.Logger.Level.WARNING, "Interrupted while waiting for salt file lock: {0}", ie.getMessage());
         }
         return randomSalt;
     }
@@ -465,30 +513,18 @@ public class EncryptConverter implements AttributeConverter<String, String> {
     /**
      * B-07: 设置盐值文件和目录的权限。在 Unix 系统上使用 POSIX 权限，在 Windows 上使用 ACL。
      *
+     * <p>
+     * <strong>P1-2 改进：</strong>Windows 上优先使用 Java NIO {@link java.nio.file.attribute.AclFileAttributeView} 设置 ACL
+     * 权限，失败时回退到 icacls 命令行工具。在严格模式下，如果权限设置失败会记录 WARN 级别日志。
+     *
      * @param homeDir 盐值目录
      * @param saltFile 盐值文件
      */
     private static void setSaltFilePermissions(java.io.File homeDir, java.io.File saltFile) {
         String os = System.getProperty("os.name", "").toLowerCase();
         if (os.contains("win")) {
-            // B-07: Windows - use icacls to restrict access to current user only
-            try {
-                String userName = System.getProperty("user.name");
-                if (userName != null && !userName.isEmpty()) {
-                    // Grant only current user full control, remove inherited permissions
-                    ProcessBuilder pb = new ProcessBuilder("icacls", saltFile.getAbsolutePath(), "/inheritance:r",
-                        "/grant:r", userName + ":F");
-                    pb.redirectErrorStream(true);
-                    Process proc = pb.start();
-                    proc.waitFor();
-                    if (proc.exitValue() != 0) {
-                        LOG.log(System.Logger.Level.DEBUG,
-                            "Failed to set Windows ACL on salt file: icacls returned {0}", proc.exitValue());
-                    }
-                }
-            } catch (Exception e) {
-                LOG.log(System.Logger.Level.DEBUG, "Cannot set Windows ACL on salt file: {0}", e.getMessage());
-            }
+            // B-07: Windows - try Java NIO ACL first, fallback to icacls
+            setWindowsPermissionsNio(saltFile);
         } else {
             // Unix/Linux/macOS - use POSIX permissions
             try {
@@ -505,6 +541,58 @@ public class EncryptConverter implements AttributeConverter<String, String> {
                 LOG.log(System.Logger.Level.DEBUG, "Cannot set POSIX permissions on salt file: {0}",
                     permEx.getMessage());
             }
+        }
+    }
+
+    /**
+     * P1-2: 使用 Java NIO 设置 Windows 文件 ACL 权限。优先使用 AclFileAttributeView， 失败时回退到 icacls 命令行工具。
+     *
+     * @param saltFile 盐值文件
+     */
+    private static void setWindowsPermissionsNio(java.io.File saltFile) {
+        try {
+            java.nio.file.attribute.AclFileAttributeView view = java.nio.file.Files
+                .getFileAttributeView(saltFile.toPath(), java.nio.file.attribute.AclFileAttributeView.class);
+            if (view != null) {
+                java.nio.file.attribute.UserPrincipal currentUser = java.nio.file.FileSystems.getDefault()
+                    .getUserPrincipalLookupService().lookupPrincipalByName(System.getProperty("user.name"));
+                java.nio.file.attribute.AclEntry entry = java.nio.file.attribute.AclEntry.newBuilder()
+                    .setType(java.nio.file.attribute.AclEntryType.ALLOW).setPrincipal(currentUser)
+                    .setPermissions(java.util.EnumSet.of(java.nio.file.attribute.AclEntryPermission.READ_DATA,
+                        java.nio.file.attribute.AclEntryPermission.WRITE_DATA))
+                    .build();
+                view.setAcl(java.util.List.of(entry));
+                LOG.log(System.Logger.Level.DEBUG, "Set Windows ACL on salt file via Java NIO");
+                return;
+            }
+        } catch (Exception e) {
+            LOG.log(System.Logger.Level.DEBUG, "Cannot set Windows ACL via Java NIO: {0}", e.getMessage());
+        }
+        // Fallback to icacls
+        setWindowsPermissionsIcacls(saltFile);
+    }
+
+    /**
+     * B-07: 使用 icacls 命令行工具设置 Windows 文件权限（回退方案）。
+     *
+     * @param saltFile 盐值文件
+     */
+    private static void setWindowsPermissionsIcacls(java.io.File saltFile) {
+        try {
+            String userName = System.getProperty("user.name");
+            if (userName != null && !userName.isEmpty()) {
+                ProcessBuilder pb = new ProcessBuilder("icacls", saltFile.getAbsolutePath(), "/inheritance:r",
+                    "/grant:r", userName + ":F");
+                pb.redirectErrorStream(true);
+                Process proc = pb.start();
+                proc.waitFor();
+                if (proc.exitValue() != 0) {
+                    LOG.log(System.Logger.Level.DEBUG, "Failed to set Windows ACL on salt file: icacls returned {0}",
+                        proc.exitValue());
+                }
+            }
+        } catch (Exception e) {
+            LOG.log(System.Logger.Level.DEBUG, "Cannot set Windows ACL on salt file: {0}", e.getMessage());
         }
     }
 

@@ -610,6 +610,64 @@ class MyJpaTemplateTest {
         assertThrows(IllegalArgumentException.class, () -> template.executeBatchInSeparateTransactions(spec, -1));
     }
 
+    // ---- saveAllBatched 测试 ----
+
+    @Test
+    void testSaveAllBatched() {
+        List<TestEntity> entities = new java.util.ArrayList<>();
+        for (int i = 0; i < 5; i++) {
+            TestEntity e = new TestEntity();
+            e.setName("batchSave" + i);
+            e.setStatus(i);
+            entities.add(e);
+        }
+
+        List<TestEntity> saved = template.saveAllBatched(entities, 2);
+        assertEquals(5, saved.size());
+        assertEquals(5, repository.count());
+    }
+
+    @Test
+    void testSaveAllBatchedWithNullEntities() {
+        assertThrows(IllegalArgumentException.class, () -> template.saveAllBatched(null, 10));
+    }
+
+    @Test
+    void testSaveAllBatchedWithInvalidBatchSize() {
+        List<TestEntity> entities = List.of(new TestEntity());
+        assertThrows(IllegalArgumentException.class, () -> template.saveAllBatched(entities, 0));
+        assertThrows(IllegalArgumentException.class, () -> template.saveAllBatched(entities, -1));
+    }
+
+    // ---- saveAllBatchedInSeparateTransactions 测试 ----
+
+    @Test
+    void testSaveAllBatchedInSeparateTransactions() {
+        List<TestEntity> entities = new java.util.ArrayList<>();
+        for (int i = 0; i < 5; i++) {
+            TestEntity e = new TestEntity();
+            e.setName("sepTxSave" + i);
+            e.setStatus(i);
+            entities.add(e);
+        }
+
+        List<TestEntity> saved = template.saveAllBatchedInSeparateTransactions(entities, 2);
+        assertEquals(5, saved.size());
+        assertEquals(5, repository.count());
+    }
+
+    @Test
+    void testSaveAllBatchedInSeparateTransactionsWithNullEntities() {
+        assertThrows(IllegalArgumentException.class, () -> template.saveAllBatchedInSeparateTransactions(null, 10));
+    }
+
+    @Test
+    void testSaveAllBatchedInSeparateTransactionsWithInvalidBatchSize() {
+        List<TestEntity> entities = List.of(new TestEntity());
+        assertThrows(IllegalArgumentException.class, () -> template.saveAllBatchedInSeparateTransactions(entities, 0));
+        assertThrows(IllegalArgumentException.class, () -> template.saveAllBatchedInSeparateTransactions(entities, -1));
+    }
+
     // ---- 深度分页硬限制测试 ----
 
     @Test

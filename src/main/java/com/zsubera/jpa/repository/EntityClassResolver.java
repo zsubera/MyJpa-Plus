@@ -14,6 +14,10 @@ import org.springframework.util.ConcurrentReferenceHashMap;
  * <p>
  * 处理类似以下情况：{@code interface UserRepo extends CustomBase<User, Long>}，其中{@code CustomBase<T, ID>
  * extends MyJpaRepository<T, ID>}，通过遍历整个接口层次结构来找到绑定到 {@link MyJpaRepository}类型参数的实际类型参数。
+ *
+ * <p>
+ * <strong>P2-8 改进：</strong>优先使用 Spring 的 {@link ResolvableType} API 进行类型解析， 仅在必要时使用反射。{@code resolveIdFieldName()}
+ * 方法通过遍历类层次结构查找 {@code @Id} 注解字段， 这是 JPA 标准做法，在 Java 17+ 模块系统下通常不需要 {@code --add-opens} 参数。
  */
 public final class EntityClassResolver {
 

@@ -15,6 +15,25 @@ import org.slf4j.LoggerFactory;
  * <strong>事务集成说明：</strong>当前缓存实现独立于事务生命周期。写操作（INSERT/UPDATE/DELETE）后， 相关缓存条目不会自动失效。建议在事务提交后手动调用
  * {@link #evictByPrefix(String)} 清除相关缓存。
  *
+ * <p>
+ * <strong>P2-7 改进：</strong>在 Spring 环境中，可以使用 {@code @TransactionalEventListener} 监听事务提交/回滚事件， 自动管理缓存失效。示例：
+ *
+ * <pre>
+ * {
+ *     &#64;code
+ *     &#64;Component
+ *     public class CacheInvalidationListener {
+ *         &#64;Autowired
+ *         private QueryCacheManager cache;
+ *
+ *         @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+ *         public void onTransactionCommit(EntityModifiedEvent event) {
+ *             cache.evictByPrefix(event.getEntityName() + ":");
+ *         }
+ *     }
+ * }
+ * </pre>
+ *
  * <pre>{@code
  * @Transactional
  * public void updateUser(User user) {

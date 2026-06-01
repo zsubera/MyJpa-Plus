@@ -153,9 +153,21 @@ public final class SoftDeleteHelper {
                 + escapedColumn + " != ?1 OR " + escapedColumn + " IS NULL").setParameter(1, deletedValue)
                 .executeUpdate();
         }
-        // Enum: delegate to field-based approach
-        throw new MyJpaPlusException("Batch soft delete for enum fields is not supported via native query. "
-            + "Use deleteAll() which handles enum fields via entity loading.");
+        // P1-3: Enum type support via ordinal value
+        if (Enum.class.isAssignableFrom(field.getType())) {
+            if (annotation == null || annotation.deletedValue().isEmpty()) {
+                throw new MyJpaPlusException("@SoftDelete on enum field '" + fieldName + "' in " + entityClass.getName()
+                    + " must specify deletedValue");
+            }
+            @SuppressWarnings({"unchecked", "rawtypes"})
+            Enum<?> deletedEnumValue = Enum.valueOf((Class<Enum>)field.getType(), annotation.deletedValue());
+            // Use ordinal value for native SQL to avoid JPA enum mapping issues
+            int ordinal = deletedEnumValue.ordinal();
+            return em.createNativeQuery("UPDATE " + escapedTable + " SET " + escapedColumn + " = ?1 WHERE "
+                + escapedColumn + " != ?1 OR " + escapedColumn + " IS NULL").setParameter(1, ordinal).executeUpdate();
+        }
+        throw new MyJpaPlusException("@SoftDelete field '" + fieldName + "' in " + entityClass.getName()
+            + " has unsupported type: " + field.getType().getName() + ". Supported types: Boolean, Integer, Enum.");
     }
 
     /**
@@ -207,8 +219,21 @@ public final class SoftDeleteHelper {
             setClause = escapedColumn + " = :" + setParamName;
             useParamBinding = true;
             deletedParamValue = deletedValue;
+        } else if (Enum.class.isAssignableFrom(field.getType())) {
+            // P1-3: Enum type support via ordinal value
+            if (annotation == null || annotation.deletedValue().isEmpty()) {
+                throw new MyJpaPlusException("@SoftDelete on enum field '" + fieldName + "' in " + entityClass.getName()
+                    + " must specify deletedValue");
+            }
+            @SuppressWarnings({"unchecked", "rawtypes"})
+            Enum<?> deletedEnumValue = Enum.valueOf((Class<Enum>)field.getType(), annotation.deletedValue());
+            int ordinal = deletedEnumValue.ordinal();
+            setClause = escapedColumn + " = :" + setParamName;
+            useParamBinding = true;
+            deletedParamValue = ordinal;
         } else {
-            throw new MyJpaPlusException("Batch soft delete by IDs for enum fields is not supported via native query.");
+            throw new MyJpaPlusException("@SoftDelete field '" + fieldName + "' in " + entityClass.getName()
+                + " has unsupported type: " + field.getType().getName() + ". Supported types: Boolean, Integer, Enum.");
         }
         // P1-8: Use InClauseBuilder.getMaxInClauseSize() instead of hardcoded 1000
         int batchSize = com.zsubera.jpa.util.InClauseBuilder.getMaxInClauseSize();

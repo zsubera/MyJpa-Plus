@@ -13,8 +13,17 @@ import org.slf4j.LoggerFactory;
  * 通常由 {@link IgnoreTenantAdvisor} 自动管理，不建议手动调用。
  *
  * <p>
- * <strong>虚拟线程说明：</strong>在 Java 21+ 虚拟线程环境中，{@code ThreadLocal} 仍然可用且功能正确。 未来版本可能考虑使用 {@code ScopedValue}（JEP
- * 462）替代，以获得更好的虚拟线程兼容性和自动清理语义。 当前实现已通过 {@link #pushIgnore()} 的安全上限和 {@link #checkHealth()} 健康检查机制防止计数泄漏。
+ * <strong>虚拟线程说明：</strong>在 Java 21+ 虚拟线程环境中，{@code ThreadLocal} 仍然可用且功能正确。 虚拟线程继承了平台线程的 ThreadLocal
+ * 值，因此在虚拟线程中使用此上下文是安全的。 未来版本可能考虑使用 {@code ScopedValue}（JEP 462）替代，以获得更好的虚拟线程兼容性和自动清理语义。 当前实现已通过 {@link #pushIgnore()}
+ * 的安全上限和 {@link #checkHealth()} 健康检查机制防止计数泄漏。
+ *
+ * <p>
+ * <strong>使用建议：</strong>
+ * <ul>
+ * <li>在虚拟线程环境中，确保在 finally 块中调用 {@link #popIgnore()} 以防止计数泄漏</li>
+ * <li>定期调用 {@link #checkHealth()} 检查计数器健康状态</li>
+ * <li>在异常恢复场景中，使用 {@link #reset()} 清除计数器</li>
+ * </ul>
  *
  * @see IgnoreTenantAdvisor
  * @see TenantProvider

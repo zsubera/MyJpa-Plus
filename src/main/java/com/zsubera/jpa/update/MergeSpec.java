@@ -256,6 +256,9 @@ public class MergeSpec<T> {
                             Thread.sleep(backoffMs);
                         } catch (InterruptedException ie) {
                             Thread.currentThread().interrupt();
+                            // P1-9: Add InterruptedException as suppressed exception to preserve
+                            // diagnostic information
+                            e.addSuppressed(ie);
                             throw e;
                         }
                         continue;
@@ -846,6 +849,9 @@ public class MergeSpec<T> {
                             Thread.sleep(backoffMs);
                         } catch (InterruptedException ie) {
                             Thread.currentThread().interrupt();
+                            // P1-9: Add InterruptedException as suppressed exception to preserve
+                            // diagnostic information
+                            e.addSuppressed(ie);
                             throw e;
                         }
                         continue;
@@ -884,9 +890,15 @@ public class MergeSpec<T> {
     /**
      * 构建数据库特定的 UPSERT SQL。
      *
+     * <p>
+     * <strong>线程安全警告：</strong>此方法访问实例字段 {@code this.entity}，不是线程安全的。 在多线程环境中请使用
+     * {@link #buildSqlFor(EntityManager, Object)} 替代。
+     *
      * @param em 实体管理器
      * @return SQL 和参数
+     * @deprecated 使用 {@link #buildSqlFor(EntityManager, Object)} 替代，该方法是线程安全的。 此方法将在 2.0 版本中移除。
      */
+    @Deprecated(since = "1.2.0", forRemoval = true)
     private SqlWithParams buildSql(EntityManager em) {
         List<String> effectiveConflictFields =
             conflictFields.isEmpty() ? resolveIdColumnNames() : new ArrayList<>(conflictFields);
@@ -1206,8 +1218,14 @@ public class MergeSpec<T> {
     /**
      * 提取实体实例中所有持久化字段的值，遍历类层次结构。
      *
+     * <p>
+     * <strong>线程安全警告：</strong>此方法访问实例字段 {@code this.entity}，不是线程安全的。 在多线程环境中请使用 {@link #extractFieldValuesFrom(Object)}
+     * 替代。
+     *
      * @return 字段名、列名和值的列表
+     * @deprecated 使用 {@link #extractFieldValuesFrom(Object)} 替代，该方法是线程安全的。 此方法将在 2.0 版本中移除。
      */
+    @Deprecated(since = "1.2.0", forRemoval = true)
     private List<EntityFieldValue> extractFieldValues() {
         if (entity == null) {
             throw new IllegalStateException("Entity must be specified via withEntity() before extracting field values");

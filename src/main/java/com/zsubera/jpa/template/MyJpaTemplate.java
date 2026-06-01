@@ -277,6 +277,76 @@ public class MyJpaTemplate {
     }
 
     /**
+     * 批量保存实体，每批在独立事务中提交，避免长事务导致的数据库锁等待超时问题。
+     *
+     * <p>
+     * 与 {@link #saveAllBatched(Iterable, int)} 不同，此方法每批操作完成后立即提交事务。 适用于大数据量保存场景（如 100000+ 实体），避免长事务导致的问题：
+     * <ul>
+     * <li>数据库锁等待超时</li>
+     * <li>事务日志撑爆</li>
+     * <li>回滚段空间不足</li>
+     * </ul>
+     *
+     * <p>
+     * <strong>注意：</strong>如果某批操作失败，已提交的批次不会回滚。调用方需要自行处理部分成功的情况。
+     *
+     * @param entities 要保存的实体列表
+     * @param batchSize 每批大小，建议值为 50-200
+     * @param <T> 实体类型
+     * @return 保存后的实体列表
+     * @throws IllegalArgumentException 如果 entities 为 null 或 batchSize 不是正数
+     */
+    public <T> List<T> saveAllBatchedInSeparateTransactions(Iterable<T> entities, int batchSize) {
+        if (entities == null) {
+            throw new IllegalArgumentException("entities must not be null");
+        }
+        if (batchSize <= 0) {
+            throw new IllegalArgumentException("batchSize must be positive");
+        }
+        java.util.ArrayList<T> result = new java.util.ArrayList<>();
+        java.util.ArrayList<T> batch = new java.util.ArrayList<>();
+        for (T entity : entities) {
+            batch.add(entity);
+            if (batch.size() >= batchSize) {
+                List<T> batchResult = executeInNewTransaction(em -> {
+                    java.util.ArrayList<T> batchRes = new java.util.ArrayList<>();
+                    for (T e : batch) {
+                        if (isNewEntity(e)) {
+                            em.persist(e);
+                            batchRes.add(e);
+                        } else {
+                            batchRes.add(em.merge(e));
+                        }
+                    }
+                    em.flush();
+                    em.clear();
+                    return batchRes;
+                });
+                result.addAll(batchResult);
+                batch.clear();
+            }
+        }
+        if (!batch.isEmpty()) {
+            List<T> batchResult = executeInNewTransaction(em -> {
+                java.util.ArrayList<T> batchRes = new java.util.ArrayList<>();
+                for (T e : batch) {
+                    if (isNewEntity(e)) {
+                        em.persist(e);
+                        batchRes.add(e);
+                    } else {
+                        batchRes.add(em.merge(e));
+                    }
+                }
+                em.flush();
+                em.clear();
+                return batchRes;
+            });
+            result.addAll(batchResult);
+        }
+        return result;
+    }
+
+    /**
      * P-03: 判断实体是否为新实体（未持久化）。通过检查 @Id 字段是否为 null 来判断。
      *
      * @param entity 实体实例

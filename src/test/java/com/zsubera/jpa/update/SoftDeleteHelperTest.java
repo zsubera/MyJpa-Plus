@@ -174,6 +174,68 @@ class SoftDeleteHelperTest {
         assertNull(fieldName);
     }
 
+    @Test
+    void testEscapeIdentifierWithValidInput() {
+        String result = SoftDeleteHelper.escapeIdentifier("test_table");
+        assertEquals("\"test_table\"", result);
+    }
+
+    @Test
+    void testEscapeIdentifierWithSchemaTable() {
+        // escapeIdentifier wraps the entire identifier in quotes, not individual segments
+        String result = SoftDeleteHelper.escapeIdentifier("schema.table");
+        assertEquals("\"schema.table\"", result);
+    }
+
+    @Test
+    void testEscapeIdentifierWithNullThrowsException() {
+        assertThrows(IllegalArgumentException.class, () -> SoftDeleteHelper.escapeIdentifier(null));
+    }
+
+    @Test
+    void testEscapeIdentifierWithEmptyThrowsException() {
+        assertThrows(IllegalArgumentException.class, () -> SoftDeleteHelper.escapeIdentifier(""));
+    }
+
+    @Test
+    void testEscapeIdentifierWithInvalidCharsThrowsException() {
+        assertThrows(IllegalArgumentException.class, () -> SoftDeleteHelper.escapeIdentifier("table;DROP"));
+    }
+
+    @Test
+    void testSoftDeleteAllWithNullEmThrowsException() {
+        assertThrows(IllegalArgumentException.class,
+            () -> SoftDeleteHelper.softDeleteAll(null, SoftDeleteTestEntity.class));
+    }
+
+    @Test
+    void testSoftDeleteAllWithNullClassThrowsException() {
+        assertThrows(IllegalArgumentException.class, () -> SoftDeleteHelper.softDeleteAll(null, null));
+    }
+
+    @Test
+    void testSoftDeleteByIdsWithNullEmThrowsException() {
+        assertThrows(IllegalArgumentException.class,
+            () -> SoftDeleteHelper.softDeleteByIds(null, SoftDeleteTestEntity.class, List.of(1L)));
+    }
+
+    @Test
+    void testSoftDeleteByIdsWithNullClassThrowsException() {
+        assertThrows(IllegalArgumentException.class, () -> SoftDeleteHelper.softDeleteByIds(null, null, List.of(1L)));
+    }
+
+    @Test
+    void testIsNotDeletedWithNullClass() {
+        // findSoftDeleteField throws NPE when entityClass is null
+        assertThrows(NullPointerException.class, () -> SoftDeleteHelper.isNotDeleted(null));
+    }
+
+    @Test
+    void testIsDeletedWithNullClass() {
+        // findSoftDeleteField throws NPE when entityClass is null
+        assertThrows(NullPointerException.class, () -> SoftDeleteHelper.isDeleted(null));
+    }
+
     private TestEntity newEntity(String name, int status) {
         TestEntity entity = new TestEntity();
         entity.setName(name);

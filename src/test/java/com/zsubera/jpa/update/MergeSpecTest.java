@@ -307,4 +307,43 @@ class MergeSpecTest {
             .updateOnConflict(TestEntity::getStatus).execute(em);
         assertTrue(count >= 1);
     }
+
+    @Test
+    void testMergeExecuteBatchWithPartialBatch() {
+        // Test batch with entities not filling the last batch
+        List<TestEntity> entities =
+            List.of(newEntity("partial1", 1), newEntity("partial2", 2), newEntity("partial3", 3));
+
+        MergeSpec<TestEntity> spec = new MergeSpec<>(TestEntity.class).onConflict(TestEntity::getName);
+        int count = spec.executeBatch(entities, em, 5); // batchSize > entities.size()
+        em.flush();
+
+        assertEquals(3, count);
+        assertEquals(3, repository.count());
+    }
+
+    @Test
+    void testMergeExecuteBatchWithExactBatch() {
+        // Test batch with entities filling exactly one batch
+        List<TestEntity> entities = List.of(newEntity("exact1", 1), newEntity("exact2", 2));
+
+        MergeSpec<TestEntity> spec = new MergeSpec<>(TestEntity.class).onConflict(TestEntity::getName);
+        int count = spec.executeBatch(entities, em, 2);
+        em.flush();
+
+        assertEquals(2, count);
+        assertEquals(2, repository.count());
+    }
+
+    @Test
+    void testMergeWithNullConflictField() {
+        assertThrows(IllegalArgumentException.class,
+            () -> new MergeSpec<>(TestEntity.class).onConflict((com.zsubera.jpa.spec.SFunction<TestEntity, ?>)null));
+    }
+
+    @Test
+    void testMergeWithNullUpdateField() {
+        assertThrows(IllegalArgumentException.class, () -> new MergeSpec<>(TestEntity.class)
+            .updateOnConflict((com.zsubera.jpa.spec.SFunction<TestEntity, ?>)null));
+    }
 }

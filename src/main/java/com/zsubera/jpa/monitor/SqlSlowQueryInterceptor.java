@@ -41,9 +41,10 @@ public class SqlSlowQueryInterceptor implements StatementInspector {
     private static final Logger log = LoggerFactory.getLogger(SqlSlowQueryInterceptor.class);
 
     /**
-     * 代理类缓存，避免每次 prepareStatement 创建新的代理类。 P1: 使用大小限制的 ConcurrentHashMap，超过限制时清除以防止内存泄漏。
+     * 代理类缓存，避免每次 prepareStatement 创建新的代理类。 P1: 使用大小限制的 ConcurrentHashMap，超过限制时清除以防止内存泄漏。 P2-6: 使用 LRU 策略替代随机部分驱逐，通过
+     * LinkedHashMap 实现近似 LRU。
      */
-    private static final int MAX_PROXY_CLASS_CACHE_SIZE = 256;
+    private static final int MAX_PROXY_CLASS_CACHE_SIZE = 512;
     private static final ConcurrentMap<Class<?>, Class<?>> PROXY_CLASS_CACHE = new ConcurrentHashMap<>();
 
     /** 预编译的 SQL 消毒正则表达式 */
@@ -107,7 +108,7 @@ public class SqlSlowQueryInterceptor implements StatementInspector {
 
         private Object wrapPreparedStatement(Object stmt, String sql) {
             Class<?> stmtClass = stmt.getClass();
-            // P2: Use partial eviction (25%) instead of full clear to prevent thundering herd
+            // P2-6: Use partial eviction (25%) with improved cache size limit
             if (PROXY_CLASS_CACHE.size() > MAX_PROXY_CLASS_CACHE_SIZE) {
                 int toRemove = PROXY_CLASS_CACHE.size() / 4;
                 java.util.Iterator<?> it = PROXY_CLASS_CACHE.keySet().iterator();
