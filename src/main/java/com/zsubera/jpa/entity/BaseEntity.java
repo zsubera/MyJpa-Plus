@@ -43,6 +43,26 @@ import java.util.Objects;
  * <p>
  * {@code equals} 和 {@code hashCode} 在 {@code id} 非空（已持久化实体）时基于 {@code id} 字段， 否则使用固定 hashCode（基于实体类），确保 equals/hashCode
  * 契约成立。
+ *
+ * <p>
+ * <strong>ID 生成策略说明：</strong>默认使用 {@link GenerationType.IDENTITY}，适用于 MySQL、PostgreSQL、H2 等支持自增列的数据库。 如果使用 Oracle
+ * 或其他不支持自增列的数据库，子类应覆盖 {@code id} 字段并使用 {@link GenerationType#SEQUENCE} 或 {@link GenerationType#TABLE}。示例：
+ *
+ * <pre>
+ * {
+ *     &#64;code
+ *     &#64;Entity
+ *     public class OracleEntity extends BaseEntity {
+ *         &#64;Override
+ *         &#64;Id
+ *         &#64;GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "seq_gen")
+ *         @SequenceGenerator(name = "seq_gen", sequenceName = "my_sequence")
+ *         protected Long getId() {
+ *             return super.getId();
+ *         }
+ *     }
+ * }
+ * </pre>
  */
 @MappedSuperclass
 public abstract class BaseEntity implements Serializable {

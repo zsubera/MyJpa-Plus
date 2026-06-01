@@ -141,19 +141,23 @@ public class QueryCacheManager {
         if (key == null || key.isEmpty()) {
             return false;
         }
-        // P-1: Use atomic compute to ensure thread-safe cache insertion with size limit
-        store.compute(key, (k, existing) -> {
-            if (existing == null && store.size() >= maxEntries) {
-                // New entry: check capacity and evict if needed
-                evictExpiredEntries();
-                if (store.size() >= maxEntries) {
-                    evictOldestEntry();
-                }
-            }
-            return new CachedQueryResult<>(value, ttlSeconds);
-        });
+        // B-01: Evict BEFORE put to avoid modifying ConcurrentHashMap inside compute().
+        // ConcurrentHashMap.compute() holds a bucket lock; structural modifications
+        // (iterator.remove) inside the lambda cause undefined behavior per JDK spec.
+        evictIfNeeded();
+        store.put(key, new CachedQueryResult<>(value, ttlSeconds));
         log.debug("Cache put for key: {} (ttl={}s)", key, ttlSeconds);
         return true;
+    }
+
+    /**
+     * 先清除过期条目，再按容量限制驱逐最早条目。在 put() 之前调用以保证线程安全。
+     */
+    private void evictIfNeeded() {
+        evictExpiredEntries();
+        while (store.size() >= maxEntries) {
+            evictOldestEntry();
+        }
     }
 
     /**

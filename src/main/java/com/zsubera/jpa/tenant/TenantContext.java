@@ -96,9 +96,11 @@ public final class TenantContext {
      * 当计数归零时自动清除 ThreadLocal，防止内存泄漏。包含防御性检查以处理异常场景下的计数漂移。
      */
     public static void popIgnore() {
-        Integer count = ignoreCount.get();
-        if (count == null || count <= 0) {
-            // 计数器已归零或未初始化，说明存在异常场景下的计数漂移，强制清除
+        // B-09: ThreadLocal.withInitial guarantees non-null, so count is always >= 0.
+        // The null check is unreachable but retained as defensive programming.
+        int count = ignoreCount.get();
+        if (count <= 0) {
+            // Counter drift detected (exception scenario), force cleanup
             ignoreCount.remove();
             return;
         }

@@ -83,17 +83,21 @@ final class AuditUtils {
      * @return 格式化的调用栈字符串
      */
     static String getCallStack() {
-        StackTraceElement[] stack = Thread.currentThread().getStackTrace();
+        // O-11: Use StackWalker (Java 9+) for efficient partial stack traversal.
+        // StackWalker only materializes the requested number of frames, unlike
+        // Thread.currentThread().getStackTrace() which captures the entire stack.
         int depth = maxStackDepth;
-        // 跳过 getStackTrace() 和 getCallStack() 本身，从调用者开始
         StringBuilder sb = new StringBuilder();
-        for (int i = STACK_SKIP; i < stack.length && i < STACK_SKIP + depth; i++) {
-            if (i > STACK_SKIP) {
-                sb.append(" <- ");
-            }
-            sb.append(stack[i].getClassName()).append(".").append(stack[i].getMethodName());
-            sb.append(":").append(stack[i].getLineNumber());
-        }
+        StackWalker.getInstance().walk(frames -> {
+            frames.skip(1).limit(depth).forEach(frame -> {
+                if (sb.length() > 0) {
+                    sb.append(" <- ");
+                }
+                sb.append(frame.getClassName()).append(".").append(frame.getMethodName());
+                sb.append(":").append(frame.getLineNumber());
+            });
+            return sb;
+        });
         return sb.toString();
     }
 }

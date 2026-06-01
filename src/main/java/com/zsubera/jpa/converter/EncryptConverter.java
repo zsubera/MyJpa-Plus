@@ -56,6 +56,9 @@ public class EncryptConverter implements AttributeConverter<String, String> {
     /** P1-1: Thread-safe salt cache to replace System.setProperty() usage. */
     private static final ConcurrentMap<String, byte[]> SALT_CACHE = new ConcurrentHashMap<>();
 
+    /** B-03: Lock object for salt file creation to prevent race conditions in computeIfAbsent. */
+    private static final Object SALT_FILE_LOCK = new Object();
+
     /** P1-2: Flag to track if key validation has been performed. */
     private static volatile boolean keyValidated = false;
 
@@ -149,6 +152,10 @@ public class EncryptConverter implements AttributeConverter<String, String> {
     public String convertToDatabaseColumn(String attribute) {
         if (attribute == null) {
             return null;
+        }
+        // B-05: Validate key configuration before encryption to fail fast
+        if (!keyValidated) {
+            validateKeyConfiguration();
         }
         try {
             SecretKeySpec keySpec = getKeySpec();
@@ -377,74 +384,128 @@ public class EncryptConverter implements AttributeConverter<String, String> {
                 throw new IllegalStateException("PBKDF2 salt must be configured in production. "
                     + "Set environment variable " + SALT_ENV + " or system property " + SALT_PROPERTY);
             }
-            // P1-1: Use ConcurrentHashMap for thread-safe salt caching instead of System.setProperty()
-            return SALT_CACHE.computeIfAbsent("internal", k -> {
-                // P0-3: Use $HOME/.myjpa-plus/.salt for better security (not world-readable temp dir)
-                java.io.File homeDir = new java.io.File(System.getProperty("user.home"), ".myjpa-plus");
-                java.io.File saltFile = new java.io.File(homeDir, ".salt");
-                if (saltFile.exists()) {
-                    try {
-                        byte[] fileSalt = java.nio.file.Files.readAllBytes(saltFile.toPath());
-                        if (fileSalt.length > 0) {
-                            LOG.log(System.Logger.Level.INFO, "Loaded persisted PBKDF2 salt from {0}",
-                                saltFile.getAbsolutePath());
-                            return fileSalt;
-                        }
-                    } catch (java.io.IOException e) {
-                        LOG.log(System.Logger.Level.WARNING, "Failed to read salt file: {0}", e.getMessage());
-                    }
+            // B-03: Use synchronized block to prevent race condition in salt file creation.
+            // ConcurrentHashMap.computeIfAbsent may execute the lambda multiple times under contention,
+            // leading to inconsistent salt values being written to the file.
+            byte[] cached = SALT_CACHE.get("internal");
+            if (cached != null) {
+                return cached;
+            }
+            synchronized (SALT_FILE_LOCK) {
+                cached = SALT_CACHE.get("internal");
+                if (cached != null) {
+                    return cached;
                 }
-                byte[] randomSalt = generateRandomSalt().getBytes(StandardCharsets.UTF_8);
-                // Try to persist the salt for cross-restart consistency
-                try {
-                    if (!homeDir.exists()) {
-                        boolean created = homeDir.mkdirs();
-                        if (!created && !homeDir.exists()) {
-                            // P0-3: Abort if directory creation fails to avoid meaningless file write
-                            LOG.log(System.Logger.Level.ERROR, "SECURITY: Failed to create directory: {0}. "
-                                + "Salt cannot be persisted. Set environment variable {1} to ensure consistent encryption.",
-                                homeDir.getAbsolutePath(), SALT_ENV);
-                            return randomSalt;
-                        }
-                    }
-                    java.nio.file.Files.write(saltFile.toPath(), randomSalt);
-                    // P0-3: Verify salt file write by reading back and comparing
-                    byte[] writtenSalt = java.nio.file.Files.readAllBytes(saltFile.toPath());
-                    if (!java.util.Arrays.equals(randomSalt, writtenSalt)) {
-                        throw new SecurityException("SECURITY: Salt file write verification failed. "
-                            + "Written bytes do not match generated salt. " + "Set environment variable " + SALT_ENV
-                            + " to ensure consistent encryption.");
-                    }
-                    // P0-3: Set POSIX file permissions (rwx------) on directory and (rw-------) on file
-                    try {
-                        java.util.Set<java.nio.file.attribute.PosixFilePermission> dirPerms =
-                            java.util.EnumSet.of(java.nio.file.attribute.PosixFilePermission.OWNER_READ,
-                                java.nio.file.attribute.PosixFilePermission.OWNER_WRITE,
-                                java.nio.file.attribute.PosixFilePermission.OWNER_EXECUTE);
-                        java.nio.file.Files.setPosixFilePermissions(homeDir.toPath(), dirPerms);
-                        java.util.Set<java.nio.file.attribute.PosixFilePermission> filePerms =
-                            java.util.EnumSet.of(java.nio.file.attribute.PosixFilePermission.OWNER_READ,
-                                java.nio.file.attribute.PosixFilePermission.OWNER_WRITE);
-                        java.nio.file.Files.setPosixFilePermissions(saltFile.toPath(), filePerms);
-                    } catch (UnsupportedOperationException | java.io.IOException permEx) {
-                        // POSIX permissions not supported on this OS (e.g., Windows)
-                        LOG.log(System.Logger.Level.DEBUG, "Cannot set POSIX permissions on salt file: {0}",
-                            permEx.getMessage());
-                    }
-                    LOG.log(System.Logger.Level.WARNING,
-                        "SECURITY: Generated and persisted PBKDF2 salt to {0}. "
-                            + "Set environment variable {1} for consistent encryption across environments.",
-                        saltFile.getAbsolutePath(), SALT_ENV);
-                } catch (java.io.IOException e) {
-                    LOG.log(System.Logger.Level.ERROR,
-                        "SECURITY: Using non-persisted random salt. Previous encrypted data WILL BE UNRECOVERABLE after restart. "
-                            + "Set environment variable {0} or system property {1}",
-                        SALT_ENV, SALT_PROPERTY);
-                }
-                return randomSalt;
-            });
+                byte[] internalSalt = loadOrCreateSalt();
+                SALT_CACHE.put("internal", internalSalt);
+                return internalSalt;
+            }
         }
         return salt.getBytes(StandardCharsets.UTF_8);
+    }
+
+    /**
+     * 从文件加载或创建盐值。必须在 {@link #SALT_FILE_LOCK} 同步块内调用。
+     *
+     * @return 盐值字节数组
+     */
+    private static byte[] loadOrCreateSalt() {
+        // P0-3: Use $HOME/.myjpa-plus/.salt for better security (not world-readable temp dir)
+        java.io.File homeDir = new java.io.File(System.getProperty("user.home"), ".myjpa-plus");
+        java.io.File saltFile = new java.io.File(homeDir, ".salt");
+        if (saltFile.exists()) {
+            try {
+                byte[] fileSalt = java.nio.file.Files.readAllBytes(saltFile.toPath());
+                if (fileSalt.length > 0) {
+                    LOG.log(System.Logger.Level.INFO, "Loaded persisted PBKDF2 salt from {0}",
+                        saltFile.getAbsolutePath());
+                    return fileSalt;
+                }
+            } catch (java.io.IOException e) {
+                LOG.log(System.Logger.Level.WARNING, "Failed to read salt file: {0}", e.getMessage());
+            }
+        }
+        byte[] randomSalt = generateRandomSalt().getBytes(StandardCharsets.UTF_8);
+        // Try to persist the salt for cross-restart consistency
+        try {
+            if (!homeDir.exists()) {
+                boolean created = homeDir.mkdirs();
+                if (!created && !homeDir.exists()) {
+                    // P0-3: Abort if directory creation fails to avoid meaningless file write
+                    LOG.log(System.Logger.Level.ERROR,
+                        "SECURITY: Failed to create directory: {0}. "
+                            + "Salt cannot be persisted. Set environment variable {1} to ensure consistent encryption.",
+                        homeDir.getAbsolutePath(), SALT_ENV);
+                    return randomSalt;
+                }
+            }
+            java.nio.file.Files.write(saltFile.toPath(), randomSalt);
+            // P0-3: Verify salt file write by reading back and comparing
+            byte[] writtenSalt = java.nio.file.Files.readAllBytes(saltFile.toPath());
+            if (!java.util.Arrays.equals(randomSalt, writtenSalt)) {
+                throw new SecurityException(
+                    "SECURITY: Salt file write verification failed. " + "Written bytes do not match generated salt. "
+                        + "Set environment variable " + SALT_ENV + " to ensure consistent encryption.");
+            }
+            // B-07: Set file permissions - POSIX on Unix, ACL on Windows
+            setSaltFilePermissions(homeDir, saltFile);
+            LOG.log(System.Logger.Level.WARNING,
+                "SECURITY: Generated and persisted PBKDF2 salt to {0}. "
+                    + "Set environment variable {1} for consistent encryption across environments.",
+                saltFile.getAbsolutePath(), SALT_ENV);
+        } catch (java.io.IOException e) {
+            LOG.log(System.Logger.Level.ERROR,
+                "SECURITY: Using non-persisted random salt. Previous encrypted data WILL BE UNRECOVERABLE after restart. "
+                    + "Set environment variable {0} or system property {1}",
+                SALT_ENV, SALT_PROPERTY);
+        }
+        return randomSalt;
+    }
+
+    /**
+     * B-07: 设置盐值文件和目录的权限。在 Unix 系统上使用 POSIX 权限，在 Windows 上使用 ACL。
+     *
+     * @param homeDir 盐值目录
+     * @param saltFile 盐值文件
+     */
+    private static void setSaltFilePermissions(java.io.File homeDir, java.io.File saltFile) {
+        String os = System.getProperty("os.name", "").toLowerCase();
+        if (os.contains("win")) {
+            // B-07: Windows - use icacls to restrict access to current user only
+            try {
+                String userName = System.getProperty("user.name");
+                if (userName != null && !userName.isEmpty()) {
+                    // Grant only current user full control, remove inherited permissions
+                    ProcessBuilder pb = new ProcessBuilder("icacls", saltFile.getAbsolutePath(), "/inheritance:r",
+                        "/grant:r", userName + ":F");
+                    pb.redirectErrorStream(true);
+                    Process proc = pb.start();
+                    proc.waitFor();
+                    if (proc.exitValue() != 0) {
+                        LOG.log(System.Logger.Level.DEBUG,
+                            "Failed to set Windows ACL on salt file: icacls returned {0}", proc.exitValue());
+                    }
+                }
+            } catch (Exception e) {
+                LOG.log(System.Logger.Level.DEBUG, "Cannot set Windows ACL on salt file: {0}", e.getMessage());
+            }
+        } else {
+            // Unix/Linux/macOS - use POSIX permissions
+            try {
+                java.util.Set<java.nio.file.attribute.PosixFilePermission> dirPerms =
+                    java.util.EnumSet.of(java.nio.file.attribute.PosixFilePermission.OWNER_READ,
+                        java.nio.file.attribute.PosixFilePermission.OWNER_WRITE,
+                        java.nio.file.attribute.PosixFilePermission.OWNER_EXECUTE);
+                java.nio.file.Files.setPosixFilePermissions(homeDir.toPath(), dirPerms);
+                java.util.Set<java.nio.file.attribute.PosixFilePermission> filePerms =
+                    java.util.EnumSet.of(java.nio.file.attribute.PosixFilePermission.OWNER_READ,
+                        java.nio.file.attribute.PosixFilePermission.OWNER_WRITE);
+                java.nio.file.Files.setPosixFilePermissions(saltFile.toPath(), filePerms);
+            } catch (UnsupportedOperationException | java.io.IOException permEx) {
+                LOG.log(System.Logger.Level.DEBUG, "Cannot set POSIX permissions on salt file: {0}",
+                    permEx.getMessage());
+            }
+        }
     }
 
     /**

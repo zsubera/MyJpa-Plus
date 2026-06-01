@@ -276,18 +276,13 @@ public final class InClauseBuilder {
             log.debug("IN clause has {} values, exceeding limit of {}. Splitting into batches.", values.size(),
                 maxInClauseSize);
         }
-        int estimatedBatches = (values.size() + maxInClauseSize - 1) / maxInClauseSize;
+        // P-10: Convert to List once to enable subList() views, avoiding temporary List copies
+        List<?> valueList = values instanceof List<?> l ? l : new ArrayList<>(values);
+        int estimatedBatches = (valueList.size() + maxInClauseSize - 1) / maxInClauseSize;
         List<Predicate> batchPredicates = new ArrayList<>(estimatedBatches);
-        List<Object> batch = new ArrayList<>(Math.min(values.size(), maxInClauseSize));
-        for (Object v : values) {
-            batch.add(v);
-            if (batch.size() >= maxInClauseSize) {
-                batchPredicates.add(buildSingleIn(cb, path, batch));
-                batch = new ArrayList<>(maxInClauseSize);
-            }
-        }
-        if (!batch.isEmpty()) {
-            batchPredicates.add(buildSingleIn(cb, path, batch));
+        for (int i = 0; i < valueList.size(); i += maxInClauseSize) {
+            int end = Math.min(i + maxInClauseSize, valueList.size());
+            batchPredicates.add(buildSingleIn(cb, path, valueList.subList(i, end)));
         }
         return cb.or(batchPredicates.toArray(new Predicate[0]));
     }
@@ -312,19 +307,13 @@ public final class InClauseBuilder {
             log.debug("NOT IN clause has {} values, exceeding limit of {}. Splitting into batches.", values.size(),
                 maxInClauseSize);
         }
-        int estimatedBatches = (values.size() + maxInClauseSize - 1) / maxInClauseSize;
+        // P-10: Convert to List once to enable subList() views, avoiding temporary List copies
+        List<?> valueList = values instanceof List<?> l ? l : new ArrayList<>(values);
+        int estimatedBatches = (valueList.size() + maxInClauseSize - 1) / maxInClauseSize;
         List<Predicate> batchPredicates = new ArrayList<>(estimatedBatches);
-        List<Object> batch = new ArrayList<>(Math.min(values.size(), maxInClauseSize));
-        for (Object v : values) {
-            batch.add(v);
-            if (batch.size() >= maxInClauseSize) {
-                batchPredicates.add(cb.not(buildSingleIn(cb, path, batch)));
-                // 创建新列表以释放旧批次的引用，防止内存泄漏
-                batch = new ArrayList<>(maxInClauseSize);
-            }
-        }
-        if (!batch.isEmpty()) {
-            batchPredicates.add(cb.not(buildSingleIn(cb, path, batch)));
+        for (int i = 0; i < valueList.size(); i += maxInClauseSize) {
+            int end = Math.min(i + maxInClauseSize, valueList.size());
+            batchPredicates.add(cb.not(buildSingleIn(cb, path, valueList.subList(i, end))));
         }
         return cb.and(batchPredicates.toArray(new Predicate[0]));
     }

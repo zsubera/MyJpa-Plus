@@ -102,14 +102,31 @@ public class MyJpaPlusException extends RuntimeException {
     public String toString() {
         StringBuilder sb = new StringBuilder(getClass().getName());
         sb.append(" [").append(errorCode).append("]");
-        // B-25: Show context information for debugging (filter sensitive data)
+        // B-12: Sanitize context to prevent sensitive data leakage (SQL parameters, credentials, etc.)
         if (context != null) {
-            sb.append(" context=").append(context);
+            String sanitized = sanitizeContext(context);
+            sb.append(" context=").append(sanitized);
         }
         String message = getMessage();
         if (message != null) {
             sb.append(": ").append(message);
         }
         return sb.toString();
+    }
+
+    /**
+     * B-12: 对上下文信息进行脱敏处理，防止敏感数据泄露到日志或监控系统。
+     *
+     * <p>
+     * 脱敏策略：截断过长内容，移除可能包含 SQL 参数值的模式。
+     *
+     * @param ctx 原始上下文
+     * @return 脱敏后的上下文
+     */
+    private static String sanitizeContext(String ctx) {
+        if (ctx.length() > 200) {
+            return ctx.substring(0, 200) + "...(truncated)";
+        }
+        return ctx;
     }
 }

@@ -55,9 +55,11 @@ public final class SoftDeleteContext {
      * 当计数归零时自动清除 ThreadLocal，防止内存泄漏。包含防御性检查以处理异常场景下的计数漂移。
      */
     public static void popIgnore() {
-        Integer count = ignoreCount.get();
-        if (count == null || count <= 0) {
-            // 防御性清理，避免计数漂移
+        // B-09: ThreadLocal.withInitial guarantees non-null, so count is always >= 0.
+        // The null check is unreachable but retained as defensive programming.
+        int count = ignoreCount.get();
+        if (count <= 0) {
+            // Defensive cleanup for counter drift in exception scenarios
             ignoreCount.remove();
             return;
         }

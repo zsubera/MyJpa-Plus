@@ -58,6 +58,28 @@ public class MergeSpec<T> {
     /** 安全标识符段正则：用于校验 schema.table 格式中每一段。 */
     private static final Pattern SAFE_IDENTIFIER_PART_PATTERN = Pattern.compile("^[a-zA-Z_][a-zA-Z0-9_]*$");
 
+    /** B-08: Unicode 标识符正则：允许 Unicode 字母、数字和下划线，支持国际化标识符。 */
+    private static final Pattern UNICODE_IDENTIFIER_PART_PATTERN = Pattern.compile("^[\\p{L}_][\\p{L}\\p{N}_]*$");
+
+    /** B-08: 是否启用 Unicode 标识符支持。可通过系统属性 myjpa-plus.merge.unicode-identifiers=true 启用。 */
+    private static volatile boolean unicodeIdentifiers = false;
+
+    static {
+        String prop = System.getProperty("myjpa-plus.merge.unicode-identifiers");
+        if ("true".equalsIgnoreCase(prop)) {
+            unicodeIdentifiers = true;
+        }
+    }
+
+    /**
+     * B-08: 设置是否启用 Unicode 标识符支持。
+     *
+     * @param enabled 是否启用
+     */
+    public static void setUnicodeIdentifiers(boolean enabled) {
+        unicodeIdentifiers = enabled;
+    }
+
     /** 缓存实体类的持久化字段列表，避免每次反射遍历。使用弱引用键防止类加载器泄漏。 */
     private static final java.util.concurrent.ConcurrentMap<Class<?>, List<java.lang.reflect.Field>> FIELD_CACHE =
         new org.springframework.util.ConcurrentReferenceHashMap<>(16,
@@ -1064,9 +1086,13 @@ public class MergeSpec<T> {
         // B-6: Validate each segment separately to prevent schema injection via dots
         String[] parts = identifier.split("\\.");
         for (String part : parts) {
-            if (!SAFE_IDENTIFIER_PART_PATTERN.matcher(part).matches()) {
+            // B-08: Use Unicode pattern when enabled, otherwise use ASCII-only pattern
+            Pattern validationPattern =
+                unicodeIdentifiers ? UNICODE_IDENTIFIER_PART_PATTERN : SAFE_IDENTIFIER_PART_PATTERN;
+            if (!validationPattern.matcher(part).matches()) {
                 throw new MyJpaPlusException("Invalid SQL identifier: '" + identifier
-                    + "'. Each part must contain only alphanumeric characters and underscores.");
+                    + "'. Each part must contain only alphanumeric characters and underscores." + (unicodeIdentifiers
+                        ? "" : " Use myjpa-plus.merge.unicode-identifiers=true for Unicode support."));
             }
         }
         // Always quote identifiers to handle reserved words and case sensitivity.

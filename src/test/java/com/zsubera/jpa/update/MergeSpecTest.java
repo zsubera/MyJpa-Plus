@@ -283,4 +283,28 @@ class MergeSpecTest {
         entity.setStatus(status);
         return entity;
     }
+
+    @Test
+    void testUnicodeIdentifiersToggle() {
+        // B-08: Test that unicode identifiers can be toggled
+        boolean original = false;
+        try {
+            MergeSpec.setUnicodeIdentifiers(true);
+            // Should not throw for valid ASCII identifiers even with unicode mode enabled
+            TestEntity entity = newEntity("unicode-test", 1);
+            int count = new MergeSpec<>(TestEntity.class).withEntity(entity).execute(em);
+            assertTrue(count >= 1);
+        } finally {
+            MergeSpec.setUnicodeIdentifiers(original);
+        }
+    }
+
+    @Test
+    void testBuildSqlDelegation() {
+        // O-08: Test that buildSql delegates to buildSqlFor (single entity path)
+        TestEntity entity = newEntity("delegate-test", 5);
+        int count = new MergeSpec<>(TestEntity.class).withEntity(entity).onConflict(TestEntity::getName)
+            .updateOnConflict(TestEntity::getStatus).execute(em);
+        assertTrue(count >= 1);
+    }
 }

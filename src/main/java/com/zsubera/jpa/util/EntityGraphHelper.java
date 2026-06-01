@@ -17,6 +17,10 @@ import org.slf4j.LoggerFactory;
  * JPA {@link EntityGraph} 允许声明式地指定查询时需要急切加载的关联关系， 提供了 {@code FETCH JOIN} 的替代方案，并支持在多个查询间复用。
  *
  * <p>
+ * <strong>线程安全说明：</strong>此类<b>非线程安全</b>。{@code attributePaths} 和 {@code loadGraphType} 字段在构建期间被修改， 因此不能在多线程环境中并发使用同一个
+ * {@code EntityGraphHelper} 实例。每个线程应使用独立的实例。
+ *
+ * <p>
  * 使用示例：
  *
  * <pre>{@code

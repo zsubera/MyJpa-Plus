@@ -347,7 +347,10 @@ public sealed interface ConditionNode permits ConditionNode.SimpleNode, Conditio
      * @param fn 谓词函数
      * @return 新的 RawNode 实例
      * @throws IllegalArgumentException 如果 fn 为 null
+     * @deprecated 此方法绕过类型安全机制，计划在 2.0 版本中移除。 使用 {@link #ofInternalPredicate(BiFunction)} 替代框架内部用途， 或使用类型安全的条件方法（eq,
+     *             likeSafe 等）替代外部用途。
      */
+    @Deprecated(since = "1.2.0", forRemoval = true)
     static ConditionNode
         ofRawPredicate(BiFunction<jakarta.persistence.criteria.Path<?>, CriteriaBuilder, Predicate> fn) {
         if (fn == null) {

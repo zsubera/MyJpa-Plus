@@ -57,6 +57,27 @@ public class CteSpec {
     private final Map<String, Object> parameters = new LinkedHashMap<>();
     private boolean recursive;
 
+    /** B-11: 严格模式开关。启用后，未绑定的命名参数将抛出异常而非仅记录警告。 */
+    private static volatile boolean strictMode = false;
+
+    /**
+     * 设置严格模式。启用后，未绑定的命名参数将抛出异常。
+     *
+     * @param enabled 是否启用严格模式
+     */
+    public static void setStrictMode(boolean enabled) {
+        strictMode = enabled;
+    }
+
+    /**
+     * 获取严格模式状态。
+     *
+     * @return 是否启用严格模式
+     */
+    public static boolean isStrictMode() {
+        return strictMode;
+    }
+
     private CteSpec(boolean recursive) {
         this.recursive = recursive;
     }
@@ -267,6 +288,40 @@ public class CteSpec {
     }
 
     /**
+     * P-02: 构建完整的 CTE SQL 并以流式方式执行查询，适用于大数据量递归 CTE 场景。
+     *
+     * <p>
+     * <strong>重要：必须使用 try-with-resources 确保资源关闭：</strong>
+     *
+     * <pre>{@code
+     * try (Stream<Object[]> stream = cteSpec.getResultStream(em)) {
+     *     stream.forEach(row -> process(row));
+     * }
+     * }</pre>
+     *
+     * @param em EntityManager 实例
+     * @return 查询结果的 Stream（必须由调用方关闭）
+     * @throws IllegalStateException 如果 CTE 或主查询未完整配置
+     * @throws IllegalArgumentException 如果 em 为 null
+     */
+    @SuppressWarnings("unchecked")
+    public java.util.stream.Stream<Object[]> getResultStream(EntityManager em) {
+        if (em == null) {
+            throw new IllegalArgumentException("em must not be null");
+        }
+        String sql = buildSql();
+        log.debug("CteSpec: executing native stream query (length={})", sql.length());
+        Query query = em.createNativeQuery(sql);
+        applyParameters(query);
+        return query.getResultStream().map(row -> {
+            if (row instanceof Object[] arr) {
+                return arr;
+            }
+            return new Object[] {row};
+        });
+    }
+
+    /**
      * 仅构建 SQL 字符串，不执行。用于调试或与其他组件集成。
      *
      * <p>
@@ -368,12 +423,20 @@ public class CteSpec {
      */
     private static void checkUnboundParameters(String sql, Map<String, Object> boundParams) {
         java.util.regex.Matcher matcher = java.util.regex.Pattern.compile(":([a-zA-Z_][a-zA-Z0-9_]*)").matcher(sql);
+        List<String> unboundParams = new ArrayList<>();
         while (matcher.find()) {
             String paramName = matcher.group(1);
             if (!boundParams.containsKey(paramName)) {
-                log.warn("SECURITY: CTE SQL contains unbound named parameter ':{}'. "
-                    + "Ensure this parameter is bound via setParameter() to prevent SQL injection.", paramName);
+                unboundParams.add(paramName);
             }
+        }
+        if (!unboundParams.isEmpty()) {
+            String message = "SECURITY: CTE SQL contains unbound named parameters: " + unboundParams
+                + ". Ensure all parameters are bound via setParameter() to prevent SQL injection.";
+            if (strictMode) {
+                throw new IllegalStateException(message);
+            }
+            log.warn(message);
         }
     }
 

@@ -391,16 +391,16 @@ public class ProjectionSpec<T> {
         if (predicate == null) {
             throw new IllegalArgumentException("predicate must not be null");
         }
-        // Store the predicate function for later application
-        // We'll apply it during query building when we have the root and cb
-        this.havingPredicateFn = predicate;
+        // B-06: Accumulate HAVING predicates in a list (AND semantics),
+        // instead of overwriting the previous one.
+        this.havingPredicateFns.add(predicate);
         return this;
     }
 
-    /** HAVING 条件函数引用，延迟应用。 */
+    /** B-06: HAVING 条件函数列表，延迟应用。多个条件通过 AND 组合。 */
     @SuppressWarnings("rawtypes")
-    private java.util.function.BiFunction<jakarta.persistence.criteria.Root<T>, CriteriaBuilder,
-        jakarta.persistence.criteria.Predicate> havingPredicateFn;
+    private final List<java.util.function.BiFunction<jakarta.persistence.criteria.Root<T>, CriteriaBuilder,
+        jakarta.persistence.criteria.Predicate>> havingPredicateFns = new ArrayList<>();
 
     /**
      * 添加 INNER JOIN 关联查询，可对关联实体设置条件。
@@ -557,12 +557,7 @@ public class ProjectionSpec<T> {
             }
 
             // Apply HAVING
-            if (havingPredicateFn != null) {
-                jakarta.persistence.criteria.Predicate havingPredicate = havingPredicateFn.apply(root, cb);
-                if (havingPredicate != null) {
-                    query.having(havingPredicate);
-                }
-            }
+            applyHaving(root, cb, query);
 
             // Apply ORDER BY
             applyOrderBy(root, cb, query);
@@ -602,7 +597,42 @@ public class ProjectionSpec<T> {
         if (em == null) {
             throw new IllegalArgumentException("em must not be null");
         }
-        return toTupleQuery(em, -1).getResultStream();
+        TypedQuery<Tuple> query = toTupleQuery(em, -1);
+        // P-01: Set fetchSize for streaming queries to enable server-side cursors.
+        // PostgreSQL requires fetchSize > 0 for true streaming;
+        // MySQL uses Integer.MIN_VALUE for streaming mode.
+        int fetchSize = determineFetchSize(em);
+        if (fetchSize != 0) {
+            query.setHint("jakarta.persistence.query.fetchSize", fetchSize);
+        }
+        return query.getResultStream();
+    }
+
+    /**
+     * P-01: 根据数据库方言确定合适的 fetchSize 用于流式查询。
+     *
+     * @param em EntityManager 实例
+     * @return fetchSize 值，0 表示不设置提示
+     */
+    private int determineFetchSize(EntityManager em) {
+        try {
+            Object urlObj = em.getEntityManagerFactory().getProperties().get("jakarta.persistence.jdbc.url");
+            if (urlObj == null) {
+                urlObj = em.getEntityManagerFactory().getProperties().get("hibernate.connection.url");
+            }
+            if (urlObj != null) {
+                String lower = urlObj.toString().toLowerCase();
+                if (lower.contains("postgresql")) {
+                    return 100;
+                }
+                if (lower.contains("mysql")) {
+                    return Integer.MIN_VALUE;
+                }
+            }
+        } catch (Exception e) {
+            log.debug("Failed to determine fetchSize from JDBC URL: {}", e.getMessage());
+        }
+        return 0;
     }
 
     /**
@@ -673,12 +703,7 @@ public class ProjectionSpec<T> {
             }
 
             // Apply HAVING
-            if (havingPredicateFn != null) {
-                jakarta.persistence.criteria.Predicate havingPredicate = havingPredicateFn.apply(root, cb);
-                if (havingPredicate != null) {
-                    query.having(havingPredicate);
-                }
-            }
+            applyHaving(root, cb, query);
 
             // Apply ORDER BY
             applyOrderBy(root, cb, query);
@@ -726,7 +751,7 @@ public class ProjectionSpec<T> {
             CriteriaQuery<Long> countQuery = cb.createQuery(Long.class);
             Root<T> countRoot = countQuery.from(entityClass);
             resolveJoins(countRoot, cb);
-            if (!groupByFields.isEmpty() && havingPredicateFn != null) {
+            if (!groupByFields.isEmpty() && !havingPredicateFns.isEmpty()) {
                 // When GROUP BY + HAVING is present, use a separate count query that
                 // groups by the same fields and applies HAVING, then counts the groups
                 CriteriaQuery<Long> havingCountQuery = cb.createQuery(Long.class);
@@ -741,10 +766,7 @@ public class ProjectionSpec<T> {
                 }
                 havingCountQuery.groupBy(groupByExpressions);
                 // Apply HAVING
-                jakarta.persistence.criteria.Predicate havingPredicate = havingPredicateFn.apply(havingRoot, cb);
-                if (havingPredicate != null) {
-                    havingCountQuery.having(havingPredicate);
-                }
+                applyHavingPredicates(havingRoot, cb, havingCountQuery);
                 havingCountQuery.select(cb.countDistinct(havingRoot));
                 total = em.createQuery(havingCountQuery).getSingleResult();
             } else {
@@ -781,12 +803,7 @@ public class ProjectionSpec<T> {
             }
 
             // Apply HAVING
-            if (havingPredicateFn != null) {
-                jakarta.persistence.criteria.Predicate havingPredicate = havingPredicateFn.apply(dataRoot, cb);
-                if (havingPredicate != null) {
-                    dataQuery.having(havingPredicate);
-                }
-            }
+            applyHavingPredicates(dataRoot, cb, dataQuery);
 
             applyOrderBy(dataRoot, cb, dataQuery);
 
@@ -1006,6 +1023,41 @@ public class ProjectionSpec<T> {
                 orders.add(os.asc() ? cb.asc(path) : cb.desc(path));
             }
             query.orderBy(orders);
+        }
+    }
+
+    /**
+     * B-06: 应用 HAVING 条件到 Tuple 类型的查询。将多个 HAVING 条件通过 AND 组合。
+     *
+     * @param root 查询根实体
+     * @param cb CriteriaBuilder 实例
+     * @param query CriteriaQuery 实例
+     */
+    private void applyHaving(Root<T> root, CriteriaBuilder cb, CriteriaQuery<?> query) {
+        applyHavingPredicates(root, cb, query);
+    }
+
+    /**
+     * B-06: 将所有累积的 HAVING 条件通过 AND 组合并应用到查询。
+     *
+     * @param root 查询根实体
+     * @param cb CriteriaBuilder 实例
+     * @param query CriteriaQuery 实例
+     */
+    @SuppressWarnings("unchecked")
+    private void applyHavingPredicates(Root<T> root, CriteriaBuilder cb, CriteriaQuery<?> query) {
+        if (havingPredicateFns.isEmpty()) {
+            return;
+        }
+        List<jakarta.persistence.criteria.Predicate> havingPredicates = new ArrayList<>();
+        for (var fn : havingPredicateFns) {
+            jakarta.persistence.criteria.Predicate p = fn.apply(root, cb);
+            if (p != null) {
+                havingPredicates.add(p);
+            }
+        }
+        if (!havingPredicates.isEmpty()) {
+            query.having(cb.and(havingPredicates.toArray(new jakarta.persistence.criteria.Predicate[0])));
         }
     }
 

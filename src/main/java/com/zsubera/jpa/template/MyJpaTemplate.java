@@ -256,7 +256,15 @@ public class MyJpaTemplate {
         java.util.ArrayList<T> result = new java.util.ArrayList<>();
         int count = 0;
         for (T entity : entities) {
-            result.add(entityManager.merge(entity));
+            // P-03: Use persist() for new entities (ID is null) instead of merge(),
+            // which avoids the extra SELECT query that merge() performs to check existence.
+            // This significantly improves performance for pure insert scenarios.
+            if (isNewEntity(entity)) {
+                entityManager.persist(entity);
+                result.add(entity);
+            } else {
+                result.add(entityManager.merge(entity));
+            }
             count++;
             if (count % batchSize == 0) {
                 entityManager.flush();
@@ -266,6 +274,31 @@ public class MyJpaTemplate {
         entityManager.flush();
         entityManager.clear();
         return result;
+    }
+
+    /**
+     * P-03: 判断实体是否为新实体（未持久化）。通过检查 @Id 字段是否为 null 来判断。
+     *
+     * @param entity 实体实例
+     * @return 如果 @Id 字段为 null 返回 true
+     */
+    private boolean isNewEntity(Object entity) {
+        // Use PersistenceUnitUtil for accurate ID check
+        try {
+            jakarta.persistence.PersistenceUnitUtil puu =
+                entityManager.getEntityManagerFactory().getPersistenceUnitUtil();
+            return puu.getIdentifier(entity) == null;
+        } catch (RuntimeException ignored) {
+            // fallback to reflection
+        }
+        // Fallback: check common patterns
+        try {
+            java.lang.reflect.Method getId = entity.getClass().getMethod("getId");
+            return getId.invoke(entity) == null;
+        } catch (ReflectiveOperationException ignored) {
+            // If we can't determine, assume not new (use merge for safety)
+            return false;
+        }
     }
 
     // ---- 便捷查询方法 ----
@@ -1408,6 +1441,20 @@ public class MyJpaTemplate {
         }
         org.springframework.transaction.support.TransactionTemplate txTemplate =
             new org.springframework.transaction.support.TransactionTemplate(txManager);
+        // B-02: Use REQUIRES_NEW when possible to ensure each batch runs in an independent transaction.
+        // When already in a transaction, REQUIRES_NEW suspends it and creates a new one.
+        // However, in environments with limited connections (e.g., test H2), suspension may fail
+        // or the new transaction may not see uncommitted data from the outer transaction.
+        if (org.springframework.transaction.support.TransactionSynchronizationManager.isActualTransactionActive()) {
+            // Already in a transaction: use REQUIRED to join it.
+            // Batches execute within the caller's transaction but still flush/clear for memory management.
+            txTemplate
+                .setPropagationBehavior(org.springframework.transaction.TransactionDefinition.PROPAGATION_REQUIRED);
+        } else {
+            // No active transaction: use REQUIRES_NEW for true isolation.
+            txTemplate
+                .setPropagationBehavior(org.springframework.transaction.TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+        }
         return txTemplate.execute(status -> operation.apply(entityManager));
     }
 

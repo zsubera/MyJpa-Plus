@@ -31,6 +31,10 @@ public class IgnoreSoftDeleteAdvisor {
 
     private static final Logger log = LoggerFactory.getLogger(IgnoreSoftDeleteAdvisor.class);
 
+    /** O-10: Cache annotation check results to avoid repeated reflection. */
+    private static final java.util.concurrent.ConcurrentMap<Method, Boolean> ANNOTATION_CACHE =
+        new java.util.concurrent.ConcurrentHashMap<>();
+
     /**
      * 拦截所有 Spring Data JPA Repository 方法调用。
      *
@@ -39,7 +43,7 @@ public class IgnoreSoftDeleteAdvisor {
      * {@link com.zsubera.jpa.repository.MyJpaRepository} 上均生效。
      *
      * <p>
-     * 优化：使用 AnnotationUtils.findAnnotation() 进行精确注解检测，避免对无注解方法的不必要处理。
+     * 优化：使用缓存避免对无注解方法的重复反射检查。
      *
      * @param pjp 连接点
      * @return 方法执行结果
@@ -50,10 +54,10 @@ public class IgnoreSoftDeleteAdvisor {
         MethodSignature signature = (MethodSignature)pjp.getSignature();
         Method method = signature.getMethod();
 
-        // Quick check: skip processing if no @IgnoreSoftDelete annotation present
-        // Uses AnnotationUtils for proper resolution through CGLIB proxies and interfaces
-        boolean hasAnnotation = AnnotationUtils.findAnnotation(method, IgnoreSoftDelete.class) != null
-            || AnnotationUtils.findAnnotation(method.getDeclaringClass(), IgnoreSoftDelete.class) != null;
+        // O-10: Use cached annotation check to avoid repeated reflection
+        Boolean hasAnnotation = ANNOTATION_CACHE.computeIfAbsent(method,
+            m -> AnnotationUtils.findAnnotation(m, IgnoreSoftDelete.class) != null
+                || AnnotationUtils.findAnnotation(m.getDeclaringClass(), IgnoreSoftDelete.class) != null);
 
         if (!hasAnnotation) {
             return pjp.proceed();

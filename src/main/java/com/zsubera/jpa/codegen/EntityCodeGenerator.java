@@ -51,6 +51,11 @@ public final class EntityCodeGenerator {
      */
     public static final class ColumnDef {
 
+        private static final java.util.regex.Pattern SAFE_COLUMN_NAME =
+            java.util.regex.Pattern.compile("^[a-zA-Z_][a-zA-Z0-9_]*$");
+        private static final java.util.regex.Pattern SAFE_JAVA_TYPE =
+            java.util.regex.Pattern.compile("^[a-zA-Z_][a-zA-Z0-9_.<>,?]*$");
+
         private final String name;
         private final String javaType;
         private final boolean nullable;
@@ -61,7 +66,7 @@ public final class EntityCodeGenerator {
          * @param name column/field name (snake_case for table, camelCase for Java)
          * @param javaType Java type simple name (e.g. "String", "Long", "BigDecimal")
          * @param nullable whether the column is nullable
-         * @throws IllegalArgumentException if name or javaType is null or empty
+         * @throws IllegalArgumentException if name or javaType is null or empty or contains invalid characters
          */
         public ColumnDef(String name, String javaType, boolean nullable) {
             if (name == null || name.isEmpty()) {
@@ -69,6 +74,15 @@ public final class EntityCodeGenerator {
             }
             if (javaType == null || javaType.isEmpty()) {
                 throw new IllegalArgumentException("javaType must not be null or empty");
+            }
+            // O-07: Validate column name to prevent code injection
+            if (!SAFE_COLUMN_NAME.matcher(name).matches()) {
+                throw new IllegalArgumentException(
+                    "Column name contains invalid characters. Only alphanumeric and underscore are allowed: " + name);
+            }
+            // O-07: Validate Java type to prevent code injection
+            if (!SAFE_JAVA_TYPE.matcher(javaType).matches()) {
+                throw new IllegalArgumentException("Java type contains invalid characters: " + javaType);
             }
             this.name = name;
             this.javaType = javaType;

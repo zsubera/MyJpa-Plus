@@ -77,9 +77,10 @@ public class OptimisticLockRetryAdvisor {
                 }
                 // P0: Cap the shift amount to prevent Long overflow (1L << 46 is safe, 1L << 47 overflows)
                 long baseDelay = Math.min(backoffMs * (1L << Math.min(attempt - 1, 46)), MAX_BACKOFF_MS);
-                // P1: Ensure jitter is always positive (minimum 10% of base delay)
-                long jitter = (long)(baseDelay * ThreadLocalRandom.current().nextDouble(0.1, 0.25));
-                long delay = baseDelay + jitter;
+                // O-09: Jitter can be positive or negative (spread ±10% of base delay)
+                // to prevent thundering herd when multiple threads retry simultaneously
+                long jitter = (long)(baseDelay * (ThreadLocalRandom.current().nextDouble() - 0.5) * 0.2);
+                long delay = Math.max(0, baseDelay + jitter);
                 log.debug("OptimisticLockException on attempt {}/{} for method {}.{}, retrying in {}ms", attempt,
                     maxRetries, method.getDeclaringClass().getSimpleName(), method.getName(), delay);
                 try {
