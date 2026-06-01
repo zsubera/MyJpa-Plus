@@ -748,7 +748,12 @@ public class ProjectionSpec<T> {
                 havingCountQuery.select(cb.countDistinct(havingRoot));
                 total = em.createQuery(havingCountQuery).getSingleResult();
             } else {
-                countQuery.select(cb.countDistinct(countRoot));
+                // P0-1: Use countDistinct only when distinct is explicitly enabled
+                if (this.distinct) {
+                    countQuery.select(cb.countDistinct(countRoot));
+                } else {
+                    countQuery.select(cb.count(countRoot));
+                }
                 applyPredicate(countRoot, countQuery, cb);
                 total = em.createQuery(countQuery).getSingleResult();
             }
@@ -760,7 +765,10 @@ public class ProjectionSpec<T> {
 
             List<jakarta.persistence.criteria.Selection<?>> selectionList = buildSelectionList(dataRoot, cb);
             dataQuery.multiselect(selectionList);
-            dataQuery.distinct(true);
+            // P0-1: Only apply DISTINCT when explicitly enabled by user
+            if (this.distinct) {
+                dataQuery.distinct(true);
+            }
             applyPredicate(dataRoot, dataQuery, cb);
 
             // Apply GROUP BY
@@ -1001,6 +1009,11 @@ public class ProjectionSpec<T> {
         }
     }
 
+    /** P1: Cache for tenant field name per entity class to avoid repeated reflection. */
+    private static final java.util.concurrent.ConcurrentMap<Class<?>, String> TENANT_FIELD_CACHE =
+        new org.springframework.util.ConcurrentReferenceHashMap<>(16,
+            org.springframework.util.ConcurrentReferenceHashMap.ReferenceType.WEAK);
+
     /**
      * 解析实体类中 @TenantId 注解标记的字段名。
      *
@@ -1008,13 +1021,20 @@ public class ProjectionSpec<T> {
      * @return 租户字段名，如果未找到则返回 null
      */
     private static String resolveTenantFieldName(Class<?> entityClass) {
+        // P1: Use cache to avoid repeated reflection
+        String cached = TENANT_FIELD_CACHE.get(entityClass);
+        if (cached != null) {
+            return "".equals(cached) ? null : cached;
+        }
         for (Class<?> c = entityClass; c != null && c != Object.class; c = c.getSuperclass()) {
             for (java.lang.reflect.Field f : c.getDeclaredFields()) {
                 if (f.isAnnotationPresent(com.zsubera.jpa.annotation.TenantId.class)) {
+                    TENANT_FIELD_CACHE.put(entityClass, f.getName());
                     return f.getName();
                 }
             }
         }
+        TENANT_FIELD_CACHE.put(entityClass, "");
         return null;
     }
 }

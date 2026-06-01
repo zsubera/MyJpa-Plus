@@ -139,6 +139,12 @@ public final class EntityCodeGenerator {
         if (tableName == null || tableName.isBlank()) {
             throw new IllegalArgumentException("tableName must not be blank");
         }
+        // P1: Validate tableName to prevent code injection
+        if (!tableName.matches("[a-zA-Z0-9_.]+")) {
+            throw new IllegalArgumentException(
+                "tableName contains invalid characters. Only alphanumeric, underscore, and dot are allowed: "
+                    + tableName);
+        }
         if (columns == null) {
             throw new IllegalArgumentException("columns must not be null");
         }

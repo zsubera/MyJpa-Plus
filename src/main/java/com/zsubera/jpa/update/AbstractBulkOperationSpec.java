@@ -538,6 +538,9 @@ public abstract class AbstractBulkOperationSpec<T, SELF extends AbstractBulkOper
      * @return 当前构建器实例
      */
     public SELF eqIgnoreCase(SFunction<T, ?> field, String value) {
+        if (value == null) {
+            throw new IllegalArgumentException("value must not be null");
+        }
         String name = property(field);
         conditionNodes.add(leaf((root, cb) -> PredicateHelper.eqIgnoreCase(root, name, value, cb)));
         return self();
@@ -551,6 +554,9 @@ public abstract class AbstractBulkOperationSpec<T, SELF extends AbstractBulkOper
      * @return 当前构建器实例
      */
     public SELF neIgnoreCase(SFunction<T, ?> field, String value) {
+        if (value == null) {
+            throw new IllegalArgumentException("value must not be null");
+        }
         String name = property(field);
         conditionNodes.add(leaf((root, cb) -> PredicateHelper.neIgnoreCase(root, name, value, cb)));
         return self();

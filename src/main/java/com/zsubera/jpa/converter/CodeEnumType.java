@@ -57,11 +57,14 @@ public class CodeEnumType implements UserType<Object>, DynamicParameterizedType 
 
     private static final Logger log = LoggerFactory.getLogger(CodeEnumType.class);
 
-    private static final ConcurrentMap<Class<?>, Field> CODE_FIELD_CACHE = new ConcurrentHashMap<>();
+    private static final ConcurrentMap<Class<?>, Field> CODE_FIELD_CACHE =
+        new org.springframework.util.ConcurrentReferenceHashMap<>(16,
+            org.springframework.util.ConcurrentReferenceHashMap.ReferenceType.WEAK);
 
     /** 枚举类 -> (code -> enum constant) 的缓存，用于 nullSafeGet 的 O(1) 查找。 */
     private static final ConcurrentMap<Class<?>, ConcurrentMap<String, Object>> ENUM_CODE_CACHE =
-        new ConcurrentHashMap<>();
+        new org.springframework.util.ConcurrentReferenceHashMap<>(16,
+            org.springframework.util.ConcurrentReferenceHashMap.ReferenceType.WEAK);
 
     private Class<?> enumClass;
     private Field codeField;
@@ -97,6 +100,11 @@ public class CodeEnumType implements UserType<Object>, DynamicParameterizedType 
         this.codeField = resolveCodeField(enumClass);
         this.useOrdinal = (codeField == null);
         if (useOrdinal) {
+            // P1: Log WARNING when @CodeEnumValue is not found and ordinal is used as fallback
+            log.warn(
+                "@CodeEnumValue not found in enum {}. Falling back to ordinal-based mapping. "
+                    + "Add @CodeEnumValue annotation to the code field for explicit mapping.",
+                enumClass.getSimpleName());
             this.sqlType = Types.INTEGER;
         } else {
             Class<?> fieldType = codeField.getType();
@@ -222,7 +230,16 @@ public class CodeEnumType implements UserType<Object>, DynamicParameterizedType 
         } else {
             try {
                 Object codeValue = codeField.get(value);
-                st.setString(index, codeValue != null ? String.valueOf(codeValue) : null);
+                if (codeValue == null) {
+                    st.setNull(index, sqlType);
+                } else if (codeValue instanceof Integer intVal) {
+                    // P1-2: Use typed setter based on code field type
+                    st.setInt(index, intVal);
+                } else if (codeValue instanceof Long longVal) {
+                    st.setLong(index, longVal);
+                } else {
+                    st.setString(index, String.valueOf(codeValue));
+                }
             } catch (IllegalAccessException e) {
                 throw new HibernateException("Failed to read @CodeEnumValue field", e);
             }

@@ -1,6 +1,5 @@
 package com.zsubera.jpa.repository;
 
-import com.zsubera.jpa.exception.MyJpaPlusException;
 import com.zsubera.jpa.update.SoftDeleteHelper;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import jakarta.persistence.EntityManager;
@@ -92,6 +91,40 @@ public class SoftDeleteJpaRepository<T, ID> extends SimpleJpaRepository<T, ID> {
             autoFilterOverride.remove();
         } else {
             autoFilterOverride.set(enabled);
+        }
+    }
+
+    /**
+     * P1: Execute an action with auto-filter override, automatically cleaning up in finally block. Prevents ThreadLocal
+     * leaks when exceptions occur.
+     *
+     * @param value the override value (null to clear)
+     * @param action the action to execute
+     */
+    public static void withAutoFilterOverride(Boolean value, Runnable action) {
+        setAutoFilterOverride(value);
+        try {
+            action.run();
+        } finally {
+            autoFilterOverride.remove();
+        }
+    }
+
+    /**
+     * P1: Execute a supplier with auto-filter override, automatically cleaning up in finally block. Prevents
+     * ThreadLocal leaks when exceptions occur.
+     *
+     * @param value the override value (null to clear)
+     * @param supplier the supplier to execute
+     * @param <R> the return type
+     * @return the supplier result
+     */
+    public static <R> R withAutoFilterOverride(Boolean value, java.util.function.Supplier<R> supplier) {
+        setAutoFilterOverride(value);
+        try {
+            return supplier.get();
+        } finally {
+            autoFilterOverride.remove();
         }
     }
 
@@ -327,25 +360,15 @@ public class SoftDeleteJpaRepository<T, ID> extends SimpleJpaRepository<T, ID> {
         }
         if (shouldApplySoftDeleteFilter()) {
             // B-12: Use batch UPDATE instead of N+1 individual deletes
+            // P1-4: Use PersistenceUnitUtil instead of reflection for Java 17+ compatibility
             java.util.List<ID> idList = new java.util.ArrayList<>();
-            String idFieldName = EntityClassResolver.resolveIdFieldName(domainClass);
+            jakarta.persistence.PersistenceUnitUtil util =
+                entityManager.getEntityManagerFactory().getPersistenceUnitUtil();
             for (T entity : entities) {
-                try {
-                    java.lang.reflect.Field idField = findIdField(domainClass, idFieldName);
-                    if (idField != null) {
-                        idField.setAccessible(true);
-                        @SuppressWarnings("unchecked")
-                        ID id = (ID)idField.get(entity);
-                        if (id != null) {
-                            idList.add(id);
-                        }
-                    }
-                } catch (java.lang.reflect.InaccessibleObjectException e) {
-                    throw new IllegalStateException("Cannot access ID field '" + idFieldName + "'. "
-                        + "In Java 17+ module system, add JVM argument: --add-opens " + domainClass.getPackageName()
-                        + "=ALL-UNNAMED", e);
-                } catch (IllegalAccessException e) {
-                    throw new MyJpaPlusException("Failed to access ID field for batch delete", e);
+                @SuppressWarnings("unchecked")
+                ID id = (ID)util.getIdentifier(entity);
+                if (id != null) {
+                    idList.add(id);
                 }
             }
             if (!idList.isEmpty()) {

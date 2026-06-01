@@ -72,6 +72,17 @@ public class AuditEntityListener implements ApplicationContextAware {
     private static volatile ApplicationContext applicationContext;
     private static volatile AuditUserProvider userProvider;
 
+    /** P1: Sentinel value to indicate that no AuditUserProvider bean was found, preventing re-entry. */
+    private static final AuditUserProvider NO_PROVIDER_SENTINEL = new AuditUserProvider() {
+        @Override
+        public String getCurrentUser() {
+            return null;
+        }
+    };
+
+    /** P1: Flag to track if provider lookup has been attempted. */
+    private static volatile boolean providerLookupAttempted = false;
+
     /** P1: Configurable timezone for audit timestamps. Defaults to system timezone. */
     private static volatile java.time.ZoneId auditZoneId = java.time.ZoneId.systemDefault();
 
@@ -86,6 +97,7 @@ public class AuditEntityListener implements ApplicationContextAware {
     public static void destroy() {
         applicationContext = null;
         userProvider = null;
+        providerLookupAttempted = false;
     }
 
     /**
@@ -102,23 +114,30 @@ public class AuditEntityListener implements ApplicationContextAware {
     /**
      * 获取 AuditUserProvider 实例（延迟初始化，线程安全）。
      *
+     * <p>
+     * P1: 使用哨兵值 NO_PROVIDER_SENTINEL 防止缓存失败后无限重入。
+     *
      * @return AuditUserProvider 实例，如果未配置则返回 null
      */
     private static AuditUserProvider getUserProvider() {
-        AuditUserProvider provider = userProvider;
-        if (provider == null && applicationContext != null) {
+        if (providerLookupAttempted) {
+            return userProvider == NO_PROVIDER_SENTINEL ? null : userProvider;
+        }
+        if (applicationContext != null) {
             synchronized (AuditEntityListener.class) {
-                provider = userProvider;
-                if (provider == null) {
+                if (!providerLookupAttempted) {
                     try {
-                        userProvider = provider = applicationContext.getBean(AuditUserProvider.class);
+                        userProvider = applicationContext.getBean(AuditUserProvider.class);
                     } catch (Exception e) {
                         log.debug("No AuditUserProvider bean found, createdBy/updatedBy will not be auto-filled");
+                        // P1: Set sentinel to prevent re-entry
+                        userProvider = NO_PROVIDER_SENTINEL;
                     }
+                    providerLookupAttempted = true;
                 }
             }
         }
-        return provider;
+        return userProvider == NO_PROVIDER_SENTINEL ? null : userProvider;
     }
 
     /**

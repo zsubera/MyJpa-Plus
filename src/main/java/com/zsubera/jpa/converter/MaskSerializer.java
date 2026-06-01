@@ -113,8 +113,12 @@ public class MaskSerializer extends JsonSerializer<String> {
     }
 
     private static String maskAddress(String address) {
-        if (address.length() <= 6) {
+        // P1: For short addresses (length <= 6), keep first 2 characters and mask the rest
+        if (address.length() <= 2) {
             return address;
+        }
+        if (address.length() <= 6) {
+            return address.substring(0, 2) + "*".repeat(address.length() - 2);
         }
         return address.substring(0, 6) + "*".repeat(address.length() - 6);
     }

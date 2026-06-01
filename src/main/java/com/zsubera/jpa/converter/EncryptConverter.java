@@ -260,18 +260,34 @@ public class EncryptConverter implements AttributeConverter<String, String> {
         Objects.requireNonNull(allKeys,
             "Encryption key not set. Set environment variable " + KEY_ENV + " or system property " + KEY_PROPERTY);
 
-        // 解析多版本密钥
-        if (allKeys.contains(":") && allKeys.contains(",")) {
+        // P0-4: Use explicit regex pattern matching for multi-key format "vN:key,vN:key"
+        // Previous detection (contains(":") && contains(",")) was ambiguous when single key
+        // contains both characters. New format requires each entry to match "vN:key" pattern.
+        if (allKeys.matches(".*v\\d+:.*,.+")) {
             String[] entries = allKeys.split(",");
+            boolean validMultiKey = true;
             for (String entry : entries) {
                 entry = entry.trim();
-                int colonIdx = entry.indexOf(':');
-                if (colonIdx > 0) {
-                    String entryVersion = entry.substring(0, colonIdx).trim();
-                    String entryKey = entry.substring(colonIdx + 1).trim();
-                    if (entryVersion.equals(version)) {
-                        validateKeyLength(entryKey);
-                        return entryKey;
+                if (!entry.matches("v\\d+:.+")) {
+                    LOG.log(System.Logger.Level.WARNING,
+                        "SECURITY: Invalid multi-key entry format '{0}'. Expected 'vN:key'. "
+                            + "Falling back to single-key mode.",
+                        entry);
+                    validMultiKey = false;
+                    break;
+                }
+            }
+            if (validMultiKey) {
+                for (String entry : entries) {
+                    entry = entry.trim();
+                    int colonIdx = entry.indexOf(':');
+                    if (colonIdx > 0) {
+                        String entryVersion = entry.substring(0, colonIdx).trim();
+                        String entryKey = entry.substring(colonIdx + 1).trim();
+                        if (entryVersion.equals(version)) {
+                            validateKeyLength(entryKey);
+                            return entryKey;
+                        }
                     }
                 }
             }
@@ -384,11 +400,21 @@ public class EncryptConverter implements AttributeConverter<String, String> {
                     if (!homeDir.exists()) {
                         boolean created = homeDir.mkdirs();
                         if (!created && !homeDir.exists()) {
-                            LOG.log(System.Logger.Level.WARNING, "Failed to create directory: {0}",
-                                homeDir.getAbsolutePath());
+                            // P0-3: Abort if directory creation fails to avoid meaningless file write
+                            LOG.log(System.Logger.Level.ERROR, "SECURITY: Failed to create directory: {0}. "
+                                + "Salt cannot be persisted. Set environment variable {1} to ensure consistent encryption.",
+                                homeDir.getAbsolutePath(), SALT_ENV);
+                            return randomSalt;
                         }
                     }
                     java.nio.file.Files.write(saltFile.toPath(), randomSalt);
+                    // P0-3: Verify salt file write by reading back and comparing
+                    byte[] writtenSalt = java.nio.file.Files.readAllBytes(saltFile.toPath());
+                    if (!java.util.Arrays.equals(randomSalt, writtenSalt)) {
+                        throw new SecurityException("SECURITY: Salt file write verification failed. "
+                            + "Written bytes do not match generated salt. " + "Set environment variable " + SALT_ENV
+                            + " to ensure consistent encryption.");
+                    }
                     // P0-3: Set POSIX file permissions (rwx------) on directory and (rw-------) on file
                     try {
                         java.util.Set<java.nio.file.attribute.PosixFilePermission> dirPerms =

@@ -53,6 +53,10 @@ public final class SoftDeleteHelper {
     private static final int MAX_CACHE_SIZE = 1024;
     private static final Logger log = org.slf4j.LoggerFactory.getLogger(SoftDeleteHelper.class);
 
+    /** P2: Counter for sampling cache size checks to reduce overhead. */
+    private static final java.util.concurrent.atomic.AtomicInteger CALL_COUNTER =
+        new java.util.concurrent.atomic.AtomicInteger(0);
+
     /** 安全标识符段正则：用于校验 schema.table 格式中每一段。 */
     private static final java.util.regex.Pattern SAFE_IDENTIFIER_PART_PATTERN =
         java.util.regex.Pattern.compile("^[a-zA-Z_][a-zA-Z0-9_]*$");
@@ -470,14 +474,14 @@ public final class SoftDeleteHelper {
      * @return 字段名称，如果未找到 {@code @SoftDelete} 字段则返回 {@code null}
      */
     public static String findSoftDeleteField(Class<?> entityClass) {
-        // 使用 cache.size() 检查缓存大小，超过阈值时记录警告
-        // ConcurrentReferenceHashMap 使用弱引用键，GC 会自动回收不再引用的条目
-        // 这里的大小检查仅用于诊断目的，不需要手动清理
-        int currentSize = FIELD_CACHE.size();
-        if (currentSize > MAX_CACHE_SIZE) {
-            log.warn("SoftDeleteHelper field cache size ({}) exceeds limit ({}). "
-                + "This may indicate a class loader leak or excessive entity classes. "
-                + "Weak reference entries will be cleaned by GC automatically.", currentSize, MAX_CACHE_SIZE);
+        // P2: Use sampling strategy - only check cache size every 64 calls to reduce overhead
+        if ((CALL_COUNTER.incrementAndGet() & 63) == 0) {
+            int currentSize = FIELD_CACHE.size();
+            if (currentSize > MAX_CACHE_SIZE) {
+                log.warn("SoftDeleteHelper field cache size ({}) exceeds limit ({}). "
+                    + "This may indicate a class loader leak or excessive entity classes. "
+                    + "Weak reference entries will be cleaned by GC automatically.", currentSize, MAX_CACHE_SIZE);
+            }
         }
         String result = FIELD_CACHE.computeIfAbsent(entityClass, cls -> {
             // Try getter-based resolution first (Java 17+ compatible)

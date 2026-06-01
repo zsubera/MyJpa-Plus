@@ -66,6 +66,10 @@ public class MergeSpec<T> {
     /** P1-14: Maximum cache size before logging warning. */
     private static final int MAX_FIELD_CACHE_SIZE = 1024;
 
+    /** P2: Counter for sampling cache size checks to reduce overhead. */
+    private static final java.util.concurrent.atomic.AtomicInteger FIELD_CACHE_CALL_COUNTER =
+        new java.util.concurrent.atomic.AtomicInteger(0);
+
     private final Class<T> entityClass;
     private T entity;
     private final List<String> conflictFields = new ArrayList<>();
@@ -165,7 +169,10 @@ public class MergeSpec<T> {
         if ("h2".equals(dialect)) {
             return executeH2Upsert(em);
         }
-        SqlWithParams sqlWithParams = buildSql(em);
+        // P0-7: Use buildSqlFor with local snapshot instead of buildSql to avoid
+        // shared mutable field access in concurrent scenarios
+        T entitySnapshot = this.entity;
+        SqlWithParams sqlWithParams = buildSqlFor(em, entitySnapshot);
         if (log.isTraceEnabled()) {
             log.trace("Executing UPSERT SQL: {}", sqlWithParams.sql());
         }
@@ -234,9 +241,14 @@ public class MergeSpec<T> {
                     throw e;
                 }
             }
-            // B-10: After retries exhausted, try MERGE again instead of direct INSERT
-            log.warn("H2 UPSERT retry limit ({}) exhausted for entity. Falling back to MERGE INTO syntax. "
-                + "This may cause data inconsistency in high-concurrency scenarios.", maxRetries);
+            // P0-2: When explicitUpdateFields=true, cannot fall back to MERGE INTO
+            // because it would overwrite all columns, violating partial update contract
+            if (explicitUpdateFields) {
+                throw new IllegalStateException("H2 UPSERT retry limit (" + maxRetries + ") exhausted. "
+                    + "Cannot fall back to MERGE INTO because explicit update fields are specified. "
+                    + "MERGE INTO would overwrite all columns, violating partial update contract.");
+            }
+            log.warn("H2 UPSERT retry limit ({}) exhausted. Falling back to MERGE INTO syntax.", maxRetries);
             SqlWithParams retrySql = buildSql(em);
             return executeNativeQuery(em, retrySql.sql(), retrySql.params());
         }
@@ -427,13 +439,23 @@ public class MergeSpec<T> {
             log.debug("getTransaction() threw exception in JTA environment: {}", ignored.getMessage());
         }
         // Fallback: try Hibernate Session (only if Hibernate is on classpath)
+        // P0-5: Use pure reflection to avoid compile-time dependency on Hibernate
         try {
-            Class.forName("org.hibernate.Session");
-            org.hibernate.Session session = em.unwrap(org.hibernate.Session.class);
-            return session.getTransaction() != null && session.getTransaction().isActive();
+            Class<?> sessionClass = Class.forName("org.hibernate.Session");
+            Object session = em.unwrap(sessionClass);
+            java.lang.reflect.Method getTransaction = sessionClass.getMethod("getTransaction");
+            Object transaction = getTransaction.invoke(session);
+            if (transaction == null) {
+                return false;
+            }
+            java.lang.reflect.Method isActive = transaction.getClass().getMethod("isActive");
+            return (Boolean)isActive.invoke(transaction);
         } catch (ClassNotFoundException e) {
             // Hibernate not on classpath
             log.debug("Hibernate not available for transaction state detection");
+        } catch (ReflectiveOperationException e) {
+            // Cannot determine transaction state
+            log.debug("Cannot determine transaction state via Hibernate reflection: {}", e.getMessage());
         } catch (Exception e) {
             // Cannot determine transaction state
             log.debug("Cannot determine transaction state via Hibernate: {}", e.getMessage());
@@ -479,8 +501,11 @@ public class MergeSpec<T> {
                 }
             }
         }
-        em.flush();
-        em.clear();
+        // P2: Only flush if there are remaining entities not yet flushed
+        if (count % batchSize != 0) {
+            em.flush();
+            em.clear();
+        }
         return total;
     }
 
@@ -538,8 +563,9 @@ public class MergeSpec<T> {
                 }
             }
             try {
-                total += executeSingle(em, ent);
+                // P1-3: Increment counter before executeSingle to ensure correct batch boundary
                 count++;
+                total += executeSingle(em, ent);
                 if (count % batchSize == 0) {
                     em.clear();
                     if (log.isDebugEnabled()) {
@@ -599,12 +625,15 @@ public class MergeSpec<T> {
             throw new IllegalArgumentException("entity must not be null");
         }
         List<EntityFieldValue> fieldValues = new ArrayList<>();
-        // P1-14: Check FIELD_CACHE size and warn if too large
-        if (FIELD_CACHE.size() > MAX_FIELD_CACHE_SIZE) {
-            log.warn(
-                "MergeSpec field cache size ({}) exceeds limit ({}). "
-                    + "This may indicate a class loader leak. Weak reference entries will be cleaned by GC.",
-                FIELD_CACHE.size(), MAX_FIELD_CACHE_SIZE);
+        // P2: Use sampling strategy - only check cache size every 64 calls to reduce overhead
+        if ((FIELD_CACHE_CALL_COUNTER.incrementAndGet() & 63) == 0) {
+            int cacheSize = FIELD_CACHE.size();
+            if (cacheSize > MAX_FIELD_CACHE_SIZE) {
+                log.warn(
+                    "MergeSpec field cache size ({}) exceeds limit ({}). "
+                        + "This may indicate a class loader leak. Weak reference entries will be cleaned by GC.",
+                    cacheSize, MAX_FIELD_CACHE_SIZE);
+            }
         }
         List<Field> allFields = FIELD_CACHE.computeIfAbsent(entityClass, cls -> {
             List<Field> fields = new ArrayList<>();
@@ -802,10 +831,15 @@ public class MergeSpec<T> {
                     throw e;
                 }
             }
+            // P0-2: When explicitUpdateFields=true, cannot fall back to MERGE INTO
+            // because it would overwrite all columns, violating partial update contract
+            if (explicitUpdateFields) {
+                throw new IllegalStateException("H2 UPSERT retry limit (" + maxRetries + ") exhausted. "
+                    + "Cannot fall back to MERGE INTO because explicit update fields are specified. "
+                    + "MERGE INTO would overwrite all columns, violating partial update contract.");
+            }
             // B-10: After retries exhausted, try MERGE again using the thread-safe buildSqlFor method
-            // (not buildSql which uses shared this.entity field — unsafe in concurrent batch scenarios)
-            log.warn("H2 UPSERT retry limit ({}) exhausted for entity. Falling back to MERGE INTO syntax. "
-                + "This may cause data inconsistency in high-concurrency scenarios.", maxRetries);
+            log.warn("H2 UPSERT retry limit ({}) exhausted. Falling back to MERGE INTO syntax.", maxRetries);
             SqlWithParams retrySql = buildSqlFor(em, entity);
             return executeNativeQuery(em, retrySql.sql(), retrySql.params());
         }

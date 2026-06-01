@@ -435,4 +435,243 @@ class ProjectionSpecTest {
             this.status = status;
         }
     }
+
+    @Test
+    void testFindPageWithDistinct() {
+        TestEntity e1 = new TestEntity();
+        e1.setName("dup");
+        e1.setStatus(1);
+        testEntityManager.persistAndFlush(e1);
+        TestEntity e2 = new TestEntity();
+        e2.setName("dup");
+        e2.setStatus(2);
+        testEntityManager.persistAndFlush(e2);
+
+        Page<Tuple> page = new ProjectionSpec<>(TestEntity.class).select(TestEntity::getName).distinct().findPage(em,
+            PageRequest.of(0, 10));
+
+        assertEquals(1, page.getTotalElements());
+        assertEquals(1, page.getContent().size());
+    }
+
+    @Test
+    void testFindPageWithoutDistinct() {
+        TestEntity e1 = new TestEntity();
+        e1.setName("dup");
+        e1.setStatus(1);
+        testEntityManager.persistAndFlush(e1);
+        TestEntity e2 = new TestEntity();
+        e2.setName("dup");
+        e2.setStatus(2);
+        testEntityManager.persistAndFlush(e2);
+
+        Page<Tuple> page =
+            new ProjectionSpec<>(TestEntity.class).select(TestEntity::getName).findPage(em, PageRequest.of(0, 10));
+
+        // Without distinct, both rows should be returned
+        assertEquals(2, page.getTotalElements());
+        assertEquals(2, page.getContent().size());
+    }
+
+    @Test
+    void testFindPageUnpaged() {
+        for (int i = 0; i < 3; i++) {
+            TestEntity e = new TestEntity();
+            e.setName("unpaged" + i);
+            e.setStatus(i);
+            testEntityManager.persistAndFlush(e);
+        }
+
+        Page<Tuple> page = new ProjectionSpec<>(TestEntity.class).select(TestEntity::getName).findPage(em,
+            org.springframework.data.domain.Pageable.unpaged());
+
+        assertEquals(3, page.getTotalElements());
+        assertEquals(3, page.getContent().size());
+    }
+
+    @Test
+    void testSelectCount() {
+        for (int i = 0; i < 3; i++) {
+            TestEntity e = new TestEntity();
+            e.setName("count" + i);
+            e.setStatus(i);
+            testEntityManager.persistAndFlush(e);
+        }
+
+        List<Tuple> results = new ProjectionSpec<>(TestEntity.class).selectCount().toTupleQuery(em).getResultList();
+
+        assertEquals(1, results.size());
+        assertEquals(3L, results.get(0).get("count"));
+    }
+
+    @Test
+    void testSelectSum() {
+        for (int i = 1; i <= 3; i++) {
+            TestEntity e = new TestEntity();
+            e.setName("sum" + i);
+            e.setStatus(i);
+            testEntityManager.persistAndFlush(e);
+        }
+
+        List<Tuple> results =
+            new ProjectionSpec<>(TestEntity.class).selectSum(TestEntity::getStatus).toTupleQuery(em).getResultList();
+
+        assertEquals(1, results.size());
+        assertEquals(6, ((Number)results.get(0).get("sum_status")).intValue());
+    }
+
+    @Test
+    void testSelectMaxMin() {
+        for (int i = 1; i <= 3; i++) {
+            TestEntity e = new TestEntity();
+            e.setName("mm" + i);
+            e.setStatus(i * 10);
+            testEntityManager.persistAndFlush(e);
+        }
+
+        List<Tuple> results = new ProjectionSpec<>(TestEntity.class).selectMax(TestEntity::getStatus)
+            .selectMin(TestEntity::getStatus).toTupleQuery(em).getResultList();
+
+        assertEquals(1, results.size());
+        assertEquals(30, ((Number)results.get(0).get("max_status")).intValue());
+        assertEquals(10, ((Number)results.get(0).get("min_status")).intValue());
+    }
+
+    @Test
+    void testSelectAvg() {
+        for (int i = 1; i <= 3; i++) {
+            TestEntity e = new TestEntity();
+            e.setName("avg" + i);
+            e.setStatus(i * 10);
+            testEntityManager.persistAndFlush(e);
+        }
+
+        List<Tuple> results =
+            new ProjectionSpec<>(TestEntity.class).selectAvg(TestEntity::getStatus).toTupleQuery(em).getResultList();
+
+        assertEquals(1, results.size());
+        assertEquals(20.0, ((Number)results.get(0).get("avg_status")).doubleValue(), 0.01);
+    }
+
+    @Test
+    void testTupleQueryWithMaxResults() {
+        for (int i = 0; i < 5; i++) {
+            TestEntity e = new TestEntity();
+            e.setName("limit" + i);
+            e.setStatus(i);
+            testEntityManager.persistAndFlush(e);
+        }
+
+        List<Tuple> results =
+            new ProjectionSpec<>(TestEntity.class).select(TestEntity::getName).toTupleQuery(em, 2).getResultList();
+
+        assertEquals(2, results.size());
+    }
+
+    @Test
+    void testTupleQueryUnlimitedResults() {
+        for (int i = 0; i < 5; i++) {
+            TestEntity e = new TestEntity();
+            e.setName("unlim" + i);
+            e.setStatus(i);
+            testEntityManager.persistAndFlush(e);
+        }
+
+        List<Tuple> results =
+            new ProjectionSpec<>(TestEntity.class).select(TestEntity::getName).toTupleQuery(em, -1).getResultList();
+
+        assertEquals(5, results.size());
+    }
+
+    @Test
+    void testWithDefaultsFactoryMethod() {
+        ProjectionSpec<TestEntity> spec = ProjectionSpec.withDefaults(TestEntity.class, null);
+        assertNotNull(spec);
+    }
+
+    @Test
+    void testNullFieldThrowsException() {
+        assertThrows(IllegalArgumentException.class, () -> {
+            new ProjectionSpec<>(TestEntity.class).select(null);
+        });
+    }
+
+    @Test
+    void testNullWhereThrowsException() {
+        assertThrows(IllegalArgumentException.class, () -> {
+            new ProjectionSpec<>(TestEntity.class).where(null);
+        });
+    }
+
+    @Test
+    void testNullDtoClassThrowsException() {
+        assertThrows(IllegalArgumentException.class, () -> {
+            new ProjectionSpec<>(TestEntity.class).asDto(null);
+        });
+    }
+
+    @Test
+    void testNullJoinFieldThrowsException() {
+        assertThrows(IllegalArgumentException.class, () -> {
+            new ProjectionSpec<>(TestEntity.class).join(null, j -> {
+            });
+        });
+    }
+
+    @Test
+    void testNullJoinConfigThrowsException() {
+        assertThrows(IllegalArgumentException.class, () -> {
+            new ProjectionSpec<>(TestEntity.class).join(TestEntity::getParent, null);
+        });
+    }
+
+    @Test
+    void testNullOrderByFieldThrowsException() {
+        assertThrows(IllegalArgumentException.class, () -> {
+            new ProjectionSpec<>(TestEntity.class).orderByAsc(null);
+        });
+    }
+
+    @Test
+    void testNullOrderByDescFieldThrowsException() {
+        assertThrows(IllegalArgumentException.class, () -> {
+            new ProjectionSpec<>(TestEntity.class).orderByDesc(null);
+        });
+    }
+
+    @Test
+    void testNullGroupByFieldThrowsException() {
+        assertThrows(IllegalArgumentException.class, () -> {
+            new ProjectionSpec<>(TestEntity.class).groupBy(null);
+        });
+    }
+
+    @Test
+    void testNullHavingThrowsException() {
+        assertThrows(IllegalArgumentException.class, () -> {
+            new ProjectionSpec<>(TestEntity.class).having(null);
+        });
+    }
+
+    @Test
+    void testGetResultStream() {
+        for (int i = 0; i < 3; i++) {
+            TestEntity e = new TestEntity();
+            e.setName("stream" + i);
+            e.setStatus(i);
+            testEntityManager.persistAndFlush(e);
+        }
+
+        try (java.util.stream.Stream<Tuple> stream =
+            new ProjectionSpec<>(TestEntity.class).select(TestEntity::getName).getResultStream(em)) {
+            assertEquals(3, stream.count());
+        }
+    }
+
+    @Test
+    void testGetResultStreamNullEmThrowsException() {
+        assertThrows(IllegalArgumentException.class, () -> {
+            new ProjectionSpec<>(TestEntity.class).select(TestEntity::getName).getResultStream(null);
+        });
+    }
 }

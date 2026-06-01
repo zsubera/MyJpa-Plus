@@ -107,9 +107,16 @@ public class SqlSlowQueryInterceptor implements StatementInspector {
 
         private Object wrapPreparedStatement(Object stmt, String sql) {
             Class<?> stmtClass = stmt.getClass();
-            // P1: Evict cache if too large to prevent memory leak
+            // P2: Use partial eviction (25%) instead of full clear to prevent thundering herd
             if (PROXY_CLASS_CACHE.size() > MAX_PROXY_CLASS_CACHE_SIZE) {
-                PROXY_CLASS_CACHE.clear();
+                int toRemove = PROXY_CLASS_CACHE.size() / 4;
+                java.util.Iterator<?> it = PROXY_CLASS_CACHE.keySet().iterator();
+                int removed = 0;
+                while (it.hasNext() && removed < toRemove) {
+                    it.next();
+                    it.remove();
+                    removed++;
+                }
             }
             Class<?> proxyClass = PROXY_CLASS_CACHE.computeIfAbsent(stmtClass,
                 clz -> Proxy.getProxyClass(clz.getClassLoader(), clz.getInterfaces()));

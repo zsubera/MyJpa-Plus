@@ -27,6 +27,10 @@ public final class EntityClassResolver {
     private static final ConcurrentMap<Class<?>, String> ID_FIELD_CACHE =
         new ConcurrentReferenceHashMap<>(16, ConcurrentReferenceHashMap.ReferenceType.WEAK);
 
+    /** P1: Cache for composite key check results to avoid repeated reflection. */
+    private static final ConcurrentMap<Class<?>, Boolean> COMPOSITE_KEY_CACHE =
+        new ConcurrentReferenceHashMap<>(16, ConcurrentReferenceHashMap.ReferenceType.WEAK);
+
     /** 哨兵值，表示缓存了 null 结果（无法解析实体类）。 */
     private static final Class<?> UNRESOLVABLE_SENTINEL = Unresolvable.class;
 
@@ -108,16 +112,19 @@ public final class EntityClassResolver {
      * @return 如果使用复合主键返回 true
      */
     public static boolean hasCompositeKey(Class<?> entityClass) {
-        // Check for @EmbeddedId
-        for (Class<?> c = entityClass; c != null && c != Object.class; c = c.getSuperclass()) {
-            for (Field f : c.getDeclaredFields()) {
-                if (f.isAnnotationPresent(jakarta.persistence.EmbeddedId.class)) {
-                    return true;
+        // P1: Use cache to avoid repeated reflection
+        return COMPOSITE_KEY_CACHE.computeIfAbsent(entityClass, cls -> {
+            // Check for @EmbeddedId
+            for (Class<?> c = cls; c != null && c != Object.class; c = c.getSuperclass()) {
+                for (Field f : c.getDeclaredFields()) {
+                    if (f.isAnnotationPresent(jakarta.persistence.EmbeddedId.class)) {
+                        return true;
+                    }
                 }
             }
-        }
-        // Check for @IdClass
-        return entityClass.getAnnotation(jakarta.persistence.IdClass.class) != null;
+            // Check for @IdClass
+            return cls.getAnnotation(jakarta.persistence.IdClass.class) != null;
+        });
     }
 
     /**

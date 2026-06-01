@@ -15,6 +15,8 @@ public class CachedQueryResult<T> {
     private final T value;
     private final Instant createdAt;
     private final long ttlSeconds;
+    /** P2: Pre-computed expiration time to avoid creating new Instant on every isExpired() call. */
+    private final Instant expiresAt;
 
     /**
      * Creates a new cached result.
@@ -30,6 +32,7 @@ public class CachedQueryResult<T> {
         this.value = value;
         this.createdAt = Instant.now();
         this.ttlSeconds = ttlSeconds;
+        this.expiresAt = createdAt.plusSeconds(ttlSeconds);
     }
 
     /**
@@ -65,6 +68,6 @@ public class CachedQueryResult<T> {
      * @return true if the result has exceeded its TTL
      */
     public boolean isExpired() {
-        return !createdAt.plusSeconds(ttlSeconds).isAfter(Instant.now());
+        return !Instant.now().isBefore(expiresAt);
     }
 }
