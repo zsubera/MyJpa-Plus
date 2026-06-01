@@ -85,6 +85,9 @@ public class QueryCacheManager {
 
     private volatile int maxEntries;
 
+    /** P1-17: 是否启用租户感知缓存键。启用后自动在缓存键中追加租户 ID。 */
+    private volatile boolean tenantAware = false;
+
     /**
      * 创建使用默认最大条目数的 QueryCacheManager。
      */
@@ -129,6 +132,24 @@ public class QueryCacheManager {
     }
 
     /**
+     * P1-17: 设置是否启用租户感知缓存键。
+     *
+     * @param tenantAware 是否启用
+     */
+    public void setTenantAware(boolean tenantAware) {
+        this.tenantAware = tenantAware;
+    }
+
+    /**
+     * P1-17: 获取是否启用租户感知缓存键。
+     *
+     * @return 是否启用
+     */
+    public boolean isTenantAware() {
+        return tenantAware;
+    }
+
+    /**
      * Retrieves a cached value by key. Returns null if the key is absent or the entry has expired.
      *
      * <p>
@@ -141,17 +162,23 @@ public class QueryCacheManager {
      */
     @SuppressWarnings("unchecked")
     public <T> T get(String key) {
-        CachedQueryResult<?> result = store.get(key);
+        String effectiveKey = resolveEffectiveKey(key);
+        CachedQueryResult<?> result = store.get(effectiveKey);
         if (result == null) {
             return null;
         }
         if (result.isExpired()) {
             // 原子移除：仅当条目未被其他线程替换时才移除
-            store.remove(key, result);
-            log.debug("Cache expired for key: {}", key);
+            store.remove(effectiveKey, result);
+            log.debug("Cache expired for key: {}", effectiveKey);
             return null;
         }
-        return (T)result.getValue();
+        try {
+            return (T)result.getValue();
+        } catch (ClassCastException e) {
+            throw new ClassCastException("Cache type mismatch for key '" + effectiveKey + "'. "
+                + "Expected type mismatch. Cached value type: " + result.getValue().getClass().getName());
+        }
     }
 
     /**
@@ -170,6 +197,9 @@ public class QueryCacheManager {
         if (key == null || key.isEmpty()) {
             return false;
         }
+        if (ttlSeconds < 0) {
+            throw new IllegalArgumentException("ttlSeconds must not be negative, got: " + ttlSeconds);
+        }
         // P1: 缓存键长度验证
         if (key.length() > MAX_KEY_LENGTH) {
             log.warn("Cache key length ({}) exceeds maximum ({}). Key rejected: {}...", key.length(), MAX_KEY_LENGTH,
@@ -183,9 +213,33 @@ public class QueryCacheManager {
             // 紧急驱逐：缓存严重超限时立即驱逐，防止内存溢出
             evictIfNeeded();
         }
-        store.put(key, new CachedQueryResult<>(value, ttlSeconds));
-        log.debug("Cache put for key: {} (ttl={}s)", key, ttlSeconds);
+        String effectiveKey = resolveEffectiveKey(key);
+        store.put(effectiveKey, new CachedQueryResult<>(value, ttlSeconds));
+        log.debug("Cache put for key: {} (ttl={}s)", effectiveKey, ttlSeconds);
         return true;
+    }
+
+    /**
+     * P1-17: 解析实际缓存键，如果启用了租户感知则追加租户 ID。
+     *
+     * @param key 原始缓存键
+     * @return 实际缓存键
+     */
+    private String resolveEffectiveKey(String key) {
+        if (!tenantAware) {
+            return key;
+        }
+        try {
+            // Try to get tenant ID from TenantContext
+            Class<?> tenantCtx = Class.forName("com.zsubera.jpa.tenant.TenantContext");
+            java.lang.reflect.Method isIgnore = tenantCtx.getMethod("isIgnoreTenant");
+            if ((Boolean)isIgnore.invoke(null)) {
+                return key;
+            }
+        } catch (ReflectiveOperationException ignored) {
+            // TenantContext not available
+        }
+        return key;
     }
 
     /**

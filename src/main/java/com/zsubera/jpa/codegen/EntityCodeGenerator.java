@@ -165,6 +165,16 @@ public final class EntityCodeGenerator {
         if (entityPackage == null || entityPackage.isBlank()) {
             throw new IllegalArgumentException("entityPackage must not be blank");
         }
+        // P1-14: Validate package name to prevent code injection
+        if (!entityPackage.matches("[a-zA-Z_][a-zA-Z0-9_.]*")) {
+            throw new IllegalArgumentException(
+                "entityPackage contains invalid characters. Only alphanumeric, underscore, and dot are allowed: "
+                    + entityPackage);
+        }
+        if (entityPackage.startsWith(".") || entityPackage.endsWith(".") || entityPackage.contains("..")) {
+            throw new IllegalArgumentException(
+                "entityPackage must not start/end with dot or contain consecutive dots: " + entityPackage);
+        }
 
         String className = toClassName(tableName);
         StringBuilder sb = new StringBuilder();

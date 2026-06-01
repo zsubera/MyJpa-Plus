@@ -735,6 +735,12 @@ public class ProjectionSpec<T> {
      * @throws IllegalArgumentException 如果分页 offset 过大
      */
     public Page<Tuple> findPage(EntityManager em, Pageable pageable) {
+        if (em == null) {
+            throw new IllegalArgumentException("em must not be null");
+        }
+        if (pageable == null) {
+            throw new IllegalArgumentException("pageable must not be null");
+        }
         CriteriaBuilder cb = em.getCriteriaBuilder();
 
         // Handle unpaged
@@ -1015,6 +1021,15 @@ public class ProjectionSpec<T> {
                 if (tenantFieldName != null) {
                     predicates.add(cb.equal(root.get(tenantFieldName), tenantId));
                 }
+            }
+        } else if (tenantProvider == null && !TenantContext.isIgnoreTenant()) {
+            // P1-13: Warn when entity has @TenantId field but no tenant provider configured
+            String tenantFieldName = resolveTenantFieldName(entityClass);
+            if (tenantFieldName != null) {
+                log.warn(
+                    "Entity {} has @TenantId field '{}' but no TenantProvider configured. "
+                        + "Use withDefaults() or withTenantFilter() to enable tenant filtering.",
+                    entityClass.getSimpleName(), tenantFieldName);
             }
         }
 

@@ -11,6 +11,20 @@ import com.zsubera.jpa.annotation.MaskType;
 import java.io.IOException;
 import java.util.List;
 
+/**
+ * Jackson 序列化器，用于对敏感字段进行显示层脱敏。
+ *
+ * <p>
+ * <strong>重要安全说明：</strong>此序列化器仅在 JSON 输出时进行脱敏处理。实体对象在 JVM 内存中仍持有完整的原始数据。 如需在存储层也进行数据保护，请与
+ * {@link com.zsubera.jpa.annotation.Encrypt @Encrypt} 注解组合使用， 实现"存储加密 + 显示脱敏"的双重保护。
+ *
+ * <p>
+ * 支持的脱敏类型：{@link MaskType#PHONE}、{@link MaskType#EMAIL}、{@link MaskType#ID_CARD}、
+ * {@link MaskType#NAME}、{@link MaskType#BANK_CARD}、{@link MaskType#ADDRESS}、{@link MaskType#LICENSE_PLATE}。
+ *
+ * @see com.zsubera.jpa.annotation.Mask
+ * @see MaskType
+ */
 public class MaskSerializer extends JsonSerializer<String> {
 
     private final MaskType maskType;

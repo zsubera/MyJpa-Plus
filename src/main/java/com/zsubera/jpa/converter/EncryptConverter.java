@@ -33,7 +33,7 @@ public class EncryptConverter implements AttributeConverter<String, String> {
     private static final System.Logger LOG = System.getLogger("com.zsubera.jpa.converter.EncryptConverter");
 
     /** P0-3: Minimum key length in characters to prevent weak key attacks. */
-    private static final int MIN_KEY_LENGTH = 8;
+    private static final int MIN_KEY_LENGTH = 16;
 
     /** 严格模式开关，通过系统属性控制。默认为 false。 */
     private static final boolean STRICT_MODE = Boolean.parseBoolean(System.getProperty(STRICT_MODE_PROPERTY, "false"));
@@ -363,8 +363,18 @@ public class EncryptConverter implements AttributeConverter<String, String> {
      * @return 如果是生产环境返回 true
      */
     private static boolean isProductionEnvironment() {
+        // Check system property
         String profile = System.getProperty("spring.profiles.active", "");
-        return profile.contains("prod") || profile.contains("production");
+        if (profile.contains("prod") || profile.contains("production")) {
+            return true;
+        }
+        // Check environment variable
+        profile = System.getenv("SPRING_PROFILES_ACTIVE");
+        if (profile != null && (profile.contains("prod") || profile.contains("production"))) {
+            return true;
+        }
+        profile = System.getenv("SPRING_PROFILES");
+        return profile != null && (profile.contains("prod") || profile.contains("production"));
     }
 
     /**
@@ -389,8 +399,7 @@ public class EncryptConverter implements AttributeConverter<String, String> {
             salt = System.getProperty(SALT_PROPERTY);
         }
         if (salt == null || salt.isEmpty()) {
-            String profile = System.getProperty("spring.profiles.active", "");
-            if (profile.contains("prod") || profile.contains("production")) {
+            if (isProductionEnvironment()) {
                 throw new IllegalStateException("PBKDF2 salt must be configured in production. "
                     + "Set environment variable " + SALT_ENV + " or system property " + SALT_PROPERTY);
             }

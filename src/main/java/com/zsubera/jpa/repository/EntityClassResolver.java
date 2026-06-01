@@ -105,8 +105,20 @@ public final class EntityClassResolver {
                 }
             }
         }
-        throw new IllegalStateException("No @Id or @EmbeddedId field found in " + entityClass.getName()
-            + ". Ensure the entity has a field annotated with @jakarta.persistence.Id or @jakarta.persistence.EmbeddedId");
+        // Support @IdClass composite keys - find the first @Id field
+        jakarta.persistence.IdClass idClassAnnotation = entityClass.getAnnotation(jakarta.persistence.IdClass.class);
+        if (idClassAnnotation != null) {
+            for (Class<?> c = entityClass; c != null && c != Object.class; c = c.getSuperclass()) {
+                for (Field f : c.getDeclaredFields()) {
+                    if (f.isAnnotationPresent(Id.class)) {
+                        return f.getName();
+                    }
+                }
+            }
+        }
+        throw new IllegalStateException("No @Id, @EmbeddedId, or @IdClass field found in " + entityClass.getName()
+            + ". Ensure the entity has a field annotated with @jakarta.persistence.Id, @jakarta.persistence.EmbeddedId,"
+            + " or @jakarta.persistence.IdClass with @Id fields.");
     }
 
     /**

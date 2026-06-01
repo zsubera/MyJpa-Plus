@@ -33,6 +33,10 @@ public final class TenantHelper {
     private static final ConcurrentMap<Class<?>, String> FIELD_CACHE =
         new ConcurrentReferenceHashMap<>(16, ConcurrentReferenceHashMap.ReferenceType.WEAK);
 
+    /** P2-26: Flag to track if cache size warning has been logged. */
+    private static final java.util.concurrent.atomic.AtomicBoolean CACHE_WARNING_LOGGED =
+        new java.util.concurrent.atomic.AtomicBoolean(false);
+
     private TenantHelper() {}
 
     /**
@@ -62,7 +66,7 @@ public final class TenantHelper {
      */
     public static String findTenantIdField(Class<?> entityClass) {
         int currentSize = FIELD_CACHE.size();
-        if (currentSize > MAX_CACHE_SIZE) {
+        if (currentSize > MAX_CACHE_SIZE && CACHE_WARNING_LOGGED.compareAndSet(false, true)) {
             log.warn("TenantHelper field cache size ({}) exceeds limit ({}). "
                 + "This may indicate a class loader leak or excessive entity classes. "
                 + "Weak reference entries will be cleaned by GC automatically.", currentSize, MAX_CACHE_SIZE);

@@ -48,7 +48,8 @@ public class SqlSlowQueryInterceptor implements StatementInspector {
     private static final ConcurrentMap<Class<?>, Class<?>> PROXY_CLASS_CACHE = new ConcurrentHashMap<>();
 
     /** 预编译的 SQL 消毒正则表达式 */
-    private static final Pattern SINGLE_QUOTE_PATTERN = Pattern.compile("'(?:[^']|'')*'");
+    // P1-9: Enhanced single quote pattern to support backslash-escaped quotes (MySQL)
+    private static final Pattern SINGLE_QUOTE_PATTERN = Pattern.compile("'(?:[^'\\\\]|\\\\.|'')*'");
     private static final Pattern DOLLAR_PARAM_PATTERN = Pattern.compile("\\$\\d+");
     private static final Pattern HEX_LITERAL_PATTERN = Pattern.compile("X'[0-9a-fA-F]+'");
     private static final Pattern UNICODE_STRING_PATTERN = Pattern.compile("N'[^']*'");

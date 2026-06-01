@@ -116,6 +116,10 @@ public class CodeEnumType implements UserType<Object>, DynamicParameterizedType 
                 this.sqlType = Types.INTEGER;
             } else {
                 this.sqlType = Types.CHAR;
+                log.warn(
+                    "Unsupported @CodeEnumValue field type '{}' in enum {}. Using Types.CHAR as fallback. "
+                        + "Supported types: String, int/Integer, long/Long.",
+                    fieldType.getName(), enumClass.getSimpleName());
             }
         }
     }

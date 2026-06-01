@@ -19,8 +19,44 @@ public final class SoftDeleteContext {
 
     private static final ThreadLocal<Integer> ignoreCount = ThreadLocal.withInitial(() -> 0);
 
-    /** 安全上限：超过此值认为存在泄漏，抛出异常。 */
-    private static final int MAX_IGNORE_COUNT = 64;
+    /** 安全上限：超过此值认为存在泄漏，抛出异常。可通过系统属性 myjpa-plus.soft-delete.max-ignore-count 配置。 */
+    private static volatile int maxIgnoreCount;
+
+    static {
+        int configured = 64;
+        String prop = System.getProperty("myjpa-plus.soft-delete.max-ignore-count");
+        if (prop != null) {
+            try {
+                int val = Integer.parseInt(prop);
+                if (val > 0 && val <= 1024) {
+                    configured = val;
+                }
+            } catch (NumberFormatException ignored) {
+                // use default
+            }
+        }
+        maxIgnoreCount = configured;
+    }
+
+    /**
+     * P2-22: 获取最大忽略计数。
+     *
+     * @return 最大忽略计数
+     */
+    public static int getMaxIgnoreCount() {
+        return maxIgnoreCount;
+    }
+
+    /**
+     * P2-22: 设置最大忽略计数。
+     *
+     * @param count 最大忽略计数（1-1024）
+     */
+    public static void setMaxIgnoreCount(int count) {
+        if (count > 0 && count <= 1024) {
+            maxIgnoreCount = count;
+        }
+    }
 
     private SoftDeleteContext() {}
 
@@ -41,9 +77,9 @@ public final class SoftDeleteContext {
     public static void pushIgnore() {
         // P2: Simplified to single read - ThreadLocal.withInitial guarantees non-null
         int count = ignoreCount.get();
-        if (count >= MAX_IGNORE_COUNT) {
+        if (count >= maxIgnoreCount) {
             throw new IllegalStateException(
-                "SoftDeleteContext ignore count exceeded maximum (" + MAX_IGNORE_COUNT + "). Possible leak detected.");
+                "SoftDeleteContext ignore count exceeded maximum (" + maxIgnoreCount + "). Possible leak detected.");
         }
         ignoreCount.set(count + 1);
     }

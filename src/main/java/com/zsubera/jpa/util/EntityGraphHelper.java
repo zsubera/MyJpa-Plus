@@ -98,7 +98,15 @@ public final class EntityGraphHelper<T> {
         if (dotIndex > 0) {
             String root = attributePath.substring(0, dotIndex);
             String subpath = attributePath.substring(dotIndex + 1);
-            attributePaths.merge(root, new String[] {subpath}, (old, val) -> appendToArray(old, subpath));
+            attributePaths.merge(root, new String[] {subpath}, (old, val) -> {
+                // P2-24: Check for duplicate subpaths before appending
+                for (String existing : old) {
+                    if (existing.equals(subpath)) {
+                        return old;
+                    }
+                }
+                return appendToArray(old, subpath);
+            });
         } else {
             // 使用 merge 而非 put 以保留已有的子路径
             // 例如：先 add("roles.permissions") 再 add("roles") 应保留 "permissions"

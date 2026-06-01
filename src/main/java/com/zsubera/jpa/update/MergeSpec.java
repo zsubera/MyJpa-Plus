@@ -67,6 +67,9 @@ public class MergeSpec<T> {
     /** B-08: 是否启用 Unicode 标识符支持。可通过系统属性 myjpa-plus.merge.unicode-identifiers=true 启用。 */
     private static volatile boolean unicodeIdentifiers = false;
 
+    /** P1-5: Maximum identifier length to prevent abuse. */
+    private static final int MAX_IDENTIFIER_LENGTH = 128;
+
     static {
         String prop = System.getProperty("myjpa-plus.merge.unicode-identifiers");
         if ("true".equalsIgnoreCase(prop)) {
@@ -100,6 +103,10 @@ public class MergeSpec<T> {
     private final List<String> conflictFields = new ArrayList<>();
     private final List<String> updateFields = new ArrayList<>();
     private boolean explicitUpdateFields = false;
+
+    /** P2-25: Cached dialect per EntityManagerFactory to avoid repeated detection. */
+    private static final java.util.concurrent.ConcurrentMap<String, String> DIALECT_CACHE =
+        new java.util.concurrent.ConcurrentHashMap<>();
 
     /**
      * 创建指定实体类型的 MergeSpec 构建器。
@@ -1057,6 +1064,11 @@ public class MergeSpec<T> {
         if (identifier == null || identifier.isEmpty()) {
             throw new MyJpaPlusException("Identifier must not be null or empty");
         }
+        // P1-5: Check identifier length limit
+        if (identifier.length() > MAX_IDENTIFIER_LENGTH) {
+            throw new MyJpaPlusException("Identifier length (" + identifier.length() + ") exceeds maximum ("
+                + MAX_IDENTIFIER_LENGTH + "): '" + identifier.substring(0, 64) + "...'");
+        }
         // B-6: Validate each segment separately to prevent schema injection via dots
         String[] parts = identifier.split("\\.");
         for (String part : parts) {
@@ -1071,8 +1083,13 @@ public class MergeSpec<T> {
             // P1-5: Detect Unicode homoglyphs that may be used for security bypass
             // Cyrillic, Greek, and Armenian characters look similar to Latin characters
             if (unicodeIdentifiers && HOMOGLYPH_PATTERN.matcher(part).find()) {
-                log.warn("SECURITY: Identifier '{}' contains Unicode homoglyph characters "
-                    + "(Cyrillic/Greek/Armenian). This may indicate a homoglyph attack attempt.", part);
+                String homoglyphMsg = "SECURITY: Identifier '" + part + "' contains Unicode homoglyph characters "
+                    + "(Cyrillic/Greek/Armenian). This may indicate a homoglyph attack attempt.";
+                if (unicodeIdentifiers
+                    && System.getProperty("myjpa-plus.merge.strict-mode", "false").equalsIgnoreCase("true")) {
+                    throw new MyJpaPlusException(homoglyphMsg);
+                }
+                log.warn(homoglyphMsg);
             }
         }
         // Always quote identifiers to handle reserved words and case sensitivity.
@@ -1228,6 +1245,12 @@ public class MergeSpec<T> {
      * @return 数据库方言标识（postgresql、mysql 或 h2）
      */
     private String detectDialect(EntityManager em) {
+        // P2-25: Use cached dialect if available
+        String factoryKey = em.getEntityManagerFactory().toString();
+        String cached = DIALECT_CACHE.get(factoryKey);
+        if (cached != null) {
+            return cached;
+        }
         // Priority 1: Detect from JDBC URL in EntityManagerFactory properties (no Hibernate dependency)
         try {
             Object jdbcUrl = em.getEntityManagerFactory().getProperties().get("jakarta.persistence.jdbc.url");
@@ -1237,12 +1260,15 @@ public class MergeSpec<T> {
             if (jdbcUrl != null) {
                 String url = jdbcUrl.toString().toLowerCase();
                 if (url.contains("postgresql")) {
+                    DIALECT_CACHE.putIfAbsent(factoryKey, "postgresql");
                     return "postgresql";
                 }
                 if (url.contains("mysql")) {
+                    DIALECT_CACHE.putIfAbsent(factoryKey, "mysql");
                     return "mysql";
                 }
                 if (url.contains("h2")) {
+                    DIALECT_CACHE.putIfAbsent(factoryKey, "h2");
                     return "h2";
                 }
             }
@@ -1255,7 +1281,9 @@ public class MergeSpec<T> {
             java.sql.Connection conn = em.unwrap(java.sql.Connection.class);
             if (conn != null) {
                 String productName = conn.getMetaData().getDatabaseProductName().toLowerCase();
-                return mapDialect(productName);
+                String dialect = mapDialect(productName);
+                DIALECT_CACHE.putIfAbsent(factoryKey, dialect);
+                return dialect;
             }
         } catch (Exception e) {
             log.debug("Failed to detect dialect via JDBC Connection.unwrap(): {}", e.getMessage());
@@ -1269,7 +1297,9 @@ public class MergeSpec<T> {
             session.doWork(connection -> {
                 dialectHolder[0] = connection.getMetaData().getDatabaseProductName().toLowerCase();
             });
-            return mapDialect(dialectHolder[0]);
+            String dialect = mapDialect(dialectHolder[0]);
+            DIALECT_CACHE.putIfAbsent(factoryKey, dialect);
+            return dialect;
         } catch (ClassNotFoundException e) {
             log.debug("Hibernate not available on classpath");
         } catch (Exception e) {
@@ -1283,6 +1313,7 @@ public class MergeSpec<T> {
         if (manualDialect != null && !manualDialect.isEmpty()) {
             String mapped = mapDialect(manualDialect.toLowerCase());
             log.info("Using manually configured dialect: {}", mapped);
+            DIALECT_CACHE.putIfAbsent(factoryKey, mapped);
             return mapped;
         }
         throw new MyJpaPlusException("Failed to detect database dialect and no manual dialect configured. "

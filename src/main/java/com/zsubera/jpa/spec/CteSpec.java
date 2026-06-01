@@ -169,6 +169,53 @@ public class CteSpec {
     }
 
     /**
+     * P0-6: 安全的参数化 CTE SQL 设置方法。与 {@link #as(String)} 不同，此方法接受 SQL 模板和参数， 强制使用参数化查询防止 SQL 注入。
+     *
+     * <p>
+     * 使用示例：
+     *
+     * <pre>{@code
+     * CteSpec.with("filtered_users").asSafe("SELECT id, name FROM users WHERE status = ?1 AND age > ?2", "ACTIVE", 18)
+     *     .select("SELECT * FROM filtered_users").getResultList(em);
+     * }</pre>
+     *
+     * @param sqlTemplate CTE 查询 SQL 模板（使用 ?1, ?2 等位置参数）
+     * @param params 参数值
+     * @return 当前 CteSpec 实例，支持链式调用
+     * @throws IllegalArgumentException 如果 sqlTemplate 为 null 或空
+     */
+    public CteSpec asSafe(String sqlTemplate, Object... params) {
+        if (sqlTemplate == null || sqlTemplate.isEmpty()) {
+            throw new IllegalArgumentException("sqlTemplate must not be null or empty");
+        }
+        if (strictMode) {
+            validateSelectOnly(sqlTemplate);
+        }
+        CteEntry current = currentCte();
+        current.sql = sqlTemplate;
+        if (params != null) {
+            for (int i = 0; i < params.length; i++) {
+                parameters.put("_cte_param_" + i, params[i]);
+            }
+        }
+        return this;
+    }
+
+    /**
+     * P0-6: 验证 SQL 仅包含 SELECT 语句（严格模式下阻止 DDL/DML）。
+     *
+     * @param sql SQL 字符串
+     * @throws SecurityException 如果检测到非 SELECT 语句
+     */
+    private static void validateSelectOnly(String sql) {
+        String trimmed = sql.trim().toUpperCase();
+        if (!trimmed.startsWith("SELECT") && !trimmed.startsWith("WITH")) {
+            throw new SecurityException("SECURITY: CTE SQL must start with SELECT or WITH. " + "Got: "
+                + (trimmed.length() > 50 ? trimmed.substring(0, 50) + "..." : trimmed));
+        }
+    }
+
+    /**
      * 添加另一个 CTE（链式添加多个 CTE）。
      *
      * @param cteName CTE 名称

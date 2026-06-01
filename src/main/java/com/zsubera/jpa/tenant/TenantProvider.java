@@ -37,8 +37,10 @@ public interface TenantProvider {
     /**
      * 获取当前租户 ID。
      *
-     * @return 当前租户 ID，不能为 {@code null}
+     * <p>
+     * 返回 {@code null} 表示无活跃租户（未登录或系统级操作）。 调用方应检查返回值是否为 null，null 表示不应用租户过滤。
+     *
+     * @return 当前租户 ID，返回 {@code null} 表示无活跃租户
      */
-    @org.springframework.lang.NonNull
     Object getCurrentTenantId();
 }

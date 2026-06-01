@@ -122,6 +122,9 @@ public class MyJpaTemplate {
     /** 批量操作最大影响行数限制。默认 10000，{@code DISABLED} 表示不限制。 */
     private volatile int maxBulkOperationRows = DEFAULT_MAX_BULK_OPERATION_ROWS;
 
+    /** P1-15: 查询默认超时时间（秒）。设置后所有查询将自动应用此超时。默认 -1 表示不设置。 */
+    private volatile int defaultTimeoutSeconds = -1;
+
     /** 创建 MyJpaTemplate 实例，使用默认配置。 */
     public MyJpaTemplate() {
         // 使用默认值
@@ -198,6 +201,31 @@ public class MyJpaTemplate {
     }
 
     /**
+     * P1-15: 设置查询默认超时时间（秒）。设置后所有查询将自动应用此超时。
+     *
+     * <p>
+     * 设置为 {@code -1} 表示不设置默认超时。
+     *
+     * @param defaultTimeoutSeconds 查询超时秒数，或 {@code -1} 表示不设置
+     * @throws IllegalArgumentException 如果值不是正数且不等于 -1
+     */
+    public void setDefaultTimeoutSeconds(int defaultTimeoutSeconds) {
+        if (defaultTimeoutSeconds <= 0 && defaultTimeoutSeconds != -1) {
+            throw new IllegalArgumentException("defaultTimeoutSeconds must be positive or -1 (disabled)");
+        }
+        this.defaultTimeoutSeconds = defaultTimeoutSeconds;
+    }
+
+    /**
+     * P1-15: 获取查询默认超时时间（秒）。
+     *
+     * @return 查询超时秒数，-1 表示不设置
+     */
+    public int getDefaultTimeoutSeconds() {
+        return defaultTimeoutSeconds;
+    }
+
+    /**
      * 创建指定实体类型的 {@link UpdateSpec}。{@link EntityManager} 将在执行时通过 {@link #execute(UpdateSpec)} 提供。
      *
      * @param entityClass 要更新的实体类
@@ -265,6 +293,46 @@ public class MyJpaTemplate {
             } else {
                 result.add(entityManager.merge(entity));
             }
+            count++;
+            if (count % batchSize == 0) {
+                entityManager.flush();
+                entityManager.clear();
+            }
+        }
+        entityManager.flush();
+        entityManager.clear();
+        return result;
+    }
+
+    /**
+     * P1-20: 纯 persist 批量保存实体，所有实体都使用 {@code persist()} 操作。
+     *
+     * <p>
+     * 与 {@link #saveAllBatched(Iterable, int)} 不同，此方法对所有实体使用 {@code persist()}， 避免了 {@code merge()} 产生的额外 SELECT
+     * 查询。适用于确定所有实体都是新建的场景（如手动赋 ID 的 UUID 实体）。
+     *
+     * <p>
+     * <strong>注意：</strong>如果实体已存在于数据库中，将抛出 {@code EntityExistsException}。
+     *
+     * @param entities 要保存的实体列表
+     * @param batchSize 每批大小，建议值为 50-200
+     * @param <T> 实体类型
+     * @return 保存后的实体列表（detached 状态）
+     * @throws IllegalArgumentException 如果 entities 为 null 或 batchSize 不是正数
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public <T> List<T> saveAllBatchedPure(Iterable<T> entities, int batchSize) {
+        if (entities == null) {
+            throw new IllegalArgumentException("entities must not be null");
+        }
+        if (batchSize <= 0) {
+            throw new IllegalArgumentException("batchSize must be positive");
+        }
+        java.util.ArrayList<T> result = new java.util.ArrayList<>();
+        int count = 0;
+        for (T entity : entities) {
+            entityManager.persist(entity);
+            result.add(entity);
             count++;
             if (count % batchSize == 0) {
                 entityManager.flush();
@@ -904,6 +972,10 @@ public class MyJpaTemplate {
         TypedQuery<T> query = entityManager.createQuery(cq);
         if (maxResults != null) {
             query.setMaxResults(maxResults);
+        }
+        // P1-15: Apply default query timeout if configured
+        if (defaultTimeoutSeconds > 0) {
+            query.setHint("jakarta.persistence.query.timeout", defaultTimeoutSeconds * 1000);
         }
         return query;
     }
