@@ -63,6 +63,9 @@ public class MergeSpec<T> {
         new org.springframework.util.ConcurrentReferenceHashMap<>(16,
             org.springframework.util.ConcurrentReferenceHashMap.ReferenceType.WEAK);
 
+    /** P1-14: Maximum cache size before logging warning. */
+    private static final int MAX_FIELD_CACHE_SIZE = 1024;
+
     private final Class<T> entityClass;
     private T entity;
     private final List<String> conflictFields = new ArrayList<>();
@@ -218,6 +221,9 @@ public class MergeSpec<T> {
                                 attempt + 1, maxRetries, backoffMs);
                         }
                         try {
+                            // P1-9: Thread.sleep() is acceptable here as retry backoff is short (10-40ms).
+                            // In Java 21+ virtual thread environments, consider using
+                            // CompletableFuture.delayedExecutor() for non-blocking delay.
                             Thread.sleep(backoffMs);
                         } catch (InterruptedException ie) {
                             Thread.currentThread().interrupt();
@@ -229,6 +235,8 @@ public class MergeSpec<T> {
                 }
             }
             // B-10: After retries exhausted, try MERGE again instead of direct INSERT
+            log.warn("H2 UPSERT retry limit ({}) exhausted for entity. Falling back to MERGE INTO syntax. "
+                + "This may cause data inconsistency in high-concurrency scenarios.", maxRetries);
             SqlWithParams retrySql = buildSql(em);
             return executeNativeQuery(em, retrySql.sql(), retrySql.params());
         }
@@ -591,6 +599,13 @@ public class MergeSpec<T> {
             throw new IllegalArgumentException("entity must not be null");
         }
         List<EntityFieldValue> fieldValues = new ArrayList<>();
+        // P1-14: Check FIELD_CACHE size and warn if too large
+        if (FIELD_CACHE.size() > MAX_FIELD_CACHE_SIZE) {
+            log.warn(
+                "MergeSpec field cache size ({}) exceeds limit ({}). "
+                    + "This may indicate a class loader leak. Weak reference entries will be cleaned by GC.",
+                FIELD_CACHE.size(), MAX_FIELD_CACHE_SIZE);
+        }
         List<Field> allFields = FIELD_CACHE.computeIfAbsent(entityClass, cls -> {
             List<Field> fields = new ArrayList<>();
             for (Class<?> c = cls; c != null && c != Object.class; c = c.getSuperclass()) {
@@ -774,6 +789,9 @@ public class MergeSpec<T> {
                                 attempt + 1, maxRetries, backoffMs);
                         }
                         try {
+                            // P1-9: Thread.sleep() is acceptable here as retry backoff is short (10-40ms).
+                            // In Java 21+ virtual thread environments, consider using
+                            // CompletableFuture.delayedExecutor() for non-blocking delay.
                             Thread.sleep(backoffMs);
                         } catch (InterruptedException ie) {
                             Thread.currentThread().interrupt();
@@ -786,6 +804,8 @@ public class MergeSpec<T> {
             }
             // B-10: After retries exhausted, try MERGE again using the thread-safe buildSqlFor method
             // (not buildSql which uses shared this.entity field — unsafe in concurrent batch scenarios)
+            log.warn("H2 UPSERT retry limit ({}) exhausted for entity. Falling back to MERGE INTO syntax. "
+                + "This may cause data inconsistency in high-concurrency scenarios.", maxRetries);
             SqlWithParams retrySql = buildSqlFor(em, entity);
             return executeNativeQuery(em, retrySql.sql(), retrySql.params());
         }
@@ -969,11 +989,24 @@ public class MergeSpec<T> {
                 tableName.append(tableAnnotation.schema()).append('.');
             }
             tableName.append(tableAnnotation.name());
-            return tableName.toString();
+            String name = tableName.toString();
+            // P0-2: Validate each segment of the table name from annotation to prevent injection
+            for (String segment : name.split("\\.")) {
+                if (!SAFE_IDENTIFIER_PART_PATTERN.matcher(segment).matches()) {
+                    throw new MyJpaPlusException("Invalid table name in @Table annotation: '" + name
+                        + "'. Each part must contain only alphanumeric characters and underscores.");
+                }
+            }
+            return name;
         }
         jakarta.persistence.Entity entityAnnotation = entityClass.getAnnotation(jakarta.persistence.Entity.class);
         if (entityAnnotation != null && !entityAnnotation.name().isEmpty()) {
-            return entityAnnotation.name();
+            String name = entityAnnotation.name();
+            if (!SAFE_IDENTIFIER_PART_PATTERN.matcher(name).matches()) {
+                throw new MyJpaPlusException("Invalid entity name in @Entity annotation: '" + name
+                    + "'. Must contain only alphanumeric characters and underscores.");
+            }
+            return name;
         }
         return camelToSnake(entityClass.getSimpleName());
     }
@@ -1131,7 +1164,13 @@ public class MergeSpec<T> {
     private String resolveColumnName(Field field) {
         Column columnAnnotation = field.getAnnotation(Column.class);
         if (columnAnnotation != null && !columnAnnotation.name().isEmpty()) {
-            return columnAnnotation.name();
+            String name = columnAnnotation.name();
+            // P0-2: Validate column name from annotation to prevent injection
+            if (!SAFE_IDENTIFIER_PATTERN.matcher(name).matches()) {
+                throw new MyJpaPlusException("Invalid column name in @Column annotation: '" + name
+                    + "'. Must contain only alphanumeric characters and underscores.");
+            }
+            return name;
         }
         return field.getName();
     }

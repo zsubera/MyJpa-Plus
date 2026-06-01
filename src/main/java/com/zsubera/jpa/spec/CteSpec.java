@@ -269,6 +269,9 @@ public class CteSpec {
     /**
      * 仅构建 SQL 字符串，不执行。用于调试或与其他组件集成。
      *
+     * <p>
+     * <strong>安全校验：</strong>构建时会检查 SQL 中是否包含未绑定的命名参数（以 {@code :} 开头的标识符）， 如果存在未通过 {@link #setParameter} 绑定的参数，将记录安全警告。
+     *
      * @return 完整的 CTE SQL 字符串
      * @throws IllegalStateException 如果 CTE 或主查询未完整配置
      */
@@ -305,7 +308,10 @@ public class CteSpec {
         }
         sb.append(" ");
         sb.append(mainSql);
-        return sb.toString();
+        String sql = sb.toString();
+        // P0-1: Warn about unbound named parameters in SQL to encourage parameterized queries
+        checkUnboundParameters(sql, parameters);
+        return sql;
     }
 
     // ---- 内部方法 ----
@@ -351,6 +357,23 @@ public class CteSpec {
                 "SECURITY: {} SQL contains potential semicolon injection pattern. "
                     + "Ensure this is intentional and not user input. SQL: {}",
                 context, sql.length() > 100 ? sql.substring(0, 100) + "..." : sql);
+        }
+    }
+
+    /**
+     * 检查 SQL 中是否存在未绑定的命名参数。
+     *
+     * @param sql 完整 SQL 字符串
+     * @param boundParams 已绑定的参数映射
+     */
+    private static void checkUnboundParameters(String sql, Map<String, Object> boundParams) {
+        java.util.regex.Matcher matcher = java.util.regex.Pattern.compile(":([a-zA-Z_][a-zA-Z0-9_]*)").matcher(sql);
+        while (matcher.find()) {
+            String paramName = matcher.group(1);
+            if (!boundParams.containsKey(paramName)) {
+                log.warn("SECURITY: CTE SQL contains unbound named parameter ':{}'. "
+                    + "Ensure this parameter is bound via setParameter() to prevent SQL injection.", paramName);
+            }
         }
     }
 

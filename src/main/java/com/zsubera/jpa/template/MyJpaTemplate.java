@@ -433,6 +433,32 @@ public class MyJpaTemplate {
     }
 
     /**
+     * P2-16: 查找匹配给定 {@link QuerySpec} 的所有实体，支持自定义排序。
+     *
+     * @param entityClass 实体类
+     * @param spec 查询规范
+     * @param sort 排序规则
+     * @param <T> 实体类型
+     * @return 匹配实体列表（限制为最大行数）
+     * @throws IllegalArgumentException 如果任何参数为 null
+     */
+    @Transactional(readOnly = true)
+    public <T> List<T> findAll(Class<T> entityClass, QuerySpec<T> spec, org.springframework.data.domain.Sort sort) {
+        if (entityClass == null) {
+            throw new IllegalArgumentException("entityClass must not be null");
+        }
+        if (spec == null) {
+            throw new IllegalArgumentException("spec must not be null");
+        }
+        if (sort == null) {
+            throw new IllegalArgumentException("sort must not be null");
+        }
+        TypedQuery<T> query = buildSpecificationQuery(entityClass, spec.toSpecification(), sort, this.maxResults);
+        spec.applyQuerySettings(query);
+        return query.getResultList();
+    }
+
+    /**
      * 查找匹配给定 {@link QuerySpec} 的所有实体，支持可选的 EntityGraph 用于急切加载。
      *
      * @param entityClass 实体类
@@ -882,9 +908,11 @@ public class MyJpaTemplate {
         CriteriaBuilder cb = entityManager.getCriteriaBuilder();
 
         if (pageable.isUnpaged()) {
-            log.debug("Pageable.unpaged() used with pagination method - returning all results without limit. "
-                + "Consider using findAll() with explicit maxResults or findAllStream() for large datasets.");
-            TypedQuery<T> typedQuery = buildSpecificationQuery(entityClass, spec, null, null);
+            log.debug(
+                "Pageable.unpaged() used with pagination method - applying maxResults limit ({}). "
+                    + "Consider using findAll() with explicit maxResults or findAllStream() for large datasets.",
+                this.maxResults);
+            TypedQuery<T> typedQuery = buildSpecificationQuery(entityClass, spec, null, this.maxResults);
             if (querySpec != null) {
                 querySpec.applyQuerySettings(typedQuery);
             }

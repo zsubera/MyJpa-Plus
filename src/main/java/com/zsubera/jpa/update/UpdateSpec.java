@@ -169,6 +169,8 @@ public class UpdateSpec<T> extends AbstractBulkOperationSpec<T, UpdateSpec<T>> {
             throw new IllegalArgumentException("amount must not be null");
         }
         String name = LambdaUtils.getPropertyName(field);
+        // P1-2: Validate that the field type is numeric at build time
+        validateNumericField(name, "setAdd");
         expressionSetClauses.add(new ExpressionSetClause(name, (root, cb) -> cb.sum(root.get(name), amount)));
         return this;
     }
@@ -197,6 +199,8 @@ public class UpdateSpec<T> extends AbstractBulkOperationSpec<T, UpdateSpec<T>> {
             throw new IllegalArgumentException("amount must not be null");
         }
         String name = LambdaUtils.getPropertyName(field);
+        // P1-2: Validate that the field type is numeric at build time
+        validateNumericField(name, "setSubtract");
         expressionSetClauses.add(new ExpressionSetClause(name, (root, cb) -> cb.diff(root.get(name), amount)));
         return this;
     }
@@ -429,6 +433,33 @@ public class UpdateSpec<T> extends AbstractBulkOperationSpec<T, UpdateSpec<T>> {
         applyExpressionSetClauses(update, updateRoot, cb);
         update.where(InClauseBuilder.in(cb, updateRoot.get(idFieldName), ids));
         return em.createQuery(update).executeUpdate();
+    }
+
+    /**
+     * P1-2: Validate that the specified field is a numeric type.
+     *
+     * @param fieldName the field name to validate
+     * @param operation the operation name for error messages
+     * @throws IllegalArgumentException if the field is not a numeric type
+     */
+    private void validateNumericField(String fieldName, String operation) {
+        for (Class<?> c = entityClass; c != null && c != Object.class; c = c.getSuperclass()) {
+            try {
+                java.lang.reflect.Field f = c.getDeclaredField(fieldName);
+                Class<?> type = f.getType();
+                if (!Number.class.isAssignableFrom(type) && type != int.class && type != long.class
+                    && type != double.class && type != float.class && type != short.class && type != byte.class) {
+                    throw new IllegalArgumentException(operation + "() requires a numeric field, but field '"
+                        + fieldName + "' in " + entityClass.getSimpleName() + " has type: " + type.getSimpleName()
+                        + ". Use set() for non-numeric fields.");
+                }
+                return;
+            } catch (NoSuchFieldException e) {
+                // continue checking superclass
+            }
+        }
+        // Field not found via reflection — may be a property without a direct field; skip validation
+        log.debug("Cannot validate numeric type for field '{}' via reflection; skipping validation", fieldName);
     }
 
 }

@@ -759,6 +759,17 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
     /**
      * 将另一个 QuerySpec 的条件以 AND 语义合并到当前实例。 另一个 spec 的条件、分组、排序和 distinct 标志将追加到当前 spec， 保留 QuerySpec 类型以支持链式调用。
      *
+     * <p>
+     * <strong>合并策略说明：</strong>
+     * <ul>
+     * <li>条件（conditions）：追加到当前条件列表（AND 语义）</li>
+     * <li>DISTINCT：如果任一 spec 启用了 DISTINCT，则合并后启用</li>
+     * <li>GROUP BY：追加到当前分组字段列表</li>
+     * <li>HAVING：追加到当前 HAVING 条件列表（AND 语义）</li>
+     * <li>ORDER BY：追加到当前排序列表（另一个 spec 的排序在当前排序之后）</li>
+     * <li>查询超时/锁模式：仅当当前实例未设置时，采用另一个实例的值</li>
+     * </ul>
+     *
      * @param other 另一个 QuerySpec 实例
      * @return 当前 QuerySpec 实例，支持链式调用
      * @throws IllegalStateException 如果另一个 spec 存在未关闭的 or() 组

@@ -204,7 +204,9 @@ public class DeleteSpec<T> extends AbstractBulkOperationSpec<T, DeleteSpec<T>> {
         }
         if (!pessimisticLock) {
             log.warn("executeLimited() with pessimisticLock=false may cause race conditions. "
-                + "Consider using pessimisticLock=true for critical operations.");
+                + "Consider using pessimisticLock=true for critical operations. "
+                + "The two-step approach (SELECT IDs then DELETE) has a time window where concurrent "
+                + "transactions may modify or delete records, leading to inconsistent results.");
         }
         CriteriaBuilder cb = em.getCriteriaBuilder();
 

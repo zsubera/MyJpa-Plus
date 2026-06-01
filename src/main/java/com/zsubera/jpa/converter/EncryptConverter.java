@@ -363,8 +363,9 @@ public class EncryptConverter implements AttributeConverter<String, String> {
             }
             // P1-1: Use ConcurrentHashMap for thread-safe salt caching instead of System.setProperty()
             return SALT_CACHE.computeIfAbsent("internal", k -> {
-                // P1-3: Try to load persisted salt from local file for cross-restart consistency
-                java.io.File saltFile = new java.io.File(System.getProperty("java.io.tmpdir"), ".myjpa-salt");
+                // P0-3: Use $HOME/.myjpa-plus/.salt for better security (not world-readable temp dir)
+                java.io.File homeDir = new java.io.File(System.getProperty("user.home"), ".myjpa-plus");
+                java.io.File saltFile = new java.io.File(homeDir, ".salt");
                 if (saltFile.exists()) {
                     try {
                         byte[] fileSalt = java.nio.file.Files.readAllBytes(saltFile.toPath());
@@ -380,13 +381,25 @@ public class EncryptConverter implements AttributeConverter<String, String> {
                 byte[] randomSalt = generateRandomSalt().getBytes(StandardCharsets.UTF_8);
                 // Try to persist the salt for cross-restart consistency
                 try {
+                    if (!homeDir.exists()) {
+                        boolean created = homeDir.mkdirs();
+                        if (!created && !homeDir.exists()) {
+                            LOG.log(System.Logger.Level.WARNING, "Failed to create directory: {0}",
+                                homeDir.getAbsolutePath());
+                        }
+                    }
                     java.nio.file.Files.write(saltFile.toPath(), randomSalt);
-                    // P2: Set POSIX file permissions (rw-------) on salt file for security
+                    // P0-3: Set POSIX file permissions (rwx------) on directory and (rw-------) on file
                     try {
-                        java.util.Set<java.nio.file.attribute.PosixFilePermission> perms =
+                        java.util.Set<java.nio.file.attribute.PosixFilePermission> dirPerms =
+                            java.util.EnumSet.of(java.nio.file.attribute.PosixFilePermission.OWNER_READ,
+                                java.nio.file.attribute.PosixFilePermission.OWNER_WRITE,
+                                java.nio.file.attribute.PosixFilePermission.OWNER_EXECUTE);
+                        java.nio.file.Files.setPosixFilePermissions(homeDir.toPath(), dirPerms);
+                        java.util.Set<java.nio.file.attribute.PosixFilePermission> filePerms =
                             java.util.EnumSet.of(java.nio.file.attribute.PosixFilePermission.OWNER_READ,
                                 java.nio.file.attribute.PosixFilePermission.OWNER_WRITE);
-                        java.nio.file.Files.setPosixFilePermissions(saltFile.toPath(), perms);
+                        java.nio.file.Files.setPosixFilePermissions(saltFile.toPath(), filePerms);
                     } catch (UnsupportedOperationException | java.io.IOException permEx) {
                         // POSIX permissions not supported on this OS (e.g., Windows)
                         LOG.log(System.Logger.Level.DEBUG, "Cannot set POSIX permissions on salt file: {0}",

@@ -118,6 +118,30 @@ public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> {
     }
 
     /**
+     * P2-5: 向安全函数白名单中添加函数名，带安全审计日志。
+     *
+     * <p>
+     * 此方法记录添加操作到安全审计日志，便于追踪白名单变更。
+     *
+     * @param functionName 要添加的函数名（大小写不敏感，将自动转为大写）
+     * @return 如果成功添加返回 true，如果已存在返回 false
+     * @throws IllegalArgumentException 如果 functionName 为 null 或空
+     */
+    static boolean addSafeFunction(String functionName) {
+        if (functionName == null || functionName.isEmpty()) {
+            throw new IllegalArgumentException("functionName must not be null or empty");
+        }
+        String upper = functionName.toUpperCase();
+        boolean added = SAFE_FUNCTION_NAMES.add(upper);
+        if (added) {
+            LoggerFactory.getLogger("com.zsubera.jpa.security")
+                .warn("SECURITY: Function '{}' added to safe function whitelist. "
+                    + "Ensure this function does not pose SQL injection risks.", upper);
+        }
+        return added;
+    }
+
+    /**
      * 获取当前条件列表。
      *
      * @return 条件节点列表

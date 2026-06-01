@@ -12,6 +12,10 @@ import org.slf4j.LoggerFactory;
  * <p>
  * 通常由 {@link IgnoreTenantAdvisor} 自动管理，不建议手动调用。
  *
+ * <p>
+ * <strong>虚拟线程说明：</strong>在 Java 21+ 虚拟线程环境中，{@code ThreadLocal} 仍然可用且功能正确。 未来版本可能考虑使用 {@code ScopedValue}（JEP
+ * 462）替代，以获得更好的虚拟线程兼容性和自动清理语义。 当前实现已通过 {@link #pushIgnore()} 的安全上限和 {@link #checkHealth()} 健康检查机制防止计数泄漏。
+ *
  * @see IgnoreTenantAdvisor
  * @see TenantProvider
  */
@@ -25,7 +29,7 @@ public final class TenantContext {
     private static volatile int maxIgnoreCount;
 
     static {
-        int configured = 64;
+        int configured = 128;
         String prop = System.getProperty("myjpa-plus.tenant.max-ignore-count");
         if (prop != null) {
             try {
