@@ -54,7 +54,7 @@ import org.springframework.util.ConcurrentReferenceHashMap;
  * 注册为 Bean。 这是因为 JPA {@code @EntityListeners} 机制与 Spring {@code @Component} 的生命周期不同， 同时使用会导致两个身份混淆。
  *
  * @author myjpa-plus
- * @since 1.3.0
+ * @since 1.2.0
  */
 public class AuditEntityListener implements ApplicationContextAware {
 
@@ -268,7 +268,24 @@ public class AuditEntityListener implements ApplicationContextAware {
                     field.set(entity, Date.from(instant));
                 }
             } else if (value instanceof String str) {
-                field.set(entity, str);
+                if (fieldType == String.class) {
+                    field.set(entity, str);
+                } else if (fieldType == Long.class || fieldType == long.class) {
+                    try {
+                        field.set(entity, Long.parseLong(str));
+                    } catch (NumberFormatException nfe) {
+                        log.warn("Cannot convert audit value '{}' to Long for field {}", str, field.getName());
+                    }
+                } else if (fieldType == Integer.class || fieldType == int.class) {
+                    try {
+                        field.set(entity, Integer.parseInt(str));
+                    } catch (NumberFormatException nfe) {
+                        log.warn("Cannot convert audit value '{}' to Integer for field {}", str, field.getName());
+                    }
+                } else {
+                    log.warn("Unsupported audit field type {} for field {} on entity {}", fieldType.getSimpleName(),
+                        field.getName(), entity.getClass().getSimpleName());
+                }
             }
         } catch (IllegalAccessException e) {
             log.warn("Failed to set audit field {} on entity {}", field.getName(), entity.getClass().getSimpleName(),

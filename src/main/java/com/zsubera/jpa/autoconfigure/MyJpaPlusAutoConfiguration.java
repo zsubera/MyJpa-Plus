@@ -187,10 +187,18 @@ public class MyJpaPlusAutoConfiguration {
 
         @Override
         public Object postProcessAfterInitialization(Object bean, String beanName) {
-            if (bean instanceof DataSource ds && !java.lang.reflect.Proxy.isProxyClass(ds.getClass())) {
+            if (bean instanceof DataSource ds && !java.lang.reflect.Proxy.isProxyClass(ds.getClass())
+                && !isAlreadyWrapped(ds)) {
                 return interceptor.wrapDataSource(ds);
             }
             return bean;
+        }
+
+        /**
+         * 检查 DataSource 是否已被 SqlSlowQueryInterceptor 包装。 通过检查类名中的代理标记来避免双重包装。
+         */
+        private static boolean isAlreadyWrapped(DataSource ds) {
+            return ds.getClass().getName().contains("$SlowQuery");
         }
     }
 

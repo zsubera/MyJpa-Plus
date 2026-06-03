@@ -63,9 +63,17 @@ public class CteSpec {
     /**
      * 设置严格模式。启用后，未绑定的命名参数将抛出异常。
      *
+     * <p>
+     * <strong>安全警告：</strong>禁用严格模式会降低 SQL 注入防护能力。仅在受控环境中使用。
+     *
      * @param enabled 是否启用严格模式
+     * @deprecated 严格模式应保持启用。如需禁用，仅限于测试或受控环境。
      */
+    @Deprecated(since = "1.2.0", forRemoval = false)
     public static void setStrictMode(boolean enabled) {
+        if (!enabled) {
+            log.warn("SECURITY: CteSpec strict mode DISABLED. SQL injection protections are now advisory-only.");
+        }
         strictMode = enabled;
     }
 
@@ -577,7 +585,9 @@ public class CteSpec {
      * @param boundParams 已绑定的参数映射
      */
     private static void checkUnboundParameters(String sql, Map<String, Object> boundParams) {
-        java.util.regex.Matcher matcher = java.util.regex.Pattern.compile(":([a-zA-Z_][a-zA-Z0-9_]*)").matcher(sql);
+        // P1-13: Use negative lookbehind to exclude PostgreSQL :: casts (e.g., ::text, ::integer)
+        java.util.regex.Matcher matcher =
+            java.util.regex.Pattern.compile("(?<!:):([a-zA-Z_][a-zA-Z0-9_]*)").matcher(sql);
         List<String> unboundParams = new ArrayList<>();
         while (matcher.find()) {
             String paramName = matcher.group(1);

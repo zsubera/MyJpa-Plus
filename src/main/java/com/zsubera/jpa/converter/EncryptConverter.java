@@ -141,6 +141,8 @@ public class EncryptConverter implements AttributeConverter<String, String> {
         }
         // 定期刷新或首次加载
         synchronized (EncryptConverter.class) {
+            // P1-10: Re-read timestamp inside synchronized block to avoid stale check
+            now = System.currentTimeMillis();
             version = cachedKeyVersion;
             if (version != null && (now - lastKeyVersionRefresh) < KEY_VERSION_REFRESH_INTERVAL_MS) {
                 return version;
@@ -360,6 +362,10 @@ public class EncryptConverter implements AttributeConverter<String, String> {
     /**
      * 检查当前是否为生产环境。
      *
+     * <p>
+     * <strong>已知限制：</strong>此方法仅检查系统属性和环境变量。Spring profiles 通过 {@code application.properties}、{@code @ActiveProfiles} 或
+     * {@code SpringApplication.setAdditionalProfiles()} 设置时不会设置系统属性， 因此可能无法正确检测生产环境。
+     *
      * @return 如果是生产环境返回 true
      */
     private static boolean isProductionEnvironment() {
@@ -504,27 +510,80 @@ public class EncryptConverter implements AttributeConverter<String, String> {
                         channel.truncate(0);
                         channel.write(java.nio.ByteBuffer.wrap(randomSalt));
                         channel.force(true);
+                        // P0-4: Verify salt file write BEFORE releasing lock
+                        channel.position(0);
+                        java.nio.ByteBuffer verifyBuf = java.nio.ByteBuffer.allocate((int)channel.size());
+                        channel.read(verifyBuf);
+                        verifyBuf.flip();
+                        byte[] writtenSalt = new byte[verifyBuf.remaining()];
+                        verifyBuf.get(writtenSalt);
+                        if (!java.util.Arrays.equals(randomSalt, writtenSalt)) {
+                            throw new SecurityException("SECURITY: Salt file write verification failed. "
+                                + "Written bytes do not match generated salt. " + "Set environment variable " + SALT_ENV
+                                + " to ensure consistent encryption.");
+                        }
                     } finally {
                         lock.release();
                     }
                 } else {
-                    // Could not acquire lock, another process is writing
-                    // Wait briefly and read the file
-                    Thread.sleep(100);
-                    byte[] fileSalt = java.nio.file.Files.readAllBytes(saltPath);
-                    if (fileSalt.length > 0) {
-                        return fileSalt;
+                    // P0-3: Could not acquire lock, another process is writing.
+                    // Retry lock acquisition with longer timeout instead of writing without lock.
+                    for (int retryAttempt = 0; retryAttempt < 5; retryAttempt++) {
+                        try {
+                            Thread.sleep(200);
+                        } catch (InterruptedException ie) {
+                            Thread.currentThread().interrupt();
+                            break;
+                        }
+                        lock = channel.tryLock();
+                        if (lock != null) {
+                            break;
+                        }
                     }
-                    // Fallback: write without lock
-                    java.nio.file.Files.write(saltPath, randomSalt);
+                    if (lock != null) {
+                        try {
+                            // Another process may have written the salt while we waited
+                            if (channel.size() > 0) {
+                                channel.position(0);
+                                java.nio.ByteBuffer buffer = java.nio.ByteBuffer.allocate((int)channel.size());
+                                channel.read(buffer);
+                                buffer.flip();
+                                byte[] existingSalt = new byte[buffer.remaining()];
+                                buffer.get(existingSalt);
+                                if (existingSalt.length > 0) {
+                                    return existingSalt;
+                                }
+                            }
+                            channel.position(0);
+                            channel.truncate(0);
+                            channel.write(java.nio.ByteBuffer.wrap(randomSalt));
+                            channel.force(true);
+                            // P0-4: Verify before releasing lock
+                            channel.position(0);
+                            java.nio.ByteBuffer verifyBuf = java.nio.ByteBuffer.allocate((int)channel.size());
+                            channel.read(verifyBuf);
+                            verifyBuf.flip();
+                            byte[] writtenSalt = new byte[verifyBuf.remaining()];
+                            verifyBuf.get(writtenSalt);
+                            if (!java.util.Arrays.equals(randomSalt, writtenSalt)) {
+                                throw new SecurityException("SECURITY: Salt file write verification failed. "
+                                    + "Set environment variable " + SALT_ENV + " to ensure consistent encryption.");
+                            }
+                        } finally {
+                            lock.release();
+                        }
+                    } else {
+                        // Last resort: read file - another process likely succeeded
+                        byte[] fileSalt = java.nio.file.Files.readAllBytes(saltPath);
+                        if (fileSalt.length > 0) {
+                            return fileSalt;
+                        }
+                        LOG.log(System.Logger.Level.WARNING,
+                            "SECURITY: Could not acquire salt file lock and no salt found. "
+                                + "Using non-persisted random salt. Set environment variable {0}",
+                            SALT_ENV);
+                    }
                 }
-            }
-            // P0-3: Verify salt file write by reading back and comparing
-            byte[] writtenSalt = java.nio.file.Files.readAllBytes(saltFile.toPath());
-            if (!java.util.Arrays.equals(randomSalt, writtenSalt)) {
-                throw new SecurityException(
-                    "SECURITY: Salt file write verification failed. " + "Written bytes do not match generated salt. "
-                        + "Set environment variable " + SALT_ENV + " to ensure consistent encryption.");
             }
             // B-07: Set file permissions - POSIX on Unix, ACL on Windows
             setSaltFilePermissions(homeDir, saltFile);
@@ -537,9 +596,6 @@ public class EncryptConverter implements AttributeConverter<String, String> {
                 "SECURITY: Using non-persisted random salt. Previous encrypted data WILL BE UNRECOVERABLE after restart. "
                     + "Set environment variable {0} or system property {1}",
                 SALT_ENV, SALT_PROPERTY);
-        } catch (InterruptedException ie) {
-            Thread.currentThread().interrupt();
-            LOG.log(System.Logger.Level.WARNING, "Interrupted while waiting for salt file lock: {0}", ie.getMessage());
         }
         return randomSalt;
     }

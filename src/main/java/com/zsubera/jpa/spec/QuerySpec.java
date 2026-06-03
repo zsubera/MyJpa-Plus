@@ -1012,17 +1012,31 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
         CriteriaBuilder cb, Map<String, Join<?, ?>> joinCache, String pathPrefix) {
         String fullPath = (pathPrefix != null && !pathPrefix.isEmpty() ? pathPrefix + "." : "") + node.fieldName;
 
-        Join<?, ?> join = joinCache.computeIfAbsent(fullPath, k -> {
-            boolean isFetch =
-                node.joinType == ConditionNode.JoinType.FETCH || node.joinType == ConditionNode.JoinType.LEFT_FETCH;
-            jakarta.persistence.criteria.JoinType jt =
-                (node.joinType == ConditionNode.JoinType.LEFT || node.joinType == ConditionNode.JoinType.LEFT_FETCH)
-                    ? jakarta.persistence.criteria.JoinType.LEFT : jakarta.persistence.criteria.JoinType.INNER;
-            if (isFetch) {
-                return (Join<?, ?>)((From<?, ?>)path).fetch(node.fieldName, jt);
+        boolean isFetch =
+            node.joinType == ConditionNode.JoinType.FETCH || node.joinType == ConditionNode.JoinType.LEFT_FETCH;
+        jakarta.persistence.criteria.JoinType jt =
+            (node.joinType == ConditionNode.JoinType.LEFT || node.joinType == ConditionNode.JoinType.LEFT_FETCH)
+                ? jakarta.persistence.criteria.JoinType.LEFT : jakarta.persistence.criteria.JoinType.INNER;
+
+        Join<?, ?> join = joinCache.get(fullPath);
+        if (join != null) {
+            // 检查joinType是否一致
+            boolean existingIsFetch = join instanceof jakarta.persistence.criteria.Fetch;
+            if (isFetch && !existingIsFetch) {
+                log.warn("Join path '{}' was previously created as non-fetch join, but now requested as fetch join. "
+                    + "Using existing non-fetch join. Consider using fetchJoin() consistently.", fullPath);
+            } else if (!isFetch && existingIsFetch) {
+                log.warn("Join path '{}' was previously created as fetch join, but now requested as non-fetch join. "
+                    + "Using existing fetch join. Consider using join() consistently.", fullPath);
             }
-            return ((From<?, ?>)path).join(node.fieldName, jt);
-        });
+        } else {
+            if (isFetch) {
+                join = (Join<?, ?>)((From<?, ?>)path).fetch(node.fieldName, jt);
+            } else {
+                join = ((From<?, ?>)path).join(node.fieldName, jt);
+            }
+            joinCache.put(fullPath, join);
+        }
 
         List<Predicate> innerPredicates = new ArrayList<>();
         for (ConditionNode inner : node.innerConditions) {

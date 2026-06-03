@@ -33,6 +33,9 @@ import org.springframework.data.jpa.domain.Specification;
  * 从实体中选择特定字段，并以 {@link Tuple} 或通过 {@code CriteriaBuilder.construct()} 返回自定义 DTO 的形式返回结果。支持 JOIN 关联、ORDER BY 排序和分页查询。
  *
  * <p>
+ * <strong>线程安全：</strong>此实例非线程安全。每个线程应使用独立的 {@code ProjectionSpec} 实例。
+ *
+ * <p>
  * 使用示例：
  *
  * <pre>{@code
@@ -102,9 +105,7 @@ public class ProjectionSpec<T> {
                     ProjectionJoinGroup<Object> group = ProjectionJoinGroup.create();
                     cfg.accept(group);
                     cachedConditions = group.conditions();
-                } catch (IllegalArgumentException e) {
-                    throw e;
-                } catch (MyJpaPlusException e) {
+                } catch (IllegalArgumentException | MyJpaPlusException e) {
                     throw e;
                 } catch (RuntimeException e) {
                     // 不设置 cachedConditions，让异常自然传播
@@ -300,13 +301,11 @@ public class ProjectionSpec<T> {
     }
 
     /**
-     * 指定用于构造函数投影的 DTO 类。
-     *
-     * <p>
-     * DTO 必须有一个构造函数，其参数顺序和类型与选定的字段匹配。
+     * 指定 DTO 构造函数投影的目标类。DTO 类必须有一个接受所有选定字段类型的构造函数。
      *
      * @param dtoClass DTO 类
      * @return 当前 ProjectionSpec 实例，支持链式调用
+     * @throws IllegalArgumentException 如果 dtoClass 为 null
      */
     public ProjectionSpec<T> asDto(Class<?> dtoClass) {
         if (dtoClass == null) {
@@ -613,26 +612,11 @@ public class ProjectionSpec<T> {
      *
      * @param em EntityManager 实例
      * @return fetchSize 值，0 表示不设置提示
+     * @deprecated 使用 {@link com.zsubera.jpa.util.PageableHelper#determineFetchSize} 替代
      */
+    @Deprecated(since = "1.2.0")
     private int determineFetchSize(EntityManager em) {
-        try {
-            Object urlObj = em.getEntityManagerFactory().getProperties().get("jakarta.persistence.jdbc.url");
-            if (urlObj == null) {
-                urlObj = em.getEntityManagerFactory().getProperties().get("hibernate.connection.url");
-            }
-            if (urlObj != null) {
-                String lower = urlObj.toString().toLowerCase();
-                if (lower.contains("postgresql")) {
-                    return 100;
-                }
-                if (lower.contains("mysql")) {
-                    return Integer.MIN_VALUE;
-                }
-            }
-        } catch (Exception e) {
-            log.debug("Failed to determine fetchSize from JDBC URL: {}", e.getMessage());
-        }
-        return 0;
+        return com.zsubera.jpa.util.PageableHelper.determineFetchSize(em);
     }
 
     /**
@@ -911,6 +895,7 @@ public class ProjectionSpec<T> {
      */
     @SuppressWarnings({"unchecked"})
     private Map<String, Join<?, ?>> resolveJoins(Root<T> root, CriteriaBuilder cb) {
+        leftJoinFilterPredicates.clear();
         Map<String, Join<?, ?>> joinMap = new LinkedHashMap<>();
         for (JoinSpec js : joins) {
             Join<?, ?> join = joinMap.computeIfAbsent(js.fieldName, k -> js.left

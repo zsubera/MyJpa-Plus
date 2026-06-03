@@ -31,6 +31,9 @@ final class AuditUtils {
     /** 当前配置的最大调用栈深度 */
     private static volatile int maxStackDepth;
 
+    /** P2-9: 缓存 StackWalker 实例，避免每次调用都创建新实例 */
+    private static final StackWalker STACK_WALKER = StackWalker.getInstance();
+
     static {
         int configured = DEFAULT_STACK_DEPTH;
         String prop = System.getProperty("myjpa-plus.audit.stack-trace-depth");
@@ -88,7 +91,7 @@ final class AuditUtils {
         // Thread.currentThread().getStackTrace() which captures the entire stack.
         int depth = maxStackDepth;
         StringBuilder sb = new StringBuilder();
-        StackWalker.getInstance().walk(frames -> {
+        STACK_WALKER.walk(frames -> {
             frames.skip(1).limit(depth).forEach(frame -> {
                 if (sb.length() > 0) {
                     sb.append(" <- ");

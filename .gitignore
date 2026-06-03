@@ -30,16 +30,10 @@ Thumbs.db
 build/
 out/
 /AGENTS.md
-/.opencode/agents/audit1.md
-/.opencode/agents/audit2.md
-/.opencode/AUDIT-README.md
-/.opencode/audit-workflow.ps1
 /run-audit.bat
-/.opencode/agents/final-audit.md
-/.opencode/opencode.json
-/.opencode/agents/optimizer.md
 
 # Audit workflow
-.audit-tasks/
-.audit-dones/
 .opencode/
+.opencode1/
+.playwright-cli/
+my-profile/

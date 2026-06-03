@@ -138,8 +138,11 @@ public class MaskSerializer extends JsonSerializer<String> {
     }
 
     private static String maskLicensePlate(String plate) {
-        if (plate.length() < 3) {
+        if (plate.length() < 2) {
             return plate;
+        }
+        if (plate.length() == 2) {
+            return plate.charAt(0) + "*";
         }
         return plate.substring(0, 2) + "*".repeat(plate.length() - 3) + plate.charAt(plate.length() - 1);
     }

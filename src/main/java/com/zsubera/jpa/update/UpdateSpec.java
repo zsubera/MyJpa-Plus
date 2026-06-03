@@ -272,12 +272,14 @@ public class UpdateSpec<T> extends AbstractBulkOperationSpec<T, UpdateSpec<T>> {
         }
         applyExpressionSetClauses(update, root, cb);
         Predicate[] predicates = buildPredicates(root, cb);
-        if (predicates.length == 0) {
-            throw new IllegalStateException(
-                "No WHERE conditions specified for UPDATE operation. " + "This would update ALL rows in the table. "
-                    + "If unconditional update is intended, use updateAll(EntityManager) instead.");
+        if (predicates.length == 0 && !allowUnconditional) {
+            throw new IllegalStateException("No WHERE conditions specified for UPDATE operation. "
+                + "This would update ALL rows in the table. "
+                + "If unconditional update is intended, use allowUnconditional(true) then updateAll(EntityManager).");
         }
-        update.where(cb.and(predicates));
+        if (predicates.length > 0) {
+            update.where(cb.and(predicates));
+        }
         return update;
     }
 

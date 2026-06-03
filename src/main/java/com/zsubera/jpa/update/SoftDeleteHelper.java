@@ -301,19 +301,38 @@ public final class SoftDeleteHelper {
     }
 
     /**
+     * P2-6: 安全标识符验证模式，防止 SQL 注入。
+     */
+    private static final java.util.regex.Pattern SAFE_IDENTIFIER_PATTERN =
+        java.util.regex.Pattern.compile("^[a-zA-Z_][a-zA-Z0-9_]*$");
+
+    /**
      * Resolve the database table name for the entity class.
      */
     private static String resolveTableName(Class<?> entityClass) {
         jakarta.persistence.Table tableAnnotation = entityClass.getAnnotation(jakarta.persistence.Table.class);
         if (tableAnnotation != null && !tableAnnotation.name().isEmpty()) {
+            // P2-6: Validate each segment to prevent SQL injection
+            String catalog = tableAnnotation.catalog();
+            String schema = tableAnnotation.schema();
+            String name = tableAnnotation.name();
+            if (!catalog.isEmpty() && !SAFE_IDENTIFIER_PATTERN.matcher(catalog).matches()) {
+                throw new IllegalArgumentException("Invalid @Table catalog: " + catalog);
+            }
+            if (!schema.isEmpty() && !SAFE_IDENTIFIER_PATTERN.matcher(schema).matches()) {
+                throw new IllegalArgumentException("Invalid @Table schema: " + schema);
+            }
+            if (!SAFE_IDENTIFIER_PATTERN.matcher(name).matches()) {
+                throw new IllegalArgumentException("Invalid @Table name: " + name);
+            }
             StringBuilder tableName = new StringBuilder();
-            if (!tableAnnotation.catalog().isEmpty()) {
-                tableName.append(tableAnnotation.catalog()).append('.');
+            if (!catalog.isEmpty()) {
+                tableName.append(catalog).append('.');
             }
-            if (!tableAnnotation.schema().isEmpty()) {
-                tableName.append(tableAnnotation.schema()).append('.');
+            if (!schema.isEmpty()) {
+                tableName.append(schema).append('.');
             }
-            tableName.append(tableAnnotation.name());
+            tableName.append(name);
             return tableName.toString();
         }
         jakarta.persistence.Entity entityAnnotation = entityClass.getAnnotation(jakarta.persistence.Entity.class);

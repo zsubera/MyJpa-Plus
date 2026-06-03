@@ -213,6 +213,11 @@ public class MyJpaTemplate {
         if (defaultTimeoutSeconds <= 0 && defaultTimeoutSeconds != -1) {
             throw new IllegalArgumentException("defaultTimeoutSeconds must be positive or -1 (disabled)");
         }
+        // P1-5: Prevent overflow when converting to milliseconds (int max ~24.8 days)
+        if (defaultTimeoutSeconds > Integer.MAX_VALUE / 1000) {
+            throw new IllegalArgumentException("defaultTimeoutSeconds too large for millisecond conversion: "
+                + defaultTimeoutSeconds + " (max " + (Integer.MAX_VALUE / 1000) + ")");
+        }
         this.defaultTimeoutSeconds = defaultTimeoutSeconds;
     }
 
@@ -830,31 +835,12 @@ public class MyJpaTemplate {
     /**
      * Determine appropriate fetchSize for streaming queries based on database dialect.
      *
-     * <p>
-     * PostgreSQL requires fetchSize > 0 to enable server-side cursors for streaming. MySQL uses Integer.MIN_VALUE to
-     * enable streaming mode. Other databases use default (no hint).
-     *
      * @return fetchSize value, 0 means no hint will be set
+     * @deprecated 使用 {@link com.zsubera.jpa.util.PageableHelper#determineFetchSize} 替代
      */
+    @Deprecated(since = "1.2.0")
     private int determineFetchSize() {
-        try {
-            Object urlObj = entityManager.getEntityManagerFactory().getProperties().get("jakarta.persistence.jdbc.url");
-            if (urlObj == null) {
-                urlObj = entityManager.getEntityManagerFactory().getProperties().get("hibernate.connection.url");
-            }
-            if (urlObj != null) {
-                String lower = urlObj.toString().toLowerCase();
-                if (lower.contains("postgresql")) {
-                    return 100;
-                }
-                if (lower.contains("mysql")) {
-                    return Integer.MIN_VALUE;
-                }
-            }
-        } catch (Exception e) {
-            log.debug("Failed to determine fetchSize from JDBC URL: {}", e.getMessage());
-        }
-        return 0;
+        return com.zsubera.jpa.util.PageableHelper.determineFetchSize(entityManager);
     }
 
     /**
@@ -975,7 +961,7 @@ public class MyJpaTemplate {
         }
         // P1-15: Apply default query timeout if configured
         if (defaultTimeoutSeconds > 0) {
-            query.setHint("jakarta.persistence.query.timeout", defaultTimeoutSeconds * 1000);
+            query.setHint("jakarta.persistence.query.timeout", Math.toIntExact(defaultTimeoutSeconds * 1000L));
         }
         return query;
     }
@@ -1351,7 +1337,7 @@ public class MyJpaTemplate {
                     operationName, MAX_BATCH_ITERATIONS, total);
                 break;
             }
-        } while (batchResult >= batchSize);
+        } while (batchResult > 0);
         return total;
     }
 

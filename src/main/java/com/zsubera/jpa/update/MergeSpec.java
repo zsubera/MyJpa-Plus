@@ -61,7 +61,13 @@ public class MergeSpec<T> {
     /** B-08: Unicode 标识符正则：允许 Unicode 字母、数字和下划线，支持国际化标识符。 */
     private static final Pattern UNICODE_IDENTIFIER_PART_PATTERN = Pattern.compile("^[\\p{L}_][\\p{L}\\p{N}_]*$");
 
-    /** P1-5: 常见 Unicode 同形字符检测：这些字符与 ASCII 字符视觉相似，可能用于绕过安全检查。 */
+    /**
+     * P1-5: 常见 Unicode 同形字符检测：这些字符与 ASCII 字符视觉相似，可能用于绕过安全检查。
+     *
+     * <p>
+     * <strong>已知限制：</strong>此模式仅覆盖西里尔字母、希腊字母和亚美尼亚字母。 不覆盖全角拉丁字母、数学字母符号等 Unicode 混淆字符。 如需生产级检测，考虑使用 ICU4J 的
+     * {@code SpoofChecker}。
+     */
     private static final Pattern HOMOGLYPH_PATTERN = Pattern.compile("[\\u0400-\\u04FF\\u0370-\\u03FF\\u0530-\\u058F]");
 
     /** B-08: 是否启用 Unicode 标识符支持。可通过系统属性 myjpa-plus.merge.unicode-identifiers=true 启用。 */
@@ -279,12 +285,16 @@ public class MergeSpec<T> {
         List<String> conflictColumns) {
         List<String> setClauses = new ArrayList<>();
         List<Object> setParams = new ArrayList<>();
+        // P2-10: Build Map for O(1) field lookup instead of O(n*m) nested loop
+        java.util.Map<String, EntityFieldValue> fieldValueMap = new java.util.LinkedHashMap<>();
+        for (EntityFieldValue fv : allFieldValues) {
+            fieldValueMap.put(fv.fieldName(), fv);
+        }
         for (String fieldName : updateFields) {
-            for (EntityFieldValue fv : allFieldValues) {
-                if (fv.fieldName().equals(fieldName)) {
-                    setClauses.add(escapeIdentifier(fv.columnName(), "h2") + " = ?");
-                    setParams.add(fv.value());
-                }
+            EntityFieldValue fv = fieldValueMap.get(fieldName);
+            if (fv != null) {
+                setClauses.add(escapeIdentifier(fv.columnName(), "h2") + " = ?");
+                setParams.add(fv.value());
             }
         }
         if (setClauses.isEmpty()) {
@@ -549,6 +559,11 @@ public class MergeSpec<T> {
                 if (tx != null && !tx.isActive()) {
                     tx.begin();
                     txStarted = true;
+                } else if (tx != null && tx.isActive()) {
+                    // P1-16: Pre-existing RESOURCE_LOCAL transaction — batch isolation not possible
+                    throw new MyJpaPlusException("executeBatchInSeparateTransactions requires no active transaction. "
+                        + "An active RESOURCE_LOCAL transaction was detected. "
+                        + "Use executeBatch() to run within the existing transaction.");
                 } else if (tx == null) {
                     // JTA environment: cannot manage transactions directly
                     throw new MyJpaPlusException("Cannot manage transactions in JTA environment. "
@@ -828,17 +843,9 @@ public class MergeSpec<T> {
                     throw e;
                 }
             }
-            // P0-2: When explicitUpdateFields=true, cannot fall back to MERGE INTO
-            // because it would overwrite all columns, violating partial update contract
-            if (explicitUpdateFields) {
-                throw new IllegalStateException("H2 UPSERT retry limit (" + maxRetries + ") exhausted. "
-                    + "Cannot fall back to MERGE INTO because explicit update fields are specified. "
-                    + "MERGE INTO would overwrite all columns, violating partial update contract.");
-            }
-            // B-10: After retries exhausted, try MERGE again using the thread-safe buildSqlFor method
-            log.warn("H2 UPSERT retry limit ({}) exhausted. Falling back to MERGE INTO syntax.", maxRetries);
-            SqlWithParams retrySql = buildSqlFor(em, entity);
-            return executeNativeQuery(em, retrySql.sql(), retrySql.params());
+            throw new IllegalStateException("H2 UPSERT retry limit (" + maxRetries + ") exhausted. "
+                + "Cannot fall back to MERGE INTO because explicit update fields are specified. "
+                + "MERGE INTO would overwrite all columns, violating partial update contract.");
         }
         SqlWithParams sqlWithParams = buildSqlFor(em, entity);
         if (log.isTraceEnabled()) {
@@ -1098,7 +1105,7 @@ public class MergeSpec<T> {
         return switch (dialect) {
             case "postgresql" -> "\"" + identifier.replace("\"", "\"\"") + "\"";
             case "mysql" -> "`" + identifier.replace("`", "``") + "`";
-            case "h2" -> "\"" + identifier.toUpperCase().replace("\"", "\"\"") + "\"";
+            case "h2" -> "\"" + identifier.toUpperCase(java.util.Locale.ROOT).replace("\"", "\"\"") + "\"";
             default -> "\"" + identifier.replace("\"", "\"\"") + "\"";
         };
     }

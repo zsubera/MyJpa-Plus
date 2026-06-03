@@ -10,7 +10,7 @@ import java.lang.annotation.Target;
  * 标记实体中的租户标识字段。
  *
  * @author myjpa-plus
- * @since 1.3.0
+ * @since 1.2.0
  */
 @Documented
 @Target(ElementType.FIELD)

@@ -74,9 +74,10 @@ public abstract class BaseEntity implements Serializable {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(updatable = false)
+    @Column(updatable = false, nullable = false)
     private Instant createdAt;
 
+    @Column(nullable = false)
     private Instant updatedAt;
 
     @Column(updatable = false, length = 64)
@@ -86,8 +87,14 @@ public abstract class BaseEntity implements Serializable {
     private String updatedBy;
 
     @Version
-    private Long version;
+    private Long version = 0L;
 
+    /**
+     * JPA 生命周期回调：在持久化前自动设置 createdAt 和 updatedAt。
+     *
+     * <p>
+     * <strong>注意：</strong>子类覆写此方法时必须调用 {@code super.prePersist()}， 否则 createdAt 和 updatedAt 字段不会被自动填充。
+     */
     @PrePersist
     protected void prePersist() {
         Instant now = Instant.now();

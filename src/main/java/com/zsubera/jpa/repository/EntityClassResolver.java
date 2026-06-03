@@ -106,6 +106,9 @@ public final class EntityClassResolver {
             }
         }
         // Support @IdClass composite keys - find the first @Id field
+        // P1-18: LIMITATION: For @IdClass with multiple @Id fields, this returns only the first one.
+        // Callers like findNotDeletedById() use this for single-field predicates, which is incorrect
+        // for composite @IdClass keys. Use @EmbeddedId for composite keys instead.
         jakarta.persistence.IdClass idClassAnnotation = entityClass.getAnnotation(jakarta.persistence.IdClass.class);
         if (idClassAnnotation != null) {
             for (Class<?> c = entityClass; c != null && c != Object.class; c = c.getSuperclass()) {

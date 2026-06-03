@@ -84,8 +84,14 @@ public class SoftDeleteJpaRepository<T, ID> extends SimpleJpaRepository<T, ID> {
      * P1: Set thread-local auto-filter override for the current thread. When set, this overrides the global
      * autoFilterEnabled setting.
      *
+     * <p>
+     * <strong>ThreadLocal 泄漏警告：</strong>调用方必须在 finally 块中调用 {@code setAutoFilterOverride(null)} 清除覆盖值。 推荐使用
+     * {@link #withAutoFilterOverride(Boolean, Runnable)} 替代，它会自动清理。
+     *
      * @param enabled 是否启用自动过滤，传 null 清除覆盖
+     * @deprecated 使用 {@link #withAutoFilterOverride(Boolean, Runnable)} 替代以避免 ThreadLocal 泄漏
      */
+    @Deprecated(since = "1.2.0")
     public static void setAutoFilterOverride(Boolean enabled) {
         if (enabled == null) {
             autoFilterOverride.remove();
@@ -377,24 +383,6 @@ public class SoftDeleteJpaRepository<T, ID> extends SimpleJpaRepository<T, ID> {
         } else {
             super.deleteInBatch(entities);
         }
-    }
-
-    /**
-     * 查找实体类中的 @Id 字段。
-     */
-    private static java.lang.reflect.Field findIdField(Class<?> entityClass, String idFieldName) {
-        for (Class<?> c = entityClass; c != null && c != Object.class; c = c.getSuperclass()) {
-            try {
-                java.lang.reflect.Field f = c.getDeclaredField(idFieldName);
-                if (f.isAnnotationPresent(jakarta.persistence.Id.class)
-                    || f.isAnnotationPresent(jakarta.persistence.EmbeddedId.class)) {
-                    return f;
-                }
-            } catch (NoSuchFieldException ignored) {
-                // continue
-            }
-        }
-        return null;
     }
 
     /**

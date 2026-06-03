@@ -72,8 +72,13 @@ public final class PredicateHelper {
                 }
             } catch (NumberFormatException e) {
                 // Fallback to toString comparison if BigDecimal conversion fails
-                if (((Comparable)start).compareTo(end) > 0) {
-                    throw new IllegalArgumentException("start must not be greater than end");
+                try {
+                    if (((Comparable)start).compareTo(end) > 0) {
+                        throw new IllegalArgumentException("start must not be greater than end");
+                    }
+                } catch (ClassCastException cce) {
+                    throw new IllegalArgumentException("Cannot compare incompatible numeric types: "
+                        + start.getClass().getName() + " and " + end.getClass().getName(), cce);
                 }
             }
             return;
@@ -575,16 +580,30 @@ public final class PredicateHelper {
             case IS_NOT_NULL:
                 return cb.isNotNull(fieldPath);
             case IN: {
+                if (node.value == null) {
+                    throw new IllegalArgumentException("IN operator requires non-null value, got null");
+                }
                 if (node.value instanceof Collection) {
                     return InClauseBuilder.in(cb, fieldPath, (Collection<?>)node.value);
                 }
-                return InClauseBuilder.in(cb, fieldPath, (Object[])node.value);
+                if (node.value.getClass().isArray()) {
+                    return InClauseBuilder.in(cb, fieldPath, (Object[])node.value);
+                }
+                throw new IllegalArgumentException(
+                    "IN operator requires Collection or array, got: " + node.value.getClass().getName());
             }
             case NOT_IN: {
+                if (node.value == null) {
+                    throw new IllegalArgumentException("NOT_IN operator requires non-null value, got null");
+                }
                 if (node.value instanceof Collection) {
                     return InClauseBuilder.notIn(cb, fieldPath, (Collection<?>)node.value);
                 }
-                return InClauseBuilder.notIn(cb, fieldPath, (Object[])node.value);
+                if (node.value.getClass().isArray()) {
+                    return InClauseBuilder.notIn(cb, fieldPath, (Object[])node.value);
+                }
+                throw new IllegalArgumentException(
+                    "NOT_IN operator requires Collection or array, got: " + node.value.getClass().getName());
             }
             case BETWEEN: {
                 Comparable<?>[] range = (Comparable<?>[])node.value;

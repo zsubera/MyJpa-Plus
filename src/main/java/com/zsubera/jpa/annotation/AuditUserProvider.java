@@ -21,7 +21,7 @@ package com.zsubera.jpa.annotation;
  * </pre>
  *
  * @author myjpa-plus
- * @since 1.3.0
+ * @since 1.2.0
  * @see CreatedBy
  * @see UpdatedBy
  * @see AuditEntityListener

@@ -94,9 +94,9 @@ public class DeleteSpec<T> extends AbstractBulkOperationSpec<T, DeleteSpec<T>> {
         Root<T> root = delete.from(entityClass);
         Predicate[] predicates = buildPredicates(root, cb);
         if (predicates.length == 0) {
-            throw new IllegalStateException(
-                "No WHERE conditions specified for DELETE operation. " + "This would delete ALL rows in the table. "
-                    + "If unconditional deletion is intended, use deleteAll(EntityManager) instead.");
+            throw new IllegalStateException("No WHERE conditions specified for DELETE operation. "
+                + "This would delete ALL rows in the table. "
+                + "If unconditional deletion is intended, use allowUnconditional(true) then deleteAll(EntityManager).");
         }
         delete.where(cb.and(predicates));
         return delete;

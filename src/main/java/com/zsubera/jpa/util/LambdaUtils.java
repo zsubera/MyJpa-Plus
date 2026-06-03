@@ -176,6 +176,7 @@ public final class LambdaUtils {
             SerializedLambda lambda = (SerializedLambda)writeReplace.invoke(fn);
             String key = lambda.getImplClass() + "#" + lambda.getImplMethodName();
             String result = CACHE.computeIfAbsent(key, k -> methodToProperty(lambda.getImplMethodName()));
+            // 将驱逐检查移到computeIfAbsent之外，避免在持有bin锁期间执行驱逐逻辑
             evictCacheIfNeeded();
             evictMethodCacheIfNeeded();
             return result;

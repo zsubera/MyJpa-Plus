@@ -47,14 +47,6 @@
         <Bug pattern="CT_CONSTRUCTOR_THROW"/>
     </Match>
 
-    <!-- Exclude CT_CONSTRUCTOR_THROW for ServiceImpl -->
-    <!-- This is a base class designed to be extended. The constructor validates the repository parameter.
-         Subclass constructors are managed by Spring, so the Finalizer attack risk is not applicable. -->
-    <Match>
-        <Class name="com.zsubera.jpa.service.ServiceImpl"/>
-        <Bug pattern="CT_CONSTRUCTOR_THROW"/>
-    </Match>
-
     <!-- Exclude CT_CONSTRUCTOR_THROW for SqlSlowQueryInterceptor -->
     <!-- Constructor validates configuration parameters, and the class is managed by the monitoring framework -->
     <Match>

@@ -76,8 +76,8 @@ public class QueryCacheManager {
     /** P1: 驱逐检查采样间隔，每 N 次 put 检查一次驱逐，避免每次 put 都遍历全量缓存 */
     private static final int EVICTION_CHECK_INTERVAL = 10;
 
-    /** P1: put 操作计数器，用于采样驱逐检查 */
-    private static final java.util.concurrent.atomic.AtomicInteger PUT_COUNTER =
+    /** P1: put 操作计数器，用于采样驱逐检查（实例级别，避免多实例干扰） */
+    private final java.util.concurrent.atomic.AtomicInteger putCounter =
         new java.util.concurrent.atomic.AtomicInteger();
 
     /** LRU 缓存，使用 ConcurrentHashMap 实现线程安全的无锁读取。 */
@@ -87,6 +87,28 @@ public class QueryCacheManager {
 
     /** P1-17: 是否启用租户感知缓存键。启用后自动在缓存键中追加租户 ID。 */
     private volatile boolean tenantAware = false;
+
+    /** P1-9: 缓存 TenantContext 反射 Method 句柄，避免每次 get/put 都反射调用。 */
+    private static final java.lang.reflect.Method IS_IGNORE_TENANT;
+    private static final java.lang.reflect.Method GET_TENANT_ID;
+    private static final boolean TENANT_CONTEXT_AVAILABLE;
+
+    static {
+        java.lang.reflect.Method isIgnore = null;
+        java.lang.reflect.Method getTenantId = null;
+        boolean available = false;
+        try {
+            Class<?> tenantCtx = Class.forName("com.zsubera.jpa.tenant.TenantContext");
+            isIgnore = tenantCtx.getMethod("isIgnoreTenant");
+            getTenantId = tenantCtx.getMethod("getCurrentTenantId");
+            available = true;
+        } catch (ReflectiveOperationException ignored) {
+            // TenantContext not available
+        }
+        IS_IGNORE_TENANT = isIgnore;
+        GET_TENANT_ID = getTenantId;
+        TENANT_CONTEXT_AVAILABLE = available;
+    }
 
     /**
      * 创建使用默认最大条目数的 QueryCacheManager。
@@ -207,7 +229,7 @@ public class QueryCacheManager {
             return false;
         }
         // P1: 采样驱逐策略 - 每 EVICTION_CHECK_INTERVAL 次 put 检查一次，避免每次 put 遍历全量缓存
-        if (PUT_COUNTER.incrementAndGet() % EVICTION_CHECK_INTERVAL == 0) {
+        if (putCounter.incrementAndGet() % EVICTION_CHECK_INTERVAL == 0) {
             evictIfNeeded();
         } else if (store.size() >= maxEntries * 2) {
             // 紧急驱逐：缓存严重超限时立即驱逐，防止内存溢出
@@ -226,18 +248,19 @@ public class QueryCacheManager {
      * @return 实际缓存键
      */
     private String resolveEffectiveKey(String key) {
-        if (!tenantAware) {
+        if (!tenantAware || !TENANT_CONTEXT_AVAILABLE) {
             return key;
         }
         try {
-            // Try to get tenant ID from TenantContext
-            Class<?> tenantCtx = Class.forName("com.zsubera.jpa.tenant.TenantContext");
-            java.lang.reflect.Method isIgnore = tenantCtx.getMethod("isIgnoreTenant");
-            if ((Boolean)isIgnore.invoke(null)) {
+            if ((Boolean)IS_IGNORE_TENANT.invoke(null)) {
                 return key;
             }
+            String tenantId = (String)GET_TENANT_ID.invoke(null);
+            if (tenantId != null && !tenantId.isEmpty()) {
+                return key + ":tenant:" + tenantId;
+            }
         } catch (ReflectiveOperationException ignored) {
-            // TenantContext not available
+            // TenantContext method invocation failed
         }
         return key;
     }

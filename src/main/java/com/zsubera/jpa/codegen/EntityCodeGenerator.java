@@ -201,7 +201,8 @@ public final class EntityCodeGenerator {
             if (!col.isNullable()) {
                 sb.append("    @Column(nullable = false)\n");
             }
-            sb.append("    private ").append(col.getJavaType()).append(" ").append(col.getName()).append(";\n\n");
+            String safeName = sanitizeFieldName(col.getName());
+            sb.append("    private ").append(col.getJavaType()).append(" ").append(safeName).append(";\n\n");
         }
 
         // getters and setters for id
@@ -213,13 +214,14 @@ public final class EntityCodeGenerator {
         sb.append("    }\n\n");
 
         for (ColumnDef col : columns) {
-            String capitalName = capitalize(col.getName());
+            String safeName = sanitizeFieldName(col.getName());
+            String capitalName = capitalize(safeName);
             sb.append("    public ").append(col.getJavaType()).append(" get").append(capitalName).append("() {\n");
-            sb.append("        return ").append(col.getName()).append(";\n");
+            sb.append("        return ").append(safeName).append(";\n");
             sb.append("    }\n\n");
             sb.append("    public void set").append(capitalName).append("(").append(col.getJavaType()).append(" ")
-                .append(col.getName()).append(") {\n");
-            sb.append("        this.").append(col.getName()).append(" = ").append(col.getName()).append(";\n");
+                .append(safeName).append(") {\n");
+            sb.append("        this.").append(safeName).append(" = ").append(safeName).append(";\n");
             sb.append("    }\n\n");
         }
 
@@ -340,7 +342,40 @@ public final class EntityCodeGenerator {
                 sb.append(c);
             }
         }
-        return sb.toString();
+        String result = sb.toString();
+        // P2-5: Handle table names starting with digits
+        if (!result.isEmpty() && Character.isDigit(result.charAt(0))) {
+            result = "T" + result;
+        }
+        return result;
+    }
+
+    private static final java.util.Set<String> JAVA_RESERVED_WORDS = java.util.Set.of("abstract", "assert", "boolean",
+        "break", "byte", "case", "catch", "char", "class", "const", "continue", "default", "do", "double", "else",
+        "enum", "extends", "final", "finally", "float", "for", "goto", "if", "implements", "import", "instanceof",
+        "int", "interface", "long", "native", "new", "package", "private", "protected", "public", "return", "short",
+        "static", "strictfp", "super", "switch", "synchronized", "this", "throw", "throws", "transient", "try", "void",
+        "volatile", "while", "true", "false", "null");
+
+    /**
+     * 校验字段名是否为 Java 保留字，如果是则追加下划线后缀。
+     *
+     * @param fieldName 字段名
+     * @return 安全的字段名
+     */
+    static String sanitizeFieldName(String fieldName) {
+        if (fieldName == null || fieldName.isEmpty()) {
+            return fieldName;
+        }
+        // P2-4: Append underscore if field name is a Java reserved word
+        if (JAVA_RESERVED_WORDS.contains(fieldName.toLowerCase())) {
+            return fieldName + "_";
+        }
+        // P2-5: Prepend underscore if starts with digit
+        if (Character.isDigit(fieldName.charAt(0))) {
+            return "_" + fieldName;
+        }
+        return fieldName;
     }
 
     private static String capitalize(String name) {

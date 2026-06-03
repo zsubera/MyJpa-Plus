@@ -112,6 +112,9 @@ public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> {
      * <p>
      * 此方法记录添加操作到安全审计日志，便于追踪白名单变更。
      *
+     * <p>
+     * <strong>安全说明：</strong>此方法为包级私有，仅限内部使用。白名单扩展应通过 系统属性 {@code myjpa-plus.func.extra-safe-functions} 配置，而非运行时调用。
+     *
      * @param functionName 要添加的函数名（大小写不敏感，将自动转为大写）
      * @return 如果成功添加返回 true，如果已存在返回 false
      * @throws IllegalArgumentException 如果 functionName 为 null 或空

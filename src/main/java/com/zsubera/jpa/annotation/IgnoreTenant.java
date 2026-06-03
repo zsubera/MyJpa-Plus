@@ -10,7 +10,7 @@ import java.lang.annotation.Target;
  * 标记 Repository 方法或接口，跳过租户过滤。
  *
  * @author myjpa-plus
- * @since 1.3.0
+ * @since 1.2.0
  */
 @Documented
 @Target({ElementType.METHOD, ElementType.TYPE})

@@ -389,9 +389,12 @@ public sealed interface ConditionNode permits ConditionNode.SimpleNode, Conditio
      */
     private static String getCallStackSummary() {
         StackTraceElement[] stack = Thread.currentThread().getStackTrace();
+        // P2-1: Limit scan to first 30 frames for performance
+        int maxFrames = Math.min(stack.length, 30);
         StringBuilder sb = new StringBuilder();
         int count = 0;
-        for (StackTraceElement element : stack) {
+        for (int i = 0; i < maxFrames; i++) {
+            StackTraceElement element = stack[i];
             String className = element.getClassName();
             if (className.startsWith("com.zsubera.jpa.") && !className.endsWith("ConditionNode")) {
                 if (count > 0) {

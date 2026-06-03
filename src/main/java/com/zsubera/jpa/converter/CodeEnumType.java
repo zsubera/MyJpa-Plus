@@ -61,6 +61,17 @@ public class CodeEnumType implements UserType<Object>, DynamicParameterizedType 
         new org.springframework.util.ConcurrentReferenceHashMap<>(16,
             org.springframework.util.ConcurrentReferenceHashMap.ReferenceType.WEAK);
 
+    /** P1-11: Sentinel field to distinguish "not scanned" from "scanned but not found" in cache. */
+    private static final Field NO_CODE_FIELD_SENTINEL;
+
+    static {
+        try {
+            NO_CODE_FIELD_SENTINEL = CodeEnumType.class.getDeclaredField("enumClass");
+        } catch (NoSuchFieldException e) {
+            throw new ExceptionInInitializerError(e);
+        }
+    }
+
     /** 枚举类 -> (code -> enum constant) 的缓存，用于 nullSafeGet 的 O(1) 查找。 */
     private static final ConcurrentMap<Class<?>, ConcurrentMap<String, Object>> ENUM_CODE_CACHE =
         new org.springframework.util.ConcurrentReferenceHashMap<>(16,
@@ -125,15 +136,16 @@ public class CodeEnumType implements UserType<Object>, DynamicParameterizedType 
     }
 
     public static Field resolveCodeField(Class<?> enumClass) {
-        return CODE_FIELD_CACHE.computeIfAbsent(enumClass, cls -> {
+        Field cached = CODE_FIELD_CACHE.computeIfAbsent(enumClass, cls -> {
             for (Field field : cls.getDeclaredFields()) {
                 if (field.isAnnotationPresent(CodeEnumValue.class)) {
                     field.setAccessible(true);
                     return field;
                 }
             }
-            return null;
+            return NO_CODE_FIELD_SENTINEL;
         });
+        return cached == NO_CODE_FIELD_SENTINEL ? null : cached;
     }
 
     public static boolean hasCodeEnumValue(Class<?> enumClass) {
@@ -199,21 +211,7 @@ public class CodeEnumType implements UserType<Object>, DynamicParameterizedType 
                 String.format("No enum constant with ordinal '%s' in %s", trimmedValue, enumClass.getSimpleName()));
         }
 
-        // 使用缓存进行 O(1) 查找，避免每次线性扫描
-        ConcurrentMap<String, Object> codeMap = ENUM_CODE_CACHE.computeIfAbsent(enumClass, cls -> {
-            ConcurrentMap<String, Object> map = new ConcurrentHashMap<>();
-            for (Object constant : cls.getEnumConstants()) {
-                try {
-                    Object codeValue = codeField.get(constant);
-                    if (codeValue != null) {
-                        map.put(String.valueOf(codeValue), constant);
-                    }
-                } catch (IllegalAccessException e) {
-                    log.warn("Failed to read @CodeEnumValue field for enum {}", cls.getSimpleName(), e);
-                }
-            }
-            return map;
-        });
+        ConcurrentMap<String, Object> codeMap = getOrBuildCodeMap();
         Object result = codeMap.get(trimmedValue);
         if (result != null) {
             return result;
@@ -297,8 +295,21 @@ public class CodeEnumType implements UserType<Object>, DynamicParameterizedType 
             throw new HibernateException(
                 String.format("No enum constant with ordinal '%s' in %s", code, enumClass.getSimpleName()));
         }
-        // P2: Use ENUM_CODE_CACHE for O(1) lookup instead of linear scan
-        ConcurrentMap<String, Object> codeMap = ENUM_CODE_CACHE.computeIfAbsent(enumClass, cls -> {
+        // P2-15: Use shared getOrBuildCodeMap() for O(1) lookup
+        ConcurrentMap<String, Object> codeMap = getOrBuildCodeMap();
+        Object result = codeMap.get(code);
+        if (result != null) {
+            return result;
+        }
+        throw new HibernateException(
+            String.format("No enum constant with code '%s' in %s", code, enumClass.getSimpleName()));
+    }
+
+    /**
+     * P2-15: 获取或构建枚举 code -> 常量的缓存映射。
+     */
+    private ConcurrentMap<String, Object> getOrBuildCodeMap() {
+        return ENUM_CODE_CACHE.computeIfAbsent(enumClass, cls -> {
             ConcurrentMap<String, Object> map = new ConcurrentHashMap<>();
             for (Object constant : cls.getEnumConstants()) {
                 try {
@@ -312,11 +323,5 @@ public class CodeEnumType implements UserType<Object>, DynamicParameterizedType 
             }
             return map;
         });
-        Object result = codeMap.get(code);
-        if (result != null) {
-            return result;
-        }
-        throw new HibernateException(
-            String.format("No enum constant with code '%s' in %s", code, enumClass.getSimpleName()));
     }
 }

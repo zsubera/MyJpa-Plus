@@ -91,4 +91,34 @@ public final class PageableHelper {
     public static Pageable sorted(int page, int size, Sort sort) {
         return PageRequest.of(page, size, sort);
     }
+
+    /**
+     * 根据数据库方言确定流式查询的 fetchSize。
+     *
+     * <p>
+     * PostgreSQL 需要 fetchSize > 0 以启用服务端游标进行流式查询。MySQL 使用 {@code Integer.MIN_VALUE} 以启用流式模式。其他数据库使用默认值（不设置提示）。
+     *
+     * @param em EntityManager 实例
+     * @return fetchSize 值，0 表示不设置提示
+     */
+    public static int determineFetchSize(jakarta.persistence.EntityManager em) {
+        try {
+            Object urlObj = em.getEntityManagerFactory().getProperties().get("jakarta.persistence.jdbc.url");
+            if (urlObj == null) {
+                urlObj = em.getEntityManagerFactory().getProperties().get("hibernate.connection.url");
+            }
+            if (urlObj != null) {
+                String lower = urlObj.toString().toLowerCase();
+                if (lower.contains("postgresql")) {
+                    return 100;
+                }
+                if (lower.contains("mysql")) {
+                    return Integer.MIN_VALUE;
+                }
+            }
+        } catch (Exception ignored) {
+            // Failed to determine fetchSize from JDBC URL
+        }
+        return 0;
+    }
 }

@@ -78,19 +78,7 @@ public final class TenantHelper {
             }
             for (Field field : getAllFields(cls)) {
                 if (field.isAnnotationPresent(TenantId.class)) {
-                    try {
-                        field.setAccessible(true);
-                    } catch (SecurityException e) {
-                        log.error(
-                            "Cannot set accessible on tenant field '{}' in {}. "
-                                + "Multi-tenant filtering will NOT work correctly. "
-                                + "If using Java 17+ module system, add JVM argument: "
-                                + "--add-opens java.base/java.lang.reflect=ALL-UNNAMED",
-                            field.getName(), cls.getSimpleName());
-                        throw new IllegalStateException("Cannot access @TenantId field '" + field.getName() + "' in "
-                            + cls.getSimpleName() + ". Multi-tenant filtering requires field access. "
-                            + "Add JVM argument: --add-opens java.base/java.lang.reflect=ALL-UNNAMED", e);
-                    }
+                    // P2-8: No setAccessible needed — we only use the field name with JPA Criteria API
                     return field.getName();
                 }
             }

@@ -30,9 +30,10 @@ public class IgnoreTenantAdvisor {
 
     private static final Logger log = LoggerFactory.getLogger(IgnoreTenantAdvisor.class);
 
-    /** O-10: Cache annotation check results to avoid repeated reflection. */
+    /** O-10: Cache annotation check results to avoid repeated reflection. P2-11: Use weak keys to prevent leak. */
     private static final java.util.concurrent.ConcurrentMap<Method, Boolean> ANNOTATION_CACHE =
-        new java.util.concurrent.ConcurrentHashMap<>();
+        new org.springframework.util.ConcurrentReferenceHashMap<>(16,
+            org.springframework.util.ConcurrentReferenceHashMap.ReferenceType.WEAK);
 
     /**
      * 拦截所有 Spring Data JPA Repository 方法调用。
