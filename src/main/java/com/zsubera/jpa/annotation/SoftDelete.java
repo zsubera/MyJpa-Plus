@@ -107,4 +107,30 @@ public @interface SoftDelete {
      * @return 表示"已删除"的整数值，默认为 1
      */
     int deletedIntValue() default 1;
+
+    /**
+     * String 类型字段中表示"已删除"的字符串值。
+     *
+     * <p>
+     * 仅当字段类型为 {@code String} 时有效。对于 {@code Boolean}、{@code Integer} 和 {@code Enum} 类型字段，此属性被忽略。 常见用法：使用 {@code char(1)}
+     * 存储 {@code '0'}（存在）和 {@code '2'}（删除）。
+     *
+     * <p>
+     * 使用示例（String 类型）：
+     *
+     * <pre>
+     * {
+     *     &#64;code
+     *     &#64;Entity
+     *     public class User {
+     *         &#64;SoftDelete(deletedStringValue = "2")
+     *         &#64;Column(name = "del_flag", length = 1)
+     *         private String delFlag = "0";
+     *     }
+     * }
+     * </pre>
+     *
+     * @return 表示"已删除"的字符串值，默认为 "2"
+     */
+    String deletedStringValue() default "2";
 }

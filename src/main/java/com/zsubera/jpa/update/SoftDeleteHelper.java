@@ -32,6 +32,7 @@ import org.springframework.util.ConcurrentReferenceHashMap;
  * <li>{@code Boolean} / {@code boolean} — {@code true} 表示"已删除"，{@code false}（或 {@code null}）表示"未删除"</li>
  * <li>{@code Integer} / {@code int} — 通过 {@link SoftDelete#deletedIntValue()} 指定表示"已删除"的整数值（默认 1），其他值表示"未删除"</li>
  * <li>{@code Enum} — 通过 {@link SoftDelete#deletedValue()} 指定表示"已删除"的枚举值名称</li>
+ * <li>{@code String} — 通过 {@link SoftDelete#deletedStringValue()} 指定表示"已删除"的字符串值（默认 "2"），适用于 {@code char(1)} 等场景</li>
  * </ul>
  *
  * <p>
@@ -187,8 +188,17 @@ public final class SoftDeleteHelper {
             return em.createNativeQuery("UPDATE " + escapedTable + " SET " + escapedColumn + " = ?1 WHERE "
                 + escapedColumn + " != ?1 OR " + escapedColumn + " IS NULL").setParameter(1, dbValue).executeUpdate();
         }
-        throw new MyJpaPlusException("@SoftDelete field '" + fieldName + "' in " + entityClass.getName()
-            + " has unsupported type: " + field.getType().getName() + ". Supported types: Boolean, Integer, Enum.");
+        // String 类型（支持 char(1) 等字符串软删除，如 '0'/'2'）
+        if (field.getType() == String.class) {
+            String deletedValue = (annotation != null && !annotation.deletedStringValue().isEmpty())
+                ? annotation.deletedStringValue() : "2";
+            return em.createNativeQuery("UPDATE " + escapedTable + " SET " + escapedColumn + " = ?1 WHERE "
+                + escapedColumn + " != ?1 OR " + escapedColumn + " IS NULL").setParameter(1, deletedValue)
+                .executeUpdate();
+        }
+        throw new MyJpaPlusException(
+            "@SoftDelete field '" + fieldName + "' in " + entityClass.getName() + " has unsupported type: "
+                + field.getType().getName() + ". Supported types: Boolean, Integer, Enum, String.");
     }
 
     /**
@@ -269,9 +279,17 @@ public final class SoftDeleteHelper {
             }
             setClause = escapedColumn + " = :" + setParamName;
             useParamBinding = true;
+        } else if (field.getType() == String.class) {
+            // String 类型（支持 char(1) 等字符串软删除，如 '0'/'2'）
+            String deletedValue = (annotation != null && !annotation.deletedStringValue().isEmpty())
+                ? annotation.deletedStringValue() : "2";
+            setClause = escapedColumn + " = :" + setParamName;
+            useParamBinding = true;
+            deletedParamValue = deletedValue;
         } else {
-            throw new MyJpaPlusException("@SoftDelete field '" + fieldName + "' in " + entityClass.getName()
-                + " has unsupported type: " + field.getType().getName() + ". Supported types: Boolean, Integer, Enum.");
+            throw new MyJpaPlusException(
+                "@SoftDelete field '" + fieldName + "' in " + entityClass.getName() + " has unsupported type: "
+                    + field.getType().getName() + ". Supported types: Boolean, Integer, Enum, String.");
         }
         // P1-8: Use InClauseBuilder.getMaxInClauseSize() instead of hardcoded 1000
         int batchSize = com.zsubera.jpa.util.InClauseBuilder.getMaxInClauseSize();
@@ -493,9 +511,16 @@ public final class SoftDeleteHelper {
             Object deletedEnumValue = getEnumConstant(field.getType(), annotation.deletedValue());
             return cb.or(cb.isNull(path.get(fieldName)), cb.notEqual(path.get(fieldName), deletedEnumValue));
         }
+        // String 类型（支持 char(1) 等字符串软删除，如 '0'/'2'）
+        if (field.getType() == String.class) {
+            String deletedValue = (annotation != null && !annotation.deletedStringValue().isEmpty())
+                ? annotation.deletedStringValue() : "2";
+            return cb.or(cb.isNull(path.get(fieldName)), cb.notEqual(path.get(fieldName), deletedValue));
+        }
         // 不支持的类型：抛出异常而非静默回退
-        throw new MyJpaPlusException("@SoftDelete field '" + fieldName + "' in " + entityClass.getName()
-            + " has unsupported type: " + field.getType().getName() + ". Supported types: Boolean, Integer, Enum.");
+        throw new MyJpaPlusException(
+            "@SoftDelete field '" + fieldName + "' in " + entityClass.getName() + " has unsupported type: "
+                + field.getType().getName() + ". Supported types: Boolean, Integer, Enum, String.");
     }
 
     private static Predicate buildDeleted(CriteriaBuilder cb, Path<?> path, String fieldName, Class<?> entityClass) {
@@ -522,9 +547,16 @@ public final class SoftDeleteHelper {
             Object deletedEnumValue = getEnumConstant(field.getType(), annotation.deletedValue());
             return cb.equal(path.get(fieldName), deletedEnumValue);
         }
+        // String 类型（支持 char(1) 等字符串软删除，如 '0'/'2'）
+        if (field.getType() == String.class) {
+            String deletedValue = (annotation != null && !annotation.deletedStringValue().isEmpty())
+                ? annotation.deletedStringValue() : "2";
+            return cb.equal(path.get(fieldName), deletedValue);
+        }
         // 不支持的类型：抛出异常而非静默回退
-        throw new MyJpaPlusException("@SoftDelete field '" + fieldName + "' in " + entityClass.getName()
-            + " has unsupported type: " + field.getType().getName() + ". Supported types: Boolean, Integer, Enum.");
+        throw new MyJpaPlusException(
+            "@SoftDelete field '" + fieldName + "' in " + entityClass.getName() + " has unsupported type: "
+                + field.getType().getName() + ". Supported types: Boolean, Integer, Enum, String.");
     }
 
     /**
@@ -683,6 +715,13 @@ public final class SoftDeleteHelper {
                 SoftDelete annotation = field.getAnnotation(SoftDelete.class);
                 if (annotation != null && !annotation.deletedValue().isEmpty()) {
                     return enumValue.name().equals(annotation.deletedValue());
+                }
+            }
+            // String type (支持 char(1) 等字符串软删除)
+            if (value instanceof String strValue && field.isAnnotationPresent(SoftDelete.class)) {
+                SoftDelete annotation = field.getAnnotation(SoftDelete.class);
+                if (annotation != null && !annotation.deletedStringValue().isEmpty()) {
+                    return strValue.equals(annotation.deletedStringValue());
                 }
             }
             return false;
