@@ -1,5 +1,6 @@
 package com.zsubera.jpa.spec;
 
+import com.zsubera.jpa.util.LambdaUtils;
 import java.util.Collection;
 import org.springframework.lang.Nullable;
 
@@ -511,5 +512,96 @@ public interface ConditionalMethods<E, SELF extends ConditionalMethods<E, SELF>>
      */
     default SELF isNotEmpty(boolean condition, SFunction<E, ?> field) {
         return condition ? isNotEmpty(field) : self();
+    }
+
+    // ---- 共享验证与预处理工具方法 ----
+
+    /**
+     * 校验字段引用不为 null。
+     *
+     * @param field 实体属性的方法引用
+     * @throws IllegalArgumentException 如果 field 为 null
+     */
+    static void requireField(SFunction<?, ?> field) {
+        if (field == null) {
+            throw new IllegalArgumentException("field must not be null");
+        }
+    }
+
+    /**
+     * 校验条件值不为 null。
+     *
+     * @param value 比较值
+     * @param methodName 方法名，用于错误消息
+     * @throws IllegalArgumentException 如果 value 为 null
+     */
+    static void requireValue(Object value, String methodName) {
+        if (value == null) {
+            throw new IllegalArgumentException("value must not be null in " + methodName);
+        }
+    }
+
+    /**
+     * 校验 varargs 值数组不为 null 且非空。
+     *
+     * @param values 值数组
+     * @throws IllegalArgumentException 如果 values 为 null 或空
+     */
+    static void requireNonEmpty(Object[] values) {
+        if (values == null || values.length == 0) {
+            throw new IllegalArgumentException("values must not be empty");
+        }
+    }
+
+    /**
+     * 校验 Collection 值不为 null 且非空。
+     *
+     * @param values 值集合
+     * @throws IllegalArgumentException 如果 values 为 null 或空
+     */
+    static void requireNonEmpty(Collection<?> values) {
+        if (values == null || values.isEmpty()) {
+            throw new IllegalArgumentException("values must not be empty");
+        }
+    }
+
+    /**
+     * 将字符串值包装为 LIKE 包含匹配模式：{@code %value%}。值中的 {@code %} 和 {@code _} 通配符会被自动转义。
+     *
+     * @param value 原始匹配值
+     * @return 转义并包装后的 LIKE 模式
+     */
+    static String wrapLikePattern(String value) {
+        return "%" + PredicateHelper.escapeLikeWildcards(value) + "%";
+    }
+
+    /**
+     * 将字符串值包装为 LIKE 前缀匹配模式：{@code value%}。值中的 {@code %} 和 {@code _} 通配符会被自动转义。
+     *
+     * @param value 原始前缀值
+     * @return 转义并添加后缀通配符的 LIKE 模式
+     */
+    static String prefixLikePattern(String value) {
+        return PredicateHelper.escapeLikeWildcards(value) + "%";
+    }
+
+    /**
+     * 将字符串值包装为 LIKE 后缀匹配模式：{@code %value}。值中的 {@code %} 和 {@code _} 通配符会被自动转义。
+     *
+     * @param value 原始后缀值
+     * @return 添加前缀通配符并转义的 LIKE 模式
+     */
+    static String suffixLikePattern(String value) {
+        return "%" + PredicateHelper.escapeLikeWildcards(value);
+    }
+
+    /**
+     * 解析实体属性方法引用为字段名。
+     *
+     * @param field 实体属性的方法引用
+     * @return 字段名
+     */
+    static String resolveProperty(SFunction<?, ?> field) {
+        return LambdaUtils.getPropertyName(field);
     }
 }

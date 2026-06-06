@@ -216,6 +216,9 @@ public class MyJpaTemplate {
             throw new IllegalArgumentException("maxBulkOperationRows must be positive or -1 (disabled)");
         }
         this.maxBulkOperationRows = maxBulkOperationRows;
+        if (bulkOperationTemplate != null) {
+            bulkOperationTemplate.setMaxBulkOperationRows(maxBulkOperationRows);
+        }
     }
 
     /**
@@ -1730,23 +1733,24 @@ public class MyJpaTemplate {
         for (int i = 0; i < orders.size(); i++) {
             String property = orders.get(i).getProperty();
             String cacheKey = entity.getClass().getName() + "#" + property;
-            java.lang.reflect.Method getter = GETTER_CACHE.get(cacheKey);
-            if (getter == null) {
+            java.lang.reflect.Method getter = GETTER_CACHE.computeIfAbsent(cacheKey, k -> {
                 try {
-                    getter = entity.getClass()
+                    return entity.getClass()
                         .getMethod("get" + Character.toUpperCase(property.charAt(0)) + property.substring(1));
-                    GETTER_CACHE.put(cacheKey, getter);
                 } catch (NoSuchMethodException e) {
-                    // 尝试 is 前缀（boolean 字段）
                     try {
-                        getter = entity.getClass()
+                        return entity.getClass()
                             .getMethod("is" + Character.toUpperCase(property.charAt(0)) + property.substring(1));
-                        GETTER_CACHE.put(cacheKey, getter);
                     } catch (NoSuchMethodException ex) {
-                        throw new IllegalArgumentException("Cannot extract sort value for property '" + property
-                            + "' from " + entity.getClass().getName(), ex);
+                        return null;
                     }
                 }
+            });
+            if (getter == null) {
+                throw new IllegalArgumentException("Cannot extract sort value for property '" + property + "' from "
+                    + entity.getClass().getName() + ": no getter method found (tried get"
+                    + Character.toUpperCase(property.charAt(0)) + property.substring(1) + " and is"
+                    + Character.toUpperCase(property.charAt(0)) + property.substring(1) + ")");
             }
             try {
                 values[i] = getter.invoke(entity);

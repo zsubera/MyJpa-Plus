@@ -212,10 +212,30 @@ public final class InClauseBuilder {
         if (values == null || values.length == 0) {
             throw new IllegalArgumentException("values must not be empty");
         }
-        if (values.length <= maxInClauseSize) {
-            return cb.not(buildSingleIn(cb, path, values));
+        // P-10: SQL NOT IN 语义：NULL IN (x, y) 返回 UNKNOWN，导致 NOT IN 整体返回空。
+        // 过滤 NULL 值并附加 IS NOT NULL 条件，确保结果符合预期。
+        List<Object> nonNullValues = new ArrayList<>(values.length);
+        boolean hasNull = false;
+        for (Object v : values) {
+            if (v == null) {
+                hasNull = true;
+            } else {
+                nonNullValues.add(v);
+            }
         }
-        return buildBatchedNotIn(cb, path, Arrays.asList(values));
+        if (nonNullValues.isEmpty()) {
+            // 全部为 NULL：NOT IN (空) 等价于所有行都匹配，但为安全起见返回 IS NOT NULL
+            return cb.isNotNull(path);
+        }
+        Predicate notInPredicate = cb.not(buildSingleIn(cb, path, nonNullValues));
+        if (hasNull) {
+            // 额外添加 IS NOT NULL 条件，排除字段为 NULL 的行
+            return cb.and(notInPredicate, cb.isNotNull(path));
+        }
+        if (nonNullValues.size() <= maxInClauseSize) {
+            return notInPredicate;
+        }
+        return buildBatchedNotIn(cb, path, nonNullValues);
     }
 
     /**
@@ -234,10 +254,28 @@ public final class InClauseBuilder {
         if (values == null || values.isEmpty()) {
             throw new IllegalArgumentException("values must not be empty");
         }
-        if (values.size() <= maxInClauseSize) {
-            return cb.not(buildSingleIn(cb, path, values));
+        // P-10: SQL NOT IN 语义：NULL IN (x, y) 返回 UNKNOWN，导致 NOT IN 整体返回空。
+        // 过滤 NULL 值并附加 IS NOT NULL 条件，确保结果符合预期。
+        List<Object> nonNullValues = new ArrayList<>(values.size());
+        boolean hasNull = false;
+        for (Object v : values) {
+            if (v == null) {
+                hasNull = true;
+            } else {
+                nonNullValues.add(v);
+            }
         }
-        return buildBatchedNotIn(cb, path, values);
+        if (nonNullValues.isEmpty()) {
+            return cb.isNotNull(path);
+        }
+        Predicate notInPredicate = cb.not(buildSingleIn(cb, path, nonNullValues));
+        if (hasNull) {
+            return cb.and(notInPredicate, cb.isNotNull(path));
+        }
+        if (nonNullValues.size() <= maxInClauseSize) {
+            return notInPredicate;
+        }
+        return buildBatchedNotIn(cb, path, nonNullValues);
     }
 
     private static Predicate buildSingleIn(CriteriaBuilder cb, Path<?> path, Object[] values) {

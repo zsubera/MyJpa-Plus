@@ -95,36 +95,44 @@ public class EncryptConverter implements AttributeConverter<String, String> {
      *
      * <p>
      * 如果密钥未配置且启用了严格模式，抛出 IllegalStateException。否则记录警告。
+     *
+     * <p>
+     * 此方法使用 synchronized 保证仅执行一次验证（避免多线程重复验证）。
      */
     public static void validateKeyConfiguration() {
         if (keyValidated) {
             return;
         }
-        String keyEnv = System.getenv(KEY_ENV);
-        String keyProp = System.getProperty(KEY_PROPERTY);
-        if ((keyEnv == null || keyEnv.isEmpty()) && (keyProp == null || keyProp.isEmpty())) {
-            if (STRICT_MODE) {
-                throw new IllegalStateException("Encryption key not configured. Set environment variable " + KEY_ENV
-                    + " or system property " + KEY_PROPERTY + " before starting the application. "
-                    + "Strict mode is enabled, application cannot start without encryption key.");
+        synchronized (EncryptConverter.class) {
+            if (keyValidated) {
+                return;
             }
-            log.warn("SECURITY: Encryption key not configured. Set environment variable {} or system property {}.",
-                KEY_ENV, KEY_PROPERTY);
-        } else {
-            String key = (keyEnv != null && !keyEnv.isEmpty()) ? keyEnv : keyProp;
-            if (key != null && key.length() < MIN_KEY_LENGTH) {
-                throw new MyJpaPlusException("Encryption key must be at least " + MIN_KEY_LENGTH + " characters. "
-                    + "Current length: " + key.length() + ".");
+            String keyEnv = System.getenv(KEY_ENV);
+            String keyProp = System.getProperty(KEY_PROPERTY);
+            if ((keyEnv == null || keyEnv.isEmpty()) && (keyProp == null || keyProp.isEmpty())) {
+                if (STRICT_MODE) {
+                    throw new IllegalStateException("Encryption key not configured. Set environment variable " + KEY_ENV
+                        + " or system property " + KEY_PROPERTY + " before starting the application. "
+                        + "Strict mode is enabled, application cannot start without encryption key.");
+                }
+                log.warn("SECURITY: Encryption key not configured. Set environment variable {} or system property {}.",
+                    KEY_ENV, KEY_PROPERTY);
+            } else {
+                String key = (keyEnv != null && !keyEnv.isEmpty()) ? keyEnv : keyProp;
+                if (key != null && key.length() < MIN_KEY_LENGTH) {
+                    throw new MyJpaPlusException("Encryption key must be at least " + MIN_KEY_LENGTH + " characters. "
+                        + "Current length: " + key.length() + ".");
+                }
+                // 当使用系统属性配置密钥时发出警告
+                // 系统属性在 JVM 全局可见，可能在进程列表中暴露
+                if (keyProp != null && !keyProp.isEmpty() && (keyEnv == null || keyEnv.isEmpty())) {
+                    log.warn("SECURITY: Encryption key configured via system property '{}'. "
+                        + "System properties are JVM-wide visible and may be exposed in process listings (e.g., /proc/PID/cmdline). "
+                        + "Use environment variable '{}' for production environments.", KEY_PROPERTY, KEY_ENV);
+                }
             }
-            // 当使用系统属性配置密钥时发出警告
-            // 系统属性在 JVM 全局可见，可能在进程列表中暴露
-            if (keyProp != null && !keyProp.isEmpty() && (keyEnv == null || keyEnv.isEmpty())) {
-                log.warn("SECURITY: Encryption key configured via system property '{}'. "
-                    + "System properties are JVM-wide visible and may be exposed in process listings (e.g., /proc/PID/cmdline). "
-                    + "Use environment variable '{}' for production environments.", KEY_PROPERTY, KEY_ENV);
-            }
+            keyValidated = true;
         }
-        keyValidated = true;
     }
 
     /**
@@ -423,12 +431,13 @@ public class EncryptConverter implements AttributeConverter<String, String> {
                 if (cached != null) {
                     return cached;
                 }
+                // 文件 I/O 可能耗时（含锁重试 sleep），在 synchronized 外执行以避免持有 JVM monitor
+                byte[] internalSalt = loadOrCreateSalt();
                 synchronized (SALT_FILE_LOCK) {
                     cached = SALT_CACHE.get("internal");
                     if (cached != null) {
                         return cached;
                     }
-                    byte[] internalSalt = loadOrCreateSalt();
                     SALT_CACHE.put("internal", internalSalt);
                     return internalSalt;
                 }
@@ -496,122 +505,61 @@ public class EncryptConverter implements AttributeConverter<String, String> {
                     return randomSalt;
                 }
             }
-            // 使用带重试的文件锁以兼容 Windows
-            // Windows 文件锁在 tryLock() 时可能不可靠，因此我们重试
-            java.nio.file.Path saltPath = saltFile.toPath();
-            try (java.nio.channels.FileChannel channel =
-                java.nio.channels.FileChannel.open(saltPath, java.nio.file.StandardOpenOption.CREATE,
-                    java.nio.file.StandardOpenOption.WRITE, java.nio.file.StandardOpenOption.READ)) {
-                // Windows 文件锁可靠性重试循环（3 次尝试，200ms 延迟）
-                java.nio.channels.FileLock lock = null;
-                for (int attempt = 0; attempt < 3; attempt++) {
-                    lock = channel.tryLock();
-                    if (lock != null) {
-                        break;
-                    }
-                    // 无法获取锁，等待并重试
-                    try {
-                        Thread.sleep(200);
-                    } catch (InterruptedException ie) {
-                        Thread.currentThread().interrupt();
-                        break;
-                    }
-                }
-                if (lock != null) {
-                    try {
-                        // 重新检查是否另一个进程已写入盐值
-                        if (channel.size() > 0) {
-                            channel.position(0);
-                            java.nio.ByteBuffer buffer = java.nio.ByteBuffer.allocate((int)channel.size());
-                            channel.read(buffer);
-                            buffer.flip();
-                            byte[] existingSalt = new byte[buffer.remaining()];
-                            buffer.get(existingSalt);
-                            if (existingSalt.length > 0) {
-                                log.info("Another process already wrote salt file, using existing salt");
-                                return existingSalt;
-                            }
-                        }
-                        // 在持有文件锁时写入盐值
-                        channel.position(0);
-                        channel.truncate(0);
-                        channel.write(java.nio.ByteBuffer.wrap(randomSalt));
-                        channel.force(true);
-                        // 在释放锁之前验证盐值文件写入
-                        channel.position(0);
-                        java.nio.ByteBuffer verifyBuf = java.nio.ByteBuffer.allocate((int)channel.size());
-                        channel.read(verifyBuf);
-                        verifyBuf.flip();
-                        byte[] writtenSalt = new byte[verifyBuf.remaining()];
-                        verifyBuf.get(writtenSalt);
-                        if (!java.util.Arrays.equals(randomSalt, writtenSalt)) {
-                            throw new SecurityException("SECURITY: Salt file write verification failed. "
-                                + "Written bytes do not match generated salt. " + "Set environment variable " + SALT_ENV
-                                + " to ensure consistent encryption.");
-                        }
-                    } finally {
-                        lock.release();
-                    }
-                } else {
-                    // 无法获取锁，另一个进程正在写入。
-                    // 使用更长的超时重试锁获取，而非不加锁写入。
-                    for (int retryAttempt = 0; retryAttempt < 5; retryAttempt++) {
-                        try {
-                            Thread.sleep(200);
-                        } catch (InterruptedException ie) {
-                            Thread.currentThread().interrupt();
-                            break;
-                        }
-                        lock = channel.tryLock();
-                        if (lock != null) {
-                            break;
-                        }
-                    }
-                    if (lock != null) {
-                        try {
-                            // 在等待期间另一个进程可能已写入盐值
-                            if (channel.size() > 0) {
-                                channel.position(0);
-                                java.nio.ByteBuffer buffer = java.nio.ByteBuffer.allocate((int)channel.size());
-                                channel.read(buffer);
-                                buffer.flip();
-                                byte[] existingSalt = new byte[buffer.remaining()];
-                                buffer.get(existingSalt);
-                                if (existingSalt.length > 0) {
-                                    return existingSalt;
-                                }
-                            }
-                            channel.position(0);
-                            channel.truncate(0);
-                            channel.write(java.nio.ByteBuffer.wrap(randomSalt));
-                            channel.force(true);
-                            // 在释放锁之前验证
-                            channel.position(0);
-                            java.nio.ByteBuffer verifyBuf = java.nio.ByteBuffer.allocate((int)channel.size());
-                            channel.read(verifyBuf);
-                            verifyBuf.flip();
-                            byte[] writtenSalt = new byte[verifyBuf.remaining()];
-                            verifyBuf.get(writtenSalt);
-                            if (!java.util.Arrays.equals(randomSalt, writtenSalt)) {
-                                throw new SecurityException("SECURITY: Salt file write verification failed. "
-                                    + "Set environment variable " + SALT_ENV + " to ensure consistent encryption.");
-                            }
-                        } finally {
-                            lock.release();
-                        }
-                    } else {
-                        // 最后手段：读取文件——另一个进程可能已成功
-                        byte[] fileSalt = java.nio.file.Files.readAllBytes(saltPath);
-                        if (fileSalt.length > 0) {
-                            return fileSalt;
-                        }
-                        log.warn("SECURITY: Could not acquire salt file lock and no salt found. "
-                            + "Using non-persisted random salt. Set environment variable {}", SALT_ENV);
-                    }
+            // 设置目录权限（Unix）
+            String os = System.getProperty("os.name", "").toLowerCase();
+            if (!os.contains("win")) {
+                try {
+                    java.nio.file.Files.setPosixFilePermissions(homeDir.toPath(),
+                        java.util.EnumSet.of(java.nio.file.attribute.PosixFilePermission.OWNER_READ,
+                            java.nio.file.attribute.PosixFilePermission.OWNER_WRITE,
+                            java.nio.file.attribute.PosixFilePermission.OWNER_EXECUTE));
+                } catch (UnsupportedOperationException | java.io.IOException e) {
+                    log.debug("Cannot set POSIX permissions on salt directory: {}", e.getMessage());
                 }
             }
-            // 设置文件权限——Unix 使用 POSIX，Windows 使用 ACL
-            setSaltFilePermissions(homeDir, saltFile);
+            // 使用临时文件 + 原子重命名，确保盐值文件从未以不安全权限存在
+            java.nio.file.Path saltPath = saltFile.toPath();
+            java.nio.file.Path tempPath = homeDir.toPath().resolve(".salt.tmp." + ProcessHandle.current().pid());
+            try {
+                // 创建临时文件并设置严格权限（写入前）
+                java.nio.file.Files.deleteIfExists(tempPath);
+                java.nio.file.Files.createFile(tempPath);
+                if (!os.contains("win")) {
+                    try {
+                        java.nio.file.Files.setPosixFilePermissions(tempPath,
+                            java.util.EnumSet.of(java.nio.file.attribute.PosixFilePermission.OWNER_READ,
+                                java.nio.file.attribute.PosixFilePermission.OWNER_WRITE));
+                    } catch (UnsupportedOperationException | java.io.IOException e) {
+                        log.debug("Cannot set POSIX permissions on salt temp file: {}", e.getMessage());
+                    }
+                } else {
+                    setWindowsPermissionsNio(tempPath.toFile());
+                }
+                // 写入盐值到临时文件
+                java.nio.file.Files.write(tempPath, randomSalt);
+                // 原子重命名到目标路径
+                try {
+                    java.nio.file.Files.move(tempPath, saltPath, java.nio.file.StandardCopyOption.REPLACE_EXISTING,
+                        java.nio.file.StandardCopyOption.ATOMIC_MOVE);
+                } catch (java.io.IOException atomicEx) {
+                    // 非原子重命名回退（Windows 可能不支持 ATOMIC_MOVE）
+                    java.nio.file.Files.move(tempPath, saltPath, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+                }
+                // 验证写入内容
+                byte[] writtenSalt = java.nio.file.Files.readAllBytes(saltPath);
+                if (!java.util.Arrays.equals(randomSalt, writtenSalt)) {
+                    throw new SecurityException("SECURITY: Salt file write verification failed. "
+                        + "Written bytes do not match generated salt. Set environment variable " + SALT_ENV
+                        + " to ensure consistent encryption.");
+                }
+            } catch (java.io.IOException e) {
+                // 清理临时文件
+                try {
+                    java.nio.file.Files.deleteIfExists(tempPath);
+                } catch (java.io.IOException ignored) {
+                }
+                throw e;
+            }
             log.warn(
                 "SECURITY: Generated and persisted PBKDF2 salt to {}. "
                     + "Set environment variable {} for consistent encryption across environments.",

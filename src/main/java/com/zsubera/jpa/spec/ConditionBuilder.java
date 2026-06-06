@@ -1,8 +1,13 @@
 package com.zsubera.jpa.spec;
 
-import static com.zsubera.jpa.spec.PredicateHelper.escapeLikeWildcards;
+import static com.zsubera.jpa.spec.ConditionalMethods.requireField;
+import static com.zsubera.jpa.spec.ConditionalMethods.requireNonEmpty;
+import static com.zsubera.jpa.spec.ConditionalMethods.requireValue;
+import static com.zsubera.jpa.spec.ConditionalMethods.resolveProperty;
+import static com.zsubera.jpa.spec.ConditionalMethods.wrapLikePattern;
+import static com.zsubera.jpa.spec.ConditionalMethods.prefixLikePattern;
+import static com.zsubera.jpa.spec.ConditionalMethods.suffixLikePattern;
 
-import com.zsubera.jpa.util.LambdaUtils;
 import java.util.Collection;
 import java.util.List;
 import java.util.Set;
@@ -150,16 +155,9 @@ public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> ext
      */
     @Override
     default SELF eq(SFunction<E, ?> field, @Nullable Object value) {
-        if (field == null) {
-            throw new IllegalArgumentException("field must not be null");
-        }
-        if (value == null) {
-            conditions()
-                .add(new ConditionNode.SimpleNode(LambdaUtils.getPropertyName(field), null, ConditionNode.Op.IS_NULL));
-        } else {
-            conditions()
-                .add(new ConditionNode.SimpleNode(LambdaUtils.getPropertyName(field), value, ConditionNode.Op.EQ));
-        }
+        requireField(field);
+        conditions().add(new ConditionNode.SimpleNode(resolveProperty(field), value == null ? null : value,
+            value == null ? ConditionNode.Op.IS_NULL : ConditionNode.Op.EQ));
         return self();
     }
 
@@ -173,16 +171,9 @@ public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> ext
      */
     @Override
     default SELF ne(SFunction<E, ?> field, @Nullable Object value) {
-        if (field == null) {
-            throw new IllegalArgumentException("field must not be null");
-        }
-        if (value == null) {
-            conditions().add(
-                new ConditionNode.SimpleNode(LambdaUtils.getPropertyName(field), null, ConditionNode.Op.IS_NOT_NULL));
-        } else {
-            conditions()
-                .add(new ConditionNode.SimpleNode(LambdaUtils.getPropertyName(field), value, ConditionNode.Op.NE));
-        }
+        requireField(field);
+        conditions().add(new ConditionNode.SimpleNode(resolveProperty(field), value == null ? null : value,
+            value == null ? ConditionNode.Op.IS_NOT_NULL : ConditionNode.Op.NE));
         return self();
     }
 
@@ -238,13 +229,9 @@ public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> ext
      */
     @Override
     default SELF gt(SFunction<E, ?> field, Comparable<?> value) {
-        if (field == null) {
-            throw new IllegalArgumentException("field must not be null");
-        }
-        if (value == null) {
-            throw new IllegalArgumentException("value must not be null");
-        }
-        conditions().add(new ConditionNode.SimpleNode(LambdaUtils.getPropertyName(field), value, ConditionNode.Op.GT));
+        requireField(field);
+        requireValue(value, "gt");
+        conditions().add(new ConditionNode.SimpleNode(resolveProperty(field), value, ConditionNode.Op.GT));
         return self();
     }
 
@@ -258,13 +245,9 @@ public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> ext
      */
     @Override
     default SELF ge(SFunction<E, ?> field, Comparable<?> value) {
-        if (field == null) {
-            throw new IllegalArgumentException("field must not be null");
-        }
-        if (value == null) {
-            throw new IllegalArgumentException("value must not be null");
-        }
-        conditions().add(new ConditionNode.SimpleNode(LambdaUtils.getPropertyName(field), value, ConditionNode.Op.GE));
+        requireField(field);
+        requireValue(value, "ge");
+        conditions().add(new ConditionNode.SimpleNode(resolveProperty(field), value, ConditionNode.Op.GE));
         return self();
     }
 
@@ -278,13 +261,9 @@ public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> ext
      */
     @Override
     default SELF lt(SFunction<E, ?> field, Comparable<?> value) {
-        if (field == null) {
-            throw new IllegalArgumentException("field must not be null");
-        }
-        if (value == null) {
-            throw new IllegalArgumentException("value must not be null");
-        }
-        conditions().add(new ConditionNode.SimpleNode(LambdaUtils.getPropertyName(field), value, ConditionNode.Op.LT));
+        requireField(field);
+        requireValue(value, "lt");
+        conditions().add(new ConditionNode.SimpleNode(resolveProperty(field), value, ConditionNode.Op.LT));
         return self();
     }
 
@@ -298,13 +277,9 @@ public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> ext
      */
     @Override
     default SELF le(SFunction<E, ?> field, Comparable<?> value) {
-        if (field == null) {
-            throw new IllegalArgumentException("field must not be null");
-        }
-        if (value == null) {
-            throw new IllegalArgumentException("value must not be null");
-        }
-        conditions().add(new ConditionNode.SimpleNode(LambdaUtils.getPropertyName(field), value, ConditionNode.Op.LE));
+        requireField(field);
+        requireValue(value, "le");
+        conditions().add(new ConditionNode.SimpleNode(resolveProperty(field), value, ConditionNode.Op.LE));
         return self();
     }
 
@@ -320,14 +295,9 @@ public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> ext
      */
     @Override
     default SELF like(SFunction<E, ?> field, String value) {
-        if (field == null) {
-            throw new IllegalArgumentException("field must not be null");
-        }
-        if (value == null) {
-            throw new IllegalArgumentException("value must not be null");
-        }
-        String escaped = escapeLikeWildcards(value);
-        conditions().add(new ConditionNode.SimpleNode(LambdaUtils.getPropertyName(field), "%" + escaped + "%",
+        requireField(field);
+        requireValue(value, "like");
+        conditions().add(new ConditionNode.SimpleNode(resolveProperty(field), wrapLikePattern(value),
             ConditionNode.Op.LIKE, PredicateHelper.LIKE_ESCAPE_CHAR));
         return self();
     }
@@ -342,14 +312,9 @@ public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> ext
      */
     @Override
     default SELF notLike(SFunction<E, ?> field, String value) {
-        if (field == null) {
-            throw new IllegalArgumentException("field must not be null");
-        }
-        if (value == null) {
-            throw new IllegalArgumentException("value must not be null");
-        }
-        String escaped = escapeLikeWildcards(value);
-        conditions().add(new ConditionNode.SimpleNode(LambdaUtils.getPropertyName(field), "%" + escaped + "%",
+        requireField(field);
+        requireValue(value, "notLike");
+        conditions().add(new ConditionNode.SimpleNode(resolveProperty(field), wrapLikePattern(value),
             ConditionNode.Op.NOT_LIKE, PredicateHelper.LIKE_ESCAPE_CHAR));
         return self();
     }
@@ -364,14 +329,10 @@ public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> ext
      */
     @Override
     default SELF startsWith(SFunction<E, ?> field, String value) {
-        if (field == null) {
-            throw new IllegalArgumentException("field must not be null");
-        }
-        if (value == null) {
-            throw new IllegalArgumentException("value must not be null");
-        }
-        conditions().add(new ConditionNode.SimpleNode(LambdaUtils.getPropertyName(field),
-            escapeLikeWildcards(value) + "%", ConditionNode.Op.LIKE, PredicateHelper.LIKE_ESCAPE_CHAR));
+        requireField(field);
+        requireValue(value, "startsWith");
+        conditions().add(new ConditionNode.SimpleNode(resolveProperty(field), prefixLikePattern(value),
+            ConditionNode.Op.LIKE, PredicateHelper.LIKE_ESCAPE_CHAR));
         return self();
     }
 
@@ -385,14 +346,10 @@ public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> ext
      */
     @Override
     default SELF endsWith(SFunction<E, ?> field, String value) {
-        if (field == null) {
-            throw new IllegalArgumentException("field must not be null");
-        }
-        if (value == null) {
-            throw new IllegalArgumentException("value must not be null");
-        }
-        conditions().add(new ConditionNode.SimpleNode(LambdaUtils.getPropertyName(field),
-            "%" + escapeLikeWildcards(value), ConditionNode.Op.LIKE, PredicateHelper.LIKE_ESCAPE_CHAR));
+        requireField(field);
+        requireValue(value, "endsWith");
+        conditions().add(new ConditionNode.SimpleNode(resolveProperty(field), suffixLikePattern(value),
+            ConditionNode.Op.LIKE, PredicateHelper.LIKE_ESCAPE_CHAR));
         return self();
     }
 
@@ -408,13 +365,9 @@ public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> ext
      */
     @Override
     default SELF in(SFunction<E, ?> field, Object... values) {
-        if (field == null) {
-            throw new IllegalArgumentException("field must not be null");
-        }
-        if (values == null || values.length == 0) {
-            throw new IllegalArgumentException("values must not be empty");
-        }
-        conditions().add(new ConditionNode.SimpleNode(LambdaUtils.getPropertyName(field), values, ConditionNode.Op.IN));
+        requireField(field);
+        requireNonEmpty(values);
+        conditions().add(new ConditionNode.SimpleNode(resolveProperty(field), values, ConditionNode.Op.IN));
         return self();
     }
 
@@ -428,14 +381,9 @@ public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> ext
      */
     @Override
     default SELF notIn(SFunction<E, ?> field, Object... values) {
-        if (field == null) {
-            throw new IllegalArgumentException("field must not be null");
-        }
-        if (values == null || values.length == 0) {
-            throw new IllegalArgumentException("values must not be empty");
-        }
-        conditions()
-            .add(new ConditionNode.SimpleNode(LambdaUtils.getPropertyName(field), values, ConditionNode.Op.NOT_IN));
+        requireField(field);
+        requireNonEmpty(values);
+        conditions().add(new ConditionNode.SimpleNode(resolveProperty(field), values, ConditionNode.Op.NOT_IN));
         return self();
     }
 
@@ -449,13 +397,9 @@ public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> ext
      */
     @Override
     default SELF in(SFunction<E, ?> field, Collection<?> values) {
-        if (field == null) {
-            throw new IllegalArgumentException("field must not be null");
-        }
-        if (values == null || values.isEmpty()) {
-            throw new IllegalArgumentException("values must not be empty");
-        }
-        conditions().add(new ConditionNode.SimpleNode(LambdaUtils.getPropertyName(field), values, ConditionNode.Op.IN));
+        requireField(field);
+        requireNonEmpty(values);
+        conditions().add(new ConditionNode.SimpleNode(resolveProperty(field), values, ConditionNode.Op.IN));
         return self();
     }
 
@@ -469,14 +413,9 @@ public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> ext
      */
     @Override
     default SELF notIn(SFunction<E, ?> field, Collection<?> values) {
-        if (field == null) {
-            throw new IllegalArgumentException("field must not be null");
-        }
-        if (values == null || values.isEmpty()) {
-            throw new IllegalArgumentException("values must not be empty");
-        }
-        conditions()
-            .add(new ConditionNode.SimpleNode(LambdaUtils.getPropertyName(field), values, ConditionNode.Op.NOT_IN));
+        requireField(field);
+        requireNonEmpty(values);
+        conditions().add(new ConditionNode.SimpleNode(resolveProperty(field), values, ConditionNode.Op.NOT_IN));
         return self();
     }
 
@@ -492,12 +431,10 @@ public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> ext
     @SuppressWarnings({"unchecked", "rawtypes"})
     @Override
     default SELF between(SFunction<E, ?> field, Comparable<?> start, Comparable<?> end) {
-        if (field == null) {
-            throw new IllegalArgumentException("field must not be null");
-        }
+        requireField(field);
         PredicateHelper.validateRange(start, end);
-        conditions().add(new ConditionNode.SimpleNode(LambdaUtils.getPropertyName(field),
-            new Comparable<?>[] {start, end}, ConditionNode.Op.BETWEEN));
+        conditions().add(new ConditionNode.SimpleNode(resolveProperty(field), new Comparable<?>[] {start, end},
+            ConditionNode.Op.BETWEEN));
         return self();
     }
 
@@ -513,12 +450,10 @@ public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> ext
     @SuppressWarnings({"unchecked", "rawtypes"})
     @Override
     default SELF notBetween(SFunction<E, ?> field, Comparable<?> start, Comparable<?> end) {
-        if (field == null) {
-            throw new IllegalArgumentException("field must not be null");
-        }
+        requireField(field);
         PredicateHelper.validateRange(start, end);
-        conditions().add(new ConditionNode.SimpleNode(LambdaUtils.getPropertyName(field),
-            new Comparable<?>[] {start, end}, ConditionNode.Op.NOT_BETWEEN));
+        conditions().add(new ConditionNode.SimpleNode(resolveProperty(field), new Comparable<?>[] {start, end},
+            ConditionNode.Op.NOT_BETWEEN));
         return self();
     }
 
@@ -533,11 +468,8 @@ public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> ext
      */
     @Override
     default SELF isNull(SFunction<E, ?> field) {
-        if (field == null) {
-            throw new IllegalArgumentException("field must not be null");
-        }
-        conditions()
-            .add(new ConditionNode.SimpleNode(LambdaUtils.getPropertyName(field), null, ConditionNode.Op.IS_NULL));
+        requireField(field);
+        conditions().add(new ConditionNode.SimpleNode(resolveProperty(field), null, ConditionNode.Op.IS_NULL));
         return self();
     }
 
@@ -550,11 +482,8 @@ public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> ext
      */
     @Override
     default SELF isNotNull(SFunction<E, ?> field) {
-        if (field == null) {
-            throw new IllegalArgumentException("field must not be null");
-        }
-        conditions()
-            .add(new ConditionNode.SimpleNode(LambdaUtils.getPropertyName(field), null, ConditionNode.Op.IS_NOT_NULL));
+        requireField(field);
+        conditions().add(new ConditionNode.SimpleNode(resolveProperty(field), null, ConditionNode.Op.IS_NOT_NULL));
         return self();
     }
 
@@ -568,14 +497,11 @@ public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> ext
      */
     @Override
     default SELF eqIgnoreCase(SFunction<E, ?> field, @Nullable String value) {
-        if (field == null) {
-            throw new IllegalArgumentException("field must not be null");
-        }
+        requireField(field);
         if (value == null) {
             return isNull(field);
         }
-        conditions().add(
-            new ConditionNode.SimpleNode(LambdaUtils.getPropertyName(field), value, ConditionNode.Op.EQ_IGNORE_CASE));
+        conditions().add(new ConditionNode.SimpleNode(resolveProperty(field), value, ConditionNode.Op.EQ_IGNORE_CASE));
         return self();
     }
 
@@ -589,14 +515,11 @@ public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> ext
      */
     @Override
     default SELF neIgnoreCase(SFunction<E, ?> field, @Nullable String value) {
-        if (field == null) {
-            throw new IllegalArgumentException("field must not be null");
-        }
+        requireField(field);
         if (value == null) {
             return isNotNull(field);
         }
-        conditions().add(
-            new ConditionNode.SimpleNode(LambdaUtils.getPropertyName(field), value, ConditionNode.Op.NE_IGNORE_CASE));
+        conditions().add(new ConditionNode.SimpleNode(resolveProperty(field), value, ConditionNode.Op.NE_IGNORE_CASE));
         return self();
     }
 
@@ -613,14 +536,9 @@ public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> ext
      */
     @Override
     default SELF likeIgnoreCase(SFunction<E, ?> field, String value) {
-        if (field == null) {
-            throw new IllegalArgumentException("field must not be null");
-        }
-        if (value == null) {
-            throw new IllegalArgumentException("value must not be null");
-        }
-        String escaped = escapeLikeWildcards(value);
-        conditions().add(new ConditionNode.SimpleNode(LambdaUtils.getPropertyName(field), "%" + escaped + "%",
+        requireField(field);
+        requireValue(value, "likeIgnoreCase");
+        conditions().add(new ConditionNode.SimpleNode(resolveProperty(field), wrapLikePattern(value),
             ConditionNode.Op.LIKE_IGNORE_CASE, PredicateHelper.LIKE_ESCAPE_CHAR));
         return self();
     }
@@ -636,11 +554,8 @@ public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> ext
      */
     @Override
     default SELF isEmpty(SFunction<E, ?> field) {
-        if (field == null) {
-            throw new IllegalArgumentException("field must not be null");
-        }
-        conditions().add(
-            new ConditionNode.CollectionNode(LambdaUtils.getPropertyName(field), ConditionNode.CollectionOp.IS_EMPTY));
+        requireField(field);
+        conditions().add(new ConditionNode.CollectionNode(resolveProperty(field), ConditionNode.CollectionOp.IS_EMPTY));
         return self();
     }
 
@@ -653,11 +568,9 @@ public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> ext
      */
     @Override
     default SELF isNotEmpty(SFunction<E, ?> field) {
-        if (field == null) {
-            throw new IllegalArgumentException("field must not be null");
-        }
-        conditions().add(new ConditionNode.CollectionNode(LambdaUtils.getPropertyName(field),
-            ConditionNode.CollectionOp.IS_NOT_EMPTY));
+        requireField(field);
+        conditions()
+            .add(new ConditionNode.CollectionNode(resolveProperty(field), ConditionNode.CollectionOp.IS_NOT_EMPTY));
         return self();
     }
 
@@ -685,7 +598,7 @@ public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> ext
                 if (fields[i] == null) {
                     throw new IllegalArgumentException("fields[" + i + "] must not be null");
                 }
-                fieldNames[i] = LambdaUtils.getPropertyName(fields[i]);
+                fieldNames[i] = resolveProperty(fields[i]);
             }
             conditions().add(new ConditionNode.MultiLikeNode(keyword, fieldNames));
         }
@@ -770,8 +683,7 @@ public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> ext
         if (config == null) {
             throw new IllegalArgumentException("config must not be null");
         }
-        conditions()
-            .add(new ConditionNode.InSubQueryNode<>(LambdaUtils.getPropertyName(outerField), subEntity, config, false));
+        conditions().add(new ConditionNode.InSubQueryNode<>(resolveProperty(outerField), subEntity, config, false));
         return self();
     }
 
@@ -807,8 +719,7 @@ public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> ext
         if (config == null) {
             throw new IllegalArgumentException("config must not be null");
         }
-        conditions()
-            .add(new ConditionNode.InSubQueryNode<>(LambdaUtils.getPropertyName(outerField), subEntity, config, true));
+        conditions().add(new ConditionNode.InSubQueryNode<>(resolveProperty(outerField), subEntity, config, true));
         return self();
     }
 
@@ -918,7 +829,7 @@ public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> ext
         if (params == null) {
             throw new IllegalArgumentException("params must not be null");
         }
-        String name = LambdaUtils.getPropertyName(field);
+        String name = resolveProperty(field);
         Object[] allParams = new Object[params.length + 1];
         allParams[0] = name;
         System.arraycopy(params, 0, allParams, 1, params.length);

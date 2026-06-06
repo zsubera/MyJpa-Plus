@@ -33,7 +33,7 @@ class BulkOperationTemplate {
     private static final int MAX_BATCH_ITERATIONS = 10000;
 
     private final EntityManager entityManager;
-    private final int maxBulkOperationRows;
+    private volatile int maxBulkOperationRows;
     private final org.springframework.context.ApplicationContext applicationContext;
 
     /**
@@ -48,6 +48,15 @@ class BulkOperationTemplate {
         this.entityManager = entityManager;
         this.maxBulkOperationRows = maxBulkOperationRows;
         this.applicationContext = applicationContext;
+    }
+
+    /**
+     * 更新最大批量操作影响行数限制。
+     *
+     * @param maxBulkOperationRows 最大影响行数（-1 表示不限制）
+     */
+    void setMaxBulkOperationRows(int maxBulkOperationRows) {
+        this.maxBulkOperationRows = maxBulkOperationRows;
     }
 
     // ---- 单次执行 ----

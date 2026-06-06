@@ -160,6 +160,7 @@ public class QueryCacheManager {
         if (result.isExpired()) {
             // 原子移除：仅当条目确实是当前过期条目时才移除，避免竞态条件误删新条目
             store.computeIfPresent(key, (k, v) -> v.isExpired() ? null : v);
+            insertionOrder.remove(key);
             log.debug("Cache expired for key: {}", key);
             return null;
         }
@@ -229,29 +230,34 @@ public class QueryCacheManager {
     }
 
     /**
-     * 驱逐最早写入的缓存条目（使用 ConcurrentLinkedDeque 维护插入顺序）。
+     * 驱逐最早写入的缓存条目（使用 ConcurrentLinkedDeque 维护插入顺序）。 跳过 deque 中已不在 store 里的陈旧条目，防止 deque/store 漂移导致无效驱逐。
      */
     private void evictOldestEntry() {
-        String oldest = insertionOrder.pollFirst();
-        if (oldest != null) {
-            store.remove(oldest);
-            log.debug("Evicted oldest cache entry: {}", oldest);
-        } else if (!store.isEmpty()) {
-            // fallback: deque 为空但 store 不为空时，驱逐 store 中的任意条目
-            java.util.Iterator<Map.Entry<String, CachedQueryResult<?>>> it = store.entrySet().iterator();
-            if (it.hasNext()) {
-                Map.Entry<String, CachedQueryResult<?>> eldest = it.next();
-                it.remove();
-                log.debug("Evicted cache entry (fallback): {}", eldest.getKey());
+        for (int attempt = 0; attempt < 10; attempt++) {
+            String oldest = insertionOrder.pollFirst();
+            if (oldest == null) {
+                return;
             }
+            // 仅当 store 中确实存在该 key 时才执行驱逐
+            if (store.remove(oldest) != null) {
+                log.debug("Evicted oldest cache entry: {}", oldest);
+                return;
+            }
+            // deque 中的陈旧条目已跳过，继续尝试下一个
         }
     }
 
     /**
-     * 清除所有过期条目（原子操作，避免竞态条件误删新条目）。
+     * 清除所有过期条目（原子操作，避免竞态条件误删新条目）。 同时清理 insertionOrder 中对应的陈旧条目。
      */
     private void evictExpiredEntries() {
-        store.entrySet().removeIf(e -> e.getValue().isExpired());
+        store.entrySet().removeIf(e -> {
+            if (e.getValue().isExpired()) {
+                insertionOrder.remove(e.getKey());
+                return true;
+            }
+            return false;
+        });
     }
 
     /**

@@ -123,7 +123,7 @@ public class MergeSpec<T> {
             if (field == null) {
                 throw new IllegalArgumentException("field must not be null");
             }
-            conflictFields.add(LambdaUtils.getPropertyName(field));
+            conflictFields.add(resolveJavaFieldToDbColumn(LambdaUtils.getPropertyName(field)));
         }
         return this;
     }
@@ -963,6 +963,26 @@ public class MergeSpec<T> {
             return name;
         }
         return field.getName();
+    }
+
+    /**
+     * 将 Java 字段名解析为数据库列名。遍历实体类及其父类的字段，匹配字段名后通过 {@link #resolveColumnName(Field)} 解析。 如果找不到对应的 Field，回退到直接使用 Java
+     * 字段名并进行安全校验。
+     *
+     * @param javaFieldName Java 字段名
+     * @return 数据库列名
+     */
+    private String resolveJavaFieldToDbColumn(String javaFieldName) {
+        for (Class<?> c = entityClass; c != null && c != Object.class; c = c.getSuperclass()) {
+            for (Field f : c.getDeclaredFields()) {
+                if (f.getName().equals(javaFieldName)) {
+                    return resolveColumnName(f);
+                }
+            }
+        }
+        // 回退：未找到 Field，直接使用字段名（安全校验）
+        IdentifierValidator.validateColumnName(javaFieldName);
+        return javaFieldName;
     }
 
     /**

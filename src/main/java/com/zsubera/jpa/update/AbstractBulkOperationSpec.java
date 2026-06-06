@@ -1,5 +1,10 @@
 package com.zsubera.jpa.update;
 
+import static com.zsubera.jpa.spec.ConditionalMethods.requireField;
+import static com.zsubera.jpa.spec.ConditionalMethods.requireNonEmpty;
+import static com.zsubera.jpa.spec.ConditionalMethods.requireValue;
+import static com.zsubera.jpa.spec.ConditionalMethods.wrapLikePattern;
+
 import com.zsubera.jpa.exception.MyJpaPlusException;
 import com.zsubera.jpa.spec.ConditionalMethods;
 import com.zsubera.jpa.spec.PredicateHelper;
@@ -302,8 +307,8 @@ public abstract class AbstractBulkOperationSpec<T, SELF extends AbstractBulkOper
      */
     @Override
     public SELF eq(SFunction<T, ?> field, @Nullable Object value) {
-        String name = property(field);
-        conditionNodes.add(leaf((root, cb) -> PredicateHelper.eq(root, name, value, cb)));
+        requireField(field);
+        conditionNodes.add(leaf((root, cb) -> PredicateHelper.eq(root, property(field), value, cb)));
         return self();
     }
 
@@ -316,8 +321,8 @@ public abstract class AbstractBulkOperationSpec<T, SELF extends AbstractBulkOper
      */
     @Override
     public SELF ne(SFunction<T, ?> field, @Nullable Object value) {
-        String name = property(field);
-        conditionNodes.add(leaf((root, cb) -> PredicateHelper.ne(root, name, value, cb)));
+        requireField(field);
+        conditionNodes.add(leaf((root, cb) -> PredicateHelper.ne(root, property(field), value, cb)));
         return self();
     }
 
@@ -331,11 +336,9 @@ public abstract class AbstractBulkOperationSpec<T, SELF extends AbstractBulkOper
      */
     @Override
     public SELF gt(SFunction<T, ?> field, Comparable<?> value) {
-        if (value == null) {
-            throw new IllegalArgumentException("value must not be null");
-        }
-        String name = property(field);
-        conditionNodes.add(leaf((root, cb) -> PredicateHelper.gt(root, name, value, cb)));
+        requireField(field);
+        requireValue(value, "gt");
+        conditionNodes.add(leaf((root, cb) -> PredicateHelper.gt(root, property(field), value, cb)));
         return self();
     }
 
@@ -349,11 +352,9 @@ public abstract class AbstractBulkOperationSpec<T, SELF extends AbstractBulkOper
      */
     @Override
     public SELF ge(SFunction<T, ?> field, Comparable<?> value) {
-        if (value == null) {
-            throw new IllegalArgumentException("value must not be null");
-        }
-        String name = property(field);
-        conditionNodes.add(leaf((root, cb) -> PredicateHelper.ge(root, name, value, cb)));
+        requireField(field);
+        requireValue(value, "ge");
+        conditionNodes.add(leaf((root, cb) -> PredicateHelper.ge(root, property(field), value, cb)));
         return self();
     }
 
@@ -367,11 +368,9 @@ public abstract class AbstractBulkOperationSpec<T, SELF extends AbstractBulkOper
      */
     @Override
     public SELF lt(SFunction<T, ?> field, Comparable<?> value) {
-        if (value == null) {
-            throw new IllegalArgumentException("value must not be null");
-        }
-        String name = property(field);
-        conditionNodes.add(leaf((root, cb) -> PredicateHelper.lt(root, name, value, cb)));
+        requireField(field);
+        requireValue(value, "lt");
+        conditionNodes.add(leaf((root, cb) -> PredicateHelper.lt(root, property(field), value, cb)));
         return self();
     }
 
@@ -385,11 +384,9 @@ public abstract class AbstractBulkOperationSpec<T, SELF extends AbstractBulkOper
      */
     @Override
     public SELF le(SFunction<T, ?> field, Comparable<?> value) {
-        if (value == null) {
-            throw new IllegalArgumentException("value must not be null");
-        }
-        String name = property(field);
-        conditionNodes.add(leaf((root, cb) -> PredicateHelper.le(root, name, value, cb)));
+        requireField(field);
+        requireValue(value, "le");
+        conditionNodes.add(leaf((root, cb) -> PredicateHelper.le(root, property(field), value, cb)));
         return self();
     }
 
@@ -403,14 +400,11 @@ public abstract class AbstractBulkOperationSpec<T, SELF extends AbstractBulkOper
      */
     @Override
     public SELF like(SFunction<T, ?> field, String value) {
-        if (value == null) {
-            throw new IllegalArgumentException("value must not be null");
-        }
-        String name = property(field);
-        String escaped = PredicateHelper.escapeLikeWildcards(value);
-        String pattern = "%" + escaped + "%";
-        conditionNodes
-            .add(leaf((root, cb) -> PredicateHelper.like(root, name, pattern, cb, PredicateHelper.LIKE_ESCAPE_CHAR)));
+        requireField(field);
+        requireValue(value, "like");
+        String pattern = wrapLikePattern(value);
+        conditionNodes.add(leaf(
+            (root, cb) -> PredicateHelper.like(root, property(field), pattern, cb, PredicateHelper.LIKE_ESCAPE_CHAR)));
         return self();
     }
 
@@ -424,14 +418,11 @@ public abstract class AbstractBulkOperationSpec<T, SELF extends AbstractBulkOper
      */
     @Override
     public SELF notLike(SFunction<T, ?> field, String value) {
-        if (value == null) {
-            throw new IllegalArgumentException("value must not be null");
-        }
-        String name = property(field);
-        String escaped = PredicateHelper.escapeLikeWildcards(value);
-        String pattern = "%" + escaped + "%";
-        conditionNodes.add(
-            leaf((root, cb) -> PredicateHelper.notLike(root, name, pattern, cb, PredicateHelper.LIKE_ESCAPE_CHAR)));
+        requireField(field);
+        requireValue(value, "notLike");
+        String pattern = wrapLikePattern(value);
+        conditionNodes.add(leaf((root, cb) -> PredicateHelper.notLike(root, property(field), pattern, cb,
+            PredicateHelper.LIKE_ESCAPE_CHAR)));
         return self();
     }
 
@@ -445,11 +436,9 @@ public abstract class AbstractBulkOperationSpec<T, SELF extends AbstractBulkOper
      */
     @Override
     public SELF startsWith(SFunction<T, ?> field, String value) {
-        if (value == null) {
-            throw new IllegalArgumentException("value must not be null");
-        }
-        String name = property(field);
-        conditionNodes.add(leaf((root, cb) -> PredicateHelper.startsWith(root, name, value, cb)));
+        requireField(field);
+        requireValue(value, "startsWith");
+        conditionNodes.add(leaf((root, cb) -> PredicateHelper.startsWith(root, property(field), value, cb)));
         return self();
     }
 
@@ -463,11 +452,9 @@ public abstract class AbstractBulkOperationSpec<T, SELF extends AbstractBulkOper
      */
     @Override
     public SELF endsWith(SFunction<T, ?> field, String value) {
-        if (value == null) {
-            throw new IllegalArgumentException("value must not be null");
-        }
-        String name = property(field);
-        conditionNodes.add(leaf((root, cb) -> PredicateHelper.endsWith(root, name, value, cb)));
+        requireField(field);
+        requireValue(value, "endsWith");
+        conditionNodes.add(leaf((root, cb) -> PredicateHelper.endsWith(root, property(field), value, cb)));
         return self();
     }
 
@@ -480,11 +467,9 @@ public abstract class AbstractBulkOperationSpec<T, SELF extends AbstractBulkOper
      */
     @Override
     public SELF eqIgnoreCase(SFunction<T, ?> field, String value) {
-        if (value == null) {
-            throw new IllegalArgumentException("value must not be null");
-        }
-        String name = property(field);
-        conditionNodes.add(leaf((root, cb) -> PredicateHelper.eqIgnoreCase(root, name, value, cb)));
+        requireField(field);
+        requireValue(value, "eqIgnoreCase");
+        conditionNodes.add(leaf((root, cb) -> PredicateHelper.eqIgnoreCase(root, property(field), value, cb)));
         return self();
     }
 
@@ -497,11 +482,9 @@ public abstract class AbstractBulkOperationSpec<T, SELF extends AbstractBulkOper
      */
     @Override
     public SELF neIgnoreCase(SFunction<T, ?> field, String value) {
-        if (value == null) {
-            throw new IllegalArgumentException("value must not be null");
-        }
-        String name = property(field);
-        conditionNodes.add(leaf((root, cb) -> PredicateHelper.neIgnoreCase(root, name, value, cb)));
+        requireField(field);
+        requireValue(value, "neIgnoreCase");
+        conditionNodes.add(leaf((root, cb) -> PredicateHelper.neIgnoreCase(root, property(field), value, cb)));
         return self();
     }
 
@@ -518,12 +501,10 @@ public abstract class AbstractBulkOperationSpec<T, SELF extends AbstractBulkOper
      */
     @Override
     public SELF likeIgnoreCase(SFunction<T, ?> field, String value) {
-        if (value == null) {
-            throw new IllegalArgumentException("value must not be null");
-        }
-        String name = property(field);
-        String escaped = PredicateHelper.escapeLikeWildcards(value);
-        conditionNodes.add(leaf((root, cb) -> PredicateHelper.likeIgnoreCase(root, name, "%" + escaped + "%", cb,
+        requireField(field);
+        requireValue(value, "likeIgnoreCase");
+        String pattern = wrapLikePattern(value);
+        conditionNodes.add(leaf((root, cb) -> PredicateHelper.likeIgnoreCase(root, property(field), pattern, cb,
             PredicateHelper.LIKE_ESCAPE_CHAR)));
         return self();
     }
@@ -538,11 +519,9 @@ public abstract class AbstractBulkOperationSpec<T, SELF extends AbstractBulkOper
      */
     @Override
     public SELF in(SFunction<T, ?> field, Object... values) {
-        String name = property(field);
-        if (values == null || values.length == 0) {
-            throw new IllegalArgumentException("values must not be empty");
-        }
-        conditionNodes.add(leaf((root, cb) -> PredicateHelper.in(root, name, values, cb)));
+        requireField(field);
+        requireNonEmpty(values);
+        conditionNodes.add(leaf((root, cb) -> PredicateHelper.in(root, property(field), values, cb)));
         return self();
     }
 
@@ -556,11 +535,9 @@ public abstract class AbstractBulkOperationSpec<T, SELF extends AbstractBulkOper
      */
     @Override
     public SELF notIn(SFunction<T, ?> field, Object... values) {
-        String name = property(field);
-        if (values == null || values.length == 0) {
-            throw new IllegalArgumentException("values must not be empty");
-        }
-        conditionNodes.add(leaf((root, cb) -> PredicateHelper.notIn(root, name, values, cb)));
+        requireField(field);
+        requireNonEmpty(values);
+        conditionNodes.add(leaf((root, cb) -> PredicateHelper.notIn(root, property(field), values, cb)));
         return self();
     }
 
@@ -574,11 +551,9 @@ public abstract class AbstractBulkOperationSpec<T, SELF extends AbstractBulkOper
      */
     @Override
     public SELF in(SFunction<T, ?> field, Collection<?> values) {
-        String name = property(field);
-        if (values == null || values.isEmpty()) {
-            throw new IllegalArgumentException("values must not be empty");
-        }
-        conditionNodes.add(leaf((root, cb) -> PredicateHelper.in(root, name, values, cb)));
+        requireField(field);
+        requireNonEmpty(values);
+        conditionNodes.add(leaf((root, cb) -> PredicateHelper.in(root, property(field), values, cb)));
         return self();
     }
 
@@ -592,11 +567,9 @@ public abstract class AbstractBulkOperationSpec<T, SELF extends AbstractBulkOper
      */
     @Override
     public SELF notIn(SFunction<T, ?> field, Collection<?> values) {
-        String name = property(field);
-        if (values == null || values.isEmpty()) {
-            throw new IllegalArgumentException("values must not be empty");
-        }
-        conditionNodes.add(leaf((root, cb) -> PredicateHelper.notIn(root, name, values, cb)));
+        requireField(field);
+        requireNonEmpty(values);
+        conditionNodes.add(leaf((root, cb) -> PredicateHelper.notIn(root, property(field), values, cb)));
         return self();
     }
 
@@ -612,9 +585,9 @@ public abstract class AbstractBulkOperationSpec<T, SELF extends AbstractBulkOper
     @SuppressWarnings({"unchecked", "rawtypes"})
     @Override
     public SELF between(SFunction<T, ?> field, Comparable<?> start, Comparable<?> end) {
+        requireField(field);
         PredicateHelper.validateRange(start, end);
-        String name = property(field);
-        conditionNodes.add(leaf((root, cb) -> PredicateHelper.between(root, name, start, end, cb)));
+        conditionNodes.add(leaf((root, cb) -> PredicateHelper.between(root, property(field), start, end, cb)));
         return self();
     }
 
@@ -630,9 +603,9 @@ public abstract class AbstractBulkOperationSpec<T, SELF extends AbstractBulkOper
     @SuppressWarnings({"unchecked", "rawtypes"})
     @Override
     public SELF notBetween(SFunction<T, ?> field, Comparable<?> start, Comparable<?> end) {
+        requireField(field);
         PredicateHelper.validateRange(start, end);
-        String name = property(field);
-        conditionNodes.add(leaf((root, cb) -> PredicateHelper.notBetween(root, name, start, end, cb)));
+        conditionNodes.add(leaf((root, cb) -> PredicateHelper.notBetween(root, property(field), start, end, cb)));
         return self();
     }
 
@@ -644,8 +617,8 @@ public abstract class AbstractBulkOperationSpec<T, SELF extends AbstractBulkOper
      */
     @Override
     public SELF isNull(SFunction<T, ?> field) {
-        String name = property(field);
-        conditionNodes.add(leaf((root, cb) -> PredicateHelper.isNull(root, name, cb)));
+        requireField(field);
+        conditionNodes.add(leaf((root, cb) -> PredicateHelper.isNull(root, property(field), cb)));
         return self();
     }
 
@@ -657,8 +630,8 @@ public abstract class AbstractBulkOperationSpec<T, SELF extends AbstractBulkOper
      */
     @Override
     public SELF isNotNull(SFunction<T, ?> field) {
-        String name = property(field);
-        conditionNodes.add(leaf((root, cb) -> PredicateHelper.isNotNull(root, name, cb)));
+        requireField(field);
+        conditionNodes.add(leaf((root, cb) -> PredicateHelper.isNotNull(root, property(field), cb)));
         return self();
     }
 
@@ -739,11 +712,8 @@ public abstract class AbstractBulkOperationSpec<T, SELF extends AbstractBulkOper
      */
     @Override
     public SELF isEmpty(SFunction<T, ?> field) {
-        if (field == null) {
-            throw new IllegalArgumentException("field must not be null");
-        }
-        String name = property(field);
-        conditionNodes.add(leaf((root, cb) -> PredicateHelper.isEmpty(root, name, cb)));
+        requireField(field);
+        conditionNodes.add(leaf((root, cb) -> PredicateHelper.isEmpty(root, property(field), cb)));
         return self();
     }
 
@@ -756,11 +726,8 @@ public abstract class AbstractBulkOperationSpec<T, SELF extends AbstractBulkOper
      */
     @Override
     public SELF isNotEmpty(SFunction<T, ?> field) {
-        if (field == null) {
-            throw new IllegalArgumentException("field must not be null");
-        }
-        String name = property(field);
-        conditionNodes.add(leaf((root, cb) -> PredicateHelper.isNotEmpty(root, name, cb)));
+        requireField(field);
+        conditionNodes.add(leaf((root, cb) -> PredicateHelper.isNotEmpty(root, property(field), cb)));
         return self();
     }
 

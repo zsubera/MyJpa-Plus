@@ -97,8 +97,9 @@ public class SqlSlowQueryInterceptor implements StatementInspector {
 
         private Object wrapPreparedStatement(Object stmt, String sql) {
             Class<?> stmtClass = stmt.getClass();
-            // 使用采样策略检查缓存大小，避免每次调用都检查
-            if (PROXY_CLASS_CACHE.size() > MAX_PROXY_CLASS_CACHE_SIZE) {
+            // 采样驱逐：每 64 次调用检查一次缓存大小，避免每次调用都检查
+            if (PROXY_CLASS_CACHE.size() > MAX_PROXY_CLASS_CACHE_SIZE
+                && java.util.concurrent.ThreadLocalRandom.current().nextInt(64) == 0) {
                 // 使用 CAS 确保只有一个线程执行驱逐
                 if (EVICTING.compareAndSet(false, true)) {
                     try {
