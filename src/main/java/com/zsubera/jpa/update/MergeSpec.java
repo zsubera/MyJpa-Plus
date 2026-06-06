@@ -2,6 +2,7 @@ package com.zsubera.jpa.update;
 
 import com.zsubera.jpa.exception.MyJpaPlusException;
 import com.zsubera.jpa.spec.SFunction;
+import com.zsubera.jpa.util.IdentifierValidator;
 import com.zsubera.jpa.util.LambdaUtils;
 import com.zsubera.jpa.util.StringHelper;
 import jakarta.persistence.Column;
@@ -14,7 +15,6 @@ import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
-import java.util.regex.Pattern;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
@@ -53,46 +53,6 @@ public class MergeSpec<T> {
 
     private static final Logger log = LoggerFactory.getLogger(MergeSpec.class);
 
-    /** 安全标识符正则：仅允许字母、数字和下划线（表名/列名不允许点号）。 */
-    private static final Pattern SAFE_IDENTIFIER_PATTERN = Pattern.compile("^[a-zA-Z_][a-zA-Z0-9_]*$");
-
-    /** 安全标识符段正则：用于校验 schema.table 格式中每一段。 */
-    private static final Pattern SAFE_IDENTIFIER_PART_PATTERN = Pattern.compile("^[a-zA-Z_][a-zA-Z0-9_]*$");
-
-    /** Unicode 标识符正则：允许 Unicode 字母、数字和下划线，支持国际化标识符。 */
-    private static final Pattern UNICODE_IDENTIFIER_PART_PATTERN = Pattern.compile("^[\\p{L}_][\\p{L}\\p{N}_]*$");
-
-    /**
-     * 常见 Unicode 同形字符检测：这些字符与 ASCII 字符视觉相似，可能用于绕过安全检查。
-     *
-     * <p>
-     * <strong>已知限制：</strong>此模式仅覆盖西里尔字母、希腊字母和亚美尼亚字母。 不覆盖全角拉丁字母、数学字母符号等 Unicode 混淆字符。 如需生产级检测，考虑使用 ICU4J 的
-     * {@code SpoofChecker}。
-     */
-    private static final Pattern HOMOGLYPH_PATTERN = Pattern.compile("[\\u0400-\\u04FF\\u0370-\\u03FF\\u0530-\\u058F]");
-
-    /** 是否启用 Unicode 标识符支持。可通过系统属性 myjpa-plus.merge.unicode-identifiers=true 启用。 */
-    private static volatile boolean unicodeIdentifiers = false;
-
-    /** 标识符最大长度，防止滥用。 */
-    private static final int MAX_IDENTIFIER_LENGTH = 128;
-
-    static {
-        String prop = System.getProperty("myjpa-plus.merge.unicode-identifiers");
-        if ("true".equalsIgnoreCase(prop)) {
-            unicodeIdentifiers = true;
-        }
-    }
-
-    /**
-     * 设置是否启用 Unicode 标识符支持。
-     *
-     * @param enabled 是否启用
-     */
-    public static void setUnicodeIdentifiers(boolean enabled) {
-        unicodeIdentifiers = enabled;
-    }
-
     /** 缓存实体类的持久化字段列表，避免每次反射遍历。使用弱引用键防止类加载器泄漏。 */
     private static final java.util.concurrent.ConcurrentMap<Class<?>, List<java.lang.reflect.Field>> FIELD_CACHE =
         new org.springframework.util.ConcurrentReferenceHashMap<>(16,
@@ -114,6 +74,10 @@ public class MergeSpec<T> {
     /** 每个 EntityManagerFactory 缓存的方言，避免重复检测。 */
     private static final java.util.concurrent.ConcurrentMap<String, String> DIALECT_CACHE =
         new java.util.concurrent.ConcurrentHashMap<>();
+
+    /** 方言策略实例映射，避免重复创建。 */
+    private static final java.util.Map<String, DialectStrategy> DIALECT_STRATEGIES =
+        java.util.Map.of("postgresql", new PostgresDialect(), "mysql", new MysqlDialect(), "h2", new H2Dialect());
 
     /**
      * 创建指定实体类型的 MergeSpec 构建器。
@@ -256,9 +220,14 @@ public class MergeSpec<T> {
                 params.add(fv.value());
             }
         }
-        String escapedTable = escapeIdentifier(resolveTableName(), "h2");
+        H2Dialect h2 = (H2Dialect)DIALECT_STRATEGIES.get("h2");
+        String escapedTable = h2.escapeIdentifier(resolveTableName());
+        List<String> escapedColumns = new ArrayList<>();
+        for (String col : columns) {
+            escapedColumns.add(h2.escapeIdentifier(col));
+        }
         StringBuilder sql = new StringBuilder("INSERT INTO ").append(escapedTable).append(" (");
-        sql.append(String.join(", ", columns.stream().map(c -> escapeIdentifier(c, "h2")).toList()));
+        sql.append(String.join(", ", escapedColumns));
         sql.append(") VALUES (");
         for (int i = 0; i < params.size(); i++) {
             if (i > 0) {
@@ -283,9 +252,9 @@ public class MergeSpec<T> {
      */
     private int executeConditionalUpdate(EntityManager em, List<EntityFieldValue> allFieldValues,
         List<String> conflictColumns) {
+        H2Dialect h2 = (H2Dialect)DIALECT_STRATEGIES.get("h2");
         List<String> setClauses = new ArrayList<>();
         List<Object> setParams = new ArrayList<>();
-        // 构建 Map 实现 O(1) 字段查找，替代 O(n*m) 嵌套循环
         java.util.Map<String, EntityFieldValue> fieldValueMap = new java.util.LinkedHashMap<>();
         for (EntityFieldValue fv : allFieldValues) {
             fieldValueMap.put(fv.fieldName(), fv);
@@ -293,7 +262,7 @@ public class MergeSpec<T> {
         for (String fieldName : updateFields) {
             EntityFieldValue fv = fieldValueMap.get(fieldName);
             if (fv != null) {
-                setClauses.add(escapeIdentifier(fv.columnName(), "h2") + " = ?");
+                setClauses.add(h2.escapeIdentifier(fv.columnName()) + " = ?");
                 setParams.add(fv.value());
             }
         }
@@ -305,13 +274,13 @@ public class MergeSpec<T> {
         for (String col : conflictColumns) {
             for (EntityFieldValue fv : allFieldValues) {
                 if (fv.columnName().equals(col)) {
-                    whereClauses.add(escapeIdentifier(col, "h2") + " = ?");
+                    whereClauses.add(h2.escapeIdentifier(col) + " = ?");
                     whereParams.add(fv.value());
                 }
             }
         }
         StringBuilder sql =
-            new StringBuilder("UPDATE ").append(escapeIdentifier(resolveTableName(), "h2")).append(" SET ");
+            new StringBuilder("UPDATE ").append(h2.escapeIdentifier(resolveTableName())).append(" SET ");
         sql.append(String.join(", ", setClauses));
         sql.append(" WHERE ");
         sql.append(String.join(" AND ", whereClauses));
@@ -774,25 +743,15 @@ public class MergeSpec<T> {
         }
         List<String> effectiveUpdateFields =
             explicitUpdateFields ? updateFields : allNonConflictColumns(allFieldValues, conflictSet);
-        Set<String> conflictFieldNames = new LinkedHashSet<>();
-        for (String col : effectiveConflictFields) {
-            for (EntityFieldValue fv : allFieldValues) {
-                if (fv.columnName().equals(col)) {
-                    conflictFieldNames.add(fv.fieldName());
-                }
-            }
-        }
         String tableName = resolveTableName();
         String dialect = detectDialect(em);
-        return switch (dialect) {
-            case "postgresql" -> buildPostgresSql(tableName, insertColumns, insertFieldValues, effectiveConflictFields,
-                effectiveUpdateFields);
-            case "mysql" -> buildMysqlSql(tableName, insertColumns, insertFieldValues, effectiveUpdateFields);
-            case "h2" -> buildH2Sql(tableName, insertColumns, insertFieldValues, effectiveConflictFields,
-                effectiveUpdateFields, allFieldValues, conflictFieldNames);
-            default -> throw new MyJpaPlusException(
+        DialectStrategy strategy = DIALECT_STRATEGIES.get(dialect);
+        if (strategy == null) {
+            throw new MyJpaPlusException(
                 "Unsupported database dialect: " + dialect + ". Supported dialects: postgresql, mysql, h2");
-        };
+        }
+        return strategy.buildUpsertSql(tableName, insertColumns, insertFieldValues, effectiveConflictFields,
+            effectiveUpdateFields);
     }
 
     /**
@@ -862,121 +821,6 @@ public class MergeSpec<T> {
     }
 
     /**
-     * SQL 构建结果，包含 SQL 语句和有序的参数值。
-     *
-     * @param sql SQL 语句（使用 ? 占位符）
-     * @param params 参数值列表（按 ? 出现顺序排列）
-     */
-    private record SqlWithParams(String sql, List<Object> params) {
-    }
-
-    /**
-     * 构建 PostgreSQL 的 UPSERT SQL：{@code INSERT ... ON CONFLICT (...) DO UPDATE SET ...}。
-     */
-    private SqlWithParams buildPostgresSql(String tableName, List<String> insertColumns,
-        List<EntityFieldValue> insertFieldValues, List<String> conflictColumns, List<String> updateColumns) {
-        String escapedTable = escapeIdentifier(tableName, "postgresql");
-        StringBuilder sql = new StringBuilder("INSERT INTO ").append(escapedTable).append(" (");
-        sql.append(String.join(", ", insertColumns.stream().map(c -> escapeIdentifier(c, "postgresql")).toList()));
-        sql.append(") VALUES (");
-        List<Object> params = new ArrayList<>();
-        for (int i = 0; i < insertFieldValues.size(); i++) {
-            if (i > 0) {
-                sql.append(", ");
-            }
-            sql.append("?");
-            params.add(insertFieldValues.get(i).value());
-        }
-        sql.append(") ON CONFLICT (");
-        sql.append(String.join(", ", conflictColumns.stream().map(c -> escapeIdentifier(c, "postgresql")).toList()));
-        sql.append(") DO UPDATE SET ");
-        List<String> setClauses = new ArrayList<>();
-        for (String col : updateColumns) {
-            String escaped = escapeIdentifier(col, "postgresql");
-            setClauses.add(escaped + " = EXCLUDED." + escaped);
-        }
-        sql.append(String.join(", ", setClauses));
-        return new SqlWithParams(sql.toString(), params);
-    }
-
-    /**
-     * 构建 MySQL 的 UPSERT SQL：{@code INSERT ... ON DUPLICATE KEY UPDATE ...}。
-     */
-    private SqlWithParams buildMysqlSql(String tableName, List<String> insertColumns,
-        List<EntityFieldValue> insertFieldValues, List<String> updateColumns) {
-        String escapedTable = escapeIdentifier(tableName, "mysql");
-        StringBuilder sql = new StringBuilder("INSERT INTO ").append(escapedTable).append(" (");
-        sql.append(String.join(", ", insertColumns.stream().map(c -> escapeIdentifier(c, "mysql")).toList()));
-        sql.append(") VALUES (");
-        List<Object> params = new ArrayList<>();
-        for (int i = 0; i < insertFieldValues.size(); i++) {
-            if (i > 0) {
-                sql.append(", ");
-            }
-            sql.append("?");
-            params.add(insertFieldValues.get(i).value());
-        }
-        sql.append(") ON DUPLICATE KEY UPDATE ");
-        List<String> setClauses = new ArrayList<>();
-        for (String col : updateColumns) {
-            String escaped = escapeIdentifier(col, "mysql");
-            setClauses.add(escaped + " = VALUES(" + escaped + ")");
-        }
-        sql.append(String.join(", ", setClauses));
-        return new SqlWithParams(sql.toString(), params);
-    }
-
-    /**
-     * 构建 H2 的 UPSERT SQL：{@code MERGE INTO ... KEY(...) VALUES(...)}。
-     *
-     * <p>
-     * H2 使用原生 MERGE INTO 语法。当冲突键值为 null（新实体的自动生成 ID）时， 使用简单 INSERT 代替，因为 H2 的 MERGE INTO 不支持 null KEY 值。
-     */
-    private SqlWithParams buildH2Sql(String tableName, List<String> insertColumns,
-        List<EntityFieldValue> insertFieldValues, List<String> conflictColumns, List<String> updateColumns,
-        List<EntityFieldValue> allFieldValues, Set<String> conflictFieldNames) {
-        boolean allConflictKeysNull = true;
-        for (EntityFieldValue fv : allFieldValues) {
-            if (conflictFieldNames.contains(fv.fieldName()) && fv.value() != null) {
-                allConflictKeysNull = false;
-                break;
-            }
-        }
-        if (allConflictKeysNull) {
-            String escapedTable = escapeIdentifier(tableName, "h2");
-            StringBuilder sql = new StringBuilder("INSERT INTO ").append(escapedTable).append(" (");
-            sql.append(String.join(", ", insertColumns.stream().map(c -> escapeIdentifier(c, "h2")).toList()));
-            sql.append(") VALUES (");
-            List<Object> params = new ArrayList<>();
-            for (int i = 0; i < insertFieldValues.size(); i++) {
-                if (i > 0) {
-                    sql.append(", ");
-                }
-                sql.append("?");
-                params.add(insertFieldValues.get(i).value());
-            }
-            sql.append(")");
-            return new SqlWithParams(sql.toString(), params);
-        }
-        String escapedTable = escapeIdentifier(tableName, "h2");
-        StringBuilder sql = new StringBuilder("MERGE INTO ").append(escapedTable).append(" (");
-        sql.append(String.join(", ", insertColumns.stream().map(c -> escapeIdentifier(c, "h2")).toList()));
-        sql.append(") KEY (");
-        sql.append(String.join(", ", conflictColumns.stream().map(c -> escapeIdentifier(c, "h2")).toList()));
-        sql.append(") VALUES (");
-        List<Object> params = new ArrayList<>();
-        for (int i = 0; i < insertFieldValues.size(); i++) {
-            if (i > 0) {
-                sql.append(", ");
-            }
-            sql.append("?");
-            params.add(insertFieldValues.get(i).value());
-        }
-        sql.append(")");
-        return new SqlWithParams(sql.toString(), params);
-    }
-
-    /**
      * 解析实体的表名。优先使用 {@code @Table} 注解，否则使用 {@code @Entity} 注解的 name 属性， 最后回退到类名的蛇形命名。
      *
      * @return 数据库表名
@@ -994,21 +838,13 @@ public class MergeSpec<T> {
             tableName.append(tableAnnotation.name());
             String name = tableName.toString();
             // 校验注解中表名的每个部分以防止注入
-            for (String segment : name.split("\\.")) {
-                if (!SAFE_IDENTIFIER_PART_PATTERN.matcher(segment).matches()) {
-                    throw new MyJpaPlusException("Invalid table name in @Table annotation: '" + name
-                        + "'. Each part must contain only alphanumeric characters and underscores.");
-                }
-            }
+            IdentifierValidator.validateTableName(name);
             return name;
         }
         jakarta.persistence.Entity entityAnnotation = entityClass.getAnnotation(jakarta.persistence.Entity.class);
         if (entityAnnotation != null && !entityAnnotation.name().isEmpty()) {
             String name = entityAnnotation.name();
-            if (!SAFE_IDENTIFIER_PART_PATTERN.matcher(name).matches()) {
-                throw new MyJpaPlusException("Invalid entity name in @Entity annotation: '" + name
-                    + "'. Must contain only alphanumeric characters and underscores.");
-            }
+            IdentifierValidator.validateTableName(name);
             return name;
         }
         return StringHelper.camelToSnake(entityClass.getSimpleName());
@@ -1030,43 +866,15 @@ public class MergeSpec<T> {
         if (identifier == null || identifier.isEmpty()) {
             throw new MyJpaPlusException("Identifier must not be null or empty");
         }
-        // 检查标识符长度限制
-        if (identifier.length() > MAX_IDENTIFIER_LENGTH) {
-            throw new MyJpaPlusException("Identifier length (" + identifier.length() + ") exceeds maximum ("
-                + MAX_IDENTIFIER_LENGTH + "): '" + identifier.substring(0, 64) + "...'");
+        // 使用 IdentifierValidator 进行验证
+        IdentifierValidator.validate(identifier);
+        // 委托给方言策略进行标识符转义
+        DialectStrategy strategy = DIALECT_STRATEGIES.get(dialect);
+        if (strategy == null) {
+            // 回退到双引号转义
+            return "\"" + identifier.replace("\"", "\"\"") + "\"";
         }
-        // 逐段校验以防止通过点号进行 schema 注入
-        String[] parts = identifier.split("\\.");
-        for (String part : parts) {
-            // 启用时使用 Unicode 模式，否则使用仅 ASCII 模式
-            Pattern validationPattern =
-                unicodeIdentifiers ? UNICODE_IDENTIFIER_PART_PATTERN : SAFE_IDENTIFIER_PART_PATTERN;
-            if (!validationPattern.matcher(part).matches()) {
-                throw new MyJpaPlusException("Invalid SQL identifier: '" + identifier
-                    + "'. Each part must contain only alphanumeric characters and underscores." + (unicodeIdentifiers
-                        ? "" : " Use myjpa-plus.merge.unicode-identifiers=true for Unicode support."));
-            }
-            // 检测可用于绕过安全检查的 Unicode 同形字符
-            // 西里尔字母、希腊字母和亚美尼亚字母与拉丁字母视觉相似
-            if (unicodeIdentifiers && HOMOGLYPH_PATTERN.matcher(part).find()) {
-                String homoglyphMsg = "SECURITY: Identifier '" + part + "' contains Unicode homoglyph characters "
-                    + "(Cyrillic/Greek/Armenian). This may indicate a homoglyph attack attempt.";
-                if (unicodeIdentifiers
-                    && System.getProperty("myjpa-plus.merge.strict-mode", "false").equalsIgnoreCase("true")) {
-                    throw new MyJpaPlusException(homoglyphMsg);
-                }
-                log.warn(homoglyphMsg);
-            }
-        }
-        // 始终对标识符加引号以处理保留字和大小写敏感性。
-        // H2 标识符现在使用双引号加引号以防止保留字冲突。
-        // H2 默认模式将标识符存储为大写，因此在加引号前先转换为大写。
-        return switch (dialect) {
-            case "postgresql" -> "\"" + identifier.replace("\"", "\"\"") + "\"";
-            case "mysql" -> "`" + identifier.replace("`", "``") + "`";
-            case "h2" -> "\"" + identifier.toUpperCase(java.util.Locale.ROOT).replace("\"", "\"\"") + "\"";
-            default -> "\"" + identifier.replace("\"", "\"\"") + "\"";
-        };
+        return strategy.escapeIdentifier(identifier);
     }
 
     /**
@@ -1151,10 +959,7 @@ public class MergeSpec<T> {
         if (columnAnnotation != null && !columnAnnotation.name().isEmpty()) {
             String name = columnAnnotation.name();
             // 校验注解中的列名以防止注入
-            if (!SAFE_IDENTIFIER_PATTERN.matcher(name).matches()) {
-                throw new MyJpaPlusException("Invalid column name in @Column annotation: '" + name
-                    + "'. Must contain only alphanumeric characters and underscores.");
-            }
+            IdentifierValidator.validateColumnName(name);
             return name;
         }
         return field.getName();
@@ -1306,6 +1111,6 @@ public class MergeSpec<T> {
      * @param columnName 数据库列名
      * @param value 字段值
      */
-    private record EntityFieldValue(String fieldName, String columnName, Object value) {
+    record EntityFieldValue(String fieldName, String columnName, Object value) {
     }
 }

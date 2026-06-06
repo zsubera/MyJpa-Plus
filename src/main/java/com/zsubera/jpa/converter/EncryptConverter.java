@@ -30,6 +30,7 @@ public class EncryptConverter implements AttributeConverter<String, String> {
     private static final String SALT_PROPERTY = "myjpa.encrypt.salt";
     private static final String STRICT_MODE_PROPERTY = "myjpa-plus.encrypt.strict-mode";
     private static final String REQUIRE_SALT_PROPERTY = "myjpa-plus.encrypt.require-salt";
+    private static final String PERSIST_SALT_PROPERTY = "myjpa-plus.encrypt.persist-salt";
     private static final SecureRandom SECURE_RANDOM = new SecureRandom();
     private static final int PBKDF2_ITERATIONS = 600_000;
     private static final int PBKDF2_KEY_LENGTH = 256;
@@ -399,14 +400,8 @@ public class EncryptConverter implements AttributeConverter<String, String> {
      * 获取 PBKDF2 盐值。优先从环境变量获取，回退到系统属性。 生产环境（spring.profiles.active 包含 prod/production）强制要求配置盐值。
      *
      * <p>
-     * <strong>安全改进：</strong>非生产环境不再使用硬编码的默认盐值，而是生成随机盐值并记录警告。 随机盐值在 JVM 生命周期内保持一致（缓存在 SALT_CACHE 中），确保同一 JVM
-     * 内的加密/解密操作使用相同盐值。
-     *
-     * <p>
-     * <strong>改进：</strong>非生产环境的随机盐值会持久化到本地文件（{@code ~/.myjpa-plus/.salt}）， 确保跨 JVM 重启后盐值保持一致，避免之前加密的数据无法解密。
-     *
-     * <p>
-     * <strong>建议：</strong>在 Windows 环境下，建议通过环境变量 {@code MYJPA_ENCRYPT_SALT} 配置盐值， 以避免多进程间的文件锁竞争问题。
+     * <strong>盐值持久化控制：</strong>默认情况下，非生产环境使用内存随机盐值（JVM 重启后会变化）。 如需跨重启保持一致，设置
+     * {@code myjpa-plus.encrypt.persist-salt=true} 或通过环境变量 {@code MYJPA_ENCRYPT_SALT} 显式配置。
      *
      * @return 盐值字节数组
      * @throws IllegalStateException 生产环境未配置盐值时抛出
@@ -421,21 +416,43 @@ public class EncryptConverter implements AttributeConverter<String, String> {
                 throw new IllegalStateException("PBKDF2 salt must be configured in production. "
                     + "Set environment variable " + SALT_ENV + " or system property " + SALT_PROPERTY);
             }
-            // 使用 synchronized 块防止盐值文件创建中的竞态条件。
-            // ConcurrentHashMap.computeIfAbsent 在竞争下可能多次执行 lambda，
-            // 导致不一致的盐值写入文件。
-            byte[] cached = SALT_CACHE.get("internal");
-            if (cached != null) {
-                return cached;
-            }
-            synchronized (SALT_FILE_LOCK) {
-                cached = SALT_CACHE.get("internal");
+            boolean persistSalt = Boolean.parseBoolean(System.getProperty(PERSIST_SALT_PROPERTY, "false"));
+            if (persistSalt) {
+                // 显式启用盐值持久化：从文件加载或创建
+                byte[] cached = SALT_CACHE.get("internal");
                 if (cached != null) {
                     return cached;
                 }
-                byte[] internalSalt = loadOrCreateSalt();
-                SALT_CACHE.put("internal", internalSalt);
-                return internalSalt;
+                synchronized (SALT_FILE_LOCK) {
+                    cached = SALT_CACHE.get("internal");
+                    if (cached != null) {
+                        return cached;
+                    }
+                    byte[] internalSalt = loadOrCreateSalt();
+                    SALT_CACHE.put("internal", internalSalt);
+                    return internalSalt;
+                }
+            } else {
+                // 默认行为：仅使用内存随机盐值，不写文件系统
+                byte[] cached = SALT_CACHE.get("internal");
+                if (cached != null) {
+                    return cached;
+                }
+                synchronized (SALT_FILE_LOCK) {
+                    cached = SALT_CACHE.get("internal");
+                    if (cached != null) {
+                        return cached;
+                    }
+                    byte[] randomSalt = generateRandomSalt().getBytes(StandardCharsets.UTF_8);
+                    SALT_CACHE.put("internal", randomSalt);
+                    log.warn(
+                        "SECURITY: Using in-memory random PBKDF2 salt. "
+                            + "Encrypted data will be UNRECOVERABLE after JVM restart. "
+                            + "Set environment variable {} or system property {} for persistent salt. "
+                            + "Or set {}=true to enable file-based salt persistence.",
+                        SALT_ENV, SALT_PROPERTY, PERSIST_SALT_PROPERTY);
+                    return randomSalt;
+                }
             }
         }
         return salt.getBytes(StandardCharsets.UTF_8);

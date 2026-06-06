@@ -73,11 +73,15 @@ public class QueryCacheManager {
     /** 缓存键最大长度限制，防止恶意超长键导致内存问题 */
     private static final int MAX_KEY_LENGTH = 1024;
 
-    /** 驱逐检查采样间隔，每 N 次 put 检查一次驱逐，避免每次 put 都遍历全量缓存 */
+    /** 驱逐检查采样间隔，每 N 次 put/get 操作检查一次驱逐，避免每次操作都遍历全量缓存 */
     private static final int EVICTION_CHECK_INTERVAL = 10;
 
     /** put 操作计数器，用于采样驱逐检查（实例级别，避免多实例干扰） */
     private final java.util.concurrent.atomic.AtomicInteger putCounter =
+        new java.util.concurrent.atomic.AtomicInteger();
+
+    /** get 操作计数器，用于读取时触发过期清理 */
+    private final java.util.concurrent.atomic.AtomicInteger getCounter =
         new java.util.concurrent.atomic.AtomicInteger();
 
     /** LRU 缓存，使用 ConcurrentHashMap 实现线程安全的无锁读取。 */
@@ -145,6 +149,10 @@ public class QueryCacheManager {
      */
     @SuppressWarnings("unchecked")
     public <T> T get(String key) {
+        // 读取时采样触发过期清理，防止高读低写场景下过期条目长期占用内存
+        if (getCounter.incrementAndGet() % EVICTION_CHECK_INTERVAL == 0) {
+            evictExpiredEntries();
+        }
         CachedQueryResult<?> result = store.get(key);
         if (result == null) {
             return null;

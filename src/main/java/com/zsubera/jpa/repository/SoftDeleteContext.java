@@ -116,4 +116,40 @@ public final class SoftDeleteContext {
         ignoreCount.remove();
     }
 
+    /**
+     * 在异步边界处清理 ThreadLocal 状态。
+     *
+     * <p>
+     * 在使用 {@code @Async}、{@code CompletableFuture}、响应式流等异步机制时， 跨线程传递 {@code @IgnoreSoftDelete} 状态需要显式处理。
+     * 推荐在异步任务提交前调用此方法确认状态，并在异步任务完成后调用 {@link #reset()} 清理。
+     *
+     * <p>
+     * 使用示例：
+     *
+     * <pre>{@code
+     * // 在异步边界前记录状态
+     * boolean wasIgnoring = SoftDeleteContext.isIgnoreSoftDelete();
+     *
+     * CompletableFuture.supplyAsync(() -> {
+     *     try {
+     *         if (wasIgnoring) {
+     *             SoftDeleteContext.pushIgnore();
+     *         }
+     *         return repository.findAll();
+     *     } finally {
+     *         SoftDeleteContext.reset();
+     *     }
+     * });
+     * }</pre>
+     *
+     * @return 当前线程是否处于忽略软删除状态
+     */
+    public static boolean captureAndReset() {
+        boolean ignoring = isIgnoreSoftDelete();
+        if (ignoring) {
+            reset();
+        }
+        return ignoring;
+    }
+
 }

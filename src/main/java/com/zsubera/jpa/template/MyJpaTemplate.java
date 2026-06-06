@@ -18,6 +18,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.function.Consumer;
 import java.util.stream.Stream;
+import jakarta.annotation.PostConstruct;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -138,6 +139,9 @@ public class MyJpaTemplate {
     /** 可选的查询缓存管理器。注入后可使用 findAllCached() 方法。 */
     @Autowired(required = false)
     private QueryCacheManager cacheManager;
+
+    /** 批量操作执行模板，封装 UpdateSpec/DeleteSpec/MergeSpec 的批量执行逻辑。 */
+    private BulkOperationTemplate bulkOperationTemplate;
 
     /** 创建 MyJpaTemplate 实例，使用默认配置。 */
     public MyJpaTemplate() {
@@ -260,6 +264,14 @@ public class MyJpaTemplate {
      */
     public QueryCacheManager getCacheManager() {
         return cacheManager;
+    }
+
+    /**
+     * 初始化批量操作模板。在所有依赖注入完成后调用。
+     */
+    @PostConstruct
+    void initBulkOperationTemplate() {
+        this.bulkOperationTemplate = new BulkOperationTemplate(entityManager, maxBulkOperationRows, applicationContext);
     }
 
     /**
@@ -1124,7 +1136,7 @@ public class MyJpaTemplate {
         if (spec == null) {
             throw new IllegalArgumentException("spec must not be null");
         }
-        return spec.executeInTransaction(entityManager);
+        return bulkOperationTemplate.execute(spec);
     }
 
     /**
@@ -1139,7 +1151,7 @@ public class MyJpaTemplate {
         if (spec == null) {
             throw new IllegalArgumentException("spec must not be null");
         }
-        return spec.executeInTransaction(entityManager);
+        return bulkOperationTemplate.execute(spec);
     }
 
     /**
@@ -1155,7 +1167,7 @@ public class MyJpaTemplate {
         if (spec == null) {
             throw new IllegalArgumentException("spec must not be null");
         }
-        return spec.executeInTransaction(entityManager);
+        return bulkOperationTemplate.execute(spec);
     }
 
     /**
@@ -1182,15 +1194,11 @@ public class MyJpaTemplate {
         if (batchSize <= 0) {
             throw new IllegalArgumentException("batchSize must be positive");
         }
-        return mergeSpec.executeBatch(entities, entityManager, batchSize);
+        return bulkOperationTemplate.executeBatch(mergeSpec, entities, batchSize);
     }
 
     /**
      * 使用给定的 {@link UpdateSpec} 执行批量更新，限制最大影响行数。
-     *
-     * <p>
-     * 如果配置了 {@link #maxBulkOperationRows} 且大于 0，则使用 {@link UpdateSpec#executeLimited} 限制影响行数。 否则，直接执行
-     * {@link #execute(UpdateSpec)}。
      *
      * @param spec 要执行的 UpdateSpec
      * @param maxRows 最大影响行数，如果为 -1 则使用全局配置
@@ -1206,19 +1214,11 @@ public class MyJpaTemplate {
         if (maxRows <= 0 && maxRows != -1) {
             throw new IllegalArgumentException("maxRows must be positive or -1 (use global config)");
         }
-        int effectiveLimit = maxRows == -1 ? maxBulkOperationRows : maxRows;
-        if (effectiveLimit <= 0) {
-            return spec.executeInTransaction(entityManager);
-        }
-        return spec.executeLimited(entityManager, effectiveLimit);
+        return bulkOperationTemplate.executeWithMaxRows(spec, maxRows);
     }
 
     /**
      * 使用给定的 {@link DeleteSpec} 执行批量删除，限制最大影响行数。
-     *
-     * <p>
-     * 如果配置了 {@link #maxBulkOperationRows} 且大于 0，则使用 {@link DeleteSpec#executeLimited} 限制影响行数。 否则，直接执行
-     * {@link #execute(DeleteSpec)}。
      *
      * @param spec 要执行的 DeleteSpec
      * @param maxRows 最大影响行数，如果为 -1 则使用全局配置
@@ -1234,26 +1234,11 @@ public class MyJpaTemplate {
         if (maxRows <= 0 && maxRows != -1) {
             throw new IllegalArgumentException("maxRows must be positive or -1 (use global config)");
         }
-        int effectiveLimit = maxRows == -1 ? maxBulkOperationRows : maxRows;
-        if (effectiveLimit <= 0) {
-            return spec.executeInTransaction(entityManager);
-        }
-        return spec.executeLimited(entityManager, effectiveLimit);
+        return bulkOperationTemplate.executeWithMaxRows(spec, maxRows);
     }
 
     /**
      * 分批执行批量更新。通过分批处理减少内存占用（通过 {@link EntityManager#clear()} 清除一级缓存）， 但所有批次在同一个事务中执行，要么全部成功，要么全部回滚。
-     *
-     * <p>
-     * <strong>注意：</strong>此方法不会分批提交事务。所有批次在同一个事务中执行， 只有在整个方法完成后才会提交。如果需要分批提交，请使用外部事务管理。
-     *
-     * <p>
-     * <strong>长事务风险：</strong>如果数据量非常大，事务日志可能撑爆，导致数据库锁等待超时。 对于大数据量操作，建议：
-     * <ul>
-     * <li>使用较小的 batchSize（如 1000-5000）</li>
-     * <li><strong>推荐：</strong>使用 {@link #executeBatchInSeparateTransactions(UpdateSpec, int)} 进行分批提交，避免长事务</li>
-     * <li>监控数据库事务日志使用情况</li>
-     * </ul>
      *
      * @param spec 要执行的 UpdateSpec
      * @param batchSize 每批更新的行数
@@ -1268,22 +1253,11 @@ public class MyJpaTemplate {
         if (batchSize <= 0) {
             throw new IllegalArgumentException("batchSize must be positive");
         }
-        return executeBatchInternal(batchSize, "update", size -> spec.executeLimited(entityManager, size));
+        return bulkOperationTemplate.executeBatch(spec, batchSize);
     }
 
     /**
      * 分批执行批量删除。通过分批处理减少内存占用（通过 {@link EntityManager#clear()} 清除一级缓存）， 但所有批次在同一个事务中执行，要么全部成功，要么全部回滚。
-     *
-     * <p>
-     * <strong>注意：</strong>此方法不会分批提交事务。所有批次在同一个事务中执行， 只有在整个方法完成后才会提交。如果需要分批提交，请使用外部事务管理。
-     *
-     * <p>
-     * <strong>长事务风险：</strong>如果数据量非常大，事务日志可能撑爆，导致数据库锁等待超时。 对于大数据量操作，建议：
-     * <ul>
-     * <li>使用较小的 batchSize（如 1000-5000）</li>
-     * <li><strong>推荐：</strong>使用 {@link #executeBatchInSeparateTransactions(DeleteSpec, int)} 进行分批提交，避免长事务</li>
-     * <li>监控数据库事务日志使用情况</li>
-     * </ul>
      *
      * @param spec 要执行的 DeleteSpec
      * @param batchSize 每批删除的行数
@@ -1298,41 +1272,7 @@ public class MyJpaTemplate {
         if (batchSize <= 0) {
             throw new IllegalArgumentException("batchSize must be positive");
         }
-        return executeBatchInternal(batchSize, "delete", size -> spec.executeLimited(entityManager, size));
-    }
-
-    /**
-     * 分批执行操作的通用实现。
-     *
-     * @param batchSize 每批操作的行数
-     * @param operationName 操作名称（用于日志）
-     * @param batchExecutor 批次执行器，接收 batchSize 返回受影响行数
-     * @return 受影响的总行数
-     */
-    private int executeBatchInternal(int batchSize, String operationName,
-        java.util.function.IntUnaryOperator batchExecutor) {
-        int total = 0;
-        int batchResult;
-        int iteration = 0;
-        do {
-            batchResult = batchExecutor.applyAsInt(batchSize);
-            total += batchResult;
-            if (batchResult > 0) {
-                entityManager.flush();
-                entityManager.clear();
-                if (log.isDebugEnabled()) {
-                    log.debug("Batch {}: {} rows {}ed in this batch (total: {})", operationName, batchResult,
-                        operationName, total);
-                }
-            }
-            iteration++;
-            if (iteration >= MAX_BATCH_ITERATIONS) {
-                log.error("Batch {} reached maximum iterations ({}). Possible infinite loop. Total rows: {}",
-                    operationName, MAX_BATCH_ITERATIONS, total);
-                break;
-            }
-        } while (batchResult > 0);
-        return total;
+        return bulkOperationTemplate.executeBatch(spec, batchSize);
     }
 
     // ---- 分批提交事务的批量操作 ----
@@ -1365,12 +1305,6 @@ public class MyJpaTemplate {
     /**
      * 分批执行批量更新，每批在独立事务中提交，支持失败回调。
      *
-     * <p>
-     * 与 {@link #executeBatch(UpdateSpec, int)} 不同，此方法每批操作完成后立即提交事务， 避免长事务导致的数据库锁等待超时问题。适用于大数据量操作场景。
-     *
-     * <p>
-     * <strong>注意：</strong>如果某批操作失败，已提交的批次不会回滚。调用方可通过 {@link BatchResult} 获取执行状态。
-     *
      * @param spec 要执行的 UpdateSpec
      * @param batchSize 每批更新的行数
      * @param failureStrategy 失败时的处理策略
@@ -1388,8 +1322,10 @@ public class MyJpaTemplate {
         if (failureStrategy == null) {
             throw new IllegalArgumentException("failureStrategy must not be null");
         }
-        return executeBatchInSeparateTransactionsWithResult(batchSize, "update",
-            size -> executeInNewTransaction(em -> spec.executeLimited(em, size)), failureStrategy);
+        BulkOperationTemplate.BatchResult result = bulkOperationTemplate.executeBatchInSeparateTransactions(spec,
+            batchSize, convertFailureStrategy(failureStrategy));
+        return new BatchResult(result.totalRows(), result.batchCount(), result.success(), result.failedBatchIndex(),
+            result.failureCause());
     }
 
     /**
@@ -1412,63 +1348,21 @@ public class MyJpaTemplate {
         if (failureStrategy == null) {
             throw new IllegalArgumentException("failureStrategy must not be null");
         }
-        return executeBatchInSeparateTransactionsWithResult(batchSize, "delete",
-            size -> executeInNewTransaction(em -> spec.executeLimited(em, size)), failureStrategy);
+        BulkOperationTemplate.BatchResult result = bulkOperationTemplate.executeBatchInSeparateTransactions(spec,
+            batchSize, convertFailureStrategy(failureStrategy));
+        return new BatchResult(result.totalRows(), result.batchCount(), result.success(), result.failedBatchIndex(),
+            result.failureCause());
     }
 
-    /**
-     * 分批在独立事务中执行操作的通用实现，返回详细结果。
-     *
-     * @param batchSize 每批操作的行数
-     * @param operationName 操作名称（用于日志）
-     * @param batchExecutor 批次执行器
-     * @param failureStrategy 失败时的处理策略
-     * @return 批量执行结果
-     */
-    private BatchResult executeBatchInSeparateTransactionsWithResult(int batchSize, String operationName,
-        java.util.function.IntUnaryOperator batchExecutor, BatchFailureStrategy failureStrategy) {
-        int total = 0;
-        int batchCount = 0;
-        int failedBatchIndex = -1;
-        Throwable failureCause = null;
-        boolean shouldContinue = true;
-        int batchResult;
-        while (shouldContinue) {
-            try {
-                batchResult = batchExecutor.applyAsInt(batchSize);
-                total += batchResult;
-                batchCount++;
-                if (batchResult > 0 && log.isDebugEnabled()) {
-                    log.debug("Batch {} committed: {} rows {}ed in this batch (total: {})", operationName, batchResult,
-                        operationName, total);
-                }
-            } catch (RuntimeException e) {
-                failedBatchIndex = batchCount;
-                failureCause = e;
-                batchCount++;
-                log.error("Batch {} failed at batch index {}: {}", operationName, failedBatchIndex, e.getMessage(), e);
-                if (failureStrategy == BatchFailureStrategy.ABORT) {
-                    shouldContinue = false;
-                    continue;
-                }
-                // CONTINUE：跳过本批次，尝试下一批次
-                batchResult = 0;
-            }
-            if (batchResult < batchSize) {
-                shouldContinue = false;
-            }
-        }
-        return new BatchResult(total, batchCount, failedBatchIndex == -1, failedBatchIndex, failureCause);
+    private static BulkOperationTemplate.BatchFailureStrategy convertFailureStrategy(BatchFailureStrategy strategy) {
+        return switch (strategy) {
+            case CONTINUE -> BulkOperationTemplate.BatchFailureStrategy.CONTINUE;
+            case ABORT -> BulkOperationTemplate.BatchFailureStrategy.ABORT;
+        };
     }
 
     /**
      * 分批执行批量更新，每批在独立事务中提交。
-     *
-     * <p>
-     * 与 {@link #executeBatch(UpdateSpec, int)} 不同，此方法每批操作完成后立即提交事务， 避免长事务导致的数据库锁等待超时问题。适用于大数据量操作场景。
-     *
-     * <p>
-     * <strong>注意：</strong>如果某批操作失败，已提交的批次不会回滚。调用方需要自行处理部分成功的情况。
      *
      * @param spec 要执行的 UpdateSpec
      * @param batchSize 每批更新的行数
@@ -1482,18 +1376,11 @@ public class MyJpaTemplate {
         if (batchSize <= 0) {
             throw new IllegalArgumentException("batchSize must be positive");
         }
-        return executeBatchInSeparateTransactionsInternal(batchSize, "update",
-            size -> executeInNewTransaction(em -> spec.executeLimited(em, size)));
+        return bulkOperationTemplate.executeBatchInSeparateTransactions(spec, batchSize);
     }
 
     /**
      * 分批执行批量删除，每批在独立事务中提交。
-     *
-     * <p>
-     * 与 {@link #executeBatch(DeleteSpec, int)} 不同，此方法每批操作完成后立即提交事务， 避免长事务导致的数据库锁等待超时问题。适用于大数据量操作场景。
-     *
-     * <p>
-     * <strong>注意：</strong>如果某批操作失败，已提交的批次不会回滚。调用方需要自行处理部分成功的情况。
      *
      * @param spec 要执行的 DeleteSpec
      * @param batchSize 每批删除的行数
@@ -1507,92 +1394,21 @@ public class MyJpaTemplate {
         if (batchSize <= 0) {
             throw new IllegalArgumentException("batchSize must be positive");
         }
-        return executeBatchInSeparateTransactionsInternal(batchSize, "delete",
-            size -> executeInNewTransaction(em -> spec.executeLimited(em, size)));
+        return bulkOperationTemplate.executeBatchInSeparateTransactions(spec, batchSize);
     }
 
     /**
-     * 分批在独立事务中执行操作的通用实现。
-     *
-     * @param batchSize 每批操作的行数
-     * @param operationName 操作名称（用于日志）
-     * @param batchExecutor 批次执行器
-     * @return 受影响的总行数
-     */
-    private int executeBatchInSeparateTransactionsInternal(int batchSize, String operationName,
-        java.util.function.IntUnaryOperator batchExecutor) {
-        int total = 0;
-        int batchResult;
-        int iteration = 0;
-        do {
-            batchResult = batchExecutor.applyAsInt(batchSize);
-            total += batchResult;
-            if (batchResult > 0 && log.isDebugEnabled()) {
-                log.debug("Batch {} committed: {} rows {}ed in this batch (total: {})", operationName, batchResult,
-                    operationName, total);
-            }
-            iteration++;
-            if (iteration >= MAX_BATCH_ITERATIONS) {
-                log.error("Batch {} reached maximum iterations ({}). Possible infinite loop. Total rows: {}",
-                    operationName, MAX_BATCH_ITERATIONS, total);
-                break;
-            }
-        } while (batchResult >= batchSize);
-        return total;
-    }
-
-    /**
-     * 在新事务中执行操作。
-     *
-     * <p>
-     * 使用 {@link org.springframework.transaction.support.TransactionTemplate} 创建独立事务， 每次调用都会创建新的事务上下文。 需要注入
-     * {@link org.springframework.transaction.PlatformTransactionManager}。
-     *
-     * <p>
-     * <strong>事务传播行为说明：</strong>
-     * <ul>
-     * <li><strong>当已有活动事务时</strong>：使用 {@code PROPAGATION_REQUIRED}（加入现有事务），所有批次在同一事务中执行。 这意味着如果某个批次失败，所有批次都会回滚。</li>
-     * <li><strong>当没有活动事务时</strong>：使用 {@code PROPAGATION_REQUIRES_NEW}（创建新事务），每个批次在独立事务中执行。</li>
-     * </ul>
-     *
-     * <p>
-     * <strong>最佳实践：</strong>
-     * <ul>
-     * <li>如果需要严格的批次隔离（每个批次独立提交），请确保在没有外层事务的情况下调用此方法</li>
-     * <li>如果在 {@code @Transactional} 方法内调用，所有批次将在同一事务中执行</li>
-     * <li>对于大数据量操作，建议使用 {@link #executeBatchInSeparateTransactions} 方法进行分批提交</li>
-     * </ul>
-     *
-     * <p>
-     * <strong>注意事项：</strong>
-     * <ul>
-     * <li>在连接池有限的环境（如测试 H2）中，事务挂起可能导致连接不足</li>
-     * <li>使用 {@code REQUIRES_NEW} 时，新事务可能无法看到外层事务的未提交数据</li>
-     * </ul>
-     *
-     * @param operation 要执行的操作
-     * @param <R> 返回类型
-     * @return 操作结果
-     * @throws IllegalStateException 如果 TransactionManager 不可用
+     * 在新事务中执行操作（用于批量保存）。
      */
     private <R> R executeInNewTransaction(java.util.function.Function<EntityManager, R> operation) {
         org.springframework.transaction.PlatformTransactionManager txManager = getTransactionManager();
         if (txManager == null) {
             throw new IllegalStateException(
-                "PlatformTransactionManager not available. Cannot execute in new transaction. "
-                    + "Ensure @Transactional support is enabled or configure a PlatformTransactionManager bean. "
-                    + "If running outside a Spring context, use MergeSpec.executeInTransaction() instead.");
+                "PlatformTransactionManager not available. Cannot execute in new transaction.");
         }
         org.springframework.transaction.support.TransactionTemplate txTemplate =
             new org.springframework.transaction.support.TransactionTemplate(txManager);
-        // 事务传播策略：
-        // - 无外部事务时：使用 REQUIRES_NEW 创建独立事务
-        // - 有外部事务时：使用 REQUIRED 加入现有事务（因为 REQUIRES_NEW 在某些环境如测试 H2 中可能失败）
-        // 注意：在外部事务中调用时，批次操作将在同一事务中执行，一个批次失败会导致所有批次回滚。
         if (org.springframework.transaction.support.TransactionSynchronizationManager.isActualTransactionActive()) {
-            log.warn("executeInNewTransaction called within an active transaction. "
-                + "Batch operations will join the existing transaction. "
-                + "For true isolation, call outside of @Transactional methods.");
             txTemplate
                 .setPropagationBehavior(org.springframework.transaction.TransactionDefinition.PROPAGATION_REQUIRED);
         } else {
@@ -1602,26 +1418,13 @@ public class MyJpaTemplate {
         return txTemplate.execute(status -> operation.apply(entityManager));
     }
 
-    /**
-     * 获取 PlatformTransactionManager。
-     *
-     * <p>
-     * 通过 ApplicationContext 获取，如果不存在则返回 null。
-     *
-     * @return PlatformTransactionManager 实例，或 null
-     */
     private org.springframework.transaction.PlatformTransactionManager getTransactionManager() {
         if (applicationContext == null) {
-            log.debug("ApplicationContext not available, cannot resolve TransactionManager");
             return null;
         }
         try {
             return applicationContext.getBean(org.springframework.transaction.PlatformTransactionManager.class);
-        } catch (org.springframework.beans.factory.NoSuchBeanDefinitionException e) {
-            log.debug("PlatformTransactionManager bean not found: {}", e.getMessage());
-            return null;
         } catch (org.springframework.beans.BeansException e) {
-            log.debug("Failed to resolve TransactionManager: {}", e.getMessage());
             return null;
         }
     }

@@ -57,8 +57,16 @@ public class CteSpec {
     private final Map<String, Object> parameters = new LinkedHashMap<>();
     private boolean recursive;
 
-    /** 严格模式开关。默认为 true，启用后未绑定的命名参数将抛出异常。 */
-    private static volatile boolean strictMode = true;
+    /**
+     * 严格模式开关。默认为 false（纯日志模式）。
+     *
+     * <p>
+     * 设置为 true 时，检测到危险 SQL 关键字或未绑定参数会抛出异常。 但请注意：正则黑名单无法完备覆盖所有绕过方式，此检查仅作为辅助防护层。 安全责任在于使用者确保 CTE SQL 不包含用户输入。
+     *
+     * <p>
+     * 通过系统属性 {@code myjpa-plus.cte.strict-mode=true} 启用。
+     */
+    private static volatile boolean strictMode = false;
 
     /**
      * 获取严格模式状态。
@@ -201,10 +209,10 @@ public class CteSpec {
     }
 
     /**
-     * 验证 SQL 仅包含 SELECT 语句（严格模式下阻止 DDL/DML）。
+     * 验证 SQL 仅包含 SELECT 语句（strictMode=true 时阻止 DDL/DML）。
      *
      * @param sql SQL 字符串
-     * @throws SecurityException 如果检测到非 SELECT 语句
+     * @throws SecurityException 如果 strictMode=true 且检测到非 SELECT 语句
      */
     private static void validateSelectOnly(String sql) {
         String trimmed = sql.trim().toUpperCase();
@@ -516,10 +524,10 @@ public class CteSpec {
         Pattern.compile("\\bWAITFOR\\s+DELAY\\b", Pattern.CASE_INSENSITIVE);
 
     /**
-     * 检测 SQL 注入尝试。strictMode=true 时抛出异常，否则仅记录警告日志。
+     * 检测 SQL 中的潜在危险模式。默认仅记录日志，strictMode=true 时抛出异常。
      *
      * <p>
-     * 使用单词边界正则匹配（非子字符串匹配）避免误报。此检测为启发式防护，不能替代参数化查询。
+     * <strong>重要：</strong>此检查是启发式辅助防护层，不是安全边界。正则黑名单无法完备覆盖所有绕过方式 （编码、注释、嵌套等）。安全责任在于使用者确保 CTE SQL 不包含用户输入。
      *
      * @param sql 要检查的 SQL 字符串
      * @param context 日志中的上下文描述
