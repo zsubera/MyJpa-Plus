@@ -8,26 +8,24 @@ import java.nio.file.Path;
 import java.util.List;
 
 /**
- * Utility class that generates JPA entity class and repository interface source code strings from table name, column
- * definitions, and package name.
+ * 从表名、列定义和包名生成 JPA 实体类和仓库接口源码字符串的工具类。
  *
  * <p>
- * This is a lightweight code generation helper -- not a Maven plugin. It produces Java source code as strings that can
- * be written to files or used for scaffolding.
+ * 这是一个轻量级的代码生成辅助工具——不是 Maven 插件。它生成 Java 源码字符串，可以 写入文件或用于脚手架。
  *
  * <p>
- * Supports loading custom templates from external files or classpath. Templates support the following placeholders:
+ * 支持从外部文件或 classpath 加载自定义模板。模板支持以下占位符：
  * <ul>
- * <li>{@code ${package}} -- target package name</li>
- * <li>{@code ${className}} -- class name</li>
- * <li>{@code ${tableName}} -- table name</li>
- * <li>{@code ${fields}} -- field declarations</li>
- * <li>{@code ${gettersSetters}} -- getter/setter methods</li>
- * <li>{@code ${imports}} -- extra import statements</li>
+ * <li>{@code ${package}} -- 目标包名</li>
+ * <li>{@code ${className}} -- 类名</li>
+ * <li>{@code ${tableName}} -- 表名</li>
+ * <li>{@code ${fields}} -- 字段声明</li>
+ * <li>{@code ${gettersSetters}} -- getter/setter 方法</li>
+ * <li>{@code ${imports}} -- 额外的 import 语句</li>
  * </ul>
  *
  * <p>
- * Example usage:
+ * 使用示例：
  *
  * <pre>{@code
  * List<EntityCodeGenerator.ColumnDef> columns = List.of(new EntityCodeGenerator.ColumnDef("name", "String", false),
@@ -36,7 +34,7 @@ import java.util.List;
  * String repoSrc =
  *     EntityCodeGenerator.generateRepository("products", columns, "com.example.domain", "com.example.repo");
  *
- * // Use custom template
+ * // 使用自定义模板
  * String template = Files.readString(Path.of("templates/entity.java.tmpl"));
  * String entitySrc = EntityCodeGenerator.generateEntity("products", columns, "com.example.domain", template);
  * }</pre>
@@ -46,7 +44,7 @@ public final class EntityCodeGenerator {
     private EntityCodeGenerator() {}
 
     /**
-     * Column definition used for code generation.
+     * 用于代码生成的列定义。
      */
     public static final class ColumnDef {
 
@@ -60,12 +58,12 @@ public final class EntityCodeGenerator {
         private final boolean nullable;
 
         /**
-         * Creates a column definition.
+         * 创建列定义。
          *
-         * @param name column/field name (snake_case for table, camelCase for Java)
-         * @param javaType Java type simple name (e.g. "String", "Long", "BigDecimal")
-         * @param nullable whether the column is nullable
-         * @throws IllegalArgumentException if name or javaType is null or empty or contains invalid characters
+         * @param name 列/字段名（表用 snake_case，Java 用 camelCase）
+         * @param javaType Java 类型简单名称（如 "String"、"Long"、"BigDecimal"）
+         * @param nullable 列是否可为空
+         * @throws IllegalArgumentException 如果 name 或 javaType 为空或包含无效字符
          */
         public ColumnDef(String name, String javaType, boolean nullable) {
             if (name == null || name.isEmpty()) {
@@ -74,12 +72,12 @@ public final class EntityCodeGenerator {
             if (javaType == null || javaType.isEmpty()) {
                 throw new IllegalArgumentException("javaType must not be null or empty");
             }
-            // O-07: Validate column name to prevent code injection
+            // O-07：校验列名以防止代码注入
             if (!SAFE_COLUMN_NAME.matcher(name).matches()) {
                 throw new IllegalArgumentException(
                     "Column name contains invalid characters. Only alphanumeric and underscore are allowed: " + name);
             }
-            // O-07: Validate Java type to prevent code injection
+            // O-07：校验 Java 类型以防止代码注入
             if (!SAFE_JAVA_TYPE.matcher(javaType).matches()) {
                 throw new IllegalArgumentException("Java type contains invalid characters: " + javaType);
             }
@@ -102,11 +100,11 @@ public final class EntityCodeGenerator {
     }
 
     /**
-     * Load template from classpath.
+     * 从 classpath 加载模板。
      *
-     * @param classpathLocation classpath location (e.g. "templates/entity.java.tmpl")
-     * @return template content string
-     * @throws IllegalArgumentException if classpathLocation is null or file not found
+     * @param classpathLocation classpath 位置（如 "templates/entity.java.tmpl"）
+     * @return 模板内容字符串
+     * @throws IllegalArgumentException 如果 classpathLocation 为空或文件未找到
      */
     public static String loadTemplateFromClasspath(String classpathLocation) {
         if (classpathLocation == null || classpathLocation.isBlank()) {
@@ -123,11 +121,11 @@ public final class EntityCodeGenerator {
     }
 
     /**
-     * Load template from file system.
+     * 从文件系统加载模板。
      *
-     * @param templatePath template file path
-     * @return template content string
-     * @throws IllegalArgumentException if templatePath is null or file not found
+     * @param templatePath 模板文件路径
+     * @return 模板内容字符串
+     * @throws IllegalArgumentException 如果 templatePath 为空或文件未找到
      */
     public static String loadTemplateFromFile(Path templatePath) {
         if (templatePath == null) {
@@ -141,18 +139,18 @@ public final class EntityCodeGenerator {
     }
 
     /**
-     * Generates a JPA entity class source code string.
+     * 生成 JPA 实体类源码字符串。
      *
-     * @param tableName the database table name
-     * @param columns list of column definitions (excluding the id column which is auto-generated)
-     * @param entityPackage the target Java package for the entity
-     * @return Java source code string for the entity class
+     * @param tableName 数据库表名
+     * @param columns 列定义列表（不包括自动生成的 id 列）
+     * @param entityPackage 实体的目标 Java 包
+     * @return 实体类的 Java 源码字符串
      */
     public static String generateEntity(String tableName, List<ColumnDef> columns, String entityPackage) {
         if (tableName == null || tableName.isBlank()) {
             throw new IllegalArgumentException("tableName must not be blank");
         }
-        // Validate tableName to prevent code injection
+        // 校验 tableName 以防止代码注入
         if (!tableName.matches("[a-zA-Z0-9_.]+")) {
             throw new IllegalArgumentException(
                 "tableName contains invalid characters. Only alphanumeric, underscore, and dot are allowed: "
@@ -164,7 +162,7 @@ public final class EntityCodeGenerator {
         if (entityPackage == null || entityPackage.isBlank()) {
             throw new IllegalArgumentException("entityPackage must not be blank");
         }
-        // Validate package name to prevent code injection
+        // 校验包名以防止代码注入
         if (!entityPackage.matches("[a-zA-Z_][a-zA-Z0-9_.]*")) {
             throw new IllegalArgumentException(
                 "entityPackage contains invalid characters. Only alphanumeric, underscore, and dot are allowed: "
@@ -204,7 +202,7 @@ public final class EntityCodeGenerator {
             sb.append("    private ").append(col.getJavaType()).append(" ").append(safeName).append(";\n\n");
         }
 
-        // getters and setters for id
+        // id 的 getter/setter
         sb.append("    public Long getId() {\n");
         sb.append("        return id;\n");
         sb.append("    }\n\n");
@@ -229,24 +227,24 @@ public final class EntityCodeGenerator {
     }
 
     /**
-     * Generate entity class source code using a custom template.
+     * 使用自定义模板生成实体类源码。
      *
      * <p>
-     * Template placeholders:
+     * 模板占位符：
      * <ul>
-     * <li>{@code ${package}} -- target package name</li>
-     * <li>{@code ${className}} -- class name</li>
-     * <li>{@code ${tableName}} -- table name</li>
-     * <li>{@code ${fields}} -- field declarations (with annotations)</li>
-     * <li>{@code ${gettersSetters}} -- getter/setter methods</li>
-     * <li>{@code ${imports}} -- extra import statements</li>
+     * <li>{@code ${package}} -- 目标包名</li>
+     * <li>{@code ${className}} -- 类名</li>
+     * <li>{@code ${tableName}} -- 表名</li>
+     * <li>{@code ${fields}} -- 字段声明（带注解）</li>
+     * <li>{@code ${gettersSetters}} -- getter/setter 方法</li>
+     * <li>{@code ${imports}} -- 额外的 import 语句</li>
      * </ul>
      *
-     * @param tableName database table name
-     * @param columns column definitions
-     * @param entityPackage target Java package
-     * @param template custom template string
-     * @return generated Java source code string
+     * @param tableName 数据库表名
+     * @param columns 列定义
+     * @param entityPackage 目标 Java 包
+     * @param template 自定义模板字符串
+     * @return 生成的 Java 源码字符串
      */
     public static String generateEntity(String tableName, List<ColumnDef> columns, String entityPackage,
         String template) {
@@ -263,13 +261,13 @@ public final class EntityCodeGenerator {
     }
 
     /**
-     * Generates a Spring Data JPA repository interface source code string.
+     * 生成 Spring Data JPA 仓库接口源码字符串。
      *
-     * @param tableName the database table name (used to derive the entity class name)
-     * @param columns list of column definitions (currently unused but reserved for future query method generation)
-     * @param entityPackage the Java package of the entity class
-     * @param repoPackage the target Java package for the repository interface
-     * @return Java source code string for the repository interface
+     * @param tableName 数据库表名（用于推导实体类名）
+     * @param columns 列定义列表（当前未使用但为将来查询方法生成保留）
+     * @param entityPackage 实体类的 Java 包
+     * @param repoPackage 仓库接口的目标 Java 包
+     * @return 仓库接口的 Java 源码字符串
      */
     public static String generateRepository(String tableName, List<ColumnDef> columns, String entityPackage,
         String repoPackage) {
@@ -302,14 +300,14 @@ public final class EntityCodeGenerator {
     }
 
     /**
-     * Generate repository interface source code using a custom template.
+     * 使用自定义模板生成仓库接口源码。
      *
-     * @param tableName database table name
-     * @param columns column definitions
-     * @param entityPackage entity class Java package
-     * @param repoPackage repository interface target Java package
-     * @param template custom template string
-     * @return generated Java source code string
+     * @param tableName 数据库表名
+     * @param columns 列定义
+     * @param entityPackage 实体类 Java 包
+     * @param repoPackage 仓库接口目标 Java 包
+     * @param template 自定义模板字符串
+     * @return 生成的 Java 源码字符串
      */
     public static String generateRepository(String tableName, List<ColumnDef> columns, String entityPackage,
         String repoPackage, String template) {
@@ -323,10 +321,10 @@ public final class EntityCodeGenerator {
     }
 
     /**
-     * Converts a snake_case table name to a PascalCase class name.
+     * 将 snake_case 表名转换为 PascalCase 类名。
      *
-     * @param tableName table name (e.g. "user_accounts")
-     * @return class name (e.g. "UserAccounts")
+     * @param tableName 表名（如 "user_accounts"）
+     * @return 类名（如 "UserAccounts"）
      */
     static String toClassName(String tableName) {
         StringBuilder sb = new StringBuilder();
@@ -342,7 +340,7 @@ public final class EntityCodeGenerator {
             }
         }
         String result = sb.toString();
-        // Handle table names starting with digits
+        // 处理以数字开头的表名
         if (!result.isEmpty() && Character.isDigit(result.charAt(0))) {
             result = "T" + result;
         }
@@ -366,11 +364,11 @@ public final class EntityCodeGenerator {
         if (fieldName == null || fieldName.isEmpty()) {
             return fieldName;
         }
-        // Append underscore if field name is a Java reserved word
+        // 如果字段名是 Java 保留字则追加下划线
         if (JAVA_RESERVED_WORDS.contains(fieldName.toLowerCase())) {
             return fieldName + "_";
         }
-        // Prepend underscore if starts with digit
+        // 如果以数字开头则前置下划线
         if (Character.isDigit(fieldName.charAt(0))) {
             return "_" + fieldName;
         }
@@ -437,7 +435,7 @@ public final class EntityCodeGenerator {
 
     private static String buildGettersSetters(List<ColumnDef> columns) {
         StringBuilder sb = new StringBuilder();
-        // id getter/setter
+        // id 的 getter/setter
         sb.append("    public Long getId() {\n");
         sb.append("        return id;\n");
         sb.append("    }\n\n");

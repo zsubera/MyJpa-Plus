@@ -21,7 +21,7 @@ public sealed interface ConditionNode permits ConditionNode.SimpleNode, Conditio
     ConditionNode.AndNode, ConditionNode.MultiLikeNode, ConditionNode.CollectionNode, ConditionNode.ExistsNode,
     ConditionNode.InSubQueryNode, ConditionNode.RawNode, ConditionNode.NegateNode, ConditionNode.FuncNode {
 
-    /** Logger for security audit warnings. */
+    /** 安全审计警告日志。 */
     Logger SECURITY_LOG = LoggerFactory.getLogger("com.zsubera.jpa.security");
 
     // ---- 操作枚举 ----
@@ -195,7 +195,7 @@ public sealed interface ConditionNode permits ConditionNode.SimpleNode, Conditio
 
         @Override
         public String toString() {
-            // Mask keyword to prevent sensitive data leakage to logs
+            // 掩码关键字，防止敏感数据泄露到日志
             return "MultiLikeNode[keyword='" + "***(" + keyword.length() + " chars)" + "', fields="
                 + java.util.Arrays.toString(fieldNames) + "]";
         }
@@ -301,7 +301,7 @@ public sealed interface ConditionNode permits ConditionNode.SimpleNode, Conditio
         }
     }
 
-    /** Internal predicate function node for framework use (e.g., SoftDeleteHelper). */
+    /** 供框架内部使用的谓词函数节点（例如 SoftDeleteHelper）。 */
     final class RawNode implements ConditionNode {
         final BiFunction<jakarta.persistence.criteria.Path<?>, CriteriaBuilder, Predicate> fn;
 
@@ -394,7 +394,7 @@ public sealed interface ConditionNode permits ConditionNode.SimpleNode, Conditio
             if (params == null) {
                 throw new IllegalArgumentException("params must not be null");
             }
-            // Validate function name against whitelist to prevent SQL injection
+            // 验证函数名是否在白名单中，防止 SQL 注入
             String upperName = functionName.toUpperCase();
             if (!ConditionBuilder.SAFE_FUNCTION_NAMES.contains(upperName)) {
                 String msg = "Function not in whitelist: '" + functionName + "'. "
@@ -407,7 +407,7 @@ public sealed interface ConditionNode permits ConditionNode.SimpleNode, Conditio
 
         @Override
         public String toString() {
-            // Mask function parameters to prevent sensitive data leakage to logs
+            // 掩码函数参数，防止敏感数据泄露到日志
             StringBuilder sb = new StringBuilder("FuncNode[");
             sb.append(functionName).append("(");
             for (int i = 0; i < params.length; i++) {

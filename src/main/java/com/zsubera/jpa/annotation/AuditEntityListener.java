@@ -72,7 +72,7 @@ public class AuditEntityListener implements ApplicationContextAware {
     private static volatile ApplicationContext applicationContext;
     private static volatile AuditUserProvider userProvider;
 
-    /** Sentinel value to indicate that no AuditUserProvider bean was found, preventing re-entry. */
+    /** 哨兵值，表示未找到 AuditUserProvider Bean，防止重复查找。 */
     private static final AuditUserProvider NO_PROVIDER_SENTINEL = new AuditUserProvider() {
         @Override
         public String getCurrentUser() {
@@ -80,10 +80,10 @@ public class AuditEntityListener implements ApplicationContextAware {
         }
     };
 
-    /** Flag to track if provider lookup has been attempted. */
+    /** 标记是否已尝试查找 provider。 */
     private static volatile boolean providerLookupAttempted = false;
 
-    /** Configurable timezone for audit timestamps. Defaults to system timezone. */
+    /** 审计时间戳的可配置时区，默认使用系统时区。 */
     private static volatile java.time.ZoneId auditZoneId = java.time.ZoneId.systemDefault();
 
     @Override
@@ -130,7 +130,7 @@ public class AuditEntityListener implements ApplicationContextAware {
                         userProvider = applicationContext.getBean(AuditUserProvider.class);
                     } catch (Exception e) {
                         log.debug("No AuditUserProvider bean found, createdBy/updatedBy will not be auto-filled");
-                        // Set sentinel to prevent re-entry
+                        // 设置哨兵值，防止重复查找
                         userProvider = NO_PROVIDER_SENTINEL;
                     }
                     providerLookupAttempted = true;
@@ -206,11 +206,11 @@ public class AuditEntityListener implements ApplicationContextAware {
         return AUDIT_FIELDS_CACHE.computeIfAbsent(entityClass, cls -> {
             AuditFields fields = new AuditFields();
             boolean extendsBaseEntity = com.zsubera.jpa.entity.BaseEntity.class.isAssignableFrom(cls);
-            // Traverse complete class hierarchy to find audit fields in parent classes
+            // 遍历完整类层次结构，查找父类中的审计字段
             for (Class<?> c = cls; c != null && c != Object.class; c = c.getSuperclass()) {
                 for (Field field : c.getDeclaredFields()) {
                     if (field.isAnnotationPresent(CreatedAt.class)) {
-                        // Skip createdAt if entity extends BaseEntity (already handled by @PrePersist)
+                        // 如果实体继承了 BaseEntity，则跳过 createdAt（已由 @PrePersist 处理）
                         if (extendsBaseEntity && "createdAt".equals(field.getName())
                             && field.getDeclaringClass() == com.zsubera.jpa.entity.BaseEntity.class) {
                             continue;
@@ -220,7 +220,7 @@ public class AuditEntityListener implements ApplicationContextAware {
                             fields.createdAt = field;
                         }
                     } else if (field.isAnnotationPresent(UpdatedAt.class)) {
-                        // Skip updatedAt if entity extends BaseEntity (already handled by @PreUpdate)
+                        // 如果实体继承了 BaseEntity，则跳过 updatedAt（已由 @PreUpdate 处理）
                         if (extendsBaseEntity && "updatedAt".equals(field.getName())
                             && field.getDeclaringClass() == com.zsubera.jpa.entity.BaseEntity.class) {
                             continue;
@@ -263,7 +263,7 @@ public class AuditEntityListener implements ApplicationContextAware {
                 if (fieldType == Instant.class) {
                     field.set(entity, instant);
                 } else if (fieldType == LocalDateTime.class) {
-                    // Use configurable timezone instead of system default
+                    // 使用可配置的时区，而非系统默认时区
                     field.set(entity, LocalDateTime.ofInstant(instant, auditZoneId));
                 } else if (fieldType == Date.class) {
                     field.set(entity, Date.from(instant));

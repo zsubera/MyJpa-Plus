@@ -4,9 +4,9 @@ import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import java.time.Instant;
 
 /**
- * Wrapper for cached query results with timestamp and TTL-based expiration.
+ * 带时间戳和基于TTL过期的缓存查询结果包装器。
  *
- * @param <T> the type of the cached result
+ * @param <T> 缓存结果的类型
  */
 @SuppressFBWarnings(value = "CT_CONSTRUCTOR_THROW",
     justification = "Constructor validates parameters via IllegalArgumentException which is standard Java practice")
@@ -15,17 +15,17 @@ public class CachedQueryResult<T> {
     private final T value;
     private final Instant createdAt;
     private final long ttlSeconds;
-    /** Pre-computed expiration time to avoid creating new Instant on every isExpired() call. */
+    /** 预计算的过期时间，避免在每次调用isExpired()时创建新的Instant。 */
     private final Instant expiresAt;
 
     /**
-     * Creates a new cached result.
+     * 创建新的缓存结果。
      *
-     * @param value the cached value
-     * @param ttlSeconds time-to-live in seconds
+     * @param value 缓存的值
+     * @param ttlSeconds 以秒为单位的生存时间
      */
     public CachedQueryResult(T value, long ttlSeconds) {
-        // Validate value is non-null to prevent caching null results
+        // 验证值不为null，防止缓存null结果
         if (value == null) {
             throw new IllegalArgumentException("CachedQueryResult value must not be null");
         }
@@ -36,36 +36,36 @@ public class CachedQueryResult<T> {
     }
 
     /**
-     * Returns the cached value.
+     * 返回缓存的值。
      *
-     * @return cached value
+     * @return 缓存值
      */
     public T getValue() {
         return value;
     }
 
     /**
-     * Returns the creation timestamp.
+     * 返回创建时间戳。
      *
-     * @return creation time
+     * @return 创建时间
      */
     public Instant getCreatedAt() {
         return createdAt;
     }
 
     /**
-     * Returns the TTL in seconds.
+     * 返回以秒为单位的TTL。
      *
-     * @return TTL seconds
+     * @return TTL秒数
      */
     public long getTtlSeconds() {
         return ttlSeconds;
     }
 
     /**
-     * Checks whether this cached result has expired.
+     * 检查此缓存结果是否已过期。
      *
-     * @return true if the result has exceeded its TTL
+     * @return 如果结果已超过其TTL则返回true
      */
     public boolean isExpired() {
         return !Instant.now().isBefore(expiresAt);

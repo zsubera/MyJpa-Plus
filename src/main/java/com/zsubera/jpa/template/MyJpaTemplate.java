@@ -227,7 +227,7 @@ public class MyJpaTemplate {
         if (defaultTimeoutSeconds <= 0 && defaultTimeoutSeconds != -1) {
             throw new IllegalArgumentException("defaultTimeoutSeconds must be positive or -1 (disabled)");
         }
-        // Prevent overflow when converting to milliseconds (int max ~24.8 days)
+        // 转换为毫秒时防止溢出（int 最大值约 24.8 天）
         if (defaultTimeoutSeconds > Integer.MAX_VALUE / 1000) {
             throw new IllegalArgumentException("defaultTimeoutSeconds too large for millisecond conversion: "
                 + defaultTimeoutSeconds + " (max " + (Integer.MAX_VALUE / 1000) + ")");
@@ -363,9 +363,9 @@ public class MyJpaTemplate {
         java.util.ArrayList<T> result = new java.util.ArrayList<>();
         int count = 0;
         for (T entity : entities) {
-            // P-03: Use persist() for new entities (ID is null) instead of merge(),
-            // which avoids the extra SELECT query that merge() performs to check existence.
-            // This significantly improves performance for pure insert scenarios.
+            // P-03: 对新实体（ID 为 null）使用 persist() 而非 merge()，
+            // 避免了 merge() 为检查存在性而执行的额外 SELECT 查询。
+            // 这显著提升了纯插入场景的性能。
             if (isNewEntity(entity)) {
                 entityManager.persist(entity);
                 result.add(entity);
@@ -816,7 +816,7 @@ public class MyJpaTemplate {
     }
 
     /**
-     * This method is kept for backward compatibility. In 2.0, it will throw UnsupportedOperationException.
+     * 此方法保留用于向后兼容。在 2.0 版本中将抛出 UnsupportedOperationException。
      */
     private <T> Stream<T> doFindStream(Class<T> entityClass, QuerySpec<T> spec, EntityGraphHelper<T> entityGraph) {
         TypedQuery<T> query = buildTypedQuery(entityClass, spec, entityGraph, null);
@@ -943,7 +943,7 @@ public class MyJpaTemplate {
         if (maxResults != null) {
             query.setMaxResults(maxResults);
         }
-        // Apply default query timeout if configured
+        // 如果已配置默认查询超时则应用
         if (defaultTimeoutSeconds > 0) {
             query.setHint("jakarta.persistence.query.timeout", Math.toIntExact(defaultTimeoutSeconds * 1000L));
         }
@@ -1451,7 +1451,7 @@ public class MyJpaTemplate {
                     shouldContinue = false;
                     continue;
                 }
-                // CONTINUE: skip this batch and try next
+                // CONTINUE：跳过本批次，尝试下一批次
                 batchResult = 0;
             }
             if (batchResult < batchSize) {
@@ -1700,7 +1700,7 @@ public class MyJpaTemplate {
         CriteriaBuilder cb = entityManager.getCriteriaBuilder();
         CriteriaQuery<T> cq = cb.createQuery(entityClass);
         Root<T> root = cq.from(entityClass);
-        // Pass ids Collection directly to avoid unnecessary toArray() conversion
+        // 直接传递 ids Collection 以避免不必要的 toArray() 转换
         cq.where(com.zsubera.jpa.util.InClauseBuilder.in(cb, root.get(idFieldName), ids));
         return entityManager.createQuery(cq).getResultList();
     }
@@ -1727,7 +1727,7 @@ public class MyJpaTemplate {
             throw new IllegalArgumentException("ids must not be null or empty");
         }
         String idFieldName = EntityClassResolver.resolveIdFieldName(entityClass);
-        // Pass ids Collection directly to avoid unnecessary toArray() conversion
+        // 直接传递 ids Collection 以避免不必要的 toArray() 转换
         Specification<T> idSpec =
             (root, query, cb) -> com.zsubera.jpa.util.InClauseBuilder.in(cb, root.get(idFieldName), ids);
         Specification<T> softDeleteSpec = com.zsubera.jpa.update.SoftDeleteHelper.isNotDeleted(entityClass);
@@ -1742,7 +1742,7 @@ public class MyJpaTemplate {
         return entityManager.createQuery(cq).getResultList();
     }
 
-    // ---- Keyset Pagination ----
+    // ---- Keyset 分页 ----
 
     /**
      * 游标分页（Keyset Pagination）的结果记录。

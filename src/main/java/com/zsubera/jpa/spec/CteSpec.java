@@ -321,7 +321,7 @@ public class CteSpec {
         if (results.isEmpty()) {
             return null;
         }
-        // Warn when multiple results are returned but only first is used
+        // 当返回多个结果但只使用第一个时发出警告
         if (results.size() > 1) {
             log.warn("CteSpec.getSingleResult() returned {} results but only the first is used. "
                 + "Consider adding LIMIT 1 to your query or using getResultList() instead.", results.size());
@@ -409,7 +409,7 @@ public class CteSpec {
      */
     private void applyFetchSize(EntityManager em, Query query) {
         try {
-            // Use pure reflection to avoid compile-time dependency on Hibernate
+            // 使用纯反射避免对 Hibernate 的编译时依赖
             Class<?> sessionClass = Class.forName("org.hibernate.Session");
             Object session = em.unwrap(sessionClass);
             Class<?> returningWorkClass = Class.forName("org.hibernate.jdbc.ReturningWork");
@@ -482,7 +482,7 @@ public class CteSpec {
         sb.append(" ");
         sb.append(mainSql);
         String sql = sb.toString();
-        // Warn about unbound named parameters in SQL to encourage parameterized queries
+        // 警告 SQL 中未绑定的命名参数，以鼓励使用参数化查询
         checkUnboundParameters(sql, parameters);
         return sql;
     }
@@ -521,8 +521,8 @@ public class CteSpec {
      * <p>
      * 使用单词边界正则匹配（非子字符串匹配）避免误报。此检测为启发式防护，不能替代参数化查询。
      *
-     * @param sql the SQL string to check
-     * @param context context description for logging
+     * @param sql 要检查的 SQL 字符串
+     * @param context 日志中的上下文描述
      * @throws SecurityException 如果 strictMode=true 且检测到危险模式
      */
     private static void checkSqlSafety(String sql, String context) {
@@ -544,7 +544,7 @@ public class CteSpec {
             }
             log.warn(message);
         }
-        // Detect comment injection attempts
+        // 检测注释注入尝试
         if (COMMENT_INJECTION_PATTERN.matcher(sql).find()) {
             String message =
                 "SECURITY: " + context + " SQL contains potential comment injection patterns (/*, */, --). "
@@ -554,7 +554,7 @@ public class CteSpec {
             }
             log.warn(message);
         }
-        // Detect semicolon injection attempts
+        // 检测分号注入尝试
         if (SEMICOLON_INJECTION_PATTERN.matcher(sql).find()) {
             String message = "SECURITY: " + context + " SQL contains potential semicolon injection pattern. "
                 + "Ensure this is intentional and not user input. SQL: " + truncated;
@@ -563,7 +563,7 @@ public class CteSpec {
             }
             log.warn(message);
         }
-        // Detect UNION SELECT injection attempts
+        // 检测 UNION SELECT 注入尝试
         if (UNION_SELECT_PATTERN.matcher(sql).find()) {
             String message = "SECURITY: " + context + " SQL contains potential UNION SELECT injection pattern. "
                 + "Ensure this is intentional and not user input. SQL: " + truncated;
@@ -572,7 +572,7 @@ public class CteSpec {
             }
             log.warn(message);
         }
-        // Detect WAITFOR DELAY time-based blind SQL injection (SQL Server)
+        // 检测 WAITFOR DELAY 时间盲注（SQL Server）
         if (WAITFOR_DELAY_PATTERN.matcher(sql).find()) {
             String message = "SECURITY: " + context
                 + " SQL contains WAITFOR DELAY pattern (time-based blind SQL injection). " + "SQL: " + truncated;
@@ -590,13 +590,13 @@ public class CteSpec {
      * @param boundParams 已绑定的参数映射
      */
     private static void checkUnboundParameters(String sql, Map<String, Object> boundParams) {
-        // Use negative lookbehind to exclude PostgreSQL :: casts (e.g., ::text, ::integer)
+        // 使用负向后行断言排除 PostgreSQL :: 类型转换（如 ::text、::integer）
         java.util.regex.Matcher matcher =
             java.util.regex.Pattern.compile("(?<!:):([a-zA-Z_][a-zA-Z0-9_]*)").matcher(sql);
         List<String> unboundParams = new ArrayList<>();
         while (matcher.find()) {
             String paramName = matcher.group(1);
-            // Skip parameters managed internally by asSafe() (e.g., :_cte_param_0)
+            // 跳过 asSafe() 内部管理的参数（如 :_cte_param_0）
             if (paramName.startsWith("_cte_param_")) {
                 continue;
             }

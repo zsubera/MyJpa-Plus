@@ -103,7 +103,7 @@ public class MyJpaPlusException extends RuntimeException {
     public String toString() {
         StringBuilder sb = new StringBuilder(getClass().getName());
         sb.append(" [").append(errorCode).append("]");
-        // Sanitize context to prevent sensitive data leakage (SQL parameters, credentials, etc.)
+        // 清理上下文以防止敏感数据泄露（SQL参数、凭据等）
         if (context != null) {
             String sanitized = sanitizeContext(context);
             sb.append(" context=").append(sanitized);
@@ -125,7 +125,7 @@ public class MyJpaPlusException extends RuntimeException {
      * @return 脱敏后的上下文
      */
     private static String sanitizeContext(String ctx) {
-        // Detect and mask sensitive data patterns
+        // 检测并遮蔽敏感数据模式
         String sanitized = SENSITIVE_DATA_PATTERN.matcher(ctx).replaceAll("$1***");
         if (sanitized.length() > 200) {
             return sanitized.substring(0, 200) + "...(truncated)";

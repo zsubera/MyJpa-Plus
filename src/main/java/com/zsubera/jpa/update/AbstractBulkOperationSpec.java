@@ -85,34 +85,31 @@ public abstract class AbstractBulkOperationSpec<T, SELF extends AbstractBulkOper
     }
 
     /**
-     * Executes the bulk operation within a new transaction if none is active, otherwise executes within the current
-     * transaction.
+     * 在新事务中执行批量操作，如果当前没有活动事务则创建新事务，否则在当前事务中执行。
      *
-     * @param em the EntityManager
-     * @return the number of affected rows
+     * @param em 实体管理器
+     * @return 受影响的行数
      */
     public int executeInTransaction(EntityManager em) {
         return executeInTransaction(em, this::doExecute);
     }
 
     /**
-     * Executes the given operation within a new transaction if none is active, otherwise executes within the current
-     * transaction.
+     * 在新事务中执行给定操作，如果当前没有活动事务则创建新事务，否则在当前事务中执行。
      *
      * <p>
-     * This overload allows subclasses to execute custom operations (e.g., unconditional deleteAll) with proper
-     * transaction management.
+     * 此重载方法允许子类执行自定义操作（如无条件 deleteAll）并进行正确的事务管理。
      *
-     * @param em the EntityManager
-     * @param operation the operation to execute
-     * @return the number of affected rows
+     * @param em 实体管理器
+     * @param operation 要执行的操作
+     * @return 受影响的行数
      */
     protected int executeInTransaction(EntityManager em, Function<EntityManager, Integer> operation) {
-        // Check if Spring manages the transaction first (container-managed JTA or Spring tx)
+        // 首先检查 Spring 是否管理事务（容器管理的 JTA 或 Spring 事务）
         if (TransactionSynchronizationManager.isActualTransactionActive()) {
             return operation.apply(em);
         }
-        // No Spring transaction — use JPA's EntityTransaction for standalone scenarios.
+        // 没有 Spring 事务 — 使用 JPA 的 EntityTransaction 用于独立场景。
         EntityTransaction tx = em.getTransaction();
         if (tx == null) {
             return executeInJtaEnvironment(em, operation);
@@ -248,10 +245,10 @@ public abstract class AbstractBulkOperationSpec<T, SELF extends AbstractBulkOper
     }
 
     /**
-     * Adds an OR group of conditions. All conditions added inside the consumer will be combined with OR instead of AND.
+     * 添加 OR 条件组。consumer 中添加的所有条件将以 OR 而非 AND 方式组合。
      *
      * <p>
-     * Example:
+     * 示例：
      *
      * <pre>{@code
      * new DeleteSpec<>(User.class).or(o -> o.eq(User::getStatus, "INACTIVE").eq(User::getStatus, "SUSPENDED"))
@@ -685,7 +682,7 @@ public abstract class AbstractBulkOperationSpec<T, SELF extends AbstractBulkOper
             jakarta.persistence.criteria.CriteriaQuery<?> tempQuery = cb.createQuery(entityClass);
             jakarta.persistence.criteria.Subquery<S> subquery = tempQuery.subquery(subEntity);
             Root<S> subRoot = subquery.from(subEntity);
-            // Use subquery.correlate() to establish correct correlation with outer query
+            // 使用 subquery.correlate() 建立与外部查询的正确关联
             Root<?> correlatedOuter = subquery.correlate(root);
             com.zsubera.jpa.spec.SubQuerySpec<S> subSpec =
                 com.zsubera.jpa.spec.SubQuerySpec.create(subquery, subRoot, correlatedOuter, cb);
@@ -719,7 +716,7 @@ public abstract class AbstractBulkOperationSpec<T, SELF extends AbstractBulkOper
             jakarta.persistence.criteria.CriteriaQuery<?> tempQuery = cb.createQuery(entityClass);
             jakarta.persistence.criteria.Subquery<S> subquery = tempQuery.subquery(subEntity);
             Root<S> subRoot = subquery.from(subEntity);
-            // Use subquery.correlate() to establish correct correlation with outer query
+            // 使用 subquery.correlate() 建立与外部查询的正确关联
             Root<?> correlatedOuter = subquery.correlate(root);
             com.zsubera.jpa.spec.SubQuerySpec<S> subSpec =
                 com.zsubera.jpa.spec.SubQuerySpec.create(subquery, subRoot, correlatedOuter, cb);

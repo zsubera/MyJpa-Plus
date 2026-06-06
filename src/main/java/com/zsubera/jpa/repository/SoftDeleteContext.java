@@ -32,7 +32,7 @@ public final class SoftDeleteContext {
                     configured = val;
                 }
             } catch (NumberFormatException ignored) {
-                // use default
+                // 使用默认值
             }
         }
         maxIgnoreCount = configured;
@@ -75,7 +75,7 @@ public final class SoftDeleteContext {
      * @throws IllegalStateException 如果计数超过安全上限（可能存在泄漏）
      */
     public static void pushIgnore() {
-        // Simplified to single read - ThreadLocal.withInitial guarantees non-null
+        // 简化为单次读取 - ThreadLocal.withInitial保证非null
         int count = ignoreCount.get();
         if (count >= maxIgnoreCount) {
             throw new IllegalStateException(
@@ -91,11 +91,11 @@ public final class SoftDeleteContext {
      * 当计数归零时自动清除 ThreadLocal，防止内存泄漏。包含防御性检查以处理异常场景下的计数漂移。
      */
     public static void popIgnore() {
-        // ThreadLocal.withInitial guarantees non-null, so count is always >= 0.
-        // The null check is unreachable but retained as defensive programming.
+        // ThreadLocal.withInitial保证非null，所以count始终>=0。
+        // null检查不可达但保留作为防御性编程。
         int count = ignoreCount.get();
         if (count <= 0) {
-            // Defensive cleanup for counter drift in exception scenarios
+            // 异常场景下计数漂移的防御性清理
             ignoreCount.remove();
             return;
         }

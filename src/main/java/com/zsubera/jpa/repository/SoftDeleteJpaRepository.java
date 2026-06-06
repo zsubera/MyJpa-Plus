@@ -70,8 +70,7 @@ public class SoftDeleteJpaRepository<T, ID> extends SimpleJpaRepository<T, ID> {
     private static volatile boolean blockUnconditionalDelete = true;
 
     /**
-     * Thread-local override for auto-filter. When set (non-null), overrides the global setting. This allows per-request
-     * control of soft delete filtering behavior.
+     * autoFilter 的 ThreadLocal 覆盖值。设置后（非 null）会覆盖全局配置，支持按请求控制软删除过滤行为。
      */
     private static final ThreadLocal<Boolean> autoFilterOverride = new ThreadLocal<>();
 
@@ -128,11 +127,10 @@ public class SoftDeleteJpaRepository<T, ID> extends SimpleJpaRepository<T, ID> {
     }
 
     /**
-     * Execute an action with auto-filter override, automatically cleaning up in finally block. Prevents ThreadLocal
-     * leaks when exceptions occur.
+     * 使用 autoFilterOverride 执行操作，自动在 finally 块中清理。防止异常发生时 ThreadLocal 泄漏。
      *
-     * @param value the override value (null to clear)
-     * @param action the action to execute
+     * @param value 覆盖值（null 表示清除）
+     * @param action 要执行的操作
      */
     public static void withAutoFilterOverride(Boolean value, Runnable action) {
         Boolean previous = autoFilterOverride.get();
@@ -154,13 +152,12 @@ public class SoftDeleteJpaRepository<T, ID> extends SimpleJpaRepository<T, ID> {
     }
 
     /**
-     * Execute a supplier with auto-filter override, automatically cleaning up in finally block. Prevents ThreadLocal
-     * leaks when exceptions occur.
+     * 使用 autoFilterOverride 执行 Supplier，自动在 finally 块中清理。防止异常发生时 ThreadLocal 泄漏。
      *
-     * @param value the override value (null to clear)
-     * @param supplier the supplier to execute
-     * @param <R> the return type
-     * @return the supplier result
+     * @param value 覆盖值（null 表示清除）
+     * @param supplier 要执行的 Supplier
+     * @param <R> 返回类型
+     * @return Supplier 的返回结果
      */
     public static <R> R withAutoFilterOverride(Boolean value, java.util.function.Supplier<R> supplier) {
         Boolean previous = autoFilterOverride.get();
@@ -208,7 +205,7 @@ public class SoftDeleteJpaRepository<T, ID> extends SimpleJpaRepository<T, ID> {
      * @return 如果应该应用过滤返回 true
      */
     private boolean shouldApplySoftDeleteFilter() {
-        // Check thread-local override first, then global setting
+        // 优先检查 ThreadLocal 覆盖值，再检查全局配置
         Boolean override = autoFilterOverride.get();
         boolean effectiveAutoFilter = (override != null) ? override : autoFilterEnabled;
         return effectiveAutoFilter && SoftDeleteHelper.findSoftDeleteField(domainClass) != null
@@ -429,8 +426,8 @@ public class SoftDeleteJpaRepository<T, ID> extends SimpleJpaRepository<T, ID> {
             throw new IllegalArgumentException("entities must not be null");
         }
         if (shouldApplySoftDeleteFilter()) {
-            // Use batch UPDATE instead of N+1 individual deletes
-            // Use PersistenceUnitUtil instead of reflection for Java 17+ compatibility
+            // 使用批量 UPDATE 替代 N+1 次单独删除
+            // 使用 PersistenceUnitUtil 替代反射，兼容 Java 17+
             java.util.List<ID> idList = new java.util.ArrayList<>();
             jakarta.persistence.PersistenceUnitUtil util =
                 entityManager.getEntityManagerFactory().getPersistenceUnitUtil();

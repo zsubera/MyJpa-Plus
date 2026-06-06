@@ -14,12 +14,10 @@ import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.stereotype.Component;
 
 /**
- * AOP advisor that intercepts methods annotated with {@link RetryOnOptimisticLock} and retries on
- * {@link OptimisticLockException} with exponential backoff.
+ * AOP 通知器，拦截带有 {@link RetryOnOptimisticLock} 注解的方法，在遇到 {@link OptimisticLockException} 时使用指数退避策略进行重试。
  *
  * <p>
- * Example: a method annotated with {@code @RetryOnOptimisticLock(maxRetries = 3, backoffMs = 100)} will retry up to 3
- * times with delays of 100ms, 200ms, and 400ms.
+ * 示例：标注 {@code @RetryOnOptimisticLock(maxRetries = 3, backoffMs = 100)} 的方法将最多重试 3 次， 延迟分别为 100ms、200ms 和 400ms。
  */
 @Aspect
 @Component
@@ -30,18 +28,18 @@ public class OptimisticLockRetryAdvisor {
     /** 最大退避延迟上限（毫秒），防止指数退避无限增长。 */
     private static final long MAX_BACKOFF_MS = 30_000;
 
-    /** Maximum allowed retries hard limit to prevent infinite loops. */
+    /** 最大重试次数硬限制，防止无限循环。 */
     private static final int MAX_RETRIES_LIMIT = 20;
 
-    /** Total timeout limit for all retries combined (60 seconds). */
+    /** 所有重试的总超时限制（60 秒）。 */
     private static final long MAX_TOTAL_TIMEOUT_MS = 60_000;
 
     /**
-     * Intercepts methods annotated with {@link RetryOnOptimisticLock} and retries on {@link OptimisticLockException}.
+     * 拦截带有 {@link RetryOnOptimisticLock} 注解的方法，在 {@link OptimisticLockException} 时重试。
      *
-     * @param pjp the proceeding join point
-     * @return the method result
-     * @throws Throwable if all retries are exhausted or a non-retryable exception occurs
+     * @param pjp 连接点
+     * @return 方法返回值
+     * @throws Throwable 如果所有重试耗尽或发生不可重试的异常
      */
     @Around("@annotation(com.zsubera.jpa.annotation.RetryOnOptimisticLock)")
     public Object retryOnOptimisticLock(ProceedingJoinPoint pjp) throws Throwable {
@@ -52,12 +50,12 @@ public class OptimisticLockRetryAdvisor {
         int maxRetries = annotation.maxRetries();
         long backoffMs = annotation.backoffMs();
 
-        // Validate annotation parameters
+        // 校验注解参数
         if (maxRetries < 0) {
             throw new IllegalStateException(
                 "@RetryOnOptimisticLock.maxRetries must be non-negative, got: " + maxRetries);
         }
-        // Hard limit on maxRetries to prevent infinite loops
+        // 对 maxRetries 设置硬限制，防止无限循环
         if (maxRetries > MAX_RETRIES_LIMIT) {
             throw new IllegalArgumentException(
                 "@RetryOnOptimisticLock.maxRetries exceeds hard limit of " + MAX_RETRIES_LIMIT + ", got: " + maxRetries
@@ -80,7 +78,7 @@ public class OptimisticLockRetryAdvisor {
                         method.getDeclaringClass().getSimpleName(), method.getName());
                     throw ex;
                 }
-                // Check total timeout to prevent infinite retry storms
+                // 检查总超时，防止无限重试风暴
                 totalElapsed = System.currentTimeMillis() - startTime;
                 if (totalElapsed >= MAX_TOTAL_TIMEOUT_MS) {
                     log.warn("OptimisticLockException after {} retries ({}ms elapsed, timeout={}ms) for method {}.{}",
@@ -88,21 +86,21 @@ public class OptimisticLockRetryAdvisor {
                         method.getName());
                     throw ex;
                 }
-                // Cap the shift amount to prevent Long overflow.
-                // backoffMs * (1L << shift) must not overflow. Since MAX_BACKOFF_MS is 30_000,
-                // the effective delay is always capped, but we prevent the intermediate multiplication
-                // from overflowing by capping shift at 44 (safe for any backoffMs up to ~500,000).
+                // 限制移位量以防止 Long 溢出。
+                // backoffMs * (1L << shift) 不得溢出。由于 MAX_BACKOFF_MS 为 30_000，
+                // 有效延迟始终受限制，但通过将 shift 限制为 44 来防止中间乘法溢出
+                // （对于最大约 500,000 的 backoffMs 是安全的）。
                 int shift = Math.min(attempt - 1, 44);
                 long shiftValue = (shift >= 63) ? Long.MAX_VALUE : (1L << shift);
                 long safeShift = Math.min(shiftValue, MAX_BACKOFF_MS / Math.max(backoffMs, 1));
                 long baseDelay = Math.min(backoffMs * safeShift, MAX_BACKOFF_MS);
-                // Ensure minimum delay of 1ms to prevent tight retry loops
+                // 确保最小延迟为 1ms，防止紧密重试循环
                 baseDelay = Math.max(baseDelay, 1);
-                // Ensure delay does not exceed remaining timeout
+                // 确保延迟不超过剩余超时时间
                 long remainingTimeout = MAX_TOTAL_TIMEOUT_MS - totalElapsed;
                 baseDelay = Math.min(baseDelay, remainingTimeout);
-                // O-09: Jitter can be positive or negative (spread ±10% of base delay)
-                // to prevent thundering herd when multiple threads retry simultaneously
+                // O-09: 抖动可为正或负（基础延迟的 ±10%），
+                // 防止多线程同时重试时的惊群效应
                 long jitter = (long)(baseDelay * (ThreadLocalRandom.current().nextDouble() - 0.5) * 0.2);
                 long delay = Math.max(0, baseDelay + jitter);
                 log.debug("OptimisticLockException on attempt {}/{} for method {}.{}, retrying in {}ms", attempt,

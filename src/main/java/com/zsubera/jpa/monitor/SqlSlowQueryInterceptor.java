@@ -48,13 +48,13 @@ public class SqlSlowQueryInterceptor implements StatementInspector {
     private static final ConcurrentMap<Class<?>, Class<?>> PROXY_CLASS_CACHE = new ConcurrentHashMap<>();
 
     /** 预编译的 SQL 消毒正则表达式 */
-    // Enhanced single quote pattern to support backslash-escaped quotes (MySQL)
+    // 增强的单引号模式，支持反斜杠转义引号（MySQL）
     private static final Pattern SINGLE_QUOTE_PATTERN = Pattern.compile("'(?:[^'\\\\]|\\\\.|'')*'");
     private static final Pattern DOLLAR_PARAM_PATTERN = Pattern.compile("\\$\\d+");
     private static final Pattern HEX_LITERAL_PATTERN = Pattern.compile("X'[0-9a-fA-F]+'");
     private static final Pattern UNICODE_STRING_PATTERN = Pattern.compile("N'[^']*'");
     private static final Pattern NUMBER_LITERAL_PATTERN = Pattern.compile("\\b\\d+\\.?\\d*(?:[eE][+-]?\\d+)?\\b");
-    // Add patterns for backtick identifiers (MySQL) and bracket identifiers (SQL Server)
+    // 添加反引号标识符（MySQL）和方括号标识符（SQL Server）模式
     private static final Pattern BACKTICK_IDENTIFIER_PATTERN = Pattern.compile("`[^`]*`");
     private static final Pattern BRACKET_IDENTIFIER_PATTERN = Pattern.compile("\\[[^\\]]*\\]");
     private static final Pattern COMMENT_PATTERN = Pattern.compile("(?:--[^\n]*|/\\*[\\s\\S]*?\\*/)");
@@ -145,7 +145,7 @@ public class SqlSlowQueryInterceptor implements StatementInspector {
                 return proxyClass.getConstructor(InvocationHandler.class)
                     .newInstance(new PreparedStatementTimingHandler(stmt, sql));
             } catch (ReflectiveOperationException e) {
-                // Fallback to direct proxy creation
+                // 回退到直接创建代理
                 return Proxy.newProxyInstance(stmtClass.getClassLoader(), stmtClass.getInterfaces(),
                     new PreparedStatementTimingHandler(stmt, sql));
             }
@@ -205,8 +205,8 @@ public class SqlSlowQueryInterceptor implements StatementInspector {
         if (sql == null) {
             return "null";
         }
-        // Enhanced SQL sanitization covering more dialects
-        String sanitized = COMMENT_PATTERN.matcher(sql).replaceAll(""); // Remove comments
+        // 增强的 SQL 消毒，覆盖更多方言
+        String sanitized = COMMENT_PATTERN.matcher(sql).replaceAll(""); // 移除注释
         sanitized = DOLLAR_QUOTE_PATTERN.matcher(sanitized).replaceAll("?"); // PostgreSQL 美元引用字符串
         sanitized = Q_QUOTE_PATTERN.matcher(sanitized).replaceAll("?"); // Oracle q'[]' 引用字符串
         sanitized = SINGLE_QUOTE_PATTERN.matcher(sanitized).replaceAll("?"); // 单引号字符串
@@ -215,8 +215,8 @@ public class SqlSlowQueryInterceptor implements StatementInspector {
         sanitized = UNICODE_STRING_PATTERN.matcher(sanitized).replaceAll("?"); // Unicode 字符串
         sanitized = BACKTICK_IDENTIFIER_PATTERN.matcher(sanitized).replaceAll("?"); // MySQL 反引号标识符
         sanitized = BRACKET_IDENTIFIER_PATTERN.matcher(sanitized).replaceAll("?"); // SQL Server 方括号标识符
-        // Preserve LIMIT/OFFSET numbers by first protecting them, then replacing other numbers
-        // Use a marker to temporarily protect LIMIT/OFFSET numbers
+        // 通过先保护再替换的方式保留 LIMIT/OFFSET 数字
+        // 使用标记临时保护 LIMIT/OFFSET 数字
         java.util.List<String> protectedParts = new java.util.ArrayList<>();
         java.util.regex.Matcher limitMatcher = LIMIT_OFFSET_PATTERN.matcher(sanitized);
         StringBuilder sb = new StringBuilder();
@@ -229,9 +229,9 @@ public class SqlSlowQueryInterceptor implements StatementInspector {
         }
         sb.append(sanitized.substring(lastEnd));
         String result = sb.toString();
-        // Replace remaining number literals
+        // 替换剩余的数字字面量
         result = NUMBER_LITERAL_PATTERN.matcher(result).replaceAll("?");
-        // Restore protected parts
+        // 恢复被保护的部分
         for (int i = 0; i < protectedParts.size(); i++) {
             result = result.replace("\0PROTECTED_" + i + "\0", protectedParts.get(i));
         }

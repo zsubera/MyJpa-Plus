@@ -191,15 +191,15 @@ public abstract class BaseEntity implements Serializable {
         if (this == o) {
             return true;
         }
-        // Use getClass() for strict type equality to prevent cross-subclass comparison.
-        // This is safer than instanceof for JPA entities where different entity types
-        // should never be considered equal even if they share the same ID.
+        // 使用 getClass() 进行严格的类型相等性检查，防止跨子类比较。
+        // 对于 JPA 实体而言，这比 instanceof 更安全，因为不同实体类型
+        // 即使共享相同 ID 也不应被视为相等。
         if (o == null || getClass() != o.getClass()) {
             return false;
         }
         BaseEntity that = (BaseEntity)o;
-        // Use id-based comparison only if both entities are persisted (id != null).
-        // Otherwise fall back to identity comparison (always false for different instances).
+        // 仅当两个实体均已持久化（id != null）时才使用基于 id 的比较。
+        // 否则回退到引用比较（不同实例始终为 false）。
         Long id = getId();
         Long thatId = that.getId();
         if (id != null && thatId != null) {
@@ -214,9 +214,9 @@ public abstract class BaseEntity implements Serializable {
         if (id != null) {
             return Objects.hashCode(id);
         }
-        // Fixed hash code for unpersisted entities to satisfy the equals/hashCode contract:
-        // All unpersisted entities of the same class have the same hashCode,
-        // and equals() returns false between them (identity comparison).
+        // 未持久化实体使用固定 hashCode，以满足 equals/hashCode 契约：
+        // 同一类型的所有未持久化实体具有相同 hashCode，
+        // 且 equals() 在它们之间返回 false（引用比较）。
         return getClass().hashCode();
     }
 }

@@ -7,14 +7,13 @@ import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
 
 /**
- * Marks a method whose query results should be cached.
+ * 标记方法的查询结果需要缓存。
  *
  * <p>
- * Used with {@link com.zsubera.jpa.template.QueryCacheManager} to cache query results for a specified duration. The
- * cache key is derived from the method signature and arguments, or can be customized via {@link #key()}.
+ * 与 {@link com.zsubera.jpa.template.QueryCacheManager} 配合使用，将查询结果缓存指定时长。 缓存键根据方法签名和参数生成，也可通过 {@link #key()} 自定义。
  *
  * <p>
- * Example usage:
+ * 使用示例：
  *
  * <pre>{@code
  * @QueryCache(expireSeconds = 120, key = "active-users")
@@ -29,16 +28,16 @@ import java.lang.annotation.Target;
 public @interface QueryCache {
 
     /**
-     * Time-to-live in seconds for cached results.
+     * 缓存结果的存活时间（秒）。
      *
-     * @return expiration seconds, default 60
+     * @return 过期时间（秒），默认 60
      */
     int expireSeconds() default 60;
 
     /**
-     * Custom cache key. If empty, a key is generated from the method signature and arguments.
+     * 自定义缓存键。为空时，根据方法签名和参数自动生成。
      *
-     * @return cache key string, default empty (auto-generated)
+     * @return 缓存键字符串，默认为空（自动生成）
      */
     String key() default "";
 }

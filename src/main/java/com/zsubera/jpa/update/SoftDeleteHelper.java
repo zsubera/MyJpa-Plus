@@ -57,7 +57,7 @@ public final class SoftDeleteHelper {
     private static final int MAX_CACHE_SIZE = 1024;
     private static final Logger log = org.slf4j.LoggerFactory.getLogger(SoftDeleteHelper.class);
 
-    /** Counter for sampling cache size checks to reduce overhead. */
+    /** 采样缓存大小检查的计数器，减少开销。 */
     private static final java.util.concurrent.atomic.AtomicInteger CALL_COUNTER =
         new java.util.concurrent.atomic.AtomicInteger(0);
 
@@ -105,7 +105,7 @@ public final class SoftDeleteHelper {
         if (identifier == null || identifier.isEmpty()) {
             throw new IllegalArgumentException("Identifier must not be null or empty");
         }
-        // Support schema.table format by validating each segment separately
+        // 通过逐段校验支持 schema.table 格式
         String[] parts = identifier.split("\\.");
         for (String part : parts) {
             if (!SAFE_IDENTIFIER_PART_PATTERN.matcher(part).matches()) {
@@ -119,18 +119,18 @@ public final class SoftDeleteHelper {
     private SoftDeleteHelper() {}
 
     /**
-     * Batch soft delete all entities of the given class using a single UPDATE statement.
+     * 使用单条 UPDATE 语句批量软删除给定类的所有实体。
      *
      * <p>
      * <strong>安全要求：</strong>必须传入 {@code allowUnconditional=true} 显式确认， 否则将抛出
      * {@link IllegalStateException}。此机制防止误调用导致全表数据被意外标记为已删除。
      *
-     * @param em EntityManager instance
-     * @param entityClass the entity class
-     * @param allowUnconditional must be true to allow unconditional soft delete
-     * @param <T> entity type
-     * @return number of affected rows
-     * @throws IllegalStateException if allowUnconditional is false
+     * @param em EntityManager 实例
+     * @param entityClass 实体类
+     * @param allowUnconditional 必须为 true 才能允许无条件软删除
+     * @param <T> 实体类型
+     * @return 受影响的行数
+     * @throws IllegalStateException 如果 allowUnconditional 为 false
      */
     public static <T> int softDeleteAll(EntityManager em, Class<T> entityClass, boolean allowUnconditional) {
         if (em == null) {
@@ -159,7 +159,7 @@ public final class SoftDeleteHelper {
         SoftDelete annotation = field.getAnnotation(SoftDelete.class);
         String escapedTable = escapeIdentifier(tableName);
         String escapedColumn = escapeIdentifier(columnName);
-        // Build UPDATE SQL based on field type — use parameterized queries to prevent SQL injection
+        // 根据字段类型构建 UPDATE SQL——使用参数化查询防止 SQL 注入
         if (field.getType() == Boolean.class || field.getType() == boolean.class) {
             return em.createNativeQuery("UPDATE " + escapedTable + " SET " + escapedColumn + " = true WHERE "
                 + escapedColumn + " = false OR " + escapedColumn + " IS NULL").executeUpdate();
@@ -170,7 +170,7 @@ public final class SoftDeleteHelper {
                 + escapedColumn + " != ?1 OR " + escapedColumn + " IS NULL").setParameter(1, deletedValue)
                 .executeUpdate();
         }
-        // Enum type support - check @Enumerated annotation for STRING vs ORDINAL
+        // 枚举类型支持——检查 @Enumerated 注解以确定 STRING 还是 ORDINAL
         if (Enum.class.isAssignableFrom(field.getType())) {
             if (annotation == null || annotation.deletedValue().isEmpty()) {
                 throw new MyJpaPlusException("@SoftDelete on enum field '" + fieldName + "' in " + entityClass.getName()
@@ -178,7 +178,7 @@ public final class SoftDeleteHelper {
             }
             @SuppressWarnings({"unchecked", "rawtypes"})
             Enum<?> deletedEnumValue = Enum.valueOf((Class<Enum>)field.getType(), annotation.deletedValue());
-            // Check @Enumerated annotation to determine correct value type
+            // 检查 @Enumerated 注解以确定正确的值类型
             Enumerated enumerated = field.getAnnotation(Enumerated.class);
             Object dbValue;
             if (enumerated != null && enumerated.value() == EnumType.STRING) {
@@ -203,7 +203,7 @@ public final class SoftDeleteHelper {
     }
 
     /**
-     * Batch soft delete entities by IDs using a single UPDATE statement.
+     * 使用单条 UPDATE 语句按 ID 批量软删除实体。
      *
      * <p>
      * <strong>限制说明：</strong>此方法使用原生 SQL 批量更新，绕过 JPA 生命周期回调（如 {@code @PreUpdate}、{@code @PostUpdate}）。
@@ -217,12 +217,12 @@ public final class SoftDeleteHelper {
      * em.createQuery(update).executeUpdate();
      * }</pre>
      *
-     * @param em EntityManager instance
-     * @param entityClass the entity class
-     * @param ids the IDs of entities to soft delete
-     * @param <T> entity type
-     * @param <ID> ID type
-     * @return number of affected rows
+     * @param em EntityManager 实例
+     * @param entityClass 实体类
+     * @param ids 要软删除的实体 ID 列表
+     * @param <T> 实体类型
+     * @param <ID> ID 类型
+     * @return 受影响的行数
      */
     public static <T, ID> int softDeleteByIds(EntityManager em, Class<T> entityClass, List<ID> ids) {
         if (em == null) {
@@ -249,8 +249,8 @@ public final class SoftDeleteHelper {
         String escapedTable = escapeIdentifier(tableName);
         String escapedColumn = escapeIdentifier(columnName);
         String escapedIdColumn = escapeIdentifier(idFieldName);
-        // Use named parameters instead of positional parameters to avoid index conflicts
-        // in some JPA implementations (especially when combining SET and IN clause parameters)
+        // 使用命名参数替代位置参数以避免某些 JPA 实现中的索引冲突
+        // （特别是在组合 SET 和 IN 子句参数时）
         String setParamName = "deletedValue";
         String setClause;
         boolean useParamBinding = false;
@@ -259,19 +259,19 @@ public final class SoftDeleteHelper {
             setClause = escapedColumn + " = true";
         } else if (field.getType() == Integer.class || field.getType() == int.class) {
             int deletedValue = (annotation != null) ? annotation.deletedIntValue() : 1;
-            // Use named parameter to avoid positional parameter conflicts
+            // 使用命名参数避免位置参数冲突
             setClause = escapedColumn + " = :" + setParamName;
             useParamBinding = true;
             deletedParamValue = deletedValue;
         } else if (Enum.class.isAssignableFrom(field.getType())) {
-            // Enum type support - check @Enumerated annotation for STRING vs ORDINAL
+            // 枚举类型支持——检查 @Enumerated 注解以确定 STRING 还是 ORDINAL
             if (annotation == null || annotation.deletedValue().isEmpty()) {
                 throw new MyJpaPlusException("@SoftDelete on enum field '" + fieldName + "' in " + entityClass.getName()
                     + " must specify deletedValue");
             }
             @SuppressWarnings({"unchecked", "rawtypes"})
             Enum<?> deletedEnumValue = Enum.valueOf((Class<Enum>)field.getType(), annotation.deletedValue());
-            // Check @Enumerated annotation to determine correct value type
+            // 检查 @Enumerated 注解以确定正确的值类型
             Enumerated enumerated = field.getAnnotation(Enumerated.class);
             if (enumerated != null && enumerated.value() == EnumType.STRING) {
                 deletedParamValue = deletedEnumValue.name();
@@ -292,9 +292,9 @@ public final class SoftDeleteHelper {
                 "@SoftDelete field '" + fieldName + "' in " + entityClass.getName() + " has unsupported type: "
                     + field.getType().getName() + ". Supported types: Boolean, Integer, Enum, String.");
         }
-        // Use InClauseBuilder.getMaxInClauseSize() instead of hardcoded 1000
+        // 使用 InClauseBuilder.getMaxInClauseSize() 替代硬编码的 1000
         int batchSize = com.zsubera.jpa.util.InClauseBuilder.getMaxInClauseSize();
-        // Use IN clause with batch splitting for large ID lists
+        // 对大型 ID 列表使用带批次拆分的 IN 子句
         int total = 0;
         for (int i = 0; i < ids.size(); i += batchSize) {
             List<ID> batch = ids.subList(i, Math.min(i + batchSize, ids.size()));
@@ -326,12 +326,12 @@ public final class SoftDeleteHelper {
         java.util.regex.Pattern.compile("^[a-zA-Z_][a-zA-Z0-9_]*$");
 
     /**
-     * Resolve the database table name for the entity class.
+     * 解析实体类对应的数据库表名。
      */
     private static String resolveTableName(Class<?> entityClass) {
         jakarta.persistence.Table tableAnnotation = entityClass.getAnnotation(jakarta.persistence.Table.class);
         if (tableAnnotation != null && !tableAnnotation.name().isEmpty()) {
-            // Validate each segment to prevent SQL injection
+            // 逐段校验以防止 SQL 注入
             String catalog = tableAnnotation.catalog();
             String schema = tableAnnotation.schema();
             String name = tableAnnotation.name();
@@ -357,7 +357,7 @@ public final class SoftDeleteHelper {
         jakarta.persistence.Entity entityAnnotation = entityClass.getAnnotation(jakarta.persistence.Entity.class);
         if (entityAnnotation != null && !entityAnnotation.name().isEmpty()) {
             String name = entityAnnotation.name();
-            // Validate @Entity name to prevent SQL injection
+            // 校验 @Entity name 以防止 SQL 注入
             if (!SAFE_IDENTIFIER_PATTERN.matcher(name).matches()) {
                 throw new IllegalArgumentException(
                     "Invalid @Entity name: " + name + ". Must contain only alphanumeric characters and underscores.");
@@ -368,7 +368,7 @@ public final class SoftDeleteHelper {
     }
 
     /**
-     * Resolve the database column name for a field.
+     * 解析字段对应的数据库列名。
      */
     private static String resolveColumnName(Class<?> entityClass, String fieldName) {
         Field field = getField(entityClass, fieldName);
@@ -382,7 +382,7 @@ public final class SoftDeleteHelper {
     }
 
     /**
-     * Resolve the ID column name for the entity class.
+     * 解析实体类的 ID 列名。
      */
     private static String resolveIdColumnName(Class<?> entityClass) {
         for (Class<?> c = entityClass; c != null && c != Object.class; c = c.getSuperclass()) {
@@ -570,7 +570,7 @@ public final class SoftDeleteHelper {
      * @return 字段名称，如果未找到 {@code @SoftDelete} 字段则返回 {@code null}
      */
     public static String findSoftDeleteField(Class<?> entityClass) {
-        // Use sampling strategy - only check cache size every 64 calls to reduce overhead
+        // 使用采样策略——每 64 次调用才检查一次缓存大小以减少开销
         if ((CALL_COUNTER.incrementAndGet() & 63) == 0) {
             int currentSize = FIELD_CACHE.size();
             if (currentSize > MAX_CACHE_SIZE) {
@@ -580,12 +580,12 @@ public final class SoftDeleteHelper {
             }
         }
         String result = FIELD_CACHE.computeIfAbsent(entityClass, cls -> {
-            // Try getter-based resolution first (Java 17+ compatible)
+            // 首先尝试基于 getter 的解析（兼容 Java 17+）
             String viaGetter = resolveSoftDeleteFieldNameViaGetter(cls);
             if (viaGetter != null) {
                 return viaGetter;
             }
-            // Fallback to field-based reflection
+            // 回退到基于字段的反射
             for (Field field : getAllFields(cls)) {
                 if (field.isAnnotationPresent(SoftDelete.class)) {
                     try {
@@ -606,11 +606,10 @@ public final class SoftDeleteHelper {
     }
 
     /**
-     * Resolve soft delete field name via getter methods (Java 17+ compatible). Scans public methods for @SoftDelete
-     * annotation on getters.
+     * 通过 getter 方法解析软删除字段名（兼容 Java 17+）。扫描公共方法上的 @SoftDelete 注解。
      *
-     * @param entityClass the entity class to scan
-     * @return the field name, or null if not found via getters
+     * @param entityClass 要扫描的实体类
+     * @return 字段名，如果通过 getter 未找到则返回 null
      */
     private static String resolveSoftDeleteFieldNameViaGetter(Class<?> entityClass) {
         for (Method m : entityClass.getMethods()) {
@@ -681,25 +680,25 @@ public final class SoftDeleteHelper {
             if (value == null) {
                 return false;
             }
-            // Boolean type
+            // Boolean 类型
             if (value instanceof Boolean) {
                 return Boolean.TRUE.equals(value);
             }
-            // Integer type
+            // Integer 类型
             if (value instanceof Integer intValue && field.isAnnotationPresent(SoftDelete.class)) {
                 SoftDelete annotation = field.getAnnotation(SoftDelete.class);
                 if (annotation != null) {
                     return intValue.equals(annotation.deletedIntValue());
                 }
             }
-            // Enum type
+            // 枚举类型
             if (value instanceof Enum enumValue && field.isAnnotationPresent(SoftDelete.class)) {
                 SoftDelete annotation = field.getAnnotation(SoftDelete.class);
                 if (annotation != null && !annotation.deletedValue().isEmpty()) {
                     return enumValue.name().equals(annotation.deletedValue());
                 }
             }
-            // String type (支持 char(1) 等字符串软删除)
+            // String 类型（支持 char(1) 等字符串软删除）
             if (value instanceof String strValue && field.isAnnotationPresent(SoftDelete.class)) {
                 SoftDelete annotation = field.getAnnotation(SoftDelete.class);
                 if (annotation != null && !annotation.deletedStringValue().isEmpty()) {

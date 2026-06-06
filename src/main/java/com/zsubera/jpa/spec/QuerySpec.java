@@ -203,7 +203,7 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
      */
     public void applyQuerySettings(TypedQuery<?> query) {
         if (queryTimeout != null) {
-            // Use Math.toIntExact() to prevent integer overflow on large timeout values
+            // 使用 Math.toIntExact() 防止大超时值的整数溢出
             query.setHint("jakarta.persistence.query.timeout", Math.toIntExact(queryTimeout * 1000L));
         }
         if (lockMode != null) {
@@ -589,7 +589,7 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
         groupStack.push(nodes);
     }
 
-    // ---- Consumer-based API (self-closing) ----
+    // ---- 基于 Consumer 的 API（自动关闭） ----
 
     /**
      * 使用消费者构建 OR 条件组，自动关闭组。
@@ -798,7 +798,7 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
         this.orderNodes.addAll(other.orderNodes);
         // 复制查询设置：仅当当前实例未设置时，采用另一个实例的值
         if (other.queryTimeout != null && this.queryTimeout == null) {
-            // Validate timeout range when copying from another spec (must match timeout() validation)
+            // 从另一个 spec 复制时验证超时范围（必须与 timeout() 验证一致）
             if (other.queryTimeout <= 0 || other.queryTimeout > MAX_TIMEOUT_SECONDS) {
                 throw new IllegalArgumentException(
                     "queryTimeout from source spec is out of range: " + other.queryTimeout);

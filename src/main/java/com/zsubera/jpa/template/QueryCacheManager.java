@@ -133,15 +133,15 @@ public class QueryCacheManager {
     }
 
     /**
-     * Retrieves a cached value by key. Returns null if the key is absent or the entry has expired.
+     * 根据键获取缓存值。如果键不存在或条目已过期则返回 null。
      *
      * <p>
      * <strong>线程安全说明：</strong>使用 ConcurrentHashMap 实现无锁读取，过期条目在访问时懒驱逐。 使用 {@code remove(key, value)}
      * 原子操作确保仅移除未被其他线程替换的过期条目。
      *
-     * @param key cache key
-     * @param <T> expected value type
-     * @return cached value, or null if absent/expired
+     * @param key 缓存键
+     * @param <T> 期望的值类型
+     * @return 缓存值，如果不存在/已过期则返回 null
      */
     @SuppressWarnings("unchecked")
     public <T> T get(String key) {
@@ -164,15 +164,15 @@ public class QueryCacheManager {
     }
 
     /**
-     * Stores a value in the cache with the given TTL.
+     * 将值存入缓存，指定 TTL（生存时间）。
      *
      * <p>
      * 当缓存条目数超过最大限制时，清除过期条目。如果仍超过限制，驱逐最早的条目后写入。
      *
-     * @param key cache key
-     * @param value value to cache
-     * @param ttlSeconds time-to-live in seconds
-     * @param <T> value type
+     * @param key 缓存键
+     * @param value 要缓存的值
+     * @param ttlSeconds 生存时间（秒）
+     * @param <T> 值类型
      * @return 如果成功写入返回 true，如果 key 为 null 或空返回 false
      */
     public <T> boolean put(String key, T value, long ttlSeconds) {
@@ -247,9 +247,9 @@ public class QueryCacheManager {
     }
 
     /**
-     * Removes a specific entry from the cache.
+     * 从缓存中移除指定条目。
      *
-     * @param key cache key to evict
+     * @param key 要驱逐的缓存键
      */
     public void evict(String key) {
         store.remove(key);
@@ -258,7 +258,7 @@ public class QueryCacheManager {
     }
 
     /**
-     * Clears all cached entries.
+     * 清除所有缓存条目。
      */
     public void clear() {
         store.clear();
@@ -301,9 +301,9 @@ public class QueryCacheManager {
     }
 
     /**
-     * Returns the number of entries currently in the store (including potentially expired ones not yet evicted).
+     * 返回当前存储中的条目数（包括尚未驱逐的可能已过期条目）。
      *
-     * @return number of entries
+     * @return 条目数
      */
     public int size() {
         return store.size();

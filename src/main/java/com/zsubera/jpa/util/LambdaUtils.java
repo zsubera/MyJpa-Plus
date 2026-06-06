@@ -74,7 +74,7 @@ public final class LambdaUtils {
                     configured = MAX_CACHE_SIZE_UPPER_LIMIT;
                 }
             } catch (NumberFormatException ignored) {
-                // use default
+                // 使用默认值
             }
         }
         maxCacheSize = configured;
@@ -356,9 +356,9 @@ public final class LambdaUtils {
         if (methodName.startsWith("is") && methodName.length() > 2 && Character.isUpperCase(methodName.charAt(2))) {
             return Introspector.decapitalize(methodName.substring(2));
         }
-        // Support Java Record accessor methods (record fields are accessed directly, no get/is prefix)
-        // Record accessors have the same name as the field (e.g., "name" for a Record component named "name")
-        // This is the fallback for method names that don't match get/is patterns
+        // 支持Java Record访问器方法（record字段直接访问，没有get/is前缀）
+        // Record访问器与字段同名（例如，对于名为"name"的Record组件，访问器就是"name"）
+        // 这是对不匹配get/is模式的方法名的回退处理
         return methodName;
     }
 }

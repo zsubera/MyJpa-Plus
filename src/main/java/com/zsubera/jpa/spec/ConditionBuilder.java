@@ -724,8 +724,8 @@ public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> ext
                 if (fieldNames[i] == null) {
                     throw new IllegalArgumentException("fieldNames[" + i + "] must not be null");
                 }
-                // Use SAFE_NESTED_FIELD_NAME_PATTERN to support dot-notation field names
-                // (e.g., "address.city" for embedded objects)
+                // 使用 SAFE_NESTED_FIELD_NAME_PATTERN 支持点号分隔的字段名
+                // （例如嵌入对象的 "address.city"）
                 if (!SAFE_NESTED_FIELD_NAME_PATTERN.matcher(fieldNames[i]).matches()) {
                     throw new IllegalArgumentException(
                         "fieldNames[" + i + "] contains invalid characters: " + fieldNames[i]);
@@ -922,9 +922,9 @@ public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> ext
         Object[] allParams = new Object[params.length + 1];
         allParams[0] = name;
         System.arraycopy(params, 0, allParams, 1, params.length);
-        // Use FuncNode.of() factory method for security whitelist validation
-        // instead of bypassing it with direct constructor call.
-        // FuncNode.of() handles whitelist checking and logging internally.
+        // 使用 FuncNode.of() 工厂方法进行安全白名单校验，
+        // 而非通过直接构造调用绕过校验。
+        // FuncNode.of() 内部处理白名单检查和日志记录。
         conditions().add(ConditionNode.FuncNode.of(functionName, allParams));
         return self();
     }

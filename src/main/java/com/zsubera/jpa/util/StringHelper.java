@@ -35,10 +35,10 @@ public final class StringHelper {
         for (int i = 0; i < name.length(); i++) {
             char c = name.charAt(i);
             if (Character.isUpperCase(c)) {
-                // Add underscore before uppercase letter if:
-                // - Not at the start
-                // - Previous char is lowercase (e.g., "camelCase" -> "camel_case")
-                // - Next char is lowercase and previous is uppercase (e.g., "XMLParser" -> "xml_parser")
+                // 在大写字母前添加下划线，如果：
+                // - 不在开头位置
+                // - 前一个字符是小写字母（例如 "camelCase" -> "camel_case"）
+                // - 下一个字符是小写字母且前一个字符是大写字母（例如 "XMLParser" -> "xml_parser"）
                 if (i > 0) {
                     char prev = name.charAt(i - 1);
                     boolean nextIsLower = (i + 1 < name.length()) && Character.isLowerCase(name.charAt(i + 1));

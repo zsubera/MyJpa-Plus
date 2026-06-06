@@ -58,12 +58,12 @@ public final class PredicateHelper {
             throw new IllegalArgumentException("end must not be null");
         }
         if (!start.getClass().isAssignableFrom(end.getClass()) && !end.getClass().isAssignableFrom(start.getClass())) {
-            // Allow cross-numeric-type comparison (e.g., Integer vs Long)
+            // 允许跨数值类型比较（例如 Integer vs Long）
             if (!(start instanceof Number) || !(end instanceof Number)) {
                 throw new IllegalArgumentException("start and end must be compatible types, but got "
                     + start.getClass().getName() + " and " + end.getClass().getName());
             }
-            // Use BigDecimal for precise cross-numeric-type comparison to avoid precision loss
+            // 使用BigDecimal进行精确的跨数值类型比较，避免精度损失
             try {
                 java.math.BigDecimal startDecimal = new java.math.BigDecimal(start.toString());
                 java.math.BigDecimal endDecimal = new java.math.BigDecimal(end.toString());
@@ -71,8 +71,8 @@ public final class PredicateHelper {
                     throw new IllegalArgumentException("start must not be greater than end");
                 }
             } catch (NumberFormatException e) {
-                // Fallback to Double comparison when BigDecimal conversion fails
-                // (e.g., special double values like NaN, Infinity)
+                // 当BigDecimal转换失败时回退到Double比较
+                // （例如特殊的double值如NaN、Infinity）
                 double startVal = ((Number)start).doubleValue();
                 double endVal = ((Number)end).doubleValue();
                 if (Double.compare(startVal, endVal) > 0) {

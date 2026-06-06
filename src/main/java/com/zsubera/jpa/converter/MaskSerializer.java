@@ -72,7 +72,7 @@ public class MaskSerializer extends JsonSerializer<String> {
     }
 
     private static String maskEmail(String email) {
-        // Use lastIndexOf to handle multiple @ symbols correctly
+        // 使用lastIndexOf正确处理多个@符号
         int atIndex = email.lastIndexOf('@');
         if (atIndex <= 0) {
             return email;
@@ -96,7 +96,7 @@ public class MaskSerializer extends JsonSerializer<String> {
     }
 
     private static String maskName(String name) {
-        // Use codePointCount for proper Unicode handling
+        // 使用codePointCount正确处理Unicode
         int codePointCount = name.codePointCount(0, name.length());
         if (codePointCount <= 1) {
             return name;
@@ -104,11 +104,11 @@ public class MaskSerializer extends JsonSerializer<String> {
         if (codePointCount == 2) {
             return new String(Character.toChars(name.codePointAt(0))) + "*";
         }
-        // For 3+ characters: keep first and last, mask the middle
+        // 对于3个以上字符：保留首尾，遮蔽中间部分
         int lastCodePointIndex = name.offsetByCodePoints(0, codePointCount - 1);
         StringBuilder sb = new StringBuilder();
         sb.append(Character.toChars(name.codePointAt(0)));
-        // Ensure proper Unicode character repetition
+        // 确保正确的Unicode字符重复
         for (int i = 0; i < codePointCount - 2; i++) {
             sb.append('*');
         }
@@ -127,7 +127,7 @@ public class MaskSerializer extends JsonSerializer<String> {
     }
 
     private static String maskAddress(String address) {
-        // For short addresses (length <= 6), keep first 2 characters and mask the rest
+        // 对于短地址（长度<=6），保留前2个字符，遮蔽其余部分
         if (address.length() <= 2) {
             return address;
         }

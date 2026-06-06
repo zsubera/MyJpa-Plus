@@ -31,7 +31,7 @@ public class IgnoreSoftDeleteAdvisor {
 
     private static final Logger log = LoggerFactory.getLogger(IgnoreSoftDeleteAdvisor.class);
 
-    /** O-10: Cache annotation check results to avoid repeated reflection. */
+    /** O-10: 缓存注解检查结果，避免重复反射。 */
     private static final java.util.concurrent.ConcurrentMap<Method, Boolean> ANNOTATION_CACHE =
         new java.util.concurrent.ConcurrentHashMap<>();
 
@@ -54,7 +54,7 @@ public class IgnoreSoftDeleteAdvisor {
         MethodSignature signature = (MethodSignature)pjp.getSignature();
         Method method = signature.getMethod();
 
-        // O-10: Use cached annotation check to avoid repeated reflection
+        // O-10: 使用缓存的注解检查，避免重复反射
         Boolean hasAnnotation = ANNOTATION_CACHE.computeIfAbsent(method,
             m -> AnnotationUtils.findAnnotation(m, IgnoreSoftDelete.class) != null
                 || AnnotationUtils.findAnnotation(m.getDeclaringClass(), IgnoreSoftDelete.class) != null);

@@ -77,7 +77,7 @@ public final class InClauseBuilder {
                     configured = MAX_ALLOWED_VALUE;
                 }
             } catch (NumberFormatException ignored) {
-                // use default
+                // 使用默认值
             }
         }
         maxInClauseSize = configured;
@@ -91,7 +91,7 @@ public final class InClauseBuilder {
                     hardConfigured = val;
                 }
             } catch (NumberFormatException ignored) {
-                // use default
+                // 使用默认值
             }
         }
         hardLimit = hardConfigured;
@@ -276,7 +276,7 @@ public final class InClauseBuilder {
             log.debug("IN clause has {} values, exceeding limit of {}. Splitting into batches.", values.size(),
                 maxInClauseSize);
         }
-        // P-10: Convert to List once to enable subList() views, avoiding temporary List copies
+        // P-10: 一次性转换为List以启用subList()视图，避免临时List复制
         List<?> valueList = values instanceof List<?> l ? l : new ArrayList<>(values);
         int estimatedBatches = (valueList.size() + maxInClauseSize - 1) / maxInClauseSize;
         List<Predicate> batchPredicates = new ArrayList<>(estimatedBatches);
@@ -307,7 +307,7 @@ public final class InClauseBuilder {
             log.debug("NOT IN clause has {} values, exceeding limit of {}. Splitting into batches.", values.size(),
                 maxInClauseSize);
         }
-        // P-10: Convert to List once to enable subList() views, avoiding temporary List copies
+        // P-10: 一次性转换为List以启用subList()视图，避免临时List复制
         List<?> valueList = values instanceof List<?> l ? l : new ArrayList<>(values);
         int estimatedBatches = (valueList.size() + maxInClauseSize - 1) / maxInClauseSize;
         List<Predicate> batchPredicates = new ArrayList<>(estimatedBatches);

@@ -74,7 +74,7 @@ public class MergeSpec<T> {
     /** 是否启用 Unicode 标识符支持。可通过系统属性 myjpa-plus.merge.unicode-identifiers=true 启用。 */
     private static volatile boolean unicodeIdentifiers = false;
 
-    /** Maximum identifier length to prevent abuse. */
+    /** 标识符最大长度，防止滥用。 */
     private static final int MAX_IDENTIFIER_LENGTH = 128;
 
     static {
@@ -98,10 +98,10 @@ public class MergeSpec<T> {
         new org.springframework.util.ConcurrentReferenceHashMap<>(16,
             org.springframework.util.ConcurrentReferenceHashMap.ReferenceType.WEAK);
 
-    /** Maximum cache size before logging warning. */
+    /** 缓存大小超过限制前的警告阈值。 */
     private static final int MAX_FIELD_CACHE_SIZE = 1024;
 
-    /** Counter for sampling cache size checks to reduce overhead. */
+    /** 采样缓存大小检查的计数器，减少开销。 */
     private static final java.util.concurrent.atomic.AtomicInteger FIELD_CACHE_CALL_COUNTER =
         new java.util.concurrent.atomic.AtomicInteger(0);
 
@@ -111,7 +111,7 @@ public class MergeSpec<T> {
     private final List<String> updateFields = new ArrayList<>();
     private boolean explicitUpdateFields = false;
 
-    /** Cached dialect per EntityManagerFactory to avoid repeated detection. */
+    /** 每个 EntityManagerFactory 缓存的方言，避免重复检测。 */
     private static final java.util.concurrent.ConcurrentMap<String, String> DIALECT_CACHE =
         new java.util.concurrent.ConcurrentHashMap<>();
 
@@ -208,8 +208,7 @@ public class MergeSpec<T> {
         if ("h2".equals(dialect)) {
             return executeH2Upsert(em);
         }
-        // Use buildSqlFor with local snapshot instead of buildSql to avoid
-        // shared mutable field access in concurrent scenarios
+        // 使用 buildSqlFor 和本地快照而非 buildSql，避免并发场景下共享可变字段访问
         T entitySnapshot = this.entity;
         SqlWithParams sqlWithParams = buildSqlFor(em, entitySnapshot);
         if (log.isTraceEnabled()) {
@@ -236,7 +235,7 @@ public class MergeSpec<T> {
      * @return 受影响的行数
      */
     private int executeH2Upsert(EntityManager em) {
-        // Delegate to thread-safe executeH2UpsertFor to eliminate code duplication
+        // 委托给线程安全的 executeH2UpsertFor 以消除代码重复
         T entitySnapshot = this.entity;
         return executeH2UpsertFor(em, entitySnapshot);
     }
@@ -286,7 +285,7 @@ public class MergeSpec<T> {
         List<String> conflictColumns) {
         List<String> setClauses = new ArrayList<>();
         List<Object> setParams = new ArrayList<>();
-        // Build Map for O(1) field lookup instead of O(n*m) nested loop
+        // 构建 Map 实现 O(1) 字段查找，替代 O(n*m) 嵌套循环
         java.util.Map<String, EntityFieldValue> fieldValueMap = new java.util.LinkedHashMap<>();
         for (EntityFieldValue fv : allFieldValues) {
             fieldValueMap.put(fv.fieldName(), fv);
@@ -413,19 +412,19 @@ public class MergeSpec<T> {
      * @return 如果有活动事务返回 true
      */
     private static boolean isJtaTransactionActive(EntityManager em) {
-        // First try standard JPA API
+        // 首先尝试标准 JPA API
         try {
             EntityTransaction tx = em.getTransaction();
             if (tx != null) {
                 return tx.isActive();
             }
         } catch (Exception ignored) {
-            // JTA environment may throw on getTransaction()
-            // Log at debug level for diagnostics
+            // JTA 环境可能在 getTransaction() 时抛出异常
+            // 以 DEBUG 级别记录以便诊断
             log.debug("getTransaction() threw exception in JTA environment: {}", ignored.getMessage());
         }
-        // Fallback: try Hibernate Session (only if Hibernate is on classpath)
-        // Use pure reflection to avoid compile-time dependency on Hibernate
+        // 回退：尝试 Hibernate Session（仅当 Hibernate 在 classpath 上时）
+        // 使用纯反射避免对 Hibernate 的编译时依赖
         try {
             Class<?> sessionClass = Class.forName("org.hibernate.Session");
             Object session = em.unwrap(sessionClass);
@@ -437,13 +436,13 @@ public class MergeSpec<T> {
             java.lang.reflect.Method isActive = transaction.getClass().getMethod("isActive");
             return (Boolean)isActive.invoke(transaction);
         } catch (ClassNotFoundException e) {
-            // Hibernate not on classpath
+            // Hibernate 不在 classpath 上
             log.debug("Hibernate not available for transaction state detection");
         } catch (ReflectiveOperationException e) {
-            // Cannot determine transaction state
+            // 无法确定事务状态
             log.debug("Cannot determine transaction state via Hibernate reflection: {}", e.getMessage());
         } catch (Exception e) {
-            // Cannot determine transaction state
+            // 无法确定事务状态
             log.debug("Cannot determine transaction state via Hibernate: {}", e.getMessage());
         }
         return false;
@@ -474,7 +473,7 @@ public class MergeSpec<T> {
         if (batchSize <= 0) {
             throw new IllegalArgumentException("batchSize must be positive");
         }
-        // Warn about large entity lists that may cause OOM
+        // 警告可能造成 OOM 的大型实体列表
         if (entities.size() > 10_000) {
             log.warn(
                 "Large entity list size ({}). This may cause excessive memory usage. "
@@ -494,7 +493,7 @@ public class MergeSpec<T> {
                 }
             }
         }
-        // Only flush if there are remaining entities not yet flushed
+        // 仅在还有未 flush 的实体时才 flush
         if (count % batchSize != 0) {
             em.flush();
             em.clear();
@@ -538,7 +537,7 @@ public class MergeSpec<T> {
         if (batchSize <= 0) {
             throw new IllegalArgumentException("batchSize must be positive");
         }
-        // If Spring transaction is active, warn and execute within it (no separate tx possible)
+        // 如果 Spring 事务已激活，发出警告并在其中执行（无法创建独立事务）
         if (TransactionSynchronizationManager.isActualTransactionActive()) {
             log.warn("executeBatchInSeparateTransactions called within an active Spring transaction. "
                 + "All operations will execute within the existing transaction. "
@@ -561,18 +560,18 @@ public class MergeSpec<T> {
                     tx.begin();
                     txStarted = true;
                 } else if (tx != null && tx.isActive()) {
-                    // Pre-existing RESOURCE_LOCAL transaction — batch isolation not possible
+                    // 已有 RESOURCE_LOCAL 事务——无法实现批次隔离
                     throw new MyJpaPlusException("executeBatchInSeparateTransactions requires no active transaction. "
                         + "An active RESOURCE_LOCAL transaction was detected. "
                         + "Use executeBatch() to run within the existing transaction.");
                 } else if (tx == null) {
-                    // JTA environment: cannot manage transactions directly
+                    // JTA 环境：无法直接管理事务
                     throw new MyJpaPlusException("Cannot manage transactions in JTA environment. "
                         + "Use @Transactional annotation or MyJpaTemplate.executeBatch() instead.");
                 }
             }
             try {
-                // Increment counter before executeSingle to ensure correct batch boundary
+                // 在 executeSingle 之前增加计数器，确保正确的批次边界
                 count++;
                 total += executeSingle(em, ent);
                 if (count % batchSize == 0) {
@@ -642,7 +641,7 @@ public class MergeSpec<T> {
             throw new MyJpaPlusException("Circular @Embedded reference detected: " + entity.getClass().getName()
                 + " has already been visited. Check your entity mapping for cycles in @Embedded objects.");
         }
-        // Use sampling strategy - only check cache size every 64 calls to reduce overhead
+        // 使用采样策略——每 64 次调用才检查一次缓存大小以减少开销
         if ((FIELD_CACHE_CALL_COUNTER.incrementAndGet() & 63) == 0) {
             int cacheSize = FIELD_CACHE.size();
             if (cacheSize > MAX_FIELD_CACHE_SIZE) {
@@ -836,14 +835,13 @@ public class MergeSpec<T> {
                                 attempt + 1, maxRetries, backoffMs);
                         }
                         try {
-                            // Thread.sleep() is acceptable here as retry backoff is short (10-40ms).
-                            // In Java 21+ virtual thread environments, consider using
-                            // CompletableFuture.delayedExecutor() for non-blocking delay.
+                            // Thread.sleep() 在此处可以接受，因为重试退避时间短（10-40ms）。
+                            // 在 Java 21+ 虚拟线程环境中，考虑使用
+                            // CompletableFuture.delayedExecutor() 实现非阻塞延迟。
                             Thread.sleep(backoffMs);
                         } catch (InterruptedException ie) {
                             Thread.currentThread().interrupt();
-                            // Add InterruptedException as suppressed exception to preserve
-                            // diagnostic information
+                            // 将 InterruptedException 作为抑制异常添加以保留诊断信息
                             e.addSuppressed(ie);
                             throw e;
                         }
@@ -995,7 +993,7 @@ public class MergeSpec<T> {
             }
             tableName.append(tableAnnotation.name());
             String name = tableName.toString();
-            // Validate each segment of the table name from annotation to prevent injection
+            // 校验注解中表名的每个部分以防止注入
             for (String segment : name.split("\\.")) {
                 if (!SAFE_IDENTIFIER_PART_PATTERN.matcher(segment).matches()) {
                     throw new MyJpaPlusException("Invalid table name in @Table annotation: '" + name
@@ -1032,15 +1030,15 @@ public class MergeSpec<T> {
         if (identifier == null || identifier.isEmpty()) {
             throw new MyJpaPlusException("Identifier must not be null or empty");
         }
-        // Check identifier length limit
+        // 检查标识符长度限制
         if (identifier.length() > MAX_IDENTIFIER_LENGTH) {
             throw new MyJpaPlusException("Identifier length (" + identifier.length() + ") exceeds maximum ("
                 + MAX_IDENTIFIER_LENGTH + "): '" + identifier.substring(0, 64) + "...'");
         }
-        // Validate each segment separately to prevent schema injection via dots
+        // 逐段校验以防止通过点号进行 schema 注入
         String[] parts = identifier.split("\\.");
         for (String part : parts) {
-            // Use Unicode pattern when enabled, otherwise use ASCII-only pattern
+            // 启用时使用 Unicode 模式，否则使用仅 ASCII 模式
             Pattern validationPattern =
                 unicodeIdentifiers ? UNICODE_IDENTIFIER_PART_PATTERN : SAFE_IDENTIFIER_PART_PATTERN;
             if (!validationPattern.matcher(part).matches()) {
@@ -1048,8 +1046,8 @@ public class MergeSpec<T> {
                     + "'. Each part must contain only alphanumeric characters and underscores." + (unicodeIdentifiers
                         ? "" : " Use myjpa-plus.merge.unicode-identifiers=true for Unicode support."));
             }
-            // Detect Unicode homoglyphs that may be used for security bypass
-            // Cyrillic, Greek, and Armenian characters look similar to Latin characters
+            // 检测可用于绕过安全检查的 Unicode 同形字符
+            // 西里尔字母、希腊字母和亚美尼亚字母与拉丁字母视觉相似
             if (unicodeIdentifiers && HOMOGLYPH_PATTERN.matcher(part).find()) {
                 String homoglyphMsg = "SECURITY: Identifier '" + part + "' contains Unicode homoglyph characters "
                     + "(Cyrillic/Greek/Armenian). This may indicate a homoglyph attack attempt.";
@@ -1060,9 +1058,9 @@ public class MergeSpec<T> {
                 log.warn(homoglyphMsg);
             }
         }
-        // Always quote identifiers to handle reserved words and case sensitivity.
-        // H2 identifiers are now quoted with double quotes to prevent reserved word conflicts.
-        // H2 default mode stores identifiers in uppercase, so we convert to uppercase before quoting.
+        // 始终对标识符加引号以处理保留字和大小写敏感性。
+        // H2 标识符现在使用双引号加引号以防止保留字冲突。
+        // H2 默认模式将标识符存储为大写，因此在加引号前先转换为大写。
         return switch (dialect) {
             case "postgresql" -> "\"" + identifier.replace("\"", "\"\"") + "\"";
             case "mysql" -> "`" + identifier.replace("`", "``") + "`";
@@ -1088,7 +1086,7 @@ public class MergeSpec<T> {
         return columns;
     }
 
-    /** Cache for auto-generated ID field detection results. */
+    /** 自动生成 ID 字段检测结果的缓存。 */
     private static final java.util.concurrent.ConcurrentMap<String, Boolean> AUTO_GENERATED_ID_CACHE =
         new java.util.concurrent.ConcurrentHashMap<>();
 
@@ -1152,7 +1150,7 @@ public class MergeSpec<T> {
         Column columnAnnotation = field.getAnnotation(Column.class);
         if (columnAnnotation != null && !columnAnnotation.name().isEmpty()) {
             String name = columnAnnotation.name();
-            // Validate column name from annotation to prevent injection
+            // 校验注解中的列名以防止注入
             if (!SAFE_IDENTIFIER_PATTERN.matcher(name).matches()) {
                 throw new MyJpaPlusException("Invalid column name in @Column annotation: '" + name
                     + "'. Must contain only alphanumeric characters and underscores.");
@@ -1169,14 +1167,14 @@ public class MergeSpec<T> {
      * @return 数据库方言标识（postgresql、mysql 或 h2）
      */
     private String detectDialect(EntityManager em) {
-        // Use stable cache key (JDBC URL if available, otherwise identity-based)
+        // 使用稳定的缓存键（如果可用则使用 JDBC URL，否则基于 identity）
         jakarta.persistence.EntityManagerFactory emf = em.getEntityManagerFactory();
         String factoryKey = resolveFactoryKey(emf);
         String cached = DIALECT_CACHE.get(factoryKey);
         if (cached != null) {
             return cached;
         }
-        // Priority 1: Detect from JDBC URL in EntityManagerFactory properties (no Hibernate dependency)
+        // 优先级 1：从 EntityManagerFactory 属性中的 JDBC URL 检测（无 Hibernate 依赖）
         try {
             Object jdbcUrl = em.getEntityManagerFactory().getProperties().get("jakarta.persistence.jdbc.url");
             if (jdbcUrl == null) {
@@ -1201,7 +1199,7 @@ public class MergeSpec<T> {
             log.debug("Failed to detect dialect from properties: {}", ex.getMessage());
         }
 
-        // Priority 2: Detect via JDBC Connection.getMetaData() through EntityManager.unwrap()
+        // 优先级 2：通过 EntityManager.unwrap() 的 JDBC Connection.getMetaData() 检测
         try {
             java.sql.Connection conn = em.unwrap(java.sql.Connection.class);
             if (conn != null) {
@@ -1214,8 +1212,8 @@ public class MergeSpec<T> {
             log.debug("Failed to detect dialect via JDBC Connection.unwrap(): {}", e.getMessage());
         }
 
-        // Priority 3: Hibernate fallback (only if Hibernate is on classpath)
-        // Use pure reflection + dynamic proxy to avoid compile-time dependency on Hibernate
+        // 优先级 3：Hibernate 回退（仅当 Hibernate 在 classpath 上时）
+        // 使用纯反射 + 动态代理避免对 Hibernate 的编译时依赖
         try {
             Class<?> sessionClass = Class.forName("org.hibernate.Session");
             Object session = em.unwrap(sessionClass);
@@ -1241,7 +1239,7 @@ public class MergeSpec<T> {
             log.debug("Hibernate dialect detection failed: {}", e.getMessage());
         }
 
-        // Priority 4: Manual configuration
+        // 优先级 4：手动配置
         log.warn("Failed to detect database dialect automatically. "
             + "Set system property 'myjpa-plus.dialect' to 'postgresql', 'mysql', or 'h2' to specify manually.");
         String manualDialect = System.getProperty("myjpa-plus.dialect");
@@ -1296,7 +1294,7 @@ public class MergeSpec<T> {
                 return jdbcUrl.toString();
             }
         } catch (Exception ignored) {
-            // Fall back to identity-based key
+            // 回退到基于 identity 的键
         }
         return emf.getClass().getName() + "@" + System.identityHashCode(emf);
     }

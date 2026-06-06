@@ -61,7 +61,7 @@ public class CodeEnumType implements UserType<Object>, DynamicParameterizedType 
         new org.springframework.util.ConcurrentReferenceHashMap<>(16,
             org.springframework.util.ConcurrentReferenceHashMap.ReferenceType.WEAK);
 
-    /** Sentinel field to distinguish "not scanned" from "scanned but not found" in cache. */
+    /** 哨兵字段，用于区分缓存中"未扫描"和"已扫描但未找到"的状态。 */
     private static final Field NO_CODE_FIELD_SENTINEL;
 
     static {
@@ -111,7 +111,7 @@ public class CodeEnumType implements UserType<Object>, DynamicParameterizedType 
         this.codeField = resolveCodeField(enumClass);
         this.useOrdinal = (codeField == null);
         if (useOrdinal) {
-            // Log WARNING when @CodeEnumValue is not found and ordinal is used as fallback
+            // 未找到 @CodeEnumValue 时记录警告，回退到基于 ordinal 的映射
             log.warn(
                 "@CodeEnumValue not found in enum {}. Falling back to ordinal-based mapping. "
                     + "Add @CodeEnumValue annotation to the code field for explicit mapping.",
@@ -175,7 +175,7 @@ public class CodeEnumType implements UserType<Object>, DynamicParameterizedType 
     @Override
     public Object nullSafeGet(ResultSet rs, int position, SharedSessionContractImplementor session, Object owner)
         throws SQLException {
-        // Handle different SQL types robustly
+        // 健壮地处理不同的 SQL 类型
         String value;
         if (sqlType == Types.BIGINT) {
             long longVal = rs.getLong(position);
@@ -235,7 +235,7 @@ public class CodeEnumType implements UserType<Object>, DynamicParameterizedType 
                 if (codeValue == null) {
                     st.setNull(index, sqlType);
                 } else if (codeValue instanceof Integer intVal) {
-                    // Use typed setter based on code field type
+                    // 根据 code 字段类型使用类型化的 setter
                     st.setInt(index, intVal);
                 } else if (codeValue instanceof Long longVal) {
                     st.setLong(index, longVal);
@@ -270,7 +270,7 @@ public class CodeEnumType implements UserType<Object>, DynamicParameterizedType 
             Object codeValue = codeField.get(value);
             return codeValue != null ? String.valueOf(codeValue) : null;
         } catch (IllegalAccessException e) {
-            // Log warning instead of silently swallowing exception
+            // 记录警告而非静默吞掉异常
             log.warn("Failed to access code field for enum {}: {}", value.getClass().getSimpleName(), e.getMessage());
             return null;
         }
@@ -295,7 +295,7 @@ public class CodeEnumType implements UserType<Object>, DynamicParameterizedType 
             throw new HibernateException(
                 String.format("No enum constant with ordinal '%s' in %s", code, enumClass.getSimpleName()));
         }
-        // Use shared getOrBuildCodeMap() for O(1) lookup
+        // 使用共享的 getOrBuildCodeMap() 实现 O(1) 查找
         ConcurrentMap<String, Object> codeMap = getOrBuildCodeMap();
         Object result = codeMap.get(code);
         if (result != null) {

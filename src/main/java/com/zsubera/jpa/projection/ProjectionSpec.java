@@ -172,7 +172,7 @@ public class ProjectionSpec<T> {
      */
     public static <T> ProjectionSpec<T> withDefaults(Class<T> entityClass) {
         ProjectionSpec<T> spec = new ProjectionSpec<>(entityClass);
-        // Auto-enable soft delete filter if entity has @SoftDelete field
+        // 如果实体有 @SoftDelete 字段则自动启用软删除过滤
         if (SoftDeleteHelper.findSoftDeleteField(entityClass) != null) {
             spec.softDeleteEnabled = true;
         }
@@ -358,8 +358,8 @@ public class ProjectionSpec<T> {
         if (predicate == null) {
             throw new IllegalArgumentException("predicate must not be null");
         }
-        // Accumulate HAVING predicates in a list (AND semantics),
-        // instead of overwriting the previous one.
+        // 将 HAVING 谓词累积到列表中（AND 语义），
+        // 而非覆盖前一个。
         this.havingPredicateFns.add(predicate);
         return this;
     }
@@ -474,7 +474,7 @@ public class ProjectionSpec<T> {
      * @return 返回 Tuple 结果的 TypedQuery 实例
      */
     public TypedQuery<Tuple> toTupleQuery(EntityManager em, int maxResults) {
-        // Validate selections are not empty
+        // 校验选择列表不为空
         if (selections.isEmpty() && aggregateSelections.isEmpty()) {
             throw new IllegalArgumentException("ProjectionSpec must have at least one selection. "
                 + "Use select() or addAggregation() before executing.");
@@ -484,22 +484,22 @@ public class ProjectionSpec<T> {
         Root<T> root = query.from(entityClass);
 
         try {
-            // Apply joins (side effects on root)
+            // 应用 JOIN（对 root 有副作用）
             resolveJoins(root, cb);
 
-            // Apply selections
+            // 应用选择列表
             List<jakarta.persistence.criteria.Selection<?>> selectionList = buildSelectionList(root, cb);
             query.multiselect(selectionList);
 
-            // Apply DISTINCT
+            // 应用 DISTINCT
             if (distinct) {
                 query.distinct(true);
             }
 
-            // Apply WHERE
+            // 应用 WHERE
             applyPredicate(root, query, cb);
 
-            // Apply GROUP BY
+            // 应用 GROUP BY
             if (!groupByFields.isEmpty()) {
                 List<jakarta.persistence.criteria.Expression<?>> groupByExpressions = new ArrayList<>();
                 for (String field : groupByFields) {
@@ -508,10 +508,10 @@ public class ProjectionSpec<T> {
                 query.groupBy(groupByExpressions);
             }
 
-            // Apply HAVING
+            // 应用 HAVING
             applyHaving(root, cb, query);
 
-            // Apply ORDER BY
+            // 应用 ORDER BY
             applyOrderBy(root, cb, query);
 
             TypedQuery<Tuple> typedQuery = em.createQuery(query);
@@ -550,9 +550,9 @@ public class ProjectionSpec<T> {
             throw new IllegalArgumentException("em must not be null");
         }
         TypedQuery<Tuple> query = toTupleQuery(em, -1);
-        // P-01: Set fetchSize for streaming queries to enable server-side cursors.
-        // PostgreSQL requires fetchSize > 0 for true streaming;
-        // MySQL uses Integer.MIN_VALUE for streaming mode.
+        // P-01：为流式查询设置 fetchSize 以启用服务端游标。
+        // PostgreSQL 需要 fetchSize > 0 才能实现真正的流式传输；
+        // MySQL 使用 Integer.MIN_VALUE 进入流式模式。
         int fetchSize = com.zsubera.jpa.util.PageableHelper.determineFetchSize(em);
         if (fetchSize != 0) {
             query.setHint("jakarta.persistence.query.fetchSize", fetchSize);
@@ -602,23 +602,23 @@ public class ProjectionSpec<T> {
         Root<T> root = query.from(entityClass);
 
         try {
-            // Apply joins
+            // 应用 JOIN
             resolveJoins(root, cb);
 
-            // Apply selections as constructor arguments
+            // 将选择列表作为构造函数参数应用
             List<jakarta.persistence.criteria.Selection<?>> selectionList = buildSelectionList(root, cb);
             query.select((CompoundSelection<R>)cb.construct(dtoClass,
                 selectionList.toArray(new jakarta.persistence.criteria.Selection[0])));
 
-            // Apply DISTINCT
+            // 应用 DISTINCT
             if (distinct) {
                 query.distinct(true);
             }
 
-            // Apply WHERE
+            // 应用 WHERE
             applyPredicate(root, query, cb);
 
-            // Apply GROUP BY
+            // 应用 GROUP BY
             if (!groupByFields.isEmpty()) {
                 List<jakarta.persistence.criteria.Expression<?>> groupByExpressions = new ArrayList<>();
                 for (String gf : groupByFields) {
@@ -627,10 +627,10 @@ public class ProjectionSpec<T> {
                 query.groupBy(groupByExpressions);
             }
 
-            // Apply HAVING
+            // 应用 HAVING
             applyHaving(root, cb, query);
 
-            // Apply ORDER BY
+            // 应用 ORDER BY
             applyOrderBy(root, cb, query);
 
             TypedQuery<R> typedQuery = em.createQuery(query);
@@ -668,7 +668,7 @@ public class ProjectionSpec<T> {
         }
         CriteriaBuilder cb = em.getCriteriaBuilder();
 
-        // Handle unpaged
+        // 处理无分页情况
         if (pageable.isUnpaged()) {
             TypedQuery<Tuple> query = toTupleQuery(em);
             List<Tuple> allContent = query.getResultList();
@@ -676,32 +676,32 @@ public class ProjectionSpec<T> {
         }
 
         try {
-            // Build count and data queries sharing a single pass of join resolution per root.
+            // 构建计数和数据查询，每个 root 共享一次 JOIN 解析
             Long total;
-            // Count query
+            // 计数查询
             CriteriaQuery<Long> countQuery = cb.createQuery(Long.class);
             Root<T> countRoot = countQuery.from(entityClass);
             resolveJoins(countRoot, cb);
             if (!groupByFields.isEmpty() && !havingPredicateFns.isEmpty()) {
-                // When GROUP BY + HAVING is present, use a separate count query that
-                // groups by the same fields and applies HAVING, then counts the groups
+                // 当存在 GROUP BY + HAVING 时，使用单独的计数查询，
+                // 按相同字段分组并应用 HAVING，然后对分组计数
                 CriteriaQuery<Long> havingCountQuery = cb.createQuery(Long.class);
                 Root<T> havingRoot = havingCountQuery.from(entityClass);
                 resolveJoins(havingRoot, cb);
-                // Apply WHERE predicates
+                // 应用 WHERE 谓词
                 applyPredicate(havingRoot, havingCountQuery, cb);
-                // Apply GROUP BY
+                // 应用 GROUP BY
                 List<jakarta.persistence.criteria.Expression<?>> groupByExpressions = new ArrayList<>();
                 for (String gf : groupByFields) {
                     groupByExpressions.add(havingRoot.get(gf));
                 }
                 havingCountQuery.groupBy(groupByExpressions);
-                // Apply HAVING
+                // 应用 HAVING
                 applyHavingPredicates(havingRoot, cb, havingCountQuery);
                 havingCountQuery.select(cb.countDistinct(havingRoot));
                 total = em.createQuery(havingCountQuery).getSingleResult();
             } else {
-                // Use countDistinct only when distinct is explicitly enabled
+                // 仅在用户显式启用 distinct 时使用 countDistinct
                 if (this.distinct) {
                     countQuery.select(cb.countDistinct(countRoot));
                 } else {
@@ -711,20 +711,20 @@ public class ProjectionSpec<T> {
                 total = em.createQuery(countQuery).getSingleResult();
             }
 
-            // Data query - build directly to avoid calling toTupleQuery() which would resolveJoins() again
+            // 数据查询——直接构建以避免调用 toTupleQuery() 导致再次 resolveJoins()
             CriteriaQuery<Tuple> dataQuery = cb.createTupleQuery();
             Root<T> dataRoot = dataQuery.from(entityClass);
             resolveJoins(dataRoot, cb);
 
             List<jakarta.persistence.criteria.Selection<?>> selectionList = buildSelectionList(dataRoot, cb);
             dataQuery.multiselect(selectionList);
-            // Only apply DISTINCT when explicitly enabled by user
+            // 仅在用户显式启用时应用 DISTINCT
             if (this.distinct) {
                 dataQuery.distinct(true);
             }
             applyPredicate(dataRoot, dataQuery, cb);
 
-            // Apply GROUP BY
+            // 应用 GROUP BY
             if (!groupByFields.isEmpty()) {
                 List<jakarta.persistence.criteria.Expression<?>> groupByExpressions = new ArrayList<>();
                 for (String gf : groupByFields) {
@@ -733,7 +733,7 @@ public class ProjectionSpec<T> {
                 dataQuery.groupBy(groupByExpressions);
             }
 
-            // Apply HAVING
+            // 应用 HAVING
             applyHavingPredicates(dataRoot, cb, dataQuery);
 
             applyOrderBy(dataRoot, cb, dataQuery);

@@ -59,7 +59,7 @@ public final class PageableHelper {
         if (pageable == null) {
             return Pageable.unpaged();
         }
-        // Add null check for querySpec parameter
+        // 对 querySpec 参数添加空值检查
         if (querySpec == null) {
             return pageable;
         }
@@ -67,7 +67,7 @@ public final class PageableHelper {
         Sort pageableSort = pageable.getSort();
         Sort combined;
         if (querySpecSort.isSorted()) {
-            // QuerySpec ordering takes precedence, then append Pageable sort
+            // QuerySpec 排序优先，然后追加 Pageable 排序
             if (pageableSort.isSorted()) {
                 combined = querySpecSort.and(pageableSort);
             } else {
@@ -117,7 +117,7 @@ public final class PageableHelper {
                 }
             }
         } catch (Exception ignored) {
-            // Failed to determine fetchSize from JDBC URL
+            // 无法从 JDBC URL 确定 fetchSize
         }
         return 0;
     }

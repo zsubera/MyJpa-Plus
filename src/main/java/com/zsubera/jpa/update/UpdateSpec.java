@@ -171,7 +171,7 @@ public class UpdateSpec<T> extends AbstractBulkOperationSpec<T, UpdateSpec<T>> {
             throw new IllegalArgumentException("amount must not be null");
         }
         String name = LambdaUtils.getPropertyName(field);
-        // Validate that the field type is numeric at build time
+        // 构建时校验字段类型是否为数值类型
         validateNumericField(name, "setAdd");
         expressionSetClauses.add(new ExpressionSetClause(name, (root, cb) -> cb.sum(root.get(name), amount)));
         return this;
@@ -201,7 +201,7 @@ public class UpdateSpec<T> extends AbstractBulkOperationSpec<T, UpdateSpec<T>> {
             throw new IllegalArgumentException("amount must not be null");
         }
         String name = LambdaUtils.getPropertyName(field);
-        // Validate that the field type is numeric at build time
+        // 构建时校验字段类型是否为数值类型
         validateNumericField(name, "setSubtract");
         expressionSetClauses.add(new ExpressionSetClause(name, (root, cb) -> cb.diff(root.get(name), amount)));
         return this;
@@ -441,7 +441,7 @@ public class UpdateSpec<T> extends AbstractBulkOperationSpec<T, UpdateSpec<T>> {
         }
         CriteriaBuilder cb = em.getCriteriaBuilder();
 
-        // Step 1: 查询符合条件的ID列表（带LIMIT）
+        // 步骤 1：查询符合条件的ID列表（带LIMIT）
         String idFieldName = EntityClassResolver.resolveIdFieldName(entityClass);
         CriteriaQuery<?> idQuery = cb.createQuery();
         Root<T> idRoot = idQuery.from(entityClass);
@@ -468,7 +468,7 @@ public class UpdateSpec<T> extends AbstractBulkOperationSpec<T, UpdateSpec<T>> {
             return 0;
         }
 
-        // Step 2: 用ID列表执行更新
+        // 步骤 2：用ID列表执行更新
         CriteriaUpdate<T> update = cb.createCriteriaUpdate(entityClass);
         Root<T> updateRoot = update.from(entityClass);
         for (SetClause sc : setClauses) {
@@ -481,14 +481,14 @@ public class UpdateSpec<T> extends AbstractBulkOperationSpec<T, UpdateSpec<T>> {
     }
 
     /**
-     * Validate that the specified field is a numeric type.
+     * 校验指定字段是否为数值类型。
      *
-     * @param fieldName the field name to validate
-     * @param operation the operation name for error messages
-     * @throws IllegalArgumentException if the field is not a numeric type
+     * @param fieldName 要校验的字段名
+     * @param operation 操作名称，用于错误消息
+     * @throws IllegalArgumentException 如果字段不是数值类型
      */
     private void validateNumericField(String fieldName, String operation) {
-        // Use cached validation result to avoid repeated reflection
+        // 使用缓存的校验结果，避免重复反射
         String cacheKey = entityClass.getName() + "#" + fieldName;
         Boolean cachedResult = NUMERIC_FIELD_CACHE.get(cacheKey);
         if (cachedResult != null) {
@@ -514,10 +514,10 @@ public class UpdateSpec<T> extends AbstractBulkOperationSpec<T, UpdateSpec<T>> {
                 }
                 return;
             } catch (NoSuchFieldException e) {
-                // continue checking superclass
+                // 继续检查父类
             }
         }
-        // Field not found via reflection — may be a property without a direct field; skip validation
+        // 通过反射未找到字段 — 可能是没有直接字段的属性；跳过校验
         evictCacheIfNeeded(NUMERIC_FIELD_CACHE);
         NUMERIC_FIELD_CACHE.put(cacheKey, true);
         log.debug("Cannot validate numeric type for field '{}' via reflection; skipping validation", fieldName);
