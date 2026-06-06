@@ -3,18 +3,11 @@ package com.zsubera.jpa.spec;
 import static com.zsubera.jpa.spec.PredicateHelper.escapeLikeWildcards;
 
 import com.zsubera.jpa.util.LambdaUtils;
-import jakarta.persistence.criteria.CriteriaBuilder;
-import jakarta.persistence.criteria.Path;
-import jakarta.persistence.criteria.Predicate;
-import jakarta.persistence.criteria.Root;
 import java.util.Collection;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.function.BiFunction;
-import java.util.function.Function;
 import java.util.regex.Pattern;
-import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.lang.Nullable;
 
@@ -33,7 +26,7 @@ import org.springframework.lang.Nullable;
  * @param <E> 条件操作的实体类型
  * @param <SELF> 用于流式链式调用的具体构建器类型
  */
-public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> {
+public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> extends ConditionalMethods<E, SELF> {
 
     /**
      * 安全字段名正则表达式：仅允许字母、数字和下划线。
@@ -59,13 +52,13 @@ public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> {
      * 安全数据库函数名白名单。仅允许调用以下常见安全函数。
      *
      * <p>
-     * P2-1: 此集合为线程安全的可变集合，通过 {@link #addSafeFunction(String)} 方法添加新函数时 会记录安全审计日志。禁止调用危险函数如
-     * {@code pg_sleep}、{@code SLEEP}、{@code LOAD_FILE} 等。
+     * 此集合为不可变集合，禁止调用危险函数如 {@code pg_sleep}、{@code SLEEP}、{@code LOAD_FILE} 等。
      *
      * <p>
-     * 白名单强制执行由系统属性 {@code myjpa-plus.func.whitelist-enforced} 控制（默认 {@code true}）。 设置为 {@code false} 时仅记录警告日志，不阻断执行。
+     * 白名单强制执行由 {@link #WHITELIST_ENFORCED} 控制（硬编码为 true）。 如需扩展白名单，请通过系统属性 {@code myjpa-plus.func.extra-safe-functions}
+     * 在启动前配置。
      */
-    Set<String> SAFE_FUNCTION_NAMES = initDefaultFunctionNames();
+    Set<String> SAFE_FUNCTION_NAMES = Set.copyOf(initDefaultFunctionNames());
 
     /**
      * P0-4: 白名单强制执行开关。硬编码为 true，不可通过系统属性禁用。
@@ -109,28 +102,22 @@ public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> {
     /**
      * P2-5: 向安全函数白名单中添加函数名，带安全审计日志。
      *
-     * <p>
-     * 此方法记录添加操作到安全审计日志，便于追踪白名单变更。
-     *
-     * <p>
-     * <strong>安全说明：</strong>此方法为包级私有，仅限内部使用。白名单扩展应通过 系统属性 {@code myjpa-plus.func.extra-safe-functions} 配置，而非运行时调用。
+     * @deprecated 此方法已废弃。白名单现在是不可变的，运行时修改不再允许。 如需扩展白名单，请通过系统属性 {@code myjpa-plus.func.extra-safe-functions} 在启动前配置。
      *
      * @param functionName 要添加的函数名（大小写不敏感，将自动转为大写）
      * @return 如果成功添加返回 true，如果已存在返回 false
      * @throws IllegalArgumentException 如果 functionName 为 null 或空
      */
+    @Deprecated
     static boolean addSafeFunction(String functionName) {
         if (functionName == null || functionName.isEmpty()) {
             throw new IllegalArgumentException("functionName must not be null or empty");
         }
         String upper = functionName.toUpperCase();
-        boolean added = SAFE_FUNCTION_NAMES.add(upper);
-        if (added) {
-            LoggerFactory.getLogger("com.zsubera.jpa.security")
-                .warn("SECURITY: Function '{}' added to safe function whitelist. "
-                    + "Ensure this function does not pose SQL injection risks.", upper);
-        }
-        return added;
+        LoggerFactory.getLogger("com.zsubera.jpa.security")
+            .warn("SECURITY: Attempted to add function '{}' to safe function whitelist at runtime. "
+                + "This operation is no longer supported. Whitelist is immutable.", upper);
+        return false;
     }
 
     /**
@@ -145,6 +132,7 @@ public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> {
      *
      * @return {@code this} 转换为 {@code SELF} 类型
      */
+    @Override
     @SuppressWarnings("unchecked")
     default SELF self() {
         return (SELF)this;
@@ -160,6 +148,7 @@ public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> {
      * @return 当前构建器以支持链式调用
      * @throws IllegalArgumentException 如果 {@code field} 为 null
      */
+    @Override
     default SELF eq(SFunction<E, ?> field, @Nullable Object value) {
         if (field == null) {
             throw new IllegalArgumentException("field must not be null");
@@ -182,6 +171,7 @@ public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> {
      * @return 当前构建器以支持链式调用
      * @throws IllegalArgumentException 如果 {@code field} 为 null
      */
+    @Override
     default SELF ne(SFunction<E, ?> field, @Nullable Object value) {
         if (field == null) {
             throw new IllegalArgumentException("field must not be null");
@@ -246,6 +236,7 @@ public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> {
      * @return 当前构建器以支持链式调用
      * @throws IllegalArgumentException 如果 {@code field} 或 {@code value} 为 null
      */
+    @Override
     default SELF gt(SFunction<E, ?> field, Comparable<?> value) {
         if (field == null) {
             throw new IllegalArgumentException("field must not be null");
@@ -265,6 +256,7 @@ public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> {
      * @return 当前构建器以支持链式调用
      * @throws IllegalArgumentException 如果 {@code field} 或 {@code value} 为 null
      */
+    @Override
     default SELF ge(SFunction<E, ?> field, Comparable<?> value) {
         if (field == null) {
             throw new IllegalArgumentException("field must not be null");
@@ -284,6 +276,7 @@ public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> {
      * @return 当前构建器以支持链式调用
      * @throws IllegalArgumentException 如果 {@code field} 或 {@code value} 为 null
      */
+    @Override
     default SELF lt(SFunction<E, ?> field, Comparable<?> value) {
         if (field == null) {
             throw new IllegalArgumentException("field must not be null");
@@ -303,6 +296,7 @@ public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> {
      * @return 当前构建器以支持链式调用
      * @throws IllegalArgumentException 如果 {@code field} 或 {@code value} 为 null
      */
+    @Override
     default SELF le(SFunction<E, ?> field, Comparable<?> value) {
         if (field == null) {
             throw new IllegalArgumentException("field must not be null");
@@ -317,113 +311,45 @@ public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> {
     // ---- 字符串运算符 ----
 
     /**
-     * 添加 LIKE 条件：{@code field LIKE value}。调用者需要自行包含通配符（例如 {@code "%keyword%"}）。
-     *
-     * <p>
-     * <b>安全提醒：</b>此方法不转义通配符（{@code %} 和 {@code _}）。如果需要处理用户输入，请使用 {@link #contains}、
-     * {@link #startsWith}、{@link #endsWith} 等安全方法，这些方法会自动转义通配符。
+     * 添加包含匹配条件 {@code field LIKE '%value%'}，值中的 {@code %} 或 {@code _} 通配符会被自动转义。
      *
      * @param field 实体属性的方法引用
-     * @param value 匹配模式的字符串值
+     * @param value 要匹配的字符串值（通配符会被自动转义）
      * @return 当前构建器以支持链式调用
      * @throws IllegalArgumentException 如果 {@code field} 或 {@code value} 为 null
-     * @deprecated 不转义通配符，存在 LIKE 注入风险。请使用 {@link #likeSafe}、{@link #contains}、{@link #startsWith}、 {@link #endsWith}
-     *             等安全替代方法。此方法将在 2.0 版本中移除。
-     * @see #likeSafe(SFunction, String)
-     * @see #contains(SFunction, String)
-     * @see #startsWith(SFunction, String)
-     * @see #endsWith(SFunction, String)
      */
-    @Deprecated(since = "1.1.0", forRemoval = true)
+    @Override
     default SELF like(SFunction<E, ?> field, String value) {
-        deprecationLog("like()", "likeSafe(), contains(), startsWith(), endsWith()");
-        return likeSafe(field, value);
-    }
-
-    /**
-     * 添加带自动通配符转义的 LIKE 条件：{@code field LIKE '%value%'}。 值中的 {@code %} 或 {@code _} 字符会被转义，作为字面量处理。
-     *
-     * <p>
-     * 此方法行为与 {@link #contains(SFunction, String)} 完全相同。
-     *
-     * @param field 实体属性的方法引用
-     * @param value 要匹配的原始字符串值
-     * @return 当前构建器以支持链式调用
-     * @throws IllegalArgumentException 如果 {@code field} 或 {@code value} 为 null
-     * @deprecated 方法命名具有误导性（暗示"原始 LIKE"不转义），实际行为与 {@link #contains(SFunction, String)} 相同。请使用 {@link #contains} 替代。
-     */
-    @Deprecated(since = "1.1.0", forRemoval = true)
-    default SELF rawLike(SFunction<E, ?> field, String value) {
-        deprecationLog("rawLike()", "contains(), startsWith(), endsWith()");
-        return contains(field, value);
-    }
-
-    /**
-     * 添加带自动通配符转义的 LIKE 条件：{@code field LIKE value}。 值中的 {@code %} 或 {@code _} 字符会被转义，作为字面量处理。
-     *
-     * <p>
-     * 此方法是 {@link #like(SFunction, String)} 的安全版本，适用于处理用户输入。
-     *
-     * @param field 实体属性的方法引用
-     * @param value 要匹配的原始字符串值（通配符会被转义）
-     * @return 当前构建器以支持链式调用
-     * @throws IllegalArgumentException 如果 {@code field} 或 {@code value} 为 null
-     * @see #like(SFunction, String)
-     * @see #rawLike(SFunction, String)
-     */
-    default SELF likeSafe(SFunction<E, ?> field, String value) {
         if (field == null) {
             throw new IllegalArgumentException("field must not be null");
         }
         if (value == null) {
             throw new IllegalArgumentException("value must not be null");
         }
-        conditions().add(new ConditionNode.SimpleNode(LambdaUtils.getPropertyName(field), escapeLikeWildcards(value),
+        String escaped = escapeLikeWildcards(value);
+        conditions().add(new ConditionNode.SimpleNode(LambdaUtils.getPropertyName(field), "%" + escaped + "%",
             ConditionNode.Op.LIKE, PredicateHelper.LIKE_ESCAPE_CHAR));
         return self();
     }
 
     /**
-     * 添加 NOT LIKE 条件：{@code field NOT LIKE value}。
-     *
-     * <p>
-     * <b>安全提醒：</b>此方法不转义通配符（{@code %} 和 {@code _}）。如果需要处理用户输入，请先使用 {@link PredicateHelper#escapeLikeWildcards(String)}
-     * 转义值中的通配符。
+     * 添加不包含匹配条件 {@code field NOT LIKE '%value%'}，值中的 {@code %} 或 {@code _} 通配符会被自动转义。
      *
      * @param field 实体属性的方法引用
-     * @param value 匹配模式的字符串值
+     * @param value 要匹配的字符串值（通配符会被自动转义）
      * @return 当前构建器以支持链式调用
      * @throws IllegalArgumentException 如果 {@code field} 或 {@code value} 为 null
-     * @deprecated 不转义通配符，存在 LIKE 注入风险。请使用 {@link #notLikeSafe} 等安全替代方法。
-     * @see #notLikeSafe(SFunction, String)
-     * @see PredicateHelper#escapeLikeWildcards(String)
      */
-    @Deprecated(since = "1.1.0", forRemoval = true)
+    @Override
     default SELF notLike(SFunction<E, ?> field, String value) {
-        deprecationLog("notLike()", "notLikeSafe()");
-        return notLikeSafe(field, value);
-    }
-
-    /**
-     * 添加带自动通配符转义的 NOT LIKE 条件：{@code field NOT LIKE value}。 值中的 {@code %} 或 {@code _} 字符会被转义，作为字面量处理。
-     *
-     * <p>
-     * 此方法是 {@link #notLike(SFunction, String)} 的安全版本，适用于处理用户输入。
-     *
-     * @param field 实体属性的方法引用
-     * @param value 要匹配的原始字符串值（通配符会被转义）
-     * @return 当前构建器以支持链式调用
-     * @throws IllegalArgumentException 如果 {@code field} 或 {@code value} 为 null
-     * @see #notLike(SFunction, String)
-     */
-    default SELF notLikeSafe(SFunction<E, ?> field, String value) {
         if (field == null) {
             throw new IllegalArgumentException("field must not be null");
         }
         if (value == null) {
             throw new IllegalArgumentException("value must not be null");
         }
-        conditions().add(new ConditionNode.SimpleNode(LambdaUtils.getPropertyName(field), escapeLikeWildcards(value),
+        String escaped = escapeLikeWildcards(value);
+        conditions().add(new ConditionNode.SimpleNode(LambdaUtils.getPropertyName(field), "%" + escaped + "%",
             ConditionNode.Op.NOT_LIKE, PredicateHelper.LIKE_ESCAPE_CHAR));
         return self();
     }
@@ -436,6 +362,7 @@ public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> {
      * @return 当前构建器以支持链式调用
      * @throws IllegalArgumentException 如果 {@code field} 或 {@code value} 为 null
      */
+    @Override
     default SELF startsWith(SFunction<E, ?> field, String value) {
         if (field == null) {
             throw new IllegalArgumentException("field must not be null");
@@ -456,6 +383,7 @@ public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> {
      * @return 当前构建器以支持链式调用
      * @throws IllegalArgumentException 如果 {@code field} 或 {@code value} 为 null
      */
+    @Override
     default SELF endsWith(SFunction<E, ?> field, String value) {
         if (field == null) {
             throw new IllegalArgumentException("field must not be null");
@@ -465,58 +393,6 @@ public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> {
         }
         conditions().add(new ConditionNode.SimpleNode(LambdaUtils.getPropertyName(field),
             "%" + escapeLikeWildcards(value), ConditionNode.Op.LIKE, PredicateHelper.LIKE_ESCAPE_CHAR));
-        return self();
-    }
-
-    /**
-     * 添加前缀匹配 LIKE 条件（别名方法，等价于 {@link #startsWith}）。
-     *
-     * <p>
-     * 此方法为 MyBatis-Plus 风格的命名别名，方便从 MyBatis-Plus 迁移的用户使用。
-     *
-     * @param field 实体属性的方法引用
-     * @param value 前缀字符串值
-     * @return 当前构建器以支持链式调用
-     * @throws IllegalArgumentException 如果 {@code field} 或 {@code value} 为 null
-     * @see #startsWith(SFunction, String)
-     */
-    default SELF likeRight(SFunction<E, ?> field, String value) {
-        return startsWith(field, value);
-    }
-
-    /**
-     * 添加后缀匹配 LIKE 条件（别名方法，等价于 {@link #endsWith}）。
-     *
-     * <p>
-     * 此方法为 MyBatis-Plus 风格的命名别名，方便从 MyBatis-Plus 迁移的用户使用。
-     *
-     * @param field 实体属性的方法引用
-     * @param value 后缀字符串值
-     * @return 当前构建器以支持链式调用
-     * @throws IllegalArgumentException 如果 {@code field} 或 {@code value} 为 null
-     * @see #endsWith(SFunction, String)
-     */
-    default SELF likeLeft(SFunction<E, ?> field, String value) {
-        return endsWith(field, value);
-    }
-
-    /**
-     * 添加包含匹配 LIKE 条件：{@code field LIKE '%value%'}。
-     *
-     * @param field 实体属性的方法引用
-     * @param value 要包含的子字符串值
-     * @return 当前构建器以支持链式调用
-     * @throws IllegalArgumentException 如果 {@code field} 或 {@code value} 为 null
-     */
-    default SELF contains(SFunction<E, ?> field, String value) {
-        if (field == null) {
-            throw new IllegalArgumentException("field must not be null");
-        }
-        if (value == null) {
-            throw new IllegalArgumentException("value must not be null");
-        }
-        conditions().add(new ConditionNode.SimpleNode(LambdaUtils.getPropertyName(field),
-            "%" + escapeLikeWildcards(value) + "%", ConditionNode.Op.LIKE, PredicateHelper.LIKE_ESCAPE_CHAR));
         return self();
     }
 
@@ -530,6 +406,7 @@ public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> {
      * @return 当前构建器以支持链式调用
      * @throws IllegalArgumentException 如果 {@code field} 为 null 或 {@code values} 为空
      */
+    @Override
     default SELF in(SFunction<E, ?> field, Object... values) {
         if (field == null) {
             throw new IllegalArgumentException("field must not be null");
@@ -549,6 +426,7 @@ public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> {
      * @return 当前构建器以支持链式调用
      * @throws IllegalArgumentException 如果 {@code field} 为 null 或 {@code values} 为空
      */
+    @Override
     default SELF notIn(SFunction<E, ?> field, Object... values) {
         if (field == null) {
             throw new IllegalArgumentException("field must not be null");
@@ -569,6 +447,7 @@ public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> {
      * @return 当前构建器以支持链式调用
      * @throws IllegalArgumentException 如果 {@code field} 为 null 或 {@code values} 为空
      */
+    @Override
     default SELF in(SFunction<E, ?> field, Collection<?> values) {
         if (field == null) {
             throw new IllegalArgumentException("field must not be null");
@@ -588,6 +467,7 @@ public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> {
      * @return 当前构建器以支持链式调用
      * @throws IllegalArgumentException 如果 {@code field} 为 null 或 {@code values} 为空
      */
+    @Override
     default SELF notIn(SFunction<E, ?> field, Collection<?> values) {
         if (field == null) {
             throw new IllegalArgumentException("field must not be null");
@@ -610,6 +490,7 @@ public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> {
      * @throws IllegalArgumentException 如果 {@code field}、{@code start} 或 {@code end} 为 null， 或者 start 大于 end
      */
     @SuppressWarnings({"unchecked", "rawtypes"})
+    @Override
     default SELF between(SFunction<E, ?> field, Comparable<?> start, Comparable<?> end) {
         if (field == null) {
             throw new IllegalArgumentException("field must not be null");
@@ -630,6 +511,7 @@ public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> {
      * @throws IllegalArgumentException 如果 {@code field}、{@code start} 或 {@code end} 为 null， 或者 start 大于 end
      */
     @SuppressWarnings({"unchecked", "rawtypes"})
+    @Override
     default SELF notBetween(SFunction<E, ?> field, Comparable<?> start, Comparable<?> end) {
         if (field == null) {
             throw new IllegalArgumentException("field must not be null");
@@ -649,6 +531,7 @@ public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> {
      * @return 当前构建器以支持链式调用
      * @throws IllegalArgumentException 如果 {@code field} 为 null
      */
+    @Override
     default SELF isNull(SFunction<E, ?> field) {
         if (field == null) {
             throw new IllegalArgumentException("field must not be null");
@@ -665,6 +548,7 @@ public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> {
      * @return 当前构建器以支持链式调用
      * @throws IllegalArgumentException 如果 {@code field} 为 null
      */
+    @Override
     default SELF isNotNull(SFunction<E, ?> field) {
         if (field == null) {
             throw new IllegalArgumentException("field must not be null");
@@ -682,6 +566,7 @@ public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> {
      * @return 当前构建器以支持链式调用
      * @throws IllegalArgumentException 如果 {@code field} 为 null
      */
+    @Override
     default SELF eqIgnoreCase(SFunction<E, ?> field, @Nullable String value) {
         if (field == null) {
             throw new IllegalArgumentException("field must not be null");
@@ -702,6 +587,7 @@ public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> {
      * @return 当前构建器以支持链式调用
      * @throws IllegalArgumentException 如果 {@code field} 为 null
      */
+    @Override
     default SELF neIgnoreCase(SFunction<E, ?> field, @Nullable String value) {
         if (field == null) {
             throw new IllegalArgumentException("field must not be null");
@@ -725,6 +611,7 @@ public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> {
      * @return 当前构建器以支持链式调用
      * @throws IllegalArgumentException 如果 {@code field} 或 {@code value} 为 null
      */
+    @Override
     default SELF likeIgnoreCase(SFunction<E, ?> field, String value) {
         if (field == null) {
             throw new IllegalArgumentException("field must not be null");
@@ -738,21 +625,6 @@ public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> {
         return self();
     }
 
-    /**
-     * 添加不区分大小写的包含匹配条件：{@code UPPER(field) LIKE UPPER('%value%')}。
-     *
-     * <p>
-     * 值中的 {@code %} 或 {@code _} 字符会被转义，作为字面量处理，防止 LIKE 注入。
-     *
-     * @param field 实体属性的方法引用
-     * @param value 要匹配的原始字符串值（通配符会被转义）
-     * @return 当前构建器以支持链式调用
-     * @throws IllegalArgumentException 如果 {@code field} 或 {@code value} 为 null
-     */
-    default SELF containsIgnoreCase(SFunction<E, ?> field, String value) {
-        return likeIgnoreCase(field, value);
-    }
-
     // ---- 集合空值检查 ----
 
     /**
@@ -762,6 +634,7 @@ public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> {
      * @return 当前构建器以支持链式调用
      * @throws IllegalArgumentException 如果 {@code field} 为 null
      */
+    @Override
     default SELF isEmpty(SFunction<E, ?> field) {
         if (field == null) {
             throw new IllegalArgumentException("field must not be null");
@@ -778,6 +651,7 @@ public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> {
      * @return 当前构建器以支持链式调用
      * @throws IllegalArgumentException 如果 {@code field} 为 null
      */
+    @Override
     default SELF isNotEmpty(SFunction<E, ?> field) {
         if (field == null) {
             throw new IllegalArgumentException("field must not be null");
@@ -785,108 +659,6 @@ public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> {
         conditions().add(new ConditionNode.CollectionNode(LambdaUtils.getPropertyName(field),
             ConditionNode.CollectionOp.IS_NOT_EMPTY));
         return self();
-    }
-
-    /**
-     * 添加原始 {@link Predicate} 条件，使用当前实体 {@link Path} 和 {@link CriteriaBuilder}。 这是处理构建器 API 未覆盖条件的扩展方法。
-     *
-     * <p>
-     * <strong>注意：</strong>由于 Java 泛型类型推断限制，使用 lambda 时编译器可能无法正确推断 {@code Path<E>} 类型， 导致无法调用 {@code path.get()}
-     * 等方法。此时需要显式声明参数类型：
-     *
-     * <pre>{@code
-     * // 编译失败：path 被推断为 Object
-     * qs.where((path, cb) -> cb.like(path.get("name"), "%test%"));
-     *
-     * // 正确：显式声明 Path<?> 类型
-     * qs.where((Path<?> path, CriteriaBuilder cb) -> cb.like(path.get("name"), "%test%"));
-     *
-     * // 推荐：使用类型安全的方法引用（编译时检查）
-     * qs.like(User::getName, "%test%");
-     * }</pre>
-     *
-     * <p>
-     * <strong>安全警告：此方法绕过类型安全机制，存在潜在的SQL注入风险！</strong>
-     * <ul>
-     * <li>请勿使用用户输入的字符串拼接字段名，如 {@code path.get(userInput)}，这可能导致 SQL 注入</li>
-     * <li>建议优先使用类型安全的方法引用 API（如 {@code eq(Entity::getField, value)}）</li>
-     * <li>如果必须使用字符串字面量，请确保是硬编码的常量，而非运行时拼接</li>
-     * <li>推荐使用 {@link #eq(SFunction, Object)}、{@link #like(SFunction, String)} 等类型安全方法</li>
-     * </ul>
-     *
-     * <pre>{@code
-     * // 危险：用户输入直接拼接到字段名
-     * String userInput = request.getParameter("field");
-     * qs.where((path, cb) -> cb.equal(path.get(userInput), value)); // SQL 注入风险！
-     *
-     * // 安全：使用硬编码字段名（仍存在类型安全风险）
-     * qs.where((path, cb) -> cb.equal(path.get("name"), value));
-     *
-     * // 推荐：使用类型安全的方法引用（编译时检查，无 SQL 注入风险）
-     * qs.eq(Entity::getName, value);
-     * }</pre>
-     *
-     * @param fn 接收实体路径和条件构建器的函数，返回谓词
-     * @return 当前构建器以支持链式调用
-     * @throws IllegalArgumentException 如果 {@code fn} 为 null
-     * @throws UnsupportedOperationException 始终抛出，此方法已在 1.1.0 版本移除
-     * @see #eq(SFunction, Object)
-     * @see #ne(SFunction, Object)
-     */
-    @Deprecated(since = "1.1.0", forRemoval = true)
-    @SuppressWarnings("unchecked")
-    default SELF where(BiFunction<Path<E>, CriteriaBuilder, Predicate> fn) {
-        if (fn == null) {
-            throw new IllegalArgumentException("fn must not be null");
-        }
-        deprecationLog("where(BiFunction)", "eq(), likeSafe(), contains(), etc.");
-        throw new UnsupportedOperationException("where(BiFunction) was removed in 1.1.0 for security reasons. "
-            + "Use type-safe methods: eq(), ne(), likeSafe(), contains(), startsWith(), endsWith(), in(), between(), etc.");
-    }
-
-    /**
-     * 添加原始 {@link Predicate} 条件，使用 {@link Root} 参数。此重载避免了 {@link #where(BiFunction)} 的类型推断问题。
-     *
-     * <p>
-     * 推荐使用此方法代替 {@link #where(BiFunction)}，因为 {@code Root<T>} 的类型推断更可靠：
-     *
-     * <pre>{@code
-     * // 使用 where(Function) - 类型推断正常
-     * qs.where(root -> cb.like(root.get("name"), "%test%"));
-     *
-     * // 注意：需要在外部获取 CriteriaBuilder
-     * CriteriaBuilder cb = entityManager.getCriteriaBuilder();
-     * qs.where(root -> cb.like(root.get("name"), "%test%"));
-     *
-     * // 推荐：使用类型安全的方法引用（编译时检查，无 SQL 注入风险）
-     * qs.like(User::getName, "%test%");
-     * }</pre>
-     *
-     * <p>
-     * <strong>安全警告：此方法绕过类型安全机制，存在潜在的SQL注入风险！</strong>
-     * <ul>
-     * <li>请勿使用用户输入的字符串拼接字段名，如 {@code root.get(userInput)}，这可能导致 SQL 注入</li>
-     * <li>建议优先使用类型安全的方法引用 API（如 {@code eq(Entity::getField, value)}）</li>
-     * <li>如果必须使用字符串字面量，请确保是硬编码的常量，而非运行时拼接</li>
-     * <li>推荐使用 {@link #eq(SFunction, Object)}、{@link #like(SFunction, String)} 等类型安全方法</li>
-     * </ul>
-     *
-     * @param fn 接收 Root 的函数，返回谓词
-     * @return 当前构建器以支持链式调用
-     * @throws IllegalArgumentException 如果 {@code fn} 为 null
-     * @throws UnsupportedOperationException 始终抛出，此方法已在 1.1.0 版本移除
-     * @see #eq(SFunction, Object)
-     * @see #ne(SFunction, Object)
-     */
-    @Deprecated(since = "1.1.0", forRemoval = true)
-    @SuppressWarnings("unchecked")
-    default SELF where(Function<Root<E>, Predicate> fn) {
-        if (fn == null) {
-            throw new IllegalArgumentException("fn must not be null");
-        }
-        deprecationLog("where(Function)", "eq(), likeSafe(), contains(), etc.");
-        throw new UnsupportedOperationException("where(Function) was removed in 1.1.0 for security reasons. "
-            + "Use type-safe methods: eq(), ne(), likeSafe(), contains(), startsWith(), endsWith(), in(), between(), etc.");
     }
 
     // ---- 多字段搜索 ----
@@ -1040,254 +812,7 @@ public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> {
         return self();
     }
 
-    // ---- 条件便捷方法 ----
-
-    /**
-     * 仅在 {@code condition} 为 true 时添加等值条件。
-     *
-     * @param condition 是否添加条件的标志
-     * @param field 实体属性的方法引用
-     * @param value 要比较的值
-     * @return 当前构建器以支持链式调用
-     */
-    default SELF eq(boolean condition, SFunction<E, ?> field, @Nullable Object value) {
-        return condition ? eq(field, value) : self();
-    }
-
-    /**
-     * 仅在 {@code condition} 为 true 时添加不等条件。
-     *
-     * @param condition 是否添加条件的标志
-     * @param field 实体属性的方法引用
-     * @param value 要比较的值
-     * @return 当前构建器以支持链式调用
-     */
-    default SELF ne(boolean condition, SFunction<E, ?> field, @Nullable Object value) {
-        return condition ? ne(field, value) : self();
-    }
-
-    /**
-     * 仅在 {@code condition} 为 true 时添加大于条件。
-     *
-     * @param condition 是否添加条件的标志
-     * @param field 实体属性的方法引用
-     * @param value 要比较的值
-     * @return 当前构建器以支持链式调用
-     */
-    default SELF gt(boolean condition, SFunction<E, ?> field, Comparable<?> value) {
-        return condition ? gt(field, value) : self();
-    }
-
-    /**
-     * 仅在 {@code condition} 为 true 时添加大于等于条件。
-     *
-     * @param condition 是否添加条件的标志
-     * @param field 实体属性的方法引用
-     * @param value 要比较的值
-     * @return 当前构建器以支持链式调用
-     */
-    default SELF ge(boolean condition, SFunction<E, ?> field, Comparable<?> value) {
-        return condition ? ge(field, value) : self();
-    }
-
-    /**
-     * 仅在 {@code condition} 为 true 时添加小于条件。
-     *
-     * @param condition 是否添加条件的标志
-     * @param field 实体属性的方法引用
-     * @param value 要比较的值
-     * @return 当前构建器以支持链式调用
-     */
-    default SELF lt(boolean condition, SFunction<E, ?> field, Comparable<?> value) {
-        return condition ? lt(field, value) : self();
-    }
-
-    /**
-     * 仅在 {@code condition} 为 true 时添加小于等于条件。
-     *
-     * @param condition 是否添加条件的标志
-     * @param field 实体属性的方法引用
-     * @param value 要比较的值
-     * @return 当前构建器以支持链式调用
-     */
-    default SELF le(boolean condition, SFunction<E, ?> field, Comparable<?> value) {
-        return condition ? le(field, value) : self();
-    }
-
-    /**
-     * 仅在 {@code condition} 为 true 时添加 LIKE 条件。
-     *
-     * @param condition 是否添加条件的标志
-     * @param field 实体属性的方法引用
-     * @param value 匹配模式的字符串值
-     * @return 当前构建器以支持链式调用
-     * @deprecated 自 1.1.0 起废弃，请使用 {@link #likeSafe(SFunction, String)} 或
-     *             {@link #startsWith(SFunction, String)}、{@link #endsWith(SFunction, String)}、{@link #contains(SFunction, String)}
-     */
-    @Deprecated(since = "1.1.0", forRemoval = true)
-    default SELF like(boolean condition, SFunction<E, ?> field, String value) {
-        return condition ? like(field, value) : self();
-    }
-
-    /**
-     * 仅在 {@code condition} 为 true 时添加 NOT LIKE 条件。
-     *
-     * @param condition 是否添加条件的标志
-     * @param field 实体属性的方法引用
-     * @param value 匹配模式的字符串值
-     * @return 当前构建器以支持链式调用
-     * @deprecated 自 1.1.0 起废弃，请使用 {@link #notLikeSafe(SFunction, String)}
-     */
-    @Deprecated(since = "1.1.0", forRemoval = true)
-    default SELF notLike(boolean condition, SFunction<E, ?> field, String value) {
-        return condition ? notLike(field, value) : self();
-    }
-
-    /**
-     * 仅在 {@code condition} 为 true 时添加前缀匹配条件。
-     *
-     * @param condition 是否添加条件的标志
-     * @param field 实体属性的方法引用
-     * @param value 前缀字符串值
-     * @return 当前构建器以支持链式调用
-     */
-    default SELF startsWith(boolean condition, SFunction<E, ?> field, String value) {
-        return condition ? startsWith(field, value) : self();
-    }
-
-    /**
-     * 仅在 {@code condition} 为 true 时添加后缀匹配条件。
-     *
-     * @param condition 是否添加条件的标志
-     * @param field 实体属性的方法引用
-     * @param value 后缀字符串值
-     * @return 当前构建器以支持链式调用
-     */
-    default SELF endsWith(boolean condition, SFunction<E, ?> field, String value) {
-        return condition ? endsWith(field, value) : self();
-    }
-
-    /**
-     * 仅在 {@code condition} 为 true 时添加包含匹配条件。
-     *
-     * @param condition 是否添加条件的标志
-     * @param field 实体属性的方法引用
-     * @param value 要包含的子字符串值
-     * @return 当前构建器以支持链式调用
-     */
-    default SELF contains(boolean condition, SFunction<E, ?> field, String value) {
-        return condition ? contains(field, value) : self();
-    }
-
-    /**
-     * 仅在 {@code condition} 为 true 时添加 IN 条件。
-     *
-     * @param condition 是否添加条件的标志
-     * @param field 实体属性的方法引用
-     * @param values 值集合
-     * @return 当前构建器以支持链式调用
-     */
-    default SELF in(boolean condition, SFunction<E, ?> field, Object... values) {
-        return condition ? in(field, values) : self();
-    }
-
-    /**
-     * 仅在 {@code condition} 为 true 时添加使用 Collection 的 IN 条件。
-     *
-     * @param condition 是否添加条件的标志
-     * @param field 实体属性的方法引用
-     * @param values 值的集合
-     * @return 当前构建器以支持链式调用
-     */
-    default SELF in(boolean condition, SFunction<E, ?> field, Collection<?> values) {
-        return condition ? in(field, values) : self();
-    }
-
-    /**
-     * 仅在 {@code condition} 为 true 时添加 NOT IN 条件。
-     *
-     * @param condition 是否添加条件的标志
-     * @param field 实体属性的方法引用
-     * @param values 值集合
-     * @return 当前构建器以支持链式调用
-     */
-    default SELF notIn(boolean condition, SFunction<E, ?> field, Object... values) {
-        return condition ? notIn(field, values) : self();
-    }
-
-    /**
-     * 仅在 {@code condition} 为 true 时添加使用 Collection 的 NOT IN 条件。
-     *
-     * @param condition 是否添加条件的标志
-     * @param field 实体属性的方法引用
-     * @param values 值的集合
-     * @return 当前构建器以支持链式调用
-     */
-    default SELF notIn(boolean condition, SFunction<E, ?> field, Collection<?> values) {
-        return condition ? notIn(field, values) : self();
-    }
-
-    /**
-     * 仅在 {@code condition} 为 true 时添加 BETWEEN 条件。
-     *
-     * @param condition 是否添加条件的标志
-     * @param field 实体属性的方法引用
-     * @param start 下界（包含）
-     * @param end 上界（包含）
-     * @return 当前构建器以支持链式调用
-     */
-    default SELF between(boolean condition, SFunction<E, ?> field, Comparable<?> start, Comparable<?> end) {
-        return condition ? between(field, start, end) : self();
-    }
-
-    /**
-     * 仅在 {@code condition} 为 true 时添加 NOT BETWEEN 条件。
-     *
-     * @param condition 是否添加条件的标志
-     * @param field 实体属性的方法引用
-     * @param start 下界（包含）
-     * @param end 上界（包含）
-     * @return 当前构建器以支持链式调用
-     */
-    default SELF notBetween(boolean condition, SFunction<E, ?> field, Comparable<?> start, Comparable<?> end) {
-        return condition ? notBetween(field, start, end) : self();
-    }
-
-    /**
-     * 仅在 {@code condition} 为 true 时添加忽略大小写的等值条件。
-     *
-     * @param condition 是否添加条件的标志
-     * @param field 实体属性的方法引用
-     * @param value 要比较的字符串值
-     * @return 当前构建器以支持链式调用
-     */
-    default SELF eqIgnoreCase(boolean condition, SFunction<E, ?> field, @Nullable String value) {
-        return condition ? eqIgnoreCase(field, value) : self();
-    }
-
-    /**
-     * 仅在 {@code condition} 为 true 时添加忽略大小写的不等条件。
-     *
-     * @param condition 是否添加条件的标志
-     * @param field 实体属性的方法引用
-     * @param value 要比较的字符串值
-     * @return 当前构建器以支持链式调用
-     */
-    default SELF neIgnoreCase(boolean condition, SFunction<E, ?> field, @Nullable String value) {
-        return condition ? neIgnoreCase(field, value) : self();
-    }
-
-    /**
-     * 仅在 {@code condition} 为 true 时添加忽略大小写的 LIKE 条件。
-     *
-     * @param condition 是否添加条件的标志
-     * @param field 实体属性的方法引用
-     * @param value 要匹配的原始字符串值（通配符会被转义）
-     * @return 当前构建器以支持链式调用
-     */
-    default SELF likeIgnoreCase(boolean condition, SFunction<E, ?> field, String value) {
-        return condition ? likeIgnoreCase(field, value) : self();
-    }
+    // ---- ConditionBuilder 独有的条件便捷方法 ----
 
     /**
      * 仅在 {@code condition} 为 true 时添加多字段 LIKE 搜索。
@@ -1302,25 +827,52 @@ public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> {
     }
 
     /**
-     * 仅在 {@code condition} 为 true 时添加 IS EMPTY 条件。
+     * 仅在 {@code condition} 为 true 时添加严格等值条件。
      *
      * @param condition 是否添加条件的标志
      * @param field 实体属性的方法引用
+     * @param value 要比较的值
      * @return 当前构建器以支持链式调用
      */
-    default SELF isEmpty(boolean condition, SFunction<E, ?> field) {
-        return condition ? isEmpty(field) : self();
+    default SELF eqStrict(boolean condition, SFunction<E, ?> field, Object value) {
+        return condition ? eqStrict(field, value) : self();
     }
 
     /**
-     * 仅在 {@code condition} 为 true 时添加 IS NOT EMPTY 条件。
+     * 仅在 {@code condition} 为 true 时添加严格不等条件。
      *
      * @param condition 是否添加条件的标志
      * @param field 实体属性的方法引用
+     * @param value 要比较的值
      * @return 当前构建器以支持链式调用
      */
-    default SELF isNotEmpty(boolean condition, SFunction<E, ?> field) {
-        return condition ? isNotEmpty(field) : self();
+    default SELF neStrict(boolean condition, SFunction<E, ?> field, Object value) {
+        return condition ? neStrict(field, value) : self();
+    }
+
+    /**
+     * 仅在 {@code condition} 为 true 时添加多字段 LIKE 搜索（字符串字段名版本）。
+     *
+     * @param condition 是否添加条件的标志
+     * @param keyword 搜索关键字
+     * @param fieldNames 一个或多个字符串属性名
+     * @return 当前构建器以支持链式调用
+     */
+    default SELF multiLike(boolean condition, String keyword, String... fieldNames) {
+        return condition ? multiLike(keyword, fieldNames) : self();
+    }
+
+    /**
+     * 仅在 {@code condition} 为 true 时调用数据库函数进行条件判断。
+     *
+     * @param condition 是否添加条件的标志
+     * @param field 实体属性的方法引用，作为函数的第一个参数
+     * @param functionName 数据库函数名（必须为硬编码常量，勿使用用户输入）
+     * @param params 函数的额外参数
+     * @return 当前构建器以支持链式调用
+     */
+    default SELF func(boolean condition, SFunction<E, ?> field, String functionName, Object... params) {
+        return condition ? func(field, functionName, params) : self();
     }
 
     // ---- 数据库函数运算符 ----
@@ -1377,17 +929,5 @@ public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> {
         return self();
     }
 
-    // ---- 内部辅助方法 ----
-
-    /**
-     * 记录废弃方法的警告日志。
-     *
-     * @param deprecatedMethod 已废弃的方法名
-     * @param replacement 推荐的替代方法
-     */
-    private static void deprecationLog(String deprecatedMethod, String replacement) {
-        Logger log = LoggerFactory.getLogger(ConditionBuilder.class);
-        log.warn("ConditionBuilder.{} is deprecated and will be removed in v2.0. Use {} instead.", deprecatedMethod,
-            replacement);
-    }
+    // ---- 条件便捷方法 ----
 }

@@ -1,7 +1,10 @@
-package com.zsubera.jpa.repository;
+package com.zsubera.jpa.util;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+import com.zsubera.jpa.repository.MyJpaRepository;
+import com.zsubera.jpa.repository.MyJpaTestEntity;
+import com.zsubera.jpa.repository.MyJpaTestRepository;
 import com.zsubera.jpa.spec.SoftDeleteTestEntity;
 import org.junit.jupiter.api.Test;
 

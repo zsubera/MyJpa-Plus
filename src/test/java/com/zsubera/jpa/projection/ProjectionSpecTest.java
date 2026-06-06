@@ -98,14 +98,6 @@ class ProjectionSpecTest {
     }
 
     @Test
-    void testConditionsAccessorReturnsQuerySpec() {
-        ProjectionSpec<TestEntity> spec = new ProjectionSpec<>(TestEntity.class);
-        assertNotNull(spec.conditions());
-        spec.conditions().eq(TestEntity::getName, "value");
-        assertNotNull(spec.conditions());
-    }
-
-    @Test
     void testTupleQueryNoResults() {
         List<Tuple> results = new ProjectionSpec<>(TestEntity.class).select(TestEntity::getName)
             .where(q -> q.eq(TestEntity::getName, "nonexistent")).toTupleQuery(em).getResultList();
@@ -221,7 +213,7 @@ class ProjectionSpecTest {
         List<Tuple> results = new ProjectionSpec<>(TestEntity.class).select(TestEntity::getName).join(
             TestEntity::getParent,
             (com.zsubera.jpa.projection.ProjectionSpec.ProjectionJoinGroup<com.zsubera.jpa.spec.ParentEntity> j) -> j
-                .contains(com.zsubera.jpa.spec.ParentEntity::getCategory, "adm"))
+                .like(com.zsubera.jpa.spec.ParentEntity::getCategory, "adm"))
             .toTupleQuery(em).getResultList();
 
         assertEquals(1, results.size());
@@ -581,12 +573,6 @@ class ProjectionSpecTest {
             new ProjectionSpec<>(TestEntity.class).select(TestEntity::getName).toTupleQuery(em, -1).getResultList();
 
         assertEquals(5, results.size());
-    }
-
-    @Test
-    void testWithDefaultsFactoryMethod() {
-        ProjectionSpec<TestEntity> spec = ProjectionSpec.withDefaults(TestEntity.class, null);
-        assertNotNull(spec);
     }
 
     @Test

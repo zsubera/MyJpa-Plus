@@ -278,7 +278,7 @@ class JoinGroupTest {
 
         QuerySpec<TestEntity> qs = new QuerySpec<>();
         JoinGroup<TestEntity, ParentEntity> jg = qs.join(TestEntity::getParent);
-        jg.contains(ParentEntity::getCategory, "inis");
+        jg.like(ParentEntity::getCategory, "inis");
         jg.endJoin();
 
         List<TestEntity> result = repository.findAll(qs.toSpecification());
@@ -376,7 +376,7 @@ class JoinGroupTest {
         // rawLike() now delegates to contains(), which works normally
         QuerySpec<TestEntity> qs = new QuerySpec<>();
         JoinGroup<TestEntity, ParentEntity> jg = qs.join(TestEntity::getParent);
-        jg.rawLike(ParentEntity::getCategory, "adm");
+        jg.like(ParentEntity::getCategory, "adm");
         List<TestEntity> result = repository.findAll(qs.toSpecification());
         assertEquals(1, result.size());
     }

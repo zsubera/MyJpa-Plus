@@ -77,33 +77,6 @@ class OrConditionBuilderTest {
     }
 
     @Test
-    void orCondition_likeSafe_matchesCorrectly() {
-        repository.save(newEntity("alice", 1));
-        repository.save(newEntity("bob", 2));
-        repository.save(newEntity("charlie", 3));
-
-        // likeSafe escapes wildcards, so "ali" matches exactly "ali" (not "alice")
-        // Use contains() for substring matching
-        List<TestEntity> result = repository.findAll(new com.zsubera.jpa.spec.QuerySpec<TestEntity>()
-            .or(or -> or.likeSafe(TestEntity::getName, "alice").likeSafe(TestEntity::getName, "bob")));
-
-        assertEquals(2, result.size());
-    }
-
-    @Test
-    void orCondition_contains_matchesCorrectly() {
-        repository.save(newEntity("alice", 1));
-        repository.save(newEntity("bob", 2));
-        repository.save(newEntity("charlie", 3));
-
-        // OR: contains("li") matches alice+charlie, contains("ob") matches bob = 3 total
-        List<TestEntity> result = repository.findAll(new com.zsubera.jpa.spec.QuerySpec<TestEntity>()
-            .or(or -> or.contains(TestEntity::getName, "li").contains(TestEntity::getName, "ob")));
-
-        assertEquals(3, result.size());
-    }
-
-    @Test
     void orCondition_startsWith_endsWith() {
         repository.save(newEntity("alice", 1));
         repository.save(newEntity("bob", 2));
@@ -203,14 +176,6 @@ class OrConditionBuilderTest {
     }
 
     @Test
-    void orCondition_likeSafe_null_throwsException() {
-        UpdateSpec<TestEntity> spec = new UpdateSpec<>(TestEntity.class);
-        OrConditionBuilder<TestEntity, UpdateSpec<TestEntity>> builder =
-            new OrConditionBuilder<>(spec, new ArrayList<>());
-        assertThrows(IllegalArgumentException.class, () -> builder.likeSafe(TestEntity::getName, null));
-    }
-
-    @Test
     void orCondition_startsWith_null_throwsException() {
         UpdateSpec<TestEntity> spec = new UpdateSpec<>(TestEntity.class);
         OrConditionBuilder<TestEntity, UpdateSpec<TestEntity>> builder =
@@ -224,30 +189,6 @@ class OrConditionBuilderTest {
         OrConditionBuilder<TestEntity, UpdateSpec<TestEntity>> builder =
             new OrConditionBuilder<>(spec, new ArrayList<>());
         assertThrows(IllegalArgumentException.class, () -> builder.endsWith(TestEntity::getName, null));
-    }
-
-    @Test
-    void orCondition_contains_null_throwsException() {
-        UpdateSpec<TestEntity> spec = new UpdateSpec<>(TestEntity.class);
-        OrConditionBuilder<TestEntity, UpdateSpec<TestEntity>> builder =
-            new OrConditionBuilder<>(spec, new ArrayList<>());
-        assertThrows(IllegalArgumentException.class, () -> builder.contains(TestEntity::getName, null));
-    }
-
-    @Test
-    void orCondition_like_deprecated_throwsUnsupported() {
-        UpdateSpec<TestEntity> spec = new UpdateSpec<>(TestEntity.class);
-        OrConditionBuilder<TestEntity, UpdateSpec<TestEntity>> builder =
-            new OrConditionBuilder<>(spec, new ArrayList<>());
-        assertThrows(UnsupportedOperationException.class, () -> builder.like(TestEntity::getName, "test"));
-    }
-
-    @Test
-    void orCondition_notLike_deprecated_throwsUnsupported() {
-        UpdateSpec<TestEntity> spec = new UpdateSpec<>(TestEntity.class);
-        OrConditionBuilder<TestEntity, UpdateSpec<TestEntity>> builder =
-            new OrConditionBuilder<>(spec, new ArrayList<>());
-        assertThrows(UnsupportedOperationException.class, () -> builder.notLike(TestEntity::getName, "test"));
     }
 
     private TestEntity newEntity(String name, int status) {

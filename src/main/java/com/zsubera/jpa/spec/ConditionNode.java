@@ -71,9 +71,9 @@ public sealed interface ConditionNode permits ConditionNode.SimpleNode, Conditio
             }
             this.fieldName = fieldName;
             // 防御性拷贝：数组和集合是可变的，拷贝防止外部修改影响内部状态
-            if (value instanceof Object[] arr) {
+            if (value instanceof Comparable<?>[] arr) {
                 this.value = arr.clone();
-            } else if (value instanceof Comparable<?>[] arr) {
+            } else if (value instanceof Object[] arr) {
                 this.value = arr.clone();
             } else if (value instanceof Collection<?> col) {
                 this.value = new ArrayList<>(col);
@@ -301,30 +301,10 @@ public sealed interface ConditionNode permits ConditionNode.SimpleNode, Conditio
         }
     }
 
-    /**
-     * 原始谓词函数（复杂条件的应急方案）。
-     *
-     * <p>
-     * <strong>安全警告：</strong>此类仅用于内部实现复杂条件逻辑，不应在外部直接使用。 它通过 BiFunction 构建原始条件，绕过类型安全机制，存在潜在的 SQL 注入风险。
-     *
-     * <p>
-     * 外部用户应使用类型安全的条件方法（如 {@code eq()}、{@code likeSafe()} 等）。 如果必须使用原始谓词，请确保不将用户输入直接拼接到字段名中。
-     *
-     * @deprecated 此类计划在 2.0 版本中完全移除。请使用类型安全的条件方法替代。
-     */
-    @Deprecated(since = "1.1.0", forRemoval = true)
+    /** Internal predicate function node for framework use (e.g., SoftDeleteHelper). */
     final class RawNode implements ConditionNode {
         final BiFunction<jakarta.persistence.criteria.Path<?>, CriteriaBuilder, Predicate> fn;
 
-        /**
-         * 创建原始谓词节点。
-         *
-         * <p>
-         * <strong>安全警告：</strong>此构造函数为包级私有，防止外部代码直接创建 RawNode 实例。 外部代码应使用 {@link #ofRawPredicate(BiFunction)} 工厂方法。
-         *
-         * @param fn 谓词函数
-         * @throws IllegalArgumentException 如果 fn 为 null
-         */
         RawNode(BiFunction<jakarta.persistence.criteria.Path<?>, CriteriaBuilder, Predicate> fn) {
             if (fn == null) {
                 throw new IllegalArgumentException("Predicate function must not be null");
@@ -338,77 +318,12 @@ public sealed interface ConditionNode permits ConditionNode.SimpleNode, Conditio
         }
     }
 
-    /**
-     * 创建原始谓词节点的工厂方法。
-     *
-     * <p>
-     * <strong>安全警告：</strong>此方法绕过类型安全机制，存在潜在的 SQL 注入风险。 仅在类型安全的条件方法（如 {@code eq()}、{@code likeSafe()} 等）无法满足需求时使用。
-     *
-     * @param fn 谓词函数
-     * @return 新的 RawNode 实例
-     * @throws IllegalArgumentException 如果 fn 为 null
-     * @deprecated 此方法绕过类型安全机制，计划在 2.0 版本中移除。 使用 {@link #ofInternalPredicate(BiFunction)} 替代框架内部用途， 或使用类型安全的条件方法（eq,
-     *             likeSafe 等）替代外部用途。
-     */
-    @Deprecated(since = "1.2.0", forRemoval = true)
-    static ConditionNode
-        ofRawPredicate(BiFunction<jakarta.persistence.criteria.Path<?>, CriteriaBuilder, Predicate> fn) {
-        if (fn == null) {
-            throw new IllegalArgumentException("Predicate function must not be null");
-        }
-        SECURITY_LOG.warn("SECURITY: RawNode.ofRawPredicate() called - this bypasses type safety. "
-            + "Use type-safe methods (eq, likeSafe, etc.) instead. Call stack: {}", getCallStackSummary());
-        return new RawNode(fn);
-    }
-
-    /**
-     * 创建内部谓词节点的工厂方法（不触发安全审计日志）。
-     *
-     * <p>
-     * 此方法仅供框架内部使用（如 {@code SoftDeleteHelper}、{@code TenantHelper}）， 这些组件的谓词函数不接受用户输入，不存在 SQL 注入风险。
-     *
-     * <p>
-     * <strong>注意：</strong>外部代码不应使用此方法。如需创建原始谓词，请使用 {@link #ofRawPredicate(BiFunction)}。
-     *
-     * @param fn 谓词函数
-     * @return 新的 RawNode 实例
-     * @throws IllegalArgumentException 如果 fn 为 null
-     */
     static ConditionNode
         ofInternalPredicate(BiFunction<jakarta.persistence.criteria.Path<?>, CriteriaBuilder, Predicate> fn) {
         if (fn == null) {
             throw new IllegalArgumentException("Predicate function must not be null");
         }
         return new RawNode(fn);
-    }
-
-    /**
-     * 获取调用栈摘要，用于安全审计日志。
-     *
-     * @return 调用栈摘要字符串
-     */
-    private static String getCallStackSummary() {
-        StackTraceElement[] stack = Thread.currentThread().getStackTrace();
-        // P2-1: Limit scan to first 30 frames for performance
-        int maxFrames = Math.min(stack.length, 30);
-        StringBuilder sb = new StringBuilder();
-        int count = 0;
-        for (int i = 0; i < maxFrames; i++) {
-            StackTraceElement element = stack[i];
-            String className = element.getClassName();
-            if (className.startsWith("com.zsubera.jpa.") && !className.endsWith("ConditionNode")) {
-                if (count > 0) {
-                    sb.append(" <- ");
-                }
-                sb.append(className.substring(className.lastIndexOf('.') + 1)).append(".")
-                    .append(element.getMethodName());
-                count++;
-                if (count >= 3) {
-                    break;
-                }
-            }
-        }
-        return sb.length() > 0 ? sb.toString() : "unknown";
     }
 
     /** 取反组节点：NOT（内部条件）。 */
@@ -482,14 +397,10 @@ public sealed interface ConditionNode permits ConditionNode.SimpleNode, Conditio
             // P0: Validate function name against whitelist to prevent SQL injection
             String upperName = functionName.toUpperCase();
             if (!ConditionBuilder.SAFE_FUNCTION_NAMES.contains(upperName)) {
-                // P1-9: Use generic error message to avoid exposing bypass method details
                 String msg = "Function not in whitelist: '" + functionName + "'. "
                     + "Only whitelisted functions are allowed. Contact administrator to add new functions.";
-                if (ConditionBuilder.WHITELIST_ENFORCED) {
-                    throw new com.zsubera.jpa.exception.MyJpaPlusException(msg,
-                        com.zsubera.jpa.exception.MyJpaPlusException.ErrorCode.SECURITY, null, null);
-                }
-                SECURITY_LOG.warn("SECURITY: {}", msg);
+                throw new com.zsubera.jpa.exception.MyJpaPlusException(msg,
+                    com.zsubera.jpa.exception.MyJpaPlusException.ErrorCode.SECURITY, null, null);
             }
             return new FuncNode(functionName, params);
         }

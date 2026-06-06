@@ -136,6 +136,9 @@ public class AuditEntityListener implements ApplicationContextAware {
                     providerLookupAttempted = true;
                 }
             }
+        } else {
+            // P2: 标记已尝试查找，避免 applicationContext 为 null 时重复检查
+            providerLookupAttempted = true;
         }
         return userProvider == NO_PROVIDER_SENTINEL ? null : userProvider;
     }
@@ -156,15 +159,13 @@ public class AuditEntityListener implements ApplicationContextAware {
         if (fields.updatedAt != null) {
             setFieldValue(entity, fields.updatedAt, now);
         }
-        if (fields.createdBy != null) {
-            AuditUserProvider provider = getUserProvider();
-            if (provider != null) {
+        // P2: 获取 provider 一次，避免重复查找
+        AuditUserProvider provider = (fields.createdBy != null || fields.updatedBy != null) ? getUserProvider() : null;
+        if (provider != null) {
+            if (fields.createdBy != null) {
                 setFieldValue(entity, fields.createdBy, provider.getCurrentUser());
             }
-        }
-        if (fields.updatedBy != null) {
-            AuditUserProvider provider = getUserProvider();
-            if (provider != null) {
+            if (fields.updatedBy != null) {
                 setFieldValue(entity, fields.updatedBy, provider.getCurrentUser());
             }
         }

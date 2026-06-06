@@ -33,7 +33,7 @@ class ConditionBuilderValidationTest {
     @Test
     void testContainsNullValueThrowsException() {
         QuerySpec<TestEntity> qs = new QuerySpec<>();
-        assertThrows(IllegalArgumentException.class, () -> qs.contains(TestEntity::getName, null));
+        assertThrows(IllegalArgumentException.class, () -> qs.like(TestEntity::getName, null));
     }
 
     @Test
@@ -149,15 +149,12 @@ class ConditionBuilderValidationTest {
 
     @Test
     void testConditionalLikeTrueAddsCondition() {
-        // like(true, ...) now delegates to likeSafe(), which escapes wildcards
         repository.save(newEntity("hello", 0));
         repository.save(newEntity("world", 0));
         QuerySpec<TestEntity> qs = new QuerySpec<>();
-        // Use contains-style pattern (wildcards are escaped, so use contains)
         qs.like(true, TestEntity::getName, "ell");
         List<TestEntity> result = repository.findAll(qs.toSpecification());
-        // likeSafe escapes wildcards, so "ell" is treated as literal, no match
-        assertEquals(0, result.size());
+        assertEquals(1, result.size());
     }
 
     @Test
@@ -286,7 +283,7 @@ class ConditionBuilderValidationTest {
         repository.save(newEntity("hello", 0));
         repository.save(newEntity("world", 0));
         QuerySpec<TestEntity> qs = new QuerySpec<>();
-        qs.contains(true, TestEntity::getName, "ell");
+        qs.like(true, TestEntity::getName, "ell");
         List<TestEntity> result = repository.findAll(qs.toSpecification());
         assertEquals(1, result.size());
     }
@@ -349,45 +346,6 @@ class ConditionBuilderValidationTest {
     void testIsNotEmptyNullFieldThrowsException() {
         QuerySpec<TestEntity> qs = new QuerySpec<>();
         assertThrows(IllegalArgumentException.class, () -> qs.isNotEmpty(null));
-    }
-
-    @Test
-    void testWhereNullFnThrowsException() {
-        QuerySpec<TestEntity> qs = new QuerySpec<>();
-        assertThrows(IllegalArgumentException.class,
-            () -> qs.where((java.util.function.BiFunction<jakarta.persistence.criteria.Path<TestEntity>,
-                jakarta.persistence.criteria.CriteriaBuilder, jakarta.persistence.criteria.Predicate>)null));
-    }
-
-    @Test
-    void testWhereRootNullFnThrowsException() {
-        QuerySpec<TestEntity> qs = new QuerySpec<>();
-        assertThrows(IllegalArgumentException.class, () -> qs.where((java.util.function.Function<
-            jakarta.persistence.criteria.Root<TestEntity>, jakarta.persistence.criteria.Predicate>)null));
-    }
-
-    @Test
-    @SuppressWarnings("deprecation")
-    void testWhereBiFunctionIsDeprecatedAndRemoved() {
-        QuerySpec<TestEntity> qs = new QuerySpec<>();
-        // where(BiFunction) is deprecated and removed for security reasons
-        assertThrows(UnsupportedOperationException.class,
-            () -> qs.where((path, cb) -> cb.equal(path.get("name"), "test")));
-    }
-
-    @Test
-    @SuppressWarnings("deprecation")
-    void testWhereFunctionIsDeprecatedAndRemoved() {
-        QuerySpec<TestEntity> qs = new QuerySpec<>();
-        // where(Function) is deprecated and removed for security reasons
-        assertThrows(UnsupportedOperationException.class, () -> qs.where(root -> root.get("name").in("test")));
-    }
-
-    @Test
-    void testRawLikeNullValueThrowsException() {
-        QuerySpec<TestEntity> qs = new QuerySpec<>();
-        // rawLike() now delegates to contains(), which throws IllegalArgumentException for null
-        assertThrows(IllegalArgumentException.class, () -> qs.rawLike(TestEntity::getName, null));
     }
 
     @Test

@@ -32,12 +32,12 @@ class IgnoreSoftDeleteAdvisorTest {
     @BeforeEach
     void setup() {
         SoftDeleteJpaRepository.setAutoFilterEnabled(true);
-        SoftDeleteContext.clear();
+        SoftDeleteContext.reset();
     }
 
     @AfterEach
     void cleanup() {
-        SoftDeleteContext.clear();
+        SoftDeleteContext.reset();
         SoftDeleteJpaRepository.setAutoFilterEnabled(true);
     }
 

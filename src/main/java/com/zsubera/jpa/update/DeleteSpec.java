@@ -1,6 +1,6 @@
 package com.zsubera.jpa.update;
 
-import com.zsubera.jpa.repository.EntityClassResolver;
+import com.zsubera.jpa.util.EntityClassResolver;
 import com.zsubera.jpa.util.InClauseBuilder;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.LockModeType;
@@ -94,9 +94,13 @@ public class DeleteSpec<T> extends AbstractBulkOperationSpec<T, DeleteSpec<T>> {
         Root<T> root = delete.from(entityClass);
         Predicate[] predicates = buildPredicates(root, cb);
         if (predicates.length == 0) {
-            throw new IllegalStateException("No WHERE conditions specified for DELETE operation. "
-                + "This would delete ALL rows in the table. "
-                + "If unconditional deletion is intended, use allowUnconditional(true) then deleteAll(EntityManager).");
+            if (!allowUnconditional) {
+                throw new IllegalStateException("No WHERE conditions specified for DELETE operation. "
+                    + "This would delete ALL rows in the table. "
+                    + "If unconditional deletion is intended, use allowUnconditional(true) then deleteAll(EntityManager).");
+            }
+            // P2-15: allowUnconditional=true, return delete without WHERE clause
+            return delete;
         }
         delete.where(cb.and(predicates));
         return delete;

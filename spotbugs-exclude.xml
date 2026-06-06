@@ -69,4 +69,26 @@
         <Class name="com.zsubera.jpa.annotation.AuditEntityListener"/>
         <Bug pattern="ST_WRITE_TO_STATIC_FROM_INSTANCE_METHOD"/>
     </Match>
+
+    <!-- Exclude EI_EXPOSE_REP for MyJpaTemplate cacheManager -->
+    <!-- The cacheManager is intentionally exposed for external configuration and management -->
+    <Match>
+        <Class name="com.zsubera.jpa.template.MyJpaTemplate"/>
+        <Bug pattern="EI_EXPOSE_REP"/>
+    </Match>
+    <Match>
+        <Class name="com.zsubera.jpa.template.MyJpaTemplate"/>
+        <Bug pattern="EI_EXPOSE_REP2"/>
+    </Match>
+
+    <!-- Exclude EI_EXPOSE_REP for MyJpaTemplate.KeysetPage -->
+    <!-- The KeysetPage is an immutable value object; exposing its fields is acceptable -->
+    <Match>
+        <Class name="com.zsubera.jpa.template.MyJpaTemplate$KeysetPage"/>
+        <Bug pattern="EI_EXPOSE_REP"/>
+    </Match>
+    <Match>
+        <Class name="com.zsubera.jpa.template.MyJpaTemplate$KeysetPage"/>
+        <Bug pattern="EI_EXPOSE_REP2"/>
+    </Match>
 </FindBugsFilter>

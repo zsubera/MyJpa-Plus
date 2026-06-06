@@ -93,7 +93,7 @@ class MySQLIntegrationTest {
         repository.save(e3);
 
         QuerySpec<PgTestEntity> qs = new QuerySpec<>();
-        qs.contains(PgTestEntity::getName, "%_");
+        qs.like(PgTestEntity::getName, "%_");
         List<PgTestEntity> result = repository.findAll(qs.toSpecification());
         assertEquals(2, result.size());
     }
@@ -113,7 +113,7 @@ class MySQLIntegrationTest {
         repository.save(e2);
 
         QuerySpec<PgTestEntity> qs = new QuerySpec<>();
-        qs.contains(PgTestEntity::getName, "_wor");
+        qs.like(PgTestEntity::getName, "_wor");
         List<PgTestEntity> result = repository.findAll(qs.toSpecification());
         assertEquals(1, result.size());
         assertEquals("hello_world", result.get(0).getName());

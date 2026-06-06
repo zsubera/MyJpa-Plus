@@ -13,7 +13,7 @@ class SoftDeleteContextTest {
     @AfterEach
     void cleanup() {
         // Ensure ThreadLocal is cleaned after each test
-        SoftDeleteContext.clear();
+        SoftDeleteContext.reset();
     }
 
     @Test
@@ -60,35 +60,35 @@ class SoftDeleteContextTest {
     void clear_removesAllIgnores() {
         SoftDeleteContext.pushIgnore();
         SoftDeleteContext.pushIgnore();
-        SoftDeleteContext.clear();
+        SoftDeleteContext.reset();
 
         assertFalse(SoftDeleteContext.isIgnoreSoftDelete());
     }
 
     @Test
     void setIgnoreSoftDelete_true_pushesIgnore() {
-        SoftDeleteContext.setIgnoreSoftDelete(true);
+        SoftDeleteContext.pushIgnore();
         assertTrue(SoftDeleteContext.isIgnoreSoftDelete());
     }
 
     @Test
     void setIgnoreSoftDelete_false_popsIgnore() {
         SoftDeleteContext.pushIgnore();
-        SoftDeleteContext.setIgnoreSoftDelete(false);
+        SoftDeleteContext.popIgnore();
         assertFalse(SoftDeleteContext.isIgnoreSoftDelete());
     }
 
     @Test
     void setIgnoreSoftDelete_supportsNesting() {
-        SoftDeleteContext.setIgnoreSoftDelete(true);
-        SoftDeleteContext.setIgnoreSoftDelete(true);
+        SoftDeleteContext.pushIgnore();
+        SoftDeleteContext.pushIgnore();
 
         assertTrue(SoftDeleteContext.isIgnoreSoftDelete());
 
-        SoftDeleteContext.setIgnoreSoftDelete(false);
+        SoftDeleteContext.popIgnore();
         assertTrue(SoftDeleteContext.isIgnoreSoftDelete());
 
-        SoftDeleteContext.setIgnoreSoftDelete(false);
+        SoftDeleteContext.popIgnore();
         assertFalse(SoftDeleteContext.isIgnoreSoftDelete());
     }
 

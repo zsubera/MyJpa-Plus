@@ -87,7 +87,7 @@ public abstract class BaseEntity implements Serializable {
     private String updatedBy;
 
     @Version
-    private Long version = 0L;
+    private Long version;
 
     /**
      * JPA 生命周期回调：在持久化前自动设置 createdAt 和 updatedAt。

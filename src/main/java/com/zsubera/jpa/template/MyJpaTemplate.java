@@ -1,6 +1,6 @@
 package com.zsubera.jpa.template;
 
-import com.zsubera.jpa.repository.EntityClassResolver;
+import com.zsubera.jpa.util.EntityClassResolver;
 import com.zsubera.jpa.spec.QuerySpec;
 import com.zsubera.jpa.update.DeleteSpec;
 import com.zsubera.jpa.update.UpdateSpec;
@@ -11,7 +11,9 @@ import jakarta.persistence.TypedQuery;
 import jakarta.persistence.criteria.CriteriaBuilder;
 import jakarta.persistence.criteria.CriteriaQuery;
 import jakarta.persistence.criteria.Root;
+import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 import java.util.function.Consumer;
@@ -105,6 +107,14 @@ public class MyJpaTemplate {
     /** 批量执行最大迭代次数保护，防止无限循环。 */
     private static final int MAX_BATCH_ITERATIONS = 10000;
 
+    /** P1-10: Getter 方法缓存，避免 extractSortValues 每次反射查找。key = className#propertyName */
+    private static final java.util.concurrent.ConcurrentMap<String, java.lang.reflect.Method> GETTER_CACHE =
+        new java.util.concurrent.ConcurrentHashMap<>();
+
+    /** P1-4: getId() 方法缓存，避免 isNewEntity() 每次反射查找。key = entity class name */
+    private static final java.util.concurrent.ConcurrentMap<Class<?>, java.lang.reflect.Method> ID_METHOD_CACHE =
+        new java.util.concurrent.ConcurrentHashMap<>();
+
     /** 上次记录深度分页警告的时间戳。 */
     private final java.util.concurrent.atomic.AtomicLong lastDeepPaginationWarnTime =
         new java.util.concurrent.atomic.AtomicLong(0);
@@ -124,6 +134,10 @@ public class MyJpaTemplate {
 
     /** P1-15: 查询默认超时时间（秒）。设置后所有查询将自动应用此超时。默认 -1 表示不设置。 */
     private volatile int defaultTimeoutSeconds = -1;
+
+    /** P1-9: 可选的查询缓存管理器。注入后可使用 findAllCached() 方法。 */
+    @Autowired(required = false)
+    private QueryCacheManager cacheManager;
 
     /** 创建 MyJpaTemplate 实例，使用默认配置。 */
     public MyJpaTemplate() {
@@ -228,6 +242,66 @@ public class MyJpaTemplate {
      */
     public int getDefaultTimeoutSeconds() {
         return defaultTimeoutSeconds;
+    }
+
+    /**
+     * P1-9: 设置查询缓存管理器。注入后可使用 {@link #findAllCached} 方法。
+     *
+     * @param cacheManager 缓存管理器实例
+     */
+    public void setCacheManager(QueryCacheManager cacheManager) {
+        this.cacheManager = cacheManager;
+    }
+
+    /**
+     * P1-9: 获取查询缓存管理器。
+     *
+     * @return 缓存管理器实例，可能为 null
+     */
+    public QueryCacheManager getCacheManager() {
+        return cacheManager;
+    }
+
+    /**
+     * P1-9: 带缓存的查询方法。如果缓存命中则直接返回，否则执行查询并将结果缓存。
+     *
+     * <p>
+     * 缓存键格式：{@code entityClassSimpleName:specHashCode}。如果需要更精确的缓存控制，请使用 {@link QueryCacheManager} 直接管理。
+     *
+     * @param entityClass 实体类
+     * @param spec 查询规范
+     * @param ttlSeconds 缓存过期时间（秒）
+     * @param <T> 实体类型
+     * @return 匹配实体列表
+     * @throws IllegalStateException 如果未配置 QueryCacheManager
+     * @throws IllegalArgumentException 如果参数为 null 或 ttlSeconds 为负数
+     */
+    @Transactional(readOnly = true)
+    public <T> List<T> findAllCached(Class<T> entityClass, QuerySpec<T> spec, long ttlSeconds) {
+        if (cacheManager == null) {
+            throw new IllegalStateException("QueryCacheManager not configured. Call setCacheManager() first.");
+        }
+        if (entityClass == null) {
+            throw new IllegalArgumentException("entityClass must not be null");
+        }
+        if (spec == null) {
+            throw new IllegalArgumentException("spec must not be null");
+        }
+        if (ttlSeconds < 0) {
+            throw new IllegalArgumentException("ttlSeconds must not be negative");
+        }
+        String cacheKey =
+            entityClass.getSimpleName() + "@" + spec.conditions().hashCode() + "@" + spec.getSort().hashCode();
+        @SuppressWarnings("unchecked")
+        List<T> cached = cacheManager.get(cacheKey);
+        if (cached != null) {
+            log.debug("Cache hit for key: {}", cacheKey);
+            return cached;
+        }
+        log.debug("Cache miss for key: {}", cacheKey);
+        List<T> result = findAll(entityClass, spec);
+        cacheManager.put(cacheKey, Collections.unmodifiableList(new ArrayList<>(result)), ttlSeconds);
+        return result;
     }
 
     /**
@@ -381,67 +455,63 @@ public class MyJpaTemplate {
         for (T entity : entities) {
             batch.add(entity);
             if (batch.size() >= batchSize) {
-                List<T> batchResult = executeInNewTransaction(em -> {
-                    java.util.ArrayList<T> batchRes = new java.util.ArrayList<>();
-                    for (T e : batch) {
-                        if (isNewEntity(e)) {
-                            em.persist(e);
-                            batchRes.add(e);
-                        } else {
-                            batchRes.add(em.merge(e));
-                        }
-                    }
-                    em.flush();
-                    em.clear();
-                    return batchRes;
-                });
-                result.addAll(batchResult);
+                result.addAll(executeBatchSave(batch));
                 batch.clear();
             }
         }
         if (!batch.isEmpty()) {
-            List<T> batchResult = executeInNewTransaction(em -> {
-                java.util.ArrayList<T> batchRes = new java.util.ArrayList<>();
-                for (T e : batch) {
-                    if (isNewEntity(e)) {
-                        em.persist(e);
-                        batchRes.add(e);
-                    } else {
-                        batchRes.add(em.merge(e));
-                    }
-                }
-                em.flush();
-                em.clear();
-                return batchRes;
-            });
-            result.addAll(batchResult);
+            result.addAll(executeBatchSave(batch));
         }
         return result;
     }
 
-    /**
-     * P-03: 判断实体是否为新实体（未持久化）。通过检查 @Id 字段是否为 null 来判断。
-     *
-     * @param entity 实体实例
-     * @return 如果 @Id 字段为 null 返回 true
-     */
+    private <T> List<T> executeBatchSave(List<T> batch) {
+        return executeInNewTransaction(em -> {
+            java.util.ArrayList<T> batchRes = new java.util.ArrayList<>();
+            for (T e : batch) {
+                if (isNewEntity(e)) {
+                    em.persist(e);
+                    batchRes.add(e);
+                } else {
+                    batchRes.add(em.merge(e));
+                }
+            }
+            em.flush();
+            em.clear();
+            return batchRes;
+        });
+    }
+
     private boolean isNewEntity(Object entity) {
-        // Use PersistenceUnitUtil for accurate ID check
         try {
             jakarta.persistence.PersistenceUnitUtil puu =
                 entityManager.getEntityManagerFactory().getPersistenceUnitUtil();
-            return puu.getIdentifier(entity) == null;
-        } catch (RuntimeException ignored) {
-            // fallback to reflection
+            Object id = puu.getIdentifier(entity);
+            return id == null;
+        } catch (RuntimeException e) {
+            if (log.isDebugEnabled()) {
+                log.debug("PersistenceUnitUtil.getIdentifier() failed for {}: {}", entity.getClass().getSimpleName(),
+                    e.getMessage());
+            }
         }
-        // Fallback: check common patterns
         try {
-            java.lang.reflect.Method getId = entity.getClass().getMethod("getId");
-            return getId.invoke(entity) == null;
+            java.lang.reflect.Method getId = ID_METHOD_CACHE.computeIfAbsent(entity.getClass(), clazz -> {
+                try {
+                    return clazz.getMethod("getId");
+                } catch (NoSuchMethodException e) {
+                    return null;
+                }
+            });
+            if (getId == null) {
+                log.debug("No getId() method found for {}; assuming existing", entity.getClass().getSimpleName());
+                return false;
+            }
+            Object id = getId.invoke(entity);
+            return id == null;
         } catch (ReflectiveOperationException ignored) {
-            // If we can't determine, assume not new (use merge for safety)
-            return false;
         }
+        log.debug("Cannot determine if entity is new for {}; assuming existing", entity.getClass().getSimpleName());
+        return false;
     }
 
     // ---- 便捷查询方法 ----
@@ -675,73 +745,6 @@ public class MyJpaTemplate {
     }
 
     /**
-     * 流式查询匹配给定 {@link QuerySpec} 的所有实体。适用于处理大数据集而无需将所有数据加载到内存。
-     *
-     * <p>
-     * <strong>重要：必须使用 try-with-resources 确保资源关闭：</strong>
-     *
-     * <pre>{@code
-     * try (Stream<User> stream = jpa.findAllStream(User.class, spec)) {
-     *     stream.filter(u -> u.getAge() > 18).forEach(this::processUser);
-     * }
-     * }</pre>
-     *
-     * <p>
-     * <strong>警告：未关闭 Stream 会导致数据库连接泄漏！</strong>底层的 EntityManager 和事务必须在 Stream 处理的整个期间保持活动状态。 推荐使用
-     * {@link #findAllStream(Class, QuerySpec, Consumer)} 安全版本，它会自动管理 Stream 生命周期。
-     *
-     * <p>
-     * <strong>风险说明：</strong>此方法直接返回 Stream，调用方必须负责关闭。 如果调用方忘记关闭 Stream 或在关闭前发生异常，数据库连接将泄漏。 安全版本
-     * {@link #findAllStream(Class, QuerySpec, Consumer)} 使用 try-with-resources 自动管理资源， 应优先使用。
-     *
-     * @param entityClass 实体类
-     * @param spec 查询规范
-     * @param <T> 实体类型
-     * @return 匹配实体的 Stream（必须由调用方关闭）
-     * @deprecated 使用 {@link #findAllStream(Class, QuerySpec, Consumer)} 安全版本替代，该版本自动管理 Stream 生命周期，避免资源泄漏。 此方法将在 2.0
-     *             版本中移除。
-     */
-    @Deprecated(since = "1.0.1", forRemoval = true)
-    @Transactional(readOnly = true)
-    public <T> Stream<T> findAllStream(Class<T> entityClass, QuerySpec<T> spec) {
-        if (entityClass == null) {
-            throw new IllegalArgumentException("entityClass must not be null");
-        }
-        if (spec == null) {
-            throw new IllegalArgumentException("spec must not be null");
-        }
-        log.warn("findAllStream(Class, QuerySpec) is deprecated and will be removed in 2.0. "
-            + "Use findAllStream(Class, QuerySpec, Consumer) for safe Stream lifecycle management. "
-            + "This method returns a Stream that must be closed by the caller to avoid connection leaks.");
-        // P1-5: This method is kept for backward compatibility. In 2.0, it will throw UnsupportedOperationException.
-        return doFindStream(entityClass, spec, null);
-    }
-
-    /**
-     * 流式查询匹配给定 {@link QuerySpec} 的所有实体，支持可选的 EntityGraph。
-     *
-     * @param entityClass 实体类
-     * @param spec 查询规范
-     * @param entityGraph 用于急切加载的实体图（可为 null）
-     * @param <T> 实体类型
-     * @return 匹配实体的 Stream（必须由调用方关闭）
-     * @deprecated 使用 {@link #findAllStream(Class, QuerySpec, Consumer)} 安全版本替代，该版本自动管理 Stream 生命周期，避免资源泄漏。 此方法将在 2.0
-     *             版本中移除。
-     */
-    @Deprecated(since = "1.0.1", forRemoval = true)
-    @Transactional(readOnly = true)
-    public <T> Stream<T> findAllStream(Class<T> entityClass, QuerySpec<T> spec, EntityGraphHelper<T> entityGraph) {
-        if (entityClass == null) {
-            throw new IllegalArgumentException("entityClass must not be null");
-        }
-        if (spec == null) {
-            throw new IllegalArgumentException("spec must not be null");
-        }
-        TypedQuery<T> query = buildTypedQuery(entityClass, spec, entityGraph, null);
-        return query.getResultStream();
-    }
-
-    /**
      * 安全版本的流式查询，自动管理 Stream 生命周期。推荐使用此方法替代 {@link #findAllStream(Class, QuerySpec)}， 以避免忘记关闭 Stream 导致的数据库连接泄漏。
      *
      * <p>
@@ -813,34 +816,15 @@ public class MyJpaTemplate {
     }
 
     /**
-     * 内部流式查询实现，供安全版本和 deprecated 版本共用。
-     *
-     * @param entityClass 实体类
-     * @param spec 查询规范
-     * @param entityGraph 实体图（可为 null）
-     * @param <T> 实体类型
-     * @return 匹配实体的 Stream（必须由调用方关闭）
+     * P1-5: This method is kept for backward compatibility. In 2.0, it will throw UnsupportedOperationException.
      */
     private <T> Stream<T> doFindStream(Class<T> entityClass, QuerySpec<T> spec, EntityGraphHelper<T> entityGraph) {
         TypedQuery<T> query = buildTypedQuery(entityClass, spec, entityGraph, null);
-        // P0: Set fetchSize for streaming queries. PostgreSQL requires fetchSize > 0 for true streaming;
-        // MySQL uses Integer.MIN_VALUE for streaming mode; other databases use default.
-        int fetchSize = determineFetchSize();
+        int fetchSize = com.zsubera.jpa.util.PageableHelper.determineFetchSize(entityManager);
         if (fetchSize != 0) {
             query.setHint("jakarta.persistence.query.fetchSize", fetchSize);
         }
         return query.getResultStream();
-    }
-
-    /**
-     * Determine appropriate fetchSize for streaming queries based on database dialect.
-     *
-     * @return fetchSize value, 0 means no hint will be set
-     * @deprecated 使用 {@link com.zsubera.jpa.util.PageableHelper#determineFetchSize} 替代
-     */
-    @Deprecated(since = "1.2.0")
-    private int determineFetchSize() {
-        return com.zsubera.jpa.util.PageableHelper.determineFetchSize(entityManager);
     }
 
     /**
@@ -1012,6 +996,32 @@ public class MyJpaTemplate {
     }
 
     /**
+     * 检查深度分页，超过阈值时记录警告，超过硬限制时抛出异常。
+     *
+     * @param offset 分页偏移量
+     * @throws IllegalArgumentException 如果 offset 超过硬限制
+     */
+    private void checkDeepPagination(long offset) {
+        // 深度分页警告（限流：每分钟最多记录一次）
+        if (offset > this.deepPaginationOffsetThreshold) {
+            long now = System.currentTimeMillis();
+            long lastWarn = lastDeepPaginationWarnTime.get();
+            if (now - lastWarn > DEEP_PAGINATION_WARN_INTERVAL_MS
+                && lastDeepPaginationWarnTime.compareAndSet(lastWarn, now)) {
+                log.warn("Deep pagination detected (offset={}). This may cause slow queries. "
+                    + "Consider using keyset pagination for better performance.", offset);
+            }
+        }
+
+        // 深度分页硬限制
+        if (this.deepPaginationOffsetLimit > 0 && offset > this.deepPaginationOffsetLimit) {
+            throw new IllegalArgumentException("Pagination offset (" + offset + ") exceeds the configured hard limit ("
+                + this.deepPaginationOffsetLimit
+                + "). Use keyset pagination for better performance, or adjust myjpa-plus.query.deep-pagination-offset-limit.");
+        }
+    }
+
+    /**
      * 执行计数查询的公共方法。
      *
      * @param entityClass 实体类
@@ -1081,23 +1091,7 @@ public class MyJpaTemplate {
             return new PageImpl<>(allContent);
         }
 
-        // 深度分页警告（限流：每分钟最多记录一次）
-        if (pageable.getOffset() > this.deepPaginationOffsetThreshold) {
-            long now = System.currentTimeMillis();
-            long lastWarn = lastDeepPaginationWarnTime.get();
-            if (now - lastWarn > DEEP_PAGINATION_WARN_INTERVAL_MS
-                && lastDeepPaginationWarnTime.compareAndSet(lastWarn, now)) {
-                log.warn("Deep pagination detected (offset={}). This may cause slow queries. "
-                    + "Consider using keyset pagination for better performance.", pageable.getOffset());
-            }
-        }
-
-        // 深度分页硬限制
-        if (this.deepPaginationOffsetLimit > 0 && pageable.getOffset() > this.deepPaginationOffsetLimit) {
-            throw new IllegalArgumentException("Pagination offset (" + pageable.getOffset()
-                + ") exceeds the configured hard limit (" + this.deepPaginationOffsetLimit
-                + "). Use keyset pagination for better performance, or adjust myjpa-plus.query.deep-pagination-offset-limit.");
-        }
+        checkDeepPagination(pageable.getOffset());
 
         // 计数查询
         long total = executeCountQuery(entityClass, spec, cb);
@@ -1555,11 +1549,25 @@ public class MyJpaTemplate {
      * {@link org.springframework.transaction.PlatformTransactionManager}。
      *
      * <p>
-     * <strong>P1 事务传播行为说明：</strong>
+     * <strong>事务传播行为说明：</strong>
      * <ul>
-     * <li>当已有活动事务时，使用 {@code PROPAGATION_REQUIRED}（加入现有事务），所有批次在同一事务中执行。 这意味着如果某个批次失败，所有批次都会回滚。</li>
-     * <li>当没有活动事务时，使用 {@code PROPAGATION_REQUIRES_NEW}（创建新事务），每个批次在独立事务中执行。</li>
-     * <li>如果需要严格的批次隔离，请确保在没有外层事务的情况下调用此方法。</li>
+     * <li><strong>当已有活动事务时</strong>：使用 {@code PROPAGATION_REQUIRED}（加入现有事务），所有批次在同一事务中执行。 这意味着如果某个批次失败，所有批次都会回滚。</li>
+     * <li><strong>当没有活动事务时</strong>：使用 {@code PROPAGATION_REQUIRES_NEW}（创建新事务），每个批次在独立事务中执行。</li>
+     * </ul>
+     *
+     * <p>
+     * <strong>最佳实践：</strong>
+     * <ul>
+     * <li>如果需要严格的批次隔离（每个批次独立提交），请确保在没有外层事务的情况下调用此方法</li>
+     * <li>如果在 {@code @Transactional} 方法内调用，所有批次将在同一事务中执行</li>
+     * <li>对于大数据量操作，建议使用 {@link #executeBatchInSeparateTransactions} 方法进行分批提交</li>
+     * </ul>
+     *
+     * <p>
+     * <strong>注意事项：</strong>
+     * <ul>
+     * <li>在连接池有限的环境（如测试 H2）中，事务挂起可能导致连接不足</li>
+     * <li>使用 {@code REQUIRES_NEW} 时，新事务可能无法看到外层事务的未提交数据</li>
      * </ul>
      *
      * @param operation 要执行的操作
@@ -1577,17 +1585,17 @@ public class MyJpaTemplate {
         }
         org.springframework.transaction.support.TransactionTemplate txTemplate =
             new org.springframework.transaction.support.TransactionTemplate(txManager);
-        // B-02: Use REQUIRES_NEW when possible to ensure each batch runs in an independent transaction.
-        // When already in a transaction, REQUIRES_NEW suspends it and creates a new one.
-        // However, in environments with limited connections (e.g., test H2), suspension may fail
-        // or the new transaction may not see uncommitted data from the outer transaction.
+        // 事务传播策略：
+        // - 无外部事务时：使用 REQUIRES_NEW 创建独立事务
+        // - 有外部事务时：使用 REQUIRED 加入现有事务（因为 REQUIRES_NEW 在某些环境如测试 H2 中可能失败）
+        // 注意：在外部事务中调用时，批次操作将在同一事务中执行，一个批次失败会导致所有批次回滚。
         if (org.springframework.transaction.support.TransactionSynchronizationManager.isActualTransactionActive()) {
-            // Already in a transaction: use REQUIRED to join it.
-            // Batches execute within the caller's transaction but still flush/clear for memory management.
+            log.warn("executeInNewTransaction called within an active transaction. "
+                + "Batch operations will join the existing transaction. "
+                + "For true isolation, call outside of @Transactional methods.");
             txTemplate
                 .setPropagationBehavior(org.springframework.transaction.TransactionDefinition.PROPAGATION_REQUIRED);
         } else {
-            // No active transaction: use REQUIRES_NEW for true isolation.
             txTemplate
                 .setPropagationBehavior(org.springframework.transaction.TransactionDefinition.PROPAGATION_REQUIRES_NEW);
         }
@@ -1640,6 +1648,9 @@ public class MyJpaTemplate {
         if (pageable == null) {
             throw new IllegalArgumentException("pageable must not be null");
         }
+        if (pageable.isPaged()) {
+            checkDeepPagination(pageable.getOffset());
+        }
         CriteriaBuilder cb = entityManager.getCriteriaBuilder();
         CriteriaQuery<T> cq = cb.createQuery(entityClass);
         Root<T> root = cq.from(entityClass);
@@ -1654,7 +1665,8 @@ public class MyJpaTemplate {
         } catch (ArithmeticException e) {
             throw new IllegalArgumentException("Page offset exceeds Integer.MAX_VALUE.", e);
         }
-        query.setMaxResults(pageable.getPageSize() + 1);
+        int effectivePageSize = Math.min(pageable.getPageSize() + 1, this.maxResults);
+        query.setMaxResults(effectivePageSize);
         List<T> content = query.getResultList();
         boolean hasNext = content.size() > pageable.getPageSize();
         if (hasNext) {
@@ -1728,5 +1740,219 @@ public class MyJpaTemplate {
             cq.where(predicate);
         }
         return entityManager.createQuery(cq).getResultList();
+    }
+
+    // ---- Keyset Pagination ----
+
+    /**
+     * 游标分页（Keyset Pagination）的结果记录。
+     *
+     * <p>
+     * 相比传统 offset 分页，游标分页在大数据量场景下性能更优（O(log n) vs O(n)）， 因为它使用 WHERE 条件而非 OFFSET 跳过已读记录。
+     *
+     * @param content 当前页数据
+     * @param hasNext 是否有下一页
+     * @param lastSortValues 最后一条记录的排序字段值，用于请求下一页（可为 null 表示无更多数据）
+     */
+    public record KeysetPage<T>(List<T> content, boolean hasNext, Object[] lastSortValues) {
+    }
+
+    /**
+     * 游标分页查询，避免大 offset 的性能退化。
+     *
+     * <p>
+     * 使用上一页最后一条记录的排序字段值作为游标，通过 WHERE 条件定位下一页起始位置。 性能始终为 O(log n)，不受页码大小影响。
+     *
+     * <p>
+     * 使用示例：
+     *
+     * <pre>{@code
+     * // 第一页
+     * KeysetPage<User> page1 = jpa.findKeysetPage(User.class, spec, Sort.by("id"), 20, null);
+     *
+     * // 下一页：使用上一页的 lastSortValues
+     * KeysetPage<User> page2 = jpa.findKeysetPage(User.class, spec, Sort.by("id"), 20, page1.lastSortValues());
+     * }</pre>
+     *
+     * <p>
+     * <strong>限制：</strong>
+     * <ul>
+     * <li>排序字段必须有数据库索引以保证性能</li>
+     * <li>排序字段组合必须唯一（或包含主键），否则可能遗漏记录</li>
+     * <li>不支持跳页（只能前进/后退一页），需要跳页请使用 offset 分页</li>
+     * </ul>
+     *
+     * @param entityClass 实体类
+     * @param spec 查询规范
+     * @param sort 排序规则（至少一个字段，建议包含主键以保证唯一性）
+     * @param pageSize 每页大小
+     * @param lastSortValues 上一页最后一条记录的排序字段值（null 表示查询第一页）
+     * @param <T> 实体类型
+     * @return 游标分页结果
+     * @throws IllegalArgumentException 如果参数不合法
+     */
+    @Transactional(readOnly = true)
+    public <T> KeysetPage<T> findKeysetPage(Class<T> entityClass, Specification<T> spec,
+        org.springframework.data.domain.Sort sort, int pageSize, @Nullable Object[] lastSortValues) {
+        if (entityClass == null) {
+            throw new IllegalArgumentException("entityClass must not be null");
+        }
+        if (spec == null) {
+            throw new IllegalArgumentException("spec must not be null");
+        }
+        if (sort == null || sort.isUnsorted()) {
+            throw new IllegalArgumentException("sort must not be null or unsorted for keyset pagination");
+        }
+        if (pageSize <= 0) {
+            throw new IllegalArgumentException("pageSize must be positive");
+        }
+        List<org.springframework.data.domain.Sort.Order> orders = sort.stream().toList();
+        if (lastSortValues != null && lastSortValues.length != orders.size()) {
+            throw new IllegalArgumentException("lastSortValues length (" + lastSortValues.length
+                + ") must match sort fields count (" + orders.size() + ")");
+        }
+
+        CriteriaBuilder cb = entityManager.getCriteriaBuilder();
+        CriteriaQuery<T> cq = cb.createQuery(entityClass);
+        Root<T> root = cq.from(entityClass);
+
+        // 应用用户条件
+        jakarta.persistence.criteria.Predicate userPredicate = spec.toPredicate(root, cq, cb);
+        if (userPredicate != null) {
+            cq.where(userPredicate);
+        }
+
+        // 应用 keyset 条件（游标定位）
+        if (lastSortValues != null) {
+            jakarta.persistence.criteria.Predicate keysetPredicate =
+                buildKeysetPredicate(root, cb, orders, lastSortValues);
+            if (userPredicate != null) {
+                cq.where(cb.and(userPredicate, keysetPredicate));
+            } else {
+                cq.where(keysetPredicate);
+            }
+        }
+
+        // 应用排序
+        List<jakarta.persistence.criteria.Order> orderList = new ArrayList<>();
+        for (org.springframework.data.domain.Sort.Order order : orders) {
+            orderList.add(
+                order.isAscending() ? cb.asc(root.get(order.getProperty())) : cb.desc(root.get(order.getProperty())));
+        }
+        cq.orderBy(orderList);
+
+        // 多查一条以判断是否有下一页
+        TypedQuery<T> query = entityManager.createQuery(cq);
+        query.setMaxResults(pageSize + 1);
+        List<T> results = query.getResultList();
+        boolean hasNext = results.size() > pageSize;
+        if (hasNext) {
+            results = results.subList(0, pageSize);
+        }
+
+        // 提取最后一条记录的排序字段值
+        Object[] nextLastSortValues = null;
+        if (hasNext && !results.isEmpty()) {
+            T lastRecord = results.get(results.size() - 1);
+            nextLastSortValues = extractSortValues(lastRecord, orders);
+        }
+
+        return new KeysetPage<>(results, hasNext, nextLastSortValues);
+    }
+
+    /**
+     * 构建 keyset 分页的 WHERE 条件。
+     *
+     * <p>
+     * 对于单字段排序 {@code ORDER BY id ASC}，条件为 {@code id > lastValue}。 对于多字段排序 {@code ORDER BY a ASC, b DESC}，条件为：
+     * {@code (a > lastA) OR (a = lastA AND b < lastB)}。
+     *
+     * @param root 查询根
+     * @param cb CriteriaBuilder
+     * @param orders 排序规则列表
+     * @param lastSortValues 上一页最后记录的排序值
+     * @return keyset 条件谓词
+     */
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    private jakarta.persistence.criteria.Predicate buildKeysetPredicate(Root<?> root, CriteriaBuilder cb,
+        List<org.springframework.data.domain.Sort.Order> orders, Object[] lastSortValues) {
+        if (orders.size() == 1) {
+            // 单字段排序：简单的 > 或 < 条件
+            org.springframework.data.domain.Sort.Order order = orders.get(0);
+            @SuppressWarnings({"unchecked", "rawtypes"})
+            jakarta.persistence.criteria.Expression<Comparable> field =
+                (jakarta.persistence.criteria.Expression)((jakarta.persistence.criteria.Path)root)
+                    .get(order.getProperty());
+            if (order.isAscending()) {
+                return cb.greaterThan(field, (Comparable)lastSortValues[0]);
+            } else {
+                return cb.lessThan(field, (Comparable)lastSortValues[0]);
+            }
+        }
+
+        // 多字段排序：行值比较
+        // (a > lastA) OR (a = lastA AND b > lastB) OR (a = lastA AND b = lastB AND c > lastC) ...
+        List<jakarta.persistence.criteria.Predicate> orPredicates = new ArrayList<>();
+        for (int i = 0; i < orders.size(); i++) {
+            List<jakarta.persistence.criteria.Predicate> andPredicates = new ArrayList<>();
+            // 前面的字段必须相等
+            for (int j = 0; j < i; j++) {
+                andPredicates.add(cb.equal(root.get(orders.get(j).getProperty()), lastSortValues[j]));
+            }
+            // 当前字段使用 > 或 <
+            org.springframework.data.domain.Sort.Order currentOrder = orders.get(i);
+            @SuppressWarnings({"unchecked", "rawtypes"})
+            jakarta.persistence.criteria.Expression<Comparable> currentField =
+                (jakarta.persistence.criteria.Expression)((jakarta.persistence.criteria.Path)root)
+                    .get(currentOrder.getProperty());
+            if (currentOrder.isAscending()) {
+                andPredicates.add(cb.greaterThan(currentField, (Comparable)lastSortValues[i]));
+            } else {
+                andPredicates.add(cb.lessThan(currentField, (Comparable)lastSortValues[i]));
+            }
+            orPredicates.add(cb.and(andPredicates.toArray(new jakarta.persistence.criteria.Predicate[0])));
+        }
+        return cb.or(orPredicates.toArray(new jakarta.persistence.criteria.Predicate[0]));
+    }
+
+    /**
+     * 从实体中提取排序字段的值。
+     *
+     * @param entity 实体对象
+     * @param orders 排序规则列表
+     * @return 排序字段值数组
+     */
+    private Object[] extractSortValues(Object entity, List<org.springframework.data.domain.Sort.Order> orders) {
+        Object[] values = new Object[orders.size()];
+        for (int i = 0; i < orders.size(); i++) {
+            String property = orders.get(i).getProperty();
+            String cacheKey = entity.getClass().getName() + "#" + property;
+            java.lang.reflect.Method getter = GETTER_CACHE.get(cacheKey);
+            if (getter == null) {
+                try {
+                    getter = entity.getClass()
+                        .getMethod("get" + Character.toUpperCase(property.charAt(0)) + property.substring(1));
+                    GETTER_CACHE.put(cacheKey, getter);
+                } catch (NoSuchMethodException e) {
+                    // 尝试 is 前缀（boolean 字段）
+                    try {
+                        getter = entity.getClass()
+                            .getMethod("is" + Character.toUpperCase(property.charAt(0)) + property.substring(1));
+                        GETTER_CACHE.put(cacheKey, getter);
+                    } catch (NoSuchMethodException ex) {
+                        throw new IllegalArgumentException("Cannot extract sort value for property '" + property
+                            + "' from " + entity.getClass().getName(), ex);
+                    }
+                }
+            }
+            try {
+                values[i] = getter.invoke(entity);
+            } catch (ReflectiveOperationException ex) {
+                throw new IllegalArgumentException(
+                    "Cannot extract sort value for property '" + property + "' from " + entity.getClass().getName(),
+                    ex);
+            }
+        }
+        return values;
     }
 }

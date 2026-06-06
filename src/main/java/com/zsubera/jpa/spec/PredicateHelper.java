@@ -71,14 +71,12 @@ public final class PredicateHelper {
                     throw new IllegalArgumentException("start must not be greater than end");
                 }
             } catch (NumberFormatException e) {
-                // Fallback to toString comparison if BigDecimal conversion fails
-                try {
-                    if (((Comparable)start).compareTo(end) > 0) {
-                        throw new IllegalArgumentException("start must not be greater than end");
-                    }
-                } catch (ClassCastException cce) {
-                    throw new IllegalArgumentException("Cannot compare incompatible numeric types: "
-                        + start.getClass().getName() + " and " + end.getClass().getName(), cce);
+                // Fallback to Double comparison when BigDecimal conversion fails
+                // (e.g., special double values like NaN, Infinity)
+                double startVal = ((Number)start).doubleValue();
+                double endVal = ((Number)end).doubleValue();
+                if (Double.compare(startVal, endVal) > 0) {
+                    throw new IllegalArgumentException("start must not be greater than end");
                 }
             }
             return;

@@ -83,32 +83,11 @@ public class QueryCacheManager {
     /** LRU 缓存，使用 ConcurrentHashMap 实现线程安全的无锁读取。 */
     private final java.util.concurrent.ConcurrentMap<String, CachedQueryResult<?>> store;
 
+    /** 插入顺序跟踪，用于实现近似 LRU 驱逐。 */
+    private final java.util.concurrent.ConcurrentLinkedDeque<String> insertionOrder =
+        new java.util.concurrent.ConcurrentLinkedDeque<>();
+
     private volatile int maxEntries;
-
-    /** P1-17: 是否启用租户感知缓存键。启用后自动在缓存键中追加租户 ID。 */
-    private volatile boolean tenantAware = false;
-
-    /** P1-9: 缓存 TenantContext 反射 Method 句柄，避免每次 get/put 都反射调用。 */
-    private static final java.lang.reflect.Method IS_IGNORE_TENANT;
-    private static final java.lang.reflect.Method GET_TENANT_ID;
-    private static final boolean TENANT_CONTEXT_AVAILABLE;
-
-    static {
-        java.lang.reflect.Method isIgnore = null;
-        java.lang.reflect.Method getTenantId = null;
-        boolean available = false;
-        try {
-            Class<?> tenantCtx = Class.forName("com.zsubera.jpa.tenant.TenantContext");
-            isIgnore = tenantCtx.getMethod("isIgnoreTenant");
-            getTenantId = tenantCtx.getMethod("getCurrentTenantId");
-            available = true;
-        } catch (ReflectiveOperationException ignored) {
-            // TenantContext not available
-        }
-        IS_IGNORE_TENANT = isIgnore;
-        GET_TENANT_ID = getTenantId;
-        TENANT_CONTEXT_AVAILABLE = available;
-    }
 
     /**
      * 创建使用默认最大条目数的 QueryCacheManager。
@@ -154,24 +133,6 @@ public class QueryCacheManager {
     }
 
     /**
-     * P1-17: 设置是否启用租户感知缓存键。
-     *
-     * @param tenantAware 是否启用
-     */
-    public void setTenantAware(boolean tenantAware) {
-        this.tenantAware = tenantAware;
-    }
-
-    /**
-     * P1-17: 获取是否启用租户感知缓存键。
-     *
-     * @return 是否启用
-     */
-    public boolean isTenantAware() {
-        return tenantAware;
-    }
-
-    /**
      * Retrieves a cached value by key. Returns null if the key is absent or the entry has expired.
      *
      * <p>
@@ -184,21 +145,20 @@ public class QueryCacheManager {
      */
     @SuppressWarnings("unchecked")
     public <T> T get(String key) {
-        String effectiveKey = resolveEffectiveKey(key);
-        CachedQueryResult<?> result = store.get(effectiveKey);
+        CachedQueryResult<?> result = store.get(key);
         if (result == null) {
             return null;
         }
         if (result.isExpired()) {
-            // 原子移除：仅当条目未被其他线程替换时才移除
-            store.remove(effectiveKey, result);
-            log.debug("Cache expired for key: {}", effectiveKey);
+            // 原子移除：仅当条目确实是当前过期条目时才移除，避免竞态条件误删新条目
+            store.computeIfPresent(key, (k, v) -> v.isExpired() ? null : v);
+            log.debug("Cache expired for key: {}", key);
             return null;
         }
         try {
             return (T)result.getValue();
         } catch (ClassCastException e) {
-            throw new ClassCastException("Cache type mismatch for key '" + effectiveKey + "'. "
+            throw new ClassCastException("Cache type mismatch for key '" + key + "'. "
                 + "Expected type mismatch. Cached value type: " + result.getValue().getClass().getName());
         }
     }
@@ -235,38 +195,23 @@ public class QueryCacheManager {
             // 紧急驱逐：缓存严重超限时立即驱逐，防止内存溢出
             evictIfNeeded();
         }
-        String effectiveKey = resolveEffectiveKey(key);
-        store.put(effectiveKey, new CachedQueryResult<>(value, ttlSeconds));
-        log.debug("Cache put for key: {} (ttl={}s)", effectiveKey, ttlSeconds);
+        store.put(key, new CachedQueryResult<>(value, ttlSeconds));
+        insertionOrder.addLast(key);
+        // 清理 deque 中已不存在的条目（防止 deque 无限增长）
+        while (insertionOrder.size() > store.size() + 100) {
+            String oldest = insertionOrder.peekFirst();
+            if (oldest != null && !store.containsKey(oldest)) {
+                insertionOrder.pollFirst();
+            } else {
+                break;
+            }
+        }
+        log.debug("Cache put for key: {} (ttl={}s)", key, ttlSeconds);
         return true;
     }
 
     /**
-     * P1-17: 解析实际缓存键，如果启用了租户感知则追加租户 ID。
-     *
-     * @param key 原始缓存键
-     * @return 实际缓存键
-     */
-    private String resolveEffectiveKey(String key) {
-        if (!tenantAware || !TENANT_CONTEXT_AVAILABLE) {
-            return key;
-        }
-        try {
-            if ((Boolean)IS_IGNORE_TENANT.invoke(null)) {
-                return key;
-            }
-            String tenantId = (String)GET_TENANT_ID.invoke(null);
-            if (tenantId != null && !tenantId.isEmpty()) {
-                return key + ":tenant:" + tenantId;
-            }
-        } catch (ReflectiveOperationException ignored) {
-            // TenantContext method invocation failed
-        }
-        return key;
-    }
-
-    /**
-     * 先清除过期条目，再按容量限制驱逐最早条目。在 put() 之前调用以保证线程安全。
+     * 清除过期条目，再按容量限制驱逐最早条目。在 put() 之前调用以保证线程安全。
      */
     private void evictIfNeeded() {
         evictExpiredEntries();
@@ -276,28 +221,29 @@ public class QueryCacheManager {
     }
 
     /**
-     * 驱逐最早写入的缓存条目（ConcurrentHashMap 迭代顺序近似插入顺序）。
+     * 驱逐最早写入的缓存条目（使用 ConcurrentLinkedDeque 维护插入顺序）。
      */
     private void evictOldestEntry() {
-        java.util.Iterator<Map.Entry<String, CachedQueryResult<?>>> it = store.entrySet().iterator();
-        if (it.hasNext()) {
-            Map.Entry<String, CachedQueryResult<?>> eldest = it.next();
-            it.remove();
-            log.debug("Evicted oldest cache entry: {}", eldest.getKey());
+        String oldest = insertionOrder.pollFirst();
+        if (oldest != null) {
+            store.remove(oldest);
+            log.debug("Evicted oldest cache entry: {}", oldest);
+        } else if (!store.isEmpty()) {
+            // fallback: deque 为空但 store 不为空时，驱逐 store 中的任意条目
+            java.util.Iterator<Map.Entry<String, CachedQueryResult<?>>> it = store.entrySet().iterator();
+            if (it.hasNext()) {
+                Map.Entry<String, CachedQueryResult<?>> eldest = it.next();
+                it.remove();
+                log.debug("Evicted cache entry (fallback): {}", eldest.getKey());
+            }
         }
     }
 
     /**
-     * 清除所有过期条目。
+     * 清除所有过期条目（原子操作，避免竞态条件误删新条目）。
      */
     private void evictExpiredEntries() {
-        java.util.Iterator<Map.Entry<String, CachedQueryResult<?>>> it = store.entrySet().iterator();
-        while (it.hasNext()) {
-            Map.Entry<String, CachedQueryResult<?>> entry = it.next();
-            if (entry.getValue().isExpired()) {
-                it.remove();
-            }
-        }
+        store.entrySet().removeIf(e -> e.getValue().isExpired());
     }
 
     /**
@@ -307,6 +253,7 @@ public class QueryCacheManager {
      */
     public void evict(String key) {
         store.remove(key);
+        insertionOrder.remove(key);
         log.debug("Cache evicted for key: {}", key);
     }
 
@@ -315,6 +262,7 @@ public class QueryCacheManager {
      */
     public void clear() {
         store.clear();
+        insertionOrder.clear();
         log.debug("Cache cleared");
     }
 
@@ -342,6 +290,7 @@ public class QueryCacheManager {
             Map.Entry<String, CachedQueryResult<?>> entry = it.next();
             if (entry.getKey().startsWith(keyPrefix)) {
                 it.remove();
+                insertionOrder.remove(entry.getKey());
                 count++;
             }
         }

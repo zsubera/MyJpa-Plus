@@ -1,6 +1,7 @@
 package com.zsubera.jpa.repository;
 
 import com.zsubera.jpa.update.SoftDeleteHelper;
+import com.zsubera.jpa.util.EntityClassResolver;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.data.domain.Page;
@@ -118,27 +119,7 @@ public interface MyJpaRepository<T, ID> extends JpaRepository<T, ID>, JpaSpecifi
     }
 
     /**
-     * 流式查找所有未被软删除的实体。
-     *
-     * <p>
-     * <strong>警告：</strong>此方法将所有结果加载到内存后再转为 Stream，不是真正的流式查询。 处理大数据集时可能导致内存溢出（OOM）。
-     *
-     * <p>
-     * <strong>推荐：</strong>使用
-     * {@link com.zsubera.jpa.template.MyJpaTemplate#findAllStream(Class, com.zsubera.jpa.spec.QuerySpec, java.util.function.Consumer)}
-     * 进行真正的流式查询，它会自动管理 Stream 生命周期和 fetchSize。
-     *
-     * @return 未删除实体的 Stream（底层已全量加载到内存）
-     * @deprecated 此方法不是真正的流式查询，请使用 {@code MyJpaTemplate.findAllStream()} 进行安全的流式查询。此方法将在 2.0 版本中移除。
-     */
-    @Deprecated(since = "1.2.0", forRemoval = true)
-    default java.util.stream.Stream<T> findNotDeletedAllStream() {
-        Specification<T> spec = SoftDeleteHelper.isNotDeleted(getEntityClass());
-        return findAll(spec, org.springframework.data.domain.Sort.unsorted()).stream();
-    }
-
-    /**
-     * 分页查找所有匹配给定规格说明且未被软删除的实体。
+     * /** 分页查找所有匹配给定规格说明且未被软删除的实体。
      *
      * @param spec 附加过滤规格说明（可以为 null）
      * @param pageable 分页参数

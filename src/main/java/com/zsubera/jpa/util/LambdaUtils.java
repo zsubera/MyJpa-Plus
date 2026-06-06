@@ -115,8 +115,14 @@ public final class LambdaUtils {
      *
      * <p>
      * <strong>驱逐策略说明：</strong>当缓存大小超过 {@link #maxCacheSize} 时，按迭代顺序清除约 25% 的条目。 这是近似 FIFO（First In First Out）策略——由于
-     * {@link ConcurrentHashMap} 不维护访问顺序， 驱逐基于迭代顺序（近似插入顺序）而非最近最少使用。在实际使用中（热点属性名高度集中在少数实体类上）， 迭代顺序驱逐与精确 LRU 的效果差异可忽略。如需精确
-     * LRU 行为，可通过 {@link #setMaxCacheSize(int)} 调整缓存大小， 或替换为 Caffeine 等高性能缓存库。
+     * {@link ConcurrentHashMap} 不维护访问顺序， 驱逐基于迭代顺序（近似插入顺序）而非最近最少使用。
+     *
+     * <p>
+     * <strong>性能优化：</strong>在实际使用中（热点属性名高度集中在少数实体类上）， 迭代顺序驱逐与精确 LRU 的效果差异可忽略。如果您的应用场景中属性名分布非常均匀， 可以通过以下方式优化：
+     * <ul>
+     * <li>增大 {@link #maxCacheSize} 以减少驱逐频率</li>
+     * <li>考虑使用 Caffeine 等高性能缓存库替换（需要额外依赖）</li>
+     * </ul>
      */
     @SuppressWarnings("serial")
     private static final Map<String, String> CACHE = new ConcurrentHashMap<>(DEFAULT_CACHE_SIZE);
@@ -136,14 +142,29 @@ public final class LambdaUtils {
      * 已在 {@code MyJpaPlusAutoConfiguration} 中通过 {@code DisposableBean} 自动注册关闭钩子。
      *
      * <p>
-     * 当前实现为空操作，因为主缓存使用 {@link LinkedHashMap} 的 LRU 驱逐策略（通过 {@code removeEldestEntry()} 自动清理）， METHOD_CACHE 的清理已在
-     * {@link #evictMethodCacheIfNeeded()} 中自动处理。
+     * 当前实现为空操作，因为主缓存使用 {@link ConcurrentHashMap} 的近似 FIFO 驱逐策略（通过 {@link #evictCacheIfNeeded()} 自动清理）， METHOD_CACHE
+     * 的清理已在 {@link #evictMethodCacheIfNeeded()} 中自动处理。
      */
     public static void shutdown() {
-        // 空操作：主缓存使用 LinkedHashMap LRU 自动驱逐，METHOD_CACHE 通过 evictMethodCacheIfNeeded() 自动清理
+        // 空操作：主缓存使用 ConcurrentHashMap 近似 FIFO 自动驱逐，METHOD_CACHE 通过 evictMethodCacheIfNeeded() 自动清理
     }
 
     private LambdaUtils() {}
+
+    /**
+     * 从方法引用中提取属性名称（带 null 校验）。
+     *
+     * @param <T> 实体类型
+     * @param fn 实体属性的方法引用
+     * @return 属性名称
+     * @throws IllegalArgumentException 如果 fn 为 null
+     */
+    public static <T> String property(SFunction<T, ?> fn) {
+        if (fn == null) {
+            throw new IllegalArgumentException("field must not be null");
+        }
+        return getPropertyName(fn);
+    }
 
     /**
      * 从方法引用中提取属性名称。
@@ -237,27 +258,45 @@ public final class LambdaUtils {
      *
      * <p>
      * 当缓存大小超过 {@link #maxCacheSize} 时，清除约 25% 的条目。 使用 CAS 确保只有一个线程执行驱逐。
+     *
+     * <p>
+     * <strong>性能优化说明：</strong>
+     * <ul>
+     * <li>使用 AtomicInteger 采样，减少 CAS 竞争</li>
+     * <li>驱逐时只迭代需要删除的条目数量，而非整个缓存</li>
+     * <li>日志记录使用 debug 级别，生产环境默认不输出</li>
+     * </ul>
      */
     private static void evictCacheIfNeeded() {
         if (CALL_COUNTER.incrementAndGet() % EVICTION_CHECK_INTERVAL != 0) {
             return;
         }
-        if (CACHE.size() > maxCacheSize && CACHE_EVICTING.compareAndSet(false, true)) {
+        // 快速检查：如果缓存大小未超过阈值，直接返回
+        if (CACHE.size() <= maxCacheSize) {
+            return;
+        }
+        // 使用 CAS 确保只有一个线程执行驱逐
+        if (CACHE_EVICTING.compareAndSet(false, true)) {
             try {
                 int currentSize = CACHE.size();
+                // 再次检查（可能其他线程已经完成驱逐）
                 if (currentSize > maxCacheSize) {
                     int target = (int)(maxCacheSize * EVICTION_TARGET_RATIO);
                     int toRemove = currentSize - target;
                     if (toRemove > 0) {
                         int removed = 0;
+                        long startTime = System.nanoTime();
                         java.util.Iterator<Map.Entry<String, String>> it = CACHE.entrySet().iterator();
                         while (it.hasNext() && removed < toRemove) {
                             it.next();
                             it.remove();
                             removed++;
                         }
-                        log.debug("Property name cache evicted {} entries (size: {} -> {})", removed, currentSize,
-                            CACHE.size());
+                        long elapsed = System.nanoTime() - startTime;
+                        if (log.isDebugEnabled()) {
+                            log.debug("Property name cache evicted {} entries (size: {} -> {}, elapsed: {} us)",
+                                removed, currentSize, CACHE.size(), elapsed / 1000);
+                        }
                     }
                 }
             } finally {
@@ -270,22 +309,32 @@ public final class LambdaUtils {
         if (METHOD_CALL_COUNTER.incrementAndGet() % EVICTION_CHECK_INTERVAL != 0) {
             return;
         }
-        if (METHOD_CACHE.size() > METHOD_CACHE_MAX_SIZE && METHOD_EVICTING.compareAndSet(false, true)) {
+        // 快速检查：如果缓存大小未超过阈值，直接返回
+        if (METHOD_CACHE.size() <= METHOD_CACHE_MAX_SIZE) {
+            return;
+        }
+        // 使用 CAS 确保只有一个线程执行驱逐
+        if (METHOD_EVICTING.compareAndSet(false, true)) {
             try {
                 int currentSize = METHOD_CACHE.size();
+                // 再次检查（可能其他线程已经完成驱逐）
                 if (currentSize > METHOD_CACHE_MAX_SIZE) {
                     int target = (int)(METHOD_CACHE_MAX_SIZE * EVICTION_TARGET_RATIO);
                     int toRemove = currentSize - target;
                     if (toRemove > 0) {
                         int removed = 0;
+                        long startTime = System.nanoTime();
                         java.util.Iterator<Map.Entry<Class<?>, Method>> it = METHOD_CACHE.entrySet().iterator();
                         while (it.hasNext() && removed < toRemove) {
                             it.next();
                             it.remove();
                             removed++;
                         }
-                        log.debug("Method cache evicted {} entries (size: {} -> {})", removed, currentSize,
-                            METHOD_CACHE.size());
+                        long elapsed = System.nanoTime() - startTime;
+                        if (log.isDebugEnabled()) {
+                            log.debug("Method cache evicted {} entries (size: {} -> {}, elapsed: {} us)", removed,
+                                currentSize, METHOD_CACHE.size(), elapsed / 1000);
+                        }
                     }
                 }
             } finally {

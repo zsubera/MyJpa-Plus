@@ -218,7 +218,7 @@ class DeleteSpecTest {
     void testDeleteNotLike() {
         repository.save(newEntity("hello", 1));
         repository.save(newEntity("world", 1));
-        int count = new DeleteSpec<>(TestEntity.class).notLikeSafe(TestEntity::getName, "hello").execute(em);
+        int count = new DeleteSpec<>(TestEntity.class).notLike(TestEntity::getName, "hello").execute(em);
         assertEquals(1, count);
         assertEquals("hello", repository.findAll().get(0).getName());
     }
@@ -242,10 +242,10 @@ class DeleteSpecTest {
     }
 
     @Test
-    void testDeleteContains() {
+    void testDeleteLike() {
         repository.save(newEntity("abc", 1));
         repository.save(newEntity("xyz", 1));
-        int count = new DeleteSpec<>(TestEntity.class).contains(TestEntity::getName, "ab").execute(em);
+        int count = new DeleteSpec<>(TestEntity.class).like(TestEntity::getName, "ab").execute(em);
         assertEquals(1, count);
         assertEquals("xyz", repository.findAll().get(0).getName());
     }
@@ -436,7 +436,7 @@ class DeleteSpecTest {
     void testDeleteOrGroupLike() {
         repository.save(newEntity("hello", 1));
         repository.save(newEntity("world", 2));
-        int count = new DeleteSpec<>(TestEntity.class).or(o -> o.contains(TestEntity::getName, "hel")).execute(em);
+        int count = new DeleteSpec<>(TestEntity.class).or(o -> o.like(TestEntity::getName, "hel")).execute(em);
         assertEquals(1, count);
     }
 
@@ -444,7 +444,7 @@ class DeleteSpecTest {
     void testDeleteOrGroupNotLike() {
         repository.save(newEntity("hello", 1));
         repository.save(newEntity("world", 2));
-        int count = new DeleteSpec<>(TestEntity.class).or(o -> o.notLikeSafe(TestEntity::getName, "hello")).execute(em);
+        int count = new DeleteSpec<>(TestEntity.class).or(o -> o.notLike(TestEntity::getName, "hello")).execute(em);
         assertEquals(1, count);
     }
 
@@ -468,7 +468,7 @@ class DeleteSpecTest {
     void testDeleteOrGroupContains() {
         repository.save(newEntity("abc", 1));
         repository.save(newEntity("xyz", 2));
-        int count = new DeleteSpec<>(TestEntity.class).or(o -> o.contains(TestEntity::getName, "ab")).execute(em);
+        int count = new DeleteSpec<>(TestEntity.class).or(o -> o.like(TestEntity::getName, "ab")).execute(em);
         assertEquals(1, count);
     }
 
@@ -590,13 +590,13 @@ class DeleteSpecTest {
 
     @Test
     void testDeleteOrGroupLikeNullThrowsException() {
-        assertThrows(UnsupportedOperationException.class,
+        assertThrows(IllegalArgumentException.class,
             () -> new DeleteSpec<>(TestEntity.class).or(o -> o.like(TestEntity::getName, null)));
     }
 
     @Test
     void testDeleteOrGroupNotLikeNullThrowsException() {
-        assertThrows(UnsupportedOperationException.class,
+        assertThrows(IllegalArgumentException.class,
             () -> new DeleteSpec<>(TestEntity.class).or(o -> o.notLike(TestEntity::getName, null)));
     }
 
@@ -615,7 +615,7 @@ class DeleteSpecTest {
     @Test
     void testDeleteOrGroupContainsNullThrowsException() {
         assertThrows(IllegalArgumentException.class,
-            () -> new DeleteSpec<>(TestEntity.class).or(o -> o.contains(TestEntity::getName, null)));
+            () -> new DeleteSpec<>(TestEntity.class).or(o -> o.like(TestEntity::getName, null)));
     }
 
     @Test

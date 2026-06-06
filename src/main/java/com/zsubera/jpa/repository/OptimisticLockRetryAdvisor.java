@@ -96,6 +96,8 @@ public class OptimisticLockRetryAdvisor {
                 long shiftValue = (shift >= 63) ? Long.MAX_VALUE : (1L << shift);
                 long safeShift = Math.min(shiftValue, MAX_BACKOFF_MS / Math.max(backoffMs, 1));
                 long baseDelay = Math.min(backoffMs * safeShift, MAX_BACKOFF_MS);
+                // P2-4: Ensure minimum delay of 1ms to prevent tight retry loops
+                baseDelay = Math.max(baseDelay, 1);
                 // Ensure delay does not exceed remaining timeout
                 long remainingTimeout = MAX_TOTAL_TIMEOUT_MS - totalElapsed;
                 baseDelay = Math.min(baseDelay, remainingTimeout);

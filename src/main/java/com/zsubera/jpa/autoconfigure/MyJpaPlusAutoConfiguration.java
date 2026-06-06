@@ -61,6 +61,7 @@ public class MyJpaPlusAutoConfiguration {
         }
         // 将 auto-filter 配置同步到 SoftDeleteJpaRepository 的静态标志，确保 Repository 层面行为一致
         SoftDeleteJpaRepository.setAutoFilterEnabled(properties.getSoftDelete().isAutoFilter());
+        SoftDeleteJpaRepository.setBlockUnconditionalDelete(properties.getSoftDelete().isBlockUnconditionalDelete());
 
         // 应用 IN 子句配置
         InClauseBuilder.setMaxInClauseSize(properties.getQuery().getInClauseMaxSize());
@@ -72,6 +73,8 @@ public class MyJpaPlusAutoConfiguration {
         log.info("MyJpa-Plus AutoConfiguration initialized");
         if (log.isDebugEnabled()) {
             log.debug("  soft-delete.auto-filter = {}", properties.getSoftDelete().isAutoFilter());
+            log.debug("  soft-delete.block-unconditional-delete = {}",
+                properties.getSoftDelete().isBlockUnconditionalDelete());
             log.debug("  query.max-results = {}", properties.getQuery().getMaxResults());
             log.debug("  query.deep-pagination-offset-threshold = {}",
                 properties.getQuery().getDeepPaginationOffsetThreshold());
@@ -148,6 +151,10 @@ public class MyJpaPlusAutoConfiguration {
         if (limit > 0) {
             template.setDeepPaginationOffsetLimit(limit);
         }
+        int timeout = properties.getQuery().getDefaultTimeoutSeconds();
+        if (timeout > 0) {
+            template.setDefaultTimeoutSeconds(timeout);
+        }
         return template;
     }
 
@@ -195,10 +202,14 @@ public class MyJpaPlusAutoConfiguration {
         }
 
         /**
-         * 检查 DataSource 是否已被 SqlSlowQueryInterceptor 包装。 通过检查类名中的代理标记来避免双重包装。
+         * 检查 DataSource 是否已被 SqlSlowQueryInterceptor 包装。 通过检查 InvocationHandler 类型来避免双重包装。
          */
         private static boolean isAlreadyWrapped(DataSource ds) {
-            return ds.getClass().getName().contains("$SlowQuery");
+            if (java.lang.reflect.Proxy.isProxyClass(ds.getClass())) {
+                java.lang.reflect.InvocationHandler handler = java.lang.reflect.Proxy.getInvocationHandler(ds);
+                return handler instanceof com.zsubera.jpa.monitor.SqlSlowQueryInterceptor.DataSourceProxyHandler;
+            }
+            return false;
         }
     }
 

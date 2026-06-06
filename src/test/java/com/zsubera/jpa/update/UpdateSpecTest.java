@@ -276,7 +276,7 @@ class UpdateSpecTest {
         repository.save(newEntity("hello", 1));
         repository.save(newEntity("world", 1));
         int count = new UpdateSpec<>(TestEntity.class).set(TestEntity::getStatus, 99)
-            .notLikeSafe(TestEntity::getName, "hello").execute(em);
+            .notLike(TestEntity::getName, "hello").execute(em);
         assertEquals(1, count);
     }
 
@@ -299,11 +299,11 @@ class UpdateSpecTest {
     }
 
     @Test
-    void testUpdateContains() {
+    void testUpdateLike() {
         repository.save(newEntity("abc", 1));
         repository.save(newEntity("xyz", 1));
-        int count = new UpdateSpec<>(TestEntity.class).set(TestEntity::getStatus, 99)
-            .contains(TestEntity::getName, "ab").execute(em);
+        int count = new UpdateSpec<>(TestEntity.class).set(TestEntity::getStatus, 99).like(TestEntity::getName, "ab")
+            .execute(em);
         assertEquals(1, count);
     }
 
@@ -506,7 +506,7 @@ class UpdateSpecTest {
         repository.save(newEntity("hello", 1));
         repository.save(newEntity("world", 2));
         int count = new UpdateSpec<>(TestEntity.class).set(TestEntity::getStatus, 99)
-            .or(o -> o.contains(TestEntity::getName, "hel")).execute(em);
+            .or(o -> o.like(TestEntity::getName, "hel")).execute(em);
         assertEquals(1, count);
     }
 
@@ -515,7 +515,7 @@ class UpdateSpecTest {
         repository.save(newEntity("hello", 1));
         repository.save(newEntity("world", 2));
         int count = new UpdateSpec<>(TestEntity.class).set(TestEntity::getStatus, 99)
-            .or(o -> o.notLikeSafe(TestEntity::getName, "hello")).execute(em);
+            .or(o -> o.notLike(TestEntity::getName, "hello")).execute(em);
         assertEquals(1, count);
     }
 
@@ -542,7 +542,7 @@ class UpdateSpecTest {
         repository.save(newEntity("abc", 1));
         repository.save(newEntity("xyz", 2));
         int count = new UpdateSpec<>(TestEntity.class).set(TestEntity::getStatus, 99)
-            .or(o -> o.contains(TestEntity::getName, "ab")).execute(em);
+            .or(o -> o.like(TestEntity::getName, "ab")).execute(em);
         assertEquals(1, count);
     }
 

@@ -63,7 +63,7 @@ class OrGroupTest {
     }
 
     @Test
-    void testOrGroupLikeOperator() {
+    void testOrGroupStartsWithWithSetup() {
         repository.save(newEntity("hello", 0));
         repository.save(newEntity("world", 0));
         repository.save(newEntity("help", 0));
@@ -78,21 +78,10 @@ class OrGroupTest {
         repository.save(newEntity("hello", 0));
         repository.save(newEntity("world", 0));
         QuerySpec<TestEntity> qs = new QuerySpec<>();
-        qs.or().notLikeSafe(TestEntity::getName, "hello").endOr();
+        qs.or().notLike(TestEntity::getName, "hello").endOr();
         List<TestEntity> result = repository.findAll(qs.toSpecification());
         assertEquals(1, result.size());
         assertEquals("world", result.get(0).getName());
-    }
-
-    @Test
-    void testOrGroupStartsWithOperator() {
-        repository.save(newEntity("hello", 0));
-        repository.save(newEntity("help", 0));
-        repository.save(newEntity("world", 0));
-        QuerySpec<TestEntity> qs = new QuerySpec<>();
-        qs.or().startsWith(TestEntity::getName, "hel").endOr();
-        List<TestEntity> result = repository.findAll(qs.toSpecification());
-        assertEquals(2, result.size());
     }
 
     @Test
@@ -107,12 +96,12 @@ class OrGroupTest {
     }
 
     @Test
-    void testOrGroupContainsOperator() {
+    void testOrGroupLikeOperator() {
         repository.save(newEntity("abc", 0));
         repository.save(newEntity("xabcx", 0));
         repository.save(newEntity("xyz", 0));
         QuerySpec<TestEntity> qs = new QuerySpec<>();
-        qs.or().contains(TestEntity::getName, "ab").endOr();
+        qs.or().like(TestEntity::getName, "ab").endOr();
         List<TestEntity> result = repository.findAll(qs.toSpecification());
         assertEquals(2, result.size());
     }
@@ -279,24 +268,24 @@ class OrGroupTest {
     }
 
     @Test
-    void testOrGroupRawLike() {
+    void testOrGroupLike() {
         repository.save(newEntity("hello", 0));
         repository.save(newEntity("world", 0));
-        // rawLike() now delegates to contains(), which wraps with % on both sides
+        // like() wraps with % on both sides
         QuerySpec<TestEntity> qs = new QuerySpec<>();
-        qs.or(g -> g.rawLike(TestEntity::getName, "hel"));
+        qs.or(g -> g.like(TestEntity::getName, "hel"));
         List<TestEntity> result = repository.findAll(qs.toSpecification());
-        // contains("hel") matches "hello" (contains "hel" substring)
+        // like("hel") matches "hello" (contains "hel" substring)
         assertEquals(1, result.size());
     }
 
     @Test
-    void testOrGroupRawLikeEscapesWildcard() {
+    void testOrGroupLikeEscapesWildcard() {
         repository.save(newEntity("100%", 0));
         repository.save(newEntity("100x", 0));
-        // rawLike() now delegates to contains(), which escapes wildcards
+        // like() escapes wildcards
         QuerySpec<TestEntity> qs = new QuerySpec<>();
-        qs.or(g -> g.rawLike(TestEntity::getName, "100%"));
+        qs.or(g -> g.like(TestEntity::getName, "100%"));
         List<TestEntity> result = repository.findAll(qs.toSpecification());
         assertEquals(1, result.size());
         assertEquals("100%", result.get(0).getName());

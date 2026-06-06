@@ -160,20 +160,6 @@ public class SubQuerySpec<S> {
         return this;
     }
 
-    /**
-     * 获取字段属性名称。
-     *
-     * @param field 字段函数
-     * @return 属性名称
-     * @throws IllegalArgumentException 如果字段为 null
-     */
-    private String property(SFunction<S, ?> field) {
-        if (field == null) {
-            throw new IllegalArgumentException("field must not be null");
-        }
-        return LambdaUtils.getPropertyName(field);
-    }
-
     // ---- 比较运算符 ----
 
     /**
@@ -185,7 +171,7 @@ public class SubQuerySpec<S> {
      * @throws IllegalArgumentException 如果 field 为 null
      */
     public SubQuerySpec<S> eq(SFunction<S, ?> field, @Nullable Object value) {
-        predicates.add(PredicateHelper.eq(root, property(field), value, cb));
+        predicates.add(PredicateHelper.eq(root, LambdaUtils.property(field), value, cb));
         return this;
     }
 
@@ -198,7 +184,7 @@ public class SubQuerySpec<S> {
      * @throws IllegalArgumentException 如果 field 为 null
      */
     public SubQuerySpec<S> ne(SFunction<S, ?> field, @Nullable Object value) {
-        predicates.add(PredicateHelper.ne(root, property(field), value, cb));
+        predicates.add(PredicateHelper.ne(root, LambdaUtils.property(field), value, cb));
         return this;
     }
 
@@ -214,7 +200,7 @@ public class SubQuerySpec<S> {
         if (value == null) {
             throw new IllegalArgumentException("value must not be null");
         }
-        predicates.add(PredicateHelper.gt(root, property(field), value, cb));
+        predicates.add(PredicateHelper.gt(root, LambdaUtils.property(field), value, cb));
         return this;
     }
 
@@ -230,7 +216,7 @@ public class SubQuerySpec<S> {
         if (value == null) {
             throw new IllegalArgumentException("value must not be null");
         }
-        predicates.add(PredicateHelper.ge(root, property(field), value, cb));
+        predicates.add(PredicateHelper.ge(root, LambdaUtils.property(field), value, cb));
         return this;
     }
 
@@ -246,7 +232,7 @@ public class SubQuerySpec<S> {
         if (value == null) {
             throw new IllegalArgumentException("value must not be null");
         }
-        predicates.add(PredicateHelper.lt(root, property(field), value, cb));
+        predicates.add(PredicateHelper.lt(root, LambdaUtils.property(field), value, cb));
         return this;
     }
 
@@ -262,93 +248,47 @@ public class SubQuerySpec<S> {
         if (value == null) {
             throw new IllegalArgumentException("value must not be null");
         }
-        predicates.add(PredicateHelper.le(root, property(field), value, cb));
+        predicates.add(PredicateHelper.le(root, LambdaUtils.property(field), value, cb));
         return this;
     }
 
     // ---- 字符串运算符 ----
 
     /**
-     * 添加子查询实体的 LIKE 条件。
-     *
-     * <p>
-     * <b>安全警告</b>: 此方法不转义 {@code %} 和 {@code _} 通配符。如果 {@code value} 来自用户输入， 请使用 {@link #likeSafe(SFunction, String)}
-     * 方法，该方法会自动转义通配符。
-     * </p>
+     * 添加包含匹配条件 {@code field LIKE '%value%'}，值中的通配符会被自动转义。
      *
      * @param field 实体字段
-     * @param value 匹配模式（可使用 % 通配符）
+     * @param value 匹配值
      * @return 当前 SubQuerySpec 实例，支持链式调用
      * @throws IllegalArgumentException 如果 value 为 null
-     * @see #likeSafe(SFunction, String)
-     * @deprecated 使用 {@link #likeSafe(SFunction, String)} 替代，该方法会自动转义通配符防止 LIKE 注入
      */
-    @Deprecated(since = "1.1.0", forRemoval = true)
     public SubQuerySpec<S> like(SFunction<S, ?> field, String value) {
-        throw new UnsupportedOperationException("like() has been removed in 1.1.0. Use likeSafe() instead. "
-            + "The original like() does not escape SQL wildcards, posing a security risk.");
-    }
-
-    /**
-     * 添加子查询实体的 NOT LIKE 条件。
-     *
-     * <p>
-     * <b>安全警告</b>: 此方法不转义 {@code %} 和 {@code _} 通配符。如果 {@code value} 来自用户输入， 请使用
-     * {@link #notLikeSafe(SFunction, String)} 方法，该方法会自动转义通配符。
-     * </p>
-     *
-     * @param field 实体字段
-     * @param value 匹配模式（可使用 % 通配符）
-     * @return 当前 SubQuerySpec 实例，支持链式调用
-     * @throws IllegalArgumentException 如果 value 为 null
-     * @see #notLikeSafe(SFunction, String)
-     * @deprecated 使用 {@link #notLikeSafe(SFunction, String)} 替代，该方法会自动转义通配符防止 LIKE 注入
-     */
-    @Deprecated(since = "1.1.0", forRemoval = true)
-    public SubQuerySpec<S> notLike(SFunction<S, ?> field, String value) {
-        throw new UnsupportedOperationException("notLike() has been removed in 1.1.0. Use notLikeSafe() instead. "
-            + "The original notLike() does not escape SQL wildcards, posing a security risk.");
-    }
-
-    /**
-     * 添加带自动通配符转义的 LIKE 条件。值中的 {@code %} 或 {@code _} 字符会被转义，作为字面量处理。
-     *
-     * <p>
-     * 此方法是 {@link #like(SFunction, String)} 的安全版本，适用于处理用户输入。
-     *
-     * @param field 实体字段
-     * @param value 要匹配的原始字符串值（通配符会被转义）
-     * @return 当前 SubQuerySpec 实例，支持链式调用
-     * @throws IllegalArgumentException 如果 value 为 null
-     * @see #like(SFunction, String)
-     */
-    public SubQuerySpec<S> likeSafe(SFunction<S, ?> field, String value) {
         if (value == null) {
             throw new IllegalArgumentException("value must not be null");
         }
-        predicates.add(PredicateHelper.like(root, property(field), PredicateHelper.escapeLikeWildcards(value), cb,
-            PredicateHelper.LIKE_ESCAPE_CHAR));
+        String escaped = PredicateHelper.escapeLikeWildcards(value);
+        String pattern = "%" + escaped + "%";
+        predicates.add(
+            PredicateHelper.like(root, LambdaUtils.property(field), pattern, cb, PredicateHelper.LIKE_ESCAPE_CHAR));
         return this;
     }
 
     /**
-     * 添加带自动通配符转义的 NOT LIKE 条件。值中的 {@code %} 或 {@code _} 字符会被转义，作为字面量处理。
-     *
-     * <p>
-     * 此方法是 {@link #notLike(SFunction, String)} 的安全版本，适用于处理用户输入。
+     * 添加包含匹配条件 {@code field NOT LIKE '%value%'}，值中的通配符会被自动转义。
      *
      * @param field 实体字段
-     * @param value 要匹配的原始字符串值（通配符会被转义）
+     * @param value 匹配值
      * @return 当前 SubQuerySpec 实例，支持链式调用
      * @throws IllegalArgumentException 如果 value 为 null
-     * @see #notLike(SFunction, String)
      */
-    public SubQuerySpec<S> notLikeSafe(SFunction<S, ?> field, String value) {
+    public SubQuerySpec<S> notLike(SFunction<S, ?> field, String value) {
         if (value == null) {
             throw new IllegalArgumentException("value must not be null");
         }
-        predicates.add(PredicateHelper.notLike(root, property(field), PredicateHelper.escapeLikeWildcards(value), cb,
-            PredicateHelper.LIKE_ESCAPE_CHAR));
+        String escaped = PredicateHelper.escapeLikeWildcards(value);
+        String pattern = "%" + escaped + "%";
+        predicates.add(
+            PredicateHelper.notLike(root, LambdaUtils.property(field), pattern, cb, PredicateHelper.LIKE_ESCAPE_CHAR));
         return this;
     }
 
@@ -364,7 +304,7 @@ public class SubQuerySpec<S> {
         if (value == null) {
             throw new IllegalArgumentException("value must not be null");
         }
-        predicates.add(PredicateHelper.startsWith(root, property(field), value, cb));
+        predicates.add(PredicateHelper.startsWith(root, LambdaUtils.property(field), value, cb));
         return this;
     }
 
@@ -380,23 +320,7 @@ public class SubQuerySpec<S> {
         if (value == null) {
             throw new IllegalArgumentException("value must not be null");
         }
-        predicates.add(PredicateHelper.endsWith(root, property(field), value, cb));
-        return this;
-    }
-
-    /**
-     * 添加子查询实体的包含匹配条件。
-     *
-     * @param field 实体字段
-     * @param value 包含的值
-     * @return 当前 SubQuerySpec 实例，支持链式调用
-     * @throws IllegalArgumentException 如果 value 为 null
-     */
-    public SubQuerySpec<S> contains(SFunction<S, ?> field, String value) {
-        if (value == null) {
-            throw new IllegalArgumentException("value must not be null");
-        }
-        predicates.add(PredicateHelper.contains(root, property(field), value, cb));
+        predicates.add(PredicateHelper.endsWith(root, LambdaUtils.property(field), value, cb));
         return this;
     }
 
@@ -413,7 +337,7 @@ public class SubQuerySpec<S> {
      */
     public SubQuerySpec<S> between(SFunction<S, ?> field, Comparable<?> start, Comparable<?> end) {
         PredicateHelper.validateRange(start, end);
-        predicates.add(PredicateHelper.between(root, property(field), start, end, cb));
+        predicates.add(PredicateHelper.between(root, LambdaUtils.property(field), start, end, cb));
         return this;
     }
 
@@ -428,7 +352,7 @@ public class SubQuerySpec<S> {
      */
     public SubQuerySpec<S> notBetween(SFunction<S, ?> field, Comparable<?> start, Comparable<?> end) {
         PredicateHelper.validateRange(start, end);
-        predicates.add(PredicateHelper.notBetween(root, property(field), start, end, cb));
+        predicates.add(PredicateHelper.notBetween(root, LambdaUtils.property(field), start, end, cb));
         return this;
     }
 
@@ -444,7 +368,7 @@ public class SubQuerySpec<S> {
         if (values == null || values.length == 0) {
             throw new IllegalArgumentException("values must not be empty");
         }
-        predicates.add(PredicateHelper.in(root, property(field), values, cb));
+        predicates.add(PredicateHelper.in(root, LambdaUtils.property(field), values, cb));
         return this;
     }
 
@@ -460,7 +384,7 @@ public class SubQuerySpec<S> {
         if (values == null || values.length == 0) {
             throw new IllegalArgumentException("values must not be empty");
         }
-        predicates.add(PredicateHelper.notIn(root, property(field), values, cb));
+        predicates.add(PredicateHelper.notIn(root, LambdaUtils.property(field), values, cb));
         return this;
     }
 
@@ -476,7 +400,7 @@ public class SubQuerySpec<S> {
         if (values == null || values.isEmpty()) {
             throw new IllegalArgumentException("values must not be empty");
         }
-        predicates.add(PredicateHelper.in(root, property(field), values, cb));
+        predicates.add(PredicateHelper.in(root, LambdaUtils.property(field), values, cb));
         return this;
     }
 
@@ -492,7 +416,7 @@ public class SubQuerySpec<S> {
         if (values == null || values.isEmpty()) {
             throw new IllegalArgumentException("values must not be empty");
         }
-        predicates.add(PredicateHelper.notIn(root, property(field), values, cb));
+        predicates.add(PredicateHelper.notIn(root, LambdaUtils.property(field), values, cb));
         return this;
     }
 
@@ -505,7 +429,7 @@ public class SubQuerySpec<S> {
      * @return 当前 SubQuerySpec 实例，支持链式调用
      */
     public SubQuerySpec<S> isNull(SFunction<S, ?> field) {
-        predicates.add(PredicateHelper.isNull(root, property(field), cb));
+        predicates.add(PredicateHelper.isNull(root, LambdaUtils.property(field), cb));
         return this;
     }
 
@@ -516,7 +440,7 @@ public class SubQuerySpec<S> {
      * @return 当前 SubQuerySpec 实例，支持链式调用
      */
     public SubQuerySpec<S> isNotNull(SFunction<S, ?> field) {
-        predicates.add(PredicateHelper.isNotNull(root, property(field), cb));
+        predicates.add(PredicateHelper.isNotNull(root, LambdaUtils.property(field), cb));
         return this;
     }
 
@@ -528,7 +452,7 @@ public class SubQuerySpec<S> {
      * @return 当前 SubQuerySpec 实例，支持链式调用
      */
     public SubQuerySpec<S> eqIgnoreCase(SFunction<S, ?> field, String value) {
-        predicates.add(PredicateHelper.eqIgnoreCase(root, property(field), value, cb));
+        predicates.add(PredicateHelper.eqIgnoreCase(root, LambdaUtils.property(field), value, cb));
         return this;
     }
 
@@ -540,12 +464,12 @@ public class SubQuerySpec<S> {
      * @return 当前 SubQuerySpec 实例，支持链式调用
      */
     public SubQuerySpec<S> neIgnoreCase(SFunction<S, ?> field, String value) {
-        predicates.add(PredicateHelper.neIgnoreCase(root, property(field), value, cb));
+        predicates.add(PredicateHelper.neIgnoreCase(root, LambdaUtils.property(field), value, cb));
         return this;
     }
 
     /**
-     * 添加子查询实体的忽略大小写包含条件：{@code UPPER(field) LIKE '%value%'}。
+     * 添加子查询实体的忽略大小写 LIKE 条件：{@code UPPER(field) LIKE '%value%'}。
      *
      * <p>
      * 值中的 {@code %} 或 {@code _} 字符会被转义，作为字面量处理，防止 LIKE 注入。
@@ -555,31 +479,14 @@ public class SubQuerySpec<S> {
      * @return 当前 SubQuerySpec 实例，支持链式调用
      * @throws IllegalArgumentException 如果 value 为 null
      */
-    public SubQuerySpec<S> containsIgnoreCase(SFunction<S, ?> field, String value) {
+    public SubQuerySpec<S> likeIgnoreCase(SFunction<S, ?> field, String value) {
         if (value == null) {
             throw new IllegalArgumentException("value must not be null");
         }
         String escaped = PredicateHelper.escapeLikeWildcards(value);
-        predicates.add(PredicateHelper.likeIgnoreCase(root, property(field), "%" + escaped + "%", cb,
+        predicates.add(PredicateHelper.likeIgnoreCase(root, LambdaUtils.property(field), "%" + escaped + "%", cb,
             PredicateHelper.LIKE_ESCAPE_CHAR));
         return this;
-    }
-
-    /**
-     * 添加子查询实体的忽略大小写的 LIKE 条件。
-     *
-     * <p>
-     * 值中的 {@code %} 或 {@code _} 字符会被转义，作为字面量处理，防止 LIKE 注入。
-     *
-     * @param field 实体字段
-     * @param value 要匹配的原始字符串值（通配符会被转义）
-     * @return 当前 SubQuerySpec 实例，支持链式调用
-     * @throws IllegalArgumentException 如果 value 为 null
-     * @deprecated 使用 {@link #containsIgnoreCase(SFunction, String)} 替代，方法名更准确地反映了行为（包含匹配而非 LIKE 模式匹配）。
-     */
-    @Deprecated(since = "1.2.0", forRemoval = true)
-    public SubQuerySpec<S> likeIgnoreCase(SFunction<S, ?> field, String value) {
-        return containsIgnoreCase(field, value);
     }
 
     // ---- 集合空检查 ----
@@ -591,7 +498,7 @@ public class SubQuerySpec<S> {
      * @return 当前 SubQuerySpec 实例，支持链式调用
      */
     public SubQuerySpec<S> isEmpty(SFunction<S, ?> field) {
-        predicates.add(PredicateHelper.isEmpty(root, property(field), cb));
+        predicates.add(PredicateHelper.isEmpty(root, LambdaUtils.property(field), cb));
         return this;
     }
 
@@ -602,7 +509,7 @@ public class SubQuerySpec<S> {
      * @return 当前 SubQuerySpec 实例，支持链式调用
      */
     public SubQuerySpec<S> isNotEmpty(SFunction<S, ?> field) {
-        predicates.add(PredicateHelper.isNotEmpty(root, property(field), cb));
+        predicates.add(PredicateHelper.isNotEmpty(root, LambdaUtils.property(field), cb));
         return this;
     }
 
@@ -627,8 +534,8 @@ public class SubQuerySpec<S> {
                 if (field == null) {
                     throw new IllegalArgumentException("fields must not contain null elements");
                 }
-                likes.add(
-                    cb.like(root.get(property(field)).as(String.class), pattern, PredicateHelper.LIKE_ESCAPE_CHAR));
+                likes.add(cb.like(root.get(LambdaUtils.property(field)).as(String.class), pattern,
+                    PredicateHelper.LIKE_ESCAPE_CHAR));
             }
             if (!likes.isEmpty()) {
                 predicates.add(likes.size() == 1 ? likes.get(0) : cb.or(likes.toArray(new Predicate[0])));
@@ -668,7 +575,7 @@ public class SubQuerySpec<S> {
                 if (fieldName == null) {
                     throw new IllegalArgumentException("fieldNames must not contain null elements");
                 }
-                if (!ConditionBuilder.SAFE_FIELD_NAME_PATTERN.matcher(fieldName).matches()) {
+                if (!ConditionBuilder.SAFE_NESTED_FIELD_NAME_PATTERN.matcher(fieldName).matches()) {
                     throw new IllegalArgumentException("fieldName contains invalid characters: " + fieldName);
                 }
                 likes.add(cb.like(root.get(fieldName).as(String.class), pattern, PredicateHelper.LIKE_ESCAPE_CHAR));
@@ -779,15 +686,27 @@ public class SubQuerySpec<S> {
     }
 
     /**
-     * 仅在 {@code condition} 为 true 时添加包含匹配条件。
+     * 仅在 {@code condition} 为 true 时添加 LIKE 条件。
      *
      * @param condition 是否添加条件的标志
      * @param field 实体属性的方法引用
-     * @param value 要包含的子字符串值
+     * @param value 匹配值
      * @return 当前 SubQuerySpec 实例，支持链式调用
      */
-    public SubQuerySpec<S> contains(boolean condition, SFunction<S, ?> field, String value) {
-        return condition ? contains(field, value) : this;
+    public SubQuerySpec<S> like(boolean condition, SFunction<S, ?> field, String value) {
+        return condition ? like(field, value) : this;
+    }
+
+    /**
+     * 仅在 {@code condition} 为 true 时添加 NOT LIKE 条件。
+     *
+     * @param condition 是否添加条件的标志
+     * @param field 实体属性的方法引用
+     * @param value 匹配值
+     * @return 当前 SubQuerySpec 实例，支持链式调用
+     */
+    public SubQuerySpec<S> notLike(boolean condition, SFunction<S, ?> field, String value) {
+        return condition ? notLike(field, value) : this;
     }
 
     /**
@@ -897,37 +816,6 @@ public class SubQuerySpec<S> {
      */
     public SubQuerySpec<S> isNotEmpty(boolean condition, SFunction<S, ?> field) {
         return condition ? isNotEmpty(field) : this;
-    }
-
-    /**
-     * 使用子查询根和 CriteriaBuilder 添加原始谓词。作为复杂条件或关联谓词的扩展机制。 要引用外部查询根，请使用 {@link #correlated()}。
-     *
-     * <pre>{@code
-     * qs.exists(Child.class, sub -> sub
-     *     .where(r -> cb.and(cb.equal(r.get("parent"), sub.correlated()), cb.greaterThan(r.get("amount"), 0))));
-     * }</pre>
-     *
-     * <p>
-     * <strong>安全警告：此方法绕过类型安全机制，存在潜在的SQL注入风险！</strong>
-     * <ul>
-     * <li>请勿使用用户输入的字符串拼接字段名，如 {@code root.get(userInput)}，这可能导致 SQL 注入</li>
-     * <li>建议优先使用类型安全的方法引用 API（如 {@code eq(Entity::getField, value)}）</li>
-     * <li>如果必须使用字符串字面量，请确保是硬编码的常量，而非运行时拼接</li>
-     * </ul>
-     *
-     * @param condition 谓词函数，接收子查询根返回谓词
-     * @return 当前 SubQuerySpec 实例，支持链式调用
-     * @deprecated 推荐使用类型安全的 {@link #eq(SFunction, Object)}、{@link #like(SFunction, String)} 等方法替代。 此方法绕过类型安全机制，存在潜在的
-     *             SQL 注入风险。
-     */
-    @Deprecated(since = "1.1.0", forRemoval = true)
-    public SubQuerySpec<S> where(java.util.function.Function<Root<S>, Predicate> condition) {
-        if (condition == null) {
-            throw new IllegalArgumentException("condition must not be null");
-        }
-        throw new UnsupportedOperationException("where(Function) has been removed for security reasons. "
-            + "This method bypasses type safety and exposes SQL injection risk. "
-            + "Use type-safe methods like eq(), like(), contains(), etc. instead.");
     }
 
     /**

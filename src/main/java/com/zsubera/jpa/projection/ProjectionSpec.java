@@ -7,8 +7,6 @@ import com.zsubera.jpa.spec.PredicateHelper;
 import com.zsubera.jpa.spec.QuerySpec;
 import com.zsubera.jpa.spec.SFunction;
 import com.zsubera.jpa.template.MyJpaTemplate;
-import com.zsubera.jpa.tenant.TenantContext;
-import com.zsubera.jpa.tenant.TenantProvider;
 import com.zsubera.jpa.update.SoftDeleteHelper;
 import com.zsubera.jpa.util.LambdaUtils;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
@@ -68,9 +66,6 @@ public class ProjectionSpec<T> {
     private final List<String> groupByFields = new ArrayList<>();
     private Class<?> dtoClass;
     private boolean distinct = false;
-
-    /** 租户过滤提供者，用于自动注入租户 WHERE 条件。 */
-    private TenantProvider tenantProvider;
 
     /** 是否启用软删除过滤。 */
     private boolean softDeleteEnabled = false;
@@ -167,24 +162,19 @@ public class ProjectionSpec<T> {
     }
 
     /**
-     * P1-4: 创建默认启用软删除和租户过滤的 ProjectionSpec 实例。
+     * 创建默认启用软删除过滤的 ProjectionSpec 实例。
      *
      * <p>
-     * 使用此工厂方法可避免手动调用 {@link #withSoftDeleteFilter()} 和 {@link #withTenantFilter(TenantProvider)}，
-     * 减少开发者遗忘启用安全过滤的风险。软删除过滤仅在实体有 {@code @SoftDelete} 字段时启用。
+     * 使用此工厂方法可避免手动调用 {@link #withSoftDeleteFilter()}， 减少开发者遗忘启用安全过滤的风险。软删除过滤仅在实体有 {@code @SoftDelete} 字段时启用。
      *
      * @param entityClass 要查询的实体类
-     * @param provider 租户提供者（可为 null，为 null 时不启用租户过滤）
      * @return 配置好的 ProjectionSpec 实例
      */
-    public static <T> ProjectionSpec<T> withDefaults(Class<T> entityClass, TenantProvider provider) {
+    public static <T> ProjectionSpec<T> withDefaults(Class<T> entityClass) {
         ProjectionSpec<T> spec = new ProjectionSpec<>(entityClass);
         // Auto-enable soft delete filter if entity has @SoftDelete field
         if (SoftDeleteHelper.findSoftDeleteField(entityClass) != null) {
             spec.softDeleteEnabled = true;
-        }
-        if (provider != null) {
-            spec.tenantProvider = provider;
         }
         return spec;
     }
@@ -312,28 +302,6 @@ public class ProjectionSpec<T> {
             throw new IllegalArgumentException("dtoClass must not be null");
         }
         this.dtoClass = dtoClass;
-        return this;
-    }
-
-    /**
-     * 启用租户过滤，自动注入租户 WHERE 条件。
-     *
-     * <p>
-     * 使用示例：
-     *
-     * <pre>{@code
-     * new ProjectionSpec<>(User.class).select(User::getName).withTenantFilter(tenantProvider).toTupleQuery(em);
-     * }</pre>
-     *
-     * @param provider 租户 ID 提供者
-     * @return 当前 ProjectionSpec 实例，支持链式调用
-     * @throws IllegalArgumentException 如果 provider 为 null
-     */
-    public ProjectionSpec<T> withTenantFilter(TenantProvider provider) {
-        if (provider == null) {
-            throw new IllegalArgumentException("provider must not be null");
-        }
-        this.tenantProvider = provider;
         return this;
     }
 
@@ -485,21 +453,6 @@ public class ProjectionSpec<T> {
     }
 
     /**
-     * 直接访问底层的 {@link QuerySpec} 以进行链式调用。
-     *
-     * <p>
-     * <strong>注意：</strong>此方法暴露了内部可变状态。推荐使用 {@link #where(Consumer)} 方法通过消费者函数配置条件。
-     *
-     * @return 底层的 QuerySpec 实例
-     * @deprecated 使用 {@link #where(Consumer)} 方法替代，该方法通过消费者函数配置条件，避免暴露内部状态。
-     */
-    @Deprecated(since = "1.2.0", forRemoval = false)
-    @SuppressFBWarnings("EI_EXPOSE_REP")
-    public QuerySpec<T> conditions() {
-        return querySpec;
-    }
-
-    /**
      * 构建并返回以 {@link Tuple} 为结果类型的类型安全查询。
      *
      * <p>
@@ -564,8 +517,8 @@ public class ProjectionSpec<T> {
             TypedQuery<Tuple> typedQuery = em.createQuery(query);
             if (maxResults > 0) {
                 typedQuery.setMaxResults(maxResults);
-                if (maxResults == MyJpaTemplate.DEFAULT_MAX_RESULTS && selections.size() > 0) {
-                    log.warn(
+                if (maxResults == MyJpaTemplate.DEFAULT_MAX_RESULTS && selections.size() > 0 && log.isDebugEnabled()) {
+                    log.debug(
                         "ProjectionSpec query limited to {} rows by default. "
                             + "Use toTupleQuery(em, -1) for unlimited results or toTupleQuery(em, N) for custom limit.",
                         maxResults);
@@ -600,23 +553,11 @@ public class ProjectionSpec<T> {
         // P-01: Set fetchSize for streaming queries to enable server-side cursors.
         // PostgreSQL requires fetchSize > 0 for true streaming;
         // MySQL uses Integer.MIN_VALUE for streaming mode.
-        int fetchSize = determineFetchSize(em);
+        int fetchSize = com.zsubera.jpa.util.PageableHelper.determineFetchSize(em);
         if (fetchSize != 0) {
             query.setHint("jakarta.persistence.query.fetchSize", fetchSize);
         }
         return query.getResultStream();
-    }
-
-    /**
-     * P-01: 根据数据库方言确定合适的 fetchSize 用于流式查询。
-     *
-     * @param em EntityManager 实例
-     * @return fetchSize 值，0 表示不设置提示
-     * @deprecated 使用 {@link com.zsubera.jpa.util.PageableHelper#determineFetchSize} 替代
-     */
-    @Deprecated(since = "1.2.0")
-    private int determineFetchSize(EntityManager em) {
-        return com.zsubera.jpa.util.PageableHelper.determineFetchSize(em);
     }
 
     /**
@@ -819,8 +760,6 @@ public class ProjectionSpec<T> {
         for (JoinSpec js : joins) {
             js.cachedConditions = null;
         }
-        // P0-1: 清除 LEFT JOIN 过滤条件缓存
-        leftJoinFilterPredicates.clear();
     }
 
     /**
@@ -871,23 +810,14 @@ public class ProjectionSpec<T> {
     }
 
     /**
-     * P0-1: 存储 LEFT JOIN 的过滤条件，需要在 WHERE 子句中应用而非 ON 子句。
-     *
-     * <p>
-     * 对于 LEFT JOIN，用户提供的过滤条件（如 {@code j.eq(Department::getActive, true)}）应放在 WHERE 子句中， 而非 ON 子句。在 ON 子句中，LEFT JOIN
-     * 会保留左表所有行（右表列为 NULL），导致过滤条件无效。 在 WHERE 子句中，会正确过滤掉不匹配的整行。
-     */
-    private final List<Predicate> leftJoinFilterPredicates = new ArrayList<>();
-
-    /**
      * 解析并应用所有 JOIN 子句。
      *
      * <p>
      * 使用 {@link JoinSpec#getConditions()} 缓存的条件，避免对每个 Root（count 和 data 查询）重复调用 Consumer 配置函数。
      *
      * <p>
-     * <strong>P0-1 修复：</strong>对于 INNER JOIN，条件放在 ON 子句中（与 WHERE 等价）。 对于 LEFT JOIN，过滤条件收集到
-     * {@link #leftJoinFilterPredicates} 中，在 WHERE 子句中应用， 确保 LEFT JOIN 的过滤语义正确。
+     * 对于 INNER JOIN 和 LEFT JOIN，过滤条件都放置在 ON 子句中。 LEFT JOIN 的 ON 子句语义：当条件不匹配时，右表列为 NULL，左表行仍然保留。 这是 LEFT JOIN
+     * 的标准行为，允许查询"没有关联记录"的数据。
      *
      * @param root 查询根实体
      * @param cb CriteriaBuilder 实例
@@ -895,7 +825,6 @@ public class ProjectionSpec<T> {
      */
     @SuppressWarnings({"unchecked"})
     private Map<String, Join<?, ?>> resolveJoins(Root<T> root, CriteriaBuilder cb) {
-        leftJoinFilterPredicates.clear();
         Map<String, Join<?, ?>> joinMap = new LinkedHashMap<>();
         for (JoinSpec js : joins) {
             Join<?, ?> join = joinMap.computeIfAbsent(js.fieldName, k -> js.left
@@ -905,14 +834,9 @@ public class ProjectionSpec<T> {
                 onPredicates.add(resolveJoinCondition(node, join, cb));
             }
             if (!onPredicates.isEmpty()) {
-                if (js.left) {
-                    // P0-1: LEFT JOIN 过滤条件应放在 WHERE 子句中，而非 ON 子句
-                    // 在 ON 子句中，LEFT JOIN 保留左表所有行（右表列为 NULL），过滤条件无效
-                    leftJoinFilterPredicates.addAll(onPredicates);
-                } else {
-                    // INNER JOIN: ON 和 WHERE 等价，保持原有行为
-                    join.on(cb.and(onPredicates.toArray(new Predicate[0])));
-                }
+                // INNER JOIN 和 LEFT JOIN 都将条件放在 ON 子句中。
+                // LEFT JOIN ON 语义：条件不匹配时右表列为 NULL，左表行保留。
+                join.on(cb.and(onPredicates.toArray(new Predicate[0])));
             }
         }
         return joinMap;
@@ -979,7 +903,7 @@ public class ProjectionSpec<T> {
     }
 
     /**
-     * 应用 WHERE 查询条件，包括安全过滤器（租户、软删除）。
+     * 应用 WHERE 查询条件，包括安全过滤器（软删除）。
      *
      * @param root 查询根实体
      * @param query CriteriaQuery 实例
@@ -989,33 +913,10 @@ public class ProjectionSpec<T> {
     private void applyPredicate(Root<T> root, CriteriaQuery<?> query, CriteriaBuilder cb) {
         List<jakarta.persistence.criteria.Predicate> predicates = new ArrayList<>();
 
-        // P0-1: 应用 LEFT JOIN 过滤条件（从 ON 子句移到 WHERE 子句）
-        predicates.addAll(leftJoinFilterPredicates);
-
         // 应用用户条件
         jakarta.persistence.criteria.Predicate userPredicate = querySpec.toPredicate(root, (CriteriaQuery)query, cb);
         if (userPredicate != null) {
             predicates.add(userPredicate);
-        }
-
-        // 应用租户过滤
-        if (tenantProvider != null && !TenantContext.isIgnoreTenant()) {
-            Object tenantId = tenantProvider.getCurrentTenantId();
-            if (tenantId != null) {
-                String tenantFieldName = resolveTenantFieldName(entityClass);
-                if (tenantFieldName != null) {
-                    predicates.add(cb.equal(root.get(tenantFieldName), tenantId));
-                }
-            }
-        } else if (tenantProvider == null && !TenantContext.isIgnoreTenant()) {
-            // P1-13: Warn when entity has @TenantId field but no tenant provider configured
-            String tenantFieldName = resolveTenantFieldName(entityClass);
-            if (tenantFieldName != null) {
-                log.warn(
-                    "Entity {} has @TenantId field '{}' but no TenantProvider configured. "
-                        + "Use withDefaults() or withTenantFilter() to enable tenant filtering.",
-                    entityClass.getSimpleName(), tenantFieldName);
-            }
         }
 
         // 应用软删除过滤
@@ -1084,34 +985,5 @@ public class ProjectionSpec<T> {
         if (!havingPredicates.isEmpty()) {
             query.having(cb.and(havingPredicates.toArray(new jakarta.persistence.criteria.Predicate[0])));
         }
-    }
-
-    /** P1: Cache for tenant field name per entity class to avoid repeated reflection. */
-    private static final java.util.concurrent.ConcurrentMap<Class<?>, String> TENANT_FIELD_CACHE =
-        new org.springframework.util.ConcurrentReferenceHashMap<>(16,
-            org.springframework.util.ConcurrentReferenceHashMap.ReferenceType.WEAK);
-
-    /**
-     * 解析实体类中 @TenantId 注解标记的字段名。
-     *
-     * @param entityClass 实体类
-     * @return 租户字段名，如果未找到则返回 null
-     */
-    private static String resolveTenantFieldName(Class<?> entityClass) {
-        // P1: Use cache to avoid repeated reflection
-        String cached = TENANT_FIELD_CACHE.get(entityClass);
-        if (cached != null) {
-            return "".equals(cached) ? null : cached;
-        }
-        for (Class<?> c = entityClass; c != null && c != Object.class; c = c.getSuperclass()) {
-            for (java.lang.reflect.Field f : c.getDeclaredFields()) {
-                if (f.isAnnotationPresent(com.zsubera.jpa.annotation.TenantId.class)) {
-                    TENANT_FIELD_CACHE.put(entityClass, f.getName());
-                    return f.getName();
-                }
-            }
-        }
-        TENANT_FIELD_CACHE.put(entityClass, "");
-        return null;
     }
 }

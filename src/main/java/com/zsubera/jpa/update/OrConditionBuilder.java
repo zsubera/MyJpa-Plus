@@ -127,75 +127,42 @@ public class OrConditionBuilder<T, SELF extends AbstractBulkOperationSpec<T, SEL
     }
 
     /**
-     * 添加 LIKE 条件：{@code field LIKE value}。
+     * 添加包含匹配条件：{@code field LIKE '%value%'}。值中的通配符会被自动转义。
      *
      * @param field 实体属性的方法引用
-     * @param value 匹配模式
+     * @param value 匹配值
      * @return 当前构建器实例
      * @throws IllegalArgumentException 如果 value 为 null
-     * @see #likeSafe(SFunction, String)
-     * @deprecated 使用 {@link #likeSafe(SFunction, String)} 替代，该方法会自动转义通配符防止 LIKE 注入
      */
-    @Deprecated(since = "1.1.0", forRemoval = true)
     public OrConditionBuilder<T, SELF> like(SFunction<T, ?> field, String value) {
-        throw new UnsupportedOperationException(
-            "like() 已在 1.1.0 版本移除，请使用 likeSafe()、contains()、startsWith() 或 endsWith()。");
-    }
-
-    /**
-     * 添加 NOT LIKE 条件：{@code field NOT LIKE value}。
-     *
-     * @param field 实体属性的方法引用
-     * @param value 匹配模式
-     * @return 当前构建器实例
-     * @throws IllegalArgumentException 如果 value 为 null
-     * @see #notLikeSafe(SFunction, String)
-     * @deprecated 使用 {@link #notLikeSafe(SFunction, String)} 替代，该方法会自动转义通配符防止 LIKE 注入
-     */
-    @Deprecated(since = "1.1.0", forRemoval = true)
-    public OrConditionBuilder<T, SELF> notLike(SFunction<T, ?> field, String value) {
-        throw new UnsupportedOperationException("notLike() 已在 1.1.0 版本移除，请使用 notLikeSafe() 或其他安全方法。");
-    }
-
-    /**
-     * 添加带自动通配符转义的 LIKE 条件：{@code field LIKE value}。 值中的 {@code %} 或 {@code _} 字符会被转义，作为字面量处理。
-     *
-     * <p>
-     * 此方法是 {@link #like(SFunction, String)} 的安全版本，适用于处理用户输入。
-     *
-     * @param field 实体属性的方法引用
-     * @param value 要匹配的原始字符串值（通配符会被转义）
-     * @return 当前构建器实例
-     * @throws IllegalArgumentException 如果 value 为 null
-     */
-    public OrConditionBuilder<T, SELF> likeSafe(SFunction<T, ?> field, String value) {
         if (value == null) {
             throw new IllegalArgumentException("value must not be null");
         }
         String name = parent.property(field);
-        nodes.add(new BulkConditionNode.LeafNode((root, cb) -> PredicateHelper.like(root, name,
-            PredicateHelper.escapeLikeWildcards(value), cb, PredicateHelper.LIKE_ESCAPE_CHAR)));
+        String escaped = PredicateHelper.escapeLikeWildcards(value);
+        String pattern = "%" + escaped + "%";
+        nodes.add(new BulkConditionNode.LeafNode(
+            (root, cb) -> PredicateHelper.like(root, name, pattern, cb, PredicateHelper.LIKE_ESCAPE_CHAR)));
         return this;
     }
 
     /**
-     * 添加带自动通配符转义的 NOT LIKE 条件：{@code field NOT LIKE value}。 值中的 {@code %} 或 {@code _} 字符会被转义，作为字面量处理。
-     *
-     * <p>
-     * 此方法是 {@link #notLike(SFunction, String)} 的安全版本，适用于处理用户输入。
+     * 添加 NOT LIKE 包含匹配条件：{@code field NOT LIKE '%value%'}。值中的通配符会被自动转义。
      *
      * @param field 实体属性的方法引用
-     * @param value 要匹配的原始字符串值（通配符会被转义）
+     * @param value 匹配值
      * @return 当前构建器实例
      * @throws IllegalArgumentException 如果 value 为 null
      */
-    public OrConditionBuilder<T, SELF> notLikeSafe(SFunction<T, ?> field, String value) {
+    public OrConditionBuilder<T, SELF> notLike(SFunction<T, ?> field, String value) {
         if (value == null) {
             throw new IllegalArgumentException("value must not be null");
         }
         String name = parent.property(field);
-        nodes.add(new BulkConditionNode.LeafNode((root, cb) -> PredicateHelper.notLike(root, name,
-            PredicateHelper.escapeLikeWildcards(value), cb, PredicateHelper.LIKE_ESCAPE_CHAR)));
+        String escaped = PredicateHelper.escapeLikeWildcards(value);
+        String pattern = "%" + escaped + "%";
+        nodes.add(new BulkConditionNode.LeafNode(
+            (root, cb) -> PredicateHelper.notLike(root, name, pattern, cb, PredicateHelper.LIKE_ESCAPE_CHAR)));
         return this;
     }
 
@@ -230,23 +197,6 @@ public class OrConditionBuilder<T, SELF extends AbstractBulkOperationSpec<T, SEL
         }
         String name = parent.property(field);
         nodes.add(new BulkConditionNode.LeafNode((root, cb) -> PredicateHelper.endsWith(root, name, value, cb)));
-        return this;
-    }
-
-    /**
-     * 添加包含条件：{@code field LIKE '%value%'}。
-     *
-     * @param field 实体属性的方法引用
-     * @param value 包含的值
-     * @return 当前构建器实例
-     * @throws IllegalArgumentException 如果 value 为 null
-     */
-    public OrConditionBuilder<T, SELF> contains(SFunction<T, ?> field, String value) {
-        if (value == null) {
-            throw new IllegalArgumentException("value must not be null");
-        }
-        String name = parent.property(field);
-        nodes.add(new BulkConditionNode.LeafNode((root, cb) -> PredicateHelper.contains(root, name, value, cb)));
         return this;
     }
 

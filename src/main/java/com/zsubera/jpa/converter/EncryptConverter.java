@@ -14,6 +14,8 @@ import javax.crypto.SecretKeyFactory;
 import javax.crypto.spec.GCMParameterSpec;
 import javax.crypto.spec.PBEKeySpec;
 import javax.crypto.spec.SecretKeySpec;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class EncryptConverter implements AttributeConverter<String, String> {
 
@@ -27,10 +29,11 @@ public class EncryptConverter implements AttributeConverter<String, String> {
     private static final String SALT_ENV = "MYJPA_ENCRYPT_SALT";
     private static final String SALT_PROPERTY = "myjpa.encrypt.salt";
     private static final String STRICT_MODE_PROPERTY = "myjpa-plus.encrypt.strict-mode";
+    private static final String REQUIRE_SALT_PROPERTY = "myjpa-plus.encrypt.require-salt";
     private static final SecureRandom SECURE_RANDOM = new SecureRandom();
     private static final int PBKDF2_ITERATIONS = 600_000;
     private static final int PBKDF2_KEY_LENGTH = 256;
-    private static final System.Logger LOG = System.getLogger("com.zsubera.jpa.converter.EncryptConverter");
+    private static final Logger log = LoggerFactory.getLogger(EncryptConverter.class);
 
     /** P0-3: Minimum key length in characters to prevent weak key attacks. */
     private static final int MIN_KEY_LENGTH = 16;
@@ -83,7 +86,7 @@ public class EncryptConverter implements AttributeConverter<String, String> {
         KEY_CACHE.clear();
         SALT_CACHE.clear();
         lastKeyVersionRefresh = System.currentTimeMillis();
-        LOG.log(System.Logger.Level.INFO, "Encryption key version cache and salt cache refreshed");
+        log.info("Encryption key version cache and salt cache refreshed");
     }
 
     /**
@@ -105,8 +108,7 @@ public class EncryptConverter implements AttributeConverter<String, String> {
                     + " or system property " + KEY_PROPERTY + " before starting the application. "
                     + "Strict mode is enabled, application cannot start without encryption key.");
             }
-            LOG.log(System.Logger.Level.WARNING,
-                "SECURITY: Encryption key not configured. Set environment variable {0} or system property {1}.",
+            log.warn("SECURITY: Encryption key not configured. Set environment variable {} or system property {}.",
                 KEY_ENV, KEY_PROPERTY);
         } else {
             String key = (keyEnv != null && !keyEnv.isEmpty()) ? keyEnv : keyProp;
@@ -117,9 +119,9 @@ public class EncryptConverter implements AttributeConverter<String, String> {
             // P1-7: Warn when system property is used for key configuration
             // System properties are JVM-wide visible and may be exposed in process listings
             if (keyProp != null && !keyProp.isEmpty() && (keyEnv == null || keyEnv.isEmpty())) {
-                LOG.log(System.Logger.Level.WARNING, "SECURITY: Encryption key configured via system property '{0}'. "
+                log.warn("SECURITY: Encryption key configured via system property '{}'. "
                     + "System properties are JVM-wide visible and may be exposed in process listings (e.g., /proc/PID/cmdline). "
-                    + "Use environment variable '{1}' for production environments.", KEY_PROPERTY, KEY_ENV);
+                    + "Use environment variable '{}' for production environments.", KEY_PROPERTY, KEY_ENV);
             }
         }
         keyValidated = true;
@@ -179,7 +181,7 @@ public class EncryptConverter implements AttributeConverter<String, String> {
             String version = getKeyVersion();
             return version + ":" + Base64.getEncoder().encodeToString(combined);
         } catch (GeneralSecurityException e) {
-            LOG.log(System.Logger.Level.ERROR, "Encryption failed", e);
+            log.error("Encryption failed", e);
             throw new MyJpaPlusException("Failed to encrypt value. Check encryption key configuration.", e);
         }
     }
@@ -206,7 +208,7 @@ public class EncryptConverter implements AttributeConverter<String, String> {
             try {
                 combined = Base64.getDecoder().decode(base64Data);
             } catch (IllegalArgumentException e) {
-                LOG.log(System.Logger.Level.ERROR, "Invalid Base64 data in encrypted field", e);
+                log.error("Invalid Base64 data in encrypted field", e);
                 throw new MyJpaPlusException("Failed to decrypt value: invalid Base64 encoding.", e);
             }
             if (combined.length < GCM_IV_LENGTH) {
@@ -224,7 +226,7 @@ public class EncryptConverter implements AttributeConverter<String, String> {
             byte[] decrypted = cipher.doFinal(encrypted);
             return new String(decrypted, StandardCharsets.UTF_8);
         } catch (GeneralSecurityException e) {
-            LOG.log(System.Logger.Level.ERROR, "Decryption failed", e);
+            log.error("Decryption failed", e);
             throw new MyJpaPlusException("Failed to decrypt value. Check encryption key configuration.", e);
         }
     }
@@ -285,10 +287,8 @@ public class EncryptConverter implements AttributeConverter<String, String> {
             for (String entry : entries) {
                 entry = entry.trim();
                 if (!entry.matches("v\\d+:.+")) {
-                    LOG.log(System.Logger.Level.WARNING,
-                        "SECURITY: Invalid multi-key entry format '{0}'. Expected 'vN:key'. "
-                            + "Falling back to single-key mode.",
-                        entry);
+                    log.warn("SECURITY: Invalid multi-key entry format '{}'. Expected 'vN:key'. "
+                        + "Falling back to single-key mode.", entry);
                     validMultiKey = false;
                     break;
                 }
@@ -333,8 +333,7 @@ public class EncryptConverter implements AttributeConverter<String, String> {
 
     private static void logVersionMismatch(String version) {
         // 使用 java.util.logging 避免引入额外依赖
-        System.getLogger("com.zsubera.jpa.converter.EncryptConverter").log(System.Logger.Level.WARNING,
-            "Key version '{0}' not found in multi-key configuration. Using primary key.", version);
+        log.warn("Key version '{}' not found in multi-key configuration. Using primary key.", version);
     }
 
     /**
@@ -360,15 +359,29 @@ public class EncryptConverter implements AttributeConverter<String, String> {
     }
 
     /**
-     * 检查当前是否为生产环境。
+     * 检查当前是否为生产环境或需要强制要求盐值配置。
      *
      * <p>
-     * <strong>已知限制：</strong>此方法仅检查系统属性和环境变量。Spring profiles 通过 {@code application.properties}、{@code @ActiveProfiles} 或
-     * {@code SpringApplication.setAdditionalProfiles()} 设置时不会设置系统属性， 因此可能无法正确检测生产环境。
+     * 检测优先级：
+     * <ol>
+     * <li>显式配置 {@code myjpa-plus.encrypt.require-salt=true}（最高优先级）</li>
+     * <li>系统属性 {@code spring.profiles.active} 包含 prod/production</li>
+     * <li>环境变量 {@code SPRING_PROFILES_ACTIVE} 包含 prod/production</li>
+     * <li>环境变量 {@code SPRING_PROFILES} 包含 prod/production</li>
+     * </ol>
      *
-     * @return 如果是生产环境返回 true
+     * @return 如果需要强制要求盐值配置返回 true
      */
     private static boolean isProductionEnvironment() {
+        // 显式配置优先级最高
+        String requireSalt = System.getProperty(REQUIRE_SALT_PROPERTY);
+        if ("true".equalsIgnoreCase(requireSalt)) {
+            return true;
+        }
+        requireSalt = System.getenv("MYJPA_ENCRYPT_REQUIRE_SALT");
+        if ("true".equalsIgnoreCase(requireSalt)) {
+            return true;
+        }
         // Check system property
         String profile = System.getProperty("spring.profiles.active", "");
         if (profile.contains("prod") || profile.contains("production")) {
@@ -446,12 +459,11 @@ public class EncryptConverter implements AttributeConverter<String, String> {
             try {
                 byte[] fileSalt = java.nio.file.Files.readAllBytes(saltFile.toPath());
                 if (fileSalt.length > 0) {
-                    LOG.log(System.Logger.Level.INFO, "Loaded persisted PBKDF2 salt from {0}",
-                        saltFile.getAbsolutePath());
+                    log.info("Loaded persisted PBKDF2 salt from {}", saltFile.getAbsolutePath());
                     return fileSalt;
                 }
             } catch (java.io.IOException e) {
-                LOG.log(System.Logger.Level.WARNING, "Failed to read salt file: {0}", e.getMessage());
+                log.warn("Failed to read salt file: {}", e.getMessage());
             }
         }
         byte[] randomSalt = generateRandomSalt().getBytes(StandardCharsets.UTF_8);
@@ -461,9 +473,9 @@ public class EncryptConverter implements AttributeConverter<String, String> {
                 boolean created = homeDir.mkdirs();
                 if (!created && !homeDir.exists()) {
                     // P0-3: Abort if directory creation fails to avoid meaningless file write
-                    LOG.log(System.Logger.Level.ERROR,
-                        "SECURITY: Failed to create directory: {0}. "
-                            + "Salt cannot be persisted. Set environment variable {1} to ensure consistent encryption.",
+                    log.error(
+                        "SECURITY: Failed to create directory: {}. "
+                            + "Salt cannot be persisted. Set environment variable {} to ensure consistent encryption.",
                         homeDir.getAbsolutePath(), SALT_ENV);
                     return randomSalt;
                 }
@@ -500,8 +512,7 @@ public class EncryptConverter implements AttributeConverter<String, String> {
                             byte[] existingSalt = new byte[buffer.remaining()];
                             buffer.get(existingSalt);
                             if (existingSalt.length > 0) {
-                                LOG.log(System.Logger.Level.INFO,
-                                    "Another process already wrote salt file, using existing salt");
+                                log.info("Another process already wrote salt file, using existing salt");
                                 return existingSalt;
                             }
                         }
@@ -578,23 +589,21 @@ public class EncryptConverter implements AttributeConverter<String, String> {
                         if (fileSalt.length > 0) {
                             return fileSalt;
                         }
-                        LOG.log(System.Logger.Level.WARNING,
-                            "SECURITY: Could not acquire salt file lock and no salt found. "
-                                + "Using non-persisted random salt. Set environment variable {0}",
-                            SALT_ENV);
+                        log.warn("SECURITY: Could not acquire salt file lock and no salt found. "
+                            + "Using non-persisted random salt. Set environment variable {}", SALT_ENV);
                     }
                 }
             }
             // B-07: Set file permissions - POSIX on Unix, ACL on Windows
             setSaltFilePermissions(homeDir, saltFile);
-            LOG.log(System.Logger.Level.WARNING,
-                "SECURITY: Generated and persisted PBKDF2 salt to {0}. "
-                    + "Set environment variable {1} for consistent encryption across environments.",
+            log.warn(
+                "SECURITY: Generated and persisted PBKDF2 salt to {}. "
+                    + "Set environment variable {} for consistent encryption across environments.",
                 saltFile.getAbsolutePath(), SALT_ENV);
         } catch (java.io.IOException e) {
-            LOG.log(System.Logger.Level.ERROR,
+            log.error(
                 "SECURITY: Using non-persisted random salt. Previous encrypted data WILL BE UNRECOVERABLE after restart. "
-                    + "Set environment variable {0} or system property {1}",
+                    + "Set environment variable {} or system property {}",
                 SALT_ENV, SALT_PROPERTY);
         }
         return randomSalt;
@@ -628,8 +637,7 @@ public class EncryptConverter implements AttributeConverter<String, String> {
                         java.nio.file.attribute.PosixFilePermission.OWNER_WRITE);
                 java.nio.file.Files.setPosixFilePermissions(saltFile.toPath(), filePerms);
             } catch (UnsupportedOperationException | java.io.IOException permEx) {
-                LOG.log(System.Logger.Level.DEBUG, "Cannot set POSIX permissions on salt file: {0}",
-                    permEx.getMessage());
+                log.debug("Cannot set POSIX permissions on salt file: {}", permEx.getMessage());
             }
         }
     }
@@ -655,12 +663,12 @@ public class EncryptConverter implements AttributeConverter<String, String> {
                         java.nio.file.attribute.AclEntryPermission.WRITE_DATA))
                     .build();
                 view.setAcl(java.util.List.of(entry));
-                LOG.log(System.Logger.Level.DEBUG, "Set Windows ACL on salt file via Java NIO");
+                log.debug("Set Windows ACL on salt file via Java NIO");
             }
         } catch (Exception e) {
             // P0-3: 仅记录日志，不回退到 icacls 命令行（防止命令注入风险）
-            LOG.log(System.Logger.Level.DEBUG, "Cannot set Windows ACL via Java NIO: {0}. "
-                + "Set environment variable {1} to ensure consistent encryption.", e.getMessage(), SALT_ENV);
+            log.debug("Cannot set Windows ACL via Java NIO: {}. "
+                + "Set environment variable {} to ensure consistent encryption.", e.getMessage(), SALT_ENV);
         }
     }
 

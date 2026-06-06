@@ -75,13 +75,6 @@
 - **便捷操作** — `get(key)` / `evict(key)` / `clear()` / `size()`
 - **基于 ConcurrentHashMap** — 线程安全，无外部依赖
 
-### 多租户支持
-
-- **@TenantId** — 标记实体中的租户标识字段
-- **TenantProvider** — 接口，实现后提供当前租户 ID（通常从 HTTP 请求头或 JWT 获取）
-- **自动过滤** — 注册 `TenantProvider` Bean 后，所有查询自动追加租户过滤条件
-- **@IgnoreTenant** — 标记 Repository 方法或接口，跳过租户过滤
-
 ### 字段加密（@Encrypt）
 
 - **AES-GCM 加密** — `@Encrypt(algorithm="AES")` 标记字段，`EncryptConverter` 自动加解密
@@ -463,41 +456,6 @@ if (cached != null) {
 // 手动清除
 cache.evict("active-users");
 cache.clear();
-```
-
-### 多租户
-
-```java
-// 1. 实现 TenantProvider
-@Component
-public class HttpHeaderTenantProvider implements TenantProvider {
-    @Override
-    public Object getCurrentTenantId() {
-        HttpServletRequest request =
-            ((ServletRequestAttributes) RequestContextHolder.getRequestAttributes()).getRequest();
-        return request.getHeader("X-Tenant-ID");
-    }
-}
-
-// 2. 实体标记租户字段
-@Entity
-public class Order {
-    @TenantId
-    @Column(name = "tenant_id")
-    private String tenantId;
-    // ...
-}
-
-// 3. 查询自动过滤（注册 TenantProvider 后无需额外代码）
-List<Order> orders = orderRepository.findAll(
-    new QuerySpec<Order>().eq(Order::getStatus, "PAID").toSpecification()
-);
-// 自动追加: WHERE ... AND tenant_id = ?
-
-// 4. 跳过租户过滤
-@IgnoreTenant
-@Query("SELECT o FROM Order o WHERE o.globalFlag = true")
-List<Order> findGlobalOrders();
 ```
 
 ### 字段加密

@@ -40,7 +40,7 @@ public class QuerySpecTest {
         repository.save(newEntity("world", 0));
         repository.save(newEntity("hello world", 0));
         QuerySpec<TestEntity> qs = new QuerySpec<>();
-        qs.contains(TestEntity::getName, "hello");
+        qs.like(TestEntity::getName, "hello");
         List<TestEntity> result = repository.findAll(qs.toSpecification());
         assertEquals(2, result.size());
     }
@@ -293,7 +293,7 @@ public class QuerySpecTest {
         repository.save(newEntity("hello", 0));
         repository.save(newEntity("world", 0));
         QuerySpec<TestEntity> qs = new QuerySpec<>();
-        qs.notLikeSafe(TestEntity::getName, "hello");
+        qs.notLike(TestEntity::getName, "hello");
         List<TestEntity> result = repository.findAll(qs.toSpecification());
         assertEquals(1, result.size());
         assertEquals("world", result.get(0).getName());
@@ -594,7 +594,7 @@ public class QuerySpecTest {
         repository.save(newEntity("xabcx", 0));
         repository.save(newEntity("xyz", 0));
         QuerySpec<TestEntity> qs = new QuerySpec<>();
-        qs.contains(TestEntity::getName, "ab");
+        qs.like(TestEntity::getName, "ab");
         List<TestEntity> result = repository.findAll(qs.toSpecification());
         assertEquals(2, result.size());
     }
@@ -963,7 +963,7 @@ public class QuerySpecTest {
         repository.save(newEntity("hel%lo", 0));
         // rawLike() now delegates to contains(), which escapes wildcards
         QuerySpec<TestEntity> qs = new QuerySpec<>();
-        qs.rawLike(TestEntity::getName, "hel");
+        qs.like(TestEntity::getName, "hel");
         List<TestEntity> result = repository.findAll(qs.toSpecification());
         // contains("hel") matches "hello" and "hel%lo" (wildcards are escaped)
         assertEquals(2, result.size());
@@ -975,7 +975,7 @@ public class QuerySpecTest {
         repository.save(newEntity("100x", 0));
         // rawLike() now delegates to contains(), which escapes wildcards
         QuerySpec<TestEntity> qs = new QuerySpec<>();
-        qs.rawLike(TestEntity::getName, "100%");
+        qs.like(TestEntity::getName, "100%");
         List<TestEntity> result = repository.findAll(qs.toSpecification());
         // contains("100%") with escaped wildcard matches only "100%"
         assertEquals(1, result.size());
@@ -988,7 +988,7 @@ public class QuerySpecTest {
         repository.save(newEntity("axb", 0));
         // rawLike() now delegates to contains(), which escapes wildcards
         QuerySpec<TestEntity> qs = new QuerySpec<>();
-        qs.rawLike(TestEntity::getName, "a_b");
+        qs.like(TestEntity::getName, "a_b");
         List<TestEntity> result = repository.findAll(qs.toSpecification());
         // contains("a_b") with escaped underscore matches only "a_b"
         assertEquals(1, result.size());
@@ -1075,7 +1075,7 @@ public class QuerySpecTest {
 
         // 查找 status IN (SELECT status FROM testEntity WHERE name LIKE '%match%')
         QuerySpec<TestEntity> spec = new QuerySpec<TestEntity>().inSubQuery(TestEntity::getStatus, TestEntity.class,
-            sub -> sub.select(TestEntity::getStatus).contains(TestEntity::getName, "match"));
+            sub -> sub.select(TestEntity::getStatus).like(TestEntity::getName, "match"));
         List<TestEntity> results = repository.findAll(spec.toSpecification());
         assertEquals(2, results.size());
         assertTrue(results.stream().allMatch(e -> e.getStatus() == 1));
@@ -1091,7 +1091,7 @@ public class QuerySpecTest {
 
         // 查找 status NOT IN (SELECT status FROM testEntity WHERE name LIKE '%exclude%')
         QuerySpec<TestEntity> spec = new QuerySpec<TestEntity>().notInSubQuery(TestEntity::getStatus, TestEntity.class,
-            sub -> sub.select(TestEntity::getStatus).contains(TestEntity::getName, "exclude"));
+            sub -> sub.select(TestEntity::getStatus).like(TestEntity::getName, "exclude"));
         List<TestEntity> results = repository.findAll(spec.toSpecification());
         assertEquals(2, results.size());
         assertTrue(results.stream().noneMatch(e -> e.getStatus() == 3));

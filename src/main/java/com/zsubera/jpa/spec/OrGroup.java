@@ -90,8 +90,11 @@ public class OrGroup<T> implements ConditionBuilder<T, OrGroup<T>> {
         ConditionNode.OrNode nested = new ConditionNode.OrNode();
         root.currentGroup().add(nested);
         root.pushGroupStack(nested.nodes);
-        config.accept(new OrGroup<>(root));
-        root.endOr();
+        try {
+            config.accept(new OrGroup<>(root));
+        } finally {
+            root.endOr();
+        }
         return this;
     }
 

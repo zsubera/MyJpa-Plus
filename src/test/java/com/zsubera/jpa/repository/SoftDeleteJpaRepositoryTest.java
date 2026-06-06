@@ -37,12 +37,12 @@ class SoftDeleteJpaRepositoryTest {
     void setup() {
         // Ensure auto-filter is enabled
         SoftDeleteJpaRepository.setAutoFilterEnabled(true);
-        SoftDeleteContext.clear();
+        SoftDeleteContext.reset();
     }
 
     @AfterEach
     void cleanup() {
-        SoftDeleteContext.clear();
+        SoftDeleteContext.reset();
         SoftDeleteJpaRepository.setAutoFilterEnabled(true);
     }
 

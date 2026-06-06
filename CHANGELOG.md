@@ -4,7 +4,6 @@
 
 ### 新增
 - **UPSERT/MERGE 支持** — `MergeSpec` 构建器，支持 PostgreSQL `ON CONFLICT`、MySQL `ON DUPLICATE KEY`、H2 `MERGE`
-- **多租户支持** — `@TenantId` + `TenantProvider` + `@IgnoreTenant`，自动在查询中追加租户过滤条件
 - **CTE 支持** — `CteSpec` 支持普通和递归 Common Table Expression
 - **SQL 慢查询监控** — `SqlSlowQueryInterceptor` + `myjpa-plus.monitoring` 配置
 - **字段加密** — `@Encrypt` 注解 + `EncryptConverter`（AES/GCM，随机 IV）

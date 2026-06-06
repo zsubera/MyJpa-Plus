@@ -1,6 +1,6 @@
 package com.zsubera.jpa.update;
 
-import com.zsubera.jpa.repository.EntityClassResolver;
+import com.zsubera.jpa.util.EntityClassResolver;
 import com.zsubera.jpa.spec.SFunction;
 import com.zsubera.jpa.util.InClauseBuilder;
 import com.zsubera.jpa.util.LambdaUtils;
@@ -42,9 +42,32 @@ public class UpdateSpec<T> extends AbstractBulkOperationSpec<T, UpdateSpec<T>> {
 
     private static final Logger log = LoggerFactory.getLogger(UpdateSpec.class);
 
-    /** P2-23: 缓存已验证的字段类型，避免重复反射查找。 */
+    /** 缓存已验证的字段类型，避免重复反射查找。使用大小限制防止内存泄漏。 */
     private static final java.util.concurrent.ConcurrentMap<String, Boolean> NUMERIC_FIELD_CACHE =
         new java.util.concurrent.ConcurrentHashMap<>();
+
+    /** 缓存实体类的 @Version 字段名，避免每次 UPDATE 执行时重复反射遍历类层次。 */
+    private static final java.util.concurrent.ConcurrentMap<String, String> VERSION_FIELD_CACHE =
+        new java.util.concurrent.ConcurrentHashMap<>();
+
+    /** 缓存最大容量限制 */
+    private static final int MAX_CACHE_SIZE = 256;
+
+    /**
+     * 缓存驱逐辅助方法：当缓存超过最大容量时清除一半条目。
+     */
+    private static void evictCacheIfNeeded(java.util.concurrent.ConcurrentMap<?, ?> cache) {
+        if (cache.size() > MAX_CACHE_SIZE) {
+            int toRemove = cache.size() / 2;
+            java.util.Iterator<?> it = cache.keySet().iterator();
+            int removed = 0;
+            while (it.hasNext() && removed < toRemove) {
+                it.next();
+                it.remove();
+                removed++;
+            }
+        }
+    }
 
     private final List<SetClause> setClauses = new ArrayList<>();
     private boolean allowUnconditional = false;
@@ -63,6 +86,7 @@ public class UpdateSpec<T> extends AbstractBulkOperationSpec<T, UpdateSpec<T>> {
     }
 
     private final List<ExpressionSetClause> expressionSetClauses = new ArrayList<>();
+    private boolean versionIncrementEnabled = true;
 
     /**
      * 创建指定实体类型的更新规范构建器。
@@ -117,54 +141,28 @@ public class UpdateSpec<T> extends AbstractBulkOperationSpec<T, UpdateSpec<T>> {
     }
 
     /**
-     * 在 UPDATE 子句中使用原子表达式设置字段值：{@code SET field = expression}。
+     * 控制 UPDATE 操作是否自动递增 {@code @Version} 字段。
      *
      * <p>
-     * 使用示例（原子递增）：
-     *
-     * <pre>{@code
-     * new UpdateSpec<>(Account.class).setExpression(Account::getBalance, "balance + :amount").eq(Account::getId, accountId)
-     *     .execute(em);
-     * }</pre>
-     *
-     * <p>
-     * <strong>安全警告：</strong>此方法接受原始 SQL 表达式字符串，存在潜在的 SQL 注入风险。 请遵循以下安全最佳实践：
-     * <ul>
-     * <li>使用命名参数（如 {@code :amount}）而非直接拼接用户输入值</li>
-     * <li>表达式应为硬编码的常量字符串，不要将用户输入直接拼接到表达式中</li>
-     * <li>对于简单的加减操作，推荐使用 {@link #setAdd} 和 {@link #setSubtract} 方法</li>
-     * </ul>
-     *
-     * @param field 实体属性的方法引用
-     * @param expression SQL 表达式字符串（使用参数名而非直接拼接值）
-     * @return 当前构建器实例，支持链式调用
-     * @throws IllegalArgumentException 如果 field 或 expression 为 null
-     * @deprecated 使用 {@link #setAdd(SFunction, Number)} 和 {@link #setSubtract(SFunction, Number)} 替代简单的加减操作。
-     *             对于复杂表达式，此方法仍然可用但不推荐，因为它接受原始 SQL 字符串存在注入风险。
-     */
-    @Deprecated(since = "1.2.0", forRemoval = true)
-    public UpdateSpec<T> setExpression(SFunction<T, ?> field, String expression) {
-        throw new UnsupportedOperationException(
-            "setExpression() is removed due to SQL injection risk and incorrect implementation (uses cb.literal() instead of cb.expression()). "
-                + "Use setAdd() or setSubtract() for arithmetic operations, or use CriteriaBuilder directly for complex expressions.");
-    }
-
-    /**
-     * 原子递增字段值：{@code SET field = field + amount}。
+     * 默认启用。当实体有 {@code @Version} 字段时，UPDATE 语句会自动添加 {@code SET version = version + 1}。 调用
+     * {@code withVersionIncrement(false)} 可禁用此行为。
      *
      * <p>
      * 使用示例：
      *
      * <pre>{@code
-     * new UpdateSpec<>(Account.class).setAdd(Account::getBalance, 100).eq(Account::getId, accountId).execute(em);
-     * // 生成: UPDATE account SET balance = balance + 100 WHERE id = ?
+     * new UpdateSpec<>(User.class).set(User::getName, "new name").withVersionIncrement(false) // 不递增 version
+     *     .eq(User::getId, userId).execute(em);
      * }</pre>
      *
-     * @param field 实体属性的方法引用
-     * @param amount 要增加的数值
+     * @param enabled 是否启用版本自动递增
      * @return 当前构建器实例，支持链式调用
-     * @throws IllegalArgumentException 如果 field 或 amount 为 null
      */
+    public UpdateSpec<T> withVersionIncrement(boolean enabled) {
+        this.versionIncrementEnabled = enabled;
+        return this;
+    }
+
     public UpdateSpec<T> setAdd(SFunction<T, ?> field, Number amount) {
         if (field == null) {
             throw new IllegalArgumentException("field must not be null");
@@ -271,6 +269,7 @@ public class UpdateSpec<T> extends AbstractBulkOperationSpec<T, UpdateSpec<T>> {
             update.set(root.get(sc.fieldName), sc.value);
         }
         applyExpressionSetClauses(update, root, cb);
+        applyVersionIncrement(update, root, cb);
         Predicate[] predicates = buildPredicates(root, cb);
         if (predicates.length == 0 && !allowUnconditional) {
             throw new IllegalStateException("No WHERE conditions specified for UPDATE operation. "
@@ -281,6 +280,44 @@ public class UpdateSpec<T> extends AbstractBulkOperationSpec<T, UpdateSpec<T>> {
             update.where(cb.and(predicates));
         }
         return update;
+    }
+
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    private void applyVersionIncrement(CriteriaUpdate<T> update, Root<T> root, CriteriaBuilder cb) {
+        if (!versionIncrementEnabled) {
+            return;
+        }
+        String versionFieldName = resolveVersionFieldName(entityClass);
+        if (versionFieldName != null) {
+            ((CriteriaUpdate)update).set(root.get(versionFieldName),
+                (jakarta.persistence.criteria.Expression)cb.sum(root.get(versionFieldName), 1));
+        }
+    }
+
+    /**
+     * 解析实体类的 {@code @Version} 字段名，使用静态缓存避免重复反射。
+     *
+     * @param clazz 实体类
+     * @return {@code @Version} 字段名，如果不存在则返回 null
+     */
+    private static String resolveVersionFieldName(Class<?> clazz) {
+        String cacheKey = clazz.getName();
+        String cached = VERSION_FIELD_CACHE.get(cacheKey);
+        if (cached != null) {
+            return "__NONE__".equals(cached) ? null : cached;
+        }
+        for (Class<?> c = clazz; c != null && c != Object.class; c = c.getSuperclass()) {
+            for (java.lang.reflect.Field f : c.getDeclaredFields()) {
+                if (f.isAnnotationPresent(jakarta.persistence.Version.class)) {
+                    evictCacheIfNeeded(VERSION_FIELD_CACHE);
+                    VERSION_FIELD_CACHE.put(cacheKey, f.getName());
+                    return f.getName();
+                }
+            }
+        }
+        evictCacheIfNeeded(VERSION_FIELD_CACHE);
+        VERSION_FIELD_CACHE.put(cacheKey, "__NONE__");
+        return null;
     }
 
     /**
@@ -312,6 +349,7 @@ public class UpdateSpec<T> extends AbstractBulkOperationSpec<T, UpdateSpec<T>> {
             update.set(root.get(sc.fieldName), sc.value);
         }
         applyExpressionSetClauses(update, root, cb);
+        applyVersionIncrement(update, root, cb);
         return em.createQuery(update).executeUpdate();
     }
 
@@ -437,6 +475,7 @@ public class UpdateSpec<T> extends AbstractBulkOperationSpec<T, UpdateSpec<T>> {
             update.set(updateRoot.get(sc.fieldName), sc.value);
         }
         applyExpressionSetClauses(update, updateRoot, cb);
+        applyVersionIncrement(update, updateRoot, cb);
         update.where(InClauseBuilder.in(cb, updateRoot.get(idFieldName), ids));
         return em.createQuery(update).executeUpdate();
     }
@@ -466,6 +505,7 @@ public class UpdateSpec<T> extends AbstractBulkOperationSpec<T, UpdateSpec<T>> {
                 Class<?> type = f.getType();
                 boolean isNumeric = Number.class.isAssignableFrom(type) || type == int.class || type == long.class
                     || type == double.class || type == float.class || type == short.class || type == byte.class;
+                evictCacheIfNeeded(NUMERIC_FIELD_CACHE);
                 NUMERIC_FIELD_CACHE.put(cacheKey, isNumeric);
                 if (!isNumeric) {
                     throw new IllegalArgumentException(operation + "() requires a numeric field, but field '"
@@ -478,6 +518,7 @@ public class UpdateSpec<T> extends AbstractBulkOperationSpec<T, UpdateSpec<T>> {
             }
         }
         // Field not found via reflection — may be a property without a direct field; skip validation
+        evictCacheIfNeeded(NUMERIC_FIELD_CACHE);
         NUMERIC_FIELD_CACHE.put(cacheKey, true);
         log.debug("Cannot validate numeric type for field '{}' via reflection; skipping validation", fieldName);
     }

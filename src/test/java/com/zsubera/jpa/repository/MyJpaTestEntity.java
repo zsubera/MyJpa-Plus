@@ -5,7 +5,7 @@ import jakarta.persistence.*;
 
 @Entity
 @Table(name = "my_jpa_test_entity")
-class MyJpaTestEntity {
+public class MyJpaTestEntity {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)

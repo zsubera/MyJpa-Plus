@@ -83,12 +83,27 @@ public class MyJpaPlusProperties {
          */
         private boolean autoFilter = true;
 
+        /**
+         * 是否阻断对拥有 {@code @SoftDelete} 字段的实体的无条件硬删除操作。 启用后，当软删除过滤被禁用（{@code autoFilter=false} 或
+         * {@code @IgnoreSoftDelete}）时， 执行 {@code deleteAll()} 等无条件硬删除将抛出 {@link IllegalStateException}。 仅对拥有
+         * {@code @SoftDelete} 字段的实体生效，无该字段的实体不受影响。 默认值：{@code true}（生产环境最安全）
+         */
+        private boolean blockUnconditionalDelete = true;
+
         public boolean isAutoFilter() {
             return autoFilter;
         }
 
         public void setAutoFilter(boolean autoFilter) {
             this.autoFilter = autoFilter;
+        }
+
+        public boolean isBlockUnconditionalDelete() {
+            return blockUnconditionalDelete;
+        }
+
+        public void setBlockUnconditionalDelete(boolean blockUnconditionalDelete) {
+            this.blockUnconditionalDelete = blockUnconditionalDelete;
         }
     }
 

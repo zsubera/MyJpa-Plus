@@ -61,23 +61,6 @@ public class CteSpec {
     private static volatile boolean strictMode = true;
 
     /**
-     * 设置严格模式。启用后，未绑定的命名参数将抛出异常。
-     *
-     * <p>
-     * <strong>安全警告：</strong>禁用严格模式会降低 SQL 注入防护能力。仅在受控环境中使用。
-     *
-     * @param enabled 是否启用严格模式
-     * @deprecated 严格模式应保持启用。如需禁用，仅限于测试或受控环境。
-     */
-    @Deprecated(since = "1.2.0", forRemoval = false)
-    public static void setStrictMode(boolean enabled) {
-        if (!enabled) {
-            log.warn("SECURITY: CteSpec strict mode DISABLED. SQL injection protections are now advisory-only.");
-        }
-        strictMode = enabled;
-    }
-
-    /**
      * 获取严格模式状态。
      *
      * @return 是否启用严格模式
@@ -200,11 +183,19 @@ public class CteSpec {
             validateSelectOnly(sqlTemplate);
         }
         CteEntry current = currentCte();
-        current.sql = sqlTemplate;
-        if (params != null) {
+        if (params != null && params.length > 0) {
+            // P2: 使用正则表达式替换参数占位符，避免替换字符串字面量中的问号
+            // 注意：此方法仍会替换 SQL 注释中的 ?N，如需精确控制请使用命名参数
+            String rewrittenSql = sqlTemplate;
             for (int i = 0; i < params.length; i++) {
-                parameters.put("_cte_param_" + i, params[i]);
+                String placeholder = "\\?" + (i + 1);
+                String namedParam = "_cte_param_" + i;
+                rewrittenSql = rewrittenSql.replaceAll(placeholder, ":" + namedParam);
+                parameters.put(namedParam, params[i]);
             }
+            current.sql = rewrittenSql;
+        } else {
+            current.sql = sqlTemplate;
         }
         return this;
     }
@@ -418,14 +409,28 @@ public class CteSpec {
      */
     private void applyFetchSize(EntityManager em, Query query) {
         try {
-            String productName = em.unwrap(org.hibernate.Session.class)
-                .doReturningWork(connection -> connection.getMetaData().getDatabaseProductName());
-            if (productName != null) {
-                String lower = productName.toLowerCase();
+            // P0-2: Use pure reflection to avoid compile-time dependency on Hibernate
+            Class<?> sessionClass = Class.forName("org.hibernate.Session");
+            Object session = em.unwrap(sessionClass);
+            Class<?> returningWorkClass = Class.forName("org.hibernate.jdbc.ReturningWork");
+            String[] productNameHolder = new String[1];
+            Object workProxy = java.lang.reflect.Proxy.newProxyInstance(returningWorkClass.getClassLoader(),
+                new Class<?>[] {returningWorkClass}, (proxy, method, args) -> {
+                    if ("execute".equals(method.getName()) && args.length == 1
+                        && args[0] instanceof java.sql.Connection conn) {
+                        return conn.getMetaData().getDatabaseProductName();
+                    }
+                    return method.invoke(proxy, args);
+                });
+            java.lang.reflect.Method doReturningWork = sessionClass.getMethod("doReturningWork", returningWorkClass);
+            productNameHolder[0] = (String)doReturningWork.invoke(session, workProxy);
+            if (productNameHolder[0] != null) {
+                String lower = productNameHolder[0].toLowerCase();
                 if (lower.contains("postgresql") || lower.contains("mysql")) {
-                    // PostgreSQL/MySQL 需要设置 fetchSize 才能流式返回结果
-                    if (query instanceof org.hibernate.query.NativeQuery<?> nativeQuery) {
-                        nativeQuery.setFetchSize(100);
+                    Class<?> nativeQueryClass = Class.forName("org.hibernate.query.NativeQuery");
+                    if (nativeQueryClass.isInstance(query)) {
+                        java.lang.reflect.Method setFetchSize = nativeQueryClass.getMethod("setFetchSize", int.class);
+                        setFetchSize.invoke(query, 100);
                     }
                 }
             }
@@ -591,6 +596,10 @@ public class CteSpec {
         List<String> unboundParams = new ArrayList<>();
         while (matcher.find()) {
             String paramName = matcher.group(1);
+            // P1-8: Skip parameters managed internally by asSafe() (e.g., :_cte_param_0)
+            if (paramName.startsWith("_cte_param_")) {
+                continue;
+            }
             if (!boundParams.containsKey(paramName)) {
                 unboundParams.add(paramName);
             }

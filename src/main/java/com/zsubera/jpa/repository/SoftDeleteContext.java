@@ -116,25 +116,4 @@ public final class SoftDeleteContext {
         ignoreCount.remove();
     }
 
-    /**
-     * 清除当前线程的标志，防止 ThreadLocal 泄漏。应在方法执行完成后调用。
-     *
-     * @deprecated 自 1.1.0 起废弃，请使用 {@link #popIgnore()} 以支持嵌套调用场景。
-     */
-    @Deprecated(since = "1.1.0")
-    public static void clear() {
-        ignoreCount.remove();
-    }
-
-    /**
-     * @deprecated 自 1.1.0 起废弃，请使用 {@link #pushIgnore()} 和 {@link #popIgnore()}。
-     */
-    @Deprecated(since = "1.1.0")
-    public static void setIgnoreSoftDelete(boolean ignore) {
-        if (ignore) {
-            pushIgnore();
-        } else {
-            popIgnore();
-        }
-    }
 }

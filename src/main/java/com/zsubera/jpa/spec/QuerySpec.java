@@ -604,8 +604,11 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
         ConditionNode.OrNode orNode = new ConditionNode.OrNode();
         currentGroup().add(orNode);
         groupStack.push(orNode.nodes);
-        config.accept(new OrGroup<>(this));
-        groupStack.pop();
+        try {
+            config.accept(new OrGroup<>(this));
+        } finally {
+            groupStack.pop();
+        }
         return this;
     }
 
@@ -699,8 +702,11 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
         ConditionNode.NegateNode negate = new ConditionNode.NegateNode(andNode);
         currentGroup().add(negate);
         groupStack.push(andNode.nodes);
-        config.accept(new OrGroup<>(this));
-        groupStack.pop();
+        try {
+            config.accept(new OrGroup<>(this));
+        } finally {
+            groupStack.pop();
+        }
         return this;
     }
 
@@ -792,8 +798,8 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
         this.orderNodes.addAll(other.orderNodes);
         // 复制查询设置：仅当当前实例未设置时，采用另一个实例的值
         if (other.queryTimeout != null && this.queryTimeout == null) {
-            // P1-3: Validate timeout range when copying from another spec
-            if (other.queryTimeout < 0 || other.queryTimeout > MAX_TIMEOUT_SECONDS) {
+            // P1-3: Validate timeout range when copying from another spec (must match timeout() validation)
+            if (other.queryTimeout <= 0 || other.queryTimeout > MAX_TIMEOUT_SECONDS) {
                 throw new IllegalArgumentException(
                     "queryTimeout from source spec is out of range: " + other.queryTimeout);
             }
@@ -1030,6 +1036,11 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
                     + "Using existing fetch join. Consider using join() consistently.", fullPath);
             }
         } else {
+            if (!(path instanceof From<?, ?>)) {
+                throw new IllegalArgumentException("Cannot join on non-entity path '" + node.fieldName
+                    + "'. Join is only supported on entity paths (Root/Join). "
+                    + "For embeddable fields, use direct field access instead of join.");
+            }
             if (isFetch) {
                 join = (Join<?, ?>)((From<?, ?>)path).fetch(node.fieldName, jt);
             } else {
@@ -1146,7 +1157,7 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
      * 解析 EXISTS 子查询节点。
      *
      * @param node EXISTS 子查询节点
-     * @param outerPath 外部查询路径
+     * @param outerPath 外部查询路径（始终为查询根 Root，由 resolveNode 保证）
      * @param query Criteria 查询对象
      * @param cb Criteria 构建器
      * @param <S> 子查询实体类型
@@ -1168,24 +1179,11 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
      * EXISTS 子查询解析的内部实现。
      *
      * <p>
-     * <strong>P1-11 Hibernate 特定行为说明：</strong>当从 {@code Join} 路径（而非 {@code Root} 路径）执行 EXISTS 子查询时， 此方法使用 Hibernate
-     * 特定的反射 API（{@code getParent()}）获取 Join 的父 {@code Root} 进行关联。 此行为在非 Hibernate JPA 实现（如 EclipseLink、OpenJPA）上不可用，将抛出
-     * {@code IllegalArgumentException}。
-     *
-     * <p>
-     * <strong>替代方案：</strong>如果需要在非 Hibernate 环境中使用 EXISTS 子查询，请确保使用 {@code Root} 级别的查询：
-     *
-     * <pre>{@code
-     * // 推荐：使用 Root 级别的 EXISTS（所有 JPA 实现兼容）
-     * qs.exists(User.class, sub -> sub.eq(User::getActive, true));
-     *
-     * // 不推荐：从 Join 路径执行 EXISTS（仅 Hibernate 兼容）
-     * qs.join(User::getDepartment, j -> j.exists(Manager.class, sub -> ...));
-     * }</pre>
+     * 使用标准 JPA {@link Subquery#correlate(Root)} 关联外部查询根， 兼容所有 JPA 实现（Hibernate、EclipseLink、OpenJPA）。
      *
      * @param <S> 子查询实体类型
      * @param node EXISTS 条件节点
-     * @param rootPath 外部查询的根路径（用于关联）
+     * @param rootPath 外部查询的根路径（由 resolveNode 保证为 Root 类型）
      * @param query CriteriaQuery 实例（可以是临时 query）
      * @param cb CriteriaBuilder 实例
      * @return 构建好的 EXISTS 或 NOT EXISTS 谓词
@@ -1194,51 +1192,35 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
         CriteriaQuery<?> query, CriteriaBuilder cb) {
         jakarta.persistence.criteria.Subquery<S> subquery = query.subquery(node.subEntity);
         Root<S> subRoot = subquery.from(node.subEntity);
-        // P0-6: 使用根路径进行关联，支持 Root 和 Join 路径
-        if (rootPath instanceof Root<?> root) {
-            Root<?> correlatedOuter = subquery.correlate(root);
-            SubQuerySpec<S> subSpec = SubQuerySpec.create(subquery, subRoot, correlatedOuter, cb);
-            node.config.accept(subSpec);
-            subSpec.applyWhere();
-            if (!subSpec.isSelectSet()) {
-                subquery.select(subRoot);
-            }
-        } else if (rootPath instanceof jakarta.persistence.criteria.Join<?, ?>) {
-            // P0-6: 支持从 Join 路径进行 EXISTS 关联
-            // Join 路径无法直接用于 correlate（JPA Criteria API 限制），
-            // 但可以通过提取 Join 的父 From 进行关联
-            @SuppressWarnings("unchecked")
-            jakarta.persistence.criteria.Join<?, ?> join = (jakarta.persistence.criteria.Join<?, ?>)rootPath;
-            // 尝试通过 Hibernate 的 getParent() 获取父路径
-            try {
-                java.lang.reflect.Method getParent = join.getClass().getMethod("getParent");
-                Object parent = getParent.invoke(join);
-                if (parent instanceof Root<?> parentRoot) {
-                    Root<?> correlatedOuter = subquery.correlate(parentRoot);
-                    SubQuerySpec<S> subSpec = SubQuerySpec.create(subquery, subRoot, correlatedOuter, cb);
-                    node.config.accept(subSpec);
-                    subSpec.applyWhere();
-                    if (!subSpec.isSelectSet()) {
-                        subquery.select(subRoot);
-                    }
-                } else {
-                    throw new IllegalArgumentException("EXISTS correlation from nested Join paths is not supported. "
-                        + "Use a Root-based query or restructure your query to use Root-level EXISTS. "
-                        + "Example: qs.exists(User.class, sub -> sub.eq(User::getActive, true))");
-                }
-            } catch (ReflectiveOperationException e) {
-                throw new IllegalArgumentException(
-                    "EXISTS correlation from Join path is not supported by the current JPA provider. "
-                        + "Use a Root-based query for EXISTS subqueries. "
-                        + "Example: qs.exists(User.class, sub -> sub.eq(User::getActive, true))",
-                    e);
-            }
-        } else {
-            throw new IllegalArgumentException(
-                "EXISTS correlation requires a Root or Join path for correlation, but got "
-                    + rootPath.getClass().getSimpleName() + ". Use Root-based queries for EXISTS subqueries.");
+        Root<?> correlatedOuter = resolveCorrelationRoot(subquery, rootPath);
+        SubQuerySpec<S> subSpec = SubQuerySpec.create(subquery, subRoot, correlatedOuter, cb);
+        node.config.accept(subSpec);
+        subSpec.applyWhere();
+        if (!subSpec.isSelectSet()) {
+            subquery.select(subRoot);
         }
         return node.negate ? cb.not(cb.exists(subquery)) : cb.exists(subquery);
+    }
+
+    /**
+     * 将外部查询路径关联到子查询。
+     *
+     * <p>
+     * 使用标准 JPA {@link Subquery#correlate(Root)} 进行关联。 {@code rootPath} 由 {@link #resolveNode} 保证为查询根 {@link Root} 类型（而非
+     * Join），因为 EXISTS 节点始终使用 {@code rootPath} 参数。
+     *
+     * @param subquery 子查询对象
+     * @param path 外部查询路径（预期为 Root 类型）
+     * @return 关联后的 Root
+     * @throws IllegalArgumentException 如果 path 不是 Root 类型
+     */
+    @SuppressWarnings("unchecked")
+    private Root<?> resolveCorrelationRoot(jakarta.persistence.criteria.Subquery<?> subquery, Path<?> path) {
+        if (path instanceof Root<?> root) {
+            return subquery.correlate(root);
+        }
+        throw new IllegalArgumentException("EXISTS correlation requires a Root path for correlation, but got "
+            + path.getClass().getSimpleName() + ". Ensure EXISTS is used at the query root level.");
     }
 
     /**
@@ -1738,5 +1720,31 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
             case NE -> cb.notEqual(expr, value);
             default -> throw new IllegalArgumentException("Unsupported operator for HAVING: " + op);
         };
+    }
+
+    @Override
+    public String toString() {
+        StringBuilder sb = new StringBuilder("QuerySpec{");
+        sb.append("conditions=").append(conditions.size());
+        if (distinct) {
+            sb.append(", distinct");
+        }
+        if (!groupByFields.isEmpty()) {
+            sb.append(", groupBy=").append(groupByFields);
+        }
+        if (!havingConditions.isEmpty()) {
+            sb.append(", having=").append(havingConditions.size()).append(" conditions");
+        }
+        if (!orderNodes.isEmpty()) {
+            sb.append(", orderBy=").append(orderNodes);
+        }
+        if (queryTimeout != null) {
+            sb.append(", timeout=").append(queryTimeout).append("s");
+        }
+        if (lockMode != null) {
+            sb.append(", lockMode=").append(lockMode);
+        }
+        sb.append('}');
+        return sb.toString();
     }
 }

@@ -97,7 +97,7 @@ public class SqlSlowQueryInterceptor implements StatementInspector {
             new DataSourceProxyHandler(dataSource));
     }
 
-    private class DataSourceProxyHandler implements InvocationHandler {
+    public class DataSourceProxyHandler implements InvocationHandler {
 
         private final DataSource target;
 

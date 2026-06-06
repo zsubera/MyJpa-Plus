@@ -43,8 +43,7 @@ mvn install -DskipTests -Ddependency-check.skip=true -Dgpg.skip=true
 | `com.zsubera.jpa.projection` | 投影查询：ProjectionSpec |
 | `com.zsubera.jpa.template` | MyJpaTemplate |
 | `com.zsubera.jpa.converter` | 枚举转换与序列化：@CodeEnum、@CodeEnumValue、CodeEnumType、EncryptConverter、MaskSerializer |
-| `com.zsubera.jpa.annotation` | 注解：@SoftDelete、@IgnoreSoftDelete、@TenantId、@IgnoreTenant、@Encrypt、@Mask、@RetryOnOptimisticLock |
-| `com.zsubera.jpa.tenant` | 多租户：TenantProvider、TenantContext |
+| `com.zsubera.jpa.annotation` | 注解：@SoftDelete、@IgnoreSoftDelete、@Encrypt、@Mask、@RetryOnOptimisticLock |
 | `com.zsubera.jpa.monitor` | SQL 监控：SqlSlowQueryInterceptor |
 | `com.zsubera.jpa.codegen` | 代码生成：EntityCodeGenerator |
 | `com.zsubera.jpa.cache` | 查询缓存：QueryCacheManager |

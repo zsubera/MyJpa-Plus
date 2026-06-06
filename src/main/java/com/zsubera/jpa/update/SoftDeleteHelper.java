@@ -4,6 +4,7 @@ import com.zsubera.jpa.annotation.SoftDelete;
 import com.zsubera.jpa.exception.MyJpaPlusException;
 import com.zsubera.jpa.spec.ConditionNode;
 import com.zsubera.jpa.spec.QuerySpec;
+import com.zsubera.jpa.util.StringHelper;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.EntityManager;
@@ -355,9 +356,15 @@ public final class SoftDeleteHelper {
         }
         jakarta.persistence.Entity entityAnnotation = entityClass.getAnnotation(jakarta.persistence.Entity.class);
         if (entityAnnotation != null && !entityAnnotation.name().isEmpty()) {
-            return entityAnnotation.name();
+            String name = entityAnnotation.name();
+            // P1-4: Validate @Entity name to prevent SQL injection
+            if (!SAFE_IDENTIFIER_PATTERN.matcher(name).matches()) {
+                throw new IllegalArgumentException(
+                    "Invalid @Entity name: " + name + ". Must contain only alphanumeric characters and underscores.");
+            }
+            return name;
         }
-        return camelToSnake(entityClass.getSimpleName());
+        return StringHelper.camelToSnake(entityClass.getSimpleName());
     }
 
     /**
@@ -371,7 +378,7 @@ public final class SoftDeleteHelper {
                 return columnAnnotation.name();
             }
         }
-        return fieldName;
+        return StringHelper.camelToSnake(fieldName);
     }
 
     /**
@@ -390,32 +397,6 @@ public final class SoftDeleteHelper {
             }
         }
         throw new IllegalStateException("No @Id field found in " + entityClass.getName());
-    }
-
-    /**
-     * Convert camelCase to snake_case.
-     */
-    private static String camelToSnake(String name) {
-        if (name == null || name.isEmpty()) {
-            return name;
-        }
-        StringBuilder sb = new StringBuilder();
-        for (int i = 0; i < name.length(); i++) {
-            char c = name.charAt(i);
-            if (Character.isUpperCase(c)) {
-                if (i > 0) {
-                    char prev = name.charAt(i - 1);
-                    boolean nextIsLower = (i + 1 < name.length()) && Character.isLowerCase(name.charAt(i + 1));
-                    if (Character.isLowerCase(prev) || (Character.isUpperCase(prev) && nextIsLower)) {
-                        sb.append('_');
-                    }
-                }
-                sb.append(Character.toLowerCase(c));
-            } else {
-                sb.append(c);
-            }
-        }
-        return sb.toString();
     }
 
     /**
@@ -490,7 +471,8 @@ public final class SoftDeleteHelper {
     private static Predicate buildNotDeleted(CriteriaBuilder cb, Path<?> path, String fieldName, Class<?> entityClass) {
         Field field = getField(entityClass, fieldName);
         if (field == null) {
-            return cb.equal(path.get(fieldName), false);
+            // 字段未找到时，回退到安全默认值：NULL 或 false 均视为未删除
+            return cb.or(cb.isNull(path.get(fieldName)), cb.equal(path.get(fieldName), false));
         }
         SoftDelete annotation = field.getAnnotation(SoftDelete.class);
         // Boolean 类型
