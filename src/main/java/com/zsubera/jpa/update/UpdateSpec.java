@@ -171,7 +171,7 @@ public class UpdateSpec<T> extends AbstractBulkOperationSpec<T, UpdateSpec<T>> {
             throw new IllegalArgumentException("amount must not be null");
         }
         String name = LambdaUtils.getPropertyName(field);
-        // P1-2: Validate that the field type is numeric at build time
+        // Validate that the field type is numeric at build time
         validateNumericField(name, "setAdd");
         expressionSetClauses.add(new ExpressionSetClause(name, (root, cb) -> cb.sum(root.get(name), amount)));
         return this;
@@ -201,7 +201,7 @@ public class UpdateSpec<T> extends AbstractBulkOperationSpec<T, UpdateSpec<T>> {
             throw new IllegalArgumentException("amount must not be null");
         }
         String name = LambdaUtils.getPropertyName(field);
-        // P1-2: Validate that the field type is numeric at build time
+        // Validate that the field type is numeric at build time
         validateNumericField(name, "setSubtract");
         expressionSetClauses.add(new ExpressionSetClause(name, (root, cb) -> cb.diff(root.get(name), amount)));
         return this;
@@ -481,14 +481,14 @@ public class UpdateSpec<T> extends AbstractBulkOperationSpec<T, UpdateSpec<T>> {
     }
 
     /**
-     * P1-2: Validate that the specified field is a numeric type.
+     * Validate that the specified field is a numeric type.
      *
      * @param fieldName the field name to validate
      * @param operation the operation name for error messages
      * @throws IllegalArgumentException if the field is not a numeric type
      */
     private void validateNumericField(String fieldName, String operation) {
-        // P2-23: Use cached validation result to avoid repeated reflection
+        // Use cached validation result to avoid repeated reflection
         String cacheKey = entityClass.getName() + "#" + fieldName;
         Boolean cachedResult = NUMERIC_FIELD_CACHE.get(cacheKey);
         if (cachedResult != null) {

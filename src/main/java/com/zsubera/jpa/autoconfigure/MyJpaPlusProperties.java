@@ -181,7 +181,7 @@ public class MyJpaPlusProperties {
             if (inClauseMaxSize <= 0) {
                 throw new IllegalArgumentException("inClauseMaxSize must be positive");
             }
-            // P2: Cross-field validation: maxInClauseSize must be <= hardLimit
+            // Cross-field validation: maxInClauseSize must be <= hardLimit
             if (this.inClauseHardLimit > 0 && inClauseMaxSize > this.inClauseHardLimit) {
                 throw new IllegalArgumentException("inClauseMaxSize (" + inClauseMaxSize
                     + ") must be <= inClauseHardLimit (" + this.inClauseHardLimit + ")");
@@ -197,7 +197,7 @@ public class MyJpaPlusProperties {
             if (inClauseHardLimit <= 0) {
                 throw new IllegalArgumentException("inClauseHardLimit must be positive");
             }
-            // P2: Cross-field validation: hardLimit must be >= maxInClauseSize
+            // Cross-field validation: hardLimit must be >= maxInClauseSize
             if (inClauseHardLimit < this.inClauseMaxSize) {
                 throw new IllegalArgumentException("inClauseHardLimit (" + inClauseHardLimit
                     + ") must be >= inClauseMaxSize (" + this.inClauseMaxSize + ")");

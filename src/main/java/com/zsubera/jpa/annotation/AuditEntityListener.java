@@ -72,7 +72,7 @@ public class AuditEntityListener implements ApplicationContextAware {
     private static volatile ApplicationContext applicationContext;
     private static volatile AuditUserProvider userProvider;
 
-    /** P1: Sentinel value to indicate that no AuditUserProvider bean was found, preventing re-entry. */
+    /** Sentinel value to indicate that no AuditUserProvider bean was found, preventing re-entry. */
     private static final AuditUserProvider NO_PROVIDER_SENTINEL = new AuditUserProvider() {
         @Override
         public String getCurrentUser() {
@@ -80,10 +80,10 @@ public class AuditEntityListener implements ApplicationContextAware {
         }
     };
 
-    /** P1: Flag to track if provider lookup has been attempted. */
+    /** Flag to track if provider lookup has been attempted. */
     private static volatile boolean providerLookupAttempted = false;
 
-    /** P1: Configurable timezone for audit timestamps. Defaults to system timezone. */
+    /** Configurable timezone for audit timestamps. Defaults to system timezone. */
     private static volatile java.time.ZoneId auditZoneId = java.time.ZoneId.systemDefault();
 
     @Override
@@ -101,7 +101,7 @@ public class AuditEntityListener implements ApplicationContextAware {
     }
 
     /**
-     * P1: 设置审计时间戳使用的时区。由自动配置类调用。
+     * 设置审计时间戳使用的时区。由自动配置类调用。
      *
      * @param zoneId 时区 ID，如 "UTC"、"Asia/Shanghai"
      */
@@ -115,7 +115,7 @@ public class AuditEntityListener implements ApplicationContextAware {
      * 获取 AuditUserProvider 实例（延迟初始化，线程安全）。
      *
      * <p>
-     * P1: 使用哨兵值 NO_PROVIDER_SENTINEL 防止缓存失败后无限重入。
+     * 使用哨兵值 NO_PROVIDER_SENTINEL 防止缓存失败后无限重入。
      *
      * @return AuditUserProvider 实例，如果未配置则返回 null
      */
@@ -130,14 +130,14 @@ public class AuditEntityListener implements ApplicationContextAware {
                         userProvider = applicationContext.getBean(AuditUserProvider.class);
                     } catch (Exception e) {
                         log.debug("No AuditUserProvider bean found, createdBy/updatedBy will not be auto-filled");
-                        // P1: Set sentinel to prevent re-entry
+                        // Set sentinel to prevent re-entry
                         userProvider = NO_PROVIDER_SENTINEL;
                     }
                     providerLookupAttempted = true;
                 }
             }
         } else {
-            // P2: 标记已尝试查找，避免 applicationContext 为 null 时重复检查
+            // 标记已尝试查找，避免 applicationContext 为 null 时重复检查
             providerLookupAttempted = true;
         }
         return userProvider == NO_PROVIDER_SENTINEL ? null : userProvider;
@@ -159,7 +159,7 @@ public class AuditEntityListener implements ApplicationContextAware {
         if (fields.updatedAt != null) {
             setFieldValue(entity, fields.updatedAt, now);
         }
-        // P2: 获取 provider 一次，避免重复查找
+        // 获取 provider 一次，避免重复查找
         AuditUserProvider provider = (fields.createdBy != null || fields.updatedBy != null) ? getUserProvider() : null;
         if (provider != null) {
             if (fields.createdBy != null) {
@@ -206,7 +206,7 @@ public class AuditEntityListener implements ApplicationContextAware {
         return AUDIT_FIELDS_CACHE.computeIfAbsent(entityClass, cls -> {
             AuditFields fields = new AuditFields();
             boolean extendsBaseEntity = com.zsubera.jpa.entity.BaseEntity.class.isAssignableFrom(cls);
-            // B-7: Traverse complete class hierarchy to find audit fields in parent classes
+            // Traverse complete class hierarchy to find audit fields in parent classes
             for (Class<?> c = cls; c != null && c != Object.class; c = c.getSuperclass()) {
                 for (Field field : c.getDeclaredFields()) {
                     if (field.isAnnotationPresent(CreatedAt.class)) {
@@ -263,7 +263,7 @@ public class AuditEntityListener implements ApplicationContextAware {
                 if (fieldType == Instant.class) {
                     field.set(entity, instant);
                 } else if (fieldType == LocalDateTime.class) {
-                    // P1: Use configurable timezone instead of system default
+                    // Use configurable timezone instead of system default
                     field.set(entity, LocalDateTime.ofInstant(instant, auditZoneId));
                 } else if (fieldType == Date.class) {
                     field.set(entity, Date.from(instant));

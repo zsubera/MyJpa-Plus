@@ -99,7 +99,7 @@ public class DeleteSpec<T> extends AbstractBulkOperationSpec<T, DeleteSpec<T>> {
                     + "This would delete ALL rows in the table. "
                     + "If unconditional deletion is intended, use allowUnconditional(true) then deleteAll(EntityManager).");
             }
-            // P2-15: allowUnconditional=true, return delete without WHERE clause
+            // allowUnconditional=true, return delete without WHERE clause
             return delete;
         }
         delete.where(cb.and(predicates));

@@ -358,13 +358,13 @@ public class ProjectionSpec<T> {
         if (predicate == null) {
             throw new IllegalArgumentException("predicate must not be null");
         }
-        // B-06: Accumulate HAVING predicates in a list (AND semantics),
+        // Accumulate HAVING predicates in a list (AND semantics),
         // instead of overwriting the previous one.
         this.havingPredicateFns.add(predicate);
         return this;
     }
 
-    /** B-06: HAVING 条件函数列表，延迟应用。多个条件通过 AND 组合。 */
+    /** HAVING 条件函数列表，延迟应用。多个条件通过 AND 组合。 */
     @SuppressWarnings("rawtypes")
     private final List<java.util.function.BiFunction<jakarta.persistence.criteria.Root<T>, CriteriaBuilder,
         jakarta.persistence.criteria.Predicate>> havingPredicateFns = new ArrayList<>();
@@ -474,7 +474,7 @@ public class ProjectionSpec<T> {
      * @return 返回 Tuple 结果的 TypedQuery 实例
      */
     public TypedQuery<Tuple> toTupleQuery(EntityManager em, int maxResults) {
-        // B-17: Validate selections are not empty
+        // Validate selections are not empty
         if (selections.isEmpty() && aggregateSelections.isEmpty()) {
             throw new IllegalArgumentException("ProjectionSpec must have at least one selection. "
                 + "Use select() or addAggregation() before executing.");
@@ -701,7 +701,7 @@ public class ProjectionSpec<T> {
                 havingCountQuery.select(cb.countDistinct(havingRoot));
                 total = em.createQuery(havingCountQuery).getSingleResult();
             } else {
-                // P0-1: Use countDistinct only when distinct is explicitly enabled
+                // Use countDistinct only when distinct is explicitly enabled
                 if (this.distinct) {
                     countQuery.select(cb.countDistinct(countRoot));
                 } else {
@@ -718,7 +718,7 @@ public class ProjectionSpec<T> {
 
             List<jakarta.persistence.criteria.Selection<?>> selectionList = buildSelectionList(dataRoot, cb);
             dataQuery.multiselect(selectionList);
-            // P0-1: Only apply DISTINCT when explicitly enabled by user
+            // Only apply DISTINCT when explicitly enabled by user
             if (this.distinct) {
                 dataQuery.distinct(true);
             }
@@ -953,7 +953,7 @@ public class ProjectionSpec<T> {
     }
 
     /**
-     * B-06: 应用 HAVING 条件到 Tuple 类型的查询。将多个 HAVING 条件通过 AND 组合。
+     * 应用 HAVING 条件到 Tuple 类型的查询。将多个 HAVING 条件通过 AND 组合。
      *
      * @param root 查询根实体
      * @param cb CriteriaBuilder 实例
@@ -964,7 +964,7 @@ public class ProjectionSpec<T> {
     }
 
     /**
-     * B-06: 将所有累积的 HAVING 条件通过 AND 组合并应用到查询。
+     * 将所有累积的 HAVING 条件通过 AND 组合并应用到查询。
      *
      * @param root 查询根实体
      * @param cb CriteriaBuilder 实例

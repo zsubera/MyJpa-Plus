@@ -103,7 +103,7 @@ public class MyJpaPlusException extends RuntimeException {
     public String toString() {
         StringBuilder sb = new StringBuilder(getClass().getName());
         sb.append(" [").append(errorCode).append("]");
-        // B-12: Sanitize context to prevent sensitive data leakage (SQL parameters, credentials, etc.)
+        // Sanitize context to prevent sensitive data leakage (SQL parameters, credentials, etc.)
         if (context != null) {
             String sanitized = sanitizeContext(context);
             sb.append(" context=").append(sanitized);
@@ -116,7 +116,7 @@ public class MyJpaPlusException extends RuntimeException {
     }
 
     /**
-     * B-12: 对上下文信息进行脱敏处理，防止敏感数据泄露到日志或监控系统。
+     * 对上下文信息进行脱敏处理，防止敏感数据泄露到日志或监控系统。
      *
      * <p>
      * 脱敏策略：截断过长内容，检测并替换敏感数据模式（password=, token=, key=, secret= 等）。
@@ -125,7 +125,7 @@ public class MyJpaPlusException extends RuntimeException {
      * @return 脱敏后的上下文
      */
     private static String sanitizeContext(String ctx) {
-        // P1-10: Detect and mask sensitive data patterns
+        // Detect and mask sensitive data patterns
         String sanitized = SENSITIVE_DATA_PATTERN.matcher(ctx).replaceAll("$1***");
         if (sanitized.length() > 200) {
             return sanitized.substring(0, 200) + "...(truncated)";
@@ -133,7 +133,7 @@ public class MyJpaPlusException extends RuntimeException {
         return sanitized;
     }
 
-    /** P1-10: 敏感数据模式检测正则：匹配 password=, token=, key=, secret=, credential= 等模式。 */
+    /** 敏感数据模式检测正则：匹配 password=, token=, key=, secret=, credential= 等模式。 */
     private static final Pattern SENSITIVE_DATA_PATTERN =
         Pattern.compile("(?i)(password|token|key|secret|credential|api[_-]?key|auth)[=:]\\s*\\S+");
 }

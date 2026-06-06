@@ -246,7 +246,7 @@ public final class LambdaUtils {
     private static final java.util.concurrent.atomic.AtomicInteger CALL_COUNTER =
         new java.util.concurrent.atomic.AtomicInteger(0);
 
-    /** P1: METHOD_CACHE 独立调用计数器，避免与主缓存共享计数器导致采样驱逐不精确 */
+    /** METHOD_CACHE 独立调用计数器，避免与主缓存共享计数器导致采样驱逐不精确 */
     private static final java.util.concurrent.atomic.AtomicInteger METHOD_CALL_COUNTER =
         new java.util.concurrent.atomic.AtomicInteger(0);
 
@@ -356,7 +356,7 @@ public final class LambdaUtils {
         if (methodName.startsWith("is") && methodName.length() > 2 && Character.isUpperCase(methodName.charAt(2))) {
             return Introspector.decapitalize(methodName.substring(2));
         }
-        // P2-2: Support Java Record accessor methods (record fields are accessed directly, no get/is prefix)
+        // Support Java Record accessor methods (record fields are accessed directly, no get/is prefix)
         // Record accessors have the same name as the field (e.g., "name" for a Record component named "name")
         // This is the fallback for method names that don't match get/is patterns
         return methodName;

@@ -57,7 +57,7 @@ public class CteSpec {
     private final Map<String, Object> parameters = new LinkedHashMap<>();
     private boolean recursive;
 
-    /** P1-6: 严格模式开关。默认为 true，启用后未绑定的命名参数将抛出异常。 */
+    /** 严格模式开关。默认为 true，启用后未绑定的命名参数将抛出异常。 */
     private static volatile boolean strictMode = true;
 
     /**
@@ -160,7 +160,7 @@ public class CteSpec {
     }
 
     /**
-     * P0-6: 安全的参数化 CTE SQL 设置方法。与 {@link #as(String)} 不同，此方法接受 SQL 模板和参数， 强制使用参数化查询防止 SQL 注入。
+     * 安全的参数化 CTE SQL 设置方法。与 {@link #as(String)} 不同，此方法接受 SQL 模板和参数， 强制使用参数化查询防止 SQL 注入。
      *
      * <p>
      * 使用示例：
@@ -184,7 +184,7 @@ public class CteSpec {
         }
         CteEntry current = currentCte();
         if (params != null && params.length > 0) {
-            // P2: 使用正则表达式替换参数占位符，避免替换字符串字面量中的问号
+            // 使用正则表达式替换参数占位符，避免替换字符串字面量中的问号
             // 注意：此方法仍会替换 SQL 注释中的 ?N，如需精确控制请使用命名参数
             String rewrittenSql = sqlTemplate;
             for (int i = 0; i < params.length; i++) {
@@ -201,7 +201,7 @@ public class CteSpec {
     }
 
     /**
-     * P0-6: 验证 SQL 仅包含 SELECT 语句（严格模式下阻止 DDL/DML）。
+     * 验证 SQL 仅包含 SELECT 语句（严格模式下阻止 DDL/DML）。
      *
      * @param sql SQL 字符串
      * @throws SecurityException 如果检测到非 SELECT 语句
@@ -321,7 +321,7 @@ public class CteSpec {
         if (results.isEmpty()) {
             return null;
         }
-        // P2: Warn when multiple results are returned but only first is used
+        // Warn when multiple results are returned but only first is used
         if (results.size() > 1) {
             log.warn("CteSpec.getSingleResult() returned {} results but only the first is used. "
                 + "Consider adding LIMIT 1 to your query or using getResultList() instead.", results.size());
@@ -359,7 +359,7 @@ public class CteSpec {
         log.debug("CteSpec: executing native stream query (length={})", sql.length());
         Query query = em.createNativeQuery(sql);
         applyParameters(query);
-        // P0-7: 设置 fetchSize 以支持流式查询，避免 PostgreSQL 驱动将整个结果集加载到内存
+        // 设置 fetchSize 以支持流式查询，避免 PostgreSQL 驱动将整个结果集加载到内存
         applyFetchSize(em, query);
         return query.getResultStream().map(row -> {
             if (row instanceof Object[] arr) {
@@ -370,7 +370,7 @@ public class CteSpec {
     }
 
     /**
-     * P2-28: 安全的流式查询消费者重载，自动管理资源关闭。
+     * 安全的流式查询消费者重载，自动管理资源关闭。
      *
      * <p>
      * 此方法使用 try-with-resources 确保 Stream 正确关闭，避免资源泄漏。 推荐使用此方法替代直接使用 {@link #getResultStream(EntityManager)}。
@@ -399,7 +399,7 @@ public class CteSpec {
     }
 
     /**
-     * P0-7: 根据数据库类型设置合适的 fetchSize，以支持流式查询。
+     * 根据数据库类型设置合适的 fetchSize，以支持流式查询。
      *
      * <p>
      * PostgreSQL 驱动在 fetchSize=0 时会将整个结果集加载到内存，失去流式查询的意义。 此方法检测数据库类型并设置适当的 fetchSize 值。
@@ -409,7 +409,7 @@ public class CteSpec {
      */
     private void applyFetchSize(EntityManager em, Query query) {
         try {
-            // P0-2: Use pure reflection to avoid compile-time dependency on Hibernate
+            // Use pure reflection to avoid compile-time dependency on Hibernate
             Class<?> sessionClass = Class.forName("org.hibernate.Session");
             Object session = em.unwrap(sessionClass);
             Class<?> returningWorkClass = Class.forName("org.hibernate.jdbc.ReturningWork");
@@ -482,7 +482,7 @@ public class CteSpec {
         sb.append(" ");
         sb.append(mainSql);
         String sql = sb.toString();
-        // P0-1: Warn about unbound named parameters in SQL to encourage parameterized queries
+        // Warn about unbound named parameters in SQL to encourage parameterized queries
         checkUnboundParameters(sql, parameters);
         return sql;
     }
@@ -490,7 +490,7 @@ public class CteSpec {
     // ---- 内部方法 ----
 
     /**
-     * P0-1: 危险 SQL 关键字检测正则表达式，使用单词边界匹配避免子字符串误报。
+     * 危险 SQL 关键字检测正则表达式，使用单词边界匹配避免子字符串误报。
      *
      * <p>
      * 使用 {@code \b} 单词边界确保仅匹配独立关键字（如 "DROP"），而非子字符串（如 "DROPDOWN" 中的 "DROP"）。 xp_cmdshell 和 sp_executesql
@@ -503,20 +503,20 @@ public class CteSpec {
     private static final Pattern DANGEROUS_PROCEDURE_PATTERN =
         Pattern.compile("(xp_cmdshell|sp_executesql)", Pattern.CASE_INSENSITIVE);
 
-    /** P2-3: SQL 注入模式检测正则表达式。 */
+    /** SQL 注入模式检测正则表达式。 */
     private static final Pattern COMMENT_INJECTION_PATTERN = Pattern.compile("/\\*|\\*/|--\\s");
     private static final Pattern SEMICOLON_INJECTION_PATTERN = Pattern.compile(";\\s*\\w");
 
-    /** P1-6: UNION SELECT 注入检测模式。仅检测 UNION SELECT（不含 ALL），因为 UNION ALL SELECT 是 CTE 递归的合法模式。 */
+    /** UNION SELECT 注入检测模式。仅检测 UNION SELECT（不含 ALL），因为 UNION ALL SELECT 是 CTE 递归的合法模式。 */
     private static final Pattern UNION_SELECT_PATTERN =
         Pattern.compile("\\bUNION\\s+SELECT\\b", Pattern.CASE_INSENSITIVE);
 
-    /** P1-6: WAITFOR DELAY 时间盲注检测模式（SQL Server）。 */
+    /** WAITFOR DELAY 时间盲注检测模式（SQL Server）。 */
     private static final Pattern WAITFOR_DELAY_PATTERN =
         Pattern.compile("\\bWAITFOR\\s+DELAY\\b", Pattern.CASE_INSENSITIVE);
 
     /**
-     * P0-1: 检测 SQL 注入尝试。strictMode=true 时抛出异常，否则仅记录警告日志。
+     * 检测 SQL 注入尝试。strictMode=true 时抛出异常，否则仅记录警告日志。
      *
      * <p>
      * 使用单词边界正则匹配（非子字符串匹配）避免误报。此检测为启发式防护，不能替代参数化查询。
@@ -527,7 +527,7 @@ public class CteSpec {
      */
     private static void checkSqlSafety(String sql, String context) {
         String truncated = sql.length() > 100 ? sql.substring(0, 100) + "..." : sql;
-        // P0-1: 使用单词边界正则匹配，避免子字符串误报（如 "DROPDOWN" 中的 "DROP"）
+        // 使用单词边界正则匹配，避免子字符串误报（如 "DROPDOWN" 中的 "DROP"）
         if (DANGEROUS_KEYWORD_PATTERN.matcher(sql).find()) {
             String message = "SECURITY: " + context + " SQL contains potentially dangerous DDL/admin keyword. "
                 + "Ensure this is intentional and not user input. SQL: " + truncated;
@@ -544,7 +544,7 @@ public class CteSpec {
             }
             log.warn(message);
         }
-        // P2-3: Detect comment injection attempts
+        // Detect comment injection attempts
         if (COMMENT_INJECTION_PATTERN.matcher(sql).find()) {
             String message =
                 "SECURITY: " + context + " SQL contains potential comment injection patterns (/*, */, --). "
@@ -554,7 +554,7 @@ public class CteSpec {
             }
             log.warn(message);
         }
-        // P2-3: Detect semicolon injection attempts
+        // Detect semicolon injection attempts
         if (SEMICOLON_INJECTION_PATTERN.matcher(sql).find()) {
             String message = "SECURITY: " + context + " SQL contains potential semicolon injection pattern. "
                 + "Ensure this is intentional and not user input. SQL: " + truncated;
@@ -563,7 +563,7 @@ public class CteSpec {
             }
             log.warn(message);
         }
-        // P1-6: Detect UNION SELECT injection attempts
+        // Detect UNION SELECT injection attempts
         if (UNION_SELECT_PATTERN.matcher(sql).find()) {
             String message = "SECURITY: " + context + " SQL contains potential UNION SELECT injection pattern. "
                 + "Ensure this is intentional and not user input. SQL: " + truncated;
@@ -572,7 +572,7 @@ public class CteSpec {
             }
             log.warn(message);
         }
-        // P1-6: Detect WAITFOR DELAY time-based blind SQL injection (SQL Server)
+        // Detect WAITFOR DELAY time-based blind SQL injection (SQL Server)
         if (WAITFOR_DELAY_PATTERN.matcher(sql).find()) {
             String message = "SECURITY: " + context
                 + " SQL contains WAITFOR DELAY pattern (time-based blind SQL injection). " + "SQL: " + truncated;
@@ -590,13 +590,13 @@ public class CteSpec {
      * @param boundParams 已绑定的参数映射
      */
     private static void checkUnboundParameters(String sql, Map<String, Object> boundParams) {
-        // P1-13: Use negative lookbehind to exclude PostgreSQL :: casts (e.g., ::text, ::integer)
+        // Use negative lookbehind to exclude PostgreSQL :: casts (e.g., ::text, ::integer)
         java.util.regex.Matcher matcher =
             java.util.regex.Pattern.compile("(?<!:):([a-zA-Z_][a-zA-Z0-9_]*)").matcher(sql);
         List<String> unboundParams = new ArrayList<>();
         while (matcher.find()) {
             String paramName = matcher.group(1);
-            // P1-8: Skip parameters managed internally by asSafe() (e.g., :_cte_param_0)
+            // Skip parameters managed internally by asSafe() (e.g., :_cte_param_0)
             if (paramName.startsWith("_cte_param_")) {
                 continue;
             }

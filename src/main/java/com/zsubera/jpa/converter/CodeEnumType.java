@@ -61,7 +61,7 @@ public class CodeEnumType implements UserType<Object>, DynamicParameterizedType 
         new org.springframework.util.ConcurrentReferenceHashMap<>(16,
             org.springframework.util.ConcurrentReferenceHashMap.ReferenceType.WEAK);
 
-    /** P1-11: Sentinel field to distinguish "not scanned" from "scanned but not found" in cache. */
+    /** Sentinel field to distinguish "not scanned" from "scanned but not found" in cache. */
     private static final Field NO_CODE_FIELD_SENTINEL;
 
     static {
@@ -92,7 +92,7 @@ public class CodeEnumType implements UserType<Object>, DynamicParameterizedType 
                     cl = getClass().getClassLoader();
                 }
                 Class<?> typeClass = Class.forName(typeName, true, cl);
-                // P2-2: 安全检查 - 仅允许加载枚举类型
+                // 安全检查 - 仅允许加载枚举类型
                 if (!typeClass.isEnum()) {
                     throw new HibernateException(
                         "CodeEnumType only supports enum types, but got: " + typeClass.getName());
@@ -111,7 +111,7 @@ public class CodeEnumType implements UserType<Object>, DynamicParameterizedType 
         this.codeField = resolveCodeField(enumClass);
         this.useOrdinal = (codeField == null);
         if (useOrdinal) {
-            // P1: Log WARNING when @CodeEnumValue is not found and ordinal is used as fallback
+            // Log WARNING when @CodeEnumValue is not found and ordinal is used as fallback
             log.warn(
                 "@CodeEnumValue not found in enum {}. Falling back to ordinal-based mapping. "
                     + "Add @CodeEnumValue annotation to the code field for explicit mapping.",
@@ -175,7 +175,7 @@ public class CodeEnumType implements UserType<Object>, DynamicParameterizedType 
     @Override
     public Object nullSafeGet(ResultSet rs, int position, SharedSessionContractImplementor session, Object owner)
         throws SQLException {
-        // P1: Handle different SQL types robustly
+        // Handle different SQL types robustly
         String value;
         if (sqlType == Types.BIGINT) {
             long longVal = rs.getLong(position);
@@ -235,7 +235,7 @@ public class CodeEnumType implements UserType<Object>, DynamicParameterizedType 
                 if (codeValue == null) {
                     st.setNull(index, sqlType);
                 } else if (codeValue instanceof Integer intVal) {
-                    // P1-2: Use typed setter based on code field type
+                    // Use typed setter based on code field type
                     st.setInt(index, intVal);
                 } else if (codeValue instanceof Long longVal) {
                     st.setLong(index, longVal);
@@ -270,7 +270,7 @@ public class CodeEnumType implements UserType<Object>, DynamicParameterizedType 
             Object codeValue = codeField.get(value);
             return codeValue != null ? String.valueOf(codeValue) : null;
         } catch (IllegalAccessException e) {
-            // P2: Log warning instead of silently swallowing exception
+            // Log warning instead of silently swallowing exception
             log.warn("Failed to access code field for enum {}: {}", value.getClass().getSimpleName(), e.getMessage());
             return null;
         }
@@ -295,7 +295,7 @@ public class CodeEnumType implements UserType<Object>, DynamicParameterizedType 
             throw new HibernateException(
                 String.format("No enum constant with ordinal '%s' in %s", code, enumClass.getSimpleName()));
         }
-        // P2-15: Use shared getOrBuildCodeMap() for O(1) lookup
+        // Use shared getOrBuildCodeMap() for O(1) lookup
         ConcurrentMap<String, Object> codeMap = getOrBuildCodeMap();
         Object result = codeMap.get(code);
         if (result != null) {
@@ -306,7 +306,7 @@ public class CodeEnumType implements UserType<Object>, DynamicParameterizedType 
     }
 
     /**
-     * P2-15: 获取或构建枚举 code -> 常量的缓存映射。
+     * 获取或构建枚举 code -> 常量的缓存映射。
      */
     private ConcurrentMap<String, Object> getOrBuildCodeMap() {
         return ENUM_CODE_CACHE.computeIfAbsent(enumClass, cls -> {

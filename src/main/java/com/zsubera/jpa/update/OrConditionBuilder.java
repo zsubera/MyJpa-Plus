@@ -219,7 +219,7 @@ public class OrConditionBuilder<T, SELF extends AbstractBulkOperationSpec<T, SEL
     }
 
     /**
-     * B-23: 添加忽略大小写的不等于条件：{@code UPPER(field) <> UPPER(value)}。
+     * 添加忽略大小写的不等于条件：{@code UPPER(field) <> UPPER(value)}。
      *
      * @param field 实体属性的方法引用
      * @param value 比较值（不可为 null，如需检查 null 请使用 isNotNull()）

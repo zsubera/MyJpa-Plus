@@ -58,7 +58,7 @@ public class SoftDeleteJpaRepository<T, ID> extends SimpleJpaRepository<T, ID> {
     private static volatile boolean autoFilterEnabled = true;
 
     /**
-     * P1-7: 全局无条件硬删除阻断开关。当为 true 时，对拥有 {@code @SoftDelete} 字段的实体， 在软删除过滤被禁用的情况下执行 {@code deleteAll()} 等无条件硬删除操作将被阻断。
+     * 全局无条件硬删除阻断开关。当为 true 时，对拥有 {@code @SoftDelete} 字段的实体， 在软删除过滤被禁用的情况下执行 {@code deleteAll()} 等无条件硬删除操作将被阻断。
      *
      * <p>
      * 此开关防止在 {@code autoFilter=false} 或 {@code @IgnoreSoftDelete} 上下文中意外执行全表硬删除。 仅对拥有 {@code @SoftDelete}
@@ -70,8 +70,8 @@ public class SoftDeleteJpaRepository<T, ID> extends SimpleJpaRepository<T, ID> {
     private static volatile boolean blockUnconditionalDelete = true;
 
     /**
-     * P1: Thread-local override for auto-filter. When set (non-null), overrides the global setting. This allows
-     * per-request control of soft delete filtering behavior.
+     * Thread-local override for auto-filter. When set (non-null), overrides the global setting. This allows per-request
+     * control of soft delete filtering behavior.
      */
     private static final ThreadLocal<Boolean> autoFilterOverride = new ThreadLocal<>();
 
@@ -112,7 +112,7 @@ public class SoftDeleteJpaRepository<T, ID> extends SimpleJpaRepository<T, ID> {
     }
 
     /**
-     * P1-7: 检查是否应该阻断无条件硬删除操作。
+     * 检查是否应该阻断无条件硬删除操作。
      *
      * <p>
      * 同时满足以下条件时返回 true：
@@ -128,7 +128,7 @@ public class SoftDeleteJpaRepository<T, ID> extends SimpleJpaRepository<T, ID> {
     }
 
     /**
-     * P1: Execute an action with auto-filter override, automatically cleaning up in finally block. Prevents ThreadLocal
+     * Execute an action with auto-filter override, automatically cleaning up in finally block. Prevents ThreadLocal
      * leaks when exceptions occur.
      *
      * @param value the override value (null to clear)
@@ -154,8 +154,8 @@ public class SoftDeleteJpaRepository<T, ID> extends SimpleJpaRepository<T, ID> {
     }
 
     /**
-     * P1: Execute a supplier with auto-filter override, automatically cleaning up in finally block. Prevents
-     * ThreadLocal leaks when exceptions occur.
+     * Execute a supplier with auto-filter override, automatically cleaning up in finally block. Prevents ThreadLocal
+     * leaks when exceptions occur.
      *
      * @param value the override value (null to clear)
      * @param supplier the supplier to execute
@@ -208,7 +208,7 @@ public class SoftDeleteJpaRepository<T, ID> extends SimpleJpaRepository<T, ID> {
      * @return 如果应该应用过滤返回 true
      */
     private boolean shouldApplySoftDeleteFilter() {
-        // P1: Check thread-local override first, then global setting
+        // Check thread-local override first, then global setting
         Boolean override = autoFilterOverride.get();
         boolean effectiveAutoFilter = (override != null) ? override : autoFilterEnabled;
         return effectiveAutoFilter && SoftDeleteHelper.findSoftDeleteField(domainClass) != null
@@ -312,7 +312,7 @@ public class SoftDeleteJpaRepository<T, ID> extends SimpleJpaRepository<T, ID> {
      * 覆写 deleteById() 以支持软删除过滤。
      *
      * <p>
-     * P0-6: 此方法在实体不存在或已被软删除时抛出 {@link org.springframework.dao.EmptyResultDataAccessException}。 如需静默版本（不抛异常），请使用
+     * 此方法在实体不存在或已被软删除时抛出 {@link org.springframework.dao.EmptyResultDataAccessException}。 如需静默版本（不抛异常），请使用
      * {@link #deleteByIdIfExists(Object)}。
      *
      * @param id 实体 ID，不能为 {@code null}
@@ -333,7 +333,7 @@ public class SoftDeleteJpaRepository<T, ID> extends SimpleJpaRepository<T, ID> {
     }
 
     /**
-     * P0-6: 静默版本的按 ID 删除。实体不存在或已软删除时不抛异常。
+     * 静默版本的按 ID 删除。实体不存在或已软删除时不抛异常。
      *
      * @param id 实体 ID，不能为 {@code null}
      * @return 如果成功删除返回 true，如果实体不存在或已软删除返回 false
@@ -374,7 +374,7 @@ public class SoftDeleteJpaRepository<T, ID> extends SimpleJpaRepository<T, ID> {
     }
 
     /**
-     * P0-5: 覆写 deleteAll() 以支持软删除。使用批量 UPDATE 替代逐条操作以避免 N+1 查询。
+     * 覆写 deleteAll() 以支持软删除。使用批量 UPDATE 替代逐条操作以避免 N+1 查询。
      *
      * <p>
      * 当软删除过滤启用时，使用 SoftDeleteHelper.softDeleteAll() 批量更新。 当软删除过滤禁用时，执行标准的硬删除。
@@ -393,7 +393,7 @@ public class SoftDeleteJpaRepository<T, ID> extends SimpleJpaRepository<T, ID> {
     }
 
     /**
-     * P0-5: 覆写 deleteAllById() 以支持软删除。使用批量 UPDATE 替代逐条操作以避免 N+1 查询。
+     * 覆写 deleteAllById() 以支持软删除。使用批量 UPDATE 替代逐条操作以避免 N+1 查询。
      *
      * @param ids 要删除的实体 ID 集合
      */
@@ -429,8 +429,8 @@ public class SoftDeleteJpaRepository<T, ID> extends SimpleJpaRepository<T, ID> {
             throw new IllegalArgumentException("entities must not be null");
         }
         if (shouldApplySoftDeleteFilter()) {
-            // B-12: Use batch UPDATE instead of N+1 individual deletes
-            // P1-4: Use PersistenceUnitUtil instead of reflection for Java 17+ compatibility
+            // Use batch UPDATE instead of N+1 individual deletes
+            // Use PersistenceUnitUtil instead of reflection for Java 17+ compatibility
             java.util.List<ID> idList = new java.util.ArrayList<>();
             jakarta.persistence.PersistenceUnitUtil util =
                 entityManager.getEntityManagerFactory().getPersistenceUnitUtil();
@@ -454,7 +454,7 @@ public class SoftDeleteJpaRepository<T, ID> extends SimpleJpaRepository<T, ID> {
     }
 
     /**
-     * P0-5: 覆写 deleteAllInBatch() 以支持软删除。使用批量 UPDATE 替代逐条操作以避免 N+1 查询。
+     * 覆写 deleteAllInBatch() 以支持软删除。使用批量 UPDATE 替代逐条操作以避免 N+1 查询。
      */
     @Override
     public void deleteAllInBatch() {

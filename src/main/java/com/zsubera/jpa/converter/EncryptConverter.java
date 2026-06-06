@@ -35,7 +35,7 @@ public class EncryptConverter implements AttributeConverter<String, String> {
     private static final int PBKDF2_KEY_LENGTH = 256;
     private static final Logger log = LoggerFactory.getLogger(EncryptConverter.class);
 
-    /** P0-3: Minimum key length in characters to prevent weak key attacks. */
+    /** Minimum key length in characters to prevent weak key attacks. */
     private static final int MIN_KEY_LENGTH = 16;
 
     /** 严格模式开关，通过系统属性控制。默认为 false。 */
@@ -44,7 +44,7 @@ public class EncryptConverter implements AttributeConverter<String, String> {
     /** Cached key specs by version to avoid repeated environment variable reads and KDF derivation. */
     private static final ConcurrentMap<String, SecretKeySpec> KEY_CACHE = new ConcurrentHashMap<>();
 
-    /** P1-3: Maximum number of cached key specs to prevent memory exhaustion from malicious version prefixes. */
+    /** Maximum number of cached key specs to prevent memory exhaustion from malicious version prefixes. */
     private static final int MAX_KEY_CACHE_SIZE = 16;
 
     /** Cached key version to avoid repeated environment variable reads. */
@@ -56,13 +56,13 @@ public class EncryptConverter implements AttributeConverter<String, String> {
     /** 密钥版本缓存刷新间隔（毫秒），默认 5 分钟。 */
     private static final long KEY_VERSION_REFRESH_INTERVAL_MS = 300_000L;
 
-    /** P1-1: Thread-safe salt cache to replace System.setProperty() usage. */
+    /** Thread-safe salt cache to replace System.setProperty() usage. */
     private static final ConcurrentMap<String, byte[]> SALT_CACHE = new ConcurrentHashMap<>();
 
-    /** B-03: Lock object for salt file creation to prevent race conditions in computeIfAbsent. */
+    /** Lock object for salt file creation to prevent race conditions in computeIfAbsent. */
     private static final Object SALT_FILE_LOCK = new Object();
 
-    /** P1-2: Flag to track if key validation has been performed. */
+    /** Flag to track if key validation has been performed. */
     private static volatile boolean keyValidated = false;
 
     /**
@@ -90,8 +90,8 @@ public class EncryptConverter implements AttributeConverter<String, String> {
     }
 
     /**
-     * P1-2: Validate encryption key configuration at startup. This method should be called during application
-     * initialization to detect missing key configuration early.
+     * Validate encryption key configuration at startup. This method should be called during application initialization
+     * to detect missing key configuration early.
      *
      * <p>
      * If the key is not configured and strict mode is enabled, throws IllegalStateException. Otherwise logs a warning.
@@ -116,7 +116,7 @@ public class EncryptConverter implements AttributeConverter<String, String> {
                 throw new MyJpaPlusException("Encryption key must be at least " + MIN_KEY_LENGTH + " characters. "
                     + "Current length: " + key.length() + ".");
             }
-            // P1-7: Warn when system property is used for key configuration
+            // Warn when system property is used for key configuration
             // System properties are JVM-wide visible and may be exposed in process listings
             if (keyProp != null && !keyProp.isEmpty() && (keyEnv == null || keyEnv.isEmpty())) {
                 log.warn("SECURITY: Encryption key configured via system property '{}'. "
@@ -143,7 +143,7 @@ public class EncryptConverter implements AttributeConverter<String, String> {
         }
         // 定期刷新或首次加载
         synchronized (EncryptConverter.class) {
-            // P1-10: Re-read timestamp inside synchronized block to avoid stale check
+            // Re-read timestamp inside synchronized block to avoid stale check
             now = System.currentTimeMillis();
             version = cachedKeyVersion;
             if (version != null && (now - lastKeyVersionRefresh) < KEY_VERSION_REFRESH_INTERVAL_MS) {
@@ -164,7 +164,7 @@ public class EncryptConverter implements AttributeConverter<String, String> {
         if (attribute == null) {
             return null;
         }
-        // B-05: Validate key configuration before encryption to fail fast
+        // Validate key configuration before encryption to fail fast
         if (!keyValidated) {
             validateKeyConfiguration();
         }
@@ -242,7 +242,7 @@ public class EncryptConverter implements AttributeConverter<String, String> {
      * 获取指定版本的密钥规范。支持多版本密钥配置（格式：v1:key1,v2:key2）。 使用 PBKDF2WithHmacSHA256 进行密钥派生。
      *
      * <p>
-     * P1-3: KEY_CACHE 大小限制为 {@value #MAX_KEY_CACHE_SIZE} 个条目。超出限制时拒绝解密未知版本， 防止恶意构造大量不同版本号前缀的加密数据导致 CPU 耗尽和 OOM。
+     * KEY_CACHE 大小限制为 {@value #MAX_KEY_CACHE_SIZE} 个条目。超出限制时拒绝解密未知版本， 防止恶意构造大量不同版本号前缀的加密数据导致 CPU 耗尽和 OOM。
      */
     private static SecretKeySpec getKeySpec(String version) {
         String cacheKey = version != null ? version : "default";
@@ -250,7 +250,7 @@ public class EncryptConverter implements AttributeConverter<String, String> {
         if (existing != null) {
             return existing;
         }
-        // P1-3: Check cache size limit before adding new entries
+        // Check cache size limit before adding new entries
         if (KEY_CACHE.size() >= MAX_KEY_CACHE_SIZE && !KEY_CACHE.containsKey(cacheKey)) {
             throw new MyJpaPlusException(
                 "Encryption key cache is full (" + MAX_KEY_CACHE_SIZE + " entries). " + "Cannot load key version '"
@@ -278,7 +278,7 @@ public class EncryptConverter implements AttributeConverter<String, String> {
         Objects.requireNonNull(allKeys,
             "Encryption key not set. Set environment variable " + KEY_ENV + " or system property " + KEY_PROPERTY);
 
-        // P0-4: Use explicit regex pattern matching for multi-key format "vN:key,vN:key"
+        // Use explicit regex pattern matching for multi-key format "vN:key,vN:key"
         // Previous detection (contains(":") && contains(",")) was ambiguous when single key
         // contains both characters. New format requires each entry to match "vN:key" pattern.
         if (allKeys.matches(".*v\\d+:.*,.+")) {
@@ -318,7 +318,7 @@ public class EncryptConverter implements AttributeConverter<String, String> {
     }
 
     /**
-     * P0-3: Validate minimum key length to prevent weak key dictionary attacks.
+     * Validate minimum key length to prevent weak key dictionary attacks.
      *
      * @param key the raw key material to validate
      * @throws MyJpaPlusException if key is shorter than {@link #MIN_KEY_LENGTH}
@@ -344,7 +344,7 @@ public class EncryptConverter implements AttributeConverter<String, String> {
      */
     private static SecretKeySpec deriveKey(String rawKeyMaterial) {
         try {
-            // P0: Always derive key via PBKDF2 for security - removed direct use shortcut
+            // Always derive key via PBKDF2 for security - removed direct use shortcut
             // The direct use of raw key bytes was a security risk as low-entropy
             // passwords could be used directly as AES keys.
             byte[] salt = getSalt();
@@ -353,7 +353,7 @@ public class EncryptConverter implements AttributeConverter<String, String> {
             byte[] derived = factory.generateSecret(spec).getEncoded();
             return new SecretKeySpec(derived, "AES");
         } catch (GeneralSecurityException e) {
-            // P2: Use MyJpaPlusException consistently instead of IllegalStateException
+            // Use MyJpaPlusException consistently instead of IllegalStateException
             throw new MyJpaPlusException("Failed to derive encryption key via PBKDF2", e);
         }
     }
@@ -404,10 +404,10 @@ public class EncryptConverter implements AttributeConverter<String, String> {
      * 内的加密/解密操作使用相同盐值。
      *
      * <p>
-     * <strong>P1-3 改进：</strong>非生产环境的随机盐值会持久化到本地文件（{@code ~/.myjpa-plus/.salt}）， 确保跨 JVM 重启后盐值保持一致，避免之前加密的数据无法解密。
+     * <strong>改进：</strong>非生产环境的随机盐值会持久化到本地文件（{@code ~/.myjpa-plus/.salt}）， 确保跨 JVM 重启后盐值保持一致，避免之前加密的数据无法解密。
      *
      * <p>
-     * <strong>P1-1 建议：</strong>在 Windows 环境下，建议通过环境变量 {@code MYJPA_ENCRYPT_SALT} 配置盐值， 以避免多进程间的文件锁竞争问题。
+     * <strong>建议：</strong>在 Windows 环境下，建议通过环境变量 {@code MYJPA_ENCRYPT_SALT} 配置盐值， 以避免多进程间的文件锁竞争问题。
      *
      * @return 盐值字节数组
      * @throws IllegalStateException 生产环境未配置盐值时抛出
@@ -422,7 +422,7 @@ public class EncryptConverter implements AttributeConverter<String, String> {
                 throw new IllegalStateException("PBKDF2 salt must be configured in production. "
                     + "Set environment variable " + SALT_ENV + " or system property " + SALT_PROPERTY);
             }
-            // B-03: Use synchronized block to prevent race condition in salt file creation.
+            // Use synchronized block to prevent race condition in salt file creation.
             // ConcurrentHashMap.computeIfAbsent may execute the lambda multiple times under contention,
             // leading to inconsistent salt values being written to the file.
             byte[] cached = SALT_CACHE.get("internal");
@@ -446,13 +446,13 @@ public class EncryptConverter implements AttributeConverter<String, String> {
      * 从文件加载或创建盐值。必须在 {@link #SALT_FILE_LOCK} 同步块内调用。
      *
      * <p>
-     * <strong>P1-1 改进：</strong>使用文件锁（{@link java.nio.channels.FileChannel}）替代 synchronized 块，
+     * <strong>改进：</strong>使用文件锁（{@link java.nio.channels.FileChannel}）替代 synchronized 块，
      * 防止多进程同时写入盐值文件导致数据损坏。写入后再次验证文件内容，确保一致性。
      *
      * @return 盐值字节数组
      */
     private static byte[] loadOrCreateSalt() {
-        // P0-3: Use $HOME/.myjpa-plus/.salt for better security (not world-readable temp dir)
+        // Use $HOME/.myjpa-plus/.salt for better security (not world-readable temp dir)
         java.io.File homeDir = new java.io.File(System.getProperty("user.home"), ".myjpa-plus");
         java.io.File saltFile = new java.io.File(homeDir, ".salt");
         if (saltFile.exists()) {
@@ -472,7 +472,7 @@ public class EncryptConverter implements AttributeConverter<String, String> {
             if (!homeDir.exists()) {
                 boolean created = homeDir.mkdirs();
                 if (!created && !homeDir.exists()) {
-                    // P0-3: Abort if directory creation fails to avoid meaningless file write
+                    // Abort if directory creation fails to avoid meaningless file write
                     log.error(
                         "SECURITY: Failed to create directory: {}. "
                             + "Salt cannot be persisted. Set environment variable {} to ensure consistent encryption.",
@@ -480,13 +480,13 @@ public class EncryptConverter implements AttributeConverter<String, String> {
                     return randomSalt;
                 }
             }
-            // P1-13: Use file lock with retry for Windows compatibility
+            // Use file lock with retry for Windows compatibility
             // Windows file locks may be unreliable with tryLock(), so we retry
             java.nio.file.Path saltPath = saltFile.toPath();
             try (java.nio.channels.FileChannel channel =
                 java.nio.channels.FileChannel.open(saltPath, java.nio.file.StandardOpenOption.CREATE,
                     java.nio.file.StandardOpenOption.WRITE, java.nio.file.StandardOpenOption.READ)) {
-                // P1-13: Retry loop for Windows file lock reliability (3 attempts, 200ms delay)
+                // Retry loop for Windows file lock reliability (3 attempts, 200ms delay)
                 java.nio.channels.FileLock lock = null;
                 for (int attempt = 0; attempt < 3; attempt++) {
                     lock = channel.tryLock();
@@ -521,7 +521,7 @@ public class EncryptConverter implements AttributeConverter<String, String> {
                         channel.truncate(0);
                         channel.write(java.nio.ByteBuffer.wrap(randomSalt));
                         channel.force(true);
-                        // P0-4: Verify salt file write BEFORE releasing lock
+                        // Verify salt file write BEFORE releasing lock
                         channel.position(0);
                         java.nio.ByteBuffer verifyBuf = java.nio.ByteBuffer.allocate((int)channel.size());
                         channel.read(verifyBuf);
@@ -537,7 +537,7 @@ public class EncryptConverter implements AttributeConverter<String, String> {
                         lock.release();
                     }
                 } else {
-                    // P0-3: Could not acquire lock, another process is writing.
+                    // Could not acquire lock, another process is writing.
                     // Retry lock acquisition with longer timeout instead of writing without lock.
                     for (int retryAttempt = 0; retryAttempt < 5; retryAttempt++) {
                         try {
@@ -569,7 +569,7 @@ public class EncryptConverter implements AttributeConverter<String, String> {
                             channel.truncate(0);
                             channel.write(java.nio.ByteBuffer.wrap(randomSalt));
                             channel.force(true);
-                            // P0-4: Verify before releasing lock
+                            // Verify before releasing lock
                             channel.position(0);
                             java.nio.ByteBuffer verifyBuf = java.nio.ByteBuffer.allocate((int)channel.size());
                             channel.read(verifyBuf);
@@ -594,7 +594,7 @@ public class EncryptConverter implements AttributeConverter<String, String> {
                     }
                 }
             }
-            // B-07: Set file permissions - POSIX on Unix, ACL on Windows
+            // Set file permissions - POSIX on Unix, ACL on Windows
             setSaltFilePermissions(homeDir, saltFile);
             log.warn(
                 "SECURITY: Generated and persisted PBKDF2 salt to {}. "
@@ -610,10 +610,10 @@ public class EncryptConverter implements AttributeConverter<String, String> {
     }
 
     /**
-     * B-07: 设置盐值文件和目录的权限。在 Unix 系统上使用 POSIX 权限，在 Windows 上使用 Java NIO ACL。
+     * 设置盐值文件和目录的权限。在 Unix 系统上使用 POSIX 权限，在 Windows 上使用 Java NIO ACL。
      *
      * <p>
-     * <strong>P0-3 改进：</strong>Windows 上仅使用 Java NIO {@link java.nio.file.attribute.AclFileAttributeView} 设置 ACL 权限，移除了
+     * <strong>改进：</strong>Windows 上仅使用 Java NIO {@link java.nio.file.attribute.AclFileAttributeView} 设置 ACL 权限，移除了
      * icacls 命令行回退以防止命令注入风险。如果 NIO ACL 设置失败，仅记录 DEBUG 日志。
      *
      * @param homeDir 盐值目录
@@ -622,7 +622,7 @@ public class EncryptConverter implements AttributeConverter<String, String> {
     private static void setSaltFilePermissions(java.io.File homeDir, java.io.File saltFile) {
         String os = System.getProperty("os.name", "").toLowerCase();
         if (os.contains("win")) {
-            // P0-3: Windows - 仅使用 Java NIO ACL，移除 icacls 命令行回退以防止命令注入风险
+            // Windows - 仅使用 Java NIO ACL，移除 icacls 命令行回退以防止命令注入风险
             setWindowsPermissionsNio(saltFile);
         } else {
             // Unix/Linux/macOS - use POSIX permissions
@@ -643,10 +643,10 @@ public class EncryptConverter implements AttributeConverter<String, String> {
     }
 
     /**
-     * P0-3: 使用 Java NIO 设置 Windows 文件 ACL 权限。
+     * 使用 Java NIO 设置 Windows 文件 ACL 权限。
      *
      * <p>
-     * <strong>P0-3 改进：</strong>移除了 icacls 命令行回退以防止命令注入风险。如果 NIO ACL 设置失败，仅记录 DEBUG 日志。
+     * <strong>改进：</strong>移除了 icacls 命令行回退以防止命令注入风险。如果 NIO ACL 设置失败，仅记录 DEBUG 日志。
      *
      * @param saltFile 盐值文件
      */
@@ -666,7 +666,7 @@ public class EncryptConverter implements AttributeConverter<String, String> {
                 log.debug("Set Windows ACL on salt file via Java NIO");
             }
         } catch (Exception e) {
-            // P0-3: 仅记录日志，不回退到 icacls 命令行（防止命令注入风险）
+            // 仅记录日志，不回退到 icacls 命令行（防止命令注入风险）
             log.debug("Cannot set Windows ACL via Java NIO: {}. "
                 + "Set environment variable {} to ensure consistent encryption.", e.getMessage(), SALT_ENV);
         }

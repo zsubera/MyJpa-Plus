@@ -107,11 +107,11 @@ public class MyJpaTemplate {
     /** 批量执行最大迭代次数保护，防止无限循环。 */
     private static final int MAX_BATCH_ITERATIONS = 10000;
 
-    /** P1-10: Getter 方法缓存，避免 extractSortValues 每次反射查找。key = className#propertyName */
+    /** Getter 方法缓存，避免 extractSortValues 每次反射查找。key = className#propertyName */
     private static final java.util.concurrent.ConcurrentMap<String, java.lang.reflect.Method> GETTER_CACHE =
         new java.util.concurrent.ConcurrentHashMap<>();
 
-    /** P1-4: getId() 方法缓存，避免 isNewEntity() 每次反射查找。key = entity class name */
+    /** getId() 方法缓存，避免 isNewEntity() 每次反射查找。key = entity class name */
     private static final java.util.concurrent.ConcurrentMap<Class<?>, java.lang.reflect.Method> ID_METHOD_CACHE =
         new java.util.concurrent.ConcurrentHashMap<>();
 
@@ -132,10 +132,10 @@ public class MyJpaTemplate {
     /** 批量操作最大影响行数限制。默认 10000，{@code DISABLED} 表示不限制。 */
     private volatile int maxBulkOperationRows = DEFAULT_MAX_BULK_OPERATION_ROWS;
 
-    /** P1-15: 查询默认超时时间（秒）。设置后所有查询将自动应用此超时。默认 -1 表示不设置。 */
+    /** 查询默认超时时间（秒）。设置后所有查询将自动应用此超时。默认 -1 表示不设置。 */
     private volatile int defaultTimeoutSeconds = -1;
 
-    /** P1-9: 可选的查询缓存管理器。注入后可使用 findAllCached() 方法。 */
+    /** 可选的查询缓存管理器。注入后可使用 findAllCached() 方法。 */
     @Autowired(required = false)
     private QueryCacheManager cacheManager;
 
@@ -215,7 +215,7 @@ public class MyJpaTemplate {
     }
 
     /**
-     * P1-15: 设置查询默认超时时间（秒）。设置后所有查询将自动应用此超时。
+     * 设置查询默认超时时间（秒）。设置后所有查询将自动应用此超时。
      *
      * <p>
      * 设置为 {@code -1} 表示不设置默认超时。
@@ -227,7 +227,7 @@ public class MyJpaTemplate {
         if (defaultTimeoutSeconds <= 0 && defaultTimeoutSeconds != -1) {
             throw new IllegalArgumentException("defaultTimeoutSeconds must be positive or -1 (disabled)");
         }
-        // P1-5: Prevent overflow when converting to milliseconds (int max ~24.8 days)
+        // Prevent overflow when converting to milliseconds (int max ~24.8 days)
         if (defaultTimeoutSeconds > Integer.MAX_VALUE / 1000) {
             throw new IllegalArgumentException("defaultTimeoutSeconds too large for millisecond conversion: "
                 + defaultTimeoutSeconds + " (max " + (Integer.MAX_VALUE / 1000) + ")");
@@ -236,7 +236,7 @@ public class MyJpaTemplate {
     }
 
     /**
-     * P1-15: 获取查询默认超时时间（秒）。
+     * 获取查询默认超时时间（秒）。
      *
      * @return 查询超时秒数，-1 表示不设置
      */
@@ -245,7 +245,7 @@ public class MyJpaTemplate {
     }
 
     /**
-     * P1-9: 设置查询缓存管理器。注入后可使用 {@link #findAllCached} 方法。
+     * 设置查询缓存管理器。注入后可使用 {@link #findAllCached} 方法。
      *
      * @param cacheManager 缓存管理器实例
      */
@@ -254,7 +254,7 @@ public class MyJpaTemplate {
     }
 
     /**
-     * P1-9: 获取查询缓存管理器。
+     * 获取查询缓存管理器。
      *
      * @return 缓存管理器实例，可能为 null
      */
@@ -263,7 +263,7 @@ public class MyJpaTemplate {
     }
 
     /**
-     * P1-9: 带缓存的查询方法。如果缓存命中则直接返回，否则执行查询并将结果缓存。
+     * 带缓存的查询方法。如果缓存命中则直接返回，否则执行查询并将结果缓存。
      *
      * <p>
      * 缓存键格式：{@code entityClassSimpleName:specHashCode}。如果需要更精确的缓存控制，请使用 {@link QueryCacheManager} 直接管理。
@@ -384,7 +384,7 @@ public class MyJpaTemplate {
     }
 
     /**
-     * P1-20: 纯 persist 批量保存实体，所有实体都使用 {@code persist()} 操作。
+     * 纯 persist 批量保存实体，所有实体都使用 {@code persist()} 操作。
      *
      * <p>
      * 与 {@link #saveAllBatched(Iterable, int)} 不同，此方法对所有实体使用 {@code persist()}， 避免了 {@code merge()} 产生的额外 SELECT
@@ -679,7 +679,7 @@ public class MyJpaTemplate {
     }
 
     /**
-     * P2-16: 查找匹配给定 {@link QuerySpec} 的所有实体，支持自定义排序。
+     * 查找匹配给定 {@link QuerySpec} 的所有实体，支持自定义排序。
      *
      * @param entityClass 实体类
      * @param spec 查询规范
@@ -816,7 +816,7 @@ public class MyJpaTemplate {
     }
 
     /**
-     * P1-5: This method is kept for backward compatibility. In 2.0, it will throw UnsupportedOperationException.
+     * This method is kept for backward compatibility. In 2.0, it will throw UnsupportedOperationException.
      */
     private <T> Stream<T> doFindStream(Class<T> entityClass, QuerySpec<T> spec, EntityGraphHelper<T> entityGraph) {
         TypedQuery<T> query = buildTypedQuery(entityClass, spec, entityGraph, null);
@@ -943,7 +943,7 @@ public class MyJpaTemplate {
         if (maxResults != null) {
             query.setMaxResults(maxResults);
         }
-        // P1-15: Apply default query timeout if configured
+        // Apply default query timeout if configured
         if (defaultTimeoutSeconds > 0) {
             query.setHint("jakarta.persistence.query.timeout", Math.toIntExact(defaultTimeoutSeconds * 1000L));
         }
@@ -1159,7 +1159,7 @@ public class MyJpaTemplate {
     }
 
     /**
-     * P2-6: 批量执行 UPSERT 操作，使用 EntityManager flush/clear 进行分批处理。
+     * 批量执行 UPSERT 操作，使用 EntityManager flush/clear 进行分批处理。
      *
      * <p>
      * 此方法在单个事务中执行所有批次，通过定期 flush 和 clear EntityManager 减少内存占用。
@@ -1700,7 +1700,7 @@ public class MyJpaTemplate {
         CriteriaBuilder cb = entityManager.getCriteriaBuilder();
         CriteriaQuery<T> cq = cb.createQuery(entityClass);
         Root<T> root = cq.from(entityClass);
-        // P2: Pass ids Collection directly to avoid unnecessary toArray() conversion
+        // Pass ids Collection directly to avoid unnecessary toArray() conversion
         cq.where(com.zsubera.jpa.util.InClauseBuilder.in(cb, root.get(idFieldName), ids));
         return entityManager.createQuery(cq).getResultList();
     }
@@ -1727,7 +1727,7 @@ public class MyJpaTemplate {
             throw new IllegalArgumentException("ids must not be null or empty");
         }
         String idFieldName = EntityClassResolver.resolveIdFieldName(entityClass);
-        // P2: Pass ids Collection directly to avoid unnecessary toArray() conversion
+        // Pass ids Collection directly to avoid unnecessary toArray() conversion
         Specification<T> idSpec =
             (root, query, cb) -> com.zsubera.jpa.util.InClauseBuilder.in(cb, root.get(idFieldName), ids);
         Specification<T> softDeleteSpec = com.zsubera.jpa.update.SoftDeleteHelper.isNotDeleted(entityClass);

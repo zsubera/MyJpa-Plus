@@ -16,8 +16,7 @@ import java.util.List;
  * be written to files or used for scaffolding.
  *
  * <p>
- * P2-7: Supports loading custom templates from external files or classpath. Templates support the following
- * placeholders:
+ * Supports loading custom templates from external files or classpath. Templates support the following placeholders:
  * <ul>
  * <li>{@code ${package}} -- target package name</li>
  * <li>{@code ${className}} -- class name</li>
@@ -37,7 +36,7 @@ import java.util.List;
  * String repoSrc =
  *     EntityCodeGenerator.generateRepository("products", columns, "com.example.domain", "com.example.repo");
  *
- * // P2-7: Use custom template
+ * // Use custom template
  * String template = Files.readString(Path.of("templates/entity.java.tmpl"));
  * String entitySrc = EntityCodeGenerator.generateEntity("products", columns, "com.example.domain", template);
  * }</pre>
@@ -103,7 +102,7 @@ public final class EntityCodeGenerator {
     }
 
     /**
-     * P2-7: Load template from classpath.
+     * Load template from classpath.
      *
      * @param classpathLocation classpath location (e.g. "templates/entity.java.tmpl")
      * @return template content string
@@ -124,7 +123,7 @@ public final class EntityCodeGenerator {
     }
 
     /**
-     * P2-7: Load template from file system.
+     * Load template from file system.
      *
      * @param templatePath template file path
      * @return template content string
@@ -153,7 +152,7 @@ public final class EntityCodeGenerator {
         if (tableName == null || tableName.isBlank()) {
             throw new IllegalArgumentException("tableName must not be blank");
         }
-        // P1: Validate tableName to prevent code injection
+        // Validate tableName to prevent code injection
         if (!tableName.matches("[a-zA-Z0-9_.]+")) {
             throw new IllegalArgumentException(
                 "tableName contains invalid characters. Only alphanumeric, underscore, and dot are allowed: "
@@ -165,7 +164,7 @@ public final class EntityCodeGenerator {
         if (entityPackage == null || entityPackage.isBlank()) {
             throw new IllegalArgumentException("entityPackage must not be blank");
         }
-        // P1-14: Validate package name to prevent code injection
+        // Validate package name to prevent code injection
         if (!entityPackage.matches("[a-zA-Z_][a-zA-Z0-9_.]*")) {
             throw new IllegalArgumentException(
                 "entityPackage contains invalid characters. Only alphanumeric, underscore, and dot are allowed: "
@@ -230,7 +229,7 @@ public final class EntityCodeGenerator {
     }
 
     /**
-     * P2-7: Generate entity class source code using a custom template.
+     * Generate entity class source code using a custom template.
      *
      * <p>
      * Template placeholders:
@@ -303,7 +302,7 @@ public final class EntityCodeGenerator {
     }
 
     /**
-     * P2-7: Generate repository interface source code using a custom template.
+     * Generate repository interface source code using a custom template.
      *
      * @param tableName database table name
      * @param columns column definitions
@@ -343,7 +342,7 @@ public final class EntityCodeGenerator {
             }
         }
         String result = sb.toString();
-        // P2-5: Handle table names starting with digits
+        // Handle table names starting with digits
         if (!result.isEmpty() && Character.isDigit(result.charAt(0))) {
             result = "T" + result;
         }
@@ -367,11 +366,11 @@ public final class EntityCodeGenerator {
         if (fieldName == null || fieldName.isEmpty()) {
             return fieldName;
         }
-        // P2-4: Append underscore if field name is a Java reserved word
+        // Append underscore if field name is a Java reserved word
         if (JAVA_RESERVED_WORDS.contains(fieldName.toLowerCase())) {
             return fieldName + "_";
         }
-        // P2-5: Prepend underscore if starts with digit
+        // Prepend underscore if starts with digit
         if (Character.isDigit(fieldName.charAt(0))) {
             return "_" + fieldName;
         }

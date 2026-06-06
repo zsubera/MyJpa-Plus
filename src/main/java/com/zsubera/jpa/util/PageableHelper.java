@@ -59,7 +59,7 @@ public final class PageableHelper {
         if (pageable == null) {
             return Pageable.unpaged();
         }
-        // B-27: Add null check for querySpec parameter
+        // Add null check for querySpec parameter
         if (querySpec == null) {
             return pageable;
         }

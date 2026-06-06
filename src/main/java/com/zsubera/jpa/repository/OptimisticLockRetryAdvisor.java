@@ -30,10 +30,10 @@ public class OptimisticLockRetryAdvisor {
     /** 最大退避延迟上限（毫秒），防止指数退避无限增长。 */
     private static final long MAX_BACKOFF_MS = 30_000;
 
-    /** P1-6: Maximum allowed retries hard limit to prevent infinite loops. */
+    /** Maximum allowed retries hard limit to prevent infinite loops. */
     private static final int MAX_RETRIES_LIMIT = 20;
 
-    /** P0: Total timeout limit for all retries combined (60 seconds). */
+    /** Total timeout limit for all retries combined (60 seconds). */
     private static final long MAX_TOTAL_TIMEOUT_MS = 60_000;
 
     /**
@@ -52,12 +52,12 @@ public class OptimisticLockRetryAdvisor {
         int maxRetries = annotation.maxRetries();
         long backoffMs = annotation.backoffMs();
 
-        // P2: Validate annotation parameters
+        // Validate annotation parameters
         if (maxRetries < 0) {
             throw new IllegalStateException(
                 "@RetryOnOptimisticLock.maxRetries must be non-negative, got: " + maxRetries);
         }
-        // P1-6: Hard limit on maxRetries to prevent infinite loops
+        // Hard limit on maxRetries to prevent infinite loops
         if (maxRetries > MAX_RETRIES_LIMIT) {
             throw new IllegalArgumentException(
                 "@RetryOnOptimisticLock.maxRetries exceeds hard limit of " + MAX_RETRIES_LIMIT + ", got: " + maxRetries
@@ -80,7 +80,7 @@ public class OptimisticLockRetryAdvisor {
                         method.getDeclaringClass().getSimpleName(), method.getName());
                     throw ex;
                 }
-                // P0: Check total timeout to prevent infinite retry storms
+                // Check total timeout to prevent infinite retry storms
                 totalElapsed = System.currentTimeMillis() - startTime;
                 if (totalElapsed >= MAX_TOTAL_TIMEOUT_MS) {
                     log.warn("OptimisticLockException after {} retries ({}ms elapsed, timeout={}ms) for method {}.{}",
@@ -88,7 +88,7 @@ public class OptimisticLockRetryAdvisor {
                         method.getName());
                     throw ex;
                 }
-                // P0-3: Cap the shift amount to prevent Long overflow.
+                // Cap the shift amount to prevent Long overflow.
                 // backoffMs * (1L << shift) must not overflow. Since MAX_BACKOFF_MS is 30_000,
                 // the effective delay is always capped, but we prevent the intermediate multiplication
                 // from overflowing by capping shift at 44 (safe for any backoffMs up to ~500,000).
@@ -96,7 +96,7 @@ public class OptimisticLockRetryAdvisor {
                 long shiftValue = (shift >= 63) ? Long.MAX_VALUE : (1L << shift);
                 long safeShift = Math.min(shiftValue, MAX_BACKOFF_MS / Math.max(backoffMs, 1));
                 long baseDelay = Math.min(backoffMs * safeShift, MAX_BACKOFF_MS);
-                // P2-4: Ensure minimum delay of 1ms to prevent tight retry loops
+                // Ensure minimum delay of 1ms to prevent tight retry loops
                 baseDelay = Math.max(baseDelay, 1);
                 // Ensure delay does not exceed remaining timeout
                 long remainingTimeout = MAX_TOTAL_TIMEOUT_MS - totalElapsed;

@@ -16,8 +16,8 @@ import org.slf4j.LoggerFactory;
  * SQL 慢查询拦截器。
  *
  * <p>
- * P1-5: <strong>此功能仅限 Hibernate 环境。</strong>实现了 Hibernate {@link StatementInspector} 接口用于注册， 实际计时通过 JDBC
- * {@link DataSource} 代理完成。在非 Hibernate JPA 实现（如 EclipseLink、OpenJPA）上， {@link StatementInspector} 接口不可用，此类应通过
+ * <strong>此功能仅限 Hibernate 环境。</strong>实现了 Hibernate {@link StatementInspector} 接口用于注册， 实际计时通过 JDBC {@link DataSource}
+ * 代理完成。在非 Hibernate JPA 实现（如 EclipseLink、OpenJPA）上， {@link StatementInspector} 接口不可用，此类应通过
  * {@code @ConditionalOnClass(StatementInspector.class)} 条件装配来跳过自动配置。代理会拦截 {@code prepareStatement()} 返回的
  * {@code PreparedStatement}， 在 {@code executeQuery()}、{@code executeUpdate()} 和 {@code execute()} 调用前后测量耗时，超过阈值时记录警告日志。
  *
@@ -41,33 +41,33 @@ public class SqlSlowQueryInterceptor implements StatementInspector {
     private static final Logger log = LoggerFactory.getLogger(SqlSlowQueryInterceptor.class);
 
     /**
-     * 代理类缓存，避免每次 prepareStatement 创建新的代理类。 P1: 使用大小限制的 ConcurrentHashMap，超过限制时清除以防止内存泄漏。 P2-6: 使用 LRU 策略替代随机部分驱逐，通过
-     * LinkedHashMap 实现近似 LRU。
+     * 代理类缓存，避免每次 prepareStatement 创建新的代理类。 使用大小限制的 ConcurrentHashMap，超过限制时清除以防止内存泄漏。 使用 LRU 策略替代随机部分驱逐，通过 LinkedHashMap
+     * 实现近似 LRU。
      */
     private static final int MAX_PROXY_CLASS_CACHE_SIZE = 512;
     private static final ConcurrentMap<Class<?>, Class<?>> PROXY_CLASS_CACHE = new ConcurrentHashMap<>();
 
     /** 预编译的 SQL 消毒正则表达式 */
-    // P1-9: Enhanced single quote pattern to support backslash-escaped quotes (MySQL)
+    // Enhanced single quote pattern to support backslash-escaped quotes (MySQL)
     private static final Pattern SINGLE_QUOTE_PATTERN = Pattern.compile("'(?:[^'\\\\]|\\\\.|'')*'");
     private static final Pattern DOLLAR_PARAM_PATTERN = Pattern.compile("\\$\\d+");
     private static final Pattern HEX_LITERAL_PATTERN = Pattern.compile("X'[0-9a-fA-F]+'");
     private static final Pattern UNICODE_STRING_PATTERN = Pattern.compile("N'[^']*'");
     private static final Pattern NUMBER_LITERAL_PATTERN = Pattern.compile("\\b\\d+\\.?\\d*(?:[eE][+-]?\\d+)?\\b");
-    // B-22: Add patterns for backtick identifiers (MySQL) and bracket identifiers (SQL Server)
+    // Add patterns for backtick identifiers (MySQL) and bracket identifiers (SQL Server)
     private static final Pattern BACKTICK_IDENTIFIER_PATTERN = Pattern.compile("`[^`]*`");
     private static final Pattern BRACKET_IDENTIFIER_PATTERN = Pattern.compile("\\[[^\\]]*\\]");
     private static final Pattern COMMENT_PATTERN = Pattern.compile("(?:--[^\n]*|/\\*[\\s\\S]*?\\*/)");
-    /** P1: LIMIT/OFFSET 数字保护模式，保留这些数字以便调试 */
+    /** LIMIT/OFFSET 数字保护模式，保留这些数字以便调试 */
     private static final Pattern LIMIT_OFFSET_PATTERN =
         Pattern.compile("(?i)(?:LIMIT|OFFSET|FETCH\\s+(?:FIRST|NEXT))\\s+\\d+(?:\\s+ROWS)?");
-    // P1-7: PostgreSQL 美元引用字符串（$$...$$ 和 $tag$...$tag$）
+    // PostgreSQL 美元引用字符串（$$...$$ 和 $tag$...$tag$）
     private static final Pattern DOLLAR_QUOTE_PATTERN = Pattern.compile("\\$\\$[^$]*\\$\\$|\\$\\w+\\$[^$]*\\$\\w+\\$");
-    // P1-7: Oracle q'[]' 引用字符串
+    // Oracle q'[]' 引用字符串
     private static final Pattern Q_QUOTE_PATTERN =
         Pattern.compile("q'\\[.*?\\]'|q'\\(.*?\\)'|q'\\{.*?\\}'|q'<.*?>'", Pattern.CASE_INSENSITIVE);
 
-    /** P2: 代理类缓存驱逐锁，确保只有一个线程执行驱逐 */
+    /** 代理类缓存驱逐锁，确保只有一个线程执行驱逐 */
     private static final java.util.concurrent.atomic.AtomicBoolean EVICTING =
         new java.util.concurrent.atomic.AtomicBoolean(false);
 
@@ -118,7 +118,7 @@ public class SqlSlowQueryInterceptor implements StatementInspector {
 
         private Object wrapPreparedStatement(Object stmt, String sql) {
             Class<?> stmtClass = stmt.getClass();
-            // P2-6: 使用采样策略检查缓存大小，避免每次调用都检查
+            // 使用采样策略检查缓存大小，避免每次调用都检查
             if (PROXY_CLASS_CACHE.size() > MAX_PROXY_CLASS_CACHE_SIZE) {
                 // 使用 CAS 确保只有一个线程执行驱逐
                 if (EVICTING.compareAndSet(false, true)) {
@@ -189,7 +189,7 @@ public class SqlSlowQueryInterceptor implements StatementInspector {
      * 消毒 SQL 语句，移除可能包含的参数值以防止敏感数据泄露到日志。
      *
      * <p>
-     * P1: 保留 LIMIT/OFFSET 后的数字字面量，仅替换其他数字字面量。 替换规则：
+     * 保留 LIMIT/OFFSET 后的数字字面量，仅替换其他数字字面量。 替换规则：
      * <ul>
      * <li>单引号字符串（支持转义单引号 ''）→ ?</li>
      * <li>PostgreSQL 美元引用（$1, $2 等）→ ?</li>
@@ -205,17 +205,17 @@ public class SqlSlowQueryInterceptor implements StatementInspector {
         if (sql == null) {
             return "null";
         }
-        // B-22: Enhanced SQL sanitization covering more dialects
+        // Enhanced SQL sanitization covering more dialects
         String sanitized = COMMENT_PATTERN.matcher(sql).replaceAll(""); // Remove comments
-        sanitized = DOLLAR_QUOTE_PATTERN.matcher(sanitized).replaceAll("?"); // P1-7: PostgreSQL 美元引用字符串
-        sanitized = Q_QUOTE_PATTERN.matcher(sanitized).replaceAll("?"); // P1-7: Oracle q'[]' 引用字符串
+        sanitized = DOLLAR_QUOTE_PATTERN.matcher(sanitized).replaceAll("?"); // PostgreSQL 美元引用字符串
+        sanitized = Q_QUOTE_PATTERN.matcher(sanitized).replaceAll("?"); // Oracle q'[]' 引用字符串
         sanitized = SINGLE_QUOTE_PATTERN.matcher(sanitized).replaceAll("?"); // 单引号字符串
         sanitized = DOLLAR_PARAM_PATTERN.matcher(sanitized).replaceAll("?"); // PostgreSQL 美元引用参数
         sanitized = HEX_LITERAL_PATTERN.matcher(sanitized).replaceAll("?"); // 十六进制字面量
         sanitized = UNICODE_STRING_PATTERN.matcher(sanitized).replaceAll("?"); // Unicode 字符串
         sanitized = BACKTICK_IDENTIFIER_PATTERN.matcher(sanitized).replaceAll("?"); // MySQL 反引号标识符
         sanitized = BRACKET_IDENTIFIER_PATTERN.matcher(sanitized).replaceAll("?"); // SQL Server 方括号标识符
-        // P1: Preserve LIMIT/OFFSET numbers by first protecting them, then replacing other numbers
+        // Preserve LIMIT/OFFSET numbers by first protecting them, then replacing other numbers
         // Use a marker to temporarily protect LIMIT/OFFSET numbers
         java.util.List<String> protectedParts = new java.util.ArrayList<>();
         java.util.regex.Matcher limitMatcher = LIMIT_OFFSET_PATTERN.matcher(sanitized);

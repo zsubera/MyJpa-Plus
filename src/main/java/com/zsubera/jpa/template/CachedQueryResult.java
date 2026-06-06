@@ -15,7 +15,7 @@ public class CachedQueryResult<T> {
     private final T value;
     private final Instant createdAt;
     private final long ttlSeconds;
-    /** P2: Pre-computed expiration time to avoid creating new Instant on every isExpired() call. */
+    /** Pre-computed expiration time to avoid creating new Instant on every isExpired() call. */
     private final Instant expiresAt;
 
     /**
@@ -25,7 +25,7 @@ public class CachedQueryResult<T> {
      * @param ttlSeconds time-to-live in seconds
      */
     public CachedQueryResult(T value, long ttlSeconds) {
-        // B-26: Validate value is non-null to prevent caching null results
+        // Validate value is non-null to prevent caching null results
         if (value == null) {
             throw new IllegalArgumentException("CachedQueryResult value must not be null");
         }

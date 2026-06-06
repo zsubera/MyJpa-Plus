@@ -59,11 +59,11 @@ public class MergeSpec<T> {
     /** 安全标识符段正则：用于校验 schema.table 格式中每一段。 */
     private static final Pattern SAFE_IDENTIFIER_PART_PATTERN = Pattern.compile("^[a-zA-Z_][a-zA-Z0-9_]*$");
 
-    /** B-08: Unicode 标识符正则：允许 Unicode 字母、数字和下划线，支持国际化标识符。 */
+    /** Unicode 标识符正则：允许 Unicode 字母、数字和下划线，支持国际化标识符。 */
     private static final Pattern UNICODE_IDENTIFIER_PART_PATTERN = Pattern.compile("^[\\p{L}_][\\p{L}\\p{N}_]*$");
 
     /**
-     * P1-5: 常见 Unicode 同形字符检测：这些字符与 ASCII 字符视觉相似，可能用于绕过安全检查。
+     * 常见 Unicode 同形字符检测：这些字符与 ASCII 字符视觉相似，可能用于绕过安全检查。
      *
      * <p>
      * <strong>已知限制：</strong>此模式仅覆盖西里尔字母、希腊字母和亚美尼亚字母。 不覆盖全角拉丁字母、数学字母符号等 Unicode 混淆字符。 如需生产级检测，考虑使用 ICU4J 的
@@ -71,10 +71,10 @@ public class MergeSpec<T> {
      */
     private static final Pattern HOMOGLYPH_PATTERN = Pattern.compile("[\\u0400-\\u04FF\\u0370-\\u03FF\\u0530-\\u058F]");
 
-    /** B-08: 是否启用 Unicode 标识符支持。可通过系统属性 myjpa-plus.merge.unicode-identifiers=true 启用。 */
+    /** 是否启用 Unicode 标识符支持。可通过系统属性 myjpa-plus.merge.unicode-identifiers=true 启用。 */
     private static volatile boolean unicodeIdentifiers = false;
 
-    /** P1-5: Maximum identifier length to prevent abuse. */
+    /** Maximum identifier length to prevent abuse. */
     private static final int MAX_IDENTIFIER_LENGTH = 128;
 
     static {
@@ -85,7 +85,7 @@ public class MergeSpec<T> {
     }
 
     /**
-     * B-08: 设置是否启用 Unicode 标识符支持。
+     * 设置是否启用 Unicode 标识符支持。
      *
      * @param enabled 是否启用
      */
@@ -98,10 +98,10 @@ public class MergeSpec<T> {
         new org.springframework.util.ConcurrentReferenceHashMap<>(16,
             org.springframework.util.ConcurrentReferenceHashMap.ReferenceType.WEAK);
 
-    /** P1-14: Maximum cache size before logging warning. */
+    /** Maximum cache size before logging warning. */
     private static final int MAX_FIELD_CACHE_SIZE = 1024;
 
-    /** P2: Counter for sampling cache size checks to reduce overhead. */
+    /** Counter for sampling cache size checks to reduce overhead. */
     private static final java.util.concurrent.atomic.AtomicInteger FIELD_CACHE_CALL_COUNTER =
         new java.util.concurrent.atomic.AtomicInteger(0);
 
@@ -111,7 +111,7 @@ public class MergeSpec<T> {
     private final List<String> updateFields = new ArrayList<>();
     private boolean explicitUpdateFields = false;
 
-    /** P2-25: Cached dialect per EntityManagerFactory to avoid repeated detection. */
+    /** Cached dialect per EntityManagerFactory to avoid repeated detection. */
     private static final java.util.concurrent.ConcurrentMap<String, String> DIALECT_CACHE =
         new java.util.concurrent.ConcurrentHashMap<>();
 
@@ -208,7 +208,7 @@ public class MergeSpec<T> {
         if ("h2".equals(dialect)) {
             return executeH2Upsert(em);
         }
-        // P0-7: Use buildSqlFor with local snapshot instead of buildSql to avoid
+        // Use buildSqlFor with local snapshot instead of buildSql to avoid
         // shared mutable field access in concurrent scenarios
         T entitySnapshot = this.entity;
         SqlWithParams sqlWithParams = buildSqlFor(em, entitySnapshot);
@@ -230,13 +230,13 @@ public class MergeSpec<T> {
      * </ol>
      *
      * <p>
-     * <strong>P2-25 改进：</strong>此方法委托给 {@link #executeH2UpsertFor(EntityManager, Object)} 以消除代码重复。
+     * <strong>改进：</strong>此方法委托给 {@link #executeH2UpsertFor(EntityManager, Object)} 以消除代码重复。
      *
      * @param em 实体管理器
      * @return 受影响的行数
      */
     private int executeH2Upsert(EntityManager em) {
-        // P2-5: Delegate to thread-safe executeH2UpsertFor to eliminate code duplication
+        // Delegate to thread-safe executeH2UpsertFor to eliminate code duplication
         T entitySnapshot = this.entity;
         return executeH2UpsertFor(em, entitySnapshot);
     }
@@ -286,7 +286,7 @@ public class MergeSpec<T> {
         List<String> conflictColumns) {
         List<String> setClauses = new ArrayList<>();
         List<Object> setParams = new ArrayList<>();
-        // P2-10: Build Map for O(1) field lookup instead of O(n*m) nested loop
+        // Build Map for O(1) field lookup instead of O(n*m) nested loop
         java.util.Map<String, EntityFieldValue> fieldValueMap = new java.util.LinkedHashMap<>();
         for (EntityFieldValue fv : allFieldValues) {
             fieldValueMap.put(fv.fieldName(), fv);
@@ -406,7 +406,7 @@ public class MergeSpec<T> {
      * 检查 JTA 环境中是否有活动事务。
      *
      * <p>
-     * P1: 使用 JPA 标准 API 检测事务状态，避免硬依赖 Hibernate。 先尝试 TransactionSynchronizationManager（Spring 环境）， 再尝试
+     * 使用 JPA 标准 API 检测事务状态，避免硬依赖 Hibernate。 先尝试 TransactionSynchronizationManager（Spring 环境）， 再尝试
      * EntityManager.getTransaction().isActive()（RESOURCE_LOCAL）， 最后回退到 Hibernate Session 检测（JTA 环境）。
      *
      * @param em 实体管理器
@@ -421,11 +421,11 @@ public class MergeSpec<T> {
             }
         } catch (Exception ignored) {
             // JTA environment may throw on getTransaction()
-            // P2: Log at debug level for diagnostics
+            // Log at debug level for diagnostics
             log.debug("getTransaction() threw exception in JTA environment: {}", ignored.getMessage());
         }
         // Fallback: try Hibernate Session (only if Hibernate is on classpath)
-        // P0-5: Use pure reflection to avoid compile-time dependency on Hibernate
+        // Use pure reflection to avoid compile-time dependency on Hibernate
         try {
             Class<?> sessionClass = Class.forName("org.hibernate.Session");
             Object session = em.unwrap(sessionClass);
@@ -474,7 +474,7 @@ public class MergeSpec<T> {
         if (batchSize <= 0) {
             throw new IllegalArgumentException("batchSize must be positive");
         }
-        // P0-4: Warn about large entity lists that may cause OOM
+        // Warn about large entity lists that may cause OOM
         if (entities.size() > 10_000) {
             log.warn(
                 "Large entity list size ({}). This may cause excessive memory usage. "
@@ -494,7 +494,7 @@ public class MergeSpec<T> {
                 }
             }
         }
-        // P2: Only flush if there are remaining entities not yet flushed
+        // Only flush if there are remaining entities not yet flushed
         if (count % batchSize != 0) {
             em.flush();
             em.clear();
@@ -509,10 +509,10 @@ public class MergeSpec<T> {
      * 适用于大数据量 UPSERT 场景。与 {@link #executeBatch(List, EntityManager, int)} 不同， 此方法每批操作完成后立即提交事务，已提交的批次不会因后续批次失败而回滚。
      *
      * <p>
-     * <strong>P0-1 修复：</strong>改为按 batchSize 分批提交事务，每 batchSize 个实体提交一次，而非每个实体提交一次。
+     * <strong>修复：</strong>改为按 batchSize 分批提交事务，每 batchSize 个实体提交一次，而非每个实体提交一次。
      *
      * <p>
-     * <strong>P1-8 事务管理限制说明：</strong>
+     * <strong>事务管理限制说明：</strong>
      * <ul>
      * <li>此方法绕过 Spring 事务管理，直接使用 JPA {@code EntityTransaction}。在 Spring 管理的事务中调用时， 将回退到
      * {@link #executeBatch(List, EntityManager, int)} 方法。</li>
@@ -538,7 +538,7 @@ public class MergeSpec<T> {
         if (batchSize <= 0) {
             throw new IllegalArgumentException("batchSize must be positive");
         }
-        // P1: If Spring transaction is active, warn and execute within it (no separate tx possible)
+        // If Spring transaction is active, warn and execute within it (no separate tx possible)
         if (TransactionSynchronizationManager.isActualTransactionActive()) {
             log.warn("executeBatchInSeparateTransactions called within an active Spring transaction. "
                 + "All operations will execute within the existing transaction. "
@@ -561,7 +561,7 @@ public class MergeSpec<T> {
                     tx.begin();
                     txStarted = true;
                 } else if (tx != null && tx.isActive()) {
-                    // P1-16: Pre-existing RESOURCE_LOCAL transaction — batch isolation not possible
+                    // Pre-existing RESOURCE_LOCAL transaction — batch isolation not possible
                     throw new MyJpaPlusException("executeBatchInSeparateTransactions requires no active transaction. "
                         + "An active RESOURCE_LOCAL transaction was detected. "
                         + "Use executeBatch() to run within the existing transaction.");
@@ -572,7 +572,7 @@ public class MergeSpec<T> {
                 }
             }
             try {
-                // P1-3: Increment counter before executeSingle to ensure correct batch boundary
+                // Increment counter before executeSingle to ensure correct batch boundary
                 count++;
                 total += executeSingle(em, ent);
                 if (count % batchSize == 0) {
@@ -624,7 +624,7 @@ public class MergeSpec<T> {
      * 从指定实体提取字段值（线程安全版本，不访问实例字段 this.entity）。
      *
      * <p>
-     * <strong>P1-4 改进：</strong>优先使用 getter 方法获取字段值，回退到字段反射。 在 Java 17+ 模块系统下，getter 方法通常不需要 {@code --add-opens} 参数。
+     * <strong>改进：</strong>优先使用 getter 方法获取字段值，回退到字段反射。 在 Java 17+ 模块系统下，getter 方法通常不需要 {@code --add-opens} 参数。
      *
      * @param entity 要提取字段值的实体实例
      * @return 字段名、列名和值的列表
@@ -642,7 +642,7 @@ public class MergeSpec<T> {
             throw new MyJpaPlusException("Circular @Embedded reference detected: " + entity.getClass().getName()
                 + " has already been visited. Check your entity mapping for cycles in @Embedded objects.");
         }
-        // P2: Use sampling strategy - only check cache size every 64 calls to reduce overhead
+        // Use sampling strategy - only check cache size every 64 calls to reduce overhead
         if ((FIELD_CACHE_CALL_COUNTER.incrementAndGet() & 63) == 0) {
             int cacheSize = FIELD_CACHE.size();
             if (cacheSize > MAX_FIELD_CACHE_SIZE) {
@@ -710,7 +710,7 @@ public class MergeSpec<T> {
     }
 
     /**
-     * P1-4: 获取实体字段值，优先使用 getter 方法，回退到字段反射。
+     * 获取实体字段值，优先使用 getter 方法，回退到字段反射。
      *
      * @param entity 实体实例
      * @param field 字段
@@ -836,13 +836,13 @@ public class MergeSpec<T> {
                                 attempt + 1, maxRetries, backoffMs);
                         }
                         try {
-                            // P1-9: Thread.sleep() is acceptable here as retry backoff is short (10-40ms).
+                            // Thread.sleep() is acceptable here as retry backoff is short (10-40ms).
                             // In Java 21+ virtual thread environments, consider using
                             // CompletableFuture.delayedExecutor() for non-blocking delay.
                             Thread.sleep(backoffMs);
                         } catch (InterruptedException ie) {
                             Thread.currentThread().interrupt();
-                            // P1-9: Add InterruptedException as suppressed exception to preserve
+                            // Add InterruptedException as suppressed exception to preserve
                             // diagnostic information
                             e.addSuppressed(ie);
                             throw e;
@@ -995,7 +995,7 @@ public class MergeSpec<T> {
             }
             tableName.append(tableAnnotation.name());
             String name = tableName.toString();
-            // P0-2: Validate each segment of the table name from annotation to prevent injection
+            // Validate each segment of the table name from annotation to prevent injection
             for (String segment : name.split("\\.")) {
                 if (!SAFE_IDENTIFIER_PART_PATTERN.matcher(segment).matches()) {
                     throw new MyJpaPlusException("Invalid table name in @Table annotation: '" + name
@@ -1032,15 +1032,15 @@ public class MergeSpec<T> {
         if (identifier == null || identifier.isEmpty()) {
             throw new MyJpaPlusException("Identifier must not be null or empty");
         }
-        // P1-5: Check identifier length limit
+        // Check identifier length limit
         if (identifier.length() > MAX_IDENTIFIER_LENGTH) {
             throw new MyJpaPlusException("Identifier length (" + identifier.length() + ") exceeds maximum ("
                 + MAX_IDENTIFIER_LENGTH + "): '" + identifier.substring(0, 64) + "...'");
         }
-        // B-6: Validate each segment separately to prevent schema injection via dots
+        // Validate each segment separately to prevent schema injection via dots
         String[] parts = identifier.split("\\.");
         for (String part : parts) {
-            // B-08: Use Unicode pattern when enabled, otherwise use ASCII-only pattern
+            // Use Unicode pattern when enabled, otherwise use ASCII-only pattern
             Pattern validationPattern =
                 unicodeIdentifiers ? UNICODE_IDENTIFIER_PART_PATTERN : SAFE_IDENTIFIER_PART_PATTERN;
             if (!validationPattern.matcher(part).matches()) {
@@ -1048,7 +1048,7 @@ public class MergeSpec<T> {
                     + "'. Each part must contain only alphanumeric characters and underscores." + (unicodeIdentifiers
                         ? "" : " Use myjpa-plus.merge.unicode-identifiers=true for Unicode support."));
             }
-            // P1-5: Detect Unicode homoglyphs that may be used for security bypass
+            // Detect Unicode homoglyphs that may be used for security bypass
             // Cyrillic, Greek, and Armenian characters look similar to Latin characters
             if (unicodeIdentifiers && HOMOGLYPH_PATTERN.matcher(part).find()) {
                 String homoglyphMsg = "SECURITY: Identifier '" + part + "' contains Unicode homoglyph characters "
@@ -1061,7 +1061,7 @@ public class MergeSpec<T> {
             }
         }
         // Always quote identifiers to handle reserved words and case sensitivity.
-        // P0-4: H2 identifiers are now quoted with double quotes to prevent reserved word conflicts.
+        // H2 identifiers are now quoted with double quotes to prevent reserved word conflicts.
         // H2 default mode stores identifiers in uppercase, so we convert to uppercase before quoting.
         return switch (dialect) {
             case "postgresql" -> "\"" + identifier.replace("\"", "\"\"") + "\"";
@@ -1088,7 +1088,7 @@ public class MergeSpec<T> {
         return columns;
     }
 
-    /** P2-14: Cache for auto-generated ID field detection results. */
+    /** Cache for auto-generated ID field detection results. */
     private static final java.util.concurrent.ConcurrentMap<String, Boolean> AUTO_GENERATED_ID_CACHE =
         new java.util.concurrent.ConcurrentHashMap<>();
 
@@ -1152,7 +1152,7 @@ public class MergeSpec<T> {
         Column columnAnnotation = field.getAnnotation(Column.class);
         if (columnAnnotation != null && !columnAnnotation.name().isEmpty()) {
             String name = columnAnnotation.name();
-            // P0-2: Validate column name from annotation to prevent injection
+            // Validate column name from annotation to prevent injection
             if (!SAFE_IDENTIFIER_PATTERN.matcher(name).matches()) {
                 throw new MyJpaPlusException("Invalid column name in @Column annotation: '" + name
                     + "'. Must contain only alphanumeric characters and underscores.");
@@ -1169,7 +1169,7 @@ public class MergeSpec<T> {
      * @return 数据库方言标识（postgresql、mysql 或 h2）
      */
     private String detectDialect(EntityManager em) {
-        // P2-17: Use stable cache key (JDBC URL if available, otherwise identity-based)
+        // Use stable cache key (JDBC URL if available, otherwise identity-based)
         jakarta.persistence.EntityManagerFactory emf = em.getEntityManagerFactory();
         String factoryKey = resolveFactoryKey(emf);
         String cached = DIALECT_CACHE.get(factoryKey);
@@ -1215,7 +1215,7 @@ public class MergeSpec<T> {
         }
 
         // Priority 3: Hibernate fallback (only if Hibernate is on classpath)
-        // P0-2: Use pure reflection + dynamic proxy to avoid compile-time dependency on Hibernate
+        // Use pure reflection + dynamic proxy to avoid compile-time dependency on Hibernate
         try {
             Class<?> sessionClass = Class.forName("org.hibernate.Session");
             Object session = em.unwrap(sessionClass);
@@ -1278,7 +1278,7 @@ public class MergeSpec<T> {
     }
 
     /**
-     * P2-17: 为 EntityManagerFactory 生成稳定的缓存键。
+     * 为 EntityManagerFactory 生成稳定的缓存键。
      *
      * <p>
      * 优先使用 JDBC URL 作为缓存键（跨 JVM 重启稳定），回退到基于 identityHashCode 的键。

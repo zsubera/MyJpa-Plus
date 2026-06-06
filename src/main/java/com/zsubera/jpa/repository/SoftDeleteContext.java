@@ -39,7 +39,7 @@ public final class SoftDeleteContext {
     }
 
     /**
-     * P2-22: 获取最大忽略计数。
+     * 获取最大忽略计数。
      *
      * @return 最大忽略计数
      */
@@ -48,7 +48,7 @@ public final class SoftDeleteContext {
     }
 
     /**
-     * P2-22: 设置最大忽略计数。
+     * 设置最大忽略计数。
      *
      * @param count 最大忽略计数（1-1024）
      */
@@ -75,7 +75,7 @@ public final class SoftDeleteContext {
      * @throws IllegalStateException 如果计数超过安全上限（可能存在泄漏）
      */
     public static void pushIgnore() {
-        // P2: Simplified to single read - ThreadLocal.withInitial guarantees non-null
+        // Simplified to single read - ThreadLocal.withInitial guarantees non-null
         int count = ignoreCount.get();
         if (count >= maxIgnoreCount) {
             throw new IllegalStateException(
@@ -91,7 +91,7 @@ public final class SoftDeleteContext {
      * 当计数归零时自动清除 ThreadLocal，防止内存泄漏。包含防御性检查以处理异常场景下的计数漂移。
      */
     public static void popIgnore() {
-        // B-09: ThreadLocal.withInitial guarantees non-null, so count is always >= 0.
+        // ThreadLocal.withInitial guarantees non-null, so count is always >= 0.
         // The null check is unreachable but retained as defensive programming.
         int count = ignoreCount.get();
         if (count <= 0) {

@@ -31,7 +31,7 @@ final class AuditUtils {
     /** 当前配置的最大调用栈深度 */
     private static volatile int maxStackDepth;
 
-    /** P2-9: 缓存 StackWalker 实例，避免每次调用都创建新实例 */
+    /** 缓存 StackWalker 实例，避免每次调用都创建新实例 */
     private static final StackWalker STACK_WALKER = StackWalker.getInstance();
 
     static {

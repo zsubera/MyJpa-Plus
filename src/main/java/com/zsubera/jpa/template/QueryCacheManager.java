@@ -16,7 +16,7 @@ import org.slf4j.LoggerFactory;
  * {@link #evictByPrefix(String)} 清除相关缓存。
  *
  * <p>
- * <strong>P2-7 改进：</strong>在 Spring 环境中，可以使用 {@code @TransactionalEventListener} 监听事务提交/回滚事件， 自动管理缓存失效。示例：
+ * <strong>改进：</strong>在 Spring 环境中，可以使用 {@code @TransactionalEventListener} 监听事务提交/回滚事件， 自动管理缓存失效。示例：
  *
  * <pre>
  * {
@@ -70,13 +70,13 @@ public class QueryCacheManager {
     /** 默认最大缓存条目数 */
     private static final int DEFAULT_MAX_ENTRIES = 10000;
 
-    /** P1: 缓存键最大长度限制，防止恶意超长键导致内存问题 */
+    /** 缓存键最大长度限制，防止恶意超长键导致内存问题 */
     private static final int MAX_KEY_LENGTH = 1024;
 
-    /** P1: 驱逐检查采样间隔，每 N 次 put 检查一次驱逐，避免每次 put 都遍历全量缓存 */
+    /** 驱逐检查采样间隔，每 N 次 put 检查一次驱逐，避免每次 put 都遍历全量缓存 */
     private static final int EVICTION_CHECK_INTERVAL = 10;
 
-    /** P1: put 操作计数器，用于采样驱逐检查（实例级别，避免多实例干扰） */
+    /** put 操作计数器，用于采样驱逐检查（实例级别，避免多实例干扰） */
     private final java.util.concurrent.atomic.AtomicInteger putCounter =
         new java.util.concurrent.atomic.AtomicInteger();
 
@@ -182,13 +182,13 @@ public class QueryCacheManager {
         if (ttlSeconds < 0) {
             throw new IllegalArgumentException("ttlSeconds must not be negative, got: " + ttlSeconds);
         }
-        // P1: 缓存键长度验证
+        // 缓存键长度验证
         if (key.length() > MAX_KEY_LENGTH) {
             log.warn("Cache key length ({}) exceeds maximum ({}). Key rejected: {}...", key.length(), MAX_KEY_LENGTH,
                 key.substring(0, 64));
             return false;
         }
-        // P1: 采样驱逐策略 - 每 EVICTION_CHECK_INTERVAL 次 put 检查一次，避免每次 put 遍历全量缓存
+        // 采样驱逐策略 - 每 EVICTION_CHECK_INTERVAL 次 put 检查一次，避免每次 put 遍历全量缓存
         if (putCounter.incrementAndGet() % EVICTION_CHECK_INTERVAL == 0) {
             evictIfNeeded();
         } else if (store.size() >= maxEntries * 2) {

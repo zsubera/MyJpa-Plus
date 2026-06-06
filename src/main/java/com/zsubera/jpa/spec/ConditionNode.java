@@ -195,7 +195,7 @@ public sealed interface ConditionNode permits ConditionNode.SimpleNode, Conditio
 
         @Override
         public String toString() {
-            // P1: Mask keyword to prevent sensitive data leakage to logs
+            // Mask keyword to prevent sensitive data leakage to logs
             return "MultiLikeNode[keyword='" + "***(" + keyword.length() + " chars)" + "', fields="
                 + java.util.Arrays.toString(fieldNames) + "]";
         }
@@ -394,7 +394,7 @@ public sealed interface ConditionNode permits ConditionNode.SimpleNode, Conditio
             if (params == null) {
                 throw new IllegalArgumentException("params must not be null");
             }
-            // P0: Validate function name against whitelist to prevent SQL injection
+            // Validate function name against whitelist to prevent SQL injection
             String upperName = functionName.toUpperCase();
             if (!ConditionBuilder.SAFE_FUNCTION_NAMES.contains(upperName)) {
                 String msg = "Function not in whitelist: '" + functionName + "'. "
@@ -407,7 +407,7 @@ public sealed interface ConditionNode permits ConditionNode.SimpleNode, Conditio
 
         @Override
         public String toString() {
-            // P1: Mask function parameters to prevent sensitive data leakage to logs
+            // Mask function parameters to prevent sensitive data leakage to logs
             StringBuilder sb = new StringBuilder("FuncNode[");
             sb.append(functionName).append("(");
             for (int i = 0; i < params.length; i++) {

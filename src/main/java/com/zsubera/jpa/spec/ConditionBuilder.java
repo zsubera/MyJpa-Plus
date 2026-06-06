@@ -41,7 +41,7 @@ public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> ext
     Pattern SAFE_FIELD_NAME_PATTERN = Pattern.compile("^[a-zA-Z_][a-zA-Z0-9_]*$");
 
     /**
-     * P2: 安全嵌套字段名正则表达式：允许字母、数字、下划线和点号。
+     * 安全嵌套字段名正则表达式：允许字母、数字、下划线和点号。
      *
      * <p>
      * 用于校验需要支持嵌套属性路径的场景（如 JPA 嵌入对象的字段引用 {@code "address.city"}）。 点号分隔的每一段必须以字母或下划线开头，不允许连续点号。
@@ -61,7 +61,7 @@ public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> ext
     Set<String> SAFE_FUNCTION_NAMES = Set.copyOf(initDefaultFunctionNames());
 
     /**
-     * P0-4: 白名单强制执行开关。硬编码为 true，不可通过系统属性禁用。
+     * 白名单强制执行开关。硬编码为 true，不可通过系统属性禁用。
      *
      * <p>
      * 此开关防止通过系统属性 {@code myjpa-plus.func.whitelist-enforced=false} 禁用白名单保护。 攻击者若能控制系统属性，可禁用白名单保护，因此移除了系统属性读取逻辑。
@@ -100,7 +100,7 @@ public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> ext
     }
 
     /**
-     * P2-5: 向安全函数白名单中添加函数名，带安全审计日志。
+     * 向安全函数白名单中添加函数名，带安全审计日志。
      *
      * @deprecated 此方法已废弃。白名单现在是不可变的，运行时修改不再允许。 如需扩展白名单，请通过系统属性 {@code myjpa-plus.func.extra-safe-functions} 在启动前配置。
      *
@@ -724,7 +724,7 @@ public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> ext
                 if (fieldNames[i] == null) {
                     throw new IllegalArgumentException("fieldNames[" + i + "] must not be null");
                 }
-                // P1-16: Use SAFE_NESTED_FIELD_NAME_PATTERN to support dot-notation field names
+                // Use SAFE_NESTED_FIELD_NAME_PATTERN to support dot-notation field names
                 // (e.g., "address.city" for embedded objects)
                 if (!SAFE_NESTED_FIELD_NAME_PATTERN.matcher(fieldNames[i]).matches()) {
                     throw new IllegalArgumentException(
@@ -922,7 +922,7 @@ public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> ext
         Object[] allParams = new Object[params.length + 1];
         allParams[0] = name;
         System.arraycopy(params, 0, allParams, 1, params.length);
-        // P2: Use FuncNode.of() factory method for security whitelist validation
+        // Use FuncNode.of() factory method for security whitelist validation
         // instead of bypassing it with direct constructor call.
         // FuncNode.of() handles whitelist checking and logging internally.
         conditions().add(ConditionNode.FuncNode.of(functionName, allParams));

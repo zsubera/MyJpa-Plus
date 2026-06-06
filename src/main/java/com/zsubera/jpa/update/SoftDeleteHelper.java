@@ -57,7 +57,7 @@ public final class SoftDeleteHelper {
     private static final int MAX_CACHE_SIZE = 1024;
     private static final Logger log = org.slf4j.LoggerFactory.getLogger(SoftDeleteHelper.class);
 
-    /** P2: Counter for sampling cache size checks to reduce overhead. */
+    /** Counter for sampling cache size checks to reduce overhead. */
     private static final java.util.concurrent.atomic.AtomicInteger CALL_COUNTER =
         new java.util.concurrent.atomic.AtomicInteger(0);
 
@@ -105,7 +105,7 @@ public final class SoftDeleteHelper {
         if (identifier == null || identifier.isEmpty()) {
             throw new IllegalArgumentException("Identifier must not be null or empty");
         }
-        // P0-2: Support schema.table format by validating each segment separately
+        // Support schema.table format by validating each segment separately
         String[] parts = identifier.split("\\.");
         for (String part : parts) {
             if (!SAFE_IDENTIFIER_PART_PATTERN.matcher(part).matches()) {
@@ -119,7 +119,7 @@ public final class SoftDeleteHelper {
     private SoftDeleteHelper() {}
 
     /**
-     * P0-5: Batch soft delete all entities of the given class using a single UPDATE statement.
+     * Batch soft delete all entities of the given class using a single UPDATE statement.
      *
      * <p>
      * <strong>安全要求：</strong>必须传入 {@code allowUnconditional=true} 显式确认， 否则将抛出
@@ -170,7 +170,7 @@ public final class SoftDeleteHelper {
                 + escapedColumn + " != ?1 OR " + escapedColumn + " IS NULL").setParameter(1, deletedValue)
                 .executeUpdate();
         }
-        // P0-2: Enum type support - check @Enumerated annotation for STRING vs ORDINAL
+        // Enum type support - check @Enumerated annotation for STRING vs ORDINAL
         if (Enum.class.isAssignableFrom(field.getType())) {
             if (annotation == null || annotation.deletedValue().isEmpty()) {
                 throw new MyJpaPlusException("@SoftDelete on enum field '" + fieldName + "' in " + entityClass.getName()
@@ -178,7 +178,7 @@ public final class SoftDeleteHelper {
             }
             @SuppressWarnings({"unchecked", "rawtypes"})
             Enum<?> deletedEnumValue = Enum.valueOf((Class<Enum>)field.getType(), annotation.deletedValue());
-            // P0-2: Check @Enumerated annotation to determine correct value type
+            // Check @Enumerated annotation to determine correct value type
             Enumerated enumerated = field.getAnnotation(Enumerated.class);
             Object dbValue;
             if (enumerated != null && enumerated.value() == EnumType.STRING) {
@@ -203,10 +203,10 @@ public final class SoftDeleteHelper {
     }
 
     /**
-     * P0-5: Batch soft delete entities by IDs using a single UPDATE statement.
+     * Batch soft delete entities by IDs using a single UPDATE statement.
      *
      * <p>
-     * <strong>P1-12 限制说明：</strong>此方法使用原生 SQL 批量更新，绕过 JPA 生命周期回调（如 {@code @PreUpdate}、{@code @PostUpdate}）。
+     * <strong>限制说明：</strong>此方法使用原生 SQL 批量更新，绕过 JPA 生命周期回调（如 {@code @PreUpdate}、{@code @PostUpdate}）。
      * 如果实体需要触发生命周期回调（如审计字段自动填充），请使用 {@code CriteriaUpdate} 替代方案：
      *
      * <pre>{@code
@@ -249,7 +249,7 @@ public final class SoftDeleteHelper {
         String escapedTable = escapeIdentifier(tableName);
         String escapedColumn = escapeIdentifier(columnName);
         String escapedIdColumn = escapeIdentifier(idFieldName);
-        // P1-4: Use named parameters instead of positional parameters to avoid index conflicts
+        // Use named parameters instead of positional parameters to avoid index conflicts
         // in some JPA implementations (especially when combining SET and IN clause parameters)
         String setParamName = "deletedValue";
         String setClause;
@@ -259,19 +259,19 @@ public final class SoftDeleteHelper {
             setClause = escapedColumn + " = true";
         } else if (field.getType() == Integer.class || field.getType() == int.class) {
             int deletedValue = (annotation != null) ? annotation.deletedIntValue() : 1;
-            // P1-4: Use named parameter to avoid positional parameter conflicts
+            // Use named parameter to avoid positional parameter conflicts
             setClause = escapedColumn + " = :" + setParamName;
             useParamBinding = true;
             deletedParamValue = deletedValue;
         } else if (Enum.class.isAssignableFrom(field.getType())) {
-            // P0-2: Enum type support - check @Enumerated annotation for STRING vs ORDINAL
+            // Enum type support - check @Enumerated annotation for STRING vs ORDINAL
             if (annotation == null || annotation.deletedValue().isEmpty()) {
                 throw new MyJpaPlusException("@SoftDelete on enum field '" + fieldName + "' in " + entityClass.getName()
                     + " must specify deletedValue");
             }
             @SuppressWarnings({"unchecked", "rawtypes"})
             Enum<?> deletedEnumValue = Enum.valueOf((Class<Enum>)field.getType(), annotation.deletedValue());
-            // P0-2: Check @Enumerated annotation to determine correct value type
+            // Check @Enumerated annotation to determine correct value type
             Enumerated enumerated = field.getAnnotation(Enumerated.class);
             if (enumerated != null && enumerated.value() == EnumType.STRING) {
                 deletedParamValue = deletedEnumValue.name();
@@ -292,7 +292,7 @@ public final class SoftDeleteHelper {
                 "@SoftDelete field '" + fieldName + "' in " + entityClass.getName() + " has unsupported type: "
                     + field.getType().getName() + ". Supported types: Boolean, Integer, Enum, String.");
         }
-        // P1-8: Use InClauseBuilder.getMaxInClauseSize() instead of hardcoded 1000
+        // Use InClauseBuilder.getMaxInClauseSize() instead of hardcoded 1000
         int batchSize = com.zsubera.jpa.util.InClauseBuilder.getMaxInClauseSize();
         // Use IN clause with batch splitting for large ID lists
         int total = 0;
@@ -320,7 +320,7 @@ public final class SoftDeleteHelper {
     }
 
     /**
-     * P2-6: 安全标识符验证模式，防止 SQL 注入。
+     * 安全标识符验证模式，防止 SQL 注入。
      */
     private static final java.util.regex.Pattern SAFE_IDENTIFIER_PATTERN =
         java.util.regex.Pattern.compile("^[a-zA-Z_][a-zA-Z0-9_]*$");
@@ -331,7 +331,7 @@ public final class SoftDeleteHelper {
     private static String resolveTableName(Class<?> entityClass) {
         jakarta.persistence.Table tableAnnotation = entityClass.getAnnotation(jakarta.persistence.Table.class);
         if (tableAnnotation != null && !tableAnnotation.name().isEmpty()) {
-            // P2-6: Validate each segment to prevent SQL injection
+            // Validate each segment to prevent SQL injection
             String catalog = tableAnnotation.catalog();
             String schema = tableAnnotation.schema();
             String name = tableAnnotation.name();
@@ -357,7 +357,7 @@ public final class SoftDeleteHelper {
         jakarta.persistence.Entity entityAnnotation = entityClass.getAnnotation(jakarta.persistence.Entity.class);
         if (entityAnnotation != null && !entityAnnotation.name().isEmpty()) {
             String name = entityAnnotation.name();
-            // P1-4: Validate @Entity name to prevent SQL injection
+            // Validate @Entity name to prevent SQL injection
             if (!SAFE_IDENTIFIER_PATTERN.matcher(name).matches()) {
                 throw new IllegalArgumentException(
                     "Invalid @Entity name: " + name + ". Must contain only alphanumeric characters and underscores.");
@@ -570,7 +570,7 @@ public final class SoftDeleteHelper {
      * @return 字段名称，如果未找到 {@code @SoftDelete} 字段则返回 {@code null}
      */
     public static String findSoftDeleteField(Class<?> entityClass) {
-        // P2: Use sampling strategy - only check cache size every 64 calls to reduce overhead
+        // Use sampling strategy - only check cache size every 64 calls to reduce overhead
         if ((CALL_COUNTER.incrementAndGet() & 63) == 0) {
             int currentSize = FIELD_CACHE.size();
             if (currentSize > MAX_CACHE_SIZE) {

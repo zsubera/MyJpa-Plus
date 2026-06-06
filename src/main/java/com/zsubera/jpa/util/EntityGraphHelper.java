@@ -99,7 +99,7 @@ public final class EntityGraphHelper<T> {
             String root = attributePath.substring(0, dotIndex);
             String subpath = attributePath.substring(dotIndex + 1);
             attributePaths.merge(root, new String[] {subpath}, (old, val) -> {
-                // P2-24: Check for duplicate subpaths before appending
+                // Check for duplicate subpaths before appending
                 for (String existing : old) {
                     if (existing.equals(subpath)) {
                         return old;

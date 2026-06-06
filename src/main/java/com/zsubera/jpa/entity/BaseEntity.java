@@ -191,7 +191,7 @@ public abstract class BaseEntity implements Serializable {
         if (this == o) {
             return true;
         }
-        // B-24: Use getClass() for strict type equality to prevent cross-subclass comparison.
+        // Use getClass() for strict type equality to prevent cross-subclass comparison.
         // This is safer than instanceof for JPA entities where different entity types
         // should never be considered equal even if they share the same ID.
         if (o == null || getClass() != o.getClass()) {
