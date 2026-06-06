@@ -97,6 +97,14 @@ public class SqlSlowQueryInterceptor implements StatementInspector {
 
         private Object wrapPreparedStatement(Object stmt, String sql) {
             Class<?> stmtClass = stmt.getClass();
+            // 如果 Statement 实现类没有实现任何接口，无法创建 JDK 动态代理，
+            // 直接返回原始对象。正常 JDBC 驱动的 PreparedStatement 总会实现
+            // java.sql.PreparedStatement 等接口，此为防御性检查。
+            if (stmtClass.getInterfaces().length == 0) {
+                log.debug("PreparedStatement class {} implements no interfaces, skipping proxy wrapping",
+                    stmtClass.getName());
+                return stmt;
+            }
             // 采样驱逐：每 64 次调用检查一次缓存大小，避免每次调用都检查
             if (PROXY_CLASS_CACHE.size() > MAX_PROXY_CLASS_CACHE_SIZE
                 && java.util.concurrent.ThreadLocalRandom.current().nextInt(64) == 0) {

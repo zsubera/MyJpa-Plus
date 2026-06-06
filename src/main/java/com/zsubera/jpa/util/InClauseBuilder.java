@@ -227,15 +227,20 @@ public final class InClauseBuilder {
             // 全部为 NULL：NOT IN (空) 等价于所有行都匹配，但为安全起见返回 IS NOT NULL
             return cb.isNotNull(path);
         }
-        Predicate notInPredicate = cb.not(buildSingleIn(cb, path, nonNullValues));
+        // 先构建 NOT IN 谓词（含批拆分），再根据 hasNull 决定是否追加 IS NOT NULL。
+        // 之前的实现在 hasNull=true 且 nonNullValues.size() > maxInClauseSize 时
+        // 会提前返回未经批拆分的 notInPredicate，绕过了 buildBatchedNotIn。
+        Predicate notInPredicate;
+        if (nonNullValues.size() <= maxInClauseSize) {
+            notInPredicate = cb.not(buildSingleIn(cb, path, nonNullValues));
+        } else {
+            notInPredicate = buildBatchedNotIn(cb, path, nonNullValues);
+        }
         if (hasNull) {
             // 额外添加 IS NOT NULL 条件，排除字段为 NULL 的行
             return cb.and(notInPredicate, cb.isNotNull(path));
         }
-        if (nonNullValues.size() <= maxInClauseSize) {
-            return notInPredicate;
-        }
-        return buildBatchedNotIn(cb, path, nonNullValues);
+        return notInPredicate;
     }
 
     /**
@@ -268,14 +273,18 @@ public final class InClauseBuilder {
         if (nonNullValues.isEmpty()) {
             return cb.isNotNull(path);
         }
-        Predicate notInPredicate = cb.not(buildSingleIn(cb, path, nonNullValues));
+        // 先构建 NOT IN 谓词（含批拆分），再根据 hasNull 决定是否追加 IS NOT NULL。
+        // 与数组版本相同的 bug 修复：hasNull=true 且大列表时不应绕过批拆分。
+        Predicate notInPredicate;
+        if (nonNullValues.size() <= maxInClauseSize) {
+            notInPredicate = cb.not(buildSingleIn(cb, path, nonNullValues));
+        } else {
+            notInPredicate = buildBatchedNotIn(cb, path, nonNullValues);
+        }
         if (hasNull) {
             return cb.and(notInPredicate, cb.isNotNull(path));
         }
-        if (nonNullValues.size() <= maxInClauseSize) {
-            return notInPredicate;
-        }
-        return buildBatchedNotIn(cb, path, nonNullValues);
+        return notInPredicate;
     }
 
     private static Predicate buildSingleIn(CriteriaBuilder cb, Path<?> path, Object[] values) {

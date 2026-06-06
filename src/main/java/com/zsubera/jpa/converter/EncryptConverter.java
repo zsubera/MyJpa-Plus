@@ -110,13 +110,12 @@ public class EncryptConverter implements AttributeConverter<String, String> {
             String keyEnv = System.getenv(KEY_ENV);
             String keyProp = System.getProperty(KEY_PROPERTY);
             if ((keyEnv == null || keyEnv.isEmpty()) && (keyProp == null || keyProp.isEmpty())) {
-                if (STRICT_MODE) {
-                    throw new IllegalStateException("Encryption key not configured. Set environment variable " + KEY_ENV
-                        + " or system property " + KEY_PROPERTY + " before starting the application. "
-                        + "Strict mode is enabled, application cannot start without encryption key.");
-                }
-                log.warn("SECURITY: Encryption key not configured. Set environment variable {} or system property {}.",
-                    KEY_ENV, KEY_PROPERTY);
+                // 密钥是 EncryptConverter 工作的必要条件，无论是否为严格模式都必须配置。
+                // 之前非严格模式仅记录警告，导致实体保存时才抛出 NullPointerException，
+                // 无法提供明确的错误信息。现在统一在启动时拒绝。
+                throw new IllegalStateException("Encryption key not configured. Set environment variable " + KEY_ENV
+                    + " or system property " + KEY_PROPERTY + " before starting the application. "
+                    + "EncryptConverter requires a key to function.");
             } else {
                 String key = (keyEnv != null && !keyEnv.isEmpty()) ? keyEnv : keyProp;
                 if (key != null && key.length() < MIN_KEY_LENGTH) {

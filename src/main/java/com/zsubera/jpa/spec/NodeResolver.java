@@ -93,6 +93,9 @@ final class NodeResolver {
         Expression<?>[] args = new Expression[node.params.length];
         for (int i = 0; i < node.params.length; i++) {
             Object param = node.params[i];
+            // FuncNode 参数约定：params[0] 总是由 ConditionBuilder.func() 设置为字段名
+            // （通过 resolveProperty(field) 获取），后续参数为函数的额外参数（通过 cb.literal 绑定）。
+            // 此处使用 instanceof String 判断是安全的，因为字段名始终是 String 类型。
             if (param instanceof String fieldName && i == 0) {
                 args[i] = path.get(fieldName);
             } else {

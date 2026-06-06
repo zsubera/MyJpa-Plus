@@ -620,7 +620,10 @@ public class MergeSpec<T> {
                     cacheSize, MAX_FIELD_CACHE_SIZE);
             }
         }
-        List<Field> allFields = FIELD_CACHE.computeIfAbsent(entityClass, cls -> {
+        // 使用实际实体类作为缓存键，确保 JPA 继承映射（TABLE_PER_CLASS）场景下
+        // 子类特有字段不被遗漏。entityClass 是声明时指定的父类，entity.getClass() 是运行时实际类。
+        Class<?> effectiveClass = entity.getClass();
+        List<Field> allFields = FIELD_CACHE.computeIfAbsent(effectiveClass, cls -> {
             List<Field> fields = new ArrayList<>();
             for (Class<?> c = cls; c != null && c != Object.class; c = c.getSuperclass()) {
                 for (Field f : c.getDeclaredFields()) {

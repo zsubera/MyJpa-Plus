@@ -161,8 +161,11 @@ public final class SoftDeleteHelper {
         String escapedColumn = escapeIdentifier(columnName);
         // 根据字段类型构建 UPDATE SQL——使用参数化查询防止 SQL 注入
         if (field.getType() == Boolean.class || field.getType() == boolean.class) {
+            // 使用 != true OR IS NULL 而非 = false OR IS NULL，以正确处理 Boolean 字段
+            // 默认值为 true 的边界场景（此时 = false 无法匹配任何行）。
+            // 对于标准 Boolean，!= true 等价于 = false，但对 NULL 的处理更明确。
             return em.createNativeQuery("UPDATE " + escapedTable + " SET " + escapedColumn + " = true WHERE "
-                + escapedColumn + " = false OR " + escapedColumn + " IS NULL").executeUpdate();
+                + escapedColumn + " != true OR " + escapedColumn + " IS NULL").executeUpdate();
         }
         if (field.getType() == Integer.class || field.getType() == int.class) {
             int deletedValue = (annotation != null) ? annotation.deletedIntValue() : 1;

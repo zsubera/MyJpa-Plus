@@ -49,7 +49,7 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
  * <ol>
  * <li>{@link com.zsubera.jpa.spec.ConditionBuilder} — 查询构建器</li>
  * <li>{@link com.zsubera.jpa.spec.ConditionNode.Op} — 运算符枚举</li>
- * <li>{@link com.zsubera.jpa.spec.QuerySpec#resolveSimple} — 查询条件解析</li>
+ * <li>{@link com.zsubera.jpa.spec.NodeResolver} — 查询条件解析（resolveSimple 等方法）</li>
  * <li>{@link com.zsubera.jpa.projection.ProjectionSpec.ProjectionJoinGroup} — 投影 JOIN 条件</li>
  * <li>此类（AbstractBulkOperationSpec）— 批量操作条件</li>
  * <li>{@link com.zsubera.jpa.spec.SubQuerySpec} — 子查询条件</li>

@@ -517,10 +517,16 @@ public class UpdateSpec<T> extends AbstractBulkOperationSpec<T, UpdateSpec<T>> {
                 // 继续检查父类
             }
         }
-        // 通过反射未找到字段 — 可能是没有直接字段的属性；跳过校验
+        // 通过反射未找到字段 — 无法校验是否为数值类型。
+        // setAdd/setSubtract 在非数值字段上会生成无效 SQL，因此不能默认通过校验。
+        // 如果字段确实存在但反射无法访问（如 Kotlin 属性、Groovy 动态字段），
+        // 请使用 setExpr() 方法代替，它接受任意 Expression。
         evictCacheIfNeeded(NUMERIC_FIELD_CACHE);
-        NUMERIC_FIELD_CACHE.put(cacheKey, true);
-        log.debug("Cannot validate numeric type for field '{}' via reflection; skipping validation", fieldName);
+        NUMERIC_FIELD_CACHE.put(cacheKey, false);
+        throw new IllegalArgumentException(operation + "() cannot validate field '" + fieldName + "' in "
+            + entityClass.getSimpleName() + ". Field not found via reflection. "
+            + "Ensure the field exists as a direct class field (not a getter-only property). "
+            + "For computed expressions, use setExpr() instead.");
     }
 
 }

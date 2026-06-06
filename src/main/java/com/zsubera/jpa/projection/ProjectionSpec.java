@@ -682,24 +682,28 @@ public class ProjectionSpec<T> {
             CriteriaQuery<Long> countQuery = cb.createQuery(Long.class);
             Root<T> countRoot = countQuery.from(entityClass);
             resolveJoins(countRoot, cb);
-            if (!groupByFields.isEmpty() && !havingPredicateFns.isEmpty()) {
-                // 当存在 GROUP BY + HAVING 时，使用单独的计数查询，
-                // 按相同字段分组并应用 HAVING，然后对分组计数
-                CriteriaQuery<Long> havingCountQuery = cb.createQuery(Long.class);
-                Root<T> havingRoot = havingCountQuery.from(entityClass);
-                resolveJoins(havingRoot, cb);
+            if (!groupByFields.isEmpty()) {
+                // 当存在 GROUP BY 时，使用单独的计数查询，
+                // 按相同字段分组并对分组计数（而非总行数）。
+                // 之前仅在同时存在 HAVING 时才走此分支，导致仅有 GROUP BY 时
+                // count 查询返回总行数而非分组数，分页总数不正确。
+                CriteriaQuery<Long> groupCountQuery = cb.createQuery(Long.class);
+                Root<T> groupRoot = groupCountQuery.from(entityClass);
+                resolveJoins(groupRoot, cb);
                 // 应用 WHERE 谓词
-                applyPredicate(havingRoot, havingCountQuery, cb);
+                applyPredicate(groupRoot, groupCountQuery, cb);
                 // 应用 GROUP BY
                 List<jakarta.persistence.criteria.Expression<?>> groupByExpressions = new ArrayList<>();
                 for (String gf : groupByFields) {
-                    groupByExpressions.add(havingRoot.get(gf));
+                    groupByExpressions.add(groupRoot.get(gf));
                 }
-                havingCountQuery.groupBy(groupByExpressions);
-                // 应用 HAVING
-                applyHavingPredicates(havingRoot, cb, havingCountQuery);
-                havingCountQuery.select(cb.countDistinct(havingRoot));
-                total = em.createQuery(havingCountQuery).getSingleResult();
+                groupCountQuery.groupBy(groupByExpressions);
+                // 应用 HAVING（如果存在）
+                if (!havingPredicateFns.isEmpty()) {
+                    applyHavingPredicates(groupRoot, cb, groupCountQuery);
+                }
+                groupCountQuery.select(cb.countDistinct(groupRoot));
+                total = em.createQuery(groupCountQuery).getSingleResult();
             } else {
                 // 仅在用户显式启用 distinct 时使用 countDistinct
                 if (this.distinct) {

@@ -204,11 +204,15 @@ public class CodeEnumType implements UserType<Object>, DynamicParameterizedType 
                 if (ordinal >= 0 && ordinal < constants.length) {
                     return constants[ordinal];
                 }
+                // ordinal 越界
+                throw new HibernateException(
+                    String.format("No enum constant with ordinal '%s' in %s (valid range: 0-%d)", trimmedValue,
+                        enumClass.getSimpleName(), constants.length - 1));
             } catch (NumberFormatException e) {
-                log.warn("Failed to parse ordinal '{}' for enum {}", trimmedValue, enumClass.getSimpleName(), e);
+                throw new HibernateException(
+                    String.format("No enum constant with ordinal '%s' in %s", trimmedValue, enumClass.getSimpleName()),
+                    e);
             }
-            throw new HibernateException(
-                String.format("No enum constant with ordinal '%s' in %s", trimmedValue, enumClass.getSimpleName()));
         }
 
         ConcurrentMap<String, Object> codeMap = getOrBuildCodeMap();
@@ -289,11 +293,14 @@ public class CodeEnumType implements UserType<Object>, DynamicParameterizedType 
                 if (ordinal >= 0 && ordinal < constants.length) {
                     return constants[ordinal];
                 }
+                // ordinal 越界
+                throw new HibernateException(
+                    String.format("No enum constant with ordinal '%s' in %s (valid range: 0-%d)", code,
+                        enumClass.getSimpleName(), constants.length - 1));
             } catch (NumberFormatException e) {
-                log.warn("Failed to parse cached ordinal '{}' for enum {}", code, enumClass.getSimpleName(), e);
+                throw new HibernateException(
+                    String.format("No enum constant with ordinal '%s' in %s", code, enumClass.getSimpleName()), e);
             }
-            throw new HibernateException(
-                String.format("No enum constant with ordinal '%s' in %s", code, enumClass.getSimpleName()));
         }
         // 使用共享的 getOrBuildCodeMap() 实现 O(1) 查找
         ConcurrentMap<String, Object> codeMap = getOrBuildCodeMap();

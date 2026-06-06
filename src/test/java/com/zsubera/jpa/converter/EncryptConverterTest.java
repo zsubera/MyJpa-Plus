@@ -90,12 +90,12 @@ class EncryptConverterTest {
     }
 
     @Test
-    @DisplayName("missing key throws NullPointerException")
+    @DisplayName("missing key throws IllegalStateException at validation time")
     void shouldThrowWhenKeyNotSet() {
         System.clearProperty("myjpa.encrypt.key");
         EncryptConverter.clearCacheForTesting();
         EncryptConverter noKeyConverter = new EncryptConverter();
-        assertThrows(NullPointerException.class, () -> noKeyConverter.convertToDatabaseColumn("test"));
+        assertThrows(IllegalStateException.class, () -> noKeyConverter.convertToDatabaseColumn("test"));
     }
 
     @Test

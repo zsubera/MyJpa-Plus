@@ -119,7 +119,7 @@ public interface MyJpaRepository<T, ID> extends JpaRepository<T, ID>, JpaSpecifi
     }
 
     /**
-     * /** 分页查找所有匹配给定规格说明且未被软删除的实体。
+     * 分页查找所有匹配给定规格说明且未被软删除的实体。
      *
      * @param spec 附加过滤规格说明（可以为 null）
      * @param pageable 分页参数
