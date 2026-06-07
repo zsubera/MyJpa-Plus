@@ -236,8 +236,9 @@ final class EntityFieldExtractor<T> {
             }
         }
         if (idColumns.isEmpty()) {
-            throw new IllegalStateException("No @Id field found in " + entityClass.getName()
-                + ". Ensure the entity has a field annotated with @jakarta.persistence.Id");
+            throw new IllegalStateException(
+                "No @Id field found in " + (entityClass != null ? entityClass.getName() : "null")
+                    + ". Ensure the entity has a field annotated with @jakarta.persistence.Id");
         }
         return idColumns;
     }

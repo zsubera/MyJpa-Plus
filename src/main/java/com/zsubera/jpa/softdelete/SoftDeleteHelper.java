@@ -67,23 +67,27 @@ public final class SoftDeleteHelper {
     private static final java.util.regex.Pattern SAFE_IDENTIFIER_PART_PATTERN =
         java.util.regex.Pattern.compile("^[a-zA-Z_][a-zA-Z0-9_]*$");
 
-    // 没有@SoftDelete字段的实体的哨兵值（避免在缓存中出现空缓存）
+    /** 没有 @SoftDelete 字段的实体的哨兵值（避免在缓存中出现空缓存）。 */
     private static final String NO_FIELD_SENTINEL = "\0";
 
-    // 缓存: entityClass ->字段名（或"无字段"的哨兵）
-    // 使用ConcurrentHashMap实现线程安全访问;实体类别数量在实际中是有限的
-    // 缓存: entityClass -> 字段名（或"无字段"的哨兵值）
-    // 使用弱引用键允许类加载器在 OSGi/热重载场景中被 GC 回收
+    /**
+     * 缓存: entityClass -&gt; 字段名（或"无字段"的哨兵值）。
+     * 使用弱引用键允许类加载器在 OSGi/热重载场景中被 GC 回收。
+     */
     private static final ConcurrentMap<Class<?>, String> FIELD_CACHE =
         new ConcurrentReferenceHashMap<>(16, ConcurrentReferenceHashMap.ReferenceType.WEAK);
 
-    // 缓存: entityClass -> isNotDeleted Specification
-    // 使用弱引用键允许类加载器在 OSGi/热重载场景中被 GC 回收
+    /**
+     * 缓存: entityClass -&gt; isNotDeleted Specification。
+     * 使用弱引用键允许类加载器在 OSGi/热重载场景中被 GC 回收。
+     */
     private static final ConcurrentMap<Class<?>, Specification<?>> NOT_DELETED_SPEC_CACHE =
         new ConcurrentReferenceHashMap<>(16, ConcurrentReferenceHashMap.ReferenceType.WEAK);
 
-    // 缓存: entityClass -> isDeleted Specification
-    // 使用弱引用键允许类加载器在 OSGi/热重载场景中被 GC 回收
+    /**
+     * 缓存: entityClass -&gt; isDeleted Specification。
+     * 使用弱引用键允许类加载器在 OSGi/热重载场景中被 GC 回收。
+     */
     private static final ConcurrentMap<Class<?>, Specification<?>> DELETED_SPEC_CACHE =
         new ConcurrentReferenceHashMap<>(16, ConcurrentReferenceHashMap.ReferenceType.WEAK);
 
@@ -124,10 +128,10 @@ public final class SoftDeleteHelper {
     /**
      * 软删除值解析结果。
      *
-     * @param isBoolean 是否为 Boolean 类型（无需参数绑定，直接使用字面量 true）
+     * @param booleanField 是否为 Boolean 类型（无需参数绑定，直接使用字面量 true）
      * @param dbValue 需要绑定到参数的数据库值（Boolean 类型时为 null）
      */
-    private record ResolvedDeletedValue(boolean isBoolean, Object dbValue) {
+    private record ResolvedDeletedValue(boolean booleanField, Object dbValue) {
     }
 
     /**
@@ -212,7 +216,7 @@ public final class SoftDeleteHelper {
         String escapedColumn = escapeIdentifier(columnName);
         ResolvedDeletedValue resolved = resolveDeletedValue(entityClass, field, annotation);
         String whereClause = escapedColumn + " != ?1 OR " + escapedColumn + " IS NULL";
-        if (resolved.isBoolean()) {
+        if (resolved.booleanField()) {
             // 使用 != true OR IS NULL 而非 = false OR IS NULL，以正确处理 Boolean 字段
             return em
                 .createNativeQuery("UPDATE " + escapedTable + " SET " + escapedColumn + " = true WHERE " + whereClause)
@@ -275,7 +279,7 @@ public final class SoftDeleteHelper {
         String setClause;
         boolean useParamBinding = false;
         Object deletedParamValue = null;
-        if (resolved.isBoolean()) {
+        if (resolved.booleanField()) {
             setClause = escapedColumn + " = true";
         } else {
             setClause = escapedColumn + " = :" + setParamName;
@@ -386,7 +390,8 @@ public final class SoftDeleteHelper {
                 }
             }
         }
-        throw new IllegalStateException("No @Id field found in " + entityClass.getName());
+        throw new IllegalStateException(
+            "No @Id field found in " + (entityClass != null ? entityClass.getName() : "null"));
     }
 
     /**

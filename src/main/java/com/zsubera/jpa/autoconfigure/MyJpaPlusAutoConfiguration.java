@@ -23,6 +23,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
 import org.springframework.context.event.ContextClosedEvent;
 import org.springframework.context.event.EventListener;
+import org.springframework.lang.NonNull;
 
 /**
  * MyJpa-Plus 的自动配置类。
@@ -193,7 +194,7 @@ public class MyJpaPlusAutoConfiguration {
         }
 
         @Override
-        public Object postProcessAfterInitialization(Object bean, String beanName) {
+        public Object postProcessAfterInitialization(@NonNull Object bean, @NonNull String beanName) {
             if (bean instanceof DataSource ds && !java.lang.reflect.Proxy.isProxyClass(ds.getClass())
                 && !isAlreadyWrapped(ds)) {
                 return interceptor.wrapDataSource(ds);
