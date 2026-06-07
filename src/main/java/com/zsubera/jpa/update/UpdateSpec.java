@@ -86,7 +86,7 @@ public class UpdateSpec<T> extends AbstractBulkOperationSpec<T, UpdateSpec<T>> {
     }
 
     private final List<ExpressionSetClause> expressionSetClauses = new ArrayList<>();
-    private boolean versionIncrementEnabled = true;
+    private boolean versionIncrementEnabled = false;
 
     /**
      * 创建指定实体类型的更新规范构建器。
@@ -143,8 +143,8 @@ public class UpdateSpec<T> extends AbstractBulkOperationSpec<T, UpdateSpec<T>> {
      * 控制 UPDATE 操作是否自动递增 {@code @Version} 字段。
      *
      * <p>
-     * 默认启用。当实体有 {@code @Version} 字段时，UPDATE 语句会自动添加 {@code SET version = version + 1}。 调用
-     * {@code withVersionIncrement(false)} 可禁用此行为。
+     * 默认禁用。当实体有 {@code @Version} 字段时，调用 {@code withVersionIncrement(true)} 可启用此行为。 批量 UPDATE
+     * 操作中启用版本递增会触发大量 {@code OptimisticLockException}，仅在确实需要时启用。
      *
      * <p>
      * 使用示例：

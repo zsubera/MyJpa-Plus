@@ -11,7 +11,6 @@ import static com.zsubera.jpa.spec.ConditionalMethods.suffixLikePattern;
 import java.util.Collection;
 import java.util.List;
 import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.regex.Pattern;
 import org.slf4j.LoggerFactory;
 import org.springframework.lang.Nullable;
@@ -79,7 +78,7 @@ public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> ext
      * @return 包含默认安全函数名的可变线程安全集合
      */
     private static Set<String> initDefaultFunctionNames() {
-        Set<String> names = ConcurrentHashMap.newKeySet();
+        Set<String> names = new java.util.HashSet<>();
         names.addAll(Set.of("LOWER", "UPPER", "TRIM", "LTRIM", "RTRIM", "LENGTH", "CHAR_LENGTH", "COALESCE", "NULLIF",
             "ABS", "ROUND", "CEIL", "FLOOR", "MOD", "CONCAT", "SUBSTRING", "SUBSTR", "REPLACE", "LEFT", "RIGHT", "NOW",
             "CURRENT_TIMESTAMP", "CURRENT_DATE", "CURRENT_TIME", "EXTRACT", "DATE_FORMAT", "TO_CHAR", "TO_DATE",

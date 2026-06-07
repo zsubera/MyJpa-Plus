@@ -1,0 +1,84 @@
+package com.zsubera.jpa.template;
+
+import jakarta.persistence.EntityManager;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.context.ApplicationContext;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
+import org.springframework.transaction.support.TransactionTemplate;
+
+import java.util.function.Function;
+
+/**
+ * 事务工具类，封装 {@link TransactionTemplate} 的创建和传播行为判断逻辑。
+ *
+ * <p>
+ * 从 {@link MyJpaTemplate} 和 {@link BulkOperationTemplate} 中提取的共享事务管理逻辑，
+ * 避免两个类各自维护相同的 {@code executeInNewTransaction} 实现。
+ *
+ * <p>
+ * <strong>事务传播行为：</strong>
+ * <ul>
+ * <li>当已有活动事务时：使用 {@code PROPAGATION_REQUIRED}（加入现有事务）</li>
+ * <li>当没有活动事务时：使用 {@code PROPAGATION_REQUIRES_NEW}（创建新事务）</li>
+ * </ul>
+ */
+class TransactionHelper {
+
+    private static final Logger log = LoggerFactory.getLogger(TransactionHelper.class);
+
+    private final EntityManager entityManager;
+    private final ApplicationContext applicationContext;
+
+    TransactionHelper(EntityManager entityManager, ApplicationContext applicationContext) {
+        this.entityManager = entityManager;
+        this.applicationContext = applicationContext;
+    }
+
+    /**
+     * 在新事务中执行操作。
+     *
+     * <p>
+     * 使用 {@link TransactionTemplate} 创建独立事务，每次调用都会创建新的事务上下文。
+     *
+     * @param operation 要执行的操作
+     * @param <R> 返回类型
+     * @return 操作结果
+     * @throws IllegalStateException 如果 TransactionManager 不可用
+     */
+    <R> R executeInNewTransaction(Function<EntityManager, R> operation) {
+        PlatformTransactionManager txManager = getTransactionManager();
+        if (txManager == null) {
+            throw new IllegalStateException(
+                "PlatformTransactionManager not available. Cannot execute in new transaction. "
+                    + "Ensure @Transactional support is enabled or configure a PlatformTransactionManager bean. "
+                    + "If running outside a Spring context, use MergeSpec.executeInTransaction() instead.");
+        }
+        TransactionTemplate txTemplate = new TransactionTemplate(txManager);
+        if (TransactionSynchronizationManager.isActualTransactionActive()) {
+            log.warn("executeInNewTransaction called within an active transaction. "
+                + "Batch operations will join the existing transaction. "
+                + "For true isolation, call outside of @Transactional methods.");
+            txTemplate
+                .setPropagationBehavior(org.springframework.transaction.TransactionDefinition.PROPAGATION_REQUIRED);
+        } else {
+            txTemplate
+                .setPropagationBehavior(org.springframework.transaction.TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+        }
+        return txTemplate.execute(status -> operation.apply(entityManager));
+    }
+
+    private PlatformTransactionManager getTransactionManager() {
+        if (applicationContext == null) {
+            log.debug("ApplicationContext not available, cannot resolve TransactionManager");
+            return null;
+        }
+        try {
+            return applicationContext.getBean(PlatformTransactionManager.class);
+        } catch (org.springframework.beans.BeansException e) {
+            log.debug("PlatformTransactionManager bean not found: {}", e.getMessage());
+            return null;
+        }
+    }
+}

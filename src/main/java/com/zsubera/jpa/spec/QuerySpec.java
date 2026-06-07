@@ -562,6 +562,15 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
      * @return OrGroup 实例，用于添加 OR 条件
      */
     public OrGroup<T> or() {
+        return pushOrGroup();
+    }
+
+    /**
+     * 创建 OR 节点并压入组栈，供 {@link OrGroup} 共享使用。
+     *
+     * @return 新的 OrGroup 实例
+     */
+    OrGroup<T> pushOrGroup() {
         ConditionNode.OrNode orNode = new ConditionNode.OrNode();
         currentGroup().add(orNode);
         groupStack.push(orNode.nodes);
@@ -578,15 +587,6 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
             throw new IllegalStateException("endOr() called without a matching or()");
         }
         groupStack.pop();
-    }
-
-    /**
-     * 将条件节点列表压入组栈。
-     *
-     * @param nodes 要压入的条件节点列表
-     */
-    void pushGroupStack(List<ConditionNode> nodes) {
-        groupStack.push(nodes);
     }
 
     // ---- 基于 Consumer 的 API（自动关闭） ----
@@ -687,8 +687,12 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
      * 添加 NOT 条件组，对组合条件取反。
      *
      * <p>
-     * <strong>注意：</strong>组内多个条件之间为 AND 关系，整体取反。 即 {@code not(b -> b.eq(A).eq(B))} 生成 {@code NOT (A AND B)}，根据德摩根定律等价于
+     * <strong>重要语义说明：</strong>组内多个条件之间为 AND 关系，整体取反。 即 {@code not(b -> b.eq(A).eq(B))} 生成 {@code NOT (A AND B)}，根据德摩根定律等价于
      * {@code NOT A OR NOT B}。
+     *
+     * <p>
+     * <strong>注意：</strong>虽然参数类型为 {@link OrGroup}，但内部使用 AND 语义收集条件。 参数类型 {@code Consumer<OrGroup<T>>}
+     * 仅为保持 API 一致性（与 {@link #or(Consumer)} 对称），不代表 OR 语义。
      *
      * @param config 条件组配置消费者
      * @return 当前 QuerySpec 实例，支持链式调用
@@ -834,7 +838,6 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
      */
     @Override
     public Predicate toPredicate(@NonNull Root<T> root, @Nullable CriteriaQuery<?> query, @NonNull CriteriaBuilder cb) {
-        validateCleanState();
         log.debug("QuerySpec: building predicate for {} with {} conditions, {} order nodes, distinct={}",
             root.getModel().getName(), conditions.size(), orderNodes.size(), distinct);
         if (query != null) {

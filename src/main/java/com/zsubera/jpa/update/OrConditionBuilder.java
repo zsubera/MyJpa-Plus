@@ -406,7 +406,7 @@ public class OrConditionBuilder<T, SELF extends AbstractBulkOperationSpec<T, SEL
             nodes.add(new BulkConditionNode.LeafNode((root, cb) -> {
                 List<Predicate> likes = new java.util.ArrayList<>();
                 for (String fieldName : fieldNames) {
-                    likes.add(cb.like(root.get(fieldName).as(String.class), pattern, PredicateHelper.LIKE_ESCAPE_CHAR));
+                    likes.add(PredicateHelper.like(root, fieldName, pattern, cb, PredicateHelper.LIKE_ESCAPE_CHAR));
                 }
                 return cb.or(likes.toArray(new Predicate[0]));
             }));

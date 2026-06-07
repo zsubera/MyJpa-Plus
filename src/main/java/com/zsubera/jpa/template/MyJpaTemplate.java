@@ -105,13 +105,12 @@ public class MyJpaTemplate {
     /** 深度分页警告日志的最小间隔（毫秒），防止日志泛滥。 */
     private static final long DEEP_PAGINATION_WARN_INTERVAL_MS = 60_000; // 1 分钟
 
-    /** Getter 方法缓存，避免 extractSortValues 每次反射查找。key = className#propertyName */
+    /** Getter 方法缓存，避免 extractSortValues 每次反射查找。key = className#propertyName，最大 4096 条 */
     private static final java.util.concurrent.ConcurrentMap<String, java.lang.reflect.Method> GETTER_CACHE =
-        new java.util.concurrent.ConcurrentHashMap<>();
+        new java.util.concurrent.ConcurrentHashMap<>(256);
 
-    /** getId() 方法缓存，避免 isNewEntity() 每次反射查找。key = entity class name */
-    private static final java.util.concurrent.ConcurrentMap<Class<?>, java.lang.reflect.Method> ID_METHOD_CACHE =
-        new java.util.concurrent.ConcurrentHashMap<>();
+    /** 静态缓存最大条目数，超出时触发清空防止内存泄漏 */
+    private static final int MAX_GETTER_CACHE_SIZE = 4096;
 
     /** 上次记录深度分页警告的时间戳。 */
     private final java.util.concurrent.atomic.AtomicLong lastDeepPaginationWarnTime =
@@ -139,6 +138,12 @@ public class MyJpaTemplate {
 
     /** 批量操作执行模板，封装 UpdateSpec/DeleteSpec/MergeSpec 的批量执行逻辑。 */
     private BulkOperationTemplate bulkOperationTemplate;
+
+    /** 批量保存操作模板，封装 persist/merge 的批量保存逻辑。 */
+    private BatchSaveTemplate batchSaveTemplate;
+
+    /** 事务工具类，用于在新事务中执行批量保存操作。 */
+    private TransactionHelper transactionHelper;
 
     /** 创建 MyJpaTemplate 实例，使用默认配置。 */
     public MyJpaTemplate() {
@@ -272,6 +277,8 @@ public class MyJpaTemplate {
     @PostConstruct
     void initBulkOperationTemplate() {
         this.bulkOperationTemplate = new BulkOperationTemplate(entityManager, maxBulkOperationRows, applicationContext);
+        this.transactionHelper = new TransactionHelper(entityManager, applicationContext);
+        this.batchSaveTemplate = new BatchSaveTemplate(entityManager, transactionHelper);
     }
 
     /**
@@ -372,27 +379,7 @@ public class MyJpaTemplate {
         if (batchSize <= 0) {
             throw new IllegalArgumentException("batchSize must be positive");
         }
-        java.util.ArrayList<T> result = new java.util.ArrayList<>();
-        int count = 0;
-        for (T entity : entities) {
-            // 对新实体（ID 为 null）使用 persist() 而非 merge()，
-            // 避免了 merge() 为检查存在性而执行的额外 SELECT 查询。
-            // 这显著提升了纯插入场景的性能。
-            if (isNewEntity(entity)) {
-                entityManager.persist(entity);
-                result.add(entity);
-            } else {
-                result.add(entityManager.merge(entity));
-            }
-            count++;
-            if (count % batchSize == 0) {
-                entityManager.flush();
-                entityManager.clear();
-            }
-        }
-        entityManager.flush();
-        entityManager.clear();
-        return result;
+        return batchSaveTemplate.saveAllBatched(entities, batchSize);
     }
 
     /**
@@ -419,20 +406,7 @@ public class MyJpaTemplate {
         if (batchSize <= 0) {
             throw new IllegalArgumentException("batchSize must be positive");
         }
-        java.util.ArrayList<T> result = new java.util.ArrayList<>();
-        int count = 0;
-        for (T entity : entities) {
-            entityManager.persist(entity);
-            result.add(entity);
-            count++;
-            if (count % batchSize == 0) {
-                entityManager.flush();
-                entityManager.clear();
-            }
-        }
-        entityManager.flush();
-        entityManager.clear();
-        return result;
+        return batchSaveTemplate.saveAllBatchedPure(entities, batchSize);
     }
 
     /**
@@ -462,68 +436,7 @@ public class MyJpaTemplate {
         if (batchSize <= 0) {
             throw new IllegalArgumentException("batchSize must be positive");
         }
-        java.util.ArrayList<T> result = new java.util.ArrayList<>();
-        java.util.ArrayList<T> batch = new java.util.ArrayList<>();
-        for (T entity : entities) {
-            batch.add(entity);
-            if (batch.size() >= batchSize) {
-                result.addAll(executeBatchSave(batch));
-                batch.clear();
-            }
-        }
-        if (!batch.isEmpty()) {
-            result.addAll(executeBatchSave(batch));
-        }
-        return result;
-    }
-
-    private <T> List<T> executeBatchSave(List<T> batch) {
-        return executeInNewTransaction(em -> {
-            java.util.ArrayList<T> batchRes = new java.util.ArrayList<>();
-            for (T e : batch) {
-                if (isNewEntity(e)) {
-                    em.persist(e);
-                    batchRes.add(e);
-                } else {
-                    batchRes.add(em.merge(e));
-                }
-            }
-            em.flush();
-            em.clear();
-            return batchRes;
-        });
-    }
-
-    private boolean isNewEntity(Object entity) {
-        try {
-            jakarta.persistence.PersistenceUnitUtil puu =
-                entityManager.getEntityManagerFactory().getPersistenceUnitUtil();
-            Object id = puu.getIdentifier(entity);
-            return id == null;
-        } catch (RuntimeException e) {
-            if (log.isDebugEnabled()) {
-                log.debug("PersistenceUnitUtil.getIdentifier() failed for {}: {}", entity.getClass().getSimpleName(),
-                    e.getMessage());
-            }
-        }
-        try {
-            java.lang.reflect.Method getId = ID_METHOD_CACHE.computeIfAbsent(entity.getClass(), clazz -> {
-                try {
-                    return clazz.getMethod("getId");
-                } catch (NoSuchMethodException e) {
-                    return null;
-                }
-            });
-            if (getId == null) {
-                log.debug("No getId() method found for {}; assuming existing", entity.getClass().getSimpleName());
-                return false;
-            }
-            Object id = getId.invoke(entity);
-            return id == null;
-        } catch (ReflectiveOperationException ignored) {
-        }
-        log.debug("Cannot determine if entity is new for {}; assuming existing", entity.getClass().getSimpleName());
-        return false;
+        return batchSaveTemplate.saveAllBatchedInSeparateTransactions(entities, batchSize);
     }
 
     // ---- 便捷查询方法 ----
@@ -1398,38 +1311,6 @@ public class MyJpaTemplate {
     }
 
     /**
-     * 在新事务中执行操作（用于批量保存）。
-     */
-    private <R> R executeInNewTransaction(java.util.function.Function<EntityManager, R> operation) {
-        org.springframework.transaction.PlatformTransactionManager txManager = getTransactionManager();
-        if (txManager == null) {
-            throw new IllegalStateException(
-                "PlatformTransactionManager not available. Cannot execute in new transaction.");
-        }
-        org.springframework.transaction.support.TransactionTemplate txTemplate =
-            new org.springframework.transaction.support.TransactionTemplate(txManager);
-        if (org.springframework.transaction.support.TransactionSynchronizationManager.isActualTransactionActive()) {
-            txTemplate
-                .setPropagationBehavior(org.springframework.transaction.TransactionDefinition.PROPAGATION_REQUIRED);
-        } else {
-            txTemplate
-                .setPropagationBehavior(org.springframework.transaction.TransactionDefinition.PROPAGATION_REQUIRES_NEW);
-        }
-        return txTemplate.execute(status -> operation.apply(entityManager));
-    }
-
-    private org.springframework.transaction.PlatformTransactionManager getTransactionManager() {
-        if (applicationContext == null) {
-            return null;
-        }
-        try {
-            return applicationContext.getBean(org.springframework.transaction.PlatformTransactionManager.class);
-        } catch (org.springframework.beans.BeansException e) {
-            return null;
-        }
-    }
-
-    /**
      * 分页查找匹配给定 {@link Specification} 的实体，不执行 count 查询。 使用多查一条记录的方式判断是否有下一页，适用于不需要总记录数的场景。
      *
      * @param entityClass 实体类
@@ -1730,6 +1611,9 @@ public class MyJpaTemplate {
         for (int i = 0; i < orders.size(); i++) {
             String property = orders.get(i).getProperty();
             String cacheKey = entity.getClass().getName() + "#" + property;
+            if (GETTER_CACHE.size() >= MAX_GETTER_CACHE_SIZE) {
+                GETTER_CACHE.clear();
+            }
             java.lang.reflect.Method getter = GETTER_CACHE.computeIfAbsent(cacheKey, k -> {
                 try {
                     return entity.getClass()

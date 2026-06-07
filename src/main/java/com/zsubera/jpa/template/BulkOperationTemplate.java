@@ -6,7 +6,6 @@ import com.zsubera.jpa.update.UpdateSpec;
 import jakarta.persistence.EntityManager;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 /**
  * 批量操作执行模板，封装 {@link UpdateSpec}、{@link DeleteSpec} 和 {@link MergeSpec} 的批量执行逻辑。
@@ -34,7 +33,7 @@ class BulkOperationTemplate {
 
     private final EntityManager entityManager;
     private volatile int maxBulkOperationRows;
-    private final org.springframework.context.ApplicationContext applicationContext;
+    private final TransactionHelper transactionHelper;
 
     /**
      * 创建 BulkOperationTemplate 实例。
@@ -47,7 +46,7 @@ class BulkOperationTemplate {
         org.springframework.context.ApplicationContext applicationContext) {
         this.entityManager = entityManager;
         this.maxBulkOperationRows = maxBulkOperationRows;
-        this.applicationContext = applicationContext;
+        this.transactionHelper = new TransactionHelper(entityManager, applicationContext);
     }
 
     /**
@@ -296,7 +295,7 @@ class BulkOperationTemplate {
             throw new IllegalArgumentException("failureStrategy must not be null");
         }
         return executeBatchInSeparateTransactionsWithResult(batchSize, "update",
-            size -> executeInNewTransaction(em -> spec.executeLimited(em, size)), failureStrategy);
+            size -> transactionHelper.executeInNewTransaction(em -> spec.executeLimited(em, size)), failureStrategy);
     }
 
     /**
@@ -320,7 +319,7 @@ class BulkOperationTemplate {
             throw new IllegalArgumentException("failureStrategy must not be null");
         }
         return executeBatchInSeparateTransactionsWithResult(batchSize, "delete",
-            size -> executeInNewTransaction(em -> spec.executeLimited(em, size)), failureStrategy);
+            size -> transactionHelper.executeInNewTransaction(em -> spec.executeLimited(em, size)), failureStrategy);
     }
 
     /**
@@ -377,7 +376,7 @@ class BulkOperationTemplate {
             throw new IllegalArgumentException("batchSize must be positive");
         }
         return executeBatchInSeparateTransactionsInternal(batchSize, "update",
-            size -> executeInNewTransaction(em -> spec.executeLimited(em, size)));
+            size -> transactionHelper.executeInNewTransaction(em -> spec.executeLimited(em, size)));
     }
 
     /**
@@ -396,7 +395,7 @@ class BulkOperationTemplate {
             throw new IllegalArgumentException("batchSize must be positive");
         }
         return executeBatchInSeparateTransactionsInternal(batchSize, "delete",
-            size -> executeInNewTransaction(em -> spec.executeLimited(em, size)));
+            size -> transactionHelper.executeInNewTransaction(em -> spec.executeLimited(em, size)));
     }
 
     /**
@@ -422,69 +421,5 @@ class BulkOperationTemplate {
             }
         } while (batchResult >= batchSize);
         return total;
-    }
-
-    // ---- 事务管理 ----
-
-    /**
-     * 在新事务中执行操作。
-     *
-     * <p>
-     * 使用 {@link org.springframework.transaction.support.TransactionTemplate} 创建独立事务， 每次调用都会创建新的事务上下文。
-     *
-     * <p>
-     * <strong>事务传播行为说明：</strong>
-     * <ul>
-     * <li><strong>当已有活动事务时</strong>：使用 {@code PROPAGATION_REQUIRED}（加入现有事务），所有批次在同一事务中执行</li>
-     * <li><strong>当没有活动事务时</strong>：使用 {@code PROPAGATION_REQUIRES_NEW}（创建新事务），每个批次在独立事务中执行</li>
-     * </ul>
-     *
-     * @param operation 要执行的操作
-     * @param <R> 返回类型
-     * @return 操作结果
-     * @throws IllegalStateException 如果 TransactionManager 不可用
-     */
-    <R> R executeInNewTransaction(java.util.function.Function<EntityManager, R> operation) {
-        org.springframework.transaction.PlatformTransactionManager txManager = getTransactionManager();
-        if (txManager == null) {
-            throw new IllegalStateException(
-                "PlatformTransactionManager not available. Cannot execute in new transaction. "
-                    + "Ensure @Transactional support is enabled or configure a PlatformTransactionManager bean. "
-                    + "If running outside a Spring context, use MergeSpec.executeInTransaction() instead.");
-        }
-        org.springframework.transaction.support.TransactionTemplate txTemplate =
-            new org.springframework.transaction.support.TransactionTemplate(txManager);
-        if (TransactionSynchronizationManager.isActualTransactionActive()) {
-            log.warn("executeInNewTransaction called within an active transaction. "
-                + "Batch operations will join the existing transaction. "
-                + "For true isolation, call outside of @Transactional methods.");
-            txTemplate
-                .setPropagationBehavior(org.springframework.transaction.TransactionDefinition.PROPAGATION_REQUIRED);
-        } else {
-            txTemplate
-                .setPropagationBehavior(org.springframework.transaction.TransactionDefinition.PROPAGATION_REQUIRES_NEW);
-        }
-        return txTemplate.execute(status -> operation.apply(entityManager));
-    }
-
-    /**
-     * 获取 PlatformTransactionManager。
-     *
-     * @return PlatformTransactionManager 实例，或 null
-     */
-    private org.springframework.transaction.PlatformTransactionManager getTransactionManager() {
-        if (applicationContext == null) {
-            log.debug("ApplicationContext not available, cannot resolve TransactionManager");
-            return null;
-        }
-        try {
-            return applicationContext.getBean(org.springframework.transaction.PlatformTransactionManager.class);
-        } catch (org.springframework.beans.factory.NoSuchBeanDefinitionException e) {
-            log.debug("PlatformTransactionManager bean not found: {}", e.getMessage());
-            return null;
-        } catch (org.springframework.beans.BeansException e) {
-            log.debug("Failed to resolve TransactionManager: {}", e.getMessage());
-            return null;
-        }
     }
 }

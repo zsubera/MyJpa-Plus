@@ -89,9 +89,13 @@ public final class InClauseBuilder {
                 int val = Integer.parseInt(hardProp);
                 if (val > 0) {
                     hardConfigured = val;
+                } else {
+                    log.warn("myjpa-plus.in-clause-hard-limit value ({}) is not positive. Using default {}.", val,
+                        hardConfigured);
                 }
             } catch (NumberFormatException ignored) {
-                // 使用默认值
+                log.warn("myjpa-plus.in-clause-hard-limit value '{}' is not a valid integer. Using default {}.",
+                    hardProp, hardConfigured);
             }
         }
         hardLimit = hardConfigured;

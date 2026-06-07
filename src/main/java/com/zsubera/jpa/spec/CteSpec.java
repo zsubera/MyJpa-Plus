@@ -192,13 +192,13 @@ public class CteSpec {
         }
         CteEntry current = currentCte();
         if (params != null && params.length > 0) {
-            // 使用正则表达式替换参数占位符，避免替换字符串字面量中的问号
+            // 倒序处理并使用 String.replace（字面量替换），避免 ?1 匹配 ?11 等前缀冲突
             // 注意：此方法仍会替换 SQL 注释中的 ?N，如需精确控制请使用命名参数
             String rewrittenSql = sqlTemplate;
-            for (int i = 0; i < params.length; i++) {
-                String placeholder = "\\?" + (i + 1);
+            for (int i = params.length - 1; i >= 0; i--) {
+                String placeholder = "?" + (i + 1);
                 String namedParam = "_cte_param_" + i;
-                rewrittenSql = rewrittenSql.replaceAll(placeholder, ":" + namedParam);
+                rewrittenSql = rewrittenSql.replace(placeholder, ":" + namedParam);
                 parameters.put(namedParam, params[i]);
             }
             current.sql = rewrittenSql;

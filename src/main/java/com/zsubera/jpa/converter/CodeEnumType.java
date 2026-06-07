@@ -331,7 +331,8 @@ public class CodeEnumType implements UserType<Object>, DynamicParameterizedType 
                 try {
                     Object codeValue = codeField.get(constant);
                     if (codeValue != null) {
-                        map.put(String.valueOf(codeValue), constant);
+                        // trim() 键以匹配 nullSafeGet 中的 trimmedValue 查找，防止含空格的 String 类型 CodeEnum 反序列化失败
+                        map.put(String.valueOf(codeValue).trim(), constant);
                     }
                 } catch (IllegalAccessException e) {
                     log.warn("Failed to read @CodeEnumValue field for enum {}", cls.getSimpleName(), e);

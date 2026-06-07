@@ -61,9 +61,8 @@ public class MergeSpec<T> {
     /** 缓存大小超过限制前的警告阈值。 */
     private static final int MAX_FIELD_CACHE_SIZE = 1024;
 
-    /** 采样缓存大小检查的计数器，减少开销。 */
-    private static final java.util.concurrent.atomic.AtomicInteger FIELD_CACHE_CALL_COUNTER =
-        new java.util.concurrent.atomic.AtomicInteger(0);
+    /** 采样概率分母——每 1024 次调用检查一次缓存大小，避免 AtomicInteger 缓存行弹跳 */
+    private static final int CACHE_CHECK_SAMPLING = 1024;
 
     private final Class<T> entityClass;
     private T entity;
@@ -563,8 +562,19 @@ public class MergeSpec<T> {
         }
         // 提交最后一批
         if (txStarted && tx != null && tx.isActive()) {
-            em.flush();
-            tx.commit();
+            try {
+                em.flush();
+                tx.commit();
+            } catch (RuntimeException e) {
+                if (tx.isActive()) {
+                    try {
+                        tx.rollback();
+                    } catch (Exception rollbackEx) {
+                        e.addSuppressed(rollbackEx);
+                    }
+                }
+                throw e;
+            }
         }
         return total;
     }
@@ -610,8 +620,8 @@ public class MergeSpec<T> {
             throw new MyJpaPlusException("Circular @Embedded reference detected: " + entity.getClass().getName()
                 + " has already been visited. Check your entity mapping for cycles in @Embedded objects.");
         }
-        // 使用采样策略——每 64 次调用才检查一次缓存大小以减少开销
-        if ((FIELD_CACHE_CALL_COUNTER.incrementAndGet() & 63) == 0) {
+        // 使用采样策略——随机采样检查缓存大小以减少开销，避免 AtomicInteger 缓存行弹跳
+        if (java.util.concurrent.ThreadLocalRandom.current().nextInt(CACHE_CHECK_SAMPLING) == 0) {
             int cacheSize = FIELD_CACHE.size();
             if (cacheSize > MAX_FIELD_CACHE_SIZE) {
                 log.warn(
@@ -1049,6 +1059,9 @@ public class MergeSpec<T> {
             String[] dialectHolder = new String[1];
             Object workProxy = java.lang.reflect.Proxy.newProxyInstance(workClass.getClassLoader(),
                 new Class<?>[] {workClass}, (proxy, method, args) -> {
+                    if (method.getDeclaringClass() == Object.class) {
+                        return method.invoke(this, args);
+                    }
                     if ("execute".equals(method.getName()) && args.length == 1
                         && args[0] instanceof java.sql.Connection conn) {
                         dialectHolder[0] = conn.getMetaData().getDatabaseProductName().toLowerCase();

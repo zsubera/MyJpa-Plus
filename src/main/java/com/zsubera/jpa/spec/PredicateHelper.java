@@ -206,7 +206,7 @@ public final class PredicateHelper {
      * @return LIKE 谓词
      */
     public static Predicate like(Path<?> path, String fieldName, String value, CriteriaBuilder cb) {
-        return cb.like(path.get(fieldName).as(String.class), value);
+        return cb.like(path.get(fieldName).as(String.class), value, LIKE_ESCAPE_CHAR);
     }
 
     /**
@@ -233,7 +233,7 @@ public final class PredicateHelper {
      * @return NOT LIKE 谓词
      */
     public static Predicate notLike(Path<?> path, String fieldName, String value, CriteriaBuilder cb) {
-        return cb.notLike(path.get(fieldName).as(String.class), value);
+        return cb.notLike(path.get(fieldName).as(String.class), value, LIKE_ESCAPE_CHAR);
     }
 
     /**

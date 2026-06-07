@@ -263,14 +263,15 @@ public class EncryptConverter implements AttributeConverter<String, String> {
         if (existing != null) {
             return existing;
         }
-        // 添加新条目前检查缓存大小限制
-        if (KEY_CACHE.size() >= MAX_KEY_CACHE_SIZE && !KEY_CACHE.containsKey(cacheKey)) {
-            throw new MyJpaPlusException(
-                "Encryption key cache is full (" + MAX_KEY_CACHE_SIZE + " entries). " + "Cannot load key version '"
-                    + cacheKey + "'. " + "This may indicate a malicious attempt to exhaust CPU via PBKDF2 derivation. "
-                    + "Clear cache or increase MAX_KEY_CACHE_SIZE if this is legitimate key rotation.");
-        }
         return KEY_CACHE.computeIfAbsent(cacheKey, v -> {
+            // 在 computeIfAbsent 的 mapping function 内部检查大小限制，
+            // 保证每个 key 只执行一次，避免 TOCTOU 竞态条件
+            if (KEY_CACHE.size() > MAX_KEY_CACHE_SIZE) {
+                throw new MyJpaPlusException(
+                    "Encryption key cache is full (" + MAX_KEY_CACHE_SIZE + " entries). " + "Cannot load key version '"
+                        + v + "'. " + "This may indicate a malicious attempt to exhaust CPU via PBKDF2 derivation. "
+                        + "Clear cache or increase MAX_KEY_CACHE_SIZE if this is legitimate key rotation.");
+            }
             String rawKey = resolveRawKey(v);
             return deriveKey(rawKey);
         });

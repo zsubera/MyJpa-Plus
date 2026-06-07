@@ -157,6 +157,8 @@ public class QueryCacheManager {
         if (result.isExpired()) {
             // 原子移除：仅当条目确实是当前过期条目时才移除，避免竞态条件误删新条目
             store.computeIfPresent(key, (k, v) -> v.isExpired() ? null : v);
+            // 注意：insertionOrder.remove 可能在并发 put 后误删新条目的 deque 条目，
+            // 但这是安全的——仅影响驱逐顺序，不会导致数据丢失。完整的 deque 清理由 evictExpiredEntries 保证。
             insertionOrder.remove(key);
             log.debug("Cache expired for key: {}", key);
             return null;

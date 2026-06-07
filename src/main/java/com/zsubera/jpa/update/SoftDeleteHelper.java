@@ -113,10 +113,59 @@ public final class SoftDeleteHelper {
                     + "'. Each part must contain only alphanumeric characters and underscores.");
             }
         }
-        return "\"" + identifier.replace("\"", "\"\"") + "\"";
+        // 校验已保证无双引号，此处直接包裹
+        return "\"" + identifier + "\"";
     }
 
     private SoftDeleteHelper() {}
+
+    /**
+     * 软删除值解析结果。
+     *
+     * @param isBoolean 是否为 Boolean 类型（无需参数绑定，直接使用字面量 true）
+     * @param dbValue 需要绑定到参数的数据库值（Boolean 类型时为 null）
+     */
+    private record ResolvedDeletedValue(boolean isBoolean, Object dbValue) {
+    }
+
+    /**
+     * 解析 @SoftDelete 字段的删除值。统一 Boolean/Integer/Enum/String 类型的分派逻辑。
+     *
+     * @param entityClass 实体类
+     * @param field 软删除字段
+     * @param annotation SoftDelete 注解
+     * @return 解析后的删除值
+     * @throws MyJpaPlusException 如果字段类型不支持或枚举缺少 deletedValue
+     */
+    private static ResolvedDeletedValue resolveDeletedValue(Class<?> entityClass, Field field, SoftDelete annotation) {
+        if (field.getType() == Boolean.class || field.getType() == boolean.class) {
+            return new ResolvedDeletedValue(true, null);
+        }
+        if (field.getType() == Integer.class || field.getType() == int.class) {
+            int deletedValue = (annotation != null) ? annotation.deletedIntValue() : 1;
+            return new ResolvedDeletedValue(false, deletedValue);
+        }
+        if (Enum.class.isAssignableFrom(field.getType())) {
+            if (annotation == null || annotation.deletedValue().isEmpty()) {
+                throw new MyJpaPlusException("@SoftDelete on enum field '" + field.getName() + "' in "
+                    + entityClass.getName() + " must specify deletedValue");
+            }
+            @SuppressWarnings({"unchecked", "rawtypes"})
+            Enum<?> deletedEnumValue = Enum.valueOf((Class<Enum>)field.getType(), annotation.deletedValue());
+            Enumerated enumerated = field.getAnnotation(Enumerated.class);
+            Object dbValue = (enumerated != null && enumerated.value() == EnumType.STRING) ? deletedEnumValue.name()
+                : deletedEnumValue.ordinal();
+            return new ResolvedDeletedValue(false, dbValue);
+        }
+        if (field.getType() == String.class) {
+            String deletedValue = (annotation != null && !annotation.deletedStringValue().isEmpty())
+                ? annotation.deletedStringValue() : "2";
+            return new ResolvedDeletedValue(false, deletedValue);
+        }
+        throw new MyJpaPlusException(
+            "@SoftDelete field '" + field.getName() + "' in " + entityClass.getName() + " has unsupported type: "
+                + field.getType().getName() + ". Supported types: Boolean, Integer, Enum, String.");
+    }
 
     /**
      * 使用单条 UPDATE 语句批量软删除给定类的所有实体。
@@ -159,50 +208,16 @@ public final class SoftDeleteHelper {
         SoftDelete annotation = field.getAnnotation(SoftDelete.class);
         String escapedTable = escapeIdentifier(tableName);
         String escapedColumn = escapeIdentifier(columnName);
-        // 根据字段类型构建 UPDATE SQL——使用参数化查询防止 SQL 注入
-        if (field.getType() == Boolean.class || field.getType() == boolean.class) {
+        ResolvedDeletedValue resolved = resolveDeletedValue(entityClass, field, annotation);
+        String whereClause = escapedColumn + " != ?1 OR " + escapedColumn + " IS NULL";
+        if (resolved.isBoolean()) {
             // 使用 != true OR IS NULL 而非 = false OR IS NULL，以正确处理 Boolean 字段
-            // 默认值为 true 的边界场景（此时 = false 无法匹配任何行）。
-            // 对于标准 Boolean，!= true 等价于 = false，但对 NULL 的处理更明确。
-            return em.createNativeQuery("UPDATE " + escapedTable + " SET " + escapedColumn + " = true WHERE "
-                + escapedColumn + " != true OR " + escapedColumn + " IS NULL").executeUpdate();
-        }
-        if (field.getType() == Integer.class || field.getType() == int.class) {
-            int deletedValue = (annotation != null) ? annotation.deletedIntValue() : 1;
-            return em.createNativeQuery("UPDATE " + escapedTable + " SET " + escapedColumn + " = ?1 WHERE "
-                + escapedColumn + " != ?1 OR " + escapedColumn + " IS NULL").setParameter(1, deletedValue)
+            return em
+                .createNativeQuery("UPDATE " + escapedTable + " SET " + escapedColumn + " = true WHERE " + whereClause)
                 .executeUpdate();
         }
-        // 枚举类型支持——检查 @Enumerated 注解以确定 STRING 还是 ORDINAL
-        if (Enum.class.isAssignableFrom(field.getType())) {
-            if (annotation == null || annotation.deletedValue().isEmpty()) {
-                throw new MyJpaPlusException("@SoftDelete on enum field '" + fieldName + "' in " + entityClass.getName()
-                    + " must specify deletedValue");
-            }
-            @SuppressWarnings({"unchecked", "rawtypes"})
-            Enum<?> deletedEnumValue = Enum.valueOf((Class<Enum>)field.getType(), annotation.deletedValue());
-            // 检查 @Enumerated 注解以确定正确的值类型
-            Enumerated enumerated = field.getAnnotation(Enumerated.class);
-            Object dbValue;
-            if (enumerated != null && enumerated.value() == EnumType.STRING) {
-                dbValue = deletedEnumValue.name();
-            } else {
-                dbValue = deletedEnumValue.ordinal();
-            }
-            return em.createNativeQuery("UPDATE " + escapedTable + " SET " + escapedColumn + " = ?1 WHERE "
-                + escapedColumn + " != ?1 OR " + escapedColumn + " IS NULL").setParameter(1, dbValue).executeUpdate();
-        }
-        // String 类型（支持 char(1) 等字符串软删除，如 '0'/'2'）
-        if (field.getType() == String.class) {
-            String deletedValue = (annotation != null && !annotation.deletedStringValue().isEmpty())
-                ? annotation.deletedStringValue() : "2";
-            return em.createNativeQuery("UPDATE " + escapedTable + " SET " + escapedColumn + " = ?1 WHERE "
-                + escapedColumn + " != ?1 OR " + escapedColumn + " IS NULL").setParameter(1, deletedValue)
-                .executeUpdate();
-        }
-        throw new MyJpaPlusException(
-            "@SoftDelete field '" + fieldName + "' in " + entityClass.getName() + " has unsupported type: "
-                + field.getType().getName() + ". Supported types: Boolean, Integer, Enum, String.");
+        return em.createNativeQuery("UPDATE " + escapedTable + " SET " + escapedColumn + " = ?1 WHERE " + whereClause)
+            .setParameter(1, resolved.dbValue()).executeUpdate();
     }
 
     /**
@@ -252,48 +267,18 @@ public final class SoftDeleteHelper {
         String escapedTable = escapeIdentifier(tableName);
         String escapedColumn = escapeIdentifier(columnName);
         String escapedIdColumn = escapeIdentifier(idFieldName);
+        ResolvedDeletedValue resolved = resolveDeletedValue(entityClass, field, annotation);
         // 使用命名参数替代位置参数以避免某些 JPA 实现中的索引冲突
-        // （特别是在组合 SET 和 IN 子句参数时）
         String setParamName = "deletedValue";
         String setClause;
         boolean useParamBinding = false;
         Object deletedParamValue = null;
-        if (field.getType() == Boolean.class || field.getType() == boolean.class) {
+        if (resolved.isBoolean()) {
             setClause = escapedColumn + " = true";
-        } else if (field.getType() == Integer.class || field.getType() == int.class) {
-            int deletedValue = (annotation != null) ? annotation.deletedIntValue() : 1;
-            // 使用命名参数避免位置参数冲突
-            setClause = escapedColumn + " = :" + setParamName;
-            useParamBinding = true;
-            deletedParamValue = deletedValue;
-        } else if (Enum.class.isAssignableFrom(field.getType())) {
-            // 枚举类型支持——检查 @Enumerated 注解以确定 STRING 还是 ORDINAL
-            if (annotation == null || annotation.deletedValue().isEmpty()) {
-                throw new MyJpaPlusException("@SoftDelete on enum field '" + fieldName + "' in " + entityClass.getName()
-                    + " must specify deletedValue");
-            }
-            @SuppressWarnings({"unchecked", "rawtypes"})
-            Enum<?> deletedEnumValue = Enum.valueOf((Class<Enum>)field.getType(), annotation.deletedValue());
-            // 检查 @Enumerated 注解以确定正确的值类型
-            Enumerated enumerated = field.getAnnotation(Enumerated.class);
-            if (enumerated != null && enumerated.value() == EnumType.STRING) {
-                deletedParamValue = deletedEnumValue.name();
-            } else {
-                deletedParamValue = deletedEnumValue.ordinal();
-            }
-            setClause = escapedColumn + " = :" + setParamName;
-            useParamBinding = true;
-        } else if (field.getType() == String.class) {
-            // String 类型（支持 char(1) 等字符串软删除，如 '0'/'2'）
-            String deletedValue = (annotation != null && !annotation.deletedStringValue().isEmpty())
-                ? annotation.deletedStringValue() : "2";
-            setClause = escapedColumn + " = :" + setParamName;
-            useParamBinding = true;
-            deletedParamValue = deletedValue;
         } else {
-            throw new MyJpaPlusException(
-                "@SoftDelete field '" + fieldName + "' in " + entityClass.getName() + " has unsupported type: "
-                    + field.getType().getName() + ". Supported types: Boolean, Integer, Enum, String.");
+            setClause = escapedColumn + " = :" + setParamName;
+            useParamBinding = true;
+            deletedParamValue = resolved.dbValue();
         }
         // 使用 InClauseBuilder.getMaxInClauseSize() 替代硬编码的 1000
         int batchSize = com.zsubera.jpa.util.InClauseBuilder.getMaxInClauseSize();

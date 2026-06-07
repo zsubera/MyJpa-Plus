@@ -65,10 +65,7 @@ public class OrGroup<T> implements ConditionBuilder<T, OrGroup<T>> {
      * @return 新的 OrGroup 实例，用于添加嵌套 OR 条件
      */
     public OrGroup<T> or() {
-        ConditionNode.OrNode nested = new ConditionNode.OrNode();
-        root.currentGroup().add(nested);
-        root.pushGroupStack(nested.nodes);
-        return new OrGroup<>(root);
+        return root.pushOrGroup();
     }
 
     /**
@@ -93,11 +90,9 @@ public class OrGroup<T> implements ConditionBuilder<T, OrGroup<T>> {
         if (config == null) {
             throw new IllegalArgumentException("config must not be null");
         }
-        ConditionNode.OrNode nested = new ConditionNode.OrNode();
-        root.currentGroup().add(nested);
-        root.pushGroupStack(nested.nodes);
+        OrGroup<T> nested = root.pushOrGroup();
         try {
-            config.accept(new OrGroup<>(root));
+            config.accept(nested);
         } finally {
             root.endOr();
         }
