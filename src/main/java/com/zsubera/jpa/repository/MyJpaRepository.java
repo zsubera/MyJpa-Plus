@@ -192,7 +192,6 @@ public interface MyJpaRepository<T, ID> extends JpaRepository<T, ID>, JpaSpecifi
      * @return 实体类
      * @throws IllegalStateException 如果无法解析实体类
      */
-    @SuppressWarnings("unchecked")
     private Class<T> getEntityClass() {
         Class<T> entityClass = EntityClassResolver.resolve(getClass());
         if (entityClass == null) {
