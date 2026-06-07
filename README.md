@@ -653,7 +653,7 @@ myjpa-plus:
 ### QuerySpec（查询条件）
 
 | 分类 | 方法 |
-|------|------|
+|---|---|
 | 比较 | `eq`, `ne`, `gt`, `ge`, `lt`, `le` |
 | 不区分大小写 | `eqIgnoreCase`, `neIgnoreCase`, `likeIgnoreCase` |
 | 字符串 | `like`, `notLike`, `startsWith`, `endsWith`, `contains` |
@@ -670,7 +670,7 @@ myjpa-plus:
 ### ProjectionSpec（投影查询）
 
 | 分类 | 方法 |
-|------|------|
+|---|---|
 | 字段选择 | `select(field)` |
 | 聚合 | `selectCount()`, `selectCountDistinct()`, `selectSum()`, `selectAvg()`, `selectMax()`, `selectMin()` |
 | DTO 投影 | `asDto(DtoClass.class)` |
@@ -682,7 +682,7 @@ myjpa-plus:
 ### UpdateSpec（批量更新）
 
 | 分类 | 方法 |
-|------|------|
+|---|---|
 | SET | `set(field, value)`, `setExpr(field, exprFn)` |
 | 条件 | 继承 QuerySpec 的所有条件方法（`eq`, `lt`, `in` 等） |
 | 执行 | `execute(em)`, `executeInTransaction(em)`, `executeLimited(em, maxRows)` |
@@ -691,7 +691,7 @@ myjpa-plus:
 ### DeleteSpec（批量删除）
 
 | 分类 | 方法 |
-|------|------|
+|---|---|
 | 条件 | 继承 QuerySpec 的所有条件方法 |
 | 执行 | `execute(em)`, `executeInTransaction(em)`, `executeLimited(em, maxRows)` |
 | 无条件 | `allowUnconditional(true)` → `deleteAll(em)` |
@@ -699,7 +699,7 @@ myjpa-plus:
 ### MergeSpec（UPSERT）
 
 | 分类 | 方法 |
-|------|------|
+|---|---|
 | 实体 | `withEntity(entity)` |
 | 冲突 | `onConflict(fields...)` — 指定唯一键列 |
 | 更新 | `updateOnConflict(fields...)` — 仅更新指定列（可选） |
@@ -708,7 +708,7 @@ myjpa-plus:
 ### CteSpec（CTE）
 
 | 分类 | 方法 |
-|------|------|
+|---|---|
 | 创建 | `with(name)`, `withRecursive(name)` |
 | 定义 | `columns(...)`, `as(sql)` |
 | 链式 | `and(name)` — 添加多个 CTE |
@@ -719,7 +719,7 @@ myjpa-plus:
 ### MyJpaTemplate（查询模板）
 
 | 分类 | 方法 |
-|------|------|
+|---|---|
 | 查询 | `findAll`, `findOne`, `findById`, `findPage`, `count` |
 | 流式 | `findAllStream(entityClass, spec, consumer)` |
 | 创建 | `update(entityClass)`, `delete(entityClass)` |
@@ -730,7 +730,7 @@ myjpa-plus:
 ### QueryCacheManager（查询缓存）
 
 | 分类 | 方法 |
-|------|------|
+|---|---|
 | 读写 | `get(key)`, `put(key, value, ttlSeconds)` |
 | 清除 | `evict(key)`, `clear()` |
 | 信息 | `size()` |
@@ -738,7 +738,7 @@ myjpa-plus:
 ### EntityCodeGenerator（代码生成）
 
 | 分类 | 方法 |
-|------|------|
+|---|---|
 | 实体 | `generateEntity(tableName, columns, packageName)` |
 | 仓库 | `generateRepository(tableName, columns, entityPackage, repoPackage)` |
 

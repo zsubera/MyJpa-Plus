@@ -110,7 +110,7 @@ public final class LambdaUtils {
      * 使用 {@link ConcurrentHashMap} 实现的属性名缓存。
      *
      * <p>
-     * 与之前使用的 {@link Collections#synchronizedMap} 包装 {@link LinkedHashMap} 相比， {@link ConcurrentHashMap}
+     * 与之前使用的 {@code Collections.synchronizedMap} 包装 {@code LinkedHashMap} 相比， {@link ConcurrentHashMap}
      * 提供更好的并发读性能（读操作无锁），消除高并发场景下的同步瓶颈。
      *
      * <p>

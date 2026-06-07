@@ -36,7 +36,7 @@ cd myjpa-plus
 ## 包结构
 
 | 包 | 职责 |
-|---|------|
+|---|---|
 | `com.zsubera.jpa.spec` | 核心查询构建：QuerySpec、ConditionBuilder（含子接口）、ConditionNode、NodeResolver、CteSpec |
 | `com.zsubera.jpa.update` | 批量操作：UpdateSpec、DeleteSpec、MergeSpec |
 | `com.zsubera.jpa.repository` | 扩展 Repository：MyJpaRepository、SoftDeleteJpaRepository |
@@ -71,7 +71,7 @@ cd myjpa-plus
 新增条件类型时，请确保同步更新以下 **7 个位置**：
 
 | 序号 | 文件 | 位置 | 说明 |
-|------|------|------|------|
+|---|---|---|---|
 | 1 | `ConditionNode.java` | `Op` 枚举 | 添加新的枚举值 |
 | 2 | `ConditionBuilder.java` | `default` 方法 | 添加类型安全的条件方法 |
 | 3 | `NodeResolver.java` | `resolve()` | 添加对应的 `case` 处理 |

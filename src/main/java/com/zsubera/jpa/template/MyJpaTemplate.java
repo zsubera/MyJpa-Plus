@@ -669,7 +669,10 @@ public class MyJpaTemplate {
     }
 
     /**
-     * 安全版本的流式查询，自动管理 Stream 生命周期。推荐使用此方法替代 {@link #findAllStream(Class, QuerySpec, java.util.function.Consumer)}， 以避免忘记关闭 Stream 导致的数据库连接泄漏。
+     * 安全版本的流式查询，自动管理 Stream 生命周期。
+     *
+     * <p>
+     * 此方法在 try-with-resources 中执行 Stream，确保 Stream 被正确关闭，避免数据库连接泄漏。
      *
      * <p>
      * 示例：

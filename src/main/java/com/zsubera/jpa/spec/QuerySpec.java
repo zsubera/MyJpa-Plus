@@ -289,7 +289,7 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
      * <p>
      * <strong>注意：</strong>当使用 {@code findAll(Specification, Pageable)} 时，Spring Data 会使用
      * {@link org.springframework.data.domain.Pageable Pageable} 的排序覆盖此处的排序。 使用 {@code findAll(spec,
-     * Sort.unsorted())} 或不带 {@code Pageable} 的 {@link #orderByAsc(SFunction[])} 以保留此处设置的排序。
+     * Sort.unsorted())} 以保留此处设置的排序。
      *
      * @param fields 要排序的字段方法引用
      * @return 当前 QuerySpec 实例，支持链式调用
