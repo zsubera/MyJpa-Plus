@@ -20,34 +20,31 @@ import org.hibernate.annotations.Type;
  * <p>
  * <strong>使用示例：</strong>
  *
- * <pre>
- * {
- *     &#64;code
- *     // 1. 枚举定义
- *     public enum StatusEnum {
- *         ACTIVE(0, "正常"), DELETED(1, "已删除");
+ * <pre>{@code
+ * // 1. 枚举定义
+ * public enum StatusEnum {
+ *     ACTIVE(0, "正常"), DELETED(1, "已删除");
  *
- *         &#64;CodeEnumValue // 可选，建议加上
- *         private final int code;
- *         private final String desc;
- *     }
- *
- *     // 2. 实体使用
- *     &#64;Entity
- *     public class User {
- *         // 普通枚举字段
- *         &#64;CodeEnum
- *         &#64;Column(name = "status")
- *         private StatusEnum status;
- *
- *         // 与 @SoftDelete 配合使用
- *         &#64;SoftDelete(deletedValue = "DELETED")
- *         &#64;CodeEnum
- *         @Column(name = "del_flag")
- *         private DelFlag delFlag;
- *     }
+ *     @CodeEnumValue // 可选，建议加上
+ *     private final int code;
+ *     private final String desc;
  * }
- * </pre>
+ *
+ * // 2. 实体使用
+ * @Entity
+ * public class User {
+ *     // 普通枚举字段
+ *     @CodeEnum
+ *     @Column(name = "status")
+ *     private StatusEnum status;
+ *
+ *     // 与 @SoftDelete 配合使用
+ *     @SoftDelete(deletedValue = "DELETED")
+ *     @CodeEnum
+ *     @Column(name = "del_flag")
+ *     private DelFlag delFlag;
+ * }
+ * }</pre>
  *
  * <p>
  * <strong>与 {@link com.zsubera.jpa.annotation.SoftDelete @SoftDelete} 的关系：</strong> 当软删除字段使用枚举类型且数据库为 CHAR(1)

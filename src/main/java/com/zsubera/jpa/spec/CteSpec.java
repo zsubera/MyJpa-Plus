@@ -342,7 +342,7 @@ public class CteSpec {
     }
 
     /**
-     * P-02: 构建完整的 CTE SQL 并以流式方式执行查询，适用于大数据量递归 CTE 场景。
+     * 构建完整的 CTE SQL 并以流式方式执行查询，适用于大数据量递归 CTE 场景。
      *
      * <p>
      * <strong>重要：必须使用 try-with-resources 确保资源关闭：</strong>

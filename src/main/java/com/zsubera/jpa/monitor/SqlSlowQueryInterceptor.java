@@ -52,6 +52,12 @@ public class SqlSlowQueryInterceptor implements StatementInspector {
 
     private final long slowQueryThresholdMs;
 
+    /**
+     * 创建慢查询拦截器。
+     *
+     * @param slowQueryThresholdMs 慢查询阈值（毫秒），超过此值的查询将记录警告日志
+     * @throws IllegalArgumentException 如果 slowQueryThresholdMs 小于等于 0
+     */
     @SuppressFBWarnings("EI_EXPOSE_REP2")
     public SqlSlowQueryInterceptor(long slowQueryThresholdMs) {
         if (slowQueryThresholdMs <= 0) {

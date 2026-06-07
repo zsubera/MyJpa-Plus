@@ -12,17 +12,14 @@ import java.lang.annotation.Target;
  * <p>
  * 使用示例：
  *
- * <pre>
- * {
- *     &#64;code
- *     &#64;Entity
- *     &#64;EntityListeners(AuditEntityListener.class)
- *     public class User {
- *         @UpdatedAt
- *         private Instant updatedAt;
- *     }
+ * <pre>{@code
+ * @Entity
+ * @EntityListeners(AuditEntityListener.class)
+ * public class User {
+ *     @UpdatedAt
+ *     private Instant updatedAt;
  * }
- * </pre>
+ * }</pre>
  *
  * <p>
  * <strong>注意：</strong>字段类型必须为 {@link java.time.Instant}、{@link java.time.LocalDateTime} 或 {@link java.util.Date}。

@@ -29,56 +29,47 @@ import java.lang.annotation.Target;
  * <p>
  * 使用示例（Boolean 类型）：
  *
- * <pre>
- * {
- *     &#64;code
- *     &#64;Entity
- *     public class Product {
- *         @SoftDelete
- *         private Boolean deleted = false;
- *     }
+ * <pre>{@code
+ * @Entity
+ * public class Product {
+ *     @SoftDelete
+ *     private Boolean deleted = false;
  * }
- * </pre>
+ * }</pre>
  *
  * <p>
  * 使用示例（Integer 类型）：
  *
- * <pre>
- * {
- *     &#64;code
- *     &#64;Entity
- *     public class Order {
- *         @SoftDelete(deletedIntValue = 1)
- *         private Integer isDeleted = 0;
- *     }
+ * <pre>{@code
+ * @Entity
+ * public class Order {
+ *     @SoftDelete(deletedIntValue = 1)
+ *     private Integer isDeleted = 0;
  * }
- * </pre>
+ * }</pre>
  *
  * <p>
  * 使用示例（枚举类型 + 字符编码列）：
  *
- * <pre>
- * {
- *     &#64;code
- *     &#64;Entity
- *     public class User {
- *         &#64;SoftDelete(deletedValue = "DELETED")
- *         private DelFlag delFlag;
- *     }
- *
- *     // 创建转换器
- *     &#64;Converter(autoApply = true)
- *     public class DelFlagConverter extends CodeEnumAttributeConverter&lt;DelFlag&gt; {}
- *
- *     public enum DelFlag {
- *         EXIST(0, "存在"), DELETED(1, "删除");
- *
- *         @CodeEnumValue
- *         private final int code;
- *         // ...
- *     }
+ * <pre>{@code
+ * @Entity
+ * public class User {
+ *     @SoftDelete(deletedValue = "DELETED")
+ *     private DelFlag delFlag;
  * }
- * </pre>
+ *
+ * // 创建转换器
+ * @Converter(autoApply = true)
+ * public class DelFlagConverter extends CodeEnumAttributeConverter<DelFlag> {}
+ *
+ * public enum DelFlag {
+ *     EXIST(0, "存在"), DELETED(1, "删除");
+ *
+ *     @CodeEnumValue
+ *     private final int code;
+ *     // ...
+ * }
+ * }</pre>
  *
  * @see com.zsubera.jpa.repository.MyJpaRepository
  * @see com.zsubera.jpa.update.SoftDeleteHelper
@@ -118,17 +109,14 @@ public @interface SoftDelete {
      * <p>
      * 使用示例（String 类型）：
      *
-     * <pre>
-     * {
-     *     &#64;code
-     *     &#64;Entity
-     *     public class User {
-     *         &#64;SoftDelete(deletedStringValue = "2")
-     *         &#64;Column(name = "del_flag", length = 1)
-     *         private String delFlag = "0";
-     *     }
+     * <pre>{@code
+     * @Entity
+     * public class User {
+     *     @SoftDelete(deletedStringValue = "2")
+     *     @Column(name = "del_flag", length = 1)
+     *     private String delFlag = "0";
      * }
-     * </pre>
+     * }</pre>
      *
      * @return 表示"已删除"的字符串值，默认为 "2"
      */

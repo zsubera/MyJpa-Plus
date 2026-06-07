@@ -115,7 +115,7 @@ public class SubQuerySpec<S> {
     }
 
     /**
-     * 返回关联的外部查询根，用于构建关联谓词。在 {@link #where(java.util.function.Function)} 中使用 以引用外部实体。
+     * 返回关联的外部查询根，用于构建关联谓词。在条件方法中使用以引用外部实体。
      *
      * <p>
      * <strong>类型安全警告：</strong>此方法执行未经检查的类型转换。调用方必须确保返回的 {@link Root} 与目标实体类型匹配， 否则可能导致运行时
@@ -868,8 +868,9 @@ public class SubQuerySpec<S> {
      * 预设 SELECT 字段类型和字段名，避免 inSubQuery 场景下配置 lambda 的副作用问题。
      *
      * <p>
-     * 此方法用于 {@link QuerySpec#resolveInSubQueryInternal} 中的第一阶段类型推断结果传递。通过预先设置类型和字段信息， 第二阶段中 {@link #select(SFunction)}
-     * 调用将变为幂等操作（跳过重复设置），而真实子查询的 SELECT 子句通过 {@link #applySelectToSubquery()} 方法在 lambda 执行后正确设置。
+     * 此方法用于 {@code NodeResolver.resolveInSubQueryInternal} 中的第一阶段类型推断结果传递。通过预先设置类型和字段信息， 第二阶段中
+     * {@link #select(SFunction)} 调用将变为幂等操作（跳过重复设置），而真实子查询的 SELECT 子句通过 {@link #applySelectToSubquery()} 方法在 lambda
+     * 执行后正确设置。
      *
      * @param selectType SELECT 字段类型
      * @param selectFieldName SELECT 字段名
@@ -884,7 +885,8 @@ public class SubQuerySpec<S> {
      * 将缓存的 SELECT 字段应用到真实子查询。
      *
      * <p>
-     * 用于 inSubQuery 的第二阶段：在 lambda 执行完成后，将 SELECT 子句正确设置到真实子查询上。 此方法在 {@link QuerySpec#resolveInSubQueryInternal} 中调用。
+     * 用于 inSubQuery 的第二阶段：在 lambda 执行完成后，将 SELECT 子句正确设置到真实子查询上。 此方法在 {@code NodeResolver.resolveInSubQueryInternal}
+     * 中调用。
      */
     @SuppressWarnings({"unchecked", "rawtypes"})
     void applySelectToSubquery() {
@@ -899,7 +901,7 @@ public class SubQuerySpec<S> {
      *
      * <p>
      * 创建一个临时的 SubQuerySpec 实例来应用配置 lambda，仅提取 selectType 和 selectFieldName 信息。 临时实例的谓词不会被应用到任何子查询。此方法用于
-     * {@link QuerySpec#resolveInSubQueryInternal} 中， 使第二阶段的 select() 调用变为幂等操作。
+     * {@code NodeResolver.resolveInSubQueryInternal} 中， 使第二阶段的 select() 调用变为幂等操作。
      *
      * @param <S> 子查询实体类型
      * @param subEntity 子查询实体类

@@ -12,17 +12,14 @@ import java.lang.annotation.Target;
  * <p>
  * 使用示例：
  *
- * <pre>
- * {
- *     &#64;code
- *     &#64;Entity
- *     &#64;EntityListeners(AuditEntityListener.class)
- *     public class User {
- *         @CreatedBy
- *         private String createdBy;
- *     }
+ * <pre>{@code
+ * @Entity
+ * @EntityListeners(AuditEntityListener.class)
+ * public class User {
+ *     @CreatedBy
+ *     private String createdBy;
  * }
- * </pre>
+ * }</pre>
  *
  * <p>
  * <strong>注意：</strong>需要配置 {@link AuditUserProvider} 实现以提供当前用户信息。

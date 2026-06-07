@@ -22,25 +22,22 @@ import org.slf4j.LoggerFactory;
  * <p>
  * <strong>使用方式：只需在枚举的 code 字段上加 {@code @CodeEnumValue}，无需创建转换器类！</strong>
  *
- * <pre>
- * {
- *     &#64;code
- *     public enum StatusEnum {
- *         ACTIVE(0, "正常"), DELETED(1, "已删除");
+ * <pre>{@code
+ * public enum StatusEnum {
+ *     ACTIVE(0, "正常"), DELETED(1, "已删除");
  *
- *         &#64;CodeEnumValue // 只需这一步！
- *         private final int code;
- *         private final String desc;
- *     }
- *
- *     // 实体中使用 @CodeEnum 注解
- *     &#64;Entity
- *     public class User {
- *         @CodeEnum
- *         private StatusEnum status;
- *     }
+ *     @CodeEnumValue // 只需这一步！
+ *     private final int code;
+ *     private final String desc;
  * }
- * </pre>
+ *
+ * // 实体中使用 @CodeEnum 注解
+ * @Entity
+ * public class User {
+ *     @CodeEnum
+ *     private StatusEnum status;
+ * }
+ * }</pre>
  *
  * <p>
  * <strong>何时必须加 {@code @CodeEnumValue}：</strong>当枚举的 {@code code} 值与 {@code ordinal()} 不同时。
@@ -135,6 +132,12 @@ public class CodeEnumType implements UserType<Object>, DynamicParameterizedType 
         }
     }
 
+    /**
+     * 解析枚举类中带有 {@link CodeEnumValue} 注解的字段。
+     *
+     * @param enumClass 枚举类
+     * @return 标注了 {@code @CodeEnumValue} 的字段，如果未找到则返回 null
+     */
     public static Field resolveCodeField(Class<?> enumClass) {
         Field cached = CODE_FIELD_CACHE.computeIfAbsent(enumClass, cls -> {
             for (Field field : cls.getDeclaredFields()) {
@@ -148,6 +151,12 @@ public class CodeEnumType implements UserType<Object>, DynamicParameterizedType 
         return cached == NO_CODE_FIELD_SENTINEL ? null : cached;
     }
 
+    /**
+     * 检查枚举类是否包含 {@link CodeEnumValue} 注解的字段。
+     *
+     * @param enumClass 枚举类
+     * @return 如果存在 {@code @CodeEnumValue} 字段则返回 true
+     */
     public static boolean hasCodeEnumValue(Class<?> enumClass) {
         return resolveCodeField(enumClass) != null;
     }

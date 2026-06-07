@@ -260,6 +260,8 @@ public abstract class AbstractBulkOperationSpec<T, SELF extends AbstractBulkOper
      *     .execute();
      * // WHERE (status = 'INACTIVE' OR status = 'SUSPENDED')
      * }</pre>
+     *
+     * @return 当前构建器实例，支持链式调用
      */
     public SELF or(Consumer<OrConditionBuilder<T, SELF>> config) {
         if (config == null) {

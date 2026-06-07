@@ -48,21 +48,18 @@ import java.util.Objects;
  * <strong>ID 生成策略说明：</strong>默认使用 {@link GenerationType.IDENTITY}，适用于 MySQL、PostgreSQL、H2 等支持自增列的数据库。 如果使用 Oracle
  * 或其他不支持自增列的数据库，子类应覆盖 {@code id} 字段并使用 {@link GenerationType#SEQUENCE} 或 {@link GenerationType#TABLE}。示例：
  *
- * <pre>
- * {
- *     &#64;code
- *     &#64;Entity
- *     public class OracleEntity extends BaseEntity {
- *         &#64;Override
- *         &#64;Id
- *         &#64;GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "seq_gen")
- *         @SequenceGenerator(name = "seq_gen", sequenceName = "my_sequence")
- *         protected Long getId() {
- *             return super.getId();
- *         }
+ * <pre>{@code
+ * @Entity
+ * public class OracleEntity extends BaseEntity {
+ *     @Override
+ *     @Id
+ *     @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "seq_gen")
+ *     @SequenceGenerator(name = "seq_gen", sequenceName = "my_sequence")
+ *     protected Long getId() {
+ *         return super.getId();
  *     }
  * }
- * </pre>
+ * }</pre>
  */
 @MappedSuperclass
 public abstract class BaseEntity implements Serializable {
@@ -186,7 +183,6 @@ public abstract class BaseEntity implements Serializable {
      * @return 如果两个实体的 ID 相等则返回 true
      */
     @Override
-    @SuppressWarnings("rawtypes")
     public boolean equals(Object o) {
         if (this == o) {
             return true;

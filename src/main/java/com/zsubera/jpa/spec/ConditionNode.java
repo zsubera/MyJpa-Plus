@@ -433,7 +433,7 @@ public sealed interface ConditionNode permits ConditionNode.SimpleNode, Conditio
      *
      * <p>
      * <strong>注意：</strong>此类定义在 {@code ConditionNode} 内部以便于组织，但不实现 {@code ConditionNode} 接口， 因为 ORDER BY 不是查询条件（WHERE
-     * clause）的一部分。排序逻辑由 {@link QuerySpec} 中的 {@code orders} 列表独立管理。
+     * clause）的一部分。排序逻辑由 {@link QuerySpec} 中的 {@code orderNodes} 列表独立管理。
      */
     final class OrderNode {
         final String fieldName;

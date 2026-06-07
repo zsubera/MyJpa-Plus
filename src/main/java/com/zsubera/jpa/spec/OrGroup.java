@@ -82,7 +82,13 @@ public class OrGroup<T> implements ConditionBuilder<T, OrGroup<T>> {
         return root;
     }
 
-    /** 自动关闭的 OR：构建嵌套 OR 组，然后返回到当前 OrGroup。 */
+    /**
+     * 使用消费者构建嵌套 OR 组，自动关闭组。
+     *
+     * @param config OR 组配置消费者
+     * @return 当前 OrGroup 实例，支持链式调用
+     * @throws IllegalArgumentException 如果 config 为 null
+     */
     public OrGroup<T> or(Consumer<OrGroup<T>> config) {
         if (config == null) {
             throw new IllegalArgumentException("config must not be null");
@@ -98,7 +104,15 @@ public class OrGroup<T> implements ConditionBuilder<T, OrGroup<T>> {
         return this;
     }
 
-    /** OR 组内自动关闭的 JOIN。 */
+    /**
+     * 使用消费者构建 OR 组内的 INNER JOIN，自动关闭关联组。
+     *
+     * @param field 关联字段的方法引用
+     * @param config JoinGroup 配置消费者
+     * @param <J> 关联实体类型
+     * @return 当前 OrGroup 实例，支持链式调用
+     * @throws IllegalArgumentException 如果 field 或 config 为 null
+     */
     public <J> OrGroup<T> join(SFunction<T, ?> field, Consumer<JoinGroup<T, J>> config) {
         if (field == null) {
             throw new IllegalArgumentException("field must not be null");
@@ -113,7 +127,15 @@ public class OrGroup<T> implements ConditionBuilder<T, OrGroup<T>> {
         return this;
     }
 
-    /** OR 组内自动关闭的 LEFT JOIN。 */
+    /**
+     * 使用消费者构建 OR 组内的 LEFT JOIN，自动关闭关联组。
+     *
+     * @param field 关联字段的方法引用
+     * @param config JoinGroup 配置消费者
+     * @param <J> 关联实体类型
+     * @return 当前 OrGroup 实例，支持链式调用
+     * @throws IllegalArgumentException 如果 field 或 config 为 null
+     */
     public <J> OrGroup<T> leftJoin(SFunction<T, ?> field, Consumer<JoinGroup<T, J>> config) {
         if (field == null) {
             throw new IllegalArgumentException("field must not be null");

@@ -28,26 +28,23 @@ import org.springframework.util.ConcurrentReferenceHashMap;
  * <p>
  * 使用方式：在实体类上添加 {@code @EntityListeners(AuditEntityListener.class)}。
  *
- * <pre>
- * {
- *     &#64;code
- *     &#64;Entity
- *     &#64;EntityListeners(AuditEntityListener.class)
- *     public class User {
- *         &#64;CreatedAt
- *         private Instant createdAt;
+ * <pre>{@code
+ * @Entity
+ * @EntityListeners(AuditEntityListener.class)
+ * public class User {
+ *     @CreatedAt
+ *     private Instant createdAt;
  *
- *         &#64;UpdatedAt
- *         private Instant updatedAt;
+ *     @UpdatedAt
+ *     private Instant updatedAt;
  *
- *         &#64;CreatedBy
- *         private String createdBy;
+ *     @CreatedBy
+ *     private String createdBy;
  *
- *         &#64;UpdatedBy
- *         private String updatedBy;
- *     }
+ *     @UpdatedBy
+ *     private String updatedBy;
  * }
- * </pre>
+ * }</pre>
  *
  * <p>
  * <strong>注意：</strong>此类不使用 {@code @Component} 注解，而是通过 {@link com.zsubera.jpa.autoconfigure.MyJpaPlusAutoConfiguration}

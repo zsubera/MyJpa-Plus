@@ -18,21 +18,18 @@ import org.slf4j.LoggerFactory;
  * <p>
  * <strong>改进：</strong>在 Spring 环境中，可以使用 {@code @TransactionalEventListener} 监听事务提交/回滚事件， 自动管理缓存失效。示例：
  *
- * <pre>
- * {
- *     &#64;code
- *     &#64;Component
- *     public class CacheInvalidationListener {
- *         &#64;Autowired
- *         private QueryCacheManager cache;
+ * <pre>{@code
+ * @Component
+ * public class CacheInvalidationListener {
+ *     @Autowired
+ *     private QueryCacheManager cache;
  *
- *         @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
- *         public void onTransactionCommit(EntityModifiedEvent event) {
- *             cache.evictByPrefix(event.getEntityName() + ":");
- *         }
+ *     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+ *     public void onTransactionCommit(EntityModifiedEvent event) {
+ *         cache.evictByPrefix(event.getEntityName() + ":");
  *     }
  * }
- * </pre>
+ * }</pre>
  *
  * <pre>{@code
  * @Transactional

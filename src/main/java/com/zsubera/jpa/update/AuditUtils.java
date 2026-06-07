@@ -86,7 +86,7 @@ final class AuditUtils {
      * @return 格式化的调用栈字符串
      */
     static String getCallStack() {
-        // O-11: 使用StackWalker（Java 9+）进行高效的部分栈遍历。
+        // 使用StackWalker（Java 9+）进行高效的部分栈遍历。
         // StackWalker仅实例化请求的帧数，而不像
         // Thread.currentThread().getStackTrace()那样捕获整个栈。
         int depth = maxStackDepth;

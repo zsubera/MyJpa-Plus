@@ -44,7 +44,6 @@ public class DeleteSpec<T> extends AbstractBulkOperationSpec<T, DeleteSpec<T>> {
      * 创建指定实体类型的删除规范构建器。
      *
      * @param entityClass 要删除的实体类
-     * @throws IllegalArgumentException 如果 entityClass 为 null
      */
     public DeleteSpec(Class<T> entityClass) {
         super(entityClass);
@@ -86,7 +85,7 @@ public class DeleteSpec<T> extends AbstractBulkOperationSpec<T, DeleteSpec<T>> {
      *
      * @param em 实体管理器
      * @return 构建的 CriteriaDelete 对象
-     * @throws IllegalStateException 如果没有添加任何条件。可使用 {@link #deleteAll(EntityManager)} 进行无条件删除
+     * @throws IllegalStateException 如果没有添加任何条件且未调用 allowUnconditional(true)
      */
     public CriteriaDelete<T> toDelete(EntityManager em) {
         CriteriaBuilder cb = em.getCriteriaBuilder();
@@ -132,22 +131,15 @@ public class DeleteSpec<T> extends AbstractBulkOperationSpec<T, DeleteSpec<T>> {
     }
 
     /**
-     * 在事务中执行限制删除行数的条件删除操作。
+     * 在事务中执行无条件删除，删除该实体的所有行。
      *
      * <p>
-     * 分两步执行：
-     * <ol>
-     * <li>查询符合条件的 ID 列表（带 LIMIT）</li>
-     * <li>用 ID 列表执行批量删除</li>
-     * </ol>
-     *
-     * <p>
-     * <strong>并发注意事项：</strong>两步操作之间存在时间窗口，其他事务可能修改或删除记录。
-     * 当使用悲观锁时，第一步会获取悲观锁（{@link jakarta.persistence.LockModeType#PESSIMISTIC_WRITE}），
-     * 防止其他事务在此窗口期修改记录。<strong>建议在并发场景下始终使用悲观锁</strong>。 禁用悲观锁时，应用层需要自行保证数据一致性。
+     * <strong>安全要求：</strong>必须先调用 {@link #allowUnconditional(boolean)} 显式确认， 否则将抛出
+     * {@link IllegalStateException}。此机制防止误调用导致全表数据被意外删除。
      *
      * @param em 实体管理器
-     * @return 实际删除的行数
+     * @return 删除的实体数量
+     * @throws IllegalStateException 如果未调用 allowUnconditional(true)
      */
     public int deleteAllInTransaction(EntityManager em) {
         return executeInTransaction(em, this::deleteAll);

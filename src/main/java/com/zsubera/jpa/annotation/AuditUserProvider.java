@@ -6,19 +6,16 @@ package com.zsubera.jpa.annotation;
  * <p>
  * 实现此接口以提供当前用户信息，用于 {@link CreatedBy} 和 {@link UpdatedBy} 注解的自动填充。
  *
- * <pre>
- * {
- *     &#64;code
- *     &#64;Component
- *     public class SecurityAuditUserProvider implements AuditUserProvider {
- *         @Override
- *         public String getCurrentUser() {
- *             Authentication auth = SecurityContextHolder.getContext().getAuthentication();
- *             return auth != null ? auth.getName() : "SYSTEM";
- *         }
+ * <pre>{@code
+ * @Component
+ * public class SecurityAuditUserProvider implements AuditUserProvider {
+ *     @Override
+ *     public String getCurrentUser() {
+ *         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+ *         return auth != null ? auth.getName() : "SYSTEM";
  *     }
  * }
- * </pre>
+ * }</pre>
  *
  * @author myjpa-plus
  * @since 1.2.0

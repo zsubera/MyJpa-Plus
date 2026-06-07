@@ -10,5 +10,10 @@ import java.lang.annotation.Target;
 @Target(ElementType.FIELD)
 @Retention(RetentionPolicy.RUNTIME)
 public @interface Mask {
+    /**
+     * 脱敏类型。
+     *
+     * @return 脱敏类型枚举值
+     */
     MaskType type();
 }

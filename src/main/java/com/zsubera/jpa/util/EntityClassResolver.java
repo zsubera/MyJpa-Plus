@@ -26,6 +26,13 @@ public final class EntityClassResolver {
 
     private EntityClassResolver() {}
 
+    /**
+     * 从 Repository 接口解析关联的实体类。
+     *
+     * @param repositoryClass Repository 接口类
+     * @param <T> 实体类型
+     * @return 解析到的实体类，如果无法解析则返回 null
+     */
     @SuppressWarnings("unchecked")
     public static <T> Class<T> resolve(Class<?> repositoryClass) {
         Class<?> cached = CACHE.get(repositoryClass);
@@ -45,6 +52,13 @@ public final class EntityClassResolver {
         return resolveThroughHierarchy(repositoryClass);
     }
 
+    /**
+     * 解析实体类的 {@code @Id} 字段名。
+     *
+     * @param entityClass 实体类
+     * @return {@code @Id} 字段名
+     * @throws IllegalStateException 如果未找到 {@code @Id}、{@code @EmbeddedId} 或 {@code @IdClass} 字段
+     */
     public static String resolveIdFieldName(Class<?> entityClass) {
         String cached = ID_FIELD_CACHE.get(entityClass);
         if (cached != null) {
@@ -81,6 +95,12 @@ public final class EntityClassResolver {
             + " or @jakarta.persistence.IdClass with @Id fields.");
     }
 
+    /**
+     * 检查实体类是否使用复合主键（{@code @EmbeddedId} 或 {@code @IdClass}）。
+     *
+     * @param entityClass 实体类
+     * @return 如果实体使用复合主键则返回 true
+     */
     public static boolean hasCompositeKey(Class<?> entityClass) {
         return COMPOSITE_KEY_CACHE.computeIfAbsent(entityClass, cls -> {
             for (Class<?> c = cls; c != null && c != Object.class; c = c.getSuperclass()) {

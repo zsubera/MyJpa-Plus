@@ -46,6 +46,13 @@ public class MaskSerializer extends JsonSerializer<String> {
         gen.writeString(mask(value, maskType));
     }
 
+    /**
+     * 对敏感字符串进行脱敏处理。
+     *
+     * @param value 原始值
+     * @param maskType 脱敏类型
+     * @return 脱敏后的字符串，如果 value 为 null 或空则原样返回
+     */
     public static String mask(String value, MaskType maskType) {
         if (value == null || value.isEmpty()) {
             return value;

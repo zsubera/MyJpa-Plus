@@ -27,15 +27,12 @@ import org.springframework.lang.Nullable;
  * <p>
  * 使用方式：在 {@code @EnableJpaRepositories} 中指定 {@code repositoryBaseClass}：
  *
- * <pre>
- * {
- *     &#64;code
- *     &#64;Configuration
- *     @EnableJpaRepositories(basePackages = "com.example.repository",
- *         repositoryBaseClass = SoftDeleteJpaRepository.class)
- *     public class JpaConfig {}
- * }
- * </pre>
+ * <pre>{@code
+ * @Configuration
+ * @EnableJpaRepositories(basePackages = "com.example.repository",
+ *     repositoryBaseClass = SoftDeleteJpaRepository.class)
+ * public class JpaConfig {}
+ * }</pre>
  *
  * @param <T> 实体类型
  * @param <ID> ID 类型

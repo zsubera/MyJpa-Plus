@@ -58,6 +58,14 @@ public class JoinGroup<T, J> implements ConditionBuilder<J, JoinGroup<T, J>> {
         return new OrJoinGroup<>(root, joinNode, orNode);
     }
 
+    /**
+     * 添加嵌套 INNER JOIN。
+     *
+     * @param field 关联字段的方法引用
+     * @param <J2> 关联实体类型
+     * @return 新的 JoinGroup 实例
+     * @throws IllegalArgumentException 如果 field 为 null
+     */
     public <J2> JoinGroup<T, J2> join(SFunction<J, ?> field) {
         if (field == null) {
             throw new IllegalArgumentException("field must not be null");
@@ -68,6 +76,14 @@ public class JoinGroup<T, J> implements ConditionBuilder<J, JoinGroup<T, J>> {
         return new JoinGroup<>(root, nestedJoin);
     }
 
+    /**
+     * 添加嵌套 LEFT JOIN。
+     *
+     * @param field 关联字段的方法引用
+     * @param <J2> 关联实体类型
+     * @return 新的 JoinGroup 实例
+     * @throws IllegalArgumentException 如果 field 为 null
+     */
     public <J2> JoinGroup<T, J2> leftJoin(SFunction<J, ?> field) {
         if (field == null) {
             throw new IllegalArgumentException("field must not be null");
@@ -223,7 +239,13 @@ public class JoinGroup<T, J> implements ConditionBuilder<J, JoinGroup<T, J>> {
         return this;
     }
 
-    /** JOIN 内自动关闭的 OR：在 JOIN 实体上构建 OR 组，然后返回到当前 JoinGroup。 */
+    /**
+     * 使用消费者构建 JOIN 内的 OR 条件组，自动关闭组。
+     *
+     * @param config OrJoinGroup 配置消费者
+     * @return 当前 JoinGroup 实例，支持链式调用
+     * @throws IllegalArgumentException 如果 config 为 null
+     */
     public JoinGroup<T, J> or(Consumer<OrJoinGroup<T, J>> config) {
         if (config == null) {
             throw new IllegalArgumentException("config must not be null");
