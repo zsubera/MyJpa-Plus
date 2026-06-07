@@ -396,7 +396,7 @@ public class EncryptConverter implements AttributeConverter<String, String> {
         }
 
         // 单密钥模式：如果指定了版本但没有找到对应密钥，使用主密钥
-        if (version != null && !version.equals("v1") && !version.equals("default")) {
+        if (version != null && !"v1".equals(version) && !"default".equals(version)) {
             logVersionMismatch(version);
         }
         validateKeyLength(allKeys);

@@ -56,7 +56,7 @@ public class CteSpec {
     private final List<CteEntry> cteEntries = new ArrayList<>();
     private String mainSql;
     private final Map<String, Object> parameters = new LinkedHashMap<>();
-    private boolean recursive;
+    private final boolean recursive;
 
     /**
      * 严格模式开关。默认为 true（安全优先模式）。

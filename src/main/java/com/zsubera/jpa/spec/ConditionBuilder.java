@@ -155,7 +155,7 @@ public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> ext
     @Override
     default SELF eq(SFunction<E, ?> field, @Nullable Object value) {
         requireField(field);
-        conditions().add(new ConditionNode.SimpleNode(resolveProperty(field), value == null ? null : value,
+        conditions().add(new ConditionNode.SimpleNode(resolveProperty(field), value,
             value == null ? ConditionNode.Op.IS_NULL : ConditionNode.Op.EQ));
         return self();
     }
@@ -171,7 +171,7 @@ public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> ext
     @Override
     default SELF ne(SFunction<E, ?> field, @Nullable Object value) {
         requireField(field);
-        conditions().add(new ConditionNode.SimpleNode(resolveProperty(field), value == null ? null : value,
+        conditions().add(new ConditionNode.SimpleNode(resolveProperty(field), value,
             value == null ? ConditionNode.Op.IS_NOT_NULL : ConditionNode.Op.NE));
         return self();
     }

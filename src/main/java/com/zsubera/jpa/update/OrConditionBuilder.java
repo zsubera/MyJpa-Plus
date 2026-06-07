@@ -48,6 +48,7 @@ public class OrConditionBuilder<T, SELF extends AbstractBulkOperationSpec<T, SEL
      * @param value 比较值
      * @return 当前构建器实例
      */
+    @Override
     public OrConditionBuilder<T, SELF> eq(SFunction<T, ?> field, @Nullable Object value) {
         requireField(field);
         String name = parent.property(field);
@@ -62,6 +63,7 @@ public class OrConditionBuilder<T, SELF extends AbstractBulkOperationSpec<T, SEL
      * @param value 比较值
      * @return 当前构建器实例
      */
+    @Override
     public OrConditionBuilder<T, SELF> ne(SFunction<T, ?> field, @Nullable Object value) {
         requireField(field);
         String name = parent.property(field);
@@ -77,6 +79,7 @@ public class OrConditionBuilder<T, SELF extends AbstractBulkOperationSpec<T, SEL
      * @return 当前构建器实例
      * @throws IllegalArgumentException 如果 value 为 null
      */
+    @Override
     public OrConditionBuilder<T, SELF> gt(SFunction<T, ?> field, Comparable<?> value) {
         requireField(field);
         if (value == null) {
@@ -95,6 +98,7 @@ public class OrConditionBuilder<T, SELF extends AbstractBulkOperationSpec<T, SEL
      * @return 当前构建器实例
      * @throws IllegalArgumentException 如果 value 为 null
      */
+    @Override
     public OrConditionBuilder<T, SELF> ge(SFunction<T, ?> field, Comparable<?> value) {
         requireField(field);
         if (value == null) {
@@ -113,6 +117,7 @@ public class OrConditionBuilder<T, SELF extends AbstractBulkOperationSpec<T, SEL
      * @return 当前构建器实例
      * @throws IllegalArgumentException 如果 value 为 null
      */
+    @Override
     public OrConditionBuilder<T, SELF> lt(SFunction<T, ?> field, Comparable<?> value) {
         requireField(field);
         if (value == null) {
@@ -131,6 +136,7 @@ public class OrConditionBuilder<T, SELF extends AbstractBulkOperationSpec<T, SEL
      * @return 当前构建器实例
      * @throws IllegalArgumentException 如果 value 为 null
      */
+    @Override
     public OrConditionBuilder<T, SELF> le(SFunction<T, ?> field, Comparable<?> value) {
         requireField(field);
         if (value == null) {
@@ -149,6 +155,7 @@ public class OrConditionBuilder<T, SELF extends AbstractBulkOperationSpec<T, SEL
      * @return 当前构建器实例
      * @throws IllegalArgumentException 如果 value 为 null
      */
+    @Override
     public OrConditionBuilder<T, SELF> like(SFunction<T, ?> field, String value) {
         requireField(field);
         if (value == null) {
@@ -169,6 +176,7 @@ public class OrConditionBuilder<T, SELF extends AbstractBulkOperationSpec<T, SEL
      * @return 当前构建器实例
      * @throws IllegalArgumentException 如果 value 为 null
      */
+    @Override
     public OrConditionBuilder<T, SELF> notLike(SFunction<T, ?> field, String value) {
         requireField(field);
         if (value == null) {
@@ -189,6 +197,7 @@ public class OrConditionBuilder<T, SELF extends AbstractBulkOperationSpec<T, SEL
      * @return 当前构建器实例
      * @throws IllegalArgumentException 如果 value 为 null
      */
+    @Override
     public OrConditionBuilder<T, SELF> startsWith(SFunction<T, ?> field, String value) {
         requireField(field);
         if (value == null) {
@@ -207,6 +216,7 @@ public class OrConditionBuilder<T, SELF extends AbstractBulkOperationSpec<T, SEL
      * @return 当前构建器实例
      * @throws IllegalArgumentException 如果 value 为 null
      */
+    @Override
     public OrConditionBuilder<T, SELF> endsWith(SFunction<T, ?> field, String value) {
         requireField(field);
         if (value == null) {
@@ -225,6 +235,7 @@ public class OrConditionBuilder<T, SELF extends AbstractBulkOperationSpec<T, SEL
      * @return 当前构建器实例
      * @throws IllegalArgumentException 如果 value 为 null
      */
+    @Override
     public OrConditionBuilder<T, SELF> eqIgnoreCase(SFunction<T, ?> field, String value) {
         requireField(field);
         if (value == null) {
@@ -244,6 +255,7 @@ public class OrConditionBuilder<T, SELF extends AbstractBulkOperationSpec<T, SEL
      * @return 当前构建器实例
      * @throws IllegalArgumentException 如果 value 为 null
      */
+    @Override
     public OrConditionBuilder<T, SELF> neIgnoreCase(SFunction<T, ?> field, String value) {
         requireField(field);
         if (value == null) {
@@ -266,6 +278,7 @@ public class OrConditionBuilder<T, SELF extends AbstractBulkOperationSpec<T, SEL
      * @return 当前构建器实例
      * @throws IllegalArgumentException 如果 value 为 null
      */
+    @Override
     public OrConditionBuilder<T, SELF> likeIgnoreCase(SFunction<T, ?> field, String value) {
         requireField(field);
         if (value == null) {
@@ -286,6 +299,7 @@ public class OrConditionBuilder<T, SELF extends AbstractBulkOperationSpec<T, SEL
      * @return 当前构建器实例
      * @throws IllegalArgumentException 如果 values 为 null 或空
      */
+    @Override
     public OrConditionBuilder<T, SELF> in(SFunction<T, ?> field, Object... values) {
         requireField(field);
         String name = parent.property(field);
@@ -304,6 +318,7 @@ public class OrConditionBuilder<T, SELF extends AbstractBulkOperationSpec<T, SEL
      * @return 当前构建器实例
      * @throws IllegalArgumentException 如果 values 为 null 或空
      */
+    @Override
     public OrConditionBuilder<T, SELF> notIn(SFunction<T, ?> field, Object... values) {
         requireField(field);
         String name = parent.property(field);
@@ -322,6 +337,7 @@ public class OrConditionBuilder<T, SELF extends AbstractBulkOperationSpec<T, SEL
      * @return 当前构建器实例
      * @throws IllegalArgumentException 如果 values 为 null 或空
      */
+    @Override
     public OrConditionBuilder<T, SELF> in(SFunction<T, ?> field, java.util.Collection<?> values) {
         requireField(field);
         String name = parent.property(field);
@@ -340,6 +356,7 @@ public class OrConditionBuilder<T, SELF extends AbstractBulkOperationSpec<T, SEL
      * @return 当前构建器实例
      * @throws IllegalArgumentException 如果 values 为 null 或空
      */
+    @Override
     public OrConditionBuilder<T, SELF> notIn(SFunction<T, ?> field, java.util.Collection<?> values) {
         requireField(field);
         String name = parent.property(field);
@@ -356,6 +373,7 @@ public class OrConditionBuilder<T, SELF extends AbstractBulkOperationSpec<T, SEL
      * @param field 实体属性的方法引用
      * @return 当前构建器实例
      */
+    @Override
     public OrConditionBuilder<T, SELF> isNull(SFunction<T, ?> field) {
         requireField(field);
         String name = parent.property(field);
@@ -369,6 +387,7 @@ public class OrConditionBuilder<T, SELF extends AbstractBulkOperationSpec<T, SEL
      * @param field 实体属性的方法引用
      * @return 当前构建器实例
      */
+    @Override
     public OrConditionBuilder<T, SELF> isNotNull(SFunction<T, ?> field) {
         requireField(field);
         String name = parent.property(field);
@@ -386,6 +405,7 @@ public class OrConditionBuilder<T, SELF extends AbstractBulkOperationSpec<T, SEL
      * @throws IllegalArgumentException 如果 start 或 end 为 null，或类型不匹配，或 start 大于 end
      */
     @SuppressWarnings({"unchecked", "rawtypes"})
+    @Override
     public OrConditionBuilder<T, SELF> between(SFunction<T, ?> field, Comparable<?> start, Comparable<?> end) {
         requireField(field);
         PredicateHelper.validateRange(start, end);
@@ -404,6 +424,7 @@ public class OrConditionBuilder<T, SELF extends AbstractBulkOperationSpec<T, SEL
      * @throws IllegalArgumentException 如果 start 或 end 为 null，或类型不兼容，或 start 大于 end
      */
     @SuppressWarnings({"unchecked", "rawtypes"})
+    @Override
     public OrConditionBuilder<T, SELF> notBetween(SFunction<T, ?> field, Comparable<?> start, Comparable<?> end) {
         requireField(field);
         PredicateHelper.validateRange(start, end);
@@ -418,6 +439,7 @@ public class OrConditionBuilder<T, SELF extends AbstractBulkOperationSpec<T, SEL
      * @param field 实体属性的方法引用
      * @return 当前构建器实例
      */
+    @Override
     public OrConditionBuilder<T, SELF> isEmpty(SFunction<T, ?> field) {
         requireField(field);
         String name = parent.property(field);
@@ -431,6 +453,7 @@ public class OrConditionBuilder<T, SELF extends AbstractBulkOperationSpec<T, SEL
      * @param field 实体属性的方法引用
      * @return 当前构建器实例
      */
+    @Override
     public OrConditionBuilder<T, SELF> isNotEmpty(SFunction<T, ?> field) {
         requireField(field);
         String name = parent.property(field);

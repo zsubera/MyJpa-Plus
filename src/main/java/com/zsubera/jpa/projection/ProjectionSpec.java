@@ -522,7 +522,7 @@ public class ProjectionSpec<T> {
             TypedQuery<Tuple> typedQuery = em.createQuery(query);
             if (maxResults > 0) {
                 typedQuery.setMaxResults(maxResults);
-                if (maxResults == MyJpaTemplate.DEFAULT_MAX_RESULTS && selections.size() > 0 && log.isDebugEnabled()) {
+                if (maxResults == MyJpaTemplate.DEFAULT_MAX_RESULTS && !selections.isEmpty() && log.isDebugEnabled()) {
                     log.debug(
                         "ProjectionSpec query limited to {} rows by default. "
                             + "Use toTupleQuery(em, -1) for unlimited results or toTupleQuery(em, N) for custom limit.",

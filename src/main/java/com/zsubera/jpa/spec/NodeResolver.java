@@ -262,10 +262,10 @@ final class NodeResolver {
         jakarta.persistence.criteria.Subquery<?> subquery;
         Root<S> subRoot;
         if (selectType != null) {
-            subquery = (jakarta.persistence.criteria.Subquery)query.subquery(selectType);
+            subquery = query.subquery(selectType);
             subRoot = (Root<S>)subquery.from(node.subEntity);
         } else {
-            subquery = (jakarta.persistence.criteria.Subquery)query.subquery(node.subEntity);
+            subquery = query.subquery(node.subEntity);
             subRoot = (Root<S>)subquery.from(node.subEntity);
         }
 
