@@ -212,7 +212,7 @@ public final class InClauseBuilder {
         if (values == null || values.length == 0) {
             throw new IllegalArgumentException("values must not be empty");
         }
-        // P-10: SQL NOT IN 语义：NULL IN (x, y) 返回 UNKNOWN，导致 NOT IN 整体返回空。
+        // SQL NOT IN 语义：NULL IN (x, y) 返回 UNKNOWN，导致 NOT IN 整体返回空。
         // 过滤 NULL 值并附加 IS NOT NULL 条件，确保结果符合预期。
         List<Object> nonNullValues = new ArrayList<>(values.length);
         boolean hasNull = false;
@@ -259,7 +259,7 @@ public final class InClauseBuilder {
         if (values == null || values.isEmpty()) {
             throw new IllegalArgumentException("values must not be empty");
         }
-        // P-10: SQL NOT IN 语义：NULL IN (x, y) 返回 UNKNOWN，导致 NOT IN 整体返回空。
+        // SQL NOT IN 语义：NULL IN (x, y) 返回 UNKNOWN，导致 NOT IN 整体返回空。
         // 过滤 NULL 值并附加 IS NOT NULL 条件，确保结果符合预期。
         List<Object> nonNullValues = new ArrayList<>(values.size());
         boolean hasNull = false;
@@ -323,7 +323,7 @@ public final class InClauseBuilder {
             log.debug("IN clause has {} values, exceeding limit of {}. Splitting into batches.", values.size(),
                 maxInClauseSize);
         }
-        // P-10: 一次性转换为List以启用subList()视图，避免临时List复制
+        // 一次性转换为List以启用subList()视图，避免临时List复制
         List<?> valueList = values instanceof List<?> l ? l : new ArrayList<>(values);
         int estimatedBatches = (valueList.size() + maxInClauseSize - 1) / maxInClauseSize;
         List<Predicate> batchPredicates = new ArrayList<>(estimatedBatches);
@@ -354,7 +354,7 @@ public final class InClauseBuilder {
             log.debug("NOT IN clause has {} values, exceeding limit of {}. Splitting into batches.", values.size(),
                 maxInClauseSize);
         }
-        // P-10: 一次性转换为List以启用subList()视图，避免临时List复制
+        // 一次性转换为List以启用subList()视图，避免临时List复制
         List<?> valueList = values instanceof List<?> l ? l : new ArrayList<>(values);
         int estimatedBatches = (valueList.size() + maxInClauseSize - 1) / maxInClauseSize;
         List<Predicate> batchPredicates = new ArrayList<>(estimatedBatches);

@@ -2,11 +2,18 @@ package com.zsubera.jpa.converter;
 
 import com.zsubera.jpa.exception.MyJpaPlusException;
 import jakarta.persistence.AttributeConverter;
+
+import java.io.File;
+import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.FileSystems;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
+import java.nio.file.attribute.*;
 import java.security.GeneralSecurityException;
 import java.security.SecureRandom;
-import java.util.Base64;
-import java.util.Objects;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import javax.crypto.Cipher;
@@ -14,9 +21,12 @@ import javax.crypto.SecretKeyFactory;
 import javax.crypto.spec.GCMParameterSpec;
 import javax.crypto.spec.PBEKeySpec;
 import javax.crypto.spec.SecretKeySpec;
+
+import jakarta.persistence.Converter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+@Converter
 public class EncryptConverter implements AttributeConverter<String, String> {
 
     private static final String ALGORITHM = "AES/GCM/NoPadding";
@@ -28,7 +38,6 @@ public class EncryptConverter implements AttributeConverter<String, String> {
     private static final String KEY_VERSION_PROPERTY = "myjpa.encrypt.key.version";
     private static final String SALT_ENV = "MYJPA_ENCRYPT_SALT";
     private static final String SALT_PROPERTY = "myjpa.encrypt.salt";
-    private static final String STRICT_MODE_PROPERTY = "myjpa-plus.encrypt.strict-mode";
     private static final String REQUIRE_SALT_PROPERTY = "myjpa-plus.encrypt.require-salt";
     private static final String PERSIST_SALT_PROPERTY = "myjpa-plus.encrypt.persist-salt";
     private static final SecureRandom SECURE_RANDOM = new SecureRandom();
@@ -38,9 +47,6 @@ public class EncryptConverter implements AttributeConverter<String, String> {
 
     /** 防止弱密钥攻击的最小密钥长度（字符数）。 */
     private static final int MIN_KEY_LENGTH = 16;
-
-    /** 严格模式开关，通过系统属性控制。默认为 false。 */
-    private static final boolean STRICT_MODE = Boolean.parseBoolean(System.getProperty(STRICT_MODE_PROPERTY, "false"));
 
     /** 按版本缓存的密钥规范，避免重复读取环境变量和 KDF 派生。 */
     private static final ConcurrentMap<String, SecretKeySpec> KEY_CACHE = new ConcurrentHashMap<>();
@@ -470,23 +476,23 @@ public class EncryptConverter implements AttributeConverter<String, String> {
      * 从文件加载或创建盐值。必须在 {@link #SALT_FILE_LOCK} 同步块内调用。
      *
      * <p>
-     * <strong>改进：</strong>使用文件锁（{@link java.nio.channels.FileChannel}）替代 synchronized 块，
+     * <strong>改进：</strong>使用文件锁（{@link FileChannel}）替代 synchronized 块，
      * 防止多进程同时写入盐值文件导致数据损坏。写入后再次验证文件内容，确保一致性。
      *
      * @return 盐值字节数组
      */
     private static byte[] loadOrCreateSalt() {
         // 使用 $HOME/.myjpa-plus/.salt 以获得更好的安全性（非全局可读的临时目录）
-        java.io.File homeDir = new java.io.File(System.getProperty("user.home"), ".myjpa-plus");
-        java.io.File saltFile = new java.io.File(homeDir, ".salt");
+        File homeDir = new File(System.getProperty("user.home"), ".myjpa-plus");
+        File saltFile = new File(homeDir, ".salt");
         if (saltFile.exists()) {
             try {
-                byte[] fileSalt = java.nio.file.Files.readAllBytes(saltFile.toPath());
+                byte[] fileSalt = Files.readAllBytes(saltFile.toPath());
                 if (fileSalt.length > 0) {
                     log.info("Loaded persisted PBKDF2 salt from {}", saltFile.getAbsolutePath());
                     return fileSalt;
                 }
-            } catch (java.io.IOException e) {
+            } catch (IOException e) {
                 log.warn("Failed to read salt file: {}", e.getMessage());
             }
         }
@@ -508,54 +514,50 @@ public class EncryptConverter implements AttributeConverter<String, String> {
             String os = System.getProperty("os.name", "").toLowerCase();
             if (!os.contains("win")) {
                 try {
-                    java.nio.file.Files.setPosixFilePermissions(homeDir.toPath(),
-                        java.util.EnumSet.of(java.nio.file.attribute.PosixFilePermission.OWNER_READ,
-                            java.nio.file.attribute.PosixFilePermission.OWNER_WRITE,
-                            java.nio.file.attribute.PosixFilePermission.OWNER_EXECUTE));
-                } catch (UnsupportedOperationException | java.io.IOException e) {
+                    Files.setPosixFilePermissions(homeDir.toPath(), EnumSet.of(PosixFilePermission.OWNER_READ,
+                        PosixFilePermission.OWNER_WRITE, PosixFilePermission.OWNER_EXECUTE));
+                } catch (UnsupportedOperationException | IOException e) {
                     log.debug("Cannot set POSIX permissions on salt directory: {}", e.getMessage());
                 }
             }
             // 使用临时文件 + 原子重命名，确保盐值文件从未以不安全权限存在
-            java.nio.file.Path saltPath = saltFile.toPath();
-            java.nio.file.Path tempPath = homeDir.toPath().resolve(".salt.tmp." + ProcessHandle.current().pid());
+            Path saltPath = saltFile.toPath();
+            Path tempPath = homeDir.toPath().resolve(".salt.tmp." + ProcessHandle.current().pid());
             try {
                 // 创建临时文件并设置严格权限（写入前）
-                java.nio.file.Files.deleteIfExists(tempPath);
-                java.nio.file.Files.createFile(tempPath);
+                Files.deleteIfExists(tempPath);
+                Files.createFile(tempPath);
                 if (!os.contains("win")) {
                     try {
-                        java.nio.file.Files.setPosixFilePermissions(tempPath,
-                            java.util.EnumSet.of(java.nio.file.attribute.PosixFilePermission.OWNER_READ,
-                                java.nio.file.attribute.PosixFilePermission.OWNER_WRITE));
-                    } catch (UnsupportedOperationException | java.io.IOException e) {
+                        Files.setPosixFilePermissions(tempPath,
+                            EnumSet.of(PosixFilePermission.OWNER_READ, PosixFilePermission.OWNER_WRITE));
+                    } catch (UnsupportedOperationException | IOException e) {
                         log.debug("Cannot set POSIX permissions on salt temp file: {}", e.getMessage());
                     }
                 } else {
                     setWindowsPermissionsNio(tempPath.toFile());
                 }
                 // 写入盐值到临时文件
-                java.nio.file.Files.write(tempPath, randomSalt);
+                Files.write(tempPath, randomSalt);
                 // 原子重命名到目标路径
                 try {
-                    java.nio.file.Files.move(tempPath, saltPath, java.nio.file.StandardCopyOption.REPLACE_EXISTING,
-                        java.nio.file.StandardCopyOption.ATOMIC_MOVE);
-                } catch (java.io.IOException atomicEx) {
+                    Files.move(tempPath, saltPath, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
+                } catch (IOException atomicEx) {
                     // 非原子重命名回退（Windows 可能不支持 ATOMIC_MOVE）
-                    java.nio.file.Files.move(tempPath, saltPath, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+                    Files.move(tempPath, saltPath, StandardCopyOption.REPLACE_EXISTING);
                 }
                 // 验证写入内容
-                byte[] writtenSalt = java.nio.file.Files.readAllBytes(saltPath);
-                if (!java.util.Arrays.equals(randomSalt, writtenSalt)) {
+                byte[] writtenSalt = Files.readAllBytes(saltPath);
+                if (!Arrays.equals(randomSalt, writtenSalt)) {
                     throw new SecurityException("SECURITY: Salt file write verification failed. "
                         + "Written bytes do not match generated salt. Set environment variable " + SALT_ENV
                         + " to ensure consistent encryption.");
                 }
-            } catch (java.io.IOException e) {
+            } catch (IOException e) {
                 // 清理临时文件
                 try {
-                    java.nio.file.Files.deleteIfExists(tempPath);
-                } catch (java.io.IOException ignored) {
+                    Files.deleteIfExists(tempPath);
+                } catch (IOException ignored) {
                 }
                 throw e;
             }
@@ -563,46 +565,13 @@ public class EncryptConverter implements AttributeConverter<String, String> {
                 "SECURITY: Generated and persisted PBKDF2 salt to {}. "
                     + "Set environment variable {} for consistent encryption across environments.",
                 saltFile.getAbsolutePath(), SALT_ENV);
-        } catch (java.io.IOException e) {
+        } catch (IOException e) {
             log.error(
                 "SECURITY: Using non-persisted random salt. Previous encrypted data WILL BE UNRECOVERABLE after restart. "
                     + "Set environment variable {} or system property {}",
                 SALT_ENV, SALT_PROPERTY);
         }
         return randomSalt;
-    }
-
-    /**
-     * 设置盐值文件和目录的权限。在 Unix 系统上使用 POSIX 权限，在 Windows 上使用 Java NIO ACL。
-     *
-     * <p>
-     * <strong>改进：</strong>Windows 上仅使用 Java NIO {@link java.nio.file.attribute.AclFileAttributeView} 设置 ACL 权限，移除了
-     * icacls 命令行回退以防止命令注入风险。如果 NIO ACL 设置失败，仅记录 DEBUG 日志。
-     *
-     * @param homeDir 盐值目录
-     * @param saltFile 盐值文件
-     */
-    private static void setSaltFilePermissions(java.io.File homeDir, java.io.File saltFile) {
-        String os = System.getProperty("os.name", "").toLowerCase();
-        if (os.contains("win")) {
-            // Windows - 仅使用 Java NIO ACL，移除 icacls 命令行回退以防止命令注入风险
-            setWindowsPermissionsNio(saltFile);
-        } else {
-            // Unix/Linux/macOS - 使用 POSIX 权限
-            try {
-                java.util.Set<java.nio.file.attribute.PosixFilePermission> dirPerms =
-                    java.util.EnumSet.of(java.nio.file.attribute.PosixFilePermission.OWNER_READ,
-                        java.nio.file.attribute.PosixFilePermission.OWNER_WRITE,
-                        java.nio.file.attribute.PosixFilePermission.OWNER_EXECUTE);
-                java.nio.file.Files.setPosixFilePermissions(homeDir.toPath(), dirPerms);
-                java.util.Set<java.nio.file.attribute.PosixFilePermission> filePerms =
-                    java.util.EnumSet.of(java.nio.file.attribute.PosixFilePermission.OWNER_READ,
-                        java.nio.file.attribute.PosixFilePermission.OWNER_WRITE);
-                java.nio.file.Files.setPosixFilePermissions(saltFile.toPath(), filePerms);
-            } catch (UnsupportedOperationException | java.io.IOException permEx) {
-                log.debug("Cannot set POSIX permissions on salt file: {}", permEx.getMessage());
-            }
-        }
     }
 
     /**
@@ -613,19 +582,15 @@ public class EncryptConverter implements AttributeConverter<String, String> {
      *
      * @param saltFile 盐值文件
      */
-    private static void setWindowsPermissionsNio(java.io.File saltFile) {
+    private static void setWindowsPermissionsNio(File saltFile) {
         try {
-            java.nio.file.attribute.AclFileAttributeView view = java.nio.file.Files
-                .getFileAttributeView(saltFile.toPath(), java.nio.file.attribute.AclFileAttributeView.class);
+            AclFileAttributeView view = Files.getFileAttributeView(saltFile.toPath(), AclFileAttributeView.class);
             if (view != null) {
-                java.nio.file.attribute.UserPrincipal currentUser = java.nio.file.FileSystems.getDefault()
-                    .getUserPrincipalLookupService().lookupPrincipalByName(System.getProperty("user.name"));
-                java.nio.file.attribute.AclEntry entry = java.nio.file.attribute.AclEntry.newBuilder()
-                    .setType(java.nio.file.attribute.AclEntryType.ALLOW).setPrincipal(currentUser)
-                    .setPermissions(java.util.EnumSet.of(java.nio.file.attribute.AclEntryPermission.READ_DATA,
-                        java.nio.file.attribute.AclEntryPermission.WRITE_DATA))
-                    .build();
-                view.setAcl(java.util.List.of(entry));
+                UserPrincipal currentUser = FileSystems.getDefault().getUserPrincipalLookupService()
+                    .lookupPrincipalByName(System.getProperty("user.name"));
+                AclEntry entry = AclEntry.newBuilder().setType(AclEntryType.ALLOW).setPrincipal(currentUser)
+                    .setPermissions(EnumSet.of(AclEntryPermission.READ_DATA, AclEntryPermission.WRITE_DATA)).build();
+                view.setAcl(List.of(entry));
                 log.debug("Set Windows ACL on salt file via Java NIO");
             }
         } catch (Exception e) {
@@ -665,7 +630,7 @@ public class EncryptConverter implements AttributeConverter<String, String> {
      * @param encryptedValue 旧密钥加密的值（带版本前缀格式）
      * @return 使用当前密钥重新加密的值
      * @throws IllegalArgumentException 如果 encryptedValue 为 null
-     * @throws com.zsubera.jpa.exception.MyJpaPlusException 如果解密或加密失败
+     * @throws MyJpaPlusException 如果解密或加密失败
      */
     public String reEncrypt(String encryptedValue) {
         if (encryptedValue == null) {

@@ -19,9 +19,6 @@ package com.zsubera.jpa.update;
  */
 final class AuditUtils {
 
-    /** 跳过的栈帧数（getStackTrace + getCallStack） */
-    private static final int STACK_SKIP = 2;
-
     /** 默认最大调用栈深度 */
     private static final int DEFAULT_STACK_DEPTH = 5;
 
@@ -93,7 +90,7 @@ final class AuditUtils {
         StringBuilder sb = new StringBuilder();
         STACK_WALKER.walk(frames -> {
             frames.skip(1).limit(depth).forEach(frame -> {
-                if (sb.length() > 0) {
+                if (!sb.isEmpty()) {
                     sb.append(" <- ");
                 }
                 sb.append(frame.getClassName()).append(".").append(frame.getMethodName());

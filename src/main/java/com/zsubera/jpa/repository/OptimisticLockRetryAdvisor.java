@@ -99,7 +99,7 @@ public class OptimisticLockRetryAdvisor {
                 // 确保延迟不超过剩余超时时间
                 long remainingTimeout = MAX_TOTAL_TIMEOUT_MS - totalElapsed;
                 baseDelay = Math.min(baseDelay, remainingTimeout);
-                // O-09: 抖动可为正或负（基础延迟的 ±10%），
+                // 抖动可为正或负（基础延迟的 ±10%），
                 // 防止多线程同时重试时的惊群效应
                 long jitter = (long)(baseDelay * (ThreadLocalRandom.current().nextDouble() - 0.5) * 0.2);
                 long delay = Math.max(0, baseDelay + jitter);

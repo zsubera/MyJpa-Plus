@@ -105,9 +105,6 @@ public class MyJpaTemplate {
     /** 深度分页警告日志的最小间隔（毫秒），防止日志泛滥。 */
     private static final long DEEP_PAGINATION_WARN_INTERVAL_MS = 60_000; // 1 分钟
 
-    /** 批量执行最大迭代次数保护，防止无限循环。 */
-    private static final int MAX_BATCH_ITERATIONS = 10000;
-
     /** Getter 方法缓存，避免 extractSortValues 每次反射查找。key = className#propertyName */
     private static final java.util.concurrent.ConcurrentMap<String, java.lang.reflect.Method> GETTER_CACHE =
         new java.util.concurrent.ConcurrentHashMap<>();
@@ -378,7 +375,7 @@ public class MyJpaTemplate {
         java.util.ArrayList<T> result = new java.util.ArrayList<>();
         int count = 0;
         for (T entity : entities) {
-            // P-03: 对新实体（ID 为 null）使用 persist() 而非 merge()，
+            // 对新实体（ID 为 null）使用 persist() 而非 merge()，
             // 避免了 merge() 为检查存在性而执行的额外 SELECT 查询。
             // 这显著提升了纯插入场景的性能。
             if (isNewEntity(entity)) {

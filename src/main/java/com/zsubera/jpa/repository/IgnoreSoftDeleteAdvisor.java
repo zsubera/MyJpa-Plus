@@ -54,7 +54,7 @@ public class IgnoreSoftDeleteAdvisor {
         MethodSignature signature = (MethodSignature)pjp.getSignature();
         Method method = signature.getMethod();
 
-        // O-10: 使用缓存的注解检查，避免重复反射
+        // 使用缓存的注解检查，避免重复反射
         Boolean hasAnnotation = ANNOTATION_CACHE.computeIfAbsent(method,
             m -> AnnotationUtils.findAnnotation(m, IgnoreSoftDelete.class) != null
                 || AnnotationUtils.findAnnotation(m.getDeclaringClass(), IgnoreSoftDelete.class) != null);

@@ -1,6 +1,5 @@
 package com.zsubera.jpa.util;
 
-import com.zsubera.jpa.spec.QuerySpec;
 import jakarta.persistence.EntityGraph;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.Subgraph;

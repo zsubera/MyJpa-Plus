@@ -17,7 +17,7 @@ package com.zsubera.jpa.repository;
  */
 public final class SoftDeleteContext {
 
-    private static final ThreadLocal<Integer> ignoreCount = ThreadLocal.withInitial(() -> 0);
+    private static final ThreadLocal<Integer> IGNORE_COUNT = ThreadLocal.withInitial(() -> 0);
 
     /** 安全上限：超过此值认为存在泄漏，抛出异常。可通过系统属性 myjpa-plus.soft-delete.max-ignore-count 配置。 */
     private static volatile int maxIgnoreCount;
@@ -66,7 +66,7 @@ public final class SoftDeleteContext {
      * @return 如果应跳过过滤返回 true
      */
     public static boolean isIgnoreSoftDelete() {
-        return ignoreCount.get() > 0;
+        return IGNORE_COUNT.get() > 0;
     }
 
     /**
@@ -76,12 +76,12 @@ public final class SoftDeleteContext {
      */
     public static void pushIgnore() {
         // 简化为单次读取 - ThreadLocal.withInitial保证非null
-        int count = ignoreCount.get();
+        int count = IGNORE_COUNT.get();
         if (count >= maxIgnoreCount) {
             throw new IllegalStateException(
                 "SoftDeleteContext ignore count exceeded maximum (" + maxIgnoreCount + "). Possible leak detected.");
         }
-        ignoreCount.set(count + 1);
+        IGNORE_COUNT.set(count + 1);
     }
 
     /**
@@ -93,16 +93,16 @@ public final class SoftDeleteContext {
     public static void popIgnore() {
         // ThreadLocal.withInitial保证非null，所以count始终>=0。
         // null检查不可达但保留作为防御性编程。
-        int count = ignoreCount.get();
+        int count = IGNORE_COUNT.get();
         if (count <= 0) {
             // 异常场景下计数漂移的防御性清理
-            ignoreCount.remove();
+            IGNORE_COUNT.remove();
             return;
         }
         if (count - 1 <= 0) {
-            ignoreCount.remove();
+            IGNORE_COUNT.remove();
         } else {
-            ignoreCount.set(count - 1);
+            IGNORE_COUNT.set(count - 1);
         }
     }
 
@@ -113,7 +113,7 @@ public final class SoftDeleteContext {
      * 当 pushIgnore() 和 popIgnore() 不匹配时（如异常导致 Advisor 的 after 未执行）， 可调用此方法强制清理，防止线程池环境下的内存泄漏。
      */
     public static void reset() {
-        ignoreCount.remove();
+        IGNORE_COUNT.remove();
     }
 
     /**
