@@ -110,7 +110,7 @@ public interface MyJpaRepository<T, ID> extends JpaRepository<T, ID>, JpaSpecifi
      * 查找所有未被软删除的实体，不附加额外条件。
      *
      * <p>
-     * <strong>安全建议：</strong>此方法不限制返回结果数量，可能导致大数据集查询时的内存溢出（OOM）。 对于大数据集，推荐使用 {@link #findNotDeletedAllStream()} 进行流式查询。
+     * <strong>安全建议：</strong>此方法不限制返回结果数量，可能导致大数据集查询时的内存溢出（OOM）。 对于大数据集，推荐使用 {@link com.zsubera.jpa.template.MyJpaTemplate#findAllStream(Class, com.zsubera.jpa.spec.QuerySpec, java.util.function.Consumer)} 进行流式查询。
      *
      * @return 所有未删除实体的列表
      */

@@ -33,7 +33,7 @@ import java.util.function.Function;
  *
  * @param <T> 实体类型
  * @param <R> 属性返回类型
- * @see LambdaUtils#getPropertyName(SFunction)
+ * @see com.zsubera.jpa.util.LambdaUtils#getPropertyName(SFunction)
  */
 @FunctionalInterface
 public interface SFunction<T, R> extends Function<T, R>, Serializable {}

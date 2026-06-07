@@ -247,7 +247,7 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
      * 添加 HAVING 条件，与 {@link #groupBy} 配合使用。 多个 HAVING 条件之间为 AND 关系。
      *
      * <p>
-     * 如需 OR 关系的 HAVING 条件，请使用 {@link #havingOr(BiFunction)} 方法。
+     * 如需 OR 关系的 HAVING 条件，请使用 {@link #having(java.util.function.Function)} 方法。
      *
      * @param condition HAVING 条件函数
      * @return 当前 QuerySpec 实例，支持链式调用
@@ -715,7 +715,7 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
         currentGroup().add(negate);
         groupStack.push(andNode.nodes);
         try {
-            config.accept(new NotGroup<>(this));
+            config.accept(NotGroup.create(this));
         } finally {
             groupStack.pop();
         }

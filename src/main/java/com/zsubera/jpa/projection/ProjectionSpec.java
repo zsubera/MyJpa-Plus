@@ -548,7 +548,7 @@ public class ProjectionSpec<T> {
      * }</pre>
      *
      * <p>
-     * <strong>性能警告：</strong>此方法不限制返回行数。对大数据集请配合 {@link #maxResults(int)} 使用，
+     * <strong>性能警告：</strong>此方法不限制返回行数。对大数据集请配合 {@link #toTupleQuery(EntityManager, int)} 使用，
      * 或使用分页查询 {@link #findPage(EntityManager, org.springframework.data.domain.Pageable)} 以避免内存溢出。
      *
      * @param em JPA 实体管理器

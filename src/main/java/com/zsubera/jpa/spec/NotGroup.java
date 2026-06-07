@@ -1,6 +1,7 @@
 package com.zsubera.jpa.spec;
 
 import com.zsubera.jpa.util.LambdaUtils;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import java.util.List;
 import java.util.function.Consumer;
 
@@ -13,15 +14,21 @@ import java.util.function.Consumer;
  *
  * @param <T> 实体类型
  */
+@SuppressFBWarnings(value = "CT_CONSTRUCTOR_THROW",
+    justification = "Factory method validates parameters before constructor call")
 public class NotGroup<T> implements ConditionBuilder<T, NotGroup<T>> {
 
     private final QuerySpec<T> root;
 
-    NotGroup(QuerySpec<T> root) {
+    private NotGroup(QuerySpec<T> root) {
+        this.root = root;
+    }
+
+    static <T> NotGroup<T> create(QuerySpec<T> root) {
         if (root == null) {
             throw new IllegalArgumentException("root must not be null");
         }
-        this.root = root;
+        return new NotGroup<>(root);
     }
 
     @Override

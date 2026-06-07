@@ -139,9 +139,6 @@ public class MyJpaTemplate {
     /** 批量保存操作模板，封装 persist/merge 的批量保存逻辑。 */
     private BatchSaveTemplate batchSaveTemplate;
 
-    /** 事务工具类，用于在新事务中执行批量保存操作。 */
-    private TransactionHelper transactionHelper;
-
     /** Keyset 分页辅助类，封装游标分页的核心逻辑。 */
     private KeysetPaginationHelper keysetPaginationHelper;
 
@@ -277,7 +274,9 @@ public class MyJpaTemplate {
     @PostConstruct
     void initBulkOperationTemplate() {
         this.bulkOperationTemplate = new BulkOperationTemplate(entityManager, maxBulkOperationRows, applicationContext);
-        this.transactionHelper = new TransactionHelper(entityManager, entityManagerFactory, applicationContext);
+        /* 事务工具类，用于在新事务中执行批量保存操作。 */
+        TransactionHelper transactionHelper =
+            new TransactionHelper(entityManager, entityManagerFactory, applicationContext);
         this.batchSaveTemplate = new BatchSaveTemplate(entityManager, transactionHelper);
         this.keysetPaginationHelper = new KeysetPaginationHelper(entityManager);
     }
@@ -312,7 +311,6 @@ public class MyJpaTemplate {
         }
         // 使用 toString() 而非 hashCode() 以避免哈希碰撞导致的缓存错误命中
         String cacheKey = entityClass.getSimpleName() + "@" + spec.conditions() + "@" + spec.getSort();
-        @SuppressWarnings("unchecked")
         List<T> cached = cacheManager.get(cacheKey);
         if (cached != null) {
             log.debug("Cache hit for key: {}", cacheKey);
@@ -562,7 +560,7 @@ public class MyJpaTemplate {
      *
      * <p>
      * <strong>生产说明：</strong>此方法将结果限制为可配置的最大行数（默认 {@value #DEFAULT_MAX_RESULTS}）。使用
-     * {@link #findAll(Class, QuerySpec, int)} 指定自定义限制，或使用 {@link #findAllStream(Class, QuerySpec)} 进行无界流式查询。
+     * {@link #findAll(Class, QuerySpec, int)} 指定自定义限制，或使用 {@link #findAllStream(Class, QuerySpec, java.util.function.Consumer)} 进行无界流式查询。
      *
      * @param entityClass 实体类
      * @param spec 查询规范
@@ -671,7 +669,7 @@ public class MyJpaTemplate {
     }
 
     /**
-     * 安全版本的流式查询，自动管理 Stream 生命周期。推荐使用此方法替代 {@link #findAllStream(Class, QuerySpec)}， 以避免忘记关闭 Stream 导致的数据库连接泄漏。
+     * 安全版本的流式查询，自动管理 Stream 生命周期。推荐使用此方法替代 {@link #findAllStream(Class, QuerySpec, java.util.function.Consumer)}， 以避免忘记关闭 Stream 导致的数据库连接泄漏。
      *
      * <p>
      * 示例：
