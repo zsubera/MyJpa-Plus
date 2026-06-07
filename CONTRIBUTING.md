@@ -30,23 +30,22 @@ cd myjpa-plus
 ./mvnw test -Dgroups=integration
 
 # 安装到本地仓库
-mvn install -DskipTests -Ddependency-check.skip=true -Dgpg.skip=true
+./mvnw install -DskipTests -Ddependency-check.skip=true -Dgpg.skip=true
 ```
 
 ## 包结构
 
 | 包 | 职责 |
 |---|------|
-| `com.zsubera.jpa.spec` | 核心查询构建：QuerySpec、ConditionBuilder（含子接口）、ConditionNode、ConditionNodeResolver、CteSpec |
+| `com.zsubera.jpa.spec` | 核心查询构建：QuerySpec、ConditionBuilder（含子接口）、ConditionNode、NodeResolver、CteSpec |
 | `com.zsubera.jpa.update` | 批量操作：UpdateSpec、DeleteSpec、MergeSpec |
 | `com.zsubera.jpa.repository` | 扩展 Repository：MyJpaRepository、SoftDeleteJpaRepository |
 | `com.zsubera.jpa.projection` | 投影查询：ProjectionSpec |
-| `com.zsubera.jpa.template` | MyJpaTemplate |
+| `com.zsubera.jpa.template` | 模板与缓存：MyJpaTemplate、QueryCacheManager |
 | `com.zsubera.jpa.converter` | 枚举转换与序列化：@CodeEnum、@CodeEnumValue、CodeEnumType、EncryptConverter、MaskSerializer |
 | `com.zsubera.jpa.annotation` | 注解：@SoftDelete、@IgnoreSoftDelete、@Encrypt、@Mask、@RetryOnOptimisticLock |
 | `com.zsubera.jpa.monitor` | SQL 监控：SqlSlowQueryInterceptor |
 | `com.zsubera.jpa.codegen` | 代码生成：EntityCodeGenerator |
-| `com.zsubera.jpa.cache` | 查询缓存：QueryCacheManager |
 | `com.zsubera.jpa.util` | 工具类：LambdaUtils、InClauseBuilder |
 
 ## 代码风格
@@ -56,32 +55,33 @@ mvn install -DskipTests -Ddependency-check.skip=true -Dgpg.skip=true
 - 遵循现有包结构
 - 所有条件方法应作为默认方法归属于 `ConditionBuilder` 接口或其子接口（`EqualityConditions`、`StringConditions`、`ComparisonConditions` 等）
 - `ConditionNode` 是 sealed 接口，所有实现类必须为 `final`
-- 新增条件类型需同步更新：ConditionBuilder（含子接口）、ConditionNode.Op、ConditionNodeResolver、SubQuerySpec、AbstractBulkOperationSpec
+- 新增条件类型需同步更新：ConditionBuilder（含子接口）、ConditionNode.Op、NodeResolver、SubQuerySpec、AbstractBulkOperationSpec、ProjectionSpec.ProjectionJoinGroup
 
 ## 添加新运算符
 
 1. 在 `ConditionNode.Op` 中添加枚举值
 2. 在 `ConditionBuilder<E, SELF>` 中添加默认方法
-3. 在 `QuerySpec.resolveSimple()` 中添加对应的 case
+3. 在 `NodeResolver` 中添加对应的 `case` 处理
 4. 在 `SubQuerySpec` 中添加对应方法
 5. 在 `AbstractBulkOperationSpec` 中添加对应方法
 6. 在 `QuerySpecTest` 中添加测试
 
 ### 新增条件类型同步检查清单
 
-新增条件类型时，请确保同步更新以下 **6 个位置**：
+新增条件类型时，请确保同步更新以下 **7 个位置**：
 
 | 序号 | 文件 | 位置 | 说明 |
 |------|------|------|------|
 | 1 | `ConditionNode.java` | `Op` 枚举 | 添加新的枚举值 |
 | 2 | `ConditionBuilder.java` | `default` 方法 | 添加类型安全的条件方法 |
-| 3 | `ConditionNodeResolver.java` | `resolve()` | 添加对应的 `case` 处理 |
+| 3 | `NodeResolver.java` | `resolve()` | 添加对应的 `case` 处理 |
 | 4 | `UpdateSpec.java` | 条件方法 | 添加对应的条件方法（继承自 AbstractBulkOperationSpec） |
 | 5 | `DeleteSpec.java` | 条件方法 | 添加对应的条件方法（继承自 AbstractBulkOperationSpec） |
-| 6 | `QuerySpecTest.java` | 测试用例 | 添加对应的测试 |
+| 6 | `ProjectionSpec.ProjectionJoinGroup` | ConditionBuilder 实现 | 添加投影 JOIN 条件 |
+| 7 | `QuerySpecTest.java` | 测试用例 | 添加对应的测试 |
 
 > **注意：**`AbstractBulkOperationSpec` 是 `UpdateSpec` 和 `DeleteSpec` 的基类，条件方法定义在此基类中。
-> `SubQuerySpec` 也需同步更新（如果新条件适用于子查询场景）。
+> `SubQuerySpec` 和 `ProjectionSpec.ProjectionJoinGroup` 也需同步更新（如果新条件适用于子查询或投影 JOIN 场景）。
 
 ## 枚举转换开发
 

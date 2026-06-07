@@ -1,5 +1,8 @@
 package com.zsubera.jpa.repository;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 /**
  * 软删除过滤上下文，使用 ThreadLocal 计数器控制是否跳过自动过滤。
  *
@@ -16,6 +19,8 @@ package com.zsubera.jpa.repository;
  * @see SoftDeleteJpaRepository
  */
 public final class SoftDeleteContext {
+
+    private static final Logger log = LoggerFactory.getLogger(SoftDeleteContext.class);
 
     private static final ThreadLocal<Integer> IGNORE_COUNT = ThreadLocal.withInitial(() -> 0);
 
@@ -96,6 +101,8 @@ public final class SoftDeleteContext {
         int count = IGNORE_COUNT.get();
         if (count <= 0) {
             // 异常场景下计数漂移的防御性清理
+            log.warn("SoftDeleteContext.popIgnore() called with count={}, possible push/pop mismatch. "
+                + "Cleaning up ThreadLocal to prevent memory leak.", count);
             IGNORE_COUNT.remove();
             return;
         }

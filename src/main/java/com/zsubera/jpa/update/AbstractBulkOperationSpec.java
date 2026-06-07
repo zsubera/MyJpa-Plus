@@ -223,15 +223,10 @@ public abstract class AbstractBulkOperationSpec<T, SELF extends AbstractBulkOper
      */
     protected abstract int doExecute(EntityManager em);
 
-    /** 批量操作条件树的密封节点类型。支持 AND（默认）、OR、NOT 和叶子谓词节点。 */
+    /** 批量操作条件树的密封节点类型。支持 OR、NOT 和叶子谓词节点。 */
     sealed interface BulkConditionNode {
         /** 叶子谓词函数节点。 */
         record LeafNode(BiFunction<Root<?>, CriteriaBuilder, Predicate> fn) implements BulkConditionNode {
-        }
-
-        /** AND 子节点组。 */
-        @SuppressFBWarnings({"EI_EXPOSE_REP", "EI_EXPOSE_REP2"})
-        record AndNode(List<BulkConditionNode> children) implements BulkConditionNode {
         }
 
         /** OR 子节点组。 */
@@ -734,6 +729,45 @@ public abstract class AbstractBulkOperationSpec<T, SELF extends AbstractBulkOper
     }
 
     /**
+     * 添加多字段 LIKE 搜索条件。关键字被包装为 {@code %keyword%} 并与每个给定字段匹配，使用 OR 连接。
+     *
+     * <p>
+     * 值中的 {@code %} 或 {@code _} 字符会被转义，作为字面量处理，防止 LIKE 注入。
+     *
+     * @param keyword 搜索关键字
+     * @param fields 一个或多个字符串属性的方法引用
+     * @return 当前构建器实例
+     * @throws IllegalArgumentException 如果 keyword 为 null，或 fields 为 null，或 fields 包含 null 元素
+     */
+    @SafeVarargs
+    public final SELF multiLike(String keyword, SFunction<T, ?>... fields) {
+        if (keyword == null) {
+            throw new IllegalArgumentException("keyword must not be null");
+        }
+        if (fields == null) {
+            throw new IllegalArgumentException("fields must not be null");
+        }
+        if (!keyword.isEmpty() && fields.length > 0) {
+            String[] fieldNames = new String[fields.length];
+            for (int i = 0; i < fields.length; i++) {
+                if (fields[i] == null) {
+                    throw new IllegalArgumentException("fields[" + i + "] must not be null");
+                }
+                fieldNames[i] = property(fields[i]);
+            }
+            String pattern = wrapLikePattern(keyword);
+            conditionNodes.add(leaf((root, cb) -> {
+                List<Predicate> likes = new java.util.ArrayList<>();
+                for (String fieldName : fieldNames) {
+                    likes.add(PredicateHelper.like(root, fieldName, pattern, cb, PredicateHelper.LIKE_ESCAPE_CHAR));
+                }
+                return cb.or(likes.toArray(new Predicate[0]));
+            }));
+        }
+        return self();
+    }
+
+    /**
      * 解析条件节点为 JPA Predicate。
      *
      * @param node 条件节点
@@ -745,19 +779,6 @@ public abstract class AbstractBulkOperationSpec<T, SELF extends AbstractBulkOper
     private Predicate resolveNode(BulkConditionNode node, Root<T> root, CriteriaBuilder cb) {
         if (node instanceof BulkConditionNode.LeafNode l) {
             return ((BiFunction<Root<T>, CriteriaBuilder, Predicate>)(BiFunction)l.fn()).apply(root, cb);
-        }
-        if (node instanceof BulkConditionNode.AndNode a) {
-            List<Predicate> childPredicates = new ArrayList<>();
-            for (BulkConditionNode child : a.children()) {
-                childPredicates.add(resolveNode(child, root, cb));
-            }
-            if (childPredicates.isEmpty()) {
-                return cb.conjunction();
-            }
-            if (childPredicates.size() == 1) {
-                return childPredicates.get(0);
-            }
-            return cb.and(childPredicates.toArray(new Predicate[0]));
         }
         if (node instanceof BulkConditionNode.OrNode o) {
             List<Predicate> childPredicates = new ArrayList<>();

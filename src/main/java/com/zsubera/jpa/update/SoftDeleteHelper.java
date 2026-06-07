@@ -582,7 +582,7 @@ public final class SoftDeleteHelper {
                         throw new IllegalStateException(
                             "Cannot set accessible on @SoftDelete field '" + field.getName() + "' in "
                                 + cls.getSimpleName() + ". " + "If using Java 17+ module system, add JVM argument: "
-                                + "--add-opens java.base/java.lang.reflect=ALL-UNNAMED",
+                                + "--add-opens " + cls.getPackageName() + "=ALL-UNNAMED",
                             e);
                     }
                     return field.getName();

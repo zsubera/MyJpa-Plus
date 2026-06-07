@@ -77,7 +77,7 @@ interface DialectStrategy {
     static SqlWithParams buildInsertPart(String escapedTable, List<String> insertColumns,
         List<MergeSpec.EntityFieldValue> insertFieldValues) {
         StringBuilder sql = new StringBuilder("INSERT INTO ").append(escapedTable).append(" (");
-        sql.append(String.join(", ", insertColumns.stream().map(c -> c).toList()));
+        sql.append(String.join(", ", List.copyOf(insertColumns)));
         sql.append(") VALUES (");
         List<Object> params = new ArrayList<>();
         for (int i = 0; i < insertFieldValues.size(); i++) {

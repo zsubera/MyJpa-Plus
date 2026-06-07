@@ -42,11 +42,8 @@ public final class IdentifierValidator {
 
     private static final Logger log = LoggerFactory.getLogger(IdentifierValidator.class);
 
-    /** 安全标识符正则：仅允许字母、数字和下划线。 */
+    /** 安全标识符正则：仅允许字母、数字和下划线。用于单段和 schema.table 格式的每一段校验。 */
     private static final Pattern SAFE_IDENTIFIER_PATTERN = Pattern.compile("^[a-zA-Z_][a-zA-Z0-9_]*$");
-
-    /** 安全标识符段正则：用于校验 schema.table 格式中每一段。 */
-    private static final Pattern SAFE_IDENTIFIER_PART_PATTERN = Pattern.compile("^[a-zA-Z_][a-zA-Z0-9_]*$");
 
     /** Unicode 标识符正则：允许 Unicode 字母、数字和下划线，支持国际化标识符。 */
     private static final Pattern UNICODE_IDENTIFIER_PART_PATTERN = Pattern.compile("^[\\p{L}_][\\p{L}\\p{N}_]*$");
@@ -135,7 +132,7 @@ public final class IdentifierValidator {
             throw new MyJpaPlusException("Column name length (" + columnName.length() + ") exceeds maximum ("
                 + MAX_IDENTIFIER_LENGTH + "): '" + columnName.substring(0, 64) + "...'");
         }
-        Pattern validationPattern = unicodeIdentifiers ? UNICODE_IDENTIFIER_PART_PATTERN : SAFE_IDENTIFIER_PART_PATTERN;
+        Pattern validationPattern = unicodeIdentifiers ? UNICODE_IDENTIFIER_PART_PATTERN : SAFE_IDENTIFIER_PATTERN;
         if (!validationPattern.matcher(columnName).matches()) {
             throw new MyJpaPlusException("Invalid column name: '" + columnName
                 + "'. Must contain only alphanumeric characters and underscores."
@@ -152,7 +149,7 @@ public final class IdentifierValidator {
      * @throws MyJpaPlusException 如果标识符段包含非法字符或同形字符
      */
     private static void validatePart(String part, String fullIdentifier) {
-        Pattern validationPattern = unicodeIdentifiers ? UNICODE_IDENTIFIER_PART_PATTERN : SAFE_IDENTIFIER_PART_PATTERN;
+        Pattern validationPattern = unicodeIdentifiers ? UNICODE_IDENTIFIER_PART_PATTERN : SAFE_IDENTIFIER_PATTERN;
         if (!validationPattern.matcher(part).matches()) {
             throw new MyJpaPlusException("Invalid SQL identifier: '" + fullIdentifier
                 + "'. Each part must contain only alphanumeric characters and underscores."

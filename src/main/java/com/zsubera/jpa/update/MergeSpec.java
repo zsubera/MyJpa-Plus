@@ -649,7 +649,7 @@ public class MergeSpec<T> {
                     }
                 }
             }
-            return fields;
+            return List.copyOf(fields);
         });
         for (Field f : allFields) {
             try {
@@ -1060,7 +1060,7 @@ public class MergeSpec<T> {
             Object workProxy = java.lang.reflect.Proxy.newProxyInstance(workClass.getClassLoader(),
                 new Class<?>[] {workClass}, (proxy, method, args) -> {
                     if (method.getDeclaringClass() == Object.class) {
-                        return method.invoke(this, args);
+                        return method.invoke(proxy, args);
                     }
                     if ("execute".equals(method.getName()) && args.length == 1
                         && args[0] instanceof java.sql.Connection conn) {

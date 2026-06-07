@@ -9,4 +9,7 @@ import java.util.List;
  * @param params 参数值列表（按 ? 出现顺序排列）
  */
 record SqlWithParams(String sql, List<Object> params) {
+    SqlWithParams {
+        params = List.copyOf(params);
+    }
 }

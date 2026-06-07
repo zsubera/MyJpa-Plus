@@ -355,16 +355,7 @@ public class SoftDeleteJpaRepository<T, ID> extends SimpleJpaRepository<T, ID> {
      */
     @Deprecated
     public void deleteByIdOrThrow(ID id) {
-        if (id == null) {
-            throw new IllegalArgumentException("ID must not be null");
-        }
-        Optional<T> entity = findById(id);
-        if (entity.isPresent()) {
-            delete(entity.get());
-        } else {
-            throw new org.springframework.dao.EmptyResultDataAccessException(
-                String.format("No %s entity with id %s exists!", domainClass.getSimpleName(), id), 1);
-        }
+        deleteById(id);
     }
 
     /**

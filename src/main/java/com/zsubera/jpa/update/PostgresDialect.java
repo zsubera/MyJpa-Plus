@@ -37,12 +37,16 @@ class PostgresDialect implements DialectStrategy {
         }
         sql.append(String.join(", ", escapedConflict));
         sql.append(") DO UPDATE SET ");
-        List<String> setClauses = new ArrayList<>();
-        for (String col : updateColumns) {
-            String escaped = escapeIdentifier(col);
-            setClauses.add(escaped + " = EXCLUDED." + escaped);
+        if (updateColumns.isEmpty()) {
+            sql.append(escapeIdentifier(conflictColumns.get(0)) + " = " + escapeIdentifier(conflictColumns.get(0)));
+        } else {
+            List<String> setClauses = new ArrayList<>();
+            for (String col : updateColumns) {
+                String escaped = escapeIdentifier(col);
+                setClauses.add(escaped + " = EXCLUDED." + escaped);
+            }
+            sql.append(String.join(", ", setClauses));
         }
-        sql.append(String.join(", ", setClauses));
         return new SqlWithParams(sql.toString(), insertPart.params());
     }
 }

@@ -39,13 +39,8 @@ class H2Dialect implements DialectStrategy {
     public SqlWithParams buildUpsertSql(String tableName, List<String> insertColumns,
         List<MergeSpec.EntityFieldValue> insertFieldValues, List<String> conflictColumns, List<String> updateColumns) {
         String escapedTable = escapeIdentifier(tableName);
-        SqlWithParams insertPart = DialectStrategy.buildInsertPart(escapedTable, insertColumns, insertFieldValues);
-        StringBuilder sql = new StringBuilder(insertPart.sql());
-        // MERGE INTO ... KEY(...) VALUES(...)
-        // INSERT INTO ... (...) VALUES (?) 部分已由 buildInsertPart 生成
-        // 需要替换为 MERGE INTO 格式
-        sql.setLength(0);
-        sql.append("MERGE INTO ").append(escapedTable).append(" (");
+        StringBuilder sql = new StringBuilder("MERGE INTO ");
+        sql.append(escapedTable).append(" (");
         List<String> escapedInsertCols = new ArrayList<>();
         for (String col : insertColumns) {
             escapedInsertCols.add(escapeIdentifier(col));

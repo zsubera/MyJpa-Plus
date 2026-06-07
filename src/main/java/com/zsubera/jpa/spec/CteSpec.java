@@ -443,7 +443,8 @@ public class CteSpec {
                 }
             }
         } catch (Exception e) {
-            log.debug("CteSpec: Cannot determine database product name for fetchSize: {}", e.getMessage());
+            log.warn("CteSpec: Cannot determine database product name for fetchSize, streaming may be inefficient: {}",
+                e.getMessage());
         }
     }
 

@@ -221,6 +221,6 @@ public class MyJpaPlusAutoConfiguration {
     @EventListener(ContextClosedEvent.class)
     public void onContextClosed(ContextClosedEvent event) {
         LambdaUtils.shutdown();
-        log.info("MyJpa-Plus context closed (LambdaUtils.shutdown is no-op with LRU cache)");
+        log.info("MyJpa-Plus context closed, LambdaUtils background cleanup stopped");
     }
 }

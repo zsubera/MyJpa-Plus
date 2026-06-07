@@ -109,6 +109,7 @@ public class OptimisticLockRetryAdvisor {
                     Thread.sleep(delay);
                 } catch (InterruptedException ie) {
                     Thread.currentThread().interrupt();
+                    ex.addSuppressed(ie);
                     throw ex;
                 }
             }

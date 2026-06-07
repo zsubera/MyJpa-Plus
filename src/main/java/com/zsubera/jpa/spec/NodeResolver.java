@@ -189,7 +189,7 @@ final class NodeResolver {
 
     private static Predicate resolveMultiLike(ConditionNode.MultiLikeNode node, Path<?> path, CriteriaBuilder cb) {
         List<Predicate> likes = new ArrayList<>();
-        String pattern = "%" + PredicateHelper.escapeLikeWildcards(node.keyword) + "%";
+        String pattern = ConditionalMethods.wrapLikePattern(node.keyword);
         for (String fieldName : node.fieldNames) {
             likes.add(cb.like(path.get(fieldName).as(String.class), pattern, PredicateHelper.LIKE_ESCAPE_CHAR));
         }

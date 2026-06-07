@@ -105,12 +105,16 @@ public class MyJpaTemplate {
     /** 深度分页警告日志的最小间隔（毫秒），防止日志泛滥。 */
     private static final long DEEP_PAGINATION_WARN_INTERVAL_MS = 60_000; // 1 分钟
 
-    /** Getter 方法缓存，避免 extractSortValues 每次反射查找。key = className#propertyName，最大 4096 条 */
+    /** Getter 方法缓存，避免 extractSortValues 每次反射查找。key = className#propertyName */
     private static final java.util.concurrent.ConcurrentMap<String, java.lang.reflect.Method> GETTER_CACHE =
         new java.util.concurrent.ConcurrentHashMap<>(256);
 
     /** 静态缓存最大条目数，超出时触发清空防止内存泄漏 */
     private static final int MAX_GETTER_CACHE_SIZE = 4096;
+
+    /** 缓存访问计数器，用于触发周期性清理（避免每次满时立即清空导致的性能抖动） */
+    private static final java.util.concurrent.atomic.AtomicLong GETTER_CACHE_ACCESS_COUNT =
+        new java.util.concurrent.atomic.AtomicLong(0);
 
     /** 上次记录深度分页警告的时间戳。 */
     private final java.util.concurrent.atomic.AtomicLong lastDeepPaginationWarnTime =
@@ -309,8 +313,8 @@ public class MyJpaTemplate {
         if (ttlSeconds < 0) {
             throw new IllegalArgumentException("ttlSeconds must not be negative");
         }
-        String cacheKey =
-            entityClass.getSimpleName() + "@" + spec.conditions().hashCode() + "@" + spec.getSort().hashCode();
+        // 使用 toString() 而非 hashCode() 以避免哈希碰撞导致的缓存错误命中
+        String cacheKey = entityClass.getSimpleName() + "@" + spec.conditions() + "@" + spec.getSort();
         @SuppressWarnings("unchecked")
         List<T> cached = cacheManager.get(cacheKey);
         if (cached != null) {
@@ -1349,10 +1353,25 @@ public class MyJpaTemplate {
         } catch (ArithmeticException e) {
             throw new IllegalArgumentException("Page offset exceeds Integer.MAX_VALUE.", e);
         }
-        int effectivePageSize = Math.min(pageable.getPageSize() + 1, this.maxResults);
-        query.setMaxResults(effectivePageSize);
+        // 总是请求 pageSize+1 行以检测是否有下一页。
+        // maxResults 仅作为安全上限：当 maxResults > 0 且小于 pageSize+1 时，
+        // 无法准确判断是否有下一页，此时保守地认为有下一页（除非结果集为空或不足一页）。
+        int fetchLimit = pageable.getPageSize() + 1;
+        boolean maxResultsLimited = false;
+        if (this.maxResults > 0 && this.maxResults < fetchLimit) {
+            fetchLimit = this.maxResults;
+            maxResultsLimited = true;
+        }
+        query.setMaxResults(fetchLimit);
         List<T> content = query.getResultList();
-        boolean hasNext = content.size() > pageable.getPageSize();
+        boolean hasNext;
+        if (maxResultsLimited) {
+            // 当 maxResults 限制了请求行数时，如果取满了 maxResults 行且 maxResults >= pageSize，
+            // 保守地认为可能还有更多数据
+            hasNext = content.size() >= pageable.getPageSize() && content.size() >= this.maxResults;
+        } else {
+            hasNext = content.size() > pageable.getPageSize();
+        }
         if (hasNext) {
             content = content.subList(0, pageable.getPageSize());
         }
@@ -1567,10 +1586,20 @@ public class MyJpaTemplate {
             jakarta.persistence.criteria.Expression<Comparable> field =
                 (jakarta.persistence.criteria.Expression)((jakarta.persistence.criteria.Path)root)
                     .get(order.getProperty());
+            Object value = lastSortValues[0];
+            if (value == null) {
+                // NULL 排序：ASC 时 NULL 排在最前，DESC 时 NULL 排在最后
+                // 对于 keyset 分页，null 值无法精确定位，使用 IS NULL 作为兜底
+                if (order.isAscending()) {
+                    return cb.isNull(field);
+                } else {
+                    return cb.or(cb.isNull(field), cb.isNotNull(field));
+                }
+            }
             if (order.isAscending()) {
-                return cb.greaterThan(field, (Comparable)lastSortValues[0]);
+                return cb.greaterThan(field, (Comparable)value);
             } else {
-                return cb.lessThan(field, (Comparable)lastSortValues[0]);
+                return cb.lessThan(field, (Comparable)value);
             }
         }
 
@@ -1581,7 +1610,12 @@ public class MyJpaTemplate {
             List<jakarta.persistence.criteria.Predicate> andPredicates = new ArrayList<>();
             // 前面的字段必须相等
             for (int j = 0; j < i; j++) {
-                andPredicates.add(cb.equal(root.get(orders.get(j).getProperty()), lastSortValues[j]));
+                Object eqValue = lastSortValues[j];
+                if (eqValue == null) {
+                    andPredicates.add(cb.isNull(root.get(orders.get(j).getProperty())));
+                } else {
+                    andPredicates.add(cb.equal(root.get(orders.get(j).getProperty()), eqValue));
+                }
             }
             // 当前字段使用 > 或 <
             org.springframework.data.domain.Sort.Order currentOrder = orders.get(i);
@@ -1589,10 +1623,17 @@ public class MyJpaTemplate {
             jakarta.persistence.criteria.Expression<Comparable> currentField =
                 (jakarta.persistence.criteria.Expression)((jakarta.persistence.criteria.Path)root)
                     .get(currentOrder.getProperty());
-            if (currentOrder.isAscending()) {
-                andPredicates.add(cb.greaterThan(currentField, (Comparable)lastSortValues[i]));
+            Object currentValue = lastSortValues[i];
+            if (currentValue == null) {
+                if (currentOrder.isAscending()) {
+                    andPredicates.add(cb.isNull(currentField));
+                } else {
+                    andPredicates.add(cb.or(cb.isNull(currentField), cb.isNotNull(currentField)));
+                }
+            } else if (currentOrder.isAscending()) {
+                andPredicates.add(cb.greaterThan(currentField, (Comparable)currentValue));
             } else {
-                andPredicates.add(cb.lessThan(currentField, (Comparable)lastSortValues[i]));
+                andPredicates.add(cb.lessThan(currentField, (Comparable)currentValue));
             }
             orPredicates.add(cb.and(andPredicates.toArray(new jakarta.persistence.criteria.Predicate[0])));
         }
@@ -1611,7 +1652,9 @@ public class MyJpaTemplate {
         for (int i = 0; i < orders.size(); i++) {
             String property = orders.get(i).getProperty();
             String cacheKey = entity.getClass().getName() + "#" + property;
-            if (GETTER_CACHE.size() >= MAX_GETTER_CACHE_SIZE) {
+            // 每 10000 次访问清理一次缓存，避免满时立即清空导致的性能抖动
+            long count = GETTER_CACHE_ACCESS_COUNT.incrementAndGet();
+            if (count % 10000 == 0 && GETTER_CACHE.size() > MAX_GETTER_CACHE_SIZE / 2) {
                 GETTER_CACHE.clear();
             }
             java.lang.reflect.Method getter = GETTER_CACHE.computeIfAbsent(cacheKey, k -> {

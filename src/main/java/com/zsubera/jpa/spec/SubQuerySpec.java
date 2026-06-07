@@ -171,6 +171,9 @@ public class SubQuerySpec<S> {
      * @throws IllegalArgumentException 如果 field 为 null
      */
     public SubQuerySpec<S> eq(SFunction<S, ?> field, @Nullable Object value) {
+        if (field == null) {
+            throw new IllegalArgumentException("field must not be null");
+        }
         predicates.add(PredicateHelper.eq(root, LambdaUtils.property(field), value, cb));
         return this;
     }
@@ -184,6 +187,9 @@ public class SubQuerySpec<S> {
      * @throws IllegalArgumentException 如果 field 为 null
      */
     public SubQuerySpec<S> ne(SFunction<S, ?> field, @Nullable Object value) {
+        if (field == null) {
+            throw new IllegalArgumentException("field must not be null");
+        }
         predicates.add(PredicateHelper.ne(root, LambdaUtils.property(field), value, cb));
         return this;
     }
@@ -197,6 +203,9 @@ public class SubQuerySpec<S> {
      * @throws IllegalArgumentException 如果 value 为 null
      */
     public SubQuerySpec<S> gt(SFunction<S, ?> field, Comparable<?> value) {
+        if (field == null) {
+            throw new IllegalArgumentException("field must not be null");
+        }
         if (value == null) {
             throw new IllegalArgumentException("value must not be null");
         }
@@ -213,6 +222,9 @@ public class SubQuerySpec<S> {
      * @throws IllegalArgumentException 如果 value 为 null
      */
     public SubQuerySpec<S> ge(SFunction<S, ?> field, Comparable<?> value) {
+        if (field == null) {
+            throw new IllegalArgumentException("field must not be null");
+        }
         if (value == null) {
             throw new IllegalArgumentException("value must not be null");
         }
@@ -229,6 +241,9 @@ public class SubQuerySpec<S> {
      * @throws IllegalArgumentException 如果 value 为 null
      */
     public SubQuerySpec<S> lt(SFunction<S, ?> field, Comparable<?> value) {
+        if (field == null) {
+            throw new IllegalArgumentException("field must not be null");
+        }
         if (value == null) {
             throw new IllegalArgumentException("value must not be null");
         }
@@ -245,6 +260,9 @@ public class SubQuerySpec<S> {
      * @throws IllegalArgumentException 如果 value 为 null
      */
     public SubQuerySpec<S> le(SFunction<S, ?> field, Comparable<?> value) {
+        if (field == null) {
+            throw new IllegalArgumentException("field must not be null");
+        }
         if (value == null) {
             throw new IllegalArgumentException("value must not be null");
         }
@@ -263,6 +281,9 @@ public class SubQuerySpec<S> {
      * @throws IllegalArgumentException 如果 value 为 null
      */
     public SubQuerySpec<S> like(SFunction<S, ?> field, String value) {
+        if (field == null) {
+            throw new IllegalArgumentException("field must not be null");
+        }
         if (value == null) {
             throw new IllegalArgumentException("value must not be null");
         }
@@ -282,6 +303,9 @@ public class SubQuerySpec<S> {
      * @throws IllegalArgumentException 如果 value 为 null
      */
     public SubQuerySpec<S> notLike(SFunction<S, ?> field, String value) {
+        if (field == null) {
+            throw new IllegalArgumentException("field must not be null");
+        }
         if (value == null) {
             throw new IllegalArgumentException("value must not be null");
         }
@@ -301,6 +325,9 @@ public class SubQuerySpec<S> {
      * @throws IllegalArgumentException 如果 value 为 null
      */
     public SubQuerySpec<S> startsWith(SFunction<S, ?> field, String value) {
+        if (field == null) {
+            throw new IllegalArgumentException("field must not be null");
+        }
         if (value == null) {
             throw new IllegalArgumentException("value must not be null");
         }
@@ -317,6 +344,9 @@ public class SubQuerySpec<S> {
      * @throws IllegalArgumentException 如果 value 为 null
      */
     public SubQuerySpec<S> endsWith(SFunction<S, ?> field, String value) {
+        if (field == null) {
+            throw new IllegalArgumentException("field must not be null");
+        }
         if (value == null) {
             throw new IllegalArgumentException("value must not be null");
         }
@@ -336,6 +366,9 @@ public class SubQuerySpec<S> {
      * @throws IllegalArgumentException 如果 start 或 end 为 null，或 start 大于 end
      */
     public SubQuerySpec<S> between(SFunction<S, ?> field, Comparable<?> start, Comparable<?> end) {
+        if (field == null) {
+            throw new IllegalArgumentException("field must not be null");
+        }
         PredicateHelper.validateRange(start, end);
         predicates.add(PredicateHelper.between(root, LambdaUtils.property(field), start, end, cb));
         return this;
@@ -351,6 +384,9 @@ public class SubQuerySpec<S> {
      * @throws IllegalArgumentException 如果 start 或 end 为 null，或 start 大于 end
      */
     public SubQuerySpec<S> notBetween(SFunction<S, ?> field, Comparable<?> start, Comparable<?> end) {
+        if (field == null) {
+            throw new IllegalArgumentException("field must not be null");
+        }
         PredicateHelper.validateRange(start, end);
         predicates.add(PredicateHelper.notBetween(root, LambdaUtils.property(field), start, end, cb));
         return this;
@@ -365,6 +401,9 @@ public class SubQuerySpec<S> {
      * @throws IllegalArgumentException 如果 values 为 null 或空
      */
     public SubQuerySpec<S> in(SFunction<S, ?> field, Object... values) {
+        if (field == null) {
+            throw new IllegalArgumentException("field must not be null");
+        }
         if (values == null || values.length == 0) {
             throw new IllegalArgumentException("values must not be empty");
         }
@@ -381,6 +420,9 @@ public class SubQuerySpec<S> {
      * @throws IllegalArgumentException 如果 values 为 null 或空
      */
     public SubQuerySpec<S> notIn(SFunction<S, ?> field, Object... values) {
+        if (field == null) {
+            throw new IllegalArgumentException("field must not be null");
+        }
         if (values == null || values.length == 0) {
             throw new IllegalArgumentException("values must not be empty");
         }
@@ -397,6 +439,9 @@ public class SubQuerySpec<S> {
      * @throws IllegalArgumentException 如果 values 为 null 或空
      */
     public SubQuerySpec<S> in(SFunction<S, ?> field, Collection<?> values) {
+        if (field == null) {
+            throw new IllegalArgumentException("field must not be null");
+        }
         if (values == null || values.isEmpty()) {
             throw new IllegalArgumentException("values must not be empty");
         }
@@ -413,6 +458,9 @@ public class SubQuerySpec<S> {
      * @throws IllegalArgumentException 如果 values 为 null 或空
      */
     public SubQuerySpec<S> notIn(SFunction<S, ?> field, Collection<?> values) {
+        if (field == null) {
+            throw new IllegalArgumentException("field must not be null");
+        }
         if (values == null || values.isEmpty()) {
             throw new IllegalArgumentException("values must not be empty");
         }
@@ -429,6 +477,9 @@ public class SubQuerySpec<S> {
      * @return 当前 SubQuerySpec 实例，支持链式调用
      */
     public SubQuerySpec<S> isNull(SFunction<S, ?> field) {
+        if (field == null) {
+            throw new IllegalArgumentException("field must not be null");
+        }
         predicates.add(PredicateHelper.isNull(root, LambdaUtils.property(field), cb));
         return this;
     }
@@ -440,6 +491,9 @@ public class SubQuerySpec<S> {
      * @return 当前 SubQuerySpec 实例，支持链式调用
      */
     public SubQuerySpec<S> isNotNull(SFunction<S, ?> field) {
+        if (field == null) {
+            throw new IllegalArgumentException("field must not be null");
+        }
         predicates.add(PredicateHelper.isNotNull(root, LambdaUtils.property(field), cb));
         return this;
     }
@@ -452,6 +506,9 @@ public class SubQuerySpec<S> {
      * @return 当前 SubQuerySpec 实例，支持链式调用
      */
     public SubQuerySpec<S> eqIgnoreCase(SFunction<S, ?> field, String value) {
+        if (field == null) {
+            throw new IllegalArgumentException("field must not be null");
+        }
         predicates.add(PredicateHelper.eqIgnoreCase(root, LambdaUtils.property(field), value, cb));
         return this;
     }
@@ -464,6 +521,9 @@ public class SubQuerySpec<S> {
      * @return 当前 SubQuerySpec 实例，支持链式调用
      */
     public SubQuerySpec<S> neIgnoreCase(SFunction<S, ?> field, String value) {
+        if (field == null) {
+            throw new IllegalArgumentException("field must not be null");
+        }
         predicates.add(PredicateHelper.neIgnoreCase(root, LambdaUtils.property(field), value, cb));
         return this;
     }
@@ -480,6 +540,9 @@ public class SubQuerySpec<S> {
      * @throws IllegalArgumentException 如果 value 为 null
      */
     public SubQuerySpec<S> likeIgnoreCase(SFunction<S, ?> field, String value) {
+        if (field == null) {
+            throw new IllegalArgumentException("field must not be null");
+        }
         if (value == null) {
             throw new IllegalArgumentException("value must not be null");
         }
@@ -498,6 +561,9 @@ public class SubQuerySpec<S> {
      * @return 当前 SubQuerySpec 实例，支持链式调用
      */
     public SubQuerySpec<S> isEmpty(SFunction<S, ?> field) {
+        if (field == null) {
+            throw new IllegalArgumentException("field must not be null");
+        }
         predicates.add(PredicateHelper.isEmpty(root, LambdaUtils.property(field), cb));
         return this;
     }
@@ -507,8 +573,12 @@ public class SubQuerySpec<S> {
      *
      * @param field 实体集合字段
      * @return 当前 SubQuerySpec 实例，支持链式调用
+     * @throws IllegalArgumentException 如果 field 为 null
      */
     public SubQuerySpec<S> isNotEmpty(SFunction<S, ?> field) {
+        if (field == null) {
+            throw new IllegalArgumentException("field must not be null");
+        }
         predicates.add(PredicateHelper.isNotEmpty(root, LambdaUtils.property(field), cb));
         return this;
     }
@@ -524,10 +594,13 @@ public class SubQuerySpec<S> {
      * @throws IllegalArgumentException 如果 fields 中包含 null 元素
      */
     public SubQuerySpec<S> multiLike(String keyword, SFunction<S, ?>... fields) {
+        if (keyword == null) {
+            throw new IllegalArgumentException("keyword must not be null");
+        }
         if (fields == null) {
             throw new IllegalArgumentException("fields must not be null");
         }
-        if (keyword != null && !keyword.isEmpty() && fields.length > 0) {
+        if (!keyword.isEmpty() && fields.length > 0) {
             String pattern = "%" + PredicateHelper.escapeLikeWildcards(keyword) + "%";
             List<Predicate> likes = new ArrayList<>();
             for (SFunction<S, ?> field : fields) {

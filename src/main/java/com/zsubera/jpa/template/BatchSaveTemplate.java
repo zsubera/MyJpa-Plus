@@ -33,6 +33,15 @@ class BatchSaveTemplate {
         new ConcurrentHashMap<>(64);
 
     private static final int MAX_ID_METHOD_CACHE_SIZE = 1024;
+    private static final java.lang.reflect.Method NO_ID_METHOD_SENTINEL;
+
+    static {
+        try {
+            NO_ID_METHOD_SENTINEL = Object.class.getDeclaredMethod("toString");
+        } catch (NoSuchMethodException e) {
+            throw new RuntimeException(e);
+        }
+    }
 
     private final EntityManager entityManager;
     private final TransactionHelper transactionHelper;
@@ -163,10 +172,10 @@ class BatchSaveTemplate {
                 try {
                     return clazz.getMethod("getId");
                 } catch (NoSuchMethodException e) {
-                    return null;
+                    return NO_ID_METHOD_SENTINEL;
                 }
             });
-            if (getId == null) {
+            if (getId == NO_ID_METHOD_SENTINEL) {
                 log.debug("No getId() method found for {}; assuming existing", entity.getClass().getSimpleName());
                 return false;
             }

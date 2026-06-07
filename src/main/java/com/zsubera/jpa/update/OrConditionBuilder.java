@@ -1,5 +1,8 @@
 package com.zsubera.jpa.update;
 
+import static com.zsubera.jpa.spec.ConditionalMethods.requireField;
+
+import com.zsubera.jpa.spec.ConditionalMethods;
 import com.zsubera.jpa.spec.PredicateHelper;
 import com.zsubera.jpa.spec.SFunction;
 import com.zsubera.jpa.update.AbstractBulkOperationSpec.BulkConditionNode;
@@ -16,7 +19,8 @@ import org.springframework.lang.Nullable;
  * @param <T> 实体类型
  * @param <SELF> 父构建器类型
  */
-public class OrConditionBuilder<T, SELF extends AbstractBulkOperationSpec<T, SELF>> {
+public class OrConditionBuilder<T, SELF extends AbstractBulkOperationSpec<T, SELF>>
+    implements ConditionalMethods<T, OrConditionBuilder<T, SELF>> {
 
     private final SELF parent;
     private final List<BulkConditionNode> nodes;
@@ -32,6 +36,11 @@ public class OrConditionBuilder<T, SELF extends AbstractBulkOperationSpec<T, SEL
         this.nodes = nodes;
     }
 
+    @Override
+    public OrConditionBuilder<T, SELF> self() {
+        return this;
+    }
+
     /**
      * 添加等于条件：{@code field = value}。
      *
@@ -40,6 +49,7 @@ public class OrConditionBuilder<T, SELF extends AbstractBulkOperationSpec<T, SEL
      * @return 当前构建器实例
      */
     public OrConditionBuilder<T, SELF> eq(SFunction<T, ?> field, @Nullable Object value) {
+        requireField(field);
         String name = parent.property(field);
         nodes.add(new BulkConditionNode.LeafNode((root, cb) -> PredicateHelper.eq(root, name, value, cb)));
         return this;
@@ -53,6 +63,7 @@ public class OrConditionBuilder<T, SELF extends AbstractBulkOperationSpec<T, SEL
      * @return 当前构建器实例
      */
     public OrConditionBuilder<T, SELF> ne(SFunction<T, ?> field, @Nullable Object value) {
+        requireField(field);
         String name = parent.property(field);
         nodes.add(new BulkConditionNode.LeafNode((root, cb) -> PredicateHelper.ne(root, name, value, cb)));
         return this;
@@ -67,6 +78,7 @@ public class OrConditionBuilder<T, SELF extends AbstractBulkOperationSpec<T, SEL
      * @throws IllegalArgumentException 如果 value 为 null
      */
     public OrConditionBuilder<T, SELF> gt(SFunction<T, ?> field, Comparable<?> value) {
+        requireField(field);
         if (value == null) {
             throw new IllegalArgumentException("value must not be null");
         }
@@ -84,6 +96,7 @@ public class OrConditionBuilder<T, SELF extends AbstractBulkOperationSpec<T, SEL
      * @throws IllegalArgumentException 如果 value 为 null
      */
     public OrConditionBuilder<T, SELF> ge(SFunction<T, ?> field, Comparable<?> value) {
+        requireField(field);
         if (value == null) {
             throw new IllegalArgumentException("value must not be null");
         }
@@ -101,6 +114,7 @@ public class OrConditionBuilder<T, SELF extends AbstractBulkOperationSpec<T, SEL
      * @throws IllegalArgumentException 如果 value 为 null
      */
     public OrConditionBuilder<T, SELF> lt(SFunction<T, ?> field, Comparable<?> value) {
+        requireField(field);
         if (value == null) {
             throw new IllegalArgumentException("value must not be null");
         }
@@ -118,6 +132,7 @@ public class OrConditionBuilder<T, SELF extends AbstractBulkOperationSpec<T, SEL
      * @throws IllegalArgumentException 如果 value 为 null
      */
     public OrConditionBuilder<T, SELF> le(SFunction<T, ?> field, Comparable<?> value) {
+        requireField(field);
         if (value == null) {
             throw new IllegalArgumentException("value must not be null");
         }
@@ -135,12 +150,12 @@ public class OrConditionBuilder<T, SELF extends AbstractBulkOperationSpec<T, SEL
      * @throws IllegalArgumentException 如果 value 为 null
      */
     public OrConditionBuilder<T, SELF> like(SFunction<T, ?> field, String value) {
+        requireField(field);
         if (value == null) {
             throw new IllegalArgumentException("value must not be null");
         }
         String name = parent.property(field);
-        String escaped = PredicateHelper.escapeLikeWildcards(value);
-        String pattern = "%" + escaped + "%";
+        String pattern = ConditionalMethods.wrapLikePattern(value);
         nodes.add(new BulkConditionNode.LeafNode(
             (root, cb) -> PredicateHelper.like(root, name, pattern, cb, PredicateHelper.LIKE_ESCAPE_CHAR)));
         return this;
@@ -155,12 +170,12 @@ public class OrConditionBuilder<T, SELF extends AbstractBulkOperationSpec<T, SEL
      * @throws IllegalArgumentException 如果 value 为 null
      */
     public OrConditionBuilder<T, SELF> notLike(SFunction<T, ?> field, String value) {
+        requireField(field);
         if (value == null) {
             throw new IllegalArgumentException("value must not be null");
         }
         String name = parent.property(field);
-        String escaped = PredicateHelper.escapeLikeWildcards(value);
-        String pattern = "%" + escaped + "%";
+        String pattern = ConditionalMethods.wrapLikePattern(value);
         nodes.add(new BulkConditionNode.LeafNode(
             (root, cb) -> PredicateHelper.notLike(root, name, pattern, cb, PredicateHelper.LIKE_ESCAPE_CHAR)));
         return this;
@@ -175,6 +190,7 @@ public class OrConditionBuilder<T, SELF extends AbstractBulkOperationSpec<T, SEL
      * @throws IllegalArgumentException 如果 value 为 null
      */
     public OrConditionBuilder<T, SELF> startsWith(SFunction<T, ?> field, String value) {
+        requireField(field);
         if (value == null) {
             throw new IllegalArgumentException("value must not be null");
         }
@@ -192,6 +208,7 @@ public class OrConditionBuilder<T, SELF extends AbstractBulkOperationSpec<T, SEL
      * @throws IllegalArgumentException 如果 value 为 null
      */
     public OrConditionBuilder<T, SELF> endsWith(SFunction<T, ?> field, String value) {
+        requireField(field);
         if (value == null) {
             throw new IllegalArgumentException("value must not be null");
         }
@@ -209,6 +226,7 @@ public class OrConditionBuilder<T, SELF extends AbstractBulkOperationSpec<T, SEL
      * @throws IllegalArgumentException 如果 value 为 null
      */
     public OrConditionBuilder<T, SELF> eqIgnoreCase(SFunction<T, ?> field, String value) {
+        requireField(field);
         if (value == null) {
             throw new IllegalArgumentException(
                 "value must not be null for eqIgnoreCase. " + "Use isNull() for null checks.");
@@ -227,6 +245,7 @@ public class OrConditionBuilder<T, SELF extends AbstractBulkOperationSpec<T, SEL
      * @throws IllegalArgumentException 如果 value 为 null
      */
     public OrConditionBuilder<T, SELF> neIgnoreCase(SFunction<T, ?> field, String value) {
+        requireField(field);
         if (value == null) {
             throw new IllegalArgumentException(
                 "value must not be null for neIgnoreCase. " + "Use isNotNull() for null checks.");
@@ -248,6 +267,7 @@ public class OrConditionBuilder<T, SELF extends AbstractBulkOperationSpec<T, SEL
      * @throws IllegalArgumentException 如果 value 为 null
      */
     public OrConditionBuilder<T, SELF> likeIgnoreCase(SFunction<T, ?> field, String value) {
+        requireField(field);
         if (value == null) {
             throw new IllegalArgumentException("value must not be null");
         }
@@ -267,6 +287,7 @@ public class OrConditionBuilder<T, SELF extends AbstractBulkOperationSpec<T, SEL
      * @throws IllegalArgumentException 如果 values 为 null 或空
      */
     public OrConditionBuilder<T, SELF> in(SFunction<T, ?> field, Object... values) {
+        requireField(field);
         String name = parent.property(field);
         if (values == null || values.length == 0) {
             throw new IllegalArgumentException("values must not be empty");
@@ -284,8 +305,45 @@ public class OrConditionBuilder<T, SELF extends AbstractBulkOperationSpec<T, SEL
      * @throws IllegalArgumentException 如果 values 为 null 或空
      */
     public OrConditionBuilder<T, SELF> notIn(SFunction<T, ?> field, Object... values) {
+        requireField(field);
         String name = parent.property(field);
         if (values == null || values.length == 0) {
+            throw new IllegalArgumentException("values must not be empty");
+        }
+        nodes.add(new BulkConditionNode.LeafNode((root, cb) -> PredicateHelper.notIn(root, name, values, cb)));
+        return this;
+    }
+
+    /**
+     * 添加 IN 条件：{@code field IN (values)}。
+     *
+     * @param field 实体属性的方法引用
+     * @param values 值集合
+     * @return 当前构建器实例
+     * @throws IllegalArgumentException 如果 values 为 null 或空
+     */
+    public OrConditionBuilder<T, SELF> in(SFunction<T, ?> field, java.util.Collection<?> values) {
+        requireField(field);
+        String name = parent.property(field);
+        if (values == null || values.isEmpty()) {
+            throw new IllegalArgumentException("values must not be empty");
+        }
+        nodes.add(new BulkConditionNode.LeafNode((root, cb) -> PredicateHelper.in(root, name, values, cb)));
+        return this;
+    }
+
+    /**
+     * 添加 NOT IN 条件：{@code field NOT IN (values)}。
+     *
+     * @param field 实体属性的方法引用
+     * @param values 值集合
+     * @return 当前构建器实例
+     * @throws IllegalArgumentException 如果 values 为 null 或空
+     */
+    public OrConditionBuilder<T, SELF> notIn(SFunction<T, ?> field, java.util.Collection<?> values) {
+        requireField(field);
+        String name = parent.property(field);
+        if (values == null || values.isEmpty()) {
             throw new IllegalArgumentException("values must not be empty");
         }
         nodes.add(new BulkConditionNode.LeafNode((root, cb) -> PredicateHelper.notIn(root, name, values, cb)));
@@ -299,6 +357,7 @@ public class OrConditionBuilder<T, SELF extends AbstractBulkOperationSpec<T, SEL
      * @return 当前构建器实例
      */
     public OrConditionBuilder<T, SELF> isNull(SFunction<T, ?> field) {
+        requireField(field);
         String name = parent.property(field);
         nodes.add(new BulkConditionNode.LeafNode((root, cb) -> PredicateHelper.isNull(root, name, cb)));
         return this;
@@ -311,6 +370,7 @@ public class OrConditionBuilder<T, SELF extends AbstractBulkOperationSpec<T, SEL
      * @return 当前构建器实例
      */
     public OrConditionBuilder<T, SELF> isNotNull(SFunction<T, ?> field) {
+        requireField(field);
         String name = parent.property(field);
         nodes.add(new BulkConditionNode.LeafNode((root, cb) -> PredicateHelper.isNotNull(root, name, cb)));
         return this;
@@ -327,6 +387,7 @@ public class OrConditionBuilder<T, SELF extends AbstractBulkOperationSpec<T, SEL
      */
     @SuppressWarnings({"unchecked", "rawtypes"})
     public OrConditionBuilder<T, SELF> between(SFunction<T, ?> field, Comparable<?> start, Comparable<?> end) {
+        requireField(field);
         PredicateHelper.validateRange(start, end);
         String name = parent.property(field);
         nodes.add(new BulkConditionNode.LeafNode((root, cb) -> PredicateHelper.between(root, name, start, end, cb)));
@@ -344,6 +405,7 @@ public class OrConditionBuilder<T, SELF extends AbstractBulkOperationSpec<T, SEL
      */
     @SuppressWarnings({"unchecked", "rawtypes"})
     public OrConditionBuilder<T, SELF> notBetween(SFunction<T, ?> field, Comparable<?> start, Comparable<?> end) {
+        requireField(field);
         PredicateHelper.validateRange(start, end);
         String name = parent.property(field);
         nodes.add(new BulkConditionNode.LeafNode((root, cb) -> PredicateHelper.notBetween(root, name, start, end, cb)));
@@ -357,6 +419,7 @@ public class OrConditionBuilder<T, SELF extends AbstractBulkOperationSpec<T, SEL
      * @return 当前构建器实例
      */
     public OrConditionBuilder<T, SELF> isEmpty(SFunction<T, ?> field) {
+        requireField(field);
         String name = parent.property(field);
         nodes.add(new BulkConditionNode.LeafNode((root, cb) -> PredicateHelper.isEmpty(root, name, cb)));
         return this;
@@ -369,6 +432,7 @@ public class OrConditionBuilder<T, SELF extends AbstractBulkOperationSpec<T, SEL
      * @return 当前构建器实例
      */
     public OrConditionBuilder<T, SELF> isNotEmpty(SFunction<T, ?> field) {
+        requireField(field);
         String name = parent.property(field);
         nodes.add(new BulkConditionNode.LeafNode((root, cb) -> PredicateHelper.isNotEmpty(root, name, cb)));
         return this;

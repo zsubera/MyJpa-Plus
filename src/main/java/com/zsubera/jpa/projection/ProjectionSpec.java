@@ -189,7 +189,12 @@ public class ProjectionSpec<T> {
         if (field == null) {
             throw new IllegalArgumentException("field must not be null");
         }
-        selections.put(LambdaUtils.getPropertyName(field), field);
+        String name = LambdaUtils.getPropertyName(field);
+        if (selections.containsKey(name)) {
+            log.warn("Duplicate select() for field '{}' overwrites previous selection. "
+                + "Each field should only be selected once in ProjectionSpec.", name);
+        }
+        selections.put(name, field);
         return this;
     }
 
@@ -541,6 +546,10 @@ public class ProjectionSpec<T> {
      *     stream.forEach(row -> process(row));
      * }
      * }</pre>
+     *
+     * <p>
+     * <strong>性能警告：</strong>此方法不限制返回行数。对大数据集请配合 {@link #maxResults(int)} 使用，
+     * 或使用分页查询 {@link #findPage(EntityManager, org.springframework.data.domain.Pageable)} 以避免内存溢出。
      *
      * @param em JPA 实体管理器
      * @return Tuple 结果的 Stream（必须由调用方关闭）

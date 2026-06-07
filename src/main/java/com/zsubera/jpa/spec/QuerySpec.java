@@ -234,6 +234,9 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
             throw new IllegalArgumentException("fields must not be null");
         }
         for (SFunction<T, ?> f : fields) {
+            if (f == null) {
+                throw new IllegalArgumentException("fields must not contain null elements");
+            }
             groupByFields.add(LambdaUtils.getPropertyName(f));
         }
         log.debug("QuerySpec: GROUP BY {}", groupByFields);
@@ -297,6 +300,9 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
             throw new IllegalArgumentException("fields must not be null");
         }
         for (SFunction<T, ?> f : fields) {
+            if (f == null) {
+                throw new IllegalArgumentException("fields must not contain null elements");
+            }
             orderNodes.add(new ConditionNode.OrderNode(LambdaUtils.getPropertyName(f), true));
         }
         log.debug("QuerySpec: ORDER BY ASC {}",
@@ -320,6 +326,9 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
             throw new IllegalArgumentException("fields must not be null");
         }
         for (SFunction<T, ?> f : fields) {
+            if (f == null) {
+                throw new IllegalArgumentException("fields must not contain null elements");
+            }
             orderNodes.add(new ConditionNode.OrderNode(LambdaUtils.getPropertyName(f), false));
         }
         log.debug("QuerySpec: ORDER BY DESC {}",
@@ -691,8 +700,9 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
      * {@code NOT A OR NOT B}。
      *
      * <p>
-     * <strong>注意：</strong>虽然参数类型为 {@link OrGroup}，但内部使用 AND 语义收集条件。 参数类型 {@code Consumer<OrGroup<T>>}
-     * 仅为保持 API 一致性（与 {@link #or(Consumer)} 对称），不代表 OR 语义。
+     * <strong>⚠ API 注意：</strong>虽然参数类型为 {@link OrGroup}，但内部使用 AND 语义收集条件。
+     * 参数类型 {@code Consumer<OrGroup<T>>} 仅为保持 API 一致性（与 {@link #or(Consumer)} 对称），
+     * <strong>不代表 OR 语义</strong>。组内条件以 AND 组合后整体取反。
      *
      * @param config 条件组配置消费者
      * @return 当前 QuerySpec 实例，支持链式调用
