@@ -11,6 +11,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.ApplicationContext;
 import org.springframework.context.ApplicationContextAware;
+import org.springframework.lang.NonNull;
 import org.springframework.util.ConcurrentReferenceHashMap;
 
 /**
@@ -70,12 +71,7 @@ public class AuditEntityListener implements ApplicationContextAware {
     private static volatile AuditUserProvider userProvider;
 
     /** 哨兵值，表示未找到 AuditUserProvider Bean，防止重复查找。 */
-    private static final AuditUserProvider NO_PROVIDER_SENTINEL = new AuditUserProvider() {
-        @Override
-        public String getCurrentUser() {
-            return null;
-        }
-    };
+    private static final AuditUserProvider NO_PROVIDER_SENTINEL = () -> null;
 
     /** 标记是否已尝试查找 provider。 */
     private static volatile boolean providerLookupAttempted = false;
@@ -84,7 +80,7 @@ public class AuditEntityListener implements ApplicationContextAware {
     private static volatile java.time.ZoneId auditZoneId = java.time.ZoneId.systemDefault();
 
     @Override
-    public void setApplicationContext(ApplicationContext ctx) {
+    public void setApplicationContext(@NonNull ApplicationContext ctx) {
         applicationContext = ctx;
     }
 
@@ -193,8 +189,7 @@ public class AuditEntityListener implements ApplicationContextAware {
      * 解析实体类的审计字段。
      *
      * <p>
-     * 预设置 {@code setAccessible(true)} 以减少每次实体操作的反射开销。 当实体继承 {@link com.zsubera.jpa.entity.BaseEntity} 时，跳过
-     * createdAt/updatedAt 字段， 因为这些字段已由 BaseEntity 的 {@code @PrePersist}/{@code @PreUpdate} 方法自动填充。
+     * 预设置 {@code setAccessible(true)} 以减少每次实体操作的反射开销。
      *
      * @param entityClass 实体类
      * @return 审计字段信息
@@ -202,26 +197,15 @@ public class AuditEntityListener implements ApplicationContextAware {
     private static AuditFields resolveAuditFields(Class<?> entityClass) {
         return AUDIT_FIELDS_CACHE.computeIfAbsent(entityClass, cls -> {
             AuditFields fields = new AuditFields();
-            boolean extendsBaseEntity = com.zsubera.jpa.entity.BaseEntity.class.isAssignableFrom(cls);
             // 遍历完整类层次结构，查找父类中的审计字段
             for (Class<?> c = cls; c != null && c != Object.class; c = c.getSuperclass()) {
                 for (Field field : c.getDeclaredFields()) {
                     if (field.isAnnotationPresent(CreatedAt.class)) {
-                        // 如果实体继承了 BaseEntity，则跳过 createdAt（已由 @PrePersist 处理）
-                        if (extendsBaseEntity && "createdAt".equals(field.getName())
-                            && field.getDeclaringClass() == com.zsubera.jpa.entity.BaseEntity.class) {
-                            continue;
-                        }
                         if (fields.createdAt == null) {
                             field.setAccessible(true);
                             fields.createdAt = field;
                         }
                     } else if (field.isAnnotationPresent(UpdatedAt.class)) {
-                        // 如果实体继承了 BaseEntity，则跳过 updatedAt（已由 @PreUpdate 处理）
-                        if (extendsBaseEntity && "updatedAt".equals(field.getName())
-                            && field.getDeclaringClass() == com.zsubera.jpa.entity.BaseEntity.class) {
-                            continue;
-                        }
                         if (fields.updatedAt == null) {
                             field.setAccessible(true);
                             fields.updatedAt = field;

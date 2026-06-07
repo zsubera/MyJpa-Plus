@@ -106,13 +106,6 @@
 - **仓库生成** — `EntityCodeGenerator.generateRepository(...)` 生成 `MyJpaRepository` 接口源码
 - **脚手架工具** — 轻量级代码生成，适合快速搭建实体和仓库骨架
 
-### 基础实体（BaseEntity）
-
-- **审计字段** — `createdAt` / `updatedAt` / `createdBy` / `updatedBy`（`@PrePersist` / `@PreUpdate` 自动填充时间）
-- **乐观锁** — `@Version` 字段
-- **ID 策略** — `@GeneratedValue(strategy = IDENTITY)`
-- **equals/hashCode** — 基于 `id` 的持久化感知实现
-
 ### 审计注解
 
 - `@CreatedAt` / `@UpdatedAt` / `@CreatedBy` / `@UpdatedBy` — 标记审计字段
@@ -541,18 +534,6 @@ String entitySrc = EntityCodeGenerator.generateEntity("products", columns, "com.
 // 生成仓库源码
 String repoSrc = EntityCodeGenerator.generateRepository(
     "products", columns, "com.example.domain", "com.example.repo");
-```
-
-### 基础实体
-
-```java
-@Entity
-@EntityListeners(AuditEntityListener.class)
-public class Product extends BaseEntity {
-    private String name;
-    private BigDecimal price;
-    // 自动获得 id, createdAt, updatedAt, createdBy, updatedBy, version 字段
-}
 ```
 
 ### 审计注解
