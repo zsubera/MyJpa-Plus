@@ -6,6 +6,7 @@ import com.zsubera.jpa.update.DeleteSpec;
 import com.zsubera.jpa.update.UpdateSpec;
 import com.zsubera.jpa.util.EntityGraphHelper;
 import jakarta.persistence.EntityManager;
+import jakarta.persistence.EntityManagerFactory;
 import jakarta.persistence.PersistenceContext;
 import jakarta.persistence.TypedQuery;
 import jakarta.persistence.criteria.CriteriaBuilder;
@@ -105,23 +106,15 @@ public class MyJpaTemplate {
     /** 深度分页警告日志的最小间隔（毫秒），防止日志泛滥。 */
     private static final long DEEP_PAGINATION_WARN_INTERVAL_MS = 60_000; // 1 分钟
 
-    /** Getter 方法缓存，避免 extractSortValues 每次反射查找。key = className#propertyName */
-    private static final java.util.concurrent.ConcurrentMap<String, java.lang.reflect.Method> GETTER_CACHE =
-        new java.util.concurrent.ConcurrentHashMap<>(256);
-
-    /** 静态缓存最大条目数，超出时触发清空防止内存泄漏 */
-    private static final int MAX_GETTER_CACHE_SIZE = 4096;
-
-    /** 缓存访问计数器，用于触发周期性清理（避免每次满时立即清空导致的性能抖动） */
-    private static final java.util.concurrent.atomic.AtomicLong GETTER_CACHE_ACCESS_COUNT =
-        new java.util.concurrent.atomic.AtomicLong(0);
-
     /** 上次记录深度分页警告的时间戳。 */
     private final java.util.concurrent.atomic.AtomicLong lastDeepPaginationWarnTime =
         new java.util.concurrent.atomic.AtomicLong(0);
 
     @PersistenceContext
     private EntityManager entityManager;
+
+    @Autowired(required = false)
+    private EntityManagerFactory entityManagerFactory;
 
     @Autowired(required = false)
     private ApplicationContext applicationContext;
@@ -148,6 +141,9 @@ public class MyJpaTemplate {
 
     /** 事务工具类，用于在新事务中执行批量保存操作。 */
     private TransactionHelper transactionHelper;
+
+    /** Keyset 分页辅助类，封装游标分页的核心逻辑。 */
+    private KeysetPaginationHelper keysetPaginationHelper;
 
     /** 创建 MyJpaTemplate 实例，使用默认配置。 */
     public MyJpaTemplate() {
@@ -281,8 +277,9 @@ public class MyJpaTemplate {
     @PostConstruct
     void initBulkOperationTemplate() {
         this.bulkOperationTemplate = new BulkOperationTemplate(entityManager, maxBulkOperationRows, applicationContext);
-        this.transactionHelper = new TransactionHelper(entityManager, applicationContext);
+        this.transactionHelper = new TransactionHelper(entityManager, entityManagerFactory, applicationContext);
         this.batchSaveTemplate = new BatchSaveTemplate(entityManager, transactionHelper);
+        this.keysetPaginationHelper = new KeysetPaginationHelper(entityManager);
     }
 
     /**
@@ -466,13 +463,13 @@ public class MyJpaTemplate {
             throw new IllegalArgumentException("id must not be null");
         }
         // 非软删除场景：直接使用 entityManager.find()，性能最优
-        if (com.zsubera.jpa.update.SoftDeleteHelper.findSoftDeleteField(entityClass) == null) {
+        if (com.zsubera.jpa.softdelete.SoftDeleteHelper.findSoftDeleteField(entityClass) == null) {
             return Optional.ofNullable(entityManager.find(entityClass, id));
         }
         // 软删除场景：使用 Specification 查询以自动过滤已删除记录
         String idFieldName = EntityClassResolver.resolveIdFieldName(entityClass);
         Specification<T> idSpec = (root, query, cb) -> cb.equal(root.get(idFieldName), id);
-        Specification<T> softDeleteSpec = com.zsubera.jpa.update.SoftDeleteHelper.isNotDeleted(entityClass);
+        Specification<T> softDeleteSpec = com.zsubera.jpa.softdelete.SoftDeleteHelper.isNotDeleted(entityClass);
         Specification<T> combinedSpec = idSpec.and(softDeleteSpec);
         CriteriaBuilder cb = entityManager.getCriteriaBuilder();
         CriteriaQuery<T> cq = cb.createQuery(entityClass);
@@ -1433,7 +1430,7 @@ public class MyJpaTemplate {
         // 直接传递 ids Collection 以避免不必要的 toArray() 转换
         Specification<T> idSpec =
             (root, query, cb) -> com.zsubera.jpa.util.InClauseBuilder.in(cb, root.get(idFieldName), ids);
-        Specification<T> softDeleteSpec = com.zsubera.jpa.update.SoftDeleteHelper.isNotDeleted(entityClass);
+        Specification<T> softDeleteSpec = com.zsubera.jpa.softdelete.SoftDeleteHelper.isNotDeleted(entityClass);
         Specification<T> combinedSpec = idSpec.and(softDeleteSpec);
         CriteriaBuilder cb = entityManager.getCriteriaBuilder();
         CriteriaQuery<T> cq = cb.createQuery(entityClass);
@@ -1515,175 +1512,6 @@ public class MyJpaTemplate {
                 + ") must match sort fields count (" + orders.size() + ")");
         }
 
-        CriteriaBuilder cb = entityManager.getCriteriaBuilder();
-        CriteriaQuery<T> cq = cb.createQuery(entityClass);
-        Root<T> root = cq.from(entityClass);
-
-        // 应用用户条件
-        jakarta.persistence.criteria.Predicate userPredicate = spec.toPredicate(root, cq, cb);
-        if (userPredicate != null) {
-            cq.where(userPredicate);
-        }
-
-        // 应用 keyset 条件（游标定位）
-        if (lastSortValues != null) {
-            jakarta.persistence.criteria.Predicate keysetPredicate =
-                buildKeysetPredicate(root, cb, orders, lastSortValues);
-            if (userPredicate != null) {
-                cq.where(cb.and(userPredicate, keysetPredicate));
-            } else {
-                cq.where(keysetPredicate);
-            }
-        }
-
-        // 应用排序
-        List<jakarta.persistence.criteria.Order> orderList = new ArrayList<>();
-        for (org.springframework.data.domain.Sort.Order order : orders) {
-            orderList.add(
-                order.isAscending() ? cb.asc(root.get(order.getProperty())) : cb.desc(root.get(order.getProperty())));
-        }
-        cq.orderBy(orderList);
-
-        // 多查一条以判断是否有下一页
-        TypedQuery<T> query = entityManager.createQuery(cq);
-        query.setMaxResults(pageSize + 1);
-        List<T> results = query.getResultList();
-        boolean hasNext = results.size() > pageSize;
-        if (hasNext) {
-            results = results.subList(0, pageSize);
-        }
-
-        // 提取最后一条记录的排序字段值
-        Object[] nextLastSortValues = null;
-        if (hasNext && !results.isEmpty()) {
-            T lastRecord = results.get(results.size() - 1);
-            nextLastSortValues = extractSortValues(lastRecord, orders);
-        }
-
-        return new KeysetPage<>(results, hasNext, nextLastSortValues);
-    }
-
-    /**
-     * 构建 keyset 分页的 WHERE 条件。
-     *
-     * <p>
-     * 对于单字段排序 {@code ORDER BY id ASC}，条件为 {@code id > lastValue}。 对于多字段排序 {@code ORDER BY a ASC, b DESC}，条件为：
-     * {@code (a > lastA) OR (a = lastA AND b < lastB)}。
-     *
-     * @param root 查询根
-     * @param cb CriteriaBuilder
-     * @param orders 排序规则列表
-     * @param lastSortValues 上一页最后记录的排序值
-     * @return keyset 条件谓词
-     */
-    @SuppressWarnings({"unchecked", "rawtypes"})
-    private jakarta.persistence.criteria.Predicate buildKeysetPredicate(Root<?> root, CriteriaBuilder cb,
-        List<org.springframework.data.domain.Sort.Order> orders, Object[] lastSortValues) {
-        if (orders.size() == 1) {
-            // 单字段排序：简单的 > 或 < 条件
-            org.springframework.data.domain.Sort.Order order = orders.get(0);
-            @SuppressWarnings({"unchecked", "rawtypes"})
-            jakarta.persistence.criteria.Expression<Comparable> field =
-                (jakarta.persistence.criteria.Expression)((jakarta.persistence.criteria.Path)root)
-                    .get(order.getProperty());
-            Object value = lastSortValues[0];
-            if (value == null) {
-                // NULL 排序：ASC 时 NULL 排在最前，DESC 时 NULL 排在最后
-                // 对于 keyset 分页，null 值无法精确定位，使用 IS NULL 作为兜底
-                if (order.isAscending()) {
-                    return cb.isNull(field);
-                } else {
-                    return cb.or(cb.isNull(field), cb.isNotNull(field));
-                }
-            }
-            if (order.isAscending()) {
-                return cb.greaterThan(field, (Comparable)value);
-            } else {
-                return cb.lessThan(field, (Comparable)value);
-            }
-        }
-
-        // 多字段排序：行值比较
-        // (a > lastA) OR (a = lastA AND b > lastB) OR (a = lastA AND b = lastB AND c > lastC) ...
-        List<jakarta.persistence.criteria.Predicate> orPredicates = new ArrayList<>();
-        for (int i = 0; i < orders.size(); i++) {
-            List<jakarta.persistence.criteria.Predicate> andPredicates = new ArrayList<>();
-            // 前面的字段必须相等
-            for (int j = 0; j < i; j++) {
-                Object eqValue = lastSortValues[j];
-                if (eqValue == null) {
-                    andPredicates.add(cb.isNull(root.get(orders.get(j).getProperty())));
-                } else {
-                    andPredicates.add(cb.equal(root.get(orders.get(j).getProperty()), eqValue));
-                }
-            }
-            // 当前字段使用 > 或 <
-            org.springframework.data.domain.Sort.Order currentOrder = orders.get(i);
-            @SuppressWarnings({"unchecked", "rawtypes"})
-            jakarta.persistence.criteria.Expression<Comparable> currentField =
-                (jakarta.persistence.criteria.Expression)((jakarta.persistence.criteria.Path)root)
-                    .get(currentOrder.getProperty());
-            Object currentValue = lastSortValues[i];
-            if (currentValue == null) {
-                if (currentOrder.isAscending()) {
-                    andPredicates.add(cb.isNull(currentField));
-                } else {
-                    andPredicates.add(cb.or(cb.isNull(currentField), cb.isNotNull(currentField)));
-                }
-            } else if (currentOrder.isAscending()) {
-                andPredicates.add(cb.greaterThan(currentField, (Comparable)currentValue));
-            } else {
-                andPredicates.add(cb.lessThan(currentField, (Comparable)currentValue));
-            }
-            orPredicates.add(cb.and(andPredicates.toArray(new jakarta.persistence.criteria.Predicate[0])));
-        }
-        return cb.or(orPredicates.toArray(new jakarta.persistence.criteria.Predicate[0]));
-    }
-
-    /**
-     * 从实体中提取排序字段的值。
-     *
-     * @param entity 实体对象
-     * @param orders 排序规则列表
-     * @return 排序字段值数组
-     */
-    private Object[] extractSortValues(Object entity, List<org.springframework.data.domain.Sort.Order> orders) {
-        Object[] values = new Object[orders.size()];
-        for (int i = 0; i < orders.size(); i++) {
-            String property = orders.get(i).getProperty();
-            String cacheKey = entity.getClass().getName() + "#" + property;
-            // 每 10000 次访问清理一次缓存，避免满时立即清空导致的性能抖动
-            long count = GETTER_CACHE_ACCESS_COUNT.incrementAndGet();
-            if (count % 10000 == 0 && GETTER_CACHE.size() > MAX_GETTER_CACHE_SIZE / 2) {
-                GETTER_CACHE.clear();
-            }
-            java.lang.reflect.Method getter = GETTER_CACHE.computeIfAbsent(cacheKey, k -> {
-                try {
-                    return entity.getClass()
-                        .getMethod("get" + Character.toUpperCase(property.charAt(0)) + property.substring(1));
-                } catch (NoSuchMethodException e) {
-                    try {
-                        return entity.getClass()
-                            .getMethod("is" + Character.toUpperCase(property.charAt(0)) + property.substring(1));
-                    } catch (NoSuchMethodException ex) {
-                        return null;
-                    }
-                }
-            });
-            if (getter == null) {
-                throw new IllegalArgumentException("Cannot extract sort value for property '" + property + "' from "
-                    + entity.getClass().getName() + ": no getter method found (tried get"
-                    + Character.toUpperCase(property.charAt(0)) + property.substring(1) + " and is"
-                    + Character.toUpperCase(property.charAt(0)) + property.substring(1) + ")");
-            }
-            try {
-                values[i] = getter.invoke(entity);
-            } catch (ReflectiveOperationException ex) {
-                throw new IllegalArgumentException(
-                    "Cannot extract sort value for property '" + property + "' from " + entity.getClass().getName(),
-                    ex);
-            }
-        }
-        return values;
+        return keysetPaginationHelper.findKeysetPage(entityClass, spec, sort, pageSize, lastSortValues);
     }
 }

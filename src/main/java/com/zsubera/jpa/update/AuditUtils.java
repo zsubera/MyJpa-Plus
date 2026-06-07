@@ -17,7 +17,7 @@ package com.zsubera.jpa.update;
  * <li>默认值：5</li>
  * </ul>
  */
-final class AuditUtils {
+public final class AuditUtils {
 
     /** 默认最大调用栈深度 */
     private static final int DEFAULT_STACK_DEPTH = 5;
@@ -54,7 +54,7 @@ final class AuditUtils {
      *
      * @param depth 最大调用栈深度，有效范围 1-20
      */
-    static void setMaxStackDepth(int depth) {
+    public static void setMaxStackDepth(int depth) {
         if (depth > 0 && depth <= MAX_STACK_DEPTH_LIMIT) {
             maxStackDepth = depth;
         }
@@ -65,7 +65,7 @@ final class AuditUtils {
      *
      * @return 最大调用栈深度
      */
-    static int getMaxStackDepth() {
+    public static int getMaxStackDepth() {
         return maxStackDepth;
     }
 
@@ -82,7 +82,7 @@ final class AuditUtils {
      *
      * @return 格式化的调用栈字符串
      */
-    static String getCallStack() {
+    public static String getCallStack() {
         // 使用StackWalker（Java 9+）进行高效的部分栈遍历。
         // StackWalker仅实例化请求的帧数，而不像
         // Thread.currentThread().getStackTrace()那样捕获整个栈。

@@ -1,9 +1,10 @@
-package com.zsubera.jpa.update;
+package com.zsubera.jpa.softdelete;
 
 import com.zsubera.jpa.annotation.SoftDelete;
 import com.zsubera.jpa.exception.MyJpaPlusException;
 import com.zsubera.jpa.spec.ConditionNode;
 import com.zsubera.jpa.spec.QuerySpec;
+import com.zsubera.jpa.update.AuditUtils;
 import com.zsubera.jpa.util.StringHelper;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
@@ -51,6 +52,7 @@ import org.springframework.util.ConcurrentReferenceHashMap;
  * @author myjpa-plus
  * @see SoftDelete
  * @see Specification
+ * @since 1.3.0
  */
 public final class SoftDeleteHelper {
 
@@ -68,7 +70,7 @@ public final class SoftDeleteHelper {
     // 没有@SoftDelete字段的实体的哨兵值（避免在缓存中出现空缓存）
     private static final String NO_FIELD_SENTINEL = "\0";
 
-    // 缓存：entityClass ->字段名（或“无字段”的哨兵）
+    // 缓存: entityClass ->字段名（或"无字段"的哨兵）
     // 使用ConcurrentHashMap实现线程安全访问;实体类别数量在实际中是有限的
     // 缓存: entityClass -> 字段名（或"无字段"的哨兵值）
     // 使用弱引用键允许类加载器在 OSGi/热重载场景中被 GC 回收

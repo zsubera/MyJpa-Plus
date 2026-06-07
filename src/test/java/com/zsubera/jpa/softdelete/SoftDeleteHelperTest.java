@@ -1,4 +1,4 @@
-package com.zsubera.jpa.update;
+package com.zsubera.jpa.softdelete;
 
 import static org.junit.jupiter.api.Assertions.*;
 

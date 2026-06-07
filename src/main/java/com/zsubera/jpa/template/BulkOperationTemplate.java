@@ -46,7 +46,7 @@ class BulkOperationTemplate {
         org.springframework.context.ApplicationContext applicationContext) {
         this.entityManager = entityManager;
         this.maxBulkOperationRows = maxBulkOperationRows;
-        this.transactionHelper = new TransactionHelper(entityManager, applicationContext);
+        this.transactionHelper = new TransactionHelper(entityManager, null, applicationContext);
     }
 
     /**

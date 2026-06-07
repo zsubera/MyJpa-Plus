@@ -18,8 +18,8 @@ import java.lang.annotation.Target;
  * <pre>
  * {@code
  * // 标记单个方法
- * &#64;IgnoreSoftDelete
- * &#64;Query("SELECT p FROM Product p WHERE p.id = :id")
+ * @IgnoreSoftDelete
+ * @Query("SELECT p FROM Product p WHERE p.id = :id")
  * Product findByIdIncludingDeleted(@Param("id") Long id);
  *
  * // 标记整个接口（所有方法都不过滤）
@@ -29,7 +29,7 @@ import java.lang.annotation.Target;
  * </pre>
  *
  * @see com.zsubera.jpa.annotation.SoftDelete
- * @see com.zsubera.jpa.update.SoftDeleteHelper
+ * @see com.zsubera.jpa.softdelete.SoftDeleteHelper
  */
 @Documented
 @Target({ElementType.METHOD, ElementType.TYPE})

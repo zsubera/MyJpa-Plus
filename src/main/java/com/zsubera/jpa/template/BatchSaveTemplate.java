@@ -166,7 +166,7 @@ class BatchSaveTemplate {
         }
         try {
             if (ID_METHOD_CACHE.size() >= MAX_ID_METHOD_CACHE_SIZE) {
-                ID_METHOD_CACHE.clear();
+                evictIdMethodCache();
             }
             java.lang.reflect.Method getId = ID_METHOD_CACHE.computeIfAbsent(entity.getClass(), clazz -> {
                 try {
@@ -185,5 +185,23 @@ class BatchSaveTemplate {
         }
         log.debug("Cannot determine if entity is new for {}; assuming existing", entity.getClass().getSimpleName());
         return false;
+    }
+
+    /**
+     * 采样驱逐 ID_METHOD_CACHE：移除约 25% 的条目，避免全量清空导致的性能抖动。
+     */
+    private static void evictIdMethodCache() {
+        int targetSize = MAX_ID_METHOD_CACHE_SIZE / 4;
+        int toRemove = ID_METHOD_CACHE.size() - targetSize;
+        if (toRemove <= 0) {
+            return;
+        }
+        var iterator = ID_METHOD_CACHE.keySet().iterator();
+        int removed = 0;
+        while (iterator.hasNext() && removed < toRemove) {
+            iterator.next();
+            iterator.remove();
+            removed++;
+        }
     }
 }

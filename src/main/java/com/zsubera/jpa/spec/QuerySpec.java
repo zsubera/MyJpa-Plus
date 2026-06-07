@@ -700,15 +700,13 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
      * {@code NOT A OR NOT B}。
      *
      * <p>
-     * <strong>⚠ API 注意：</strong>虽然参数类型为 {@link OrGroup}，但内部使用 AND 语义收集条件。
-     * 参数类型 {@code Consumer<OrGroup<T>>} 仅为保持 API 一致性（与 {@link #or(Consumer)} 对称），
-     * <strong>不代表 OR 语义</strong>。组内条件以 AND 组合后整体取反。
+     * 使用 {@link NotGroup} 类型明确表达 NOT 语义，组内条件以 AND 组合后整体取反。
      *
      * @param config 条件组配置消费者
      * @return 当前 QuerySpec 实例，支持链式调用
      * @throws IllegalArgumentException 如果 config 为 null
      */
-    public QuerySpec<T> not(Consumer<OrGroup<T>> config) {
+    public QuerySpec<T> not(Consumer<NotGroup<T>> config) {
         if (config == null) {
             throw new IllegalArgumentException("config must not be null");
         }
@@ -717,7 +715,7 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
         currentGroup().add(negate);
         groupStack.push(andNode.nodes);
         try {
-            config.accept(new OrGroup<>(this));
+            config.accept(new NotGroup<>(this));
         } finally {
             groupStack.pop();
         }
@@ -939,13 +937,7 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
      * @param <T> 实体类型
      */
     public static <T> Expression<Long> count(Path<T> root, CriteriaBuilder cb) {
-        if (root == null) {
-            throw new IllegalArgumentException("root must not be null");
-        }
-        if (cb == null) {
-            throw new IllegalArgumentException("cb must not be null");
-        }
-        return cb.count(root);
+        return AggregateHelper.count(root, cb);
     }
 
     /**
@@ -965,16 +957,7 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
      * @param <T> 实体类型
      */
     public static <T> Expression<Long> count(Path<T> root, SFunction<T, ?> field, CriteriaBuilder cb) {
-        if (root == null) {
-            throw new IllegalArgumentException("root must not be null");
-        }
-        if (field == null) {
-            throw new IllegalArgumentException("field must not be null");
-        }
-        if (cb == null) {
-            throw new IllegalArgumentException("cb must not be null");
-        }
-        return cb.count(root.get(LambdaUtils.getPropertyName(field)));
+        return AggregateHelper.count(root, field, cb);
     }
 
     /**
@@ -987,16 +970,7 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
      * @param <T> 实体类型
      */
     public static <T> Expression<Long> countDistinct(Path<T> root, SFunction<T, ?> field, CriteriaBuilder cb) {
-        if (root == null) {
-            throw new IllegalArgumentException("root must not be null");
-        }
-        if (field == null) {
-            throw new IllegalArgumentException("field must not be null");
-        }
-        if (cb == null) {
-            throw new IllegalArgumentException("cb must not be null");
-        }
-        return cb.countDistinct(root.get(LambdaUtils.getPropertyName(field)));
+        return AggregateHelper.countDistinct(root, field, cb);
     }
 
     /**
@@ -1018,16 +992,7 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
      */
     @SuppressWarnings({"unchecked", "rawtypes"})
     public static <T> Expression<? extends Number> sum(Path<T> root, SFunction<T, ?> field, CriteriaBuilder cb) {
-        if (root == null) {
-            throw new IllegalArgumentException("root must not be null");
-        }
-        if (field == null) {
-            throw new IllegalArgumentException("field must not be null");
-        }
-        if (cb == null) {
-            throw new IllegalArgumentException("cb must not be null");
-        }
-        return cb.sum((Expression)root.get(LambdaUtils.getPropertyName(field)));
+        return AggregateHelper.sum(root, field, cb);
     }
 
     /**
@@ -1049,16 +1014,7 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
      */
     @SuppressWarnings({"unchecked", "rawtypes"})
     public static <T> Expression<Double> avg(Path<T> root, SFunction<T, ?> field, CriteriaBuilder cb) {
-        if (root == null) {
-            throw new IllegalArgumentException("root must not be null");
-        }
-        if (field == null) {
-            throw new IllegalArgumentException("field must not be null");
-        }
-        if (cb == null) {
-            throw new IllegalArgumentException("cb must not be null");
-        }
-        return cb.avg((Expression)root.get(LambdaUtils.getPropertyName(field)));
+        return AggregateHelper.avg(root, field, cb);
     }
 
     /**
@@ -1082,16 +1038,7 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
     @SuppressWarnings({"unchecked", "rawtypes"})
     public static <T, Y extends Comparable<? super Y>> Expression<Y> max(Path<T> root, SFunction<T, ?> field,
         CriteriaBuilder cb) {
-        if (root == null) {
-            throw new IllegalArgumentException("root must not be null");
-        }
-        if (field == null) {
-            throw new IllegalArgumentException("field must not be null");
-        }
-        if (cb == null) {
-            throw new IllegalArgumentException("cb must not be null");
-        }
-        return cb.max((Expression)root.get(LambdaUtils.getPropertyName(field)));
+        return AggregateHelper.max(root, field, cb);
     }
 
     /**
@@ -1114,16 +1061,7 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
     @SuppressWarnings({"unchecked", "rawtypes"})
     public static <T, Y extends Comparable<? super Y>> Expression<Y> min(Path<T> root, SFunction<T, ?> field,
         CriteriaBuilder cb) {
-        if (root == null) {
-            throw new IllegalArgumentException("root must not be null");
-        }
-        if (field == null) {
-            throw new IllegalArgumentException("field must not be null");
-        }
-        if (cb == null) {
-            throw new IllegalArgumentException("cb must not be null");
-        }
-        return cb.min((Expression)root.get(LambdaUtils.getPropertyName(field)));
+        return AggregateHelper.min(root, field, cb);
     }
 
     // ---- 类型安全的 HAVING 辅助方法 ----
@@ -1153,11 +1091,11 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
         if (op == null) {
             throw new IllegalArgumentException("op must not be null");
         }
-        validateHavingOperator(op);
+        AggregateHelper.validateHavingOperator(op);
         String fieldName = LambdaUtils.getPropertyName(field);
         havingConditions.add((root, cb) -> {
             Expression<Long> countExpr = cb.count(root.get(fieldName));
-            return compareExpression(cb, countExpr, op, value);
+            return AggregateHelper.compareExpression(cb, countExpr, op, value);
         });
         return this;
     }
@@ -1190,11 +1128,11 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
         if (value == null) {
             throw new IllegalArgumentException("value must not be null");
         }
-        validateHavingOperator(op);
+        AggregateHelper.validateHavingOperator(op);
         String fieldName = LambdaUtils.getPropertyName(field);
         havingConditions.add((root, cb) -> {
             Expression<? extends Number> sumExpr = cb.sum((Expression)root.get(fieldName));
-            return compareExpression(cb, sumExpr, op, value);
+            return AggregateHelper.compareExpression(cb, sumExpr, op, value);
         });
         return this;
     }
@@ -1219,11 +1157,11 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
         if (value == null) {
             throw new IllegalArgumentException("value must not be null");
         }
-        validateHavingOperator(op);
+        AggregateHelper.validateHavingOperator(op);
         String fieldName = LambdaUtils.getPropertyName(field);
         havingConditions.add((root, cb) -> {
             Expression<Double> avgExpr = cb.avg((Expression)root.get(fieldName));
-            return compareExpression(cb, avgExpr, op, value);
+            return AggregateHelper.compareExpression(cb, avgExpr, op, value);
         });
         return this;
     }
@@ -1249,11 +1187,11 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
         if (value == null) {
             throw new IllegalArgumentException("value must not be null");
         }
-        validateHavingOperator(op);
+        AggregateHelper.validateHavingOperator(op);
         String fieldName = LambdaUtils.getPropertyName(field);
         havingConditions.add((root, cb) -> {
             Expression<Y> maxExpr = cb.max((Expression)root.get(fieldName));
-            return compareComparable(cb, maxExpr, op, value);
+            return AggregateHelper.compareComparable(cb, maxExpr, op, value);
         });
         return this;
     }
@@ -1279,59 +1217,13 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
         if (value == null) {
             throw new IllegalArgumentException("value must not be null");
         }
-        validateHavingOperator(op);
+        AggregateHelper.validateHavingOperator(op);
         String fieldName = LambdaUtils.getPropertyName(field);
         havingConditions.add((root, cb) -> {
             Expression<Y> minExpr = cb.min((Expression)root.get(fieldName));
-            return compareComparable(cb, minExpr, op, value);
+            return AggregateHelper.compareComparable(cb, minExpr, op, value);
         });
         return this;
-    }
-
-    /**
-     * 验证 HAVING 子句支持的运算符。
-     */
-    private static void validateHavingOperator(ConditionNode.Op op) {
-        switch (op) {
-            case GT, GE, LT, LE, EQ, NE -> {
-                /* supported */ }
-            default -> throw new IllegalArgumentException(
-                "Unsupported operator for HAVING: " + op + ". Supported operators: GT, GE, LT, LE, EQ, NE");
-        }
-    }
-
-    /**
-     * 比较数值表达式与给定值。
-     */
-    @SuppressWarnings({"unchecked", "rawtypes"})
-    private static Predicate compareExpression(CriteriaBuilder cb, Expression<? extends Number> expr,
-        ConditionNode.Op op, Number value) {
-        return switch (op) {
-            case GT -> cb.greaterThan((Expression)expr, (Comparable)value);
-            case GE -> cb.greaterThanOrEqualTo((Expression)expr, (Comparable)value);
-            case LT -> cb.lessThan((Expression)expr, (Comparable)value);
-            case LE -> cb.lessThanOrEqualTo((Expression)expr, (Comparable)value);
-            case EQ -> cb.equal(expr, value);
-            case NE -> cb.notEqual(expr, value);
-            default -> throw new IllegalArgumentException("Unsupported operator for HAVING: " + op);
-        };
-    }
-
-    /**
-     * 比较可比较表达式与给定值。
-     */
-    @SuppressWarnings({"unchecked", "rawtypes"})
-    private static <Y extends Comparable<? super Y>> Predicate compareComparable(CriteriaBuilder cb, Expression<Y> expr,
-        ConditionNode.Op op, Y value) {
-        return switch (op) {
-            case GT -> cb.greaterThan(expr, value);
-            case GE -> cb.greaterThanOrEqualTo(expr, value);
-            case LT -> cb.lessThan(expr, value);
-            case LE -> cb.lessThanOrEqualTo(expr, value);
-            case EQ -> cb.equal(expr, value);
-            case NE -> cb.notEqual(expr, value);
-            default -> throw new IllegalArgumentException("Unsupported operator for HAVING: " + op);
-        };
     }
 
     @Override

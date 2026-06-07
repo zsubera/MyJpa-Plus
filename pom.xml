@@ -224,6 +224,7 @@
                                         <include>com.zsubera.jpa.update</include>
                                         <include>com.zsubera.jpa.repository</include>
                                         <include>com.zsubera.jpa.projection</include>
+                                        <include>com.zsubera.jpa.template</include>
                                     </includes>
                                     <limits>
                                         <limit>

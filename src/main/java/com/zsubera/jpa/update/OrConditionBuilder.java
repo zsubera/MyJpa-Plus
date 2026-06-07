@@ -272,9 +272,9 @@ public class OrConditionBuilder<T, SELF extends AbstractBulkOperationSpec<T, SEL
             throw new IllegalArgumentException("value must not be null");
         }
         String name = parent.property(field);
-        String escaped = PredicateHelper.escapeLikeWildcards(value);
-        nodes.add(new BulkConditionNode.LeafNode((root, cb) -> PredicateHelper.likeIgnoreCase(root, name,
-            "%" + escaped + "%", cb, PredicateHelper.LIKE_ESCAPE_CHAR)));
+        String pattern = ConditionalMethods.wrapLikePattern(value);
+        nodes.add(new BulkConditionNode.LeafNode(
+            (root, cb) -> PredicateHelper.likeIgnoreCase(root, name, pattern, cb, PredicateHelper.LIKE_ESCAPE_CHAR)));
         return this;
     }
 

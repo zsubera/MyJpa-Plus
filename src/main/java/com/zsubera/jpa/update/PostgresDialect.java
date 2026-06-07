@@ -3,6 +3,8 @@ package com.zsubera.jpa.update;
 import java.util.ArrayList;
 import java.util.List;
 
+import com.zsubera.jpa.update.EntityFieldExtractor.EntityFieldValue;
+
 /**
  * PostgreSQL 方言实现。
  *
@@ -26,7 +28,7 @@ class PostgresDialect implements DialectStrategy {
 
     @Override
     public SqlWithParams buildUpsertSql(String tableName, List<String> insertColumns,
-        List<MergeSpec.EntityFieldValue> insertFieldValues, List<String> conflictColumns, List<String> updateColumns) {
+        List<EntityFieldValue> insertFieldValues, List<String> conflictColumns, List<String> updateColumns) {
         String escapedTable = escapeIdentifier(tableName);
         SqlWithParams insertPart = DialectStrategy.buildInsertPart(escapedTable, insertColumns, insertFieldValues);
         StringBuilder sql = new StringBuilder(insertPart.sql());

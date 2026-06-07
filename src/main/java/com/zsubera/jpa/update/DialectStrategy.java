@@ -3,6 +3,8 @@ package com.zsubera.jpa.update;
 import java.util.ArrayList;
 import java.util.List;
 
+import com.zsubera.jpa.update.EntityFieldExtractor.EntityFieldValue;
+
 /**
  * 数据库方言策略接口，封装不同数据库的 UPSERT SQL 语法差异。
  *
@@ -18,6 +20,7 @@ import java.util.List;
  * </ul>
  *
  * @see MergeSpec
+ * @see EntityFieldExtractor
  */
 interface DialectStrategy {
 
@@ -46,8 +49,8 @@ interface DialectStrategy {
      * @param updateColumns 更新列名列表
      * @return SQL 和参数
      */
-    SqlWithParams buildUpsertSql(String tableName, List<String> insertColumns,
-        List<MergeSpec.EntityFieldValue> insertFieldValues, List<String> conflictColumns, List<String> updateColumns);
+    SqlWithParams buildUpsertSql(String tableName, List<String> insertColumns, List<EntityFieldValue> insertFieldValues,
+        List<String> conflictColumns, List<String> updateColumns);
 
     /**
      * 构建简单的 INSERT SQL（不处理冲突，用于 H2 冲突键全为 null 的场景）。
@@ -62,7 +65,7 @@ interface DialectStrategy {
      * @throws UnsupportedOperationException 如果方言不支持此操作
      */
     default SqlWithParams buildInsertOnlySql(String tableName, List<String> insertColumns,
-        List<MergeSpec.EntityFieldValue> insertFieldValues) {
+        List<EntityFieldValue> insertFieldValues) {
         throw new UnsupportedOperationException("Simple INSERT not supported for dialect: " + name());
     }
 
@@ -75,7 +78,7 @@ interface DialectStrategy {
      * @return SQL 和参数
      */
     static SqlWithParams buildInsertPart(String escapedTable, List<String> insertColumns,
-        List<MergeSpec.EntityFieldValue> insertFieldValues) {
+        List<EntityFieldValue> insertFieldValues) {
         StringBuilder sql = new StringBuilder("INSERT INTO ").append(escapedTable).append(" (");
         sql.append(String.join(", ", List.copyOf(insertColumns)));
         sql.append(") VALUES (");

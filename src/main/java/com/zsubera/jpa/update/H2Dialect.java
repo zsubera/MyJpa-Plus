@@ -3,6 +3,8 @@ package com.zsubera.jpa.update;
 import java.util.ArrayList;
 import java.util.List;
 
+import com.zsubera.jpa.update.EntityFieldExtractor.EntityFieldValue;
+
 /**
  * H2 方言实现。
  *
@@ -29,7 +31,7 @@ class H2Dialect implements DialectStrategy {
 
     @Override
     public SqlWithParams buildInsertOnlySql(String tableName, List<String> insertColumns,
-        List<MergeSpec.EntityFieldValue> insertFieldValues) {
+        List<EntityFieldValue> insertFieldValues) {
         String escapedTable = escapeIdentifier(tableName);
         SqlWithParams insertPart = DialectStrategy.buildInsertPart(escapedTable, insertColumns, insertFieldValues);
         return new SqlWithParams(insertPart.sql(), insertPart.params());
@@ -37,7 +39,7 @@ class H2Dialect implements DialectStrategy {
 
     @Override
     public SqlWithParams buildUpsertSql(String tableName, List<String> insertColumns,
-        List<MergeSpec.EntityFieldValue> insertFieldValues, List<String> conflictColumns, List<String> updateColumns) {
+        List<EntityFieldValue> insertFieldValues, List<String> conflictColumns, List<String> updateColumns) {
         String escapedTable = escapeIdentifier(tableName);
         StringBuilder sql = new StringBuilder("MERGE INTO ");
         sql.append(escapedTable).append(" (");

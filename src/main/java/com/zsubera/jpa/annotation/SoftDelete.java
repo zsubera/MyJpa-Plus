@@ -72,7 +72,7 @@ import java.lang.annotation.Target;
  * }</pre>
  *
  * @see com.zsubera.jpa.repository.MyJpaRepository
- * @see com.zsubera.jpa.update.SoftDeleteHelper
+ * @see com.zsubera.jpa.softdelete.SoftDeleteHelper
  */
 @Documented
 @Target(ElementType.FIELD)

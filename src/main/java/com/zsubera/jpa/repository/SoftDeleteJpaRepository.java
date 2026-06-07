@@ -1,6 +1,7 @@
 package com.zsubera.jpa.repository;
 
-import com.zsubera.jpa.update.SoftDeleteHelper;
+import com.zsubera.jpa.softdelete.SoftDeleteHelper;
+import com.zsubera.jpa.update.AuditUtils;
 import com.zsubera.jpa.util.EntityClassResolver;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import jakarta.persistence.EntityManager;
@@ -303,6 +304,54 @@ public class SoftDeleteJpaRepository<T, ID> extends SimpleJpaRepository<T, ID> {
     }
 
     /**
+     * 覆写 findAllById() 以支持软删除过滤。
+     *
+     * <p>
+     * 默认的 {@link SimpleJpaRepository#findAllById(Iterable)} 不会过滤软删除记录。 此实现会自动追加软删除过滤条件，确保已删除的实体不被返回。
+     *
+     * @param ids 实体 ID 集合
+     * @return 未被软删除的实体列表
+     */
+    @Override
+    public List<T> findAllById(Iterable<ID> ids) {
+        if (ids == null) {
+            throw new IllegalArgumentException("ids must not be null");
+        }
+        if (!shouldApplySoftDeleteFilter()) {
+            return super.findAllById(ids);
+        }
+        java.util.List<ID> idList = new java.util.ArrayList<>();
+        ids.forEach(idList::add);
+        if (idList.isEmpty()) {
+            return java.util.Collections.emptyList();
+        }
+        String idFieldName = EntityClassResolver.resolveIdFieldName(domainClass);
+        Specification<T> idSpec = Specification.where((root, query, cb) -> root.get(idFieldName).in(idList));
+        Specification<T> softDeleteSpec = SoftDeleteHelper.isNotDeleted(domainClass);
+        return findAll(idSpec.and(softDeleteSpec));
+    }
+
+    /**
+     * 覆写 existsById() 以支持软删除过滤。
+     *
+     * <p>
+     * 默认的 {@link SimpleJpaRepository#existsById(Object)} 不会过滤软删除记录。 此实现会自动追加软删除过滤条件，确保已软删除的实体返回 {@code false}。
+     *
+     * @param id 实体 ID
+     * @return 如果实体存在且未被软删除返回 true
+     */
+    @Override
+    public boolean existsById(ID id) {
+        if (id == null) {
+            return false;
+        }
+        if (!shouldApplySoftDeleteFilter()) {
+            return super.existsById(id);
+        }
+        return findById(id).isPresent();
+    }
+
+    /**
      * 覆写 deleteById() 以支持软删除过滤。
      *
      * <p>
@@ -373,6 +422,10 @@ public class SoftDeleteJpaRepository<T, ID> extends SimpleJpaRepository<T, ID> {
                 + " is blocked because the entity has a @SoftDelete field. "
                 + "Set SoftDeleteJpaRepository.setBlockUnconditionalDelete(false) to allow this operation.");
         } else {
+            if (SoftDeleteHelper.findSoftDeleteField(domainClass) != null) {
+                log.warn("AUDIT: Executing unconditional hard DELETE ALL on {} with @SoftDelete field "
+                    + "(autoFilter=false). Call stack: {}", domainClass.getSimpleName(), AuditUtils.getCallStack());
+            }
             super.deleteAll();
         }
     }

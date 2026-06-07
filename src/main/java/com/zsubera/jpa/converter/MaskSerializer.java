@@ -29,10 +29,18 @@ public class MaskSerializer extends JsonSerializer<String> {
 
     private final MaskType maskType;
 
+    /**
+     * 创建默认脱敏类型为 {@link MaskType#NAME} 的序列化器。
+     */
     public MaskSerializer() {
         this(MaskType.NAME);
     }
 
+    /**
+     * 创建指定脱敏类型的序列化器。
+     *
+     * @param maskType 脱敏类型
+     */
     public MaskSerializer(MaskType maskType) {
         this.maskType = maskType;
     }
@@ -154,6 +162,17 @@ public class MaskSerializer extends JsonSerializer<String> {
         return plate.substring(0, 2) + "*".repeat(plate.length() - 3) + plate.charAt(plate.length() - 1);
     }
 
+    /**
+     * Jackson 模块，自动发现 {@link Mask @Mask} 注解的 {@code String} 字段并注册对应的脱敏序列化器。
+     *
+     * <p>
+     * 使用方式：
+     *
+     * <pre>{@code
+     * ObjectMapper mapper = new ObjectMapper();
+     * mapper.registerModule(new MaskSerializer.MaskModule());
+     * }</pre>
+     */
     public static class MaskModule extends SimpleModule {
 
         public MaskModule() {

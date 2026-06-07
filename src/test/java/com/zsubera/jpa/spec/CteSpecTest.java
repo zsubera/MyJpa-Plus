@@ -137,19 +137,19 @@ class CteSpecTest {
         em.persist(e1);
         em.flush();
 
-        Object[] result = CteSpec.with("one").as("SELECT id, name FROM test_entity WHERE status = 42")
+        var result = CteSpec.with("one").as("SELECT id, name FROM test_entity WHERE status = 42")
             .select("SELECT id, name FROM one").getSingleResult(em);
 
-        assertNotNull(result);
-        assertEquals("solo", result[1]);
+        assertTrue(result.isPresent());
+        assertEquals("solo", result.get()[1]);
     }
 
     @Test
     void testGetSingleResultEmpty() {
-        Object[] result = CteSpec.with("empty").as("SELECT id, name FROM test_entity WHERE status = -999")
+        var result = CteSpec.with("empty").as("SELECT id, name FROM test_entity WHERE status = -999")
             .select("SELECT * FROM empty").getSingleResult(em);
 
-        assertNull(result);
+        assertTrue(result.isEmpty());
     }
 
     @Test

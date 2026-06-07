@@ -1,6 +1,7 @@
 package com.zsubera.jpa.template;
 
 import jakarta.persistence.EntityManager;
+import jakarta.persistence.EntityManagerFactory;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.ApplicationContext;
@@ -29,10 +30,13 @@ class TransactionHelper {
     private static final Logger log = LoggerFactory.getLogger(TransactionHelper.class);
 
     private final EntityManager entityManager;
+    private final EntityManagerFactory entityManagerFactory;
     private final ApplicationContext applicationContext;
 
-    TransactionHelper(EntityManager entityManager, ApplicationContext applicationContext) {
+    TransactionHelper(EntityManager entityManager, EntityManagerFactory entityManagerFactory,
+        ApplicationContext applicationContext) {
         this.entityManager = entityManager;
+        this.entityManagerFactory = entityManagerFactory;
         this.applicationContext = applicationContext;
     }
 
@@ -56,7 +60,8 @@ class TransactionHelper {
                     + "If running outside a Spring context, use MergeSpec.executeInTransaction() instead.");
         }
         TransactionTemplate txTemplate = new TransactionTemplate(txManager);
-        if (TransactionSynchronizationManager.isActualTransactionActive()) {
+        boolean existingTransaction = TransactionSynchronizationManager.isActualTransactionActive();
+        if (existingTransaction) {
             log.warn("executeInNewTransaction called within an active transaction. "
                 + "Batch operations will join the existing transaction. "
                 + "For true isolation, call outside of @Transactional methods.");

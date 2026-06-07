@@ -5,11 +5,14 @@ import jakarta.persistence.AttributeConverter;
 
 import java.io.File;
 import java.io.IOException;
+import java.nio.channels.FileChannel;
+import java.nio.channels.FileLock;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.FileSystems;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
+import java.nio.file.StandardOpenOption;
 import java.nio.file.attribute.*;
 import java.security.GeneralSecurityException;
 import java.security.SecureRandom;
@@ -26,6 +29,44 @@ import jakarta.persistence.Converter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+/**
+ * JPA 属性转换器，提供透明的 AES/GCM 字段级加密存储。
+ *
+ * <p>
+ * 在实体字段写入数据库时自动加密，读取时自动解密。加密算法为
+ * {@code AES/GCM/NoPadding}（认证加密），每次加密使用随机 12 字节 IV，提供机密性与完整性保护。
+ *
+ * <h3>密钥配置</h3>
+ * <ul>
+ *   <li>环境变量 {@code MYJPA_ENCRYPT_KEY}（推荐）</li>
+ *   <li>系统属性 {@code myjpa.encrypt.key}</li>
+ * </ul>
+ *
+ * <p>
+ * 密钥通过 PBKDF2WithHmacSHA256（600,000 次迭代、256 位输出）派生 AES 密钥。最小密钥长度为 16 字节（UTF-8）。
+ *
+ * <h3>多版本密钥轮换</h3>
+ * 支持格式 {@code v1:key1,v2:key2}，配合 {@link #refreshKeyVersion()} 实现在线密钥轮换。
+ *
+ * <h3>盐值管理</h3>
+ * 优先使用环境变量 {@code MYJPA_ENCRYPT_SALT} 配置；未配置时根据 {@code myjpa-plus.encrypt.persist-salt}
+ * 决定是否将自动生成的盐值持久化到 {@code ~/.myjpa-plus/.salt}。
+ *
+ * <h3>典型用法</h3>
+ *
+ * <pre>{@code
+ * @Entity
+ * public class User {
+ *     @Id @GeneratedValue
+ *     private Long id;
+ *
+ *     @Encrypt
+ *     private String phone;
+ * }
+ * }</pre>
+ *
+ * @see com.zsubera.jpa.annotation.Encrypt
+ */
 @Converter
 public class EncryptConverter implements AttributeConverter<String, String> {
 
@@ -39,6 +80,7 @@ public class EncryptConverter implements AttributeConverter<String, String> {
     private static final String SALT_ENV = "MYJPA_ENCRYPT_SALT";
     private static final String SALT_PROPERTY = "myjpa.encrypt.salt";
     private static final String REQUIRE_SALT_PROPERTY = "myjpa-plus.encrypt.require-salt";
+    /** 默认启用盐值持久化，防止 JVM 重启后加密数据不可恢复。 */
     private static final String PERSIST_SALT_PROPERTY = "myjpa-plus.encrypt.persist-salt";
     private static final SecureRandom SECURE_RANDOM = new SecureRandom();
     private static final int PBKDF2_ITERATIONS = 600_000;
@@ -124,9 +166,14 @@ public class EncryptConverter implements AttributeConverter<String, String> {
                     + "EncryptConverter requires a key to function.");
             } else {
                 String key = (keyEnv != null && !keyEnv.isEmpty()) ? keyEnv : keyProp;
-                if (key != null && key.length() < MIN_KEY_LENGTH) {
-                    throw new MyJpaPlusException("Encryption key must be at least " + MIN_KEY_LENGTH + " characters. "
-                        + "Current length: " + key.length() + ".");
+                if (key != null) {
+                    // 基于 UTF-8 字节长度校验，而非字符长度，确保非 ASCII 字符（如中文）密钥的熵足够
+                    int byteLength = key.getBytes(StandardCharsets.UTF_8).length;
+                    if (byteLength < MIN_KEY_LENGTH) {
+                        throw new MyJpaPlusException(
+                            "Encryption key must be at least " + MIN_KEY_LENGTH + " bytes (UTF-8 encoded). "
+                                + "Current byte length: " + byteLength + " (character length: " + key.length() + ").");
+                    }
                 }
                 // 当使用系统属性配置密钥时发出警告
                 // 系统属性在 JVM 全局可见，可能在进程列表中暴露
@@ -172,6 +219,17 @@ public class EncryptConverter implements AttributeConverter<String, String> {
         }
     }
 
+    /**
+     * 将实体字段值加密后写入数据库列。
+     *
+     * <p>
+     * 加密流程：生成随机 IV → AES/GCM 加密 → 拼接 IV 与密文 → Base64 编码 → 添加版本前缀。
+     * 输出格式为 {@code version:base64(iv + ciphertext)}。
+     *
+     * @param attribute 实体字段的明文值
+     * @return 加密后的密文字符串，如果 {@code attribute} 为 null 则返回 null
+     * @throws MyJpaPlusException 如果加密过程失败
+     */
     @Override
     public String convertToDatabaseColumn(String attribute) {
         if (attribute == null) {
@@ -199,6 +257,20 @@ public class EncryptConverter implements AttributeConverter<String, String> {
         }
     }
 
+    /**
+     * 从数据库列读取密文并解密还原为实体字段明文值。
+     *
+     * <p>
+     * 支持两种存储格式：
+     * <ul>
+     *   <li>带版本前缀格式：{@code version:base64(iv + ciphertext)}</li>
+     *   <li>无版本前缀格式（兼容旧数据）：{@code base64(iv + ciphertext)}</li>
+     * </ul>
+     *
+     * @param dbData 数据库中的密文字符串
+     * @return 解密后的明文值，如果 {@code dbData} 为 null 则返回 null
+     * @throws MyJpaPlusException 如果 Base64 解码失败、数据损坏或解密过程失败
+     */
     @Override
     public String convertToEntityAttribute(String dbData) {
         if (dbData == null) {
@@ -414,8 +486,8 @@ public class EncryptConverter implements AttributeConverter<String, String> {
      * 获取 PBKDF2 盐值。优先从环境变量获取，回退到系统属性。 生产环境（spring.profiles.active 包含 prod/production）强制要求配置盐值。
      *
      * <p>
-     * <strong>盐值持久化控制：</strong>默认情况下，非生产环境使用内存随机盐值（JVM 重启后会变化）。 如需跨重启保持一致，设置
-     * {@code myjpa-plus.encrypt.persist-salt=true} 或通过环境变量 {@code MYJPA_ENCRYPT_SALT} 显式配置。
+     * <strong>盐值持久化控制：</strong>默认情况下，盐值会持久化到文件系统以确保 JVM 重启后加密数据可恢复。 如需禁用持久化（如容器化部署），设置
+     * {@code myjpa-plus.encrypt.persist-salt=false}。通过环境变量 {@code MYJPA_ENCRYPT_SALT} 显式配置时不受影响。
      *
      * @return 盐值字节数组
      * @throws IllegalStateException 生产环境未配置盐值时抛出
@@ -430,7 +502,8 @@ public class EncryptConverter implements AttributeConverter<String, String> {
                 throw new IllegalStateException("PBKDF2 salt must be configured in production. "
                     + "Set environment variable " + SALT_ENV + " or system property " + SALT_PROPERTY);
             }
-            boolean persistSalt = Boolean.parseBoolean(System.getProperty(PERSIST_SALT_PROPERTY, "false"));
+            // 默认启用盐值持久化，防止 JVM 重启后加密数据不可恢复
+            boolean persistSalt = Boolean.parseBoolean(System.getProperty(PERSIST_SALT_PROPERTY, "true"));
             if (persistSalt) {
                 // 显式启用盐值持久化：从文件加载或创建
                 byte[] cached = SALT_CACHE.get("internal");
@@ -474,11 +547,11 @@ public class EncryptConverter implements AttributeConverter<String, String> {
     }
 
     /**
-     * 从文件加载或创建盐值。必须在 {@link #SALT_FILE_LOCK} 同步块内调用。
+     * 从文件加载或创建盐值。使用 {@link FileLock} 实现跨进程互斥。
      *
      * <p>
-     * <strong>改进：</strong>使用文件锁（{@link FileChannel}）替代 synchronized 块，
-     * 防止多进程同时写入盐值文件导致数据损坏。写入后再次验证文件内容，确保一致性。
+     * 使用文件锁（{@link FileChannel}）防止多进程同时写入盐值文件导致数据损坏。
+     * 获取锁后再次检查文件是否存在（双重检查模式），写入后验证文件内容确保一致性。
      *
      * @return 盐值字节数组
      */
@@ -486,6 +559,9 @@ public class EncryptConverter implements AttributeConverter<String, String> {
         // 使用 $HOME/.myjpa-plus/.salt 以获得更好的安全性（非全局可读的临时目录）
         File homeDir = new File(System.getProperty("user.home"), ".myjpa-plus");
         File saltFile = new File(homeDir, ".salt");
+        File lockFile = new File(homeDir, ".salt.lock");
+
+        // 快速路径：如果盐值文件已存在且可读，直接返回（无需获取锁）
         if (saltFile.exists()) {
             try {
                 byte[] fileSalt = Files.readAllBytes(saltFile.toPath());
@@ -497,13 +573,14 @@ public class EncryptConverter implements AttributeConverter<String, String> {
                 log.warn("Failed to read salt file: {}", e.getMessage());
             }
         }
+
         byte[] randomSalt = generateRandomSalt().getBytes(StandardCharsets.UTF_8);
-        // 尝试持久化盐值以保证跨重启的一致性
+
+        // 确保目录存在
         try {
             if (!homeDir.exists()) {
                 boolean created = homeDir.mkdirs();
                 if (!created && !homeDir.exists()) {
-                    // 目录创建失败则中止，避免无意义的文件写入
                     log.error(
                         "SECURITY: Failed to create directory: {}. "
                             + "Salt cannot be persisted. Set environment variable {} to ensure consistent encryption.",
@@ -521,51 +598,81 @@ public class EncryptConverter implements AttributeConverter<String, String> {
                     log.debug("Cannot set POSIX permissions on salt directory: {}", e.getMessage());
                 }
             }
-            // 使用临时文件 + 原子重命名，确保盐值文件从未以不安全权限存在
-            Path saltPath = saltFile.toPath();
-            Path tempPath = homeDir.toPath().resolve(".salt.tmp." + ProcessHandle.current().pid());
+        } catch (Exception e) {
+            log.error("SECURITY: Failed to prepare salt directory: {}", e.getMessage());
+            return randomSalt;
+        }
+
+        // 使用文件锁实现跨进程互斥
+        Path lockPath = lockFile.toPath();
+        try (FileChannel lockChannel =
+            FileChannel.open(lockPath, StandardOpenOption.CREATE, StandardOpenOption.WRITE, StandardOpenOption.READ)) {
+            FileLock fileLock = lockChannel.lock();
             try {
-                // 创建临时文件并设置严格权限（写入前）
-                Files.deleteIfExists(tempPath);
-                Files.createFile(tempPath);
-                if (!os.contains("win")) {
+                // 双重检查：获取锁后再次检查盐值文件（另一个进程可能已创建）
+                if (saltFile.exists()) {
                     try {
-                        Files.setPosixFilePermissions(tempPath,
-                            EnumSet.of(PosixFilePermission.OWNER_READ, PosixFilePermission.OWNER_WRITE));
-                    } catch (UnsupportedOperationException | IOException e) {
-                        log.debug("Cannot set POSIX permissions on salt temp file: {}", e.getMessage());
+                        byte[] fileSalt = Files.readAllBytes(saltFile.toPath());
+                        if (fileSalt.length > 0) {
+                            log.info("Loaded persisted PBKDF2 salt from {} (after acquiring lock)",
+                                saltFile.getAbsolutePath());
+                            return fileSalt;
+                        }
+                    } catch (IOException e) {
+                        log.warn("Failed to read salt file after acquiring lock: {}", e.getMessage());
                     }
-                } else {
-                    setWindowsPermissionsNio(tempPath.toFile());
                 }
-                // 写入盐值到临时文件
-                Files.write(tempPath, randomSalt);
-                // 原子重命名到目标路径
+
+                // 使用临时文件 + 原子重命名，确保盐值文件从未以不安全权限存在
+                Path saltPath = saltFile.toPath();
+                Path tempPath = homeDir.toPath().resolve(".salt.tmp." + ProcessHandle.current().pid());
                 try {
-                    Files.move(tempPath, saltPath, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
-                } catch (IOException atomicEx) {
-                    // 非原子重命名回退（Windows 可能不支持 ATOMIC_MOVE）
-                    Files.move(tempPath, saltPath, StandardCopyOption.REPLACE_EXISTING);
-                }
-                // 验证写入内容
-                byte[] writtenSalt = Files.readAllBytes(saltPath);
-                if (!Arrays.equals(randomSalt, writtenSalt)) {
-                    throw new SecurityException("SECURITY: Salt file write verification failed. "
-                        + "Written bytes do not match generated salt. Set environment variable " + SALT_ENV
-                        + " to ensure consistent encryption.");
-                }
-            } catch (IOException e) {
-                // 清理临时文件
-                try {
+                    // 创建临时文件并设置严格权限（写入前）
                     Files.deleteIfExists(tempPath);
-                } catch (IOException ignored) {
+                    Files.createFile(tempPath);
+                    String sysOs = System.getProperty("os.name", "").toLowerCase();
+                    if (!sysOs.contains("win")) {
+                        try {
+                            Files.setPosixFilePermissions(tempPath,
+                                EnumSet.of(PosixFilePermission.OWNER_READ, PosixFilePermission.OWNER_WRITE));
+                        } catch (UnsupportedOperationException | IOException e) {
+                            log.debug("Cannot set POSIX permissions on salt temp file: {}", e.getMessage());
+                        }
+                    } else {
+                        setWindowsPermissionsNio(tempPath.toFile());
+                    }
+                    // 写入盐值到临时文件
+                    Files.write(tempPath, randomSalt);
+                    // 原子重命名到目标路径
+                    try {
+                        Files.move(tempPath, saltPath, StandardCopyOption.REPLACE_EXISTING,
+                            StandardCopyOption.ATOMIC_MOVE);
+                    } catch (IOException atomicEx) {
+                        // 非原子重命名回退（Windows 可能不支持 ATOMIC_MOVE）
+                        Files.move(tempPath, saltPath, StandardCopyOption.REPLACE_EXISTING);
+                    }
+                    // 验证写入内容
+                    byte[] writtenSalt = Files.readAllBytes(saltPath);
+                    if (!Arrays.equals(randomSalt, writtenSalt)) {
+                        throw new SecurityException("SECURITY: Salt file write verification failed. "
+                            + "Written bytes do not match generated salt. Set environment variable " + SALT_ENV
+                            + " to ensure consistent encryption.");
+                    }
+                } catch (IOException e) {
+                    // 清理临时文件
+                    try {
+                        Files.deleteIfExists(tempPath);
+                    } catch (IOException ignored) {
+                    }
+                    throw e;
                 }
-                throw e;
+                log.warn(
+                    "SECURITY: Generated and persisted PBKDF2 salt to {}. "
+                        + "Set environment variable {} for consistent encryption across environments.",
+                    saltFile.getAbsolutePath(), SALT_ENV);
+            } finally {
+                fileLock.release();
             }
-            log.warn(
-                "SECURITY: Generated and persisted PBKDF2 salt to {}. "
-                    + "Set environment variable {} for consistent encryption across environments.",
-                saltFile.getAbsolutePath(), SALT_ENV);
         } catch (IOException e) {
             log.error(
                 "SECURITY: Using non-persisted random salt. Previous encrypted data WILL BE UNRECOVERABLE after restart. "

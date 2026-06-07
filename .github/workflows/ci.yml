@@ -7,6 +7,11 @@ on:
   pull_request:
     branches: [main, master]
 
+# 防止并发 CI 运行，节省资源
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -29,12 +34,15 @@ jobs:
   integration:
     needs: build
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        java: [17, 21]
     steps:
       - uses: actions/checkout@v4
-      - name: Set up JDK 17
+      - name: Set up JDK ${{ matrix.java }}
         uses: actions/setup-java@v4
         with:
-          java-version: 17
+          java-version: ${{ matrix.java }}
           distribution: 'temurin'
           cache: maven
       - name: Run PostgreSQL + MySQL integration tests

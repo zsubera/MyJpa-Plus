@@ -7,7 +7,7 @@ import com.zsubera.jpa.spec.PredicateHelper;
 import com.zsubera.jpa.spec.QuerySpec;
 import com.zsubera.jpa.spec.SFunction;
 import com.zsubera.jpa.template.MyJpaTemplate;
-import com.zsubera.jpa.update.SoftDeleteHelper;
+import com.zsubera.jpa.softdelete.SoftDeleteHelper;
 import com.zsubera.jpa.util.LambdaUtils;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import jakarta.persistence.EntityManager;

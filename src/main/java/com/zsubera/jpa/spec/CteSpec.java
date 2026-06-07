@@ -8,6 +8,7 @@ import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.regex.Pattern;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -58,15 +59,15 @@ public class CteSpec {
     private boolean recursive;
 
     /**
-     * 严格模式开关。默认为 false（纯日志模式）。
+     * 严格模式开关。默认为 true（安全优先模式）。
      *
      * <p>
      * 设置为 true 时，检测到危险 SQL 关键字或未绑定参数会抛出异常。 但请注意：正则黑名单无法完备覆盖所有绕过方式，此检查仅作为辅助防护层。 安全责任在于使用者确保 CTE SQL 不包含用户输入。
      *
      * <p>
-     * 通过系统属性 {@code myjpa-plus.cte.strict-mode=true} 启用。
+     * 通过系统属性 {@code myjpa-plus.cte.strict-mode=false} 可禁用严格模式。
      */
-    private static volatile boolean strictMode = false;
+    private static volatile boolean strictMode = true;
 
     /**
      * 获取严格模式状态。
@@ -312,12 +313,13 @@ public class CteSpec {
      * 构建完整的 CTE SQL 并执行查询，返回单个结果。
      *
      * @param em EntityManager 实例
-     * @return 单个查询结果（Object[]），如果无结果则返回 null
+     * @return 单个查询结果（Object[]），如果无结果则返回 {@link Optional#empty()}
      * @throws IllegalStateException 如果 CTE 或主查询未完整配置
      * @throws IllegalArgumentException 如果 em 为 null
+     * @since 1.3.0
      */
     @SuppressWarnings("unchecked")
-    public Object[] getSingleResult(EntityManager em) {
+    public Optional<Object[]> getSingleResult(EntityManager em) {
         if (em == null) {
             throw new IllegalArgumentException("em must not be null");
         }
@@ -327,7 +329,7 @@ public class CteSpec {
         applyParameters(query);
         List<?> results = query.getResultList();
         if (results.isEmpty()) {
-            return null;
+            return Optional.empty();
         }
         // 当返回多个结果但只使用第一个时发出警告
         if (results.size() > 1) {
@@ -336,9 +338,9 @@ public class CteSpec {
         }
         Object row = results.get(0);
         if (row instanceof Object[] arr) {
-            return arr;
+            return Optional.of(arr);
         }
-        return new Object[] {row};
+        return Optional.of(new Object[] {row});
     }
 
     /**

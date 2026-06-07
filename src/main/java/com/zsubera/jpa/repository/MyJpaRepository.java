@@ -1,6 +1,6 @@
 package com.zsubera.jpa.repository;
 
-import com.zsubera.jpa.update.SoftDeleteHelper;
+import com.zsubera.jpa.softdelete.SoftDeleteHelper;
 import com.zsubera.jpa.util.EntityClassResolver;
 import java.util.List;
 import java.util.Optional;
