@@ -419,7 +419,7 @@ class BulkOperationTemplate {
                     operationName, MAX_BATCH_ITERATIONS, total);
                 break;
             }
-        } while (batchResult >= batchSize);
+        } while (batchResult > 0);
         return total;
     }
 }

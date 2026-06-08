@@ -19,11 +19,8 @@ import java.util.function.Function;
  * 避免两个类各自维护相同的 {@code executeInNewTransaction} 实现。
  *
  * <p>
- * <strong>事务传播行为：</strong>
- * <ul>
- * <li>当已有活动事务时：使用 {@code PROPAGATION_REQUIRED}（加入现有事务）</li>
- * <li>当没有活动事务时：使用 {@code PROPAGATION_REQUIRES_NEW}（创建新事务）</li>
- * </ul>
+ * <strong>事务传播行为：</strong>始终使用 {@code PROPAGATION_REQUIRES_NEW}（挂起当前事务，创建新事务），
+ * 确保批量操作在独立事务中执行。当已有活动事务时会记录警告日志，因为挂起外层事务可能影响外层事务的连接池行为。
  */
 class TransactionHelper {
 
@@ -63,8 +60,8 @@ class TransactionHelper {
         boolean existingTransaction = TransactionSynchronizationManager.isActualTransactionActive();
         if (existingTransaction) {
             log.warn("executeInNewTransaction called within an active transaction. "
-                + "Batch operations will join the existing transaction. "
-                + "For true isolation, call outside of @Transactional methods.");
+                + "Batch operations will join the existing transaction (PROPAGATION_REQUIRED). "
+                + "For true per-batch commit isolation, call outside of @Transactional methods.");
             txTemplate
                 .setPropagationBehavior(org.springframework.transaction.TransactionDefinition.PROPAGATION_REQUIRED);
         } else {

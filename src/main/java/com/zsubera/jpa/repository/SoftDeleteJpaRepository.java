@@ -300,6 +300,9 @@ public class SoftDeleteJpaRepository<T, ID> extends SimpleJpaRepository<T, ID> {
         String idFieldName = EntityClassResolver.resolveIdFieldName(domainClass);
         Specification<T> idSpec = Specification.where((root, query, cb) -> cb.equal(root.get(idFieldName), id));
         Specification<T> softDeleteSpec = SoftDeleteHelper.isNotDeleted(domainClass);
+        if (softDeleteSpec == null) {
+            return findOne(idSpec);
+        }
         return findOne(idSpec.and(softDeleteSpec));
     }
 
@@ -366,8 +369,15 @@ public class SoftDeleteJpaRepository<T, ID> extends SimpleJpaRepository<T, ID> {
         if (id == null) {
             throw new IllegalArgumentException("ID must not be null");
         }
+        // findById 在软删除过滤启用时会排除已删除实体，此时结果安全。
+        // 在 @IgnoreSoftDelete 上下文中，findById 可能返回已软删除的实体，
+        // 需要额外检查以避免隐式硬删除绕过 blockUnconditionalDelete 保护。
         Optional<T> entity = findById(id);
         if (entity.isPresent()) {
+            if (SoftDeleteContext.isIgnoreSoftDelete() && SoftDeleteHelper.isSoftDeleted(domainClass, entity.get())) {
+                throw new org.springframework.dao.EmptyResultDataAccessException(String.format(
+                    "No %s entity with id %s exists (already soft-deleted)!", domainClass.getSimpleName(), id), 1);
+            }
             delete(entity.get());
         } else {
             throw new org.springframework.dao.EmptyResultDataAccessException(
@@ -422,7 +432,7 @@ public class SoftDeleteJpaRepository<T, ID> extends SimpleJpaRepository<T, ID> {
                 + " is blocked because the entity has a @SoftDelete field. "
                 + "Set SoftDeleteJpaRepository.setBlockUnconditionalDelete(false) to allow this operation.");
         } else {
-            if (SoftDeleteHelper.findSoftDeleteField(domainClass) != null) {
+            if (SoftDeleteHelper.findSoftDeleteField(domainClass) != null && log.isWarnEnabled()) {
                 log.warn("AUDIT: Executing unconditional hard DELETE ALL on {} with @SoftDelete field "
                     + "(autoFilter=false). Call stack: {}", domainClass.getSimpleName(), AuditUtils.getCallStack());
             }

@@ -10,6 +10,7 @@ import org.aspectj.lang.annotation.Aspect;
 import org.aspectj.lang.reflect.MethodSignature;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.core.annotation.AnnotationUtils;
 import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.stereotype.Component;
 
@@ -45,7 +46,17 @@ public class OptimisticLockRetryAdvisor {
     public Object retryOnOptimisticLock(ProceedingJoinPoint pjp) throws Throwable {
         MethodSignature signature = (MethodSignature)pjp.getSignature();
         Method method = signature.getMethod();
-        RetryOnOptimisticLock annotation = method.getAnnotation(RetryOnOptimisticLock.class);
+        // 使用 AnnotationUtils.findAnnotation 处理 Spring 代理场景
+        // method.getAnnotation() 在代理接口方法上可能返回 null
+        RetryOnOptimisticLock annotation = AnnotationUtils.findAnnotation(method, RetryOnOptimisticLock.class);
+        if (annotation == null) {
+            // 回退：从目标方法查找
+            Method targetMethod = pjp.getTarget().getClass().getMethod(method.getName(), method.getParameterTypes());
+            annotation = AnnotationUtils.findAnnotation(targetMethod, RetryOnOptimisticLock.class);
+        }
+        if (annotation == null) {
+            return pjp.proceed();
+        }
 
         int maxRetries = annotation.maxRetries();
         long backoffMs = annotation.backoffMs();
@@ -86,23 +97,16 @@ public class OptimisticLockRetryAdvisor {
                         method.getName());
                     throw ex;
                 }
-                // 限制移位量以防止 Long 溢出。
-                // backoffMs * (1L << shift) 不得溢出。由于 MAX_BACKOFF_MS 为 30_000，
-                // 有效延迟始终受限制，但通过将 shift 限制为 44 来防止中间乘法溢出
-                // （对于最大约 500,000 的 backoffMs 是安全的）。
-                int shift = Math.min(attempt - 1, 44);
-                long shiftValue = (shift >= 63) ? Long.MAX_VALUE : (1L << shift);
-                long safeShift = Math.min(shiftValue, MAX_BACKOFF_MS / Math.max(backoffMs, 1));
-                long baseDelay = Math.min(backoffMs * safeShift, MAX_BACKOFF_MS);
+                // 指数退避：backoffMs * 2^(attempt-1)，上限 MAX_BACKOFF_MS
+                long baseDelay = Math.min(backoffMs * (1L << Math.min(attempt - 1, 30)), MAX_BACKOFF_MS);
                 // 确保最小延迟为 1ms，防止紧密重试循环
                 baseDelay = Math.max(baseDelay, 1);
                 // 确保延迟不超过剩余超时时间
                 long remainingTimeout = MAX_TOTAL_TIMEOUT_MS - totalElapsed;
                 baseDelay = Math.min(baseDelay, remainingTimeout);
-                // 抖动可为正或负（基础延迟的 ±10%），
-                // 防止多线程同时重试时的惊群效应
-                long jitter = (long)(baseDelay * (ThreadLocalRandom.current().nextDouble() - 0.5) * 0.2);
-                long delay = Math.max(0, baseDelay + jitter);
+                // 正向抖动（基础延迟的 0~20%），防止多线程同时重试时的惊群效应
+                long jitter = (long)(baseDelay * 0.1 * ThreadLocalRandom.current().nextDouble());
+                long delay = baseDelay + jitter;
                 log.debug("OptimisticLockException on attempt {}/{} for method {}.{}, retrying in {}ms", attempt,
                     maxRetries, method.getDeclaringClass().getSimpleName(), method.getName(), delay);
                 try {

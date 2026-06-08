@@ -524,8 +524,15 @@ public class MergeSpec<T> {
                     }
                     return executeSimpleInsert(em, allFieldValues);
                 } catch (jakarta.persistence.PersistenceException e) {
-                    if (attempt < maxRetries - 1 && e.getMessage() != null
-                        && e.getMessage().toLowerCase().contains("unique")) {
+                    // 使用 SQL state 23505（unique_violation）检测约束冲突，而非依赖消息文本
+                    boolean isUniqueViolation = false;
+                    Throwable cause = e.getCause();
+                    if (cause instanceof org.hibernate.exception.ConstraintViolationException cve) {
+                        isUniqueViolation = "23505".equals(cve.getSQLState());
+                    } else if (e.getMessage() != null) {
+                        isUniqueViolation = e.getMessage().toLowerCase().contains("unique");
+                    }
+                    if (attempt < maxRetries - 1 && isUniqueViolation) {
                         long backoffMs = (long)(10 * Math.pow(2, attempt))
                             + java.util.concurrent.ThreadLocalRandom.current().nextLong(0, 10);
                         if (log.isDebugEnabled()) {

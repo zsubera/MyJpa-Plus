@@ -70,17 +70,26 @@ interface DialectStrategy {
     }
 
     /**
-     * 构建 INSERT 部分的 SQL（所有方言共用）。
+     * 构建 INSERT 部分的 SQL（PostgresDialect 共用，MysqlDialect 和 H2Dialect 自行实现）。
      *
      * @param escapedTable 转义后的表名
-     * @param insertColumns 插入列名列表
+     * @param dialect 方言实例，用于转义列名
+     * @param insertColumns 插入列名列表（原始名称）
      * @param insertFieldValues 插入字段值列表
      * @return SQL 和参数
      */
-    static SqlWithParams buildInsertPart(String escapedTable, List<String> insertColumns,
+    static SqlWithParams buildInsertPart(String escapedTable, DialectStrategy dialect, List<String> insertColumns,
         List<EntityFieldValue> insertFieldValues) {
+        if (insertColumns.size() != insertFieldValues.size()) {
+            throw new IllegalArgumentException("Column count (" + insertColumns.size()
+                + ") does not match value count (" + insertFieldValues.size() + ")");
+        }
         StringBuilder sql = new StringBuilder("INSERT INTO ").append(escapedTable).append(" (");
-        sql.append(String.join(", ", List.copyOf(insertColumns)));
+        List<String> escapedCols = new ArrayList<>();
+        for (String col : insertColumns) {
+            escapedCols.add(dialect.escapeIdentifier(col));
+        }
+        sql.append(String.join(", ", escapedCols));
         sql.append(") VALUES (");
         List<Object> params = new ArrayList<>();
         for (int i = 0; i < insertFieldValues.size(); i++) {

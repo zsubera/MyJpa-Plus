@@ -117,6 +117,105 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
     }
 
     /**
+     * 生成包含实际参数值的缓存键。与 {@link #conditions()} 不同，此方法返回的字符串包含
+     * 条件的实际值（而非掩码），确保不同参数值的查询产生不同的缓存键。
+     *
+     * <p>
+     * <strong>安全警告：</strong>返回的字符串可能包含敏感数据（如密码、token），仅用于缓存键计算，
+     * 不得写入日志或返回给客户端。
+     *
+     * @return 包含参数值的缓存键字符串
+     */
+    public String cacheKey() {
+        StringBuilder sb = new StringBuilder();
+        for (ConditionNode node : currentGroup()) {
+            appendCacheKey(sb, node);
+        }
+        if (distinct) {
+            sb.append("#DISTINCT");
+        }
+        return sb.toString();
+    }
+
+    private static void appendCacheKey(StringBuilder sb, ConditionNode node) {
+        if (node instanceof ConditionNode.SimpleNode sn) {
+            sb.append(sn.fieldName).append(sn.op);
+            appendValue(sb, sn.value);
+            sb.append(";");
+        } else if (node instanceof ConditionNode.FuncNode fn) {
+            sb.append("FUNC(").append(fn.functionName);
+            for (Object p : fn.params) {
+                sb.append(",");
+                appendValue(sb, p);
+            }
+            sb.append(")");
+        } else if (node instanceof ConditionNode.JoinNode jn) {
+            sb.append("JOIN(").append(jn.fieldName).append(",").append(jn.joinType).append(",");
+            for (ConditionNode inner : jn.innerConditions) {
+                appendCacheKey(sb, inner);
+            }
+            sb.append(")");
+        } else if (node instanceof ConditionNode.OrNode on) {
+            sb.append("OR(");
+            for (ConditionNode inner : on.nodes()) {
+                appendCacheKey(sb, inner);
+            }
+            sb.append(")");
+        } else if (node instanceof ConditionNode.AndNode an) {
+            sb.append("AND(");
+            for (ConditionNode inner : an.nodes()) {
+                appendCacheKey(sb, inner);
+            }
+            sb.append(")");
+        } else if (node instanceof ConditionNode.MultiLikeNode mln) {
+            sb.append("MULTILIKE(").append(mln.keyword);
+            for (String f : mln.fieldNames) {
+                sb.append(",").append(f);
+            }
+            sb.append(")");
+        } else if (node instanceof ConditionNode.CollectionNode cn) {
+            sb.append("COLLECTION(").append(cn.fieldName).append(",").append(cn.op).append(")");
+        } else if (node instanceof ConditionNode.ExistsNode<?> en) {
+            sb.append(en.negate ? "NOTEXISTS(" : "EXISTS(");
+            sb.append(en.subEntity.getSimpleName()).append(")");
+        } else if (node instanceof ConditionNode.InSubQueryNode<?> isn) {
+            sb.append(isn.negate ? "NOTINSUBQUERY(" : "INSUBQUERY(");
+            sb.append(isn.outerFieldName).append(",").append(isn.subEntity.getSimpleName()).append(")");
+        } else if (node instanceof ConditionNode.NegateNode nn) {
+            sb.append("NOT(");
+            appendCacheKey(sb, nn.inner());
+            sb.append(")");
+        } else if (node instanceof ConditionNode.RawNode rn) {
+            sb.append("RAW(").append(rn.fn.hashCode()).append(")");
+        } else {
+            sb.append(node.getClass().getSimpleName()).append("@").append(node.hashCode());
+        }
+    }
+
+    private static void appendValue(StringBuilder sb, Object value) {
+        if (value == null) {
+            sb.append("null");
+        } else if (value instanceof Collection<?> col) {
+            sb.append("COLLECTION[").append(col.size()).append("]");
+            for (Object item : col) {
+                sb.append(":").append(item);
+            }
+        } else if (value instanceof Object[] arr) {
+            sb.append("ARRAY[").append(arr.length).append("]");
+            for (Object item : arr) {
+                sb.append(":").append(item);
+            }
+        } else if (value instanceof Comparable<?>[] arr) {
+            sb.append("BETWEEN[").append(arr.length).append("]");
+            for (Object item : arr) {
+                sb.append(":").append(item);
+            }
+        } else {
+            sb.append(value);
+        }
+    }
+
+    /**
      * 将此 QuerySpec 上定义的排序暴露为 Spring Data {@link Sort} 对象。 如果未设置排序，则返回 {@link Sort#unsorted()}。
      *
      * <p>

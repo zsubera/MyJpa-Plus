@@ -155,11 +155,13 @@ public class AuditEntityListener implements ApplicationContextAware {
         // 获取 provider 一次，避免重复查找
         AuditUserProvider provider = (fields.createdBy != null || fields.updatedBy != null) ? getUserProvider() : null;
         if (provider != null) {
+            // 只调用一次 getCurrentUser()，避免重复查找和潜在的不一致
+            String currentUser = provider.getCurrentUser();
             if (fields.createdBy != null) {
-                setFieldValue(entity, fields.createdBy, provider.getCurrentUser());
+                setFieldValue(entity, fields.createdBy, currentUser);
             }
             if (fields.updatedBy != null) {
-                setFieldValue(entity, fields.updatedBy, provider.getCurrentUser());
+                setFieldValue(entity, fields.updatedBy, currentUser);
             }
         }
     }

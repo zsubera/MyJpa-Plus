@@ -215,13 +215,14 @@ public final class SoftDeleteHelper {
         String escapedTable = escapeIdentifier(tableName);
         String escapedColumn = escapeIdentifier(columnName);
         ResolvedDeletedValue resolved = resolveDeletedValue(entityClass, field, annotation);
-        String whereClause = escapedColumn + " != ?1 OR " + escapedColumn + " IS NULL";
         if (resolved.booleanField()) {
-            // 使用 != true OR IS NULL 而非 = false OR IS NULL，以正确处理 Boolean 字段
+            // Boolean 字段：SET true WHERE false OR NULL（无需参数绑定）
+            String boolWhere = escapedColumn + " = false OR " + escapedColumn + " IS NULL";
             return em
-                .createNativeQuery("UPDATE " + escapedTable + " SET " + escapedColumn + " = true WHERE " + whereClause)
+                .createNativeQuery("UPDATE " + escapedTable + " SET " + escapedColumn + " = true WHERE " + boolWhere)
                 .executeUpdate();
         }
+        String whereClause = escapedColumn + " != ?1 OR " + escapedColumn + " IS NULL";
         return em.createNativeQuery("UPDATE " + escapedTable + " SET " + escapedColumn + " = ?1 WHERE " + whereClause)
             .setParameter(1, resolved.dbValue()).executeUpdate();
     }

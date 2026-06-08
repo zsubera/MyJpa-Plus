@@ -125,9 +125,11 @@ final class KeysetPaginationHelper {
             Object value = lastSortValues[0];
             if (value == null) {
                 if (order.isAscending()) {
-                    return cb.isNull(field);
+                    // ASC: nulls first, so "next page" = non-null values
+                    return cb.isNotNull(field);
                 } else {
-                    return cb.or(cb.isNull(field), cb.isNotNull(field));
+                    // DESC: nulls first, so "next page" = non-null values (same as ASC case)
+                    return cb.isNotNull(field);
                 }
             }
             if (order.isAscending()) {
@@ -158,7 +160,8 @@ final class KeysetPaginationHelper {
                 if (currentOrder.isAscending()) {
                     andPredicates.add(cb.isNull(currentField));
                 } else {
-                    andPredicates.add(cb.or(cb.isNull(currentField), cb.isNotNull(currentField)));
+                    // DESC null: 后续页 = 非 null 值（数据库默认 nulls first 时）
+                    andPredicates.add(cb.isNotNull(currentField));
                 }
             } else if (currentOrder.isAscending()) {
                 andPredicates.add(cb.greaterThan(currentField, (Comparable)currentValue));

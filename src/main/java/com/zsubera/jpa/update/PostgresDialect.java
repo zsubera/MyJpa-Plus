@@ -30,7 +30,8 @@ class PostgresDialect implements DialectStrategy {
     public SqlWithParams buildUpsertSql(String tableName, List<String> insertColumns,
         List<EntityFieldValue> insertFieldValues, List<String> conflictColumns, List<String> updateColumns) {
         String escapedTable = escapeIdentifier(tableName);
-        SqlWithParams insertPart = DialectStrategy.buildInsertPart(escapedTable, insertColumns, insertFieldValues);
+        SqlWithParams insertPart =
+            DialectStrategy.buildInsertPart(escapedTable, this, insertColumns, insertFieldValues);
         StringBuilder sql = new StringBuilder(insertPart.sql());
         sql.append(" ON CONFLICT (");
         List<String> escapedConflict = new ArrayList<>();

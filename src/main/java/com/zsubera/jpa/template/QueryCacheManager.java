@@ -156,11 +156,12 @@ public class QueryCacheManager {
         }
         if (result.isExpired()) {
             // 原子移除：仅当条目确实是当前过期条目时才移除，避免竞态条件误删新条目
-            store.computeIfPresent(key, (k, v) -> v.isExpired() ? null : v);
-            // 注意：insertionOrder.remove 可能在并发 put 后误删新条目的 deque 条目，
-            // 但这是安全的——仅影响驱逐顺序，不会导致数据丢失。完整的 deque 清理由 evictExpiredEntries 保证。
-            insertionOrder.remove(key);
-            log.debug("Cache expired for key: {}", key);
+            boolean removed = store.remove(key, result);
+            if (removed) {
+                // 仅当确实移除了过期条目时才清理 deque，避免误删并发 put 的新条目
+                insertionOrder.remove(key);
+                log.debug("Cache expired for key: {}", key);
+            }
             return null;
         }
         try {
@@ -204,6 +205,8 @@ public class QueryCacheManager {
             evictIfNeeded();
         }
         store.put(key, new CachedQueryResult<>(value, ttlSeconds));
+        // 先移除旧的 deque 条目（如果有），避免重复条目导致 deque 无限增长
+        insertionOrder.remove(key);
         insertionOrder.addLast(key);
         // 清理 deque 中已不存在的条目（防止 deque 无限增长）
         while (insertionOrder.size() > store.size() + 100) {

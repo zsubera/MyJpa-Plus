@@ -309,8 +309,8 @@ public class MyJpaTemplate {
         if (ttlSeconds < 0) {
             throw new IllegalArgumentException("ttlSeconds must not be negative");
         }
-        // 使用 toString() 而非 hashCode() 以避免哈希碰撞导致的缓存错误命中
-        String cacheKey = entityClass.getSimpleName() + "@" + spec.conditions() + "@" + spec.getSort();
+        // 使用 cacheKey() 包含实际参数值，避免不同参数值的查询产生相同的缓存键
+        String cacheKey = entityClass.getSimpleName() + "@" + spec.cacheKey() + "@" + spec.getSort();
         List<T> cached = cacheManager.get(cacheKey);
         if (cached != null) {
             log.debug("Cache hit for key: {}", cacheKey);

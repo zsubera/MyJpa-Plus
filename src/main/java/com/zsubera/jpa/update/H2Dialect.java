@@ -33,7 +33,8 @@ class H2Dialect implements DialectStrategy {
     public SqlWithParams buildInsertOnlySql(String tableName, List<String> insertColumns,
         List<EntityFieldValue> insertFieldValues) {
         String escapedTable = escapeIdentifier(tableName);
-        SqlWithParams insertPart = DialectStrategy.buildInsertPart(escapedTable, insertColumns, insertFieldValues);
+        SqlWithParams insertPart =
+            DialectStrategy.buildInsertPart(escapedTable, this, insertColumns, insertFieldValues);
         return new SqlWithParams(insertPart.sql(), insertPart.params());
     }
 

@@ -142,7 +142,13 @@ public class CodeEnumType implements UserType<Object>, DynamicParameterizedType 
         Field cached = CODE_FIELD_CACHE.computeIfAbsent(enumClass, cls -> {
             for (Field field : cls.getDeclaredFields()) {
                 if (field.isAnnotationPresent(CodeEnumValue.class)) {
-                    field.setAccessible(true);
+                    try {
+                        field.setAccessible(true);
+                    } catch (java.lang.reflect.InaccessibleObjectException e) {
+                        throw new IllegalStateException("Cannot access @CodeEnumValue field '" + field.getName()
+                            + "' in " + cls.getName() + ". On Java 17+, add JVM argument: "
+                            + "--add-opens java.base/java.lang.reflect=ALL-UNNAMED", e);
+                    }
                     return field;
                 }
             }
