@@ -67,7 +67,12 @@ public class CteSpec {
      * <p>
      * 通过系统属性 {@code myjpa-plus.cte.strict-mode=false} 可禁用严格模式。
      */
-    private static volatile boolean strictMode = true;
+    private static volatile boolean strictMode;
+
+    static {
+        String prop = System.getProperty("myjpa-plus.cte.strict-mode");
+        strictMode = !"false".equalsIgnoreCase(prop);
+    }
 
     /**
      * 获取严格模式状态。
@@ -193,13 +198,13 @@ public class CteSpec {
         }
         CteEntry current = currentCte();
         if (params != null && params.length > 0) {
-            // 倒序处理并使用 String.replace（字面量替换），避免 ?1 匹配 ?11 等前缀冲突
-            // 注意：此方法仍会替换 SQL 注释中的 ?N，如需精确控制请使用命名参数
+            // 使用正则替换，避免替换 SQL 字符串字面量中的 ?N（如 WHERE name = '?1'）
+            // 负向断言：?N 前面不能是字母数字或下划线（避免匹配命名参数 :paramN）
             String rewrittenSql = sqlTemplate;
             for (int i = params.length - 1; i >= 0; i--) {
-                String placeholder = "?" + (i + 1);
+                String placeholder = "\\?" + (i + 1) + "(?![0-9])";
                 String namedParam = "_cte_param_" + i;
-                rewrittenSql = rewrittenSql.replace(placeholder, ":" + namedParam);
+                rewrittenSql = rewrittenSql.replaceAll(placeholder, ":" + namedParam);
                 parameters.put(namedParam, params[i]);
             }
             current.sql = rewrittenSql;
@@ -316,7 +321,7 @@ public class CteSpec {
      * @return 单个查询结果（Object[]），如果无结果则返回 {@link Optional#empty()}
      * @throws IllegalStateException 如果 CTE 或主查询未完整配置
      * @throws IllegalArgumentException 如果 em 为 null
-     * @since 1.3.0
+     * @since 1.2.0
      */
     @SuppressWarnings("unchecked")
     public Optional<Object[]> getSingleResult(EntityManager em) {

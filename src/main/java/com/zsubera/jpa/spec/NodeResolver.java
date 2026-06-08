@@ -120,12 +120,15 @@ final class NodeResolver {
         Join<?, ?> join = joinCache.get(fullPath);
         if (join != null) {
             boolean existingIsFetch = join instanceof jakarta.persistence.criteria.Fetch;
-            if (isFetch && !existingIsFetch) {
-                log.warn("Join path '{}' was previously created as non-fetch join, but now requested as fetch join. "
-                    + "Using existing non-fetch join. Consider using fetchJoin() consistently.", fullPath);
-            } else if (!isFetch && existingIsFetch) {
-                log.warn("Join path '{}' was previously created as fetch join, but now requested as non-fetch join. "
-                    + "Using existing fetch join. Consider using join() consistently.", fullPath);
+            if (!isFetch && existingIsFetch) {
+                // FETCH → 非 FETCH：fetch 是超集，复用安全
+                log.debug("Join path '{}' reusing existing fetch join (requested non-fetch).", fullPath);
+            } else if (isFetch && !existingIsFetch) {
+                // 非 FETCH → FETCH：用户明确要求急加载但缓存中是普通 join，会导致 N+1
+                throw new IllegalStateException("Join path '" + fullPath
+                    + "' was previously created as non-fetch join, but now requested as fetch join. "
+                    + "This would cause eager loading to be silently ignored. "
+                    + "Reorder your conditions so fetch joins come first, or use different paths.");
             }
         } else {
             if (!(path instanceof From<?, ?>)) {

@@ -237,7 +237,12 @@ public class DeleteSpec<T> extends AbstractBulkOperationSpec<T, DeleteSpec<T>> {
         CriteriaDelete<T> delete = cb.createCriteriaDelete(entityClass);
         Root<T> deleteRoot = delete.from(entityClass);
         delete.where(InClauseBuilder.in(cb, deleteRoot.get(idFieldName), ids));
-        return em.createQuery(delete).executeUpdate();
+        int deleted = em.createQuery(delete).executeUpdate();
+        // 原生 CriteriaDelete 绕过 JPA 生命周期，需要清除 L1 缓存以确保后续查询一致性
+        if (deleted > 0) {
+            em.clear();
+        }
+        return deleted;
     }
 
 }

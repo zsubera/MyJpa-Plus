@@ -1,5 +1,6 @@
 package com.zsubera.jpa.monitor;
 
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.atomic.AtomicLong;
@@ -43,7 +44,7 @@ import org.slf4j.LoggerFactory;
  * <p>
  * <strong>线程安全：</strong>此类是线程安全的，可以在多线程环境中使用。
  *
- * @since 1.3.0
+ * @since 1.2.0
  */
 public class QueryMetricsCollector {
 
@@ -68,6 +69,7 @@ public class QueryMetricsCollector {
      *
      * @return QueryMetricsCollector 实例
      */
+    @SuppressFBWarnings(value = "MS_EXPOSE_REP", justification = "Singleton intentionally exposes its own instance")
     public static QueryMetricsCollector getInstance() {
         return INSTANCE;
     }

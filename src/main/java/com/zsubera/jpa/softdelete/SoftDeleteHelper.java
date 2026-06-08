@@ -52,7 +52,7 @@ import org.springframework.util.ConcurrentReferenceHashMap;
  * @author myjpa-plus
  * @see SoftDelete
  * @see Specification
- * @since 1.3.0
+ * @since 1.2.0
  */
 public final class SoftDeleteHelper {
 
@@ -215,16 +215,22 @@ public final class SoftDeleteHelper {
         String escapedTable = escapeIdentifier(tableName);
         String escapedColumn = escapeIdentifier(columnName);
         ResolvedDeletedValue resolved = resolveDeletedValue(entityClass, field, annotation);
+        int updated;
         if (resolved.booleanField()) {
             // Boolean 字段：SET true WHERE false OR NULL（无需参数绑定）
             String boolWhere = escapedColumn + " = false OR " + escapedColumn + " IS NULL";
-            return em
-                .createNativeQuery("UPDATE " + escapedTable + " SET " + escapedColumn + " = true WHERE " + boolWhere)
-                .executeUpdate();
+            updated =
+                em.createNativeQuery("UPDATE " + escapedTable + " SET " + escapedColumn + " = true WHERE " + boolWhere)
+                    .executeUpdate();
+        } else {
+            String whereClause = escapedColumn + " != ?1 OR " + escapedColumn + " IS NULL";
+            updated =
+                em.createNativeQuery("UPDATE " + escapedTable + " SET " + escapedColumn + " = ?1 WHERE " + whereClause)
+                    .setParameter(1, resolved.dbValue()).executeUpdate();
         }
-        String whereClause = escapedColumn + " != ?1 OR " + escapedColumn + " IS NULL";
-        return em.createNativeQuery("UPDATE " + escapedTable + " SET " + escapedColumn + " = ?1 WHERE " + whereClause)
-            .setParameter(1, resolved.dbValue()).executeUpdate();
+        // 原生 SQL 绕过 JPA 生命周期，需要清除 L1 缓存以确保后续查询一致性
+        em.clear();
+        return updated;
     }
 
     /**
@@ -310,6 +316,10 @@ public final class SoftDeleteHelper {
                 query.setParameter("id" + j, batch.get(j));
             }
             total += query.executeUpdate();
+        }
+        // 原生 SQL 绕过 JPA 生命周期，需要清除 L1 缓存以确保后续查询一致性
+        if (total > 0) {
+            em.clear();
         }
         return total;
     }

@@ -1,22 +1,23 @@
 package com.zsubera.jpa.template;
 
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import java.time.Instant;
 
 /**
  * 带时间戳和基于TTL过期的缓存查询结果包装器。
  *
+ * <p>
+ * 使用 {@link System#nanoTime()}（单调时钟）计算过期时间，避免系统时钟调整导致的缓存异常过期或永不过期。
+ *
  * @param <T> 缓存结果的类型
  */
-@SuppressFBWarnings(value = "CT_CONSTRUCTOR_THROW",
-    justification = "Constructor validates parameters via IllegalArgumentException which is standard Java practice")
 public class CachedQueryResult<T> {
 
     private final T value;
-    private final Instant createdAt;
     private final long ttlSeconds;
-    /** 预计算的过期时间，避免在每次调用isExpired()时创建新的Instant。 */
-    private final Instant expiresAt;
+    /** 使用单调时钟记录创建时刻（纳秒）。 */
+    private final long createdAtNanos;
+    /** 预计算的过期时刻（纳秒），避免在每次调用 isExpired() 时重复计算。 */
+    private final long expiresAtNanos;
 
     /**
      * 创建新的缓存结果。
@@ -24,15 +25,16 @@ public class CachedQueryResult<T> {
      * @param value 缓存的值
      * @param ttlSeconds 以秒为单位的生存时间
      */
+    @SuppressFBWarnings(value = "CT_CONSTRUCTOR_THROW",
+        justification = "Constructor validates parameters via IllegalArgumentException which is standard Java practice")
     public CachedQueryResult(T value, long ttlSeconds) {
-        // 验证值不为null，防止缓存null结果
         if (value == null) {
             throw new IllegalArgumentException("CachedQueryResult value must not be null");
         }
         this.value = value;
-        this.createdAt = Instant.now();
         this.ttlSeconds = ttlSeconds;
-        this.expiresAt = createdAt.plusSeconds(ttlSeconds);
+        this.createdAtNanos = System.nanoTime();
+        this.expiresAtNanos = createdAtNanos + ttlSeconds * 1_000_000_000L;
     }
 
     /**
@@ -42,15 +44,6 @@ public class CachedQueryResult<T> {
      */
     public T getValue() {
         return value;
-    }
-
-    /**
-     * 返回创建时间戳。
-     *
-     * @return 创建时间
-     */
-    public Instant getCreatedAt() {
-        return createdAt;
     }
 
     /**
@@ -65,9 +58,12 @@ public class CachedQueryResult<T> {
     /**
      * 检查此缓存结果是否已过期。
      *
-     * @return 如果结果已超过其TTL则返回true
+     * <p>
+     * 使用 {@link System#nanoTime()} 单调时钟，不受系统时钟调整（NTP 同步、手动修改）影响。
+     *
+     * @return 如果结果已超过其TTL则返回 true
      */
     public boolean isExpired() {
-        return !Instant.now().isBefore(expiresAt);
+        return System.nanoTime() - createdAtNanos >= ttlSeconds * 1_000_000_000L;
     }
 }

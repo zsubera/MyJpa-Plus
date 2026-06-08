@@ -25,7 +25,7 @@ import org.springframework.util.ConcurrentReferenceHashMap;
  * 缓存策略：字段列表使用弱引用键缓存（防止类加载器泄漏），自动生成 ID 检测结果使用强引用缓存。
  *
  * @param <T> 实体类型
- * @since 1.3.0
+ * @since 1.2.0
  */
 final class EntityFieldExtractor<T> {
 

@@ -111,7 +111,6 @@ class QueryCacheManagerTest {
 
         assertTrue(result.isExpired());
         assertEquals("test", result.getValue());
-        assertNotNull(result.getCreatedAt());
         assertEquals(0, result.getTtlSeconds());
     }
 

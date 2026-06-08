@@ -351,7 +351,10 @@ public class SoftDeleteJpaRepository<T, ID> extends SimpleJpaRepository<T, ID> {
         if (!shouldApplySoftDeleteFilter()) {
             return super.existsById(id);
         }
-        return findById(id).isPresent();
+        String idFieldName = EntityClassResolver.resolveIdFieldName(domainClass);
+        Specification<T> idSpec = Specification.where((root, query, cb) -> cb.equal(root.get(idFieldName), id));
+        Specification<T> softDeleteSpec = SoftDeleteHelper.isNotDeleted(domainClass);
+        return count(softDeleteSpec != null ? idSpec.and(softDeleteSpec) : idSpec) > 0;
     }
 
     /**

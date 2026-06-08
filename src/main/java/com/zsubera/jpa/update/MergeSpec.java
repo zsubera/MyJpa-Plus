@@ -49,6 +49,9 @@ public class MergeSpec<T> {
 
     private static final Logger log = LoggerFactory.getLogger(MergeSpec.class);
 
+    /** H2 UPSERT 最大重试次数，用于处理并发竞态条件。 */
+    private static final int H2_MAX_UPSERT_RETRIES = 3;
+
     private final Class<T> entityClass;
     private final EntityFieldExtractor<T> fieldExtractor;
     private T entity;
@@ -152,7 +155,7 @@ public class MergeSpec<T> {
             return executeH2Upsert(em);
         }
         T entitySnapshot = this.entity;
-        SqlWithParams sqlWithParams = buildSqlFor(em, entitySnapshot);
+        SqlWithParams sqlWithParams = buildSqlFor(em, entitySnapshot, dialect);
         if (log.isTraceEnabled()) {
             log.trace("Executing UPSERT SQL: {}", sqlWithParams.sql());
         }
@@ -424,8 +427,8 @@ public class MergeSpec<T> {
                 }
             }
             try {
-                count++;
                 total += executeSingle(em, ent);
+                count++;
                 if (count % batchSize == 0) {
                     em.clear();
                     if (log.isDebugEnabled()) {
@@ -467,14 +470,14 @@ public class MergeSpec<T> {
         if ("h2".equals(dialect)) {
             return executeH2UpsertFor(em, entityToMerge);
         }
-        SqlWithParams sqlWithParams = buildSqlFor(em, entityToMerge);
+        SqlWithParams sqlWithParams = buildSqlFor(em, entityToMerge, dialect);
         if (log.isTraceEnabled()) {
             log.trace("Executing UPSERT SQL: {}", sqlWithParams.sql());
         }
         return executeNativeQuery(em, sqlWithParams.sql(), sqlWithParams.params());
     }
 
-    private SqlWithParams buildSqlFor(EntityManager em, T entity) {
+    private SqlWithParams buildSqlFor(EntityManager em, T entity, String dialect) {
         List<String> effectiveConflictFields =
             conflictFields.isEmpty() ? fieldExtractor.resolveIdColumnNames() : new ArrayList<>(conflictFields);
         Set<String> conflictSet = new LinkedHashSet<>(effectiveConflictFields);
@@ -490,7 +493,6 @@ public class MergeSpec<T> {
         List<String> effectiveUpdateFields =
             explicitUpdateFields ? updateFields : allNonConflictColumns(allFieldValues, conflictSet);
         String tableName = resolveTableName();
-        String dialect = DialectDetector.detectDialect(em);
         DialectStrategy strategy = DialectDetector.DIALECT_STRATEGIES.get(dialect);
         if (strategy == null) {
             throw new MyJpaPlusException(
@@ -555,7 +557,7 @@ public class MergeSpec<T> {
                 + "Cannot fall back to MERGE INTO because explicit update fields are specified. "
                 + "MERGE INTO would overwrite all columns, violating partial update contract.");
         }
-        SqlWithParams sqlWithParams = buildSqlFor(em, entity);
+        SqlWithParams sqlWithParams = buildSqlFor(em, entity, "h2");
         if (log.isTraceEnabled()) {
             log.trace("Executing H2 MERGE SQL: {}", sqlWithParams.sql());
         }
@@ -583,7 +585,9 @@ public class MergeSpec<T> {
             IdentifierValidator.validateTableName(name);
             return name;
         }
-        return StringHelper.camelToSnake(entityClass.getSimpleName());
+        String name = StringHelper.camelToSnake(entityClass.getSimpleName());
+        IdentifierValidator.validateTableName(name);
+        return name;
     }
 
     private List<String> allNonConflictColumns(List<EntityFieldExtractor.EntityFieldValue> allFieldValues,

@@ -52,10 +52,12 @@ public final class IdentifierValidator {
      * 常见 Unicode 同形字符检测：这些字符与 ASCII 字符视觉相似，可能用于绕过安全检查。
      *
      * <p>
-     * <strong>已知限制：</strong>此模式仅覆盖西里尔字母、希腊字母和亚美尼亚字母。 不覆盖全角拉丁字母、数学字母符号等 Unicode 混淆字符。 如需生产级检测，考虑使用 ICU4J 的
-     * {@code SpoofChecker}。
+     * <strong>已知限制：</strong>此模式覆盖西里尔字母、希腊字母、亚美尼亚字母、全角拉丁/数字、
+     * 数学字母符号等常见混淆字符。不覆盖所有 Unicode 混淆字符（如装饰字母、封闭字母数字）。
+     * 如需生产级检测，考虑使用 ICU4J 的 {@code SpoofChecker}。
      */
-    private static final Pattern HOMOGLYPH_PATTERN = Pattern.compile("[\\u0400-\\u04FF\\u0370-\\u03FF\\u0530-\\u058F]");
+    private static final Pattern HOMOGLYPH_PATTERN =
+        Pattern.compile("[\\u0400-\\u04FF\\u0370-\\u03FF\\u0530-\\u058F\\uFF00-\\uFFEF\\u2100-\\u214F\\u2460-\\u24FF]");
 
     /** 标识符最大长度，防止滥用。 */
     private static final int MAX_IDENTIFIER_LENGTH = 128;
