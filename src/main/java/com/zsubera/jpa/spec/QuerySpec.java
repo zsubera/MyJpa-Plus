@@ -134,6 +134,29 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
         if (distinct) {
             sb.append("#DISTINCT");
         }
+        if (!groupByFields.isEmpty()) {
+            sb.append("#GROUPBY(");
+            for (String f : groupByFields) {
+                sb.append(f).append(",");
+            }
+            sb.append(")");
+        }
+        if (!havingConditions.isEmpty()) {
+            sb.append("#HAVING(").append(havingConditions.size()).append(")");
+        }
+        if (!orderNodes.isEmpty()) {
+            sb.append("#ORDERBY(");
+            for (ConditionNode.OrderNode node : orderNodes) {
+                sb.append(node.fieldName).append(node.asc ? " ASC" : " DESC").append(",");
+            }
+            sb.append(")");
+        }
+        if (queryTimeout != null) {
+            sb.append("#TIMEOUT(").append(queryTimeout).append(")");
+        }
+        if (lockMode != null) {
+            sb.append("#LOCK(").append(lockMode).append(")");
+        }
         return sb.toString();
     }
 
@@ -945,6 +968,7 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
      */
     @Override
     public Predicate toPredicate(@NonNull Root<T> root, @Nullable CriteriaQuery<?> query, @NonNull CriteriaBuilder cb) {
+        validateCleanState();
         log.debug("QuerySpec: building predicate for {} with {} conditions, {} order nodes, distinct={}",
             root.getModel().getName(), conditions.size(), orderNodes.size(), distinct);
         if (query != null) {

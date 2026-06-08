@@ -68,14 +68,15 @@ class TransactionHelper {
             txTemplate
                 .setPropagationBehavior(org.springframework.transaction.TransactionDefinition.PROPAGATION_REQUIRES_NEW);
         }
-        R result = txTemplate.execute(status -> {
+        return txTemplate.execute(status -> {
+            // Spring 的 @PersistenceContext 代理会自动为每个事务创建独立的底层 EntityManager，
+            // 无需手动创建新 EM。直接使用代理即可，Spring 会通过事务同步机制确保正确的 EM 绑定。
             R r = operation.apply(entityManager);
             if (status.isRollbackOnly()) {
                 log.warn("Transaction marked as rollback-only. Result will be discarded.");
             }
             return r;
         });
-        return result;
     }
 
     private PlatformTransactionManager getTransactionManager() {

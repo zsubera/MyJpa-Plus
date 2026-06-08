@@ -169,12 +169,29 @@ class BatchSaveTemplate {
                 evictIdMethodCache();
             }
             java.lang.reflect.Method getId = ID_METHOD_CACHE.computeIfAbsent(entity.getClass(), clazz -> {
+                // 1. 先尝试 PersistenceUnitUtil（最可靠，处理 @EmbeddedId 等复杂 ID）
+                try {
+                    jakarta.persistence.PersistenceUnitUtil puu =
+                        entityManager.getEntityManagerFactory().getPersistenceUnitUtil();
+                    puu.getIdentifier(entity);
+                    // 如果没有抛异常，说明 PersistenceUnitUtil 能处理此实体
+                    return null; // 特殊标记：使用 PersistenceUnitUtil 路径
+                } catch (RuntimeException e) {
+                    // PersistenceUnitUtil 无法处理，尝试反射 getId()
+                }
                 try {
                     return clazz.getMethod("getId");
                 } catch (NoSuchMethodException e) {
                     return NO_ID_METHOD_SENTINEL;
                 }
             });
+            if (getId == null) {
+                // PersistenceUnitUtil 路径：已在 computeIfAbsent 中验证可用
+                jakarta.persistence.PersistenceUnitUtil puu =
+                    entityManager.getEntityManagerFactory().getPersistenceUnitUtil();
+                Object id = puu.getIdentifier(entity);
+                return id == null;
+            }
             if (getId == NO_ID_METHOD_SENTINEL) {
                 log.debug("No getId() method found for {}; assuming existing", entity.getClass().getSimpleName());
                 return false;

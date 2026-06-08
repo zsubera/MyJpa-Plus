@@ -67,6 +67,9 @@ public class NotGroup<T> implements ConditionBuilder<T, NotGroup<T>> {
      * @throws IllegalArgumentException 如果 {@code field} 或 {@code config} 为 null
      */
     public <J> NotGroup<T> join(SFunction<T, ?> field, Consumer<JoinGroup<T, J>> config) {
+        if (config == null) {
+            throw new IllegalArgumentException("config must not be null");
+        }
         JoinGroup<T, J> joinGroup = internalJoin(field, ConditionNode.JoinType.INNER);
         config.accept(joinGroup);
         return this;
@@ -94,6 +97,9 @@ public class NotGroup<T> implements ConditionBuilder<T, NotGroup<T>> {
      * @throws IllegalArgumentException 如果 {@code field} 或 {@code config} 为 null
      */
     public <J> NotGroup<T> leftJoin(SFunction<T, ?> field, Consumer<JoinGroup<T, J>> config) {
+        if (config == null) {
+            throw new IllegalArgumentException("config must not be null");
+        }
         JoinGroup<T, J> joinGroup = internalJoin(field, ConditionNode.JoinType.LEFT);
         config.accept(joinGroup);
         return this;

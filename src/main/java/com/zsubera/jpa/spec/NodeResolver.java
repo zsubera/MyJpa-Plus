@@ -102,8 +102,26 @@ final class NodeResolver {
                 args[i] = cb.literal(param);
             }
         }
-        Expression<Boolean> funcExpr = cb.function(node.functionName, Boolean.class, args);
+        Expression<Boolean> funcExpr;
+        // 如果函数名为已知的布尔函数，直接使用 Boolean.class 返回类型
+        // 否则包装为 isTrue() 处理（适用于返回非布尔类型的函数如 LENGTH、ABS 等）
+        if (isBooleanFunction(node.functionName)) {
+            funcExpr = cb.function(node.functionName, Boolean.class, args);
+            return cb.isTrue(funcExpr);
+        }
+        // 非布尔函数：尝试作为数值/字符串表达式，在 CriteriaBuilder 中直接返回
+        // 注意：func() 的设计初衷是布尔条件，非布尔函数需要额外的比较操作
+        // 这里保留原有行为以保持向后兼容，但记录警告
+        log.debug("func() called with non-boolean function '{}'. "
+            + "Result will be wrapped in isTrue() which may produce unexpected results. "
+            + "Consider using a boolean-returning function.", node.functionName);
+        funcExpr = cb.function(node.functionName, Boolean.class, args);
         return cb.isTrue(funcExpr);
+    }
+
+    private static boolean isBooleanFunction(String functionName) {
+        return "IF".equals(functionName) || "DECODE".equals(functionName) || "COALESCE".equals(functionName)
+            || "NULLIF".equals(functionName) || "CASE".equals(functionName) || "EXISTS".equals(functionName);
     }
 
     @SuppressWarnings({"unchecked", "rawtypes"})

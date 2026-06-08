@@ -56,6 +56,9 @@ public class QueryMetricsCollector {
     /** 查询指标存储 */
     private final ConcurrentMap<String, QueryMetrics> metricsMap = new ConcurrentHashMap<>();
 
+    /** 指标存储最大条目数，防止内存泄漏 */
+    private static final int MAX_METRICS_ENTRIES = 4096;
+
     /** 慢查询阈值（纳秒），默认 1 秒 */
     private volatile long slowQueryThresholdNanos = 1_000_000_000L;
 
@@ -113,6 +116,15 @@ public class QueryMetricsCollector {
      */
     public void recordQuery(String queryName, long durationNanos) {
         if (!enabled || queryName == null) {
+            return;
+        }
+
+        // 防止指标存储无限增长：超过上限时跳过新查询名的记录
+        if (metricsMap.size() >= MAX_METRICS_ENTRIES && !metricsMap.containsKey(queryName)) {
+            if (log.isDebugEnabled()) {
+                log.debug("QueryMetricsCollector: max entries ({}) reached, skipping metrics for '{}'",
+                    MAX_METRICS_ENTRIES, queryName);
+            }
             return;
         }
 

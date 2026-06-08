@@ -4,6 +4,7 @@ import com.zsubera.jpa.exception.MyJpaPlusException;
 import com.zsubera.jpa.spec.SFunction;
 import java.beans.Introspector;
 import java.lang.invoke.SerializedLambda;
+import java.lang.reflect.InaccessibleObjectException;
 import java.lang.reflect.Method;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -186,6 +187,11 @@ public final class LambdaUtils {
                     Method m = clazz.getDeclaredMethod("writeReplace");
                     m.setAccessible(true);
                     return m;
+                } catch (InaccessibleObjectException e) {
+                    throw new MyJpaPlusException(
+                        "Failed to access SerializedLambda.writeReplace() due to Java module system restrictions. "
+                            + "Add JVM argument: --add-opens java.base/java.lang.invoke=ALL-UNNAMED",
+                        e);
                 } catch (ReflectiveOperationException e) {
                     throw new MyJpaPlusException("Failed to extract property name from method reference. "
                         + "Ensure you are using a method reference directly (e.g., Entity::getField). "

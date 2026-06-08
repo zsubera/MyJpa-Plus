@@ -58,8 +58,9 @@ public final class SqlSanitizer {
     private static final Pattern LIMIT_OFFSET_PATTERN =
         Pattern.compile("(?i)(?:LIMIT|OFFSET|FETCH\\s+(?:FIRST|NEXT))\\s+\\d+(?:\\s+ROWS)?");
 
-    /** PostgreSQL 美元引用字符串模式（$$...$$ 和 $tag$...$tag$） */
-    private static final Pattern DOLLAR_QUOTE_PATTERN = Pattern.compile("\\$\\$[^$]*\\$\\$|\\$\\w+\\$[^$]*\\$\\w+\\$");
+    /** PostgreSQL 美元引用字符串模式（$$...$$ 和 $tag$...$tag$，支持嵌套） */
+    private static final Pattern DOLLAR_QUOTE_PATTERN =
+        Pattern.compile("\\$\\$(?:(?!\\$\\$)[\\s\\S])*\\$\\$|\\$\\w+\\$[^$]*\\$\\w+\\$");
 
     /** Oracle Q 引用字符串模式（q'[...]', q'(...)', q'{...}', q'<...>'） */
     private static final Pattern Q_QUOTE_PATTERN =

@@ -122,7 +122,6 @@ public class EncryptConverter implements AttributeConverter<String, String> {
      */
     static void clearCacheForTesting() {
         KEY_CACHE.clear();
-        KEY_CACHE_SIZE.set(0);
         cachedKeyVersion = null;
         lastKeyVersionRefresh = 0;
         keyValidated = false;
@@ -137,7 +136,6 @@ public class EncryptConverter implements AttributeConverter<String, String> {
     public static void refreshKeyVersion() {
         cachedKeyVersion = null;
         KEY_CACHE.clear();
-        KEY_CACHE_SIZE.set(0);
         lastKeyVersionRefresh = System.currentTimeMillis();
         log.info("Encryption key version cache refreshed");
     }
@@ -339,19 +337,18 @@ public class EncryptConverter implements AttributeConverter<String, String> {
         if (existing != null) {
             return existing;
         }
-        // 使用 AtomicInteger 做无竞态的大小限制检查
-        if (KEY_CACHE_SIZE.get() >= MAX_KEY_CACHE_SIZE && !KEY_CACHE.containsKey(cacheKey)) {
+        // 使用 KEY_CACHE.size() 替代独立计数器，避免计数器漂移
+        if (KEY_CACHE.size() >= MAX_KEY_CACHE_SIZE && !KEY_CACHE.containsKey(cacheKey)) {
             throw new MyJpaPlusException(
                 "Encryption key cache is full (" + MAX_KEY_CACHE_SIZE + " entries). " + "Cannot load key version '"
                     + cacheKey + "'. " + "This may indicate a malicious attempt to exhaust CPU via PBKDF2 derivation. "
                     + "Clear cache or increase MAX_KEY_CACHE_SIZE if this is legitimate key rotation.");
         }
-        return KEY_CACHE.computeIfAbsent(cacheKey, v -> {
+        SecretKeySpec result = KEY_CACHE.computeIfAbsent(cacheKey, v -> {
             String rawKey = resolveRawKey(v);
-            SecretKeySpec key = deriveKey(rawKey);
-            KEY_CACHE_SIZE.incrementAndGet();
-            return key;
+            return deriveKey(rawKey);
         });
+        return result;
     }
 
     /**

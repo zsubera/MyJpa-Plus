@@ -566,13 +566,11 @@ public final class PredicateHelper {
             case LIKE_IGNORE_CASE:
                 if (node.value == null) {
                     return cb.isNull(fieldPath);
-                }
-                if (node.escapeChar != '\0') {
-                    return cb.like(cb.upper(fieldPath.as(String.class)),
-                        ((String)node.value).toUpperCase(java.util.Locale.ROOT), node.escapeChar);
-                }
+                } {
+                char escape = node.escapeChar != '\0' ? node.escapeChar : LIKE_ESCAPE_CHAR;
                 return cb.like(cb.upper(fieldPath.as(String.class)),
-                    ((String)node.value).toUpperCase(java.util.Locale.ROOT));
+                    ((String)node.value).toUpperCase(java.util.Locale.ROOT), escape);
+            }
             case IS_NULL:
                 return cb.isNull(fieldPath);
             case IS_NOT_NULL:
@@ -581,11 +579,18 @@ public final class PredicateHelper {
                 if (node.value == null) {
                     throw new IllegalArgumentException("IN operator requires non-null value, got null");
                 }
-                if (node.value instanceof Collection) {
-                    return InClauseBuilder.in(cb, fieldPath, (Collection<?>)node.value);
+                if (node.value instanceof Collection<?> col) {
+                    if (col.isEmpty()) {
+                        return cb.disjunction();
+                    }
+                    return InClauseBuilder.in(cb, fieldPath, col);
                 }
                 if (node.value.getClass().isArray()) {
-                    return InClauseBuilder.in(cb, fieldPath, (Object[])node.value);
+                    Object[] arr = (Object[])node.value;
+                    if (arr.length == 0) {
+                        return cb.disjunction();
+                    }
+                    return InClauseBuilder.in(cb, fieldPath, arr);
                 }
                 throw new IllegalArgumentException(
                     "IN operator requires Collection or array, got: " + node.value.getClass().getName());
@@ -594,11 +599,18 @@ public final class PredicateHelper {
                 if (node.value == null) {
                     throw new IllegalArgumentException("NOT_IN operator requires non-null value, got null");
                 }
-                if (node.value instanceof Collection) {
-                    return InClauseBuilder.notIn(cb, fieldPath, (Collection<?>)node.value);
+                if (node.value instanceof Collection<?> col) {
+                    if (col.isEmpty()) {
+                        return cb.conjunction();
+                    }
+                    return InClauseBuilder.notIn(cb, fieldPath, col);
                 }
                 if (node.value.getClass().isArray()) {
-                    return InClauseBuilder.notIn(cb, fieldPath, (Object[])node.value);
+                    Object[] arr = (Object[])node.value;
+                    if (arr.length == 0) {
+                        return cb.conjunction();
+                    }
+                    return InClauseBuilder.notIn(cb, fieldPath, arr);
                 }
                 throw new IllegalArgumentException(
                     "NOT_IN operator requires Collection or array, got: " + node.value.getClass().getName());

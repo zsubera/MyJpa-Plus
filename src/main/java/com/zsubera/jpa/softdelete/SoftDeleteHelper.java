@@ -219,11 +219,12 @@ public final class SoftDeleteHelper {
         ResolvedDeletedValue resolved = resolveDeletedValue(entityClass, field, annotation);
         int updated;
         if (resolved.booleanField()) {
-            // Boolean 字段：SET true WHERE false OR NULL（无需参数绑定）
-            String boolWhere = escapedColumn + " = false OR " + escapedColumn + " IS NULL";
-            updated =
-                em.createNativeQuery("UPDATE " + escapedTable + " SET " + escapedColumn + " = true WHERE " + boolWhere)
-                    .executeUpdate();
+            // Boolean 字段：使用参数绑定的 SQL 以确保跨数据库兼容性
+            // PostgreSQL 使用 true/false，MySQL 使用 1/0，参数绑定由 JDBC 驱动处理
+            updated = em
+                .createNativeQuery("UPDATE " + escapedTable + " SET " + escapedColumn + " = ?1 WHERE " + escapedColumn
+                    + " = ?2 OR " + escapedColumn + " IS NULL")
+                .setParameter(1, Boolean.TRUE).setParameter(2, Boolean.FALSE).executeUpdate();
         } else {
             String whereClause = escapedColumn + " != ?1 OR " + escapedColumn + " IS NULL";
             updated =
@@ -723,9 +724,10 @@ public final class SoftDeleteHelper {
         }
     }
 
-    /** 字段缓存，避免重复反射 */
+    /** 字段缓存，使用弱引用防止类加载器泄漏（热部署/OSGi 场景） */
     private static final java.util.concurrent.ConcurrentMap<Class<?>, java.util.List<Field>> FIELDS_CACHE =
-        new java.util.concurrent.ConcurrentHashMap<>();
+        new org.springframework.util.ConcurrentReferenceHashMap<>(16,
+            org.springframework.util.ConcurrentReferenceHashMap.ReferenceType.WEAK);
 
     private static List<Field> getAllFields(Class<?> clazz) {
         return FIELDS_CACHE.computeIfAbsent(clazz, c -> {

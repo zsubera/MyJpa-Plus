@@ -332,8 +332,8 @@ class BulkOperationTemplate {
         int failedBatchIndex = -1;
         Throwable failureCause = null;
         boolean shouldContinue = true;
-        int batchResult;
         while (shouldContinue) {
+            int batchResult;
             try {
                 batchResult = batchExecutor.applyAsInt(batchSize);
                 total += batchResult;
@@ -351,7 +351,8 @@ class BulkOperationTemplate {
                     shouldContinue = false;
                     continue;
                 }
-                batchResult = 0;
+                // CONTINUE 模式：记录失败但不中断，继续下一批
+                continue;
             }
             if (batchResult < batchSize) {
                 shouldContinue = false;

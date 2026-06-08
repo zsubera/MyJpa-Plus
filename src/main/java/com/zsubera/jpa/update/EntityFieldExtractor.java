@@ -120,7 +120,7 @@ final class EntityFieldExtractor<T> {
                         for (jakarta.persistence.AttributeOverride override : overrides) {
                             overrideMap.put(override.name(), override.column().name());
                         }
-                        for (Field subField : embeddedValue.getClass().getDeclaredFields()) {
+                        for (Field subField : getAllFields(embeddedValue.getClass())) {
                             if (!java.lang.reflect.Modifier.isStatic(subField.getModifiers()) && !subField.isSynthetic()
                                 && !subField.isAnnotationPresent(jakarta.persistence.Embedded.class)) {
                                 Object subValue = getFieldValue(embeddedValue, subField);
@@ -146,6 +146,26 @@ final class EntityFieldExtractor<T> {
             }
         }
         return fieldValues;
+    }
+
+    /**
+     * 从实体类层次结构中获取所有字段，包括继承的字段。
+     *
+     * @param clazz 要扫描的类
+     * @return 所有字段列表（不包括静态和合成字段）
+     */
+    private static List<Field> getAllFields(Class<?> clazz) {
+        List<Field> fields = new ArrayList<>();
+        Class<?> current = clazz;
+        while (current != null && current != Object.class) {
+            for (Field f : current.getDeclaredFields()) {
+                if (!java.lang.reflect.Modifier.isStatic(f.getModifiers()) && !f.isSynthetic()) {
+                    fields.add(f);
+                }
+            }
+            current = current.getSuperclass();
+        }
+        return fields;
     }
 
     /**
