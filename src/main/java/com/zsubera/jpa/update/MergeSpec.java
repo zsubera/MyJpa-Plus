@@ -307,14 +307,19 @@ public class MergeSpec<T> {
     }
 
     private static boolean isJtaTransactionActive(EntityManager em) {
+        // 优先尝试标准 JPA EntityTransaction（适用于 RESOURCE_LOCAL 事务）
         try {
             EntityTransaction tx = em.getTransaction();
             if (tx != null) {
                 return tx.isActive();
             }
+        } catch (IllegalStateException ignored) {
+            // JTA 环境中调用 em.getTransaction() 会抛出 IllegalStateException
+            log.debug("getTransaction() threw IllegalStateException (expected in JTA environment)");
         } catch (Exception ignored) {
-            log.debug("getTransaction() threw exception in JTA environment: {}", ignored.getMessage());
+            log.debug("getTransaction() threw exception: {}", ignored.getMessage());
         }
+        // 回退到 Hibernate Session API（适用于 JTA 和 RESOURCE_LOCAL）
         try {
             Class<?> sessionClass = Class.forName("org.hibernate.Session");
             Object session = em.unwrap(sessionClass);
@@ -359,10 +364,12 @@ public class MergeSpec<T> {
                     + "Consider using executeBatchInSeparateTransactions() or processing entities in smaller chunks.",
                 entities.size());
         }
+        // 在批次开始前检测一次方言，避免每个实体重复检测
+        String cachedDialect = DialectDetector.detectDialect(em);
         int total = 0;
         int count = 0;
         for (T ent : entities) {
-            total += executeSingle(em, ent);
+            total += executeSingleWithDialect(em, ent, cachedDialect);
             count++;
             if (count % batchSize == 0) {
                 em.flush();
@@ -467,6 +474,10 @@ public class MergeSpec<T> {
 
     private int executeSingle(EntityManager em, T entityToMerge) {
         String dialect = DialectDetector.detectDialect(em);
+        return executeSingleWithDialect(em, entityToMerge, dialect);
+    }
+
+    private int executeSingleWithDialect(EntityManager em, T entityToMerge, String dialect) {
         if ("h2".equals(dialect)) {
             return executeH2UpsertFor(em, entityToMerge);
         }
@@ -514,6 +525,10 @@ public class MergeSpec<T> {
             }
         }
         if (allConflictKeysNull) {
+            log.warn("All conflict key values are null for entity {}. "
+                + "Falling back to plain INSERT which bypasses upsert semantics. "
+                + "For nullable unique keys, this may produce duplicate rows since SQL NULL = NULL evaluates to UNKNOWN.",
+                entityClass.getSimpleName());
             return executeSimpleInsert(em, allFieldValues);
         }
         if (explicitUpdateFields) {

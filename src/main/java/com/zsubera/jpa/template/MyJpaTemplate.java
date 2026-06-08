@@ -1412,9 +1412,10 @@ public class MyJpaTemplate {
         List<T> content = query.getResultList();
         boolean hasNext;
         if (maxResultsLimited) {
-            // 当 maxResults 限制了请求行数时，如果取满了 maxResults 行且 maxResults >= pageSize，
-            // 保守地认为可能还有更多数据
-            hasNext = content.size() >= pageable.getPageSize() && content.size() >= this.maxResults;
+            // 当 maxResults 限制了请求行数时，需要区分两种情况：
+            // 1. 返回的行数 == maxResults 且 maxResults > pageSize → 可能还有更多数据
+            // 2. 返回的行数 == maxResults 但 maxResults == pageSize → 已到达边界，没有下一页
+            hasNext = content.size() >= this.maxResults && content.size() > pageable.getPageSize();
         } else {
             hasNext = content.size() > pageable.getPageSize();
         }

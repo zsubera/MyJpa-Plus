@@ -74,6 +74,10 @@ class TransactionHelper {
             R r = operation.apply(entityManager);
             if (status.isRollbackOnly()) {
                 log.warn("Transaction marked as rollback-only. Result will be discarded.");
+                // 抛出异常让调用方感知事务回滚状态，避免基于回滚结果做出错误决策
+                throw new org.springframework.transaction.UnexpectedRollbackException(
+                    "Transaction was unexpectedly rolled back. "
+                        + "The operation result should not be used as the data has been rolled back.");
             }
             return r;
         });

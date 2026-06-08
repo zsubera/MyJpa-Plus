@@ -151,6 +151,8 @@ final class DialectDetector {
         if (productName.contains("h2")) {
             return "h2";
         }
+        log.warn("Unknown database product '{}'. "
+            + "Set system property 'myjpa-plus.dialect' to 'postgresql', 'mysql', or 'h2' manually.", productName);
         return productName;
     }
 

@@ -472,8 +472,8 @@ public class OrConditionBuilder<T, SELF extends AbstractBulkOperationSpec<T, SEL
      * @return 当前构建器实例
      * @throws IllegalArgumentException 如果 keyword 为 null，或 fields 为 null，或 fields 包含 null 元素
      */
-    @SuppressWarnings("unchecked")
-    public OrConditionBuilder<T, SELF> multiLike(String keyword, SFunction<T, ?>... fields) {
+    @SafeVarargs
+    public final OrConditionBuilder<T, SELF> multiLike(String keyword, SFunction<T, ?>... fields) {
         if (keyword == null) {
             throw new IllegalArgumentException("keyword must not be null");
         }

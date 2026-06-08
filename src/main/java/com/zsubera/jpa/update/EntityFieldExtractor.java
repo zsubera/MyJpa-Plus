@@ -9,7 +9,6 @@ import java.lang.reflect.InaccessibleObjectException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.util.ConcurrentReferenceHashMap;
@@ -41,8 +40,10 @@ final class EntityFieldExtractor<T> {
     /** 采样概率分母——每 1024 次调用检查一次缓存大小 */
     private static final int CACHE_CHECK_SAMPLING = 1024;
 
-    /** 自动生成 ID 字段检测结果的缓存。 */
-    private static final ConcurrentHashMap<String, Boolean> AUTO_GENERATED_ID_CACHE = new ConcurrentHashMap<>();
+    /** 自动生成 ID 字段检测结果的缓存。使用弱引用防止类加载器泄漏。 */
+    private static final java.util.concurrent.ConcurrentMap<String, Boolean> AUTO_GENERATED_ID_CACHE =
+        new org.springframework.util.ConcurrentReferenceHashMap<>(16,
+            org.springframework.util.ConcurrentReferenceHashMap.ReferenceType.WEAK);
 
     private final Class<T> entityClass;
 

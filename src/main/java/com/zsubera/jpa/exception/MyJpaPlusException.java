@@ -134,6 +134,6 @@ public class MyJpaPlusException extends RuntimeException {
     }
 
     /** 敏感数据模式检测正则：匹配 password=, token=, key=, secret=, credential= 等模式。使用单词边界避免误匹配 primaryKey 等。 */
-    private static final Pattern SENSITIVE_DATA_PATTERN =
-        Pattern.compile("(?i)\\b(password|token|key|secret|credential|api[_-]?key|auth)[=:]\\s*\\S+");
+    private static final Pattern SENSITIVE_DATA_PATTERN = Pattern.compile(
+        "(?i)\\b(password|token|key|secret|credential|api[_-]?key|auth|authorization|ssn|credit[_-]?card)[=:]\\s*\\S+");
 }

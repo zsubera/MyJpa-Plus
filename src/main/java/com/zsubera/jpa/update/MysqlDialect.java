@@ -59,9 +59,15 @@ class MysqlDialect implements DialectStrategy {
         sql.append(" ON DUPLICATE KEY UPDATE ");
         List<String> setClauses = new ArrayList<>();
         String escapedAlias = escapeIdentifier(rowAlias);
-        for (String col : updateColumns) {
-            String escaped = escapeIdentifier(col);
-            setClauses.add(escaped + " = " + escapedAlias + "." + escaped);
+        if (updateColumns.isEmpty()) {
+            // 无更新字段时使用 no-op：`col` = `col`
+            String firstCol = escapedInsertCols.get(0);
+            setClauses.add(firstCol + " = " + firstCol);
+        } else {
+            for (String col : updateColumns) {
+                String escaped = escapeIdentifier(col);
+                setClauses.add(escaped + " = " + escapedAlias + "." + escaped);
+            }
         }
         sql.append(String.join(", ", setClauses));
         return new SqlWithParams(sql.toString(), params);

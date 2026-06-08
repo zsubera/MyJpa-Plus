@@ -129,9 +129,6 @@ public class AuditEntityListener implements ApplicationContextAware {
                     providerLookupAttempted = true;
                 }
             }
-        } else {
-            // 标记已尝试查找，避免 applicationContext 为 null 时重复检查
-            providerLookupAttempted = true;
         }
         return userProvider == NO_PROVIDER_SENTINEL ? null : userProvider;
     }

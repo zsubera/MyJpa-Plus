@@ -189,6 +189,10 @@ public class DeleteSpec<T> extends AbstractBulkOperationSpec<T, DeleteSpec<T>> {
      * <li>在应用层使用分布式锁保护整个操作流程
      * </ol>
      *
+     * <p>
+     * <strong>注意：</strong>此方法使用 CriteriaDelete 绕过 JPA 生命周期回调，不会触发 {@code @PreRemove}/{@code @PostRemove}。
+     * 如果实体有 L1 缓存中的托管实例，删除后可能返回过时数据。如需确保一致性，请在调用后手动执行 {@code em.clear()}。
+     *
      * @param em 实体管理器
      * @param limit 最大删除行数
      * @param pessimisticLock 如果为 true，则获取 {@link jakarta.persistence.LockModeType#PESSIMISTIC_WRITE} 锁以防止并发修改
@@ -197,6 +201,12 @@ public class DeleteSpec<T> extends AbstractBulkOperationSpec<T, DeleteSpec<T>> {
     public int executeLimited(EntityManager em, int limit, boolean pessimisticLock) {
         if (limit <= 0) {
             throw new IllegalArgumentException("limit must be positive");
+        }
+        if (EntityClassResolver.hasCompositeKey(entityClass)) {
+            throw new UnsupportedOperationException(
+                "executeLimited() does not support entities with composite primary keys (@EmbeddedId or @IdClass). "
+                    + "Entity: " + entityClass.getName() + ". "
+                    + "Use delete(entityManager).executeInTransaction(entityManager) instead.");
         }
         if (!pessimisticLock) {
             log.warn("executeLimited() with pessimisticLock=false may cause race conditions. "
@@ -237,12 +247,7 @@ public class DeleteSpec<T> extends AbstractBulkOperationSpec<T, DeleteSpec<T>> {
         CriteriaDelete<T> delete = cb.createCriteriaDelete(entityClass);
         Root<T> deleteRoot = delete.from(entityClass);
         delete.where(InClauseBuilder.in(cb, deleteRoot.get(idFieldName), ids));
-        int deleted = em.createQuery(delete).executeUpdate();
-        // 原生 CriteriaDelete 绕过 JPA 生命周期，需要清除 L1 缓存以确保后续查询一致性
-        if (deleted > 0) {
-            em.clear();
-        }
-        return deleted;
+        return em.createQuery(delete).executeUpdate();
     }
 
 }

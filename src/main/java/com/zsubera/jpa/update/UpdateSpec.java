@@ -53,19 +53,30 @@ public class UpdateSpec<T> extends AbstractBulkOperationSpec<T, UpdateSpec<T>> {
     /** 缓存最大容量限制 */
     private static final int MAX_CACHE_SIZE = 256;
 
+    /** 缓存驱逐标记，确保只有一个线程执行驱逐 */
+    private static final java.util.concurrent.atomic.AtomicBoolean CACHE_EVICTING =
+        new java.util.concurrent.atomic.AtomicBoolean(false);
+
     /**
-     * 缓存驱逐辅助方法：当缓存超过最大容量时清除一半条目。
+     * 缓存驱逐辅助方法：当缓存超过最大容量时清除一半条目。使用 CAS 确保只有一个线程执行驱逐。
+     *
+     * <p><strong>线程安全说明：</strong>此方法使用 CAS 标志确保只有一个线程执行驱逐操作。
+     * 其他线程在驱逐期间仍可继续添加条目，这是可接受的设计权衡——缓存可能暂时超过 MAX_CACHE_SIZE，
+     * 但不会无限增长。驱逐操作使用 Iterator.remove() 保证并发安全。
      */
     private static void evictCacheIfNeeded(java.util.concurrent.ConcurrentMap<?, ?> cache) {
-        if (cache.size() > MAX_CACHE_SIZE) {
-            // 使用简单的批量移除策略，避免迭代器的复杂性
-            int toRemove = cache.size() / 2;
-            int removed = 0;
-            java.util.Iterator<?> it = cache.keySet().iterator();
-            while (it.hasNext() && removed < toRemove) {
-                it.next();
-                it.remove();
-                removed++;
+        if (cache.size() > MAX_CACHE_SIZE && CACHE_EVICTING.compareAndSet(false, true)) {
+            try {
+                int toRemove = cache.size() / 2;
+                int removed = 0;
+                java.util.Iterator<?> it = cache.keySet().iterator();
+                while (it.hasNext() && removed < toRemove) {
+                    it.next();
+                    it.remove();
+                    removed++;
+                }
+            } finally {
+                CACHE_EVICTING.set(false);
             }
         }
     }
@@ -325,6 +336,7 @@ public class UpdateSpec<T> extends AbstractBulkOperationSpec<T, UpdateSpec<T>> {
             }
             return "__NONE__";
         });
+        evictCacheIfNeeded(VERSION_FIELD_CACHE);
         return "__NONE__".equals(result) ? null : result;
     }
 
@@ -435,6 +447,12 @@ public class UpdateSpec<T> extends AbstractBulkOperationSpec<T, UpdateSpec<T>> {
         if (limit <= 0) {
             throw new IllegalArgumentException("limit must be positive");
         }
+        if (EntityClassResolver.hasCompositeKey(entityClass)) {
+            throw new UnsupportedOperationException(
+                "executeLimited() does not support entities with composite primary keys (@EmbeddedId or @IdClass). "
+                    + "Entity: " + entityClass.getName() + ". "
+                    + "Use toUpdate(entityManager).executeInTransaction(entityManager) instead.");
+        }
         if (!pessimisticLock) {
             log.warn("executeLimited() with pessimisticLock=false may cause race conditions. "
                 + "Consider using pessimisticLock=true for critical operations.");
@@ -467,6 +485,10 @@ public class UpdateSpec<T> extends AbstractBulkOperationSpec<T, UpdateSpec<T>> {
         if (ids.isEmpty()) {
             return 0;
         }
+
+        // 步骤 1.5：清除持久化上下文，分离已查询的实体
+        // 这防止持久化上下文持有过期数据，并为批量更新释放内存
+        em.clear();
 
         // 步骤 2：用ID列表执行更新
         CriteriaUpdate<T> update = cb.createCriteriaUpdate(entityClass);
@@ -513,6 +535,7 @@ public class UpdateSpec<T> extends AbstractBulkOperationSpec<T, UpdateSpec<T>> {
             }
             return false;
         });
+        evictCacheIfNeeded(NUMERIC_FIELD_CACHE);
         if (!isNumeric) {
             // 尝试获取字段类型用于错误消息
             String fieldType = "unknown";

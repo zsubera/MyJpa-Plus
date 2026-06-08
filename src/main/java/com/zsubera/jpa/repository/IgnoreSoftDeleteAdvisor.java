@@ -31,8 +31,8 @@ public class IgnoreSoftDeleteAdvisor {
 
     private static final Logger log = LoggerFactory.getLogger(IgnoreSoftDeleteAdvisor.class);
 
-    /** 缓存注解检查结果，避免重复反射。 */
-    private static final java.util.concurrent.ConcurrentMap<Method, Boolean> ANNOTATION_CACHE =
+    /** 缓存注解检查结果，避免重复反射。使用复合键（类名+方法名）确保跨代理类的缓存一致性。 */
+    private static final java.util.concurrent.ConcurrentMap<String, Boolean> ANNOTATION_CACHE =
         new java.util.concurrent.ConcurrentHashMap<>();
 
     /**
@@ -54,10 +54,12 @@ public class IgnoreSoftDeleteAdvisor {
         MethodSignature signature = (MethodSignature)pjp.getSignature();
         Method method = signature.getMethod();
 
-        // 使用缓存的注解检查，避免重复反射
-        Boolean hasAnnotation = ANNOTATION_CACHE.computeIfAbsent(method,
-            m -> AnnotationUtils.findAnnotation(m, IgnoreSoftDelete.class) != null
-                || AnnotationUtils.findAnnotation(m.getDeclaringClass(), IgnoreSoftDelete.class) != null);
+        // 使用复合缓存键（类名+方法名）确保跨代理类的缓存一致性
+        // CGLIB/ByteBuddy 生成的代理类方法与原始接口方法不共享同一 Method 实例
+        String cacheKey = method.getDeclaringClass().getName() + "#" + method.getName();
+        Boolean hasAnnotation = ANNOTATION_CACHE.computeIfAbsent(cacheKey,
+            k -> AnnotationUtils.findAnnotation(method, IgnoreSoftDelete.class) != null
+                || AnnotationUtils.findAnnotation(method.getDeclaringClass(), IgnoreSoftDelete.class) != null);
 
         if (!hasAnnotation) {
             return pjp.proceed();

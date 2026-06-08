@@ -13,7 +13,6 @@ import jakarta.persistence.criteria.CriteriaBuilder;
 import jakarta.persistence.criteria.Path;
 import jakarta.persistence.criteria.Predicate;
 import java.lang.reflect.Field;
-import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
@@ -268,6 +267,12 @@ public final class SoftDeleteHelper {
         if (ids == null || ids.isEmpty()) {
             return 0;
         }
+        // 检查ID列表大小是否超过硬限制，防止Oracle等数据库的IN子句参数限制
+        int hardLimit = com.zsubera.jpa.util.InClauseBuilder.getHardLimit();
+        if (ids.size() > hardLimit) {
+            throw new IllegalArgumentException("ID list size (" + ids.size() + ") exceeds the hard limit (" + hardLimit
+                + "). " + "Consider processing in smaller batches or using a temporary table.");
+        }
         String fieldName = findSoftDeleteField(entityClass);
         if (fieldName == null) {
             throw new IllegalArgumentException("Entity " + entityClass.getSimpleName() + " has no @SoftDelete field");
@@ -424,6 +429,9 @@ public final class SoftDeleteHelper {
      */
     @SuppressWarnings("unchecked")
     public static <T> Specification<T> isNotDeleted(Class<T> entityClass) {
+        if (entityClass == null) {
+            throw new NullPointerException("entityClass must not be null");
+        }
         return (Specification<T>)NOT_DELETED_SPEC_CACHE.computeIfAbsent(entityClass, cls -> {
             String fieldName = findSoftDeleteField(entityClass);
             if (fieldName == null) {
@@ -445,6 +453,9 @@ public final class SoftDeleteHelper {
      */
     @SuppressWarnings("unchecked")
     public static <T> Specification<T> isDeleted(Class<T> entityClass) {
+        if (entityClass == null) {
+            throw new NullPointerException("entityClass must not be null");
+        }
         return (Specification<T>)DELETED_SPEC_CACHE.computeIfAbsent(entityClass, cls -> {
             String fieldName = findSoftDeleteField(entityClass);
             if (fieldName == null) {
@@ -600,12 +611,7 @@ public final class SoftDeleteHelper {
             }
         }
         String result = FIELD_CACHE.computeIfAbsent(entityClass, cls -> {
-            // 首先尝试基于 getter 的解析（兼容 Java 17+）
-            String viaGetter = resolveSoftDeleteFieldNameViaGetter(cls);
-            if (viaGetter != null) {
-                return viaGetter;
-            }
-            // 回退到基于字段的反射
+            // 扫描字段上的 @SoftDelete 注解
             for (Field field : getAllFields(cls)) {
                 if (field.isAnnotationPresent(SoftDelete.class)) {
                     try {
@@ -623,28 +629,6 @@ public final class SoftDeleteHelper {
             return NO_FIELD_SENTINEL;
         });
         return NO_FIELD_SENTINEL.equals(result) ? null : result;
-    }
-
-    /**
-     * 通过 getter 方法解析软删除字段名（兼容 Java 17+）。扫描公共方法上的 @SoftDelete 注解。
-     *
-     * @param entityClass 要扫描的实体类
-     * @return 字段名，如果通过 getter 未找到则返回 null
-     */
-    private static String resolveSoftDeleteFieldNameViaGetter(Class<?> entityClass) {
-        for (Method m : entityClass.getMethods()) {
-            SoftDelete ann = m.getAnnotation(SoftDelete.class);
-            if (ann != null && m.getParameterCount() == 0) {
-                String name = m.getName();
-                if (name.startsWith("get") && name.length() > 3) {
-                    return Character.toLowerCase(name.charAt(3)) + name.substring(4);
-                }
-                if (name.startsWith("is") && name.length() > 2 && Character.isUpperCase(name.charAt(2))) {
-                    return Character.toLowerCase(name.charAt(2)) + name.substring(3);
-                }
-            }
-        }
-        return null;
     }
 
     private static Field getField(Class<?> entityClass, String fieldName) {
@@ -755,5 +739,16 @@ public final class SoftDeleteHelper {
             }
             return java.util.Collections.unmodifiableList(fields);
         });
+    }
+
+    /**
+     * 清除所有缓存。用于应用关闭时清理，防止热部署场景下的类加载器泄漏。
+     */
+    public static void shutdown() {
+        FIELD_CACHE.clear();
+        NOT_DELETED_SPEC_CACHE.clear();
+        DELETED_SPEC_CACHE.clear();
+        FIELD_OBJECT_CACHE.clear();
+        FIELDS_CACHE.clear();
     }
 }

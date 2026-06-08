@@ -121,10 +121,10 @@ public class QueryMetricsCollector {
 
         // 防止指标存储无限增长：超过上限时跳过新查询名的记录
         if (metricsMap.size() >= MAX_METRICS_ENTRIES && !metricsMap.containsKey(queryName)) {
-            if (log.isDebugEnabled()) {
-                log.debug("QueryMetricsCollector: max entries ({}) reached, skipping metrics for '{}'",
-                    MAX_METRICS_ENTRIES, queryName);
-            }
+            log.warn(
+                "QueryMetricsCollector: max entries ({}) reached, skipping metrics for '{}'. "
+                    + "This may indicate high-cardinality query names (e.g., dynamic queries with parameter values).",
+                MAX_METRICS_ENTRIES, queryName);
             return;
         }
 

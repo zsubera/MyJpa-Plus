@@ -222,6 +222,8 @@ public class MyJpaPlusAutoConfiguration {
     @EventListener(ContextClosedEvent.class)
     public void onContextClosed(ContextClosedEvent event) {
         LambdaUtils.shutdown();
-        log.info("MyJpa-Plus context closed, LambdaUtils background cleanup stopped");
+        com.zsubera.jpa.converter.EncryptConverter.clearCacheForTesting();
+        com.zsubera.jpa.softdelete.SoftDeleteHelper.shutdown();
+        log.info("MyJpa-Plus context closed, caches cleaned");
     }
 }

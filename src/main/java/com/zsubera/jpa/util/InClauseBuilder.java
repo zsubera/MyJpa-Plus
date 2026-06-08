@@ -87,8 +87,12 @@ public final class InClauseBuilder {
         if (hardProp != null) {
             try {
                 int val = Integer.parseInt(hardProp);
-                if (val > 0) {
+                if (val > 0 && val <= MAX_ALLOWED_VALUE) {
                     hardConfigured = val;
+                } else if (val > MAX_ALLOWED_VALUE) {
+                    log.warn("myjpa-plus.in-clause-hard-limit value ({}) exceeds upper limit ({}). Using {}.", val,
+                        MAX_ALLOWED_VALUE, MAX_ALLOWED_VALUE);
+                    hardConfigured = MAX_ALLOWED_VALUE;
                 } else {
                     log.warn("myjpa-plus.in-clause-hard-limit value ({}) is not positive. Using default {}.", val,
                         hardConfigured);

@@ -199,7 +199,11 @@ class BatchSaveTemplate {
                 return id == null;
             }
             if (getId == NO_ID_METHOD_SENTINEL) {
-                log.debug("No getId() method found for {}; assuming existing", entity.getClass().getSimpleName());
+                log.warn(
+                    "No getId() method found for {}; assuming existing entity. "
+                        + "This may cause unnecessary SELECT queries during merge. "
+                        + "Consider implementing getId() method or using saveAllBatchedPure() for new entities.",
+                    entity.getClass().getSimpleName());
                 return false;
             }
             Object id = getId.invoke(entity);

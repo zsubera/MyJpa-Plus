@@ -31,7 +31,7 @@ class MaskSerializerTest {
     @Test
     @DisplayName("EMAIL mask: single char local part")
     void shouldMaskEmailWithShortLocal() {
-        assertEquals("a***@x.com", MaskSerializer.mask("a@x.com", MaskType.EMAIL));
+        assertEquals("***@x.com", MaskSerializer.mask("a@x.com", MaskType.EMAIL));
     }
 
     @Test

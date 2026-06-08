@@ -95,7 +95,7 @@ public class MaskSerializer extends JsonSerializer<String> {
         String localPart = email.substring(0, atIndex);
         String domain = email.substring(atIndex);
         if (localPart.length() <= 1) {
-            return localPart + "***" + domain;
+            return "***" + domain;
         }
         return localPart.charAt(0) + "***" + domain;
     }
@@ -158,6 +158,10 @@ public class MaskSerializer extends JsonSerializer<String> {
         }
         if (plate.length() == 2) {
             return plate.charAt(0) + "*";
+        }
+        // 3字符车牌：保留首字符和尾字符，遮蔽中间
+        if (plate.length() == 3) {
+            return plate.charAt(0) + "*" + plate.charAt(2);
         }
         return plate.substring(0, 2) + "*".repeat(plate.length() - 3) + plate.charAt(plate.length() - 1);
     }

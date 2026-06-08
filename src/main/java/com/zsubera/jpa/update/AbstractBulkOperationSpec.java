@@ -173,11 +173,6 @@ public abstract class AbstractBulkOperationSpec<T, SELF extends AbstractBulkOper
             }
             log.error("Unexpected checked exception in bulk operation (type: {}): {}", e.getClass().getName(),
                 e.getMessage(), e);
-            // 重新抛出为 RuntimeException 以保持 Spring @Transactional 的回滚语义
-            // MyJpaPlusException 已经是 RuntimeException，这里统一使用它
-            if (e instanceof RuntimeException re) {
-                throw re;
-            }
             throw new MyJpaPlusException(
                 "Bulk operation failed: " + e.getClass().getSimpleName() + " - " + e.getMessage(), e);
         }
@@ -270,6 +265,9 @@ public abstract class AbstractBulkOperationSpec<T, SELF extends AbstractBulkOper
         }
         List<BulkConditionNode> children = new ArrayList<>();
         config.accept(new OrConditionBuilder<>(self(), children));
+        if (children.isEmpty()) {
+            log.warn("Empty or() consumer produces no conditions, which is a no-op in WHERE clause");
+        }
         conditionNodes.add(new BulkConditionNode.OrNode(List.copyOf(children)));
         return self();
     }
@@ -295,6 +293,9 @@ public abstract class AbstractBulkOperationSpec<T, SELF extends AbstractBulkOper
         }
         List<BulkConditionNode> children = new ArrayList<>();
         config.accept(new OrConditionBuilder<>(self(), children));
+        if (children.isEmpty()) {
+            log.warn("Empty not() consumer produces no conditions, which results in NOT(FALSE) = TRUE (tautology)");
+        }
         BulkConditionNode combined =
             children.size() == 1 ? children.get(0) : new BulkConditionNode.OrNode(List.copyOf(children));
         conditionNodes.add(new BulkConditionNode.NotNode(combined));

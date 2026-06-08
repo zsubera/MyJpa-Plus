@@ -118,9 +118,9 @@ public class EncryptConverter implements AttributeConverter<String, String> {
     private static volatile boolean keyValidated = false;
 
     /**
-     * 清除所有缓存的密钥和版本信息。仅用于测试环境。
+     * 清除所有缓存的密钥和版本信息。用于测试环境和应用关闭时清理。
      */
-    static void clearCacheForTesting() {
+    public static void clearCacheForTesting() {
         KEY_CACHE.clear();
         cachedKeyVersion = null;
         lastKeyVersionRefresh = 0;
@@ -412,10 +412,14 @@ public class EncryptConverter implements AttributeConverter<String, String> {
      * @throws MyJpaPlusException 如果密钥长度短于 {@link #MIN_KEY_LENGTH}
      */
     private static void validateKeyLength(String key) {
-        if (key != null && key.length() < MIN_KEY_LENGTH) {
-            throw new MyJpaPlusException("Encryption key must be at least " + MIN_KEY_LENGTH + " characters. "
-                + "Current length: " + key.length() + ". "
-                + "Short keys are vulnerable to dictionary attacks even with PBKDF2 derivation.");
+        if (key != null) {
+            int byteLength = key.getBytes(StandardCharsets.UTF_8).length;
+            if (byteLength < MIN_KEY_LENGTH) {
+                throw new MyJpaPlusException(
+                    "Encryption key must be at least " + MIN_KEY_LENGTH + " bytes (UTF-8 encoded). "
+                        + "Current byte length: " + byteLength + " (character length: " + key.length() + "). "
+                        + "Short keys are vulnerable to dictionary attacks even with PBKDF2 derivation.");
+            }
         }
     }
 
@@ -469,9 +473,12 @@ public class EncryptConverter implements AttributeConverter<String, String> {
             throw new IllegalStateException("PBKDF2 salt must be configured in production. "
                 + "Set environment variable " + SALT_ENV + " or system property " + SALT_PROPERTY);
         }
-        log.warn("Using fixed development PBKDF2 salt. "
-            + "Encrypted data is NOT secure and will be consistent across restarts. "
-            + "For production, set environment variable {} or system property {}.", SALT_ENV, SALT_PROPERTY);
+        log.warn(
+            "SECURITY: Using fixed development PBKDF2 salt. "
+                + "Encrypted data is NOT secure and will be consistent across restarts. "
+                + "For production, set environment variable {} or system property {}. "
+                + "This salt is publicly visible in source code and must NOT be used in production.",
+            SALT_ENV, SALT_PROPERTY);
         return DEV_SALT;
     }
 
