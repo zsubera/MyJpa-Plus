@@ -31,6 +31,17 @@ final class KeysetPaginationHelper {
     private static final java.util.concurrent.ConcurrentMap<String, java.lang.reflect.Method> GETTER_CACHE =
         new java.util.concurrent.ConcurrentHashMap<>(256);
 
+    /** 哨兵值：表示 getter 方法不存在，用于替代 ConcurrentHashMap 不允许的 null value */
+    private static final java.lang.reflect.Method NO_GETTER_SENTINEL;
+
+    static {
+        try {
+            NO_GETTER_SENTINEL = Object.class.getDeclaredMethod("toString");
+        } catch (NoSuchMethodException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
     /** 静态缓存最大条目数，超出时触发采样驱逐防止内存泄漏 */
     private static final int MAX_GETTER_CACHE_SIZE = 4096;
 
@@ -199,11 +210,11 @@ final class KeysetPaginationHelper {
                         return entity.getClass()
                             .getMethod("is" + Character.toUpperCase(property.charAt(0)) + property.substring(1));
                     } catch (NoSuchMethodException ex) {
-                        return null;
+                        return NO_GETTER_SENTINEL;
                     }
                 }
             });
-            if (getter == null) {
+            if (getter == NO_GETTER_SENTINEL) {
                 throw new IllegalArgumentException("Cannot extract sort value for property '" + property + "' from "
                     + entity.getClass().getName() + ": no getter method found (tried get"
                     + Character.toUpperCase(property.charAt(0)) + property.substring(1) + " and is"

@@ -64,24 +64,14 @@ class BatchSaveTemplate {
      * @throws IllegalArgumentException 如果 entities 为 null 或 batchSize 不是正数
      */
     <T> List<T> saveAllBatched(Iterable<T> entities, int batchSize) {
-        ArrayList<T> result = new ArrayList<>();
-        int count = 0;
-        for (T entity : entities) {
+        return executeBatchedSave(entities, batchSize, entity -> {
             if (isNewEntity(entity)) {
                 entityManager.persist(entity);
-                result.add(entity);
+                return entity;
             } else {
-                result.add(entityManager.merge(entity));
+                return entityManager.merge(entity);
             }
-            count++;
-            if (count % batchSize == 0) {
-                entityManager.flush();
-                entityManager.clear();
-            }
-        }
-        entityManager.flush();
-        entityManager.clear();
-        return result;
+        });
     }
 
     /**
@@ -94,11 +84,27 @@ class BatchSaveTemplate {
      * @throws IllegalArgumentException 如果 entities 为 null 或 batchSize 不是正数
      */
     <T> List<T> saveAllBatchedPure(Iterable<T> entities, int batchSize) {
+        return executeBatchedSave(entities, batchSize, entity -> {
+            entityManager.persist(entity);
+            return entity;
+        });
+    }
+
+    /**
+     * 通用分批保存逻辑，消除 saveAllBatched 和 saveAllBatchedPure 的重复代码。
+     *
+     * @param entities 要保存的实体列表
+     * @param batchSize 每批大小
+     * @param saveFunction 保存函数，接收实体并返回保存后的实体
+     * @param <T> 实体类型
+     * @return 保存后的实体列表
+     */
+    private <T> List<T> executeBatchedSave(Iterable<T> entities, int batchSize,
+        java.util.function.Function<T, T> saveFunction) {
         ArrayList<T> result = new ArrayList<>();
         int count = 0;
         for (T entity : entities) {
-            entityManager.persist(entity);
-            result.add(entity);
+            result.add(saveFunction.apply(entity));
             count++;
             if (count % batchSize == 0) {
                 entityManager.flush();

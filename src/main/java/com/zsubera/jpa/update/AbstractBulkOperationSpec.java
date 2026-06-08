@@ -173,6 +173,11 @@ public abstract class AbstractBulkOperationSpec<T, SELF extends AbstractBulkOper
             }
             log.error("Unexpected checked exception in bulk operation (type: {}): {}", e.getClass().getName(),
                 e.getMessage(), e);
+            // 重新抛出为 RuntimeException 以保持 Spring @Transactional 的回滚语义
+            // MyJpaPlusException 已经是 RuntimeException，这里统一使用它
+            if (e instanceof RuntimeException re) {
+                throw re;
+            }
             throw new MyJpaPlusException(
                 "Bulk operation failed: " + e.getClass().getSimpleName() + " - " + e.getMessage(), e);
         }

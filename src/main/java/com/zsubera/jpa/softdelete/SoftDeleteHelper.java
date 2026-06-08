@@ -477,22 +477,53 @@ public final class SoftDeleteHelper {
         return qs;
     }
 
-    private static Predicate buildNotDeleted(CriteriaBuilder cb, Path<?> path, String fieldName, Class<?> entityClass) {
+    /**
+     * 软删除值比较策略接口，统一 Boolean/Integer/Enum/String 类型的分派逻辑。
+     */
+    @FunctionalInterface
+    private interface DeletedValuePredicate {
+        Predicate test(CriteriaBuilder cb, Path<?> path, Object deletedValue);
+    }
+
+    /**
+     * 解析软删除值并构建谓词。统一 Boolean/Integer/Enum/String 类型的分派逻辑。
+     *
+     * @param cb CriteriaBuilder
+     * @param path 字段路径
+     * @param fieldName 字段名
+     * @param entityClass 实体类
+     * @param isNotDeleted true 表示构建"未删除"谓词，false 表示构建"已删除"谓词
+     * @return 构建的谓词
+     */
+    private static Predicate resolveDeletedPredicate(CriteriaBuilder cb, Path<?> path, String fieldName,
+        Class<?> entityClass, boolean isNotDeleted) {
         Field field = getField(entityClass, fieldName);
         if (field == null) {
-            // 字段未找到时，回退到安全默认值：NULL 或 false 均视为未删除
-            return cb.or(cb.isNull(path.get(fieldName)), cb.equal(path.get(fieldName), false));
+            // 字段未找到时的默认行为
+            if (isNotDeleted) {
+                return cb.or(cb.isNull(path.get(fieldName)), cb.equal(path.get(fieldName), false));
+            }
+            return cb.equal(path.get(fieldName), true);
         }
         SoftDelete annotation = field.getAnnotation(SoftDelete.class);
+
         // Boolean 类型
         if (field.getType() == Boolean.class || field.getType() == boolean.class) {
-            return cb.or(cb.isNull(path.get(fieldName)), cb.equal(path.get(fieldName), false));
+            if (isNotDeleted) {
+                return cb.or(cb.isNull(path.get(fieldName)), cb.equal(path.get(fieldName), false));
+            }
+            return cb.equal(path.get(fieldName), true);
         }
+
         // Integer 类型
         if (field.getType() == Integer.class || field.getType() == int.class) {
             int deletedValue = (annotation != null) ? annotation.deletedIntValue() : 1;
-            return cb.or(cb.isNull(path.get(fieldName)), cb.notEqual(path.get(fieldName), deletedValue));
+            if (isNotDeleted) {
+                return cb.or(cb.isNull(path.get(fieldName)), cb.notEqual(path.get(fieldName), deletedValue));
+            }
+            return cb.equal(path.get(fieldName), deletedValue);
         }
+
         // 枚举类型
         if (Enum.class.isAssignableFrom(field.getType())) {
             if (annotation == null || annotation.deletedValue().isEmpty()) {
@@ -500,54 +531,34 @@ public final class SoftDeleteHelper {
                     + " must specify deletedValue");
             }
             Object deletedEnumValue = getEnumConstant(field.getType(), annotation.deletedValue());
-            return cb.or(cb.isNull(path.get(fieldName)), cb.notEqual(path.get(fieldName), deletedEnumValue));
+            if (isNotDeleted) {
+                return cb.or(cb.isNull(path.get(fieldName)), cb.notEqual(path.get(fieldName), deletedEnumValue));
+            }
+            return cb.equal(path.get(fieldName), deletedEnumValue);
         }
+
         // String 类型（支持 char(1) 等字符串软删除，如 '0'/'2'）
         if (field.getType() == String.class) {
             String deletedValue = (annotation != null && !annotation.deletedStringValue().isEmpty())
                 ? annotation.deletedStringValue() : "2";
-            return cb.or(cb.isNull(path.get(fieldName)), cb.notEqual(path.get(fieldName), deletedValue));
+            if (isNotDeleted) {
+                return cb.or(cb.isNull(path.get(fieldName)), cb.notEqual(path.get(fieldName), deletedValue));
+            }
+            return cb.equal(path.get(fieldName), deletedValue);
         }
+
         // 不支持的类型：抛出异常而非静默回退
         throw new MyJpaPlusException(
             "@SoftDelete field '" + fieldName + "' in " + entityClass.getName() + " has unsupported type: "
                 + field.getType().getName() + ". Supported types: Boolean, Integer, Enum, String.");
     }
 
+    private static Predicate buildNotDeleted(CriteriaBuilder cb, Path<?> path, String fieldName, Class<?> entityClass) {
+        return resolveDeletedPredicate(cb, path, fieldName, entityClass, true);
+    }
+
     private static Predicate buildDeleted(CriteriaBuilder cb, Path<?> path, String fieldName, Class<?> entityClass) {
-        Field field = getField(entityClass, fieldName);
-        if (field == null) {
-            return cb.equal(path.get(fieldName), true);
-        }
-        SoftDelete annotation = field.getAnnotation(SoftDelete.class);
-        // Boolean 类型
-        if (field.getType() == Boolean.class || field.getType() == boolean.class) {
-            return cb.equal(path.get(fieldName), true);
-        }
-        // Integer 类型
-        if (field.getType() == Integer.class || field.getType() == int.class) {
-            int deletedValue = (annotation != null) ? annotation.deletedIntValue() : 1;
-            return cb.equal(path.get(fieldName), deletedValue);
-        }
-        // 枚举类型
-        if (Enum.class.isAssignableFrom(field.getType())) {
-            if (annotation == null || annotation.deletedValue().isEmpty()) {
-                throw new MyJpaPlusException("@SoftDelete on enum field '" + fieldName + "' in " + entityClass.getName()
-                    + " must specify deletedValue");
-            }
-            Object deletedEnumValue = getEnumConstant(field.getType(), annotation.deletedValue());
-            return cb.equal(path.get(fieldName), deletedEnumValue);
-        }
-        // String 类型（支持 char(1) 等字符串软删除，如 '0'/'2'）
-        if (field.getType() == String.class) {
-            String deletedValue = (annotation != null && !annotation.deletedStringValue().isEmpty())
-                ? annotation.deletedStringValue() : "2";
-            return cb.equal(path.get(fieldName), deletedValue);
-        }
-        // 不支持的类型：抛出异常而非静默回退
-        throw new MyJpaPlusException(
-            "@SoftDelete field '" + fieldName + "' in " + entityClass.getName() + " has unsupported type: "
-                + field.getType().getName() + ". Supported types: Boolean, Integer, Enum, String.");
+        return resolveDeletedPredicate(cb, path, fieldName, entityClass, false);
     }
 
     /**
