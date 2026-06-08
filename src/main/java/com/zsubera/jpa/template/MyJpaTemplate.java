@@ -216,7 +216,7 @@ public class MyJpaTemplate {
         }
         this.maxBulkOperationRows = maxBulkOperationRows;
         if (bulkOperationTemplate != null) {
-            bulkOperationTemplate.setMaxBulkOperationRows(maxBulkOperationRows);
+            getBulkOperationTemplate().setMaxBulkOperationRows(maxBulkOperationRows);
         }
     }
 
@@ -279,6 +279,54 @@ public class MyJpaTemplate {
             new TransactionHelper(entityManager, entityManagerFactory, applicationContext);
         this.batchSaveTemplate = new BatchSaveTemplate(entityManager, transactionHelper);
         this.keysetPaginationHelper = new KeysetPaginationHelper(entityManager);
+    }
+
+    /**
+     * 获取批量操作模板，确保已初始化。
+     *
+     * @return 批量操作模板
+     * @throws IllegalStateException 如果 MyJpaTemplate 未完全初始化
+     */
+    private BulkOperationTemplate getBulkOperationTemplate() {
+        if (bulkOperationTemplate == null) {
+            throw new IllegalStateException(
+                "MyJpaTemplate not fully initialized. This can happen if methods are called before "
+                    + "Spring context refresh completes. Ensure all dependencies are injected and "
+                    + "@PostConstruct has been invoked.");
+        }
+        return bulkOperationTemplate;
+    }
+
+    /**
+     * 获取批量保存模板，确保已初始化。
+     *
+     * @return 批量保存模板
+     * @throws IllegalStateException 如果 MyJpaTemplate 未完全初始化
+     */
+    private BatchSaveTemplate getBatchSaveTemplate() {
+        if (batchSaveTemplate == null) {
+            throw new IllegalStateException(
+                "MyJpaTemplate not fully initialized. This can happen if methods are called before "
+                    + "Spring context refresh completes. Ensure all dependencies are injected and "
+                    + "@PostConstruct has been invoked.");
+        }
+        return batchSaveTemplate;
+    }
+
+    /**
+     * 获取键集分页助手，确保已初始化。
+     *
+     * @return 键集分页助手
+     * @throws IllegalStateException 如果 MyJpaTemplate 未完全初始化
+     */
+    private KeysetPaginationHelper getKeysetPaginationHelper() {
+        if (keysetPaginationHelper == null) {
+            throw new IllegalStateException(
+                "MyJpaTemplate not fully initialized. This can happen if methods are called before "
+                    + "Spring context refresh completes. Ensure all dependencies are injected and "
+                    + "@PostConstruct has been invoked.");
+        }
+        return keysetPaginationHelper;
     }
 
     /**
@@ -378,7 +426,7 @@ public class MyJpaTemplate {
         if (batchSize <= 0) {
             throw new IllegalArgumentException("batchSize must be positive");
         }
-        return batchSaveTemplate.saveAllBatched(entities, batchSize);
+        return getBatchSaveTemplate().saveAllBatched(entities, batchSize);
     }
 
     /**
@@ -405,7 +453,7 @@ public class MyJpaTemplate {
         if (batchSize <= 0) {
             throw new IllegalArgumentException("batchSize must be positive");
         }
-        return batchSaveTemplate.saveAllBatchedPure(entities, batchSize);
+        return getBatchSaveTemplate().saveAllBatchedPure(entities, batchSize);
     }
 
     /**
@@ -435,7 +483,7 @@ public class MyJpaTemplate {
         if (batchSize <= 0) {
             throw new IllegalArgumentException("batchSize must be positive");
         }
-        return batchSaveTemplate.saveAllBatchedInSeparateTransactions(entities, batchSize);
+        return getBatchSaveTemplate().saveAllBatchedInSeparateTransactions(entities, batchSize);
     }
 
     // ---- 便捷查询方法 ----
@@ -1051,7 +1099,7 @@ public class MyJpaTemplate {
         if (spec == null) {
             throw new IllegalArgumentException("spec must not be null");
         }
-        return bulkOperationTemplate.execute(spec);
+        return getBulkOperationTemplate().execute(spec);
     }
 
     /**
@@ -1066,7 +1114,7 @@ public class MyJpaTemplate {
         if (spec == null) {
             throw new IllegalArgumentException("spec must not be null");
         }
-        return bulkOperationTemplate.execute(spec);
+        return getBulkOperationTemplate().execute(spec);
     }
 
     /**
@@ -1082,7 +1130,7 @@ public class MyJpaTemplate {
         if (spec == null) {
             throw new IllegalArgumentException("spec must not be null");
         }
-        return bulkOperationTemplate.execute(spec);
+        return getBulkOperationTemplate().execute(spec);
     }
 
     /**
@@ -1109,7 +1157,7 @@ public class MyJpaTemplate {
         if (batchSize <= 0) {
             throw new IllegalArgumentException("batchSize must be positive");
         }
-        return bulkOperationTemplate.executeBatch(mergeSpec, entities, batchSize);
+        return getBulkOperationTemplate().executeBatch(mergeSpec, entities, batchSize);
     }
 
     /**
@@ -1129,7 +1177,7 @@ public class MyJpaTemplate {
         if (maxRows <= 0 && maxRows != -1) {
             throw new IllegalArgumentException("maxRows must be positive or -1 (use global config)");
         }
-        return bulkOperationTemplate.executeWithMaxRows(spec, maxRows);
+        return getBulkOperationTemplate().executeWithMaxRows(spec, maxRows);
     }
 
     /**
@@ -1149,7 +1197,7 @@ public class MyJpaTemplate {
         if (maxRows <= 0 && maxRows != -1) {
             throw new IllegalArgumentException("maxRows must be positive or -1 (use global config)");
         }
-        return bulkOperationTemplate.executeWithMaxRows(spec, maxRows);
+        return getBulkOperationTemplate().executeWithMaxRows(spec, maxRows);
     }
 
     /**
@@ -1168,7 +1216,7 @@ public class MyJpaTemplate {
         if (batchSize <= 0) {
             throw new IllegalArgumentException("batchSize must be positive");
         }
-        return bulkOperationTemplate.executeBatch(spec, batchSize);
+        return getBulkOperationTemplate().executeBatch(spec, batchSize);
     }
 
     /**
@@ -1187,7 +1235,7 @@ public class MyJpaTemplate {
         if (batchSize <= 0) {
             throw new IllegalArgumentException("batchSize must be positive");
         }
-        return bulkOperationTemplate.executeBatch(spec, batchSize);
+        return getBulkOperationTemplate().executeBatch(spec, batchSize);
     }
 
     // ---- 分批提交事务的批量操作 ----
@@ -1237,7 +1285,7 @@ public class MyJpaTemplate {
         if (failureStrategy == null) {
             throw new IllegalArgumentException("failureStrategy must not be null");
         }
-        BulkOperationTemplate.BatchResult result = bulkOperationTemplate.executeBatchInSeparateTransactions(spec,
+        BulkOperationTemplate.BatchResult result = getBulkOperationTemplate().executeBatchInSeparateTransactions(spec,
             batchSize, convertFailureStrategy(failureStrategy));
         return new BatchResult(result.totalRows(), result.batchCount(), result.success(), result.failedBatchIndex(),
             result.failureCause());
@@ -1263,7 +1311,7 @@ public class MyJpaTemplate {
         if (failureStrategy == null) {
             throw new IllegalArgumentException("failureStrategy must not be null");
         }
-        BulkOperationTemplate.BatchResult result = bulkOperationTemplate.executeBatchInSeparateTransactions(spec,
+        BulkOperationTemplate.BatchResult result = getBulkOperationTemplate().executeBatchInSeparateTransactions(spec,
             batchSize, convertFailureStrategy(failureStrategy));
         return new BatchResult(result.totalRows(), result.batchCount(), result.success(), result.failedBatchIndex(),
             result.failureCause());
@@ -1291,7 +1339,7 @@ public class MyJpaTemplate {
         if (batchSize <= 0) {
             throw new IllegalArgumentException("batchSize must be positive");
         }
-        return bulkOperationTemplate.executeBatchInSeparateTransactions(spec, batchSize);
+        return getBulkOperationTemplate().executeBatchInSeparateTransactions(spec, batchSize);
     }
 
     /**
@@ -1309,7 +1357,7 @@ public class MyJpaTemplate {
         if (batchSize <= 0) {
             throw new IllegalArgumentException("batchSize must be positive");
         }
-        return bulkOperationTemplate.executeBatchInSeparateTransactions(spec, batchSize);
+        return getBulkOperationTemplate().executeBatchInSeparateTransactions(spec, batchSize);
     }
 
     /**
@@ -1513,6 +1561,6 @@ public class MyJpaTemplate {
                 + ") must match sort fields count (" + orders.size() + ")");
         }
 
-        return keysetPaginationHelper.findKeysetPage(entityClass, spec, sort, pageSize, lastSortValues);
+        return getKeysetPaginationHelper().findKeysetPage(entityClass, spec, sort, pageSize, lastSortValues);
     }
 }

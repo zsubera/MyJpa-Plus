@@ -428,7 +428,8 @@ public final class EntityCodeGenerator {
             if (!col.isNullable()) {
                 sb.append("    @Column(nullable = false)\n");
             }
-            sb.append("    private ").append(col.getJavaType()).append(" ").append(col.getName()).append(";\n\n");
+            String safeName = sanitizeFieldName(col.getName());
+            sb.append("    private ").append(col.getJavaType()).append(" ").append(safeName).append(";\n\n");
         }
         return sb.toString();
     }
@@ -443,13 +444,14 @@ public final class EntityCodeGenerator {
         sb.append("        this.id = id;\n");
         sb.append("    }\n\n");
         for (ColumnDef col : columns) {
-            String capitalName = capitalize(col.getName());
+            String safeName = sanitizeFieldName(col.getName());
+            String capitalName = capitalize(safeName);
             sb.append("    public ").append(col.getJavaType()).append(" get").append(capitalName).append("() {\n");
-            sb.append("        return ").append(col.getName()).append(";\n");
+            sb.append("        return ").append(safeName).append(";\n");
             sb.append("    }\n\n");
             sb.append("    public void set").append(capitalName).append("(").append(col.getJavaType()).append(" ")
-                .append(col.getName()).append(") {\n");
-            sb.append("        this.").append(col.getName()).append(" = ").append(col.getName()).append(";\n");
+                .append(safeName).append(") {\n");
+            sb.append("        this.").append(safeName).append(" = ").append(safeName).append(";\n");
             sb.append("    }\n\n");
         }
         return sb.toString();

@@ -58,9 +58,10 @@ public class UpdateSpec<T> extends AbstractBulkOperationSpec<T, UpdateSpec<T>> {
      */
     private static void evictCacheIfNeeded(java.util.concurrent.ConcurrentMap<?, ?> cache) {
         if (cache.size() > MAX_CACHE_SIZE) {
+            // 使用简单的批量移除策略，避免迭代器的复杂性
             int toRemove = cache.size() / 2;
-            java.util.Iterator<?> it = cache.keySet().iterator();
             int removed = 0;
+            java.util.Iterator<?> it = cache.keySet().iterator();
             while (it.hasNext() && removed < toRemove) {
                 it.next();
                 it.remove();
@@ -313,18 +314,18 @@ public class UpdateSpec<T> extends AbstractBulkOperationSpec<T, UpdateSpec<T>> {
         if (cached != null) {
             return "__NONE__".equals(cached) ? null : cached;
         }
-        for (Class<?> c = clazz; c != null && c != Object.class; c = c.getSuperclass()) {
-            for (java.lang.reflect.Field f : c.getDeclaredFields()) {
-                if (f.isAnnotationPresent(jakarta.persistence.Version.class)) {
-                    evictCacheIfNeeded(VERSION_FIELD_CACHE);
-                    VERSION_FIELD_CACHE.put(cacheKey, f.getName());
-                    return f.getName();
+        // 使用 computeIfAbsent 原子操作避免缓存竞争
+        String result = VERSION_FIELD_CACHE.computeIfAbsent(cacheKey, k -> {
+            for (Class<?> c = clazz; c != null && c != Object.class; c = c.getSuperclass()) {
+                for (java.lang.reflect.Field f : c.getDeclaredFields()) {
+                    if (f.isAnnotationPresent(jakarta.persistence.Version.class)) {
+                        return f.getName();
+                    }
                 }
             }
-        }
-        evictCacheIfNeeded(VERSION_FIELD_CACHE);
-        VERSION_FIELD_CACHE.put(cacheKey, "__NONE__");
-        return null;
+            return "__NONE__";
+        });
+        return "__NONE__".equals(result) ? null : result;
     }
 
     /**
@@ -498,34 +499,43 @@ public class UpdateSpec<T> extends AbstractBulkOperationSpec<T, UpdateSpec<T>> {
             }
             return;
         }
-        for (Class<?> c = entityClass; c != null && c != Object.class; c = c.getSuperclass()) {
-            try {
-                java.lang.reflect.Field f = c.getDeclaredField(fieldName);
-                Class<?> type = f.getType();
-                boolean isNumeric = Number.class.isAssignableFrom(type) || type == int.class || type == long.class
-                    || type == double.class || type == float.class || type == short.class || type == byte.class;
-                evictCacheIfNeeded(NUMERIC_FIELD_CACHE);
-                NUMERIC_FIELD_CACHE.put(cacheKey, isNumeric);
-                if (!isNumeric) {
-                    throw new IllegalArgumentException(operation + "() requires a numeric field, but field '"
-                        + fieldName + "' in " + entityClass.getSimpleName() + " has type: " + type.getSimpleName()
-                        + ". Use set() for non-numeric fields.");
+        // 使用 computeIfAbsent 原子操作避免缓存竞争
+        Boolean isNumeric = NUMERIC_FIELD_CACHE.computeIfAbsent(cacheKey, k -> {
+            for (Class<?> c = entityClass; c != null && c != Object.class; c = c.getSuperclass()) {
+                try {
+                    java.lang.reflect.Field f = c.getDeclaredField(fieldName);
+                    Class<?> type = f.getType();
+                    return Number.class.isAssignableFrom(type) || type == int.class || type == long.class
+                        || type == double.class || type == float.class || type == short.class || type == byte.class;
+                } catch (NoSuchFieldException e) {
+                    // 继续检查父类
                 }
-                return;
-            } catch (NoSuchFieldException e) {
-                // 继续检查父类
+            }
+            return false;
+        });
+        if (!isNumeric) {
+            // 尝试获取字段类型用于错误消息
+            String fieldType = "unknown";
+            for (Class<?> c = entityClass; c != null && c != Object.class; c = c.getSuperclass()) {
+                try {
+                    java.lang.reflect.Field f = c.getDeclaredField(fieldName);
+                    fieldType = f.getType().getSimpleName();
+                    break;
+                } catch (NoSuchFieldException e) {
+                    // 继续检查父类
+                }
+            }
+            if ("unknown".equals(fieldType)) {
+                throw new IllegalArgumentException(operation + "() cannot validate field '" + fieldName + "' in "
+                    + entityClass.getSimpleName() + ". Field not found via reflection. "
+                    + "Ensure the field exists as a direct class field (not a getter-only property). "
+                    + "For computed expressions, use setExpr() instead.");
+            } else {
+                throw new IllegalArgumentException(operation + "() requires a numeric field, but field '" + fieldName
+                    + "' in " + entityClass.getSimpleName() + " has type: " + fieldType
+                    + ". Use set() for non-numeric fields.");
             }
         }
-        // 通过反射未找到字段 — 无法校验是否为数值类型。
-        // setAdd/setSubtract 在非数值字段上会生成无效 SQL，因此不能默认通过校验。
-        // 如果字段确实存在但反射无法访问（如 Kotlin 属性、Groovy 动态字段），
-        // 请使用 setExpr() 方法代替，它接受任意 Expression。
-        evictCacheIfNeeded(NUMERIC_FIELD_CACHE);
-        NUMERIC_FIELD_CACHE.put(cacheKey, false);
-        throw new IllegalArgumentException(operation + "() cannot validate field '" + fieldName + "' in "
-            + entityClass.getSimpleName() + ". Field not found via reflection. "
-            + "Ensure the field exists as a direct class field (not a getter-only property). "
-            + "For computed expressions, use setExpr() instead.");
     }
 
 }

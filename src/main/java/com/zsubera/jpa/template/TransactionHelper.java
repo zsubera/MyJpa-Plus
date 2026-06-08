@@ -68,7 +68,14 @@ class TransactionHelper {
             txTemplate
                 .setPropagationBehavior(org.springframework.transaction.TransactionDefinition.PROPAGATION_REQUIRES_NEW);
         }
-        return txTemplate.execute(status -> operation.apply(entityManager));
+        R result = txTemplate.execute(status -> {
+            R r = operation.apply(entityManager);
+            if (status.isRollbackOnly()) {
+                log.warn("Transaction marked as rollback-only. Result will be discarded.");
+            }
+            return r;
+        });
+        return result;
     }
 
     private PlatformTransactionManager getTransactionManager() {

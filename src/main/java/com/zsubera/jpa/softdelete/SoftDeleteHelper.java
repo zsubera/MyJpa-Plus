@@ -199,8 +199,10 @@ public final class SoftDeleteHelper {
                 "softDeleteAll without conditions is dangerous. Pass allowUnconditional=true to confirm.");
         }
         // 审计日志
-        log.warn("AUDIT: Executing unconditional soft DELETE on {} — this will affect ALL rows! Call stack: {}",
-            entityClass.getSimpleName(), AuditUtils.getCallStack());
+        if (log.isWarnEnabled()) {
+            log.warn("AUDIT: Executing unconditional soft DELETE on {} — this will affect ALL rows! Call stack: {}",
+                entityClass.getSimpleName(), AuditUtils.getCallStack());
+        }
         String fieldName = findSoftDeleteField(entityClass);
         if (fieldName == null) {
             throw new IllegalArgumentException("Entity " + entityClass.getSimpleName() + " has no @SoftDelete field");
@@ -721,17 +723,24 @@ public final class SoftDeleteHelper {
         }
     }
 
+    /** 字段缓存，避免重复反射 */
+    private static final java.util.concurrent.ConcurrentMap<Class<?>, java.util.List<Field>> FIELDS_CACHE =
+        new java.util.concurrent.ConcurrentHashMap<>();
+
     private static List<Field> getAllFields(Class<?> clazz) {
-        List<Field> fields = new java.util.ArrayList<>();
-        while (clazz != null && clazz != Object.class) {
-            for (Field field : clazz.getDeclaredFields()) {
-                // 过滤静态字段和合成字段，只返回实例字段
-                if (!Modifier.isStatic(field.getModifiers()) && !field.isSynthetic()) {
-                    fields.add(field);
+        return FIELDS_CACHE.computeIfAbsent(clazz, c -> {
+            List<Field> fields = new java.util.ArrayList<>();
+            Class<?> current = c;
+            while (current != null && current != Object.class) {
+                for (Field field : current.getDeclaredFields()) {
+                    // 过滤静态字段和合成字段，只返回实例字段
+                    if (!Modifier.isStatic(field.getModifiers()) && !field.isSynthetic()) {
+                        fields.add(field);
+                    }
                 }
+                current = current.getSuperclass();
             }
-            clazz = clazz.getSuperclass();
-        }
-        return fields;
+            return java.util.Collections.unmodifiableList(fields);
+        });
     }
 }

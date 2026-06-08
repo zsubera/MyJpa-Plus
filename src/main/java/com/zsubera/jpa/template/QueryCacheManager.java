@@ -226,7 +226,8 @@ public class QueryCacheManager {
      */
     private void evictIfNeeded() {
         evictExpiredEntries();
-        while (store.size() >= maxEntries) {
+        // 使用有界重试次数避免无限循环
+        for (int i = 0; i < maxEntries && store.size() >= maxEntries; i++) {
             evictOldestEntry();
         }
     }

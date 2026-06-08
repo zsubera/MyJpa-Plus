@@ -96,6 +96,12 @@ public class EncryptConverter implements AttributeConverter<String, String> {
     /** 上次刷新密钥版本的时间戳。 */
     private static volatile long lastKeyVersionRefresh;
 
+    /** 多密钥格式正则表达式：vN:key,vN:key */
+    private static final java.util.regex.Pattern MULTI_KEY_PATTERN = java.util.regex.Pattern.compile(".*v\\d+:.*,.+");
+
+    /** 单条目格式正则表达式：vN:key */
+    private static final java.util.regex.Pattern SINGLE_ENTRY_PATTERN = java.util.regex.Pattern.compile("v\\d+:.+");
+
     /** 密钥版本缓存刷新间隔（毫秒），默认 5 分钟。 */
     private static final long KEY_VERSION_REFRESH_INTERVAL_MS = 300_000L;
 
@@ -366,12 +372,12 @@ public class EncryptConverter implements AttributeConverter<String, String> {
         // 使用显式正则表达式匹配多密钥格式 "vN:key,vN:key"
         // 之前的检测（contains(":") && contains(",")）在单个密钥同时包含这两个字符时存在歧义。
         // 新格式要求每个条目匹配 "vN:key" 模式。
-        if (allKeys.matches(".*v\\d+:.*,.+")) {
+        if (MULTI_KEY_PATTERN.matcher(allKeys).matches()) {
             String[] entries = allKeys.split(",");
             boolean validMultiKey = true;
             for (String entry : entries) {
                 entry = entry.trim();
-                if (!entry.matches("v\\d+:.+")) {
+                if (!SINGLE_ENTRY_PATTERN.matcher(entry).matches()) {
                     log.warn("SECURITY: Invalid multi-key entry format '{}'. Expected 'vN:key'. "
                         + "Falling back to single-key mode.", entry);
                     validMultiKey = false;
