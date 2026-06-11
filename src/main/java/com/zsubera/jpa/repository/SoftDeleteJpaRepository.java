@@ -3,6 +3,7 @@ package com.zsubera.jpa.repository;
 import com.zsubera.jpa.softdelete.SoftDeleteHelper;
 import com.zsubera.jpa.update.AuditUtils;
 import com.zsubera.jpa.util.EntityClassResolver;
+import com.zsubera.jpa.util.QueryTimeoutHelper;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import jakarta.persistence.EntityManager;
 import java.util.List;
@@ -355,6 +356,55 @@ public class SoftDeleteJpaRepository<T, ID> extends SimpleJpaRepository<T, ID> {
         Specification<T> idSpec = Specification.where((root, query, cb) -> cb.equal(root.get(idFieldName), id));
         Specification<T> softDeleteSpec = SoftDeleteHelper.isNotDeleted(domainClass);
         return count(softDeleteSpec != null ? idSpec.and(softDeleteSpec) : idSpec) > 0;
+    }
+
+    // ---- 查询超时保护 ----
+
+    @Override
+    protected jakarta.persistence.TypedQuery<T> getQuery(Specification<T> spec,
+        org.springframework.data.domain.Pageable pageable) {
+        jakarta.persistence.TypedQuery<T> query = super.getQuery(spec, pageable);
+        QueryTimeoutHelper.applyTimeout(query);
+        return query;
+    }
+
+    @Override
+    protected <S extends T> jakarta.persistence.TypedQuery<S> getQuery(Specification<S> spec, Class<S> domainClass,
+        org.springframework.data.domain.Pageable pageable) {
+        jakarta.persistence.TypedQuery<S> query = super.getQuery(spec, domainClass, pageable);
+        QueryTimeoutHelper.applyTimeout(query);
+        return query;
+    }
+
+    @Override
+    protected jakarta.persistence.TypedQuery<T> getQuery(Specification<T> spec,
+        org.springframework.data.domain.Sort sort) {
+        jakarta.persistence.TypedQuery<T> query = super.getQuery(spec, sort);
+        QueryTimeoutHelper.applyTimeout(query);
+        return query;
+    }
+
+    @Override
+    protected <S extends T> jakarta.persistence.TypedQuery<S> getQuery(Specification<S> spec, Class<S> domainClass,
+        org.springframework.data.domain.Sort sort) {
+        jakarta.persistence.TypedQuery<S> query = super.getQuery(spec, domainClass, sort);
+        QueryTimeoutHelper.applyTimeout(query);
+        return query;
+    }
+
+    @Override
+    protected jakarta.persistence.TypedQuery<Long> getCountQuery(Specification<T> spec) {
+        jakarta.persistence.TypedQuery<Long> query = super.getCountQuery(spec);
+        QueryTimeoutHelper.applyTimeout(query);
+        return query;
+    }
+
+    @Override
+    protected <S extends T> jakarta.persistence.TypedQuery<Long> getCountQuery(Specification<S> spec,
+        Class<S> domainClass) {
+        jakarta.persistence.TypedQuery<Long> query = super.getCountQuery(spec, domainClass);
+        QueryTimeoutHelper.applyTimeout(query);
+        return query;
     }
 
     /**

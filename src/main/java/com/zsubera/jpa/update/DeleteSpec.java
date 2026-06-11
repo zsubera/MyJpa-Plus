@@ -72,7 +72,9 @@ public class DeleteSpec<T> extends AbstractBulkOperationSpec<T, DeleteSpec<T>> {
      */
     @Override
     public int execute(EntityManager em) {
-        return em.createQuery(toDelete(em)).executeUpdate();
+        var query = em.createQuery(toDelete(em));
+        applyTimeout(query);
+        return query.executeUpdate();
     }
 
     @Override
@@ -127,7 +129,9 @@ public class DeleteSpec<T> extends AbstractBulkOperationSpec<T, DeleteSpec<T>> {
         CriteriaBuilder cb = em.getCriteriaBuilder();
         CriteriaDelete<T> delete = cb.createCriteriaDelete(entityClass);
         delete.from(entityClass);
-        return em.createQuery(delete).executeUpdate();
+        var q = em.createQuery(delete);
+        applyTimeout(q);
+        return q.executeUpdate();
     }
 
     /**
@@ -173,6 +177,10 @@ public class DeleteSpec<T> extends AbstractBulkOperationSpec<T, DeleteSpec<T>> {
      * 此方法首先查询符合条件的实体 ID 列表（带限制），然后对这些实体执行删除操作。
      *
      * <p>
+     * <strong>重要副作用：</strong>{@code em.clear()} 会分离当前事务中<strong>所有</strong>托管实体，
+     * 包括调用方在同一事务中持有的其他实体。调用方应在 {@code executeLimited} 返回后重新查询需要的实体。
+     *
+     * <p>
      * <strong>并发风险警告：</strong>此方法分两步执行（先查询 ID，再删除），在高并发场景下存在竞态条件。 在查询ID和执行删除之间，其他事务可能修改或删除记录，导致数据不一致。
      *
      * <p>
@@ -191,7 +199,7 @@ public class DeleteSpec<T> extends AbstractBulkOperationSpec<T, DeleteSpec<T>> {
      *
      * <p>
      * <strong>注意：</strong>此方法使用 CriteriaDelete 绕过 JPA 生命周期回调，不会触发 {@code @PreRemove}/{@code @PostRemove}。
-     * 如果实体有 L1 缓存中的托管实例，删除后可能返回过时数据。如需确保一致性，请在调用后手动执行 {@code em.clear()}。
+     * 删除成功后会自动调用 {@code em.clear()} 清除持久化上下文，防止 L1 缓存中保留已删除实体的过期数据。
      *
      * @param em 实体管理器
      * @param limit 最大删除行数
@@ -233,7 +241,9 @@ public class DeleteSpec<T> extends AbstractBulkOperationSpec<T, DeleteSpec<T>> {
                 entityClass.getSimpleName(), limit);
         }
         idQuery.where(predicates.length > 0 ? cb.and(predicates) : cb.conjunction());
-        TypedQuery<?> query = em.createQuery(idQuery).setMaxResults(limit);
+        TypedQuery<?> query = em.createQuery(idQuery);
+        applyTimeout(query);
+        query.setMaxResults(limit);
         if (pessimisticLock) {
             query.setLockMode(LockModeType.PESSIMISTIC_WRITE);
         }
@@ -243,11 +253,20 @@ public class DeleteSpec<T> extends AbstractBulkOperationSpec<T, DeleteSpec<T>> {
             return 0;
         }
 
-        // Step 2: 用ID列表执行删除
+        // [FIX] P0-1: 清除持久化上下文，防止 L1 缓存中已加载的实体干扰批量删除
+        // 警告：此操作会分离当前事务中的所有托管实体，包括调用者可能持有的其他托管实例。
+        log.warn(
+            "executeLimited() calling em.clear() — all managed entities in current persistence context will be detached. "
+                + "Entity: {}, IDs affected: {}. Re-query any needed entities after this call.",
+            entityClass.getSimpleName(), ids.size());
+        em.clear();
         CriteriaDelete<T> delete = cb.createCriteriaDelete(entityClass);
         Root<T> deleteRoot = delete.from(entityClass);
         delete.where(InClauseBuilder.in(cb, deleteRoot.get(idFieldName), ids));
-        return em.createQuery(delete).executeUpdate();
+        var dq = em.createQuery(delete);
+        applyTimeout(dq);
+        int deleted = dq.executeUpdate();
+        return deleted;
     }
 
 }

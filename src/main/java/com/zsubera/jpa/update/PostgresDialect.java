@@ -14,7 +14,7 @@ import com.zsubera.jpa.update.EntityFieldExtractor.EntityFieldValue;
  * <p>
  * 标识符使用双引号转义：{@code "identifier"}
  */
-class PostgresDialect implements DialectStrategy {
+final class PostgresDialect implements DialectStrategy {
 
     @Override
     public String name() {
@@ -39,10 +39,11 @@ class PostgresDialect implements DialectStrategy {
             escapedConflict.add(escapeIdentifier(col));
         }
         sql.append(String.join(", ", escapedConflict));
-        sql.append(") DO UPDATE SET ");
+        sql.append(") ");
         if (updateColumns.isEmpty()) {
-            sql.append(escapeIdentifier(conflictColumns.get(0)) + " = " + escapeIdentifier(conflictColumns.get(0)));
+            sql.append("DO NOTHING");
         } else {
+            sql.append("DO UPDATE SET ");
             List<String> setClauses = new ArrayList<>();
             for (String col : updateColumns) {
                 String escaped = escapeIdentifier(col);

@@ -118,7 +118,7 @@ public @interface SoftDelete {
      * }
      * }</pre>
      *
-     * @return 表示"已删除"的字符串值，默认为 "2"
+     * @return 表示"已删除"的字符串值，默认为 "1"
      */
-    String deletedStringValue() default "2";
+    String deletedStringValue() default "1";
 }

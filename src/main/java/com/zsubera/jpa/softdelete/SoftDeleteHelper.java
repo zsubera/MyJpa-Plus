@@ -4,6 +4,7 @@ import com.zsubera.jpa.annotation.SoftDelete;
 import com.zsubera.jpa.exception.MyJpaPlusException;
 import com.zsubera.jpa.spec.ConditionNode;
 import com.zsubera.jpa.spec.QuerySpec;
+import com.zsubera.jpa.util.QueryTimeoutHelper;
 import com.zsubera.jpa.update.AuditUtils;
 import com.zsubera.jpa.util.StringHelper;
 import jakarta.persistence.EnumType;
@@ -110,16 +111,22 @@ public final class SoftDeleteHelper {
         if (identifier == null || identifier.isEmpty()) {
             throw new IllegalArgumentException("Identifier must not be null or empty");
         }
-        // 通过逐段校验支持 schema.table 格式
+        // [FIX] P1-3: 按点号分段校验并逐段转义，支持 schema.table 和 catalog.schema.table 格式
+        // 例如: "myschema.mytable" → "myschema"."mytable"（而非整体 "myschema.mytable"）
         String[] parts = identifier.split("\\.");
-        for (String part : parts) {
+        StringBuilder escaped = new StringBuilder();
+        for (int i = 0; i < parts.length; i++) {
+            String part = parts[i];
             if (!SAFE_IDENTIFIER_PART_PATTERN.matcher(part).matches()) {
                 throw new IllegalArgumentException("Invalid SQL identifier: '" + identifier
                     + "'. Each part must contain only alphanumeric characters and underscores.");
             }
+            if (i > 0) {
+                escaped.append('.');
+            }
+            escaped.append('"').append(part).append('"');
         }
-        // 校验已保证无双引号，此处直接包裹
-        return "\"" + identifier + "\"";
+        return escaped.toString();
     }
 
     private SoftDeleteHelper() {}
@@ -220,18 +227,25 @@ public final class SoftDeleteHelper {
         if (resolved.booleanField()) {
             // Boolean 字段：使用参数绑定的 SQL 以确保跨数据库兼容性
             // PostgreSQL 使用 true/false，MySQL 使用 1/0，参数绑定由 JDBC 驱动处理
-            updated = em
+            var q = em
                 .createNativeQuery("UPDATE " + escapedTable + " SET " + escapedColumn + " = ?1 WHERE " + escapedColumn
                     + " = ?2 OR " + escapedColumn + " IS NULL")
-                .setParameter(1, Boolean.TRUE).setParameter(2, Boolean.FALSE).executeUpdate();
+                .setParameter(1, Boolean.TRUE).setParameter(2, Boolean.FALSE);
+            QueryTimeoutHelper.applyTimeout(q);
+            updated = q.executeUpdate();
         } else {
             String whereClause = escapedColumn + " != ?1 OR " + escapedColumn + " IS NULL";
-            updated =
+            var q =
                 em.createNativeQuery("UPDATE " + escapedTable + " SET " + escapedColumn + " = ?1 WHERE " + whereClause)
-                    .setParameter(1, resolved.dbValue()).executeUpdate();
+                    .setParameter(1, resolved.dbValue());
+            QueryTimeoutHelper.applyTimeout(q);
+            updated = q.executeUpdate();
         }
         // 原生 SQL 绕过 JPA 生命周期，需要清除 L1 缓存以确保后续查询一致性
-        em.clear();
+        // 仅在实际更新了行时才 clear，避免无谓地丢弃持久化上下文中的待持久化实体
+        if (updated > 0) {
+            em.clear();
+        }
         return updated;
     }
 
@@ -317,6 +331,7 @@ public final class SoftDeleteHelper {
             String sql = "UPDATE " + escapedTable + " SET " + setClause + " WHERE " + escapedIdColumn + " IN ("
                 + placeholders + ")";
             var query = em.createNativeQuery(sql);
+            QueryTimeoutHelper.applyTimeout(query);
             if (useParamBinding) {
                 query.setParameter(setParamName, deletedParamValue);
             }
@@ -388,7 +403,12 @@ public final class SoftDeleteHelper {
         if (field != null) {
             jakarta.persistence.Column columnAnnotation = field.getAnnotation(jakarta.persistence.Column.class);
             if (columnAnnotation != null && !columnAnnotation.name().isEmpty()) {
-                return columnAnnotation.name();
+                String name = columnAnnotation.name();
+                if (!SAFE_IDENTIFIER_PATTERN.matcher(name).matches()) {
+                    throw new IllegalArgumentException("Invalid @Column name: " + name
+                        + ". Must contain only alphanumeric characters and underscores.");
+                }
+                return name;
             }
         }
         return StringHelper.camelToSnake(fieldName);
@@ -403,9 +423,14 @@ public final class SoftDeleteHelper {
                 if (f.isAnnotationPresent(jakarta.persistence.Id.class)) {
                     jakarta.persistence.Column columnAnnotation = f.getAnnotation(jakarta.persistence.Column.class);
                     if (columnAnnotation != null && !columnAnnotation.name().isEmpty()) {
-                        return columnAnnotation.name();
+                        String name = columnAnnotation.name();
+                        if (!SAFE_IDENTIFIER_PATTERN.matcher(name).matches()) {
+                            throw new IllegalArgumentException("Invalid @Column name for @Id field: " + name
+                                + ". Must contain only alphanumeric characters and underscores.");
+                        }
+                        return name;
                     }
-                    return f.getName();
+                    return StringHelper.camelToSnake(f.getName());
                 }
             }
         }
@@ -617,11 +642,15 @@ public final class SoftDeleteHelper {
                     try {
                         field.setAccessible(true);
                     } catch (SecurityException e) {
-                        throw new IllegalStateException(
-                            "Cannot set accessible on @SoftDelete field '" + field.getName() + "' in "
-                                + cls.getSimpleName() + ". " + "If using Java 17+ module system, add JVM argument: "
-                                + "--add-opens " + cls.getPackageName() + "=ALL-UNNAMED",
-                            e);
+                        // [FIX] P2-2: 提供更详细的模块系统诊断信息
+                        String moduleName = cls.getModule() != null ? cls.getModule().getName() : "unnamed";
+                        String pkg = cls.getPackageName();
+                        throw new IllegalStateException(String.format(
+                            "Cannot access @SoftDelete field '%s' in %s. " + "Module '%s' does not open package '%s'.%n"
+                                + "Solutions (pick one):%n" + "  1. Add to module-info.java: opens %s;%n"
+                                + "  2. JVM argument: --add-opens %s/%s=ALL-UNNAMED%n"
+                                + "  3. Use a public getter/setter for the @SoftDelete field",
+                            field.getName(), cls.getSimpleName(), moduleName, pkg, pkg, moduleName, pkg), e);
                     }
                     return field.getName();
                 }

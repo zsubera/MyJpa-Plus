@@ -201,21 +201,35 @@ public class AuditEntityListener implements ApplicationContextAware {
                 for (Field field : c.getDeclaredFields()) {
                     if (field.isAnnotationPresent(CreatedAt.class)) {
                         if (fields.createdAt == null) {
+                            validateAuditFieldType(field, entityClass);
                             field.setAccessible(true);
                             fields.createdAt = field;
                         }
                     } else if (field.isAnnotationPresent(UpdatedAt.class)) {
                         if (fields.updatedAt == null) {
+                            validateAuditFieldType(field, entityClass);
                             field.setAccessible(true);
                             fields.updatedAt = field;
                         }
                     } else if (field.isAnnotationPresent(CreatedBy.class)) {
                         if (fields.createdBy == null) {
+                            if (field.getType() != String.class) {
+                                log.warn(
+                                    "@CreatedBy field {} on {} must be String type, got {}. Field will be ignored.",
+                                    field.getName(), entityClass.getSimpleName(), field.getType().getSimpleName());
+                                continue;
+                            }
                             field.setAccessible(true);
                             fields.createdBy = field;
                         }
                     } else if (field.isAnnotationPresent(UpdatedBy.class)) {
                         if (fields.updatedBy == null) {
+                            if (field.getType() != String.class) {
+                                log.warn(
+                                    "@UpdatedBy field {} on {} must be String type, got {}. Field will be ignored.",
+                                    field.getName(), entityClass.getSimpleName(), field.getType().getSimpleName());
+                                continue;
+                            }
                             field.setAccessible(true);
                             fields.updatedBy = field;
                         }
@@ -224,6 +238,23 @@ public class AuditEntityListener implements ApplicationContextAware {
             }
             return fields;
         });
+    }
+
+    /**
+     * 校验 @CreatedAt/@UpdatedAt 字段类型是否受支持。
+     * 支持 Instant、LocalDateTime、Date 和 Long（epoch millis）。
+     */
+    private static void validateAuditFieldType(Field field, Class<?> entityClass) {
+        Class<?> type = field.getType();
+        if (type != Instant.class && type != LocalDateTime.class && type != Date.class && type != Long.class
+            && type != long.class) {
+            log.warn(
+                "@{}/@{} field {} on {} has unsupported type {}. "
+                    + "Supported types: Instant, LocalDateTime, Date, Long. Field will not be auto-filled.",
+                field.isAnnotationPresent(CreatedAt.class) ? "CreatedAt" : "UpdatedAt",
+                field.isAnnotationPresent(CreatedAt.class) ? "CreatedAt" : "UpdatedAt", field.getName(),
+                entityClass.getSimpleName(), type.getSimpleName());
+        }
     }
 
     /**
@@ -247,6 +278,8 @@ public class AuditEntityListener implements ApplicationContextAware {
                     field.set(entity, LocalDateTime.ofInstant(instant, auditZoneId));
                 } else if (fieldType == Date.class) {
                     field.set(entity, Date.from(instant));
+                } else if (fieldType == Long.class || fieldType == long.class) {
+                    field.set(entity, instant.toEpochMilli());
                 }
             } else if (value instanceof String str) {
                 if (fieldType == String.class) {

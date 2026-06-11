@@ -202,11 +202,15 @@ public final class LambdaUtils {
             });
             SerializedLambda lambda = (SerializedLambda)writeReplace.invoke(fn);
             String key = lambda.getImplClass() + "#" + lambda.getImplMethodName();
-            String result = CACHE.computeIfAbsent(key, k -> methodToProperty(lambda.getImplMethodName()));
-            // 将驱逐检查移到computeIfAbsent之外，避免在持有bin锁期间执行驱逐逻辑
+            // [FIX] P1-2: 驱逐检查移到缓存查找之前，确保命中路径也能触发采样驱逐
+            // 使用采样策略（每 100 次调用检查一次），开销可忽略
             evictCacheIfNeeded();
             evictMethodCacheIfNeeded();
-            return result;
+            String cached = CACHE.get(key);
+            if (cached != null) {
+                return cached;
+            }
+            return CACHE.computeIfAbsent(key, k -> methodToProperty(lambda.getImplMethodName()));
         } catch (ReflectiveOperationException e) {
             throw new MyJpaPlusException("Failed to extract property name from method reference. "
                 + "Ensure you are using a method reference directly (e.g., Entity::getField). "
@@ -241,12 +245,11 @@ public final class LambdaUtils {
      * 当 METHOD_CACHE 大小超过 2048 时，驱逐约 25% 的条目，而非清除全部。 该缓存仅存储 Class -> Method 映射，数量通常有界，但在热部署场景下可能积累旧类加载器的条目。 使用 CAS
      * 操作确保只有一个线程执行驱逐。
      */
-    private static final java.util.concurrent.atomic.AtomicBoolean METHOD_EVICTING =
-        new java.util.concurrent.atomic.AtomicBoolean(false);
+    private static final java.util.concurrent.locks.ReentrantLock CACHE_EVICT_LOCK =
+        new java.util.concurrent.locks.ReentrantLock();
 
-    /** 主缓存驱逐锁 */
-    private static final java.util.concurrent.atomic.AtomicBoolean CACHE_EVICTING =
-        new java.util.concurrent.atomic.AtomicBoolean(false);
+    private static final java.util.concurrent.locks.ReentrantLock METHOD_EVICT_LOCK =
+        new java.util.concurrent.locks.ReentrantLock();
 
     /** 调用计数器，用于采样驱逐检查（仅用于主缓存 CACHE） */
     private static final java.util.concurrent.atomic.AtomicInteger CALL_COUNTER =
@@ -281,33 +284,32 @@ public final class LambdaUtils {
         if (CACHE.size() <= maxCacheSize) {
             return;
         }
-        // 使用 CAS 确保只有一个线程执行驱逐
-        if (CACHE_EVICTING.compareAndSet(false, true)) {
-            try {
-                int currentSize = CACHE.size();
-                // 再次检查（可能其他线程已经完成驱逐）
-                if (currentSize > maxCacheSize) {
-                    int target = (int)(maxCacheSize * EVICTION_TARGET_RATIO);
-                    int toRemove = currentSize - target;
-                    if (toRemove > 0) {
-                        int removed = 0;
-                        long startTime = System.nanoTime();
-                        java.util.Iterator<Map.Entry<String, String>> it = CACHE.entrySet().iterator();
-                        while (it.hasNext() && removed < toRemove) {
-                            it.next();
-                            it.remove();
-                            removed++;
-                        }
-                        long elapsed = System.nanoTime() - startTime;
-                        if (log.isDebugEnabled()) {
-                            log.debug("Property name cache evicted {} entries (size: {} -> {}, elapsed: {} us)",
-                                removed, currentSize, CACHE.size(), elapsed / 1000);
-                        }
+        // 使用 ReentrantLock 确保只有一个线程执行驱逐
+        CACHE_EVICT_LOCK.lock();
+        try {
+            int currentSize = CACHE.size();
+            // 再次检查（可能其他线程已经完成驱逐）
+            if (currentSize > maxCacheSize) {
+                int target = (int)(maxCacheSize * EVICTION_TARGET_RATIO);
+                int toRemove = currentSize - target;
+                if (toRemove > 0) {
+                    int removed = 0;
+                    long startTime = System.nanoTime();
+                    java.util.Iterator<Map.Entry<String, String>> it = CACHE.entrySet().iterator();
+                    while (it.hasNext() && removed < toRemove) {
+                        it.next();
+                        it.remove();
+                        removed++;
+                    }
+                    long elapsed = System.nanoTime() - startTime;
+                    if (log.isDebugEnabled()) {
+                        log.debug("Property name cache evicted {} entries (size: {} -> {}, elapsed: {} us)", removed,
+                            currentSize, CACHE.size(), elapsed / 1000);
                     }
                 }
-            } finally {
-                CACHE_EVICTING.set(false);
             }
+        } finally {
+            CACHE_EVICT_LOCK.unlock();
         }
     }
 
@@ -319,33 +321,32 @@ public final class LambdaUtils {
         if (METHOD_CACHE.size() <= METHOD_CACHE_MAX_SIZE) {
             return;
         }
-        // 使用 CAS 确保只有一个线程执行驱逐
-        if (METHOD_EVICTING.compareAndSet(false, true)) {
-            try {
-                int currentSize = METHOD_CACHE.size();
-                // 再次检查（可能其他线程已经完成驱逐）
-                if (currentSize > METHOD_CACHE_MAX_SIZE) {
-                    int target = (int)(METHOD_CACHE_MAX_SIZE * EVICTION_TARGET_RATIO);
-                    int toRemove = currentSize - target;
-                    if (toRemove > 0) {
-                        int removed = 0;
-                        long startTime = System.nanoTime();
-                        java.util.Iterator<Map.Entry<Class<?>, Method>> it = METHOD_CACHE.entrySet().iterator();
-                        while (it.hasNext() && removed < toRemove) {
-                            it.next();
-                            it.remove();
-                            removed++;
-                        }
-                        long elapsed = System.nanoTime() - startTime;
-                        if (log.isDebugEnabled()) {
-                            log.debug("Method cache evicted {} entries (size: {} -> {}, elapsed: {} us)", removed,
-                                currentSize, METHOD_CACHE.size(), elapsed / 1000);
-                        }
+        // 使用 ReentrantLock 确保只有一个线程执行驱逐
+        METHOD_EVICT_LOCK.lock();
+        try {
+            int currentSize = METHOD_CACHE.size();
+            // 再次检查（可能其他线程已经完成驱逐）
+            if (currentSize > METHOD_CACHE_MAX_SIZE) {
+                int target = (int)(METHOD_CACHE_MAX_SIZE * EVICTION_TARGET_RATIO);
+                int toRemove = currentSize - target;
+                if (toRemove > 0) {
+                    int removed = 0;
+                    long startTime = System.nanoTime();
+                    java.util.Iterator<Map.Entry<Class<?>, Method>> it = METHOD_CACHE.entrySet().iterator();
+                    while (it.hasNext() && removed < toRemove) {
+                        it.next();
+                        it.remove();
+                        removed++;
+                    }
+                    long elapsed = System.nanoTime() - startTime;
+                    if (log.isDebugEnabled()) {
+                        log.debug("Method cache evicted {} entries (size: {} -> {}, elapsed: {} us)", removed,
+                            currentSize, METHOD_CACHE.size(), elapsed / 1000);
                     }
                 }
-            } finally {
-                METHOD_EVICTING.set(false);
             }
+        } finally {
+            METHOD_EVICT_LOCK.unlock();
         }
     }
 

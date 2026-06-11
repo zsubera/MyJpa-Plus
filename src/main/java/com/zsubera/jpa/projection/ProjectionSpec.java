@@ -9,6 +9,7 @@ import com.zsubera.jpa.spec.SFunction;
 import com.zsubera.jpa.template.MyJpaTemplate;
 import com.zsubera.jpa.softdelete.SoftDeleteHelper;
 import com.zsubera.jpa.util.LambdaUtils;
+import com.zsubera.jpa.util.QueryTimeoutHelper;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.Tuple;
@@ -18,6 +19,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
@@ -69,6 +71,18 @@ public class ProjectionSpec<T> {
 
     /** 是否启用软删除过滤。 */
     private boolean softDeleteEnabled = false;
+
+    /** 深度分页警告阈值（默认 100000）。 */
+    private int deepPaginationOffsetThreshold = MyJpaTemplate.DEFAULT_DEEP_PAGINATION_OFFSET_THRESHOLD;
+
+    /** 深度分页硬限制（默认 1000000）。 */
+    private int deepPaginationOffsetLimit = MyJpaTemplate.DEFAULT_DEEP_PAGINATION_OFFSET_LIMIT;
+
+    /** 深度分页警告日志限流：上次记录时间。 */
+    private final AtomicLong lastDeepPaginationWarnTime = new AtomicLong(0);
+
+    /** 深度分页警告日志最小间隔（1 分钟）。 */
+    private static final long DEEP_PAGINATION_WARN_INTERVAL_MS = 60_000;
 
     /**
      * 描述 JOIN 子句的内部记录类。
@@ -219,7 +233,7 @@ public class ProjectionSpec<T> {
     }
 
     /**
-     * 添加 COUNT(DISTINCT *) 聚合投影，别名为 {@code "count"}。
+     * 添加 COUNT(DISTINCT *) 聚合投影，别名为 {@code "count_distinct"}。
      *
      * <p>
      * 与 {@link #selectCount()} 不同，此方法使用 {@code COUNT(DISTINCT root)} 进行去重计数， 适用于 JOIN 产生重复行的场景。
@@ -227,7 +241,7 @@ public class ProjectionSpec<T> {
      * @return 当前 ProjectionSpec 实例，支持链式调用
      */
     public ProjectionSpec<T> selectCountDistinct() {
-        aggregateSelections.add(new AggregateSelection(AggregateType.COUNT_DISTINCT, "count", null));
+        aggregateSelections.add(new AggregateSelection(AggregateType.COUNT_DISTINCT, "count_distinct", null));
         return this;
     }
 
@@ -324,6 +338,34 @@ public class ProjectionSpec<T> {
      */
     public ProjectionSpec<T> withSoftDeleteFilter() {
         this.softDeleteEnabled = true;
+        return this;
+    }
+
+    /**
+     * 设置深度分页警告阈值。超过此偏移量时记录警告日志。
+     *
+     * @param threshold 偏移量阈值
+     * @return 当前 ProjectionSpec 实例，支持链式调用
+     */
+    public ProjectionSpec<T> withDeepPaginationThreshold(int threshold) {
+        if (threshold <= 0) {
+            throw new IllegalArgumentException("deepPaginationOffsetThreshold must be positive");
+        }
+        this.deepPaginationOffsetThreshold = threshold;
+        return this;
+    }
+
+    /**
+     * 设置深度分页硬限制。超过此偏移量时抛出异常。
+     *
+     * @param limit 硬限制值，或 -1 表示禁用
+     * @return 当前 ProjectionSpec 实例，支持链式调用
+     */
+    public ProjectionSpec<T> withDeepPaginationLimit(int limit) {
+        if (limit <= 0 && limit != -1) {
+            throw new IllegalArgumentException("deepPaginationOffsetLimit must be positive or -1 (disabled)");
+        }
+        this.deepPaginationOffsetLimit = limit;
         return this;
     }
 
@@ -479,11 +521,7 @@ public class ProjectionSpec<T> {
      * @return 返回 Tuple 结果的 TypedQuery 实例
      */
     public TypedQuery<Tuple> toTupleQuery(EntityManager em, int maxResults) {
-        // 校验选择列表不为空
-        if (selections.isEmpty() && aggregateSelections.isEmpty()) {
-            throw new IllegalArgumentException("ProjectionSpec must have at least one selection. "
-                + "Use select() or addAggregation() before executing.");
-        }
+        validateSelectionConsistency();
         CriteriaBuilder cb = em.getCriteriaBuilder();
         CriteriaQuery<Tuple> query = cb.createTupleQuery();
         Root<T> root = query.from(entityClass);
@@ -520,6 +558,7 @@ public class ProjectionSpec<T> {
             applyOrderBy(root, cb, query);
 
             TypedQuery<Tuple> typedQuery = em.createQuery(query);
+            QueryTimeoutHelper.applyTimeout(typedQuery);
             if (maxResults > 0) {
                 typedQuery.setMaxResults(maxResults);
                 if (maxResults == MyJpaTemplate.DEFAULT_MAX_RESULTS && !selections.isEmpty() && log.isDebugEnabled()) {
@@ -606,6 +645,7 @@ public class ProjectionSpec<T> {
         if (dtoClass == null) {
             throw new IllegalStateException("asDto() must be called before toDtoQuery()");
         }
+        validateSelectionConsistency();
         CriteriaBuilder cb = em.getCriteriaBuilder();
         CriteriaQuery<R> query = (CriteriaQuery<R>)cb.createQuery(dtoClass);
         Root<T> root = query.from(entityClass);
@@ -643,6 +683,7 @@ public class ProjectionSpec<T> {
             applyOrderBy(root, cb, query);
 
             TypedQuery<R> typedQuery = em.createQuery(query);
+            QueryTimeoutHelper.applyTimeout(typedQuery);
             if (maxResults > 0) {
                 typedQuery.setMaxResults(maxResults);
             }
@@ -675,6 +716,7 @@ public class ProjectionSpec<T> {
         if (pageable == null) {
             throw new IllegalArgumentException("pageable must not be null");
         }
+        validateSelectionConsistency();
         CriteriaBuilder cb = em.getCriteriaBuilder();
 
         // 处理无分页情况
@@ -683,6 +725,8 @@ public class ProjectionSpec<T> {
             List<Tuple> allContent = query.getResultList();
             return new PageImpl<>(allContent);
         }
+
+        checkDeepPagination(pageable.getOffset());
 
         try {
             // 构建计数和数据查询，每个 root 共享一次 JOIN 解析
@@ -712,7 +756,9 @@ public class ProjectionSpec<T> {
                     applyHavingPredicates(groupRoot, cb, groupCountQuery);
                 }
                 groupCountQuery.select(cb.countDistinct(groupRoot));
-                total = em.createQuery(groupCountQuery).getSingleResult();
+                TypedQuery<Long> groupCountTypedQuery = em.createQuery(groupCountQuery);
+                QueryTimeoutHelper.applyTimeout(groupCountTypedQuery);
+                total = groupCountTypedQuery.getSingleResult();
             } else {
                 // 仅在用户显式启用 distinct 时使用 countDistinct
                 if (this.distinct) {
@@ -721,7 +767,9 @@ public class ProjectionSpec<T> {
                     countQuery.select(cb.count(countRoot));
                 }
                 applyPredicate(countRoot, countQuery, cb);
-                total = em.createQuery(countQuery).getSingleResult();
+                TypedQuery<Long> countTypedQuery = em.createQuery(countQuery);
+                QueryTimeoutHelper.applyTimeout(countTypedQuery);
+                total = countTypedQuery.getSingleResult();
             }
 
             // 数据查询——直接构建以避免调用 toTupleQuery() 导致再次 resolveJoins()
@@ -752,6 +800,7 @@ public class ProjectionSpec<T> {
             applyOrderBy(dataRoot, cb, dataQuery);
 
             TypedQuery<Tuple> query = em.createQuery(dataQuery);
+            QueryTimeoutHelper.applyTimeout(query);
             if (pageable.getOffset() > Integer.MAX_VALUE) {
                 throw new IllegalArgumentException("Offset too large: " + pageable.getOffset());
             }
@@ -763,6 +812,42 @@ public class ProjectionSpec<T> {
         } finally {
             // 清除 JOIN 条件缓存，释放 Consumer 引用防止内存泄漏
             clearJoinCache();
+        }
+    }
+
+    /**
+     * 检查深度分页，超过阈值时记录警告，超过硬限制时抛出异常。
+     */
+    private void checkDeepPagination(long offset) {
+        if (offset > this.deepPaginationOffsetThreshold) {
+            long now = System.currentTimeMillis();
+            long lastWarn = lastDeepPaginationWarnTime.get();
+            if (now - lastWarn > DEEP_PAGINATION_WARN_INTERVAL_MS
+                && lastDeepPaginationWarnTime.compareAndSet(lastWarn, now)) {
+                log.warn("Deep pagination detected (offset={}). This may cause slow queries. "
+                    + "Consider using keyset pagination for better performance.", offset);
+            }
+        }
+        if (this.deepPaginationOffsetLimit > 0 && offset > this.deepPaginationOffsetLimit) {
+            throw new IllegalArgumentException("Pagination offset (" + offset + ") exceeds the configured hard limit ("
+                + this.deepPaginationOffsetLimit
+                + "). Use keyset pagination for better performance, or adjust myjpa-plus.query.deep-pagination-offset-limit.");
+        }
+    }
+
+    /**
+     * 校验选择列表一致性：至少有一个选择；聚合与非聚合字段混用时必须有 GROUP BY。
+     */
+    private void validateSelectionConsistency() {
+        if (selections.isEmpty() && aggregateSelections.isEmpty()) {
+            throw new IllegalArgumentException("ProjectionSpec must have at least one selection. "
+                + "Use select() or addAggregation() before executing.");
+        }
+        if (!selections.isEmpty() && !aggregateSelections.isEmpty() && groupByFields.isEmpty()) {
+            throw new IllegalArgumentException(
+                "Mixing aggregate (selectCount/selectSum/etc.) and non-aggregate select() requires groupBy(). "
+                    + "Non-aggregate columns in the SELECT list must appear in the GROUP BY clause. "
+                    + "Add .groupBy() calls for each non-aggregate field, or remove aggregate functions.");
         }
     }
 
@@ -839,17 +924,22 @@ public class ProjectionSpec<T> {
     @SuppressWarnings({"unchecked"})
     private Map<String, Join<?, ?>> resolveJoins(Root<T> root, CriteriaBuilder cb) {
         Map<String, Join<?, ?>> joinMap = new LinkedHashMap<>();
+        // 按字段名收集所有条件，避免同名 join 的 ON 子句被覆盖
+        Map<String, List<ConditionNode>> conditionsByField = new LinkedHashMap<>();
         for (JoinSpec js : joins) {
             Join<?, ?> join = joinMap.computeIfAbsent(js.fieldName, k -> js.left
                 ? root.join(js.fieldName, jakarta.persistence.criteria.JoinType.LEFT) : root.join(js.fieldName));
-            List<Predicate> onPredicates = new ArrayList<>();
-            for (ConditionNode node : js.getConditions()) {
-                onPredicates.add(resolveJoinCondition(node, join, cb));
-            }
-            if (!onPredicates.isEmpty()) {
-                // INNER JOIN 和 LEFT JOIN 都将条件放在 ON 子句中。
-                // LEFT JOIN ON 语义：条件不匹配时右表列为 NULL，左表行保留。
-                join.on(cb.and(onPredicates.toArray(new Predicate[0])));
+            conditionsByField.computeIfAbsent(js.fieldName, k -> new ArrayList<>()).addAll(js.getConditions());
+        }
+        // 统一应用 ON 条件
+        for (Map.Entry<String, Join<?, ?>> entry : joinMap.entrySet()) {
+            List<ConditionNode> allConditions = conditionsByField.get(entry.getKey());
+            if (allConditions != null && !allConditions.isEmpty()) {
+                List<Predicate> onPredicates = new ArrayList<>();
+                for (ConditionNode node : allConditions) {
+                    onPredicates.add(resolveJoinCondition(node, entry.getValue(), cb));
+                }
+                entry.getValue().on(cb.and(onPredicates.toArray(new Predicate[0])));
             }
         }
         return joinMap;

@@ -61,7 +61,7 @@ cd myjpa-plus
 
 1. 在 `ConditionNode.Op` 中添加枚举值
 2. 在 `ConditionBuilder<E, SELF>` 中添加默认方法
-3. 在 `NodeResolver` 中添加对应的 `case` 处理
+3. 在 `NodeResolver` 中添加对应的 `if-else instanceof` 分支（Java 17，不用 switch 模式匹配）
 4. 在 `SubQuerySpec` 中添加对应方法
 5. 在 `AbstractBulkOperationSpec` 中添加对应方法
 6. 在 `QuerySpecTest` 中添加测试
@@ -72,12 +72,12 @@ cd myjpa-plus
 
 | 序号 | 文件 | 位置 | 说明 |
 |---|---|---|---|
-| 1 | `ConditionNode.java` | `Op` 枚举 | 添加新的枚举值 |
+| 1 | `ConditionNode.java` | `Op` 枚举 | 添加新的枚举值（sealed 接口，新增节点类型需加 `permits`） |
 | 2 | `ConditionBuilder.java` | `default` 方法 | 添加类型安全的条件方法 |
-| 3 | `NodeResolver.java` | `resolve()` | 添加对应的 `case` 处理 |
-| 4 | `UpdateSpec.java` | 条件方法 | 添加对应的条件方法（继承自 AbstractBulkOperationSpec） |
-| 5 | `DeleteSpec.java` | 条件方法 | 添加对应的条件方法（继承自 AbstractBulkOperationSpec） |
-| 6 | `ProjectionSpec.ProjectionJoinGroup` | ConditionBuilder 实现 | 添加投影 JOIN 条件 |
+| 3 | `ConditionalMethods.java` | 抽象方法声明 | 添加抽象方法（若批量操作也需要） |
+| 4 | `NodeResolver.java` | `resolveNode()` | 添加对应的 `if-else instanceof` 分支（深度限制 50 层） |
+| 5 | `AbstractBulkOperationSpec.java` | 实现 | 添加批量操作实现（若需要） |
+| 6 | `OrConditionBuilder.java` | 实现 | 添加批量 OR 组实现（若需要） |
 | 7 | `QuerySpecTest.java` | 测试用例 | 添加对应的测试 |
 
 > **注意：**`AbstractBulkOperationSpec` 是 `UpdateSpec` 和 `DeleteSpec` 的基类，条件方法定义在此基类中。

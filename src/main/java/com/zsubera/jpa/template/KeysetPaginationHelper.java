@@ -1,5 +1,6 @@
 package com.zsubera.jpa.template;
 
+import com.zsubera.jpa.util.QueryTimeoutHelper;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.criteria.CriteriaBuilder;
 import jakarta.persistence.criteria.CriteriaQuery;
@@ -101,6 +102,7 @@ final class KeysetPaginationHelper {
 
         // 多查一条以判断是否有下一页
         jakarta.persistence.TypedQuery<T> query = entityManager.createQuery(cq);
+        QueryTimeoutHelper.applyTimeout(query);
         query.setMaxResults(pageSize + 1);
         List<T> results = query.getResultList();
         boolean hasNext = results.size() > pageSize;
@@ -233,6 +235,8 @@ final class KeysetPaginationHelper {
 
     /**
      * 采样驱逐 GETTER_CACHE：移除约 25% 的条目，避免全量清空导致的性能抖动。
+     * [FIX] P2-1: 使用 keySet().toArray() 快照 + remove() 替代 iterator.remove()，
+     * 避免 ConcurrentHashMap 弱一致性迭代器在并发写入时跳过条目导致驱逐不完全。
      */
     private static void evictGetterCache() {
         int targetSize = MAX_GETTER_CACHE_SIZE / 4;
@@ -240,12 +244,15 @@ final class KeysetPaginationHelper {
         if (toRemove <= 0) {
             return;
         }
-        var iterator = GETTER_CACHE.keySet().iterator();
+        Object[] keys = GETTER_CACHE.keySet().toArray();
         int removed = 0;
-        while (iterator.hasNext() && removed < toRemove) {
-            iterator.next();
-            iterator.remove();
-            removed++;
+        for (Object key : keys) {
+            if (removed >= toRemove) {
+                break;
+            }
+            if (GETTER_CACHE.remove(key) != null) {
+                removed++;
+            }
         }
     }
 }

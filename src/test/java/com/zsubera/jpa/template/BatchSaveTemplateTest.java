@@ -7,6 +7,7 @@ import com.zsubera.jpa.spec.TestEntity;
 import com.zsubera.jpa.spec.TestEntityRepository;
 import java.util.ArrayList;
 import java.util.List;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
@@ -33,6 +34,13 @@ class BatchSaveTemplateTest {
 
     @Autowired
     private TestEntityRepository repository;
+
+    // [FIX] 清理测试数据，避免测试间数据泄漏导致断言失败
+    @BeforeEach
+    void cleanUp() {
+        repository.deleteAll();
+        repository.flush();
+    }
 
     // ---- saveAllBatched ----
 

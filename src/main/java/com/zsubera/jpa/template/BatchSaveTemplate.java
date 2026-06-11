@@ -111,8 +111,10 @@ class BatchSaveTemplate {
                 entityManager.clear();
             }
         }
-        entityManager.flush();
-        entityManager.clear();
+        if (count > 0 && count % batchSize != 0) {
+            entityManager.flush();
+            entityManager.clear();
+        }
         return result;
     }
 
@@ -175,29 +177,12 @@ class BatchSaveTemplate {
                 evictIdMethodCache();
             }
             java.lang.reflect.Method getId = ID_METHOD_CACHE.computeIfAbsent(entity.getClass(), clazz -> {
-                // 1. 先尝试 PersistenceUnitUtil（最可靠，处理 @EmbeddedId 等复杂 ID）
-                try {
-                    jakarta.persistence.PersistenceUnitUtil puu =
-                        entityManager.getEntityManagerFactory().getPersistenceUnitUtil();
-                    puu.getIdentifier(entity);
-                    // 如果没有抛异常，说明 PersistenceUnitUtil 能处理此实体
-                    return null; // 特殊标记：使用 PersistenceUnitUtil 路径
-                } catch (RuntimeException e) {
-                    // PersistenceUnitUtil 无法处理，尝试反射 getId()
-                }
                 try {
                     return clazz.getMethod("getId");
                 } catch (NoSuchMethodException e) {
                     return NO_ID_METHOD_SENTINEL;
                 }
             });
-            if (getId == null) {
-                // PersistenceUnitUtil 路径：已在 computeIfAbsent 中验证可用
-                jakarta.persistence.PersistenceUnitUtil puu =
-                    entityManager.getEntityManagerFactory().getPersistenceUnitUtil();
-                Object id = puu.getIdentifier(entity);
-                return id == null;
-            }
             if (getId == NO_ID_METHOD_SENTINEL) {
                 log.warn(
                     "No getId() method found for {}; assuming existing entity. "
@@ -210,12 +195,16 @@ class BatchSaveTemplate {
             return id == null;
         } catch (ReflectiveOperationException ignored) {
         }
-        log.debug("Cannot determine if entity is new for {}; assuming existing", entity.getClass().getSimpleName());
-        return false;
+        throw new com.zsubera.jpa.exception.MyJpaPlusException(
+            "Cannot determine if entity is new for " + entity.getClass().getSimpleName()
+                + ". Entity must have a getId() method or be managed by PersistenceUnitUtil. "
+                + "Use saveAllBatchedPure() for new entities, or implement getId().");
     }
 
     /**
      * 采样驱逐 ID_METHOD_CACHE：移除约 25% 的条目，避免全量清空导致的性能抖动。
+     * [FIX] P1-3: 使用 keySet().toArray() 快照 + remove() 替代 iterator.remove()，
+     * 避免 ConcurrentHashMap 弱一致性迭代器在并发写入时跳过条目导致驱逐不完全。
      */
     private static void evictIdMethodCache() {
         int targetSize = MAX_ID_METHOD_CACHE_SIZE / 4;
@@ -223,12 +212,15 @@ class BatchSaveTemplate {
         if (toRemove <= 0) {
             return;
         }
-        var iterator = ID_METHOD_CACHE.keySet().iterator();
+        Object[] keys = ID_METHOD_CACHE.keySet().toArray();
         int removed = 0;
-        while (iterator.hasNext() && removed < toRemove) {
-            iterator.next();
-            iterator.remove();
-            removed++;
+        for (Object key : keys) {
+            if (removed >= toRemove) {
+                break;
+            }
+            if (ID_METHOD_CACHE.remove(key) != null) {
+                removed++;
+            }
         }
     }
 }

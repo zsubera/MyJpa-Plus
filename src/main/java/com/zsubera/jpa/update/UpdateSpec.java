@@ -14,6 +14,7 @@ import jakarta.persistence.criteria.Predicate;
 import jakarta.persistence.criteria.Root;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.ThreadLocalRandom;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.lang.Nullable;
@@ -53,30 +54,25 @@ public class UpdateSpec<T> extends AbstractBulkOperationSpec<T, UpdateSpec<T>> {
     /** 缓存最大容量限制 */
     private static final int MAX_CACHE_SIZE = 256;
 
-    /** 缓存驱逐标记，确保只有一个线程执行驱逐 */
-    private static final java.util.concurrent.atomic.AtomicBoolean CACHE_EVICTING =
-        new java.util.concurrent.atomic.AtomicBoolean(false);
-
     /**
-     * 缓存驱逐辅助方法：当缓存超过最大容量时清除一半条目。使用 CAS 确保只有一个线程执行驱逐。
+     * 缓存驱逐辅助方法：使用概率采样而非全局锁，避免多线程竞争。
      *
-     * <p><strong>线程安全说明：</strong>此方法使用 CAS 标志确保只有一个线程执行驱逐操作。
-     * 其他线程在驱逐期间仍可继续添加条目，这是可接受的设计权衡——缓存可能暂时超过 MAX_CACHE_SIZE，
-     * 但不会无限增长。驱逐操作使用 Iterator.remove() 保证并发安全。
+     * <p>
+     * 当缓存超过 {@link #MAX_CACHE_SIZE} 时，每次检查有 10% 的概率触发驱逐，消除全局锁竞争。
+     * 驱逐操作使用 Iterator.remove() 保证并发安全。缓存可能暂时超过 MAX_CACHE_SIZE，
+     * 但不会无限增长。
      */
     private static void evictCacheIfNeeded(java.util.concurrent.ConcurrentMap<?, ?> cache) {
-        if (cache.size() > MAX_CACHE_SIZE && CACHE_EVICTING.compareAndSet(false, true)) {
-            try {
-                int toRemove = cache.size() / 2;
-                int removed = 0;
-                java.util.Iterator<?> it = cache.keySet().iterator();
-                while (it.hasNext() && removed < toRemove) {
-                    it.next();
-                    it.remove();
-                    removed++;
-                }
-            } finally {
-                CACHE_EVICTING.set(false);
+        // [FIX] P1-5: 使用同一快照值避免两次 size() 调用之间的竞态窗口
+        int currentSize = cache.size();
+        if (currentSize > MAX_CACHE_SIZE && ThreadLocalRandom.current().nextInt(10) == 0) {
+            int toRemove = currentSize / 2;
+            int removed = 0;
+            java.util.Iterator<?> it = cache.keySet().iterator();
+            while (it.hasNext() && removed < toRemove) {
+                it.next();
+                it.remove();
+                removed++;
             }
         }
     }
@@ -239,7 +235,9 @@ public class UpdateSpec<T> extends AbstractBulkOperationSpec<T, UpdateSpec<T>> {
      */
     @Override
     public int execute(EntityManager em) {
-        return em.createQuery(toUpdate(em)).executeUpdate();
+        var query = em.createQuery(toUpdate(em));
+        applyTimeout(query);
+        return query.executeUpdate();
     }
 
     @Override
@@ -370,7 +368,9 @@ public class UpdateSpec<T> extends AbstractBulkOperationSpec<T, UpdateSpec<T>> {
         }
         applyExpressionSetClauses(update, root, cb);
         applyVersionIncrement(update, root, cb);
-        return em.createQuery(update).executeUpdate();
+        var q = em.createQuery(update);
+        applyTimeout(q);
+        return q.executeUpdate();
     }
 
     /**
@@ -396,6 +396,10 @@ public class UpdateSpec<T> extends AbstractBulkOperationSpec<T, UpdateSpec<T>> {
      *
      * <p>
      * 此方法使用 {@link EntityManager#clear()} 分离已更新的实体，允许在不清除持久化上下文的情况下执行多个批次。
+     *
+     * <p>
+     * <strong>重要副作用：</strong>{@code em.clear()} 会分离当前事务中<strong>所有</strong>托管实体，
+     * 包括调用方在同一事务中持有的其他实体。调用方应在 {@code executeLimited} 返回后重新查询需要的实体。
      *
      * <p>
      * <strong>安全说明：</strong>此方法默认启用悲观锁（{@code pessimisticLock=true}）， 以防止查询ID和执行更新之间的并发竞态条件。如需禁用悲观锁，请使用
@@ -476,7 +480,9 @@ public class UpdateSpec<T> extends AbstractBulkOperationSpec<T, UpdateSpec<T>> {
                 entityClass.getSimpleName(), limit);
         }
         idQuery.where(predicates.length > 0 ? cb.and(predicates) : cb.conjunction());
-        TypedQuery<?> query = em.createQuery(idQuery).setMaxResults(limit);
+        TypedQuery<?> query = em.createQuery(idQuery);
+        applyTimeout(query);
+        query.setMaxResults(limit);
         if (pessimisticLock) {
             query.setLockMode(LockModeType.PESSIMISTIC_WRITE);
         }
@@ -486,8 +492,14 @@ public class UpdateSpec<T> extends AbstractBulkOperationSpec<T, UpdateSpec<T>> {
             return 0;
         }
 
-        // 步骤 1.5：清除持久化上下文，分离已查询的实体
-        // 这防止持久化上下文持有过期数据，并为批量更新释放内存
+        // [FIX] P0-1: 清除持久化上下文，分离已查询的实体
+        // 这防止持久化上下文持有过期数据，并为批量更新释放内存。
+        // 警告：此操作会分离当前事务中的所有托管实体，包括调用者可能持有的其他托管实例。
+        // 调用方应在 executeLimited 返回后重新查询需要的实体，或使用独立的 EntityManager。
+        log.warn(
+            "executeLimited() calling em.clear() — all managed entities in current persistence context will be detached. "
+                + "Entity: {}, IDs affected: {}. Re-query any needed entities after this call.",
+            entityClass.getSimpleName(), ids.size());
         em.clear();
 
         // 步骤 2：用ID列表执行更新
@@ -499,7 +511,9 @@ public class UpdateSpec<T> extends AbstractBulkOperationSpec<T, UpdateSpec<T>> {
         applyExpressionSetClauses(update, updateRoot, cb);
         applyVersionIncrement(update, updateRoot, cb);
         update.where(InClauseBuilder.in(cb, updateRoot.get(idFieldName), ids));
-        return em.createQuery(update).executeUpdate();
+        var uq = em.createQuery(update);
+        applyTimeout(uq);
+        return uq.executeUpdate();
     }
 
     /**

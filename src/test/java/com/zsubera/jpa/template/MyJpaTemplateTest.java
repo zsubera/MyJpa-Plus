@@ -9,10 +9,12 @@ import com.zsubera.jpa.spec.TestEntityRepository;
 import com.zsubera.jpa.update.DeleteSpec;
 import com.zsubera.jpa.update.UpdateSpec;
 import java.util.List;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
 import org.springframework.boot.test.context.TestConfiguration;
+import org.springframework.context.ApplicationContext;
 import org.springframework.context.annotation.Bean;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -38,6 +40,19 @@ class MyJpaTemplateTest {
 
     @Autowired
     private TestEntityRepository repository;
+
+    @Autowired
+    private ApplicationContext applicationContext;
+
+    @Autowired
+    private jakarta.persistence.EntityManager entityManager;
+
+    // [FIX] 清理测试数据，避免测试间数据泄漏导致断言失败
+    @BeforeEach
+    void cleanUp() {
+        repository.deleteAll();
+        repository.flush();
+    }
 
     // ---- 工厂方法测试 ----
 
@@ -339,7 +354,9 @@ class MyJpaTemplateTest {
     void testSetMaxResultsWithInvalidValue() {
         MyJpaTemplate custom = new MyJpaTemplate();
         assertThrows(IllegalArgumentException.class, () -> custom.setMaxResults(0));
-        assertThrows(IllegalArgumentException.class, () -> custom.setMaxResults(-1));
+        assertThrows(IllegalArgumentException.class, () -> custom.setMaxResults(-2));
+        // -1 is valid (disables limit)
+        assertDoesNotThrow(() -> custom.setMaxResults(-1));
     }
 
     @Test
@@ -567,7 +584,10 @@ class MyJpaTemplateTest {
 
     // ---- executeBatchInSeparateTransactions 测试 ----
 
+    // [FIX] P0-1: 使用 NOT_SUPPORTED 挂起测试事务，避免 REQUIRES_NEW 与 H2 PESSIMISTIC_WRITE 锁冲突
     @Test
+    @org.springframework.transaction.annotation.Transactional(
+        propagation = org.springframework.transaction.annotation.Propagation.NOT_SUPPORTED)
     void testExecuteBatchInSeparateTransactionsUpdate() {
         for (int i = 0; i < 5; i++) {
             TestEntity e = new TestEntity();
@@ -576,6 +596,7 @@ class MyJpaTemplateTest {
             repository.save(e);
         }
         repository.flush();
+        entityManager.clear();
 
         UpdateSpec<TestEntity> spec =
             template.update(TestEntity.class).set(TestEntity::getStatus, 1).eq(TestEntity::getStatus, 0);
@@ -584,6 +605,8 @@ class MyJpaTemplateTest {
     }
 
     @Test
+    @org.springframework.transaction.annotation.Transactional(
+        propagation = org.springframework.transaction.annotation.Propagation.NOT_SUPPORTED)
     void testExecuteBatchInSeparateTransactionsDelete() {
         for (int i = 0; i < 5; i++) {
             TestEntity e = new TestEntity();
@@ -592,6 +615,7 @@ class MyJpaTemplateTest {
             repository.save(e);
         }
         repository.flush();
+        entityManager.clear();
 
         DeleteSpec<TestEntity> spec = template.delete(TestEntity.class).eq(TestEntity::getStatus, 0);
         int count = template.executeBatchInSeparateTransactions(spec, 2);

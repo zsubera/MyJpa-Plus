@@ -100,6 +100,10 @@ public interface MyJpaRepository<T, ID> extends JpaRepository<T, ID>, JpaSpecifi
      */
     default List<T> findNotDeletedAll(Specification<T> spec) {
         Specification<T> notDeleted = SoftDeleteHelper.isNotDeleted(getEntityClass());
+        if (notDeleted == null) {
+            // 实体没有 @SoftDelete 字段，退化为普通查询
+            return spec == null ? findAll() : findAll(spec);
+        }
         if (spec == null) {
             return findAll(notDeleted);
         }
@@ -115,7 +119,8 @@ public interface MyJpaRepository<T, ID> extends JpaRepository<T, ID>, JpaSpecifi
      * @return 所有未删除实体的列表
      */
     default List<T> findNotDeletedAll() {
-        return findAll(SoftDeleteHelper.isNotDeleted(getEntityClass()));
+        Specification<T> notDeleted = SoftDeleteHelper.isNotDeleted(getEntityClass());
+        return notDeleted == null ? findAll() : findAll(notDeleted);
     }
 
     /**
@@ -127,6 +132,9 @@ public interface MyJpaRepository<T, ID> extends JpaRepository<T, ID>, JpaSpecifi
      */
     default Page<T> findNotDeletedAll(Specification<T> spec, Pageable pageable) {
         Specification<T> notDeleted = SoftDeleteHelper.isNotDeleted(getEntityClass());
+        if (notDeleted == null) {
+            return spec == null ? findAll(pageable) : findAll(spec, pageable);
+        }
         if (spec == null) {
             return findAll(notDeleted, pageable);
         }
@@ -141,6 +149,18 @@ public interface MyJpaRepository<T, ID> extends JpaRepository<T, ID>, JpaSpecifi
      */
     default Optional<T> findNotDeletedOne(Specification<T> spec) {
         Specification<T> notDeleted = SoftDeleteHelper.isNotDeleted(getEntityClass());
+        // [FIX] P1-4: 使用 findSoftDeleteField 判断实体是否有 @SoftDelete 字段，
+        // 而非检查 notDeleted 是否为 null（无 @SoftDelete 时 isNotDeleted 返回 conjunction 而非 null）
+        boolean hasSoftDelete = SoftDeleteHelper.findSoftDeleteField(getEntityClass()) != null;
+        if (!hasSoftDelete) {
+            if (spec == null) {
+                // [FIX] P1-4: 无 @SoftDelete 且无 spec 时，使用分页查询而非全表加载
+                // 原代码 findAll().stream().findFirst() 会加载全部实体到内存
+                List<T> content = findAll(org.springframework.data.domain.Pageable.ofSize(1)).getContent();
+                return content.isEmpty() ? Optional.empty() : Optional.of(content.get(0));
+            }
+            return findOne(spec);
+        }
         if (spec == null) {
             return findOne(notDeleted);
         }
@@ -158,9 +178,13 @@ public interface MyJpaRepository<T, ID> extends JpaRepository<T, ID>, JpaSpecifi
             return Optional.empty();
         }
         Class<T> entityClass = getEntityClass();
+        Specification<T> notDeleted = SoftDeleteHelper.isNotDeleted(entityClass);
         String idFieldName = EntityClassResolver.resolveIdFieldName(entityClass);
-        return findOne(
-            SoftDeleteHelper.isNotDeleted(entityClass).and((root, query, cb) -> cb.equal(root.get(idFieldName), id)));
+        Specification<T> idSpec = (root, query, cb) -> cb.equal(root.get(idFieldName), id);
+        if (notDeleted == null) {
+            return findOne(idSpec);
+        }
+        return findOne(notDeleted.and(idSpec));
     }
 
     /**
@@ -171,6 +195,9 @@ public interface MyJpaRepository<T, ID> extends JpaRepository<T, ID>, JpaSpecifi
      */
     default long countNotDeleted(Specification<T> spec) {
         Specification<T> notDeleted = SoftDeleteHelper.isNotDeleted(getEntityClass());
+        if (notDeleted == null) {
+            return spec == null ? count() : count(spec);
+        }
         if (spec == null) {
             return count(notDeleted);
         }
@@ -183,7 +210,8 @@ public interface MyJpaRepository<T, ID> extends JpaRepository<T, ID>, JpaSpecifi
      * @return 未删除实体总数
      */
     default long countNotDeleted() {
-        return count(SoftDeleteHelper.isNotDeleted(getEntityClass()));
+        Specification<T> notDeleted = SoftDeleteHelper.isNotDeleted(getEntityClass());
+        return notDeleted == null ? count() : count(notDeleted);
     }
 
     /**

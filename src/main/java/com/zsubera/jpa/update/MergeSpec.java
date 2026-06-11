@@ -4,6 +4,7 @@ import com.zsubera.jpa.exception.MyJpaPlusException;
 import com.zsubera.jpa.spec.SFunction;
 import com.zsubera.jpa.util.IdentifierValidator;
 import com.zsubera.jpa.util.LambdaUtils;
+import com.zsubera.jpa.util.QueryTimeoutHelper;
 import com.zsubera.jpa.util.StringHelper;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.EntityTransaction;
@@ -42,6 +43,13 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
  * new MergeSpec<>(User.class).withEntity(user).onConflict(User::getEmail).updateOnConflict(User::getName, User::getAge)
  *     .execute(em);
  * }</pre>
+ *
+ * <p>
+ * <strong>重试行为：</strong>H2 UPSERT 在遇到以下异常时自动重试（最多 3 次，指数退避 {@code 10ms × attempt²}，最大 100ms）：
+ * <ul>
+ * <li>唯一约束冲突 — 两个并发事务同时插入相同唯一键时触发</li>
+ * <li>乐观锁冲突（{@link jakarta.persistence.OptimisticLockException}）— &#64;Version 字段并发更新时触发</li>
+ * </ul>
  *
  * @param <T> 实体类型
  */
@@ -154,8 +162,7 @@ public class MergeSpec<T> {
         if ("h2".equals(dialect)) {
             return executeH2Upsert(em);
         }
-        T entitySnapshot = this.entity;
-        SqlWithParams sqlWithParams = buildSqlFor(em, entitySnapshot, dialect);
+        SqlWithParams sqlWithParams = buildSqlFor(em, this.entity, dialect);
         if (log.isTraceEnabled()) {
             log.trace("Executing UPSERT SQL: {}", sqlWithParams.sql());
         }
@@ -198,51 +205,9 @@ public class MergeSpec<T> {
         return executeNativeQuery(em, sql.toString(), params);
     }
 
-    private int executeConditionalUpdate(EntityManager em, List<EntityFieldExtractor.EntityFieldValue> allFieldValues,
-        List<String> conflictColumns) {
-        var h2 = (H2Dialect)DialectDetector.DIALECT_STRATEGIES.get("h2");
-        List<String> setClauses = new ArrayList<>();
-        List<Object> setParams = new ArrayList<>();
-        // 使用数据库列名作为 key，因为 updateFields 现在存储的是列名
-        java.util.Map<String, EntityFieldExtractor.EntityFieldValue> fieldValueMap = new java.util.LinkedHashMap<>();
-        for (EntityFieldExtractor.EntityFieldValue fv : allFieldValues) {
-            fieldValueMap.put(fv.columnName(), fv);
-        }
-        for (String columnName : updateFields) {
-            EntityFieldExtractor.EntityFieldValue fv = fieldValueMap.get(columnName);
-            if (fv != null) {
-                setClauses.add(h2.escapeIdentifier(fv.columnName()) + " = ?");
-                setParams.add(fv.value());
-            }
-        }
-        if (setClauses.isEmpty()) {
-            return 0;
-        }
-        List<String> whereClauses = new ArrayList<>();
-        List<Object> whereParams = new ArrayList<>();
-        for (String col : conflictColumns) {
-            for (EntityFieldExtractor.EntityFieldValue fv : allFieldValues) {
-                if (fv.columnName().equals(col)) {
-                    whereClauses.add(h2.escapeIdentifier(col) + " = ?");
-                    whereParams.add(fv.value());
-                }
-            }
-        }
-        StringBuilder sql =
-            new StringBuilder("UPDATE ").append(h2.escapeIdentifier(resolveTableName())).append(" SET ");
-        sql.append(String.join(", ", setClauses));
-        sql.append(" WHERE ");
-        sql.append(String.join(" AND ", whereClauses));
-        List<Object> allParams = new ArrayList<>(setParams);
-        allParams.addAll(whereParams);
-        if (log.isTraceEnabled()) {
-            log.trace("Executing H2 UPDATE SQL: {}", sql);
-        }
-        return executeNativeQuery(em, sql.toString(), allParams);
-    }
-
     private int executeNativeQuery(EntityManager em, String sql, List<Object> params) {
         var query = em.createNativeQuery(sql);
+        QueryTimeoutHelper.applyTimeout(query);
         for (int i = 0; i < params.size(); i++) {
             query.setParameter(i + 1, params.get(i));
         }
@@ -412,6 +377,7 @@ public class MergeSpec<T> {
         }
         int total = 0;
         int count = 0;
+        String cachedDialect = DialectDetector.detectDialect(em);
         EntityTransaction tx = null;
         boolean txStarted = false;
         for (T ent : entities) {
@@ -434,7 +400,7 @@ public class MergeSpec<T> {
                 }
             }
             try {
-                total += executeSingle(em, ent);
+                total += executeSingleWithDialect(em, ent, cachedDialect);
                 count++;
                 if (count % batchSize == 0) {
                     em.clear();
@@ -532,51 +498,57 @@ public class MergeSpec<T> {
             return executeSimpleInsert(em, allFieldValues);
         }
         if (explicitUpdateFields) {
-            int maxRetries = 3;
-            for (int attempt = 0; attempt < maxRetries; attempt++) {
-                try {
-                    int updated = executeConditionalUpdate(em, allFieldValues, effectiveConflictFields);
-                    if (updated > 0) {
-                        return updated;
-                    }
-                    return executeSimpleInsert(em, allFieldValues);
-                } catch (jakarta.persistence.PersistenceException e) {
-                    // 使用 SQL state 23505（unique_violation）检测约束冲突，而非依赖消息文本
-                    boolean isUniqueViolation = false;
-                    Throwable cause = e.getCause();
-                    if (cause instanceof org.hibernate.exception.ConstraintViolationException cve) {
-                        isUniqueViolation = "23505".equals(cve.getSQLState());
-                    } else if (e.getMessage() != null) {
-                        isUniqueViolation = e.getMessage().toLowerCase().contains("unique");
-                    }
-                    if (attempt < maxRetries - 1 && isUniqueViolation) {
-                        long backoffMs = (long)(10 * Math.pow(2, attempt))
-                            + java.util.concurrent.ThreadLocalRandom.current().nextLong(0, 10);
-                        if (log.isDebugEnabled()) {
-                            log.debug("H2 UPSERT race condition detected on attempt {}/{}, retrying after {}ms",
-                                attempt + 1, maxRetries, backoffMs);
-                        }
-                        try {
-                            Thread.sleep(backoffMs);
-                        } catch (InterruptedException ie) {
-                            Thread.currentThread().interrupt();
-                            e.addSuppressed(ie);
-                            throw e;
-                        }
-                        continue;
-                    }
+            log.warn("H2 MERGE INTO does not support partial column updates. "
+                + "When explicitUpdateFields is set on H2, all non-conflict columns will be updated. "
+                + "This limitation only affects H2 (test database); PostgreSQL and MySQL support partial updates natively.");
+        }
+        for (int attempt = 0; attempt < H2_MAX_UPSERT_RETRIES; attempt++) {
+            try {
+                SqlWithParams sqlWithParams = buildSqlFor(em, entity, "h2");
+                if (log.isTraceEnabled()) {
+                    log.trace("Executing H2 MERGE SQL: {}", sqlWithParams.sql());
+                }
+                return executeNativeQuery(em, sqlWithParams.sql(), sqlWithParams.params());
+            } catch (jakarta.persistence.OptimisticLockException e) {
+                if (attempt == H2_MAX_UPSERT_RETRIES - 1) {
                     throw e;
                 }
+                log.warn("H2 MERGE optimistic lock conflict on attempt {}/{}, retrying", attempt + 1,
+                    H2_MAX_UPSERT_RETRIES);
+                doH2RetryBackoff(attempt);
+            } catch (org.springframework.orm.ObjectOptimisticLockingFailureException e) {
+                if (attempt == H2_MAX_UPSERT_RETRIES - 1) {
+                    throw e;
+                }
+                log.warn("H2 MERGE optimistic lock conflict on attempt {}/{}, retrying", attempt + 1,
+                    H2_MAX_UPSERT_RETRIES);
+                doH2RetryBackoff(attempt);
+            } catch (jakarta.persistence.PersistenceException e) {
+                boolean isUniqueViolation = false;
+                Throwable cause = e.getCause();
+                if (cause instanceof org.hibernate.exception.ConstraintViolationException cve) {
+                    isUniqueViolation = "23505".equals(cve.getSQLState());
+                }
+                if (attempt == H2_MAX_UPSERT_RETRIES - 1 || !isUniqueViolation) {
+                    throw e;
+                }
+                log.warn("H2 MERGE unique constraint violation on attempt {}/{}, retrying", attempt + 1,
+                    H2_MAX_UPSERT_RETRIES);
+                doH2RetryBackoff(attempt);
             }
-            throw new IllegalStateException("H2 UPSERT retry limit (" + maxRetries + ") exhausted. "
-                + "Cannot fall back to MERGE INTO because explicit update fields are specified. "
-                + "MERGE INTO would overwrite all columns, violating partial update contract.");
         }
-        SqlWithParams sqlWithParams = buildSqlFor(em, entity, "h2");
-        if (log.isTraceEnabled()) {
-            log.trace("Executing H2 MERGE SQL: {}", sqlWithParams.sql());
+        throw new IllegalStateException("H2 UPSERT retry limit (" + H2_MAX_UPSERT_RETRIES + ") exhausted.");
+    }
+
+    private static void doH2RetryBackoff(int attempt) {
+        // 退避时间: 5ms, 20ms, 45ms (避免长时间持有数据库连接)
+        long backoffMs = Math.min(5L * (attempt + 1) * (attempt + 1), 50L);
+        try {
+            Thread.sleep(backoffMs);
+        } catch (InterruptedException ie) {
+            Thread.currentThread().interrupt();
+            throw new MyJpaPlusException("H2 UPSERT retry interrupted", ie);
         }
-        return executeNativeQuery(em, sqlWithParams.sql(), sqlWithParams.params());
     }
 
     private String resolveTableName() {

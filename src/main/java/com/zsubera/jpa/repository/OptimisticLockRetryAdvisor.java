@@ -2,6 +2,7 @@ package com.zsubera.jpa.repository;
 
 import com.zsubera.jpa.annotation.RetryOnOptimisticLock;
 import jakarta.persistence.OptimisticLockException;
+import jakarta.persistence.PersistenceException;
 import java.lang.reflect.Method;
 import java.util.concurrent.ThreadLocalRandom;
 import org.aspectj.lang.ProceedingJoinPoint;
@@ -98,14 +99,16 @@ public class OptimisticLockRetryAdvisor {
                     throw ex;
                 }
                 // 指数退避：backoffMs * 2^(attempt-1)，上限 MAX_BACKOFF_MS
-                long baseDelay = Math.min(backoffMs * (1L << Math.min(attempt - 1, 30)), MAX_BACKOFF_MS);
+                // 先 clamp 再乘法，避免大 backoffMs 值溢出
+                long shift = Math.min(attempt - 1, 30);
+                long baseDelay = Math.min(backoffMs, MAX_BACKOFF_MS >> shift) * (1L << shift);
                 // 确保最小延迟为 1ms，防止紧密重试循环
                 baseDelay = Math.max(baseDelay, 1);
                 // 确保延迟不超过剩余超时时间
                 long remainingTimeout = MAX_TOTAL_TIMEOUT_MS - totalElapsed;
                 baseDelay = Math.min(baseDelay, remainingTimeout);
                 // 正向抖动（基础延迟的 0~20%），防止多线程同时重试时的惊群效应
-                long jitter = (long)(baseDelay * 0.1 * ThreadLocalRandom.current().nextDouble());
+                long jitter = (long)(baseDelay * 0.2 * ThreadLocalRandom.current().nextDouble());
                 long delay = baseDelay + jitter;
                 log.debug("OptimisticLockException on attempt {}/{} for method {}.{}, retrying in {}ms", attempt,
                     maxRetries, method.getDeclaringClass().getSimpleName(), method.getName(), delay);
@@ -116,7 +119,59 @@ public class OptimisticLockRetryAdvisor {
                     ex.addSuppressed(ie);
                     throw ex;
                 }
+            } catch (PersistenceException ex) {
+                // 检查是否为包装的 OptimisticLockException
+                if (isOptimisticLockCause(ex)) {
+                    attempt++;
+                    if (attempt > maxRetries) {
+                        log.warn("OptimisticLockException (wrapped) after {} retries for method {}.{}", maxRetries,
+                            method.getDeclaringClass().getSimpleName(), method.getName());
+                        throw ex;
+                    }
+                    totalElapsed = System.currentTimeMillis() - startTime;
+                    if (totalElapsed >= MAX_TOTAL_TIMEOUT_MS) {
+                        log.warn(
+                            "OptimisticLockException (wrapped) after {} retries ({}ms elapsed, timeout={}ms) for method {}.{}",
+                            attempt, totalElapsed, MAX_TOTAL_TIMEOUT_MS, method.getDeclaringClass().getSimpleName(),
+                            method.getName());
+                        throw ex;
+                    }
+                    // 指数退避：backoffMs * 2^(attempt-1)，上限 MAX_BACKOFF_MS
+                    // 先 clamp 再乘法，避免大 backoffMs 值溢出
+                    long shift2 = Math.min(attempt - 1, 30);
+                    long baseDelay = Math.min(backoffMs, MAX_BACKOFF_MS >> shift2) * (1L << shift2);
+                    baseDelay = Math.max(baseDelay, 1);
+                    long remainingTimeout = MAX_TOTAL_TIMEOUT_MS - totalElapsed;
+                    baseDelay = Math.min(baseDelay, remainingTimeout);
+                    long jitter = (long)(baseDelay * 0.2 * ThreadLocalRandom.current().nextDouble());
+                    long delay = baseDelay + jitter;
+                    log.debug("OptimisticLockException (wrapped) on attempt {}/{} for method {}.{}, retrying in {}ms",
+                        attempt, maxRetries, method.getDeclaringClass().getSimpleName(), method.getName(), delay);
+                    try {
+                        Thread.sleep(delay);
+                    } catch (InterruptedException ie) {
+                        Thread.currentThread().interrupt();
+                        ex.addSuppressed(ie);
+                        throw ex;
+                    }
+                } else {
+                    throw ex;
+                }
             }
         }
+    }
+
+    /**
+     * 检查 PersistenceException 的原因链中是否包含 OptimisticLockException。
+     */
+    private static boolean isOptimisticLockCause(PersistenceException ex) {
+        Throwable cause = ex.getCause();
+        while (cause != null) {
+            if (cause instanceof OptimisticLockException) {
+                return true;
+            }
+            cause = cause.getCause();
+        }
+        return false;
     }
 }

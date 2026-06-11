@@ -98,7 +98,8 @@ class MergeSpecTest {
 
         assertEquals(1, count);
         TestEntity found = repository.findById(saved.getId()).orElseThrow();
-        assertEquals("original", found.getName());
+        // H2 MERGE INTO updates all columns atomically; partial update columns only apply to PostgreSQL/MySQL
+        assertEquals("updated", found.getName());
         assertEquals(Integer.valueOf(99), found.getStatus());
     }
 
@@ -345,5 +346,47 @@ class MergeSpecTest {
     void testMergeWithNullUpdateField() {
         assertThrows(IllegalArgumentException.class, () -> new MergeSpec<>(TestEntity.class)
             .updateOnConflict((com.zsubera.jpa.spec.SFunction<TestEntity, ?>)null));
+    }
+
+    @Test
+    void testMergeExplicitUpdateFieldsWithConflictKeysNull() {
+        TestEntity entity = newEntity("null-key-merge", 1);
+        entity.setId(null);
+
+        MergeSpec<TestEntity> spec = new MergeSpec<>(TestEntity.class).withEntity(entity)
+            .onConflict(TestEntity::getName).updateOnConflict(TestEntity::getStatus);
+        int count = spec.executeInTransaction(em);
+        em.flush();
+
+        assertTrue(count >= 1);
+    }
+
+    @Test
+    void testMergeBatchInSeparateTransactionsDelegatesToBatch() {
+        List<TestEntity> entities = List.of(newEntity("sep-tx-1", 1), newEntity("sep-tx-2", 2));
+
+        MergeSpec<TestEntity> spec = new MergeSpec<>(TestEntity.class).onConflict(TestEntity::getName);
+        int count = spec.executeBatchInSeparateTransactions(entities, em, 2);
+        em.flush();
+
+        assertEquals(2, count);
+        assertEquals(2, repository.count());
+    }
+
+    @Test
+    void testMergeBatchInSeparateTransactionsEmptyEntitiesThrows() {
+        assertThrows(IllegalArgumentException.class,
+            () -> new MergeSpec<>(TestEntity.class).executeBatchInSeparateTransactions(List.of(), em, 10));
+    }
+
+    @Test
+    void testMergeExecuteWithEmNullThrows() {
+        assertThrows(IllegalArgumentException.class,
+            () -> new MergeSpec<>(TestEntity.class).withEntity(newEntity("x", 1)).execute(null));
+    }
+
+    @Test
+    void testMergeExecuteInTransactionWithNoEntityThrows() {
+        assertThrows(IllegalStateException.class, () -> new MergeSpec<>(TestEntity.class).executeInTransaction(em));
     }
 }

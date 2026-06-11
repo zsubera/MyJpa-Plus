@@ -660,6 +660,81 @@ public class SubQuerySpec<S> {
         return this;
     }
 
+    // ---- 条件组支持 ----
+
+    /**
+     * 添加 OR 条件组。consumer 内添加的所有条件以 OR 方式组合。
+     *
+     * <pre>{@code
+     * sub.exists(Order.class, s -> s.or(o ->
+     *     o.eq(Order::getStatus, "PENDING").eq(Order::getStatus, "PROCESSING")));
+     * }</pre>
+     *
+     * @param config OR 组配置消费者
+     * @return 当前 SubQuerySpec 实例，支持链式调用
+     * @throws IllegalArgumentException 如果 config 为 null
+     */
+    public SubQuerySpec<S> or(Consumer<SubQuerySpec<S>> config) {
+        if (config == null) {
+            throw new IllegalArgumentException("config must not be null");
+        }
+        SubQuerySpec<S> child = new SubQuerySpec<>(subquery, root, correlatedRoot, cb);
+        config.accept(child);
+        if (!child.predicates.isEmpty()) {
+            predicates.add(child.predicates.size() == 1 ? child.predicates.get(0)
+                : cb.or(child.predicates.toArray(new Predicate[0])));
+        }
+        return this;
+    }
+
+    /**
+     * 添加 NOT 条件组。consumer 内添加的所有条件以 AND 方式组合，然后整体取反。
+     *
+     * <pre>{@code
+     * sub.not(n -> n.eq(Order::getStatus, "CANCELLED"));
+     * // 生成: NOT (status = 'CANCELLED')
+     * }</pre>
+     *
+     * @param config NOT 组配置消费者
+     * @return 当前 SubQuerySpec 实例，支持链式调用
+     * @throws IllegalArgumentException 如果 config 为 null
+     */
+    public SubQuerySpec<S> not(Consumer<SubQuerySpec<S>> config) {
+        if (config == null) {
+            throw new IllegalArgumentException("config must not be null");
+        }
+        SubQuerySpec<S> child = new SubQuerySpec<>(subquery, root, correlatedRoot, cb);
+        config.accept(child);
+        if (!child.predicates.isEmpty()) {
+            Predicate combined = child.predicates.size() == 1 ? child.predicates.get(0)
+                : cb.and(child.predicates.toArray(new Predicate[0]));
+            predicates.add(cb.not(combined));
+        }
+        return this;
+    }
+
+    /**
+     * 仅在 {@code condition} 为 true 时添加 OR 条件组。
+     *
+     * @param condition 执行条件
+     * @param config OR 组配置消费者
+     * @return 当前 SubQuerySpec 实例，支持链式调用
+     */
+    public SubQuerySpec<S> or(boolean condition, Consumer<SubQuerySpec<S>> config) {
+        return condition ? or(config) : this;
+    }
+
+    /**
+     * 仅在 {@code condition} 为 true 时添加 NOT 条件组。
+     *
+     * @param condition 执行条件
+     * @param config NOT 组配置消费者
+     * @return 当前 SubQuerySpec 实例，支持链式调用
+     */
+    public SubQuerySpec<S> not(boolean condition, Consumer<SubQuerySpec<S>> config) {
+        return condition ? not(config) : this;
+    }
+
     // ---- 条件便捷方法 ----
 
     /**
@@ -969,27 +1044,4 @@ public class SubQuerySpec<S> {
         }
     }
 
-    /**
-     * 提取配置 lambda 中 SELECT 子句的目标类型和字段名，而不执行条件构建。
-     *
-     * <p>
-     * 创建一个临时的 SubQuerySpec 实例来应用配置 lambda，仅提取 selectType 和 selectFieldName 信息。 临时实例的谓词不会被应用到任何子查询。此方法用于
-     * {@code NodeResolver.resolveInSubQueryInternal} 中， 使第二阶段的 select() 调用变为幂等操作。
-     *
-     * @param <S> 子查询实体类型
-     * @param subEntity 子查询实体类
-     * @param config 配置 lambda
-     * @param cb CriteriaBuilder 实例
-     * @return SELECT 信息的数组 [selectType, selectFieldName]，如果未调用 select() 则两者均为 null
-     */
-    @SuppressWarnings({"unchecked", "rawtypes"})
-    static <S> Object[] extractSelectInfo(Class<S> subEntity, Consumer<SubQuerySpec<S>> config, CriteriaBuilder cb) {
-        // 创建临时子查询仅用于提取类型信息
-        jakarta.persistence.criteria.CriteriaQuery<?> tempQuery = cb.createQuery(Object.class);
-        jakarta.persistence.criteria.Subquery<S> tempSub = tempQuery.subquery(subEntity);
-        Root<S> tempRoot = tempSub.from(subEntity);
-        SubQuerySpec<S> tempSpec = SubQuerySpec.create(tempSub, tempRoot, tempRoot, cb);
-        config.accept(tempSpec);
-        return new Object[] {tempSpec.getSelectType(), tempSpec.getSelectFieldName()};
-    }
 }

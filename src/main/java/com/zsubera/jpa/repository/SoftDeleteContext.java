@@ -75,6 +75,15 @@ public final class SoftDeleteContext {
     }
 
     /**
+     * 获取当前线程的忽略计数。
+     *
+     * @return 当前线程的忽略计数
+     */
+    public static int getIgnoreCount() {
+        return IGNORE_COUNT.get();
+    }
+
+    /**
      * 推入忽略标记（增加计数）。当方法进入 {@code @IgnoreSoftDelete} 注解的方法时调用。
      *
      * @throws IllegalStateException 如果计数超过安全上限（可能存在泄漏）
@@ -121,6 +130,73 @@ public final class SoftDeleteContext {
      */
     public static void reset() {
         IGNORE_COUNT.remove();
+    }
+
+    // [FIX] P0-2: 添加异步边界支持方法，防止线程池环境下 ThreadLocal 泄漏
+
+    /**
+     * 在异步边界前捕获并重置状态，返回原始忽略计数用于后续恢复。
+     *
+     * <p>
+     * 此方法用于 {@code @Async}、{@code CompletableFuture}、响应式流等异步机制。 在异步任务提交前调用此方法捕获状态，然后在异步任务中调用
+     * {@link #restoreForAsync(int)} 恢复状态。
+     *
+     * <p>
+     * 使用示例：
+     *
+     * <pre>{@code
+     * // 在异步边界前捕获状态
+     * int captured = SoftDeleteContext.captureAndResetForAsync();
+     *
+     * CompletableFuture.supplyAsync(() -> {
+     *     try {
+     *         // 在异步任务中恢复状态
+     *         SoftDeleteContext.restoreForAsync(captured);
+     *         return repository.findAll();
+     *     } finally {
+     *         SoftDeleteContext.reset();
+     *     }
+     * });
+     * }</pre>
+     *
+     * @return 当前线程的忽略计数（0 表示未忽略）
+     */
+    public static int captureAndResetForAsync() {
+        int count = IGNORE_COUNT.get();
+        if (count > 0) {
+            IGNORE_COUNT.remove();
+        }
+        return count;
+    }
+
+    /**
+     * 在异步任务中恢复之前捕获的忽略状态。
+     *
+     * <p>
+     * 配合 {@link #captureAndResetForAsync()} 使用，确保异步任务继承父线程的软删除忽略状态。
+     *
+     * <p>
+     * 使用示例：
+     *
+     * <pre>{@code
+     * int captured = SoftDeleteContext.captureAndResetForAsync();
+     *
+     * CompletableFuture.supplyAsync(() -> {
+     *     try {
+     *         SoftDeleteContext.restoreForAsync(captured);
+     *         return repository.findAll();
+     *     } finally {
+     *         SoftDeleteContext.reset();
+     *     }
+     * });
+     * }</pre>
+     *
+     * @param capturedCount 之前通过 {@link #captureAndResetForAsync()} 捕获的忽略计数
+     */
+    public static void restoreForAsync(int capturedCount) {
+        if (capturedCount > 0) {
+            IGNORE_COUNT.set(capturedCount);
+        }
     }
 
     /**

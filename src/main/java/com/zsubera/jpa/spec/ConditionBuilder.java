@@ -12,7 +12,6 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Set;
 import java.util.regex.Pattern;
-import org.slf4j.LoggerFactory;
 import org.springframework.lang.Nullable;
 
 /**
@@ -56,7 +55,7 @@ public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> ext
      * 安全数据库函数名白名单。仅允许调用以下常见安全函数。
      *
      * <p>
-     * 此集合为不可变集合，禁止调用危险函数如 {@code pg_sleep}、{@code SLEEP}、{@code LOAD_FILE} 等。
+     * 此集合为不可变集合，禁止调用危险函数如 {@code pg_sleep}、{@code SLEEP}、{code LOAD_FILE} 等。
      *
      * <p>
      * 白名单强制执行由 {@link #WHITELIST_ENFORCED} 控制（硬编码为 true）。 如需扩展白名单，请通过系统属性 {@code myjpa-plus.func.extra-safe-functions}
@@ -71,6 +70,16 @@ public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> ext
      * 此开关防止通过系统属性 {@code myjpa-plus.func.whitelist-enforced=false} 禁用白名单保护。 攻击者若能控制系统属性，可禁用白名单保护，因此移除了系统属性读取逻辑。
      */
     boolean WHITELIST_ENFORCED = true;
+
+    /**
+     * 布尔函数名白名单。{@code func()} 方法只允许调用这些返回布尔值的函数。
+     *
+     * <p>
+     * 严格是 {@link #SAFE_FUNCTION_NAMES} 的子集——函数必须先通过安全白名单，再通过布尔白名单。
+     * 这防止了像 {@code LENGTH(name) = true} 这种无意义 SQL 的产生。
+     */
+    Set<String> BOOLEAN_FUNCTION_NAMES = Set.of("COALESCE", "NULLIF", "IF", "DECODE", "IFNULL", "NVL", "NVL2",
+        "JSONB_EXISTS", "ST_CONTAINS", "ST_WITHIN", "ST_INTERSECTS");
 
     /**
      * 初始化默认安全函数名白名单。
@@ -101,27 +110,6 @@ public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> ext
         // 字符串函数
         names.addAll(Set.of("INITCAP", "LPAD", "RPAD", "ASCII", "CHR", "CONCAT_WS", "FORMAT", "INSERT", "LOCATE"));
         return names;
-    }
-
-    /**
-     * 向安全函数白名单中添加函数名，带安全审计日志。
-     *
-     * @deprecated 此方法已废弃。白名单现在是不可变的，运行时修改不再允许。 如需扩展白名单，请通过系统属性 {@code myjpa-plus.func.extra-safe-functions} 在启动前配置。
-     *
-     * @param functionName 要添加的函数名（大小写不敏感，将自动转为大写）
-     * @return 如果成功添加返回 true，如果已存在返回 false
-     * @throws IllegalArgumentException 如果 functionName 为 null 或空
-     */
-    @Deprecated
-    static boolean addSafeFunction(String functionName) {
-        if (functionName == null || functionName.isEmpty()) {
-            throw new IllegalArgumentException("functionName must not be null or empty");
-        }
-        String upper = functionName.toUpperCase();
-        LoggerFactory.getLogger("com.zsubera.jpa.security")
-            .warn("SECURITY: Attempted to add function '{}' to safe function whitelist at runtime. "
-                + "This operation is no longer supported. Whitelist is immutable.", upper);
-        return false;
     }
 
     /**
@@ -191,6 +179,7 @@ public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> ext
      * @see #isNull(SFunction)
      */
     default SELF eqStrict(SFunction<E, ?> field, Object value) {
+        requireField(field);
         if (value == null) {
             throw new IllegalArgumentException("value must not be null. Use isNull() for null comparisons.");
         }
@@ -212,6 +201,7 @@ public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> ext
      * @see #isNotNull(SFunction)
      */
     default SELF neStrict(SFunction<E, ?> field, Object value) {
+        requireField(field);
         if (value == null) {
             throw new IllegalArgumentException("value must not be null. Use isNotNull() for null comparisons.");
         }

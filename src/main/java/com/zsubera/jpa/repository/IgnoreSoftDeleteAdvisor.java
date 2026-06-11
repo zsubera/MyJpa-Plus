@@ -2,6 +2,7 @@ package com.zsubera.jpa.repository;
 
 import com.zsubera.jpa.annotation.IgnoreSoftDelete;
 import java.lang.reflect.Method;
+import java.util.StringJoiner;
 import org.aspectj.lang.ProceedingJoinPoint;
 import org.aspectj.lang.annotation.Around;
 import org.aspectj.lang.annotation.Aspect;
@@ -54,9 +55,13 @@ public class IgnoreSoftDeleteAdvisor {
         MethodSignature signature = (MethodSignature)pjp.getSignature();
         Method method = signature.getMethod();
 
-        // 使用复合缓存键（类名+方法名）确保跨代理类的缓存一致性
+        // 使用复合缓存键（类名+方法名+参数类型）确保跨代理类的缓存一致性和重载方法区分
         // CGLIB/ByteBuddy 生成的代理类方法与原始接口方法不共享同一 Method 实例
-        String cacheKey = method.getDeclaringClass().getName() + "#" + method.getName();
+        StringJoiner paramJoiner = new StringJoiner(",", "(", ")");
+        for (Class<?> paramType : method.getParameterTypes()) {
+            paramJoiner.add(paramType.getName());
+        }
+        String cacheKey = method.getDeclaringClass().getName() + "#" + method.getName() + paramJoiner;
         Boolean hasAnnotation = ANNOTATION_CACHE.computeIfAbsent(cacheKey,
             k -> AnnotationUtils.findAnnotation(method, IgnoreSoftDelete.class) != null
                 || AnnotationUtils.findAnnotation(method.getDeclaringClass(), IgnoreSoftDelete.class) != null);

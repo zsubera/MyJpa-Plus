@@ -64,6 +64,6 @@ public class CachedQueryResult<T> {
      * @return 如果结果已超过其TTL则返回 true
      */
     public boolean isExpired() {
-        return System.nanoTime() - createdAtNanos >= ttlSeconds * 1_000_000_000L;
+        return System.nanoTime() >= expiresAtNanos;
     }
 }

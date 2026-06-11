@@ -8,6 +8,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicReference;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -23,13 +24,16 @@ import org.slf4j.LoggerFactory;
  * 以避免超出这些限制。
  *
  * <p>
- * <strong>配置优先级：</strong>Spring Boot 配置 > 系统属性 > 默认值
+ * <strong>配置优先级：</strong>Spring Boot 配置 &gt; 系统属性 &gt; 默认值
  *
  * <ul>
  * <li>Spring Boot: {@code myjpa-plus.in-clause.max-size} / {@code myjpa-plus.in-clause.hard-limit}
  * <li>系统属性: {@code -Dmyjpa-plus.in-clause-max-size} / {@code -Dmyjpa-plus.in-clause-hard-limit}
  * <li>默认值: max-size=1000, hard-limit=5000
  * </ul>
+ *
+ * <p>
+ * <strong>线程安全：</strong>配置通过 {@link AtomicReference} 持有不可变 {@link Config} 原子切换。
  *
  * <p>
  * 不同数据库的限制参考：
@@ -48,116 +52,113 @@ public final class InClauseBuilder {
     private static final int MAX_ALLOWED_VALUE = 100_000;
 
     /**
-     * IN 子句的硬限制。超过此限制时将抛出异常，防止数据库性能问题。
-     *
-     * <p>
-     * 配置优先级：Spring Boot 配置 > 系统属性 {@code myjpa-plus.in-clause-hard-limit} > 默认值 (5000)。
+     * 不可变配置记录，两个值同时原子切换，消除之前两个独立 volatile 字段的竞态条件。
      */
-    private static volatile int hardLimit;
+    public record Config(int maxInClauseSize, int hardLimit) {
+
+        private static final Config DEFAULT = new Config(1000, 5000);
+
+        public Config {
+            if (maxInClauseSize <= 0 || maxInClauseSize > MAX_ALLOWED_VALUE) {
+                throw new IllegalArgumentException(
+                    "maxInClauseSize must be between 1 and " + MAX_ALLOWED_VALUE + ", got: " + maxInClauseSize);
+            }
+            if (hardLimit <= 0 || hardLimit > MAX_ALLOWED_VALUE) {
+                throw new IllegalArgumentException(
+                    "hardLimit must be between 1 and " + MAX_ALLOWED_VALUE + ", got: " + hardLimit);
+            }
+            if (hardLimit < maxInClauseSize) {
+                throw new IllegalArgumentException(
+                    "hardLimit (" + hardLimit + ") must be >= maxInClauseSize (" + maxInClauseSize + ")");
+            }
+        }
+
+        static Config loadFromSystemProperties() {
+            int maxSize = DEFAULT.maxInClauseSize;
+            String prop = System.getProperty("myjpa-plus.in-clause-max-size");
+            if (prop != null) {
+                try {
+                    int val = Integer.parseInt(prop);
+                    if (val > 0 && val <= MAX_ALLOWED_VALUE) {
+                        maxSize = val;
+                    } else if (val > MAX_ALLOWED_VALUE) {
+                        log.warn("myjpa-plus.in-clause-max-size value ({}) exceeds upper limit ({}). Using {}.", val,
+                            MAX_ALLOWED_VALUE, MAX_ALLOWED_VALUE);
+                        maxSize = MAX_ALLOWED_VALUE;
+                    }
+                } catch (NumberFormatException ignored) {
+                    // 使用默认值
+                }
+            }
+            int hardLimit = DEFAULT.hardLimit;
+            String hardProp = System.getProperty("myjpa-plus.in-clause-hard-limit");
+            if (hardProp != null) {
+                try {
+                    int val = Integer.parseInt(hardProp);
+                    if (val > 0 && val <= MAX_ALLOWED_VALUE) {
+                        hardLimit = val;
+                    } else if (val > MAX_ALLOWED_VALUE) {
+                        log.warn("myjpa-plus.in-clause-hard-limit value ({}) exceeds upper limit ({}). Using {}.", val,
+                            MAX_ALLOWED_VALUE, MAX_ALLOWED_VALUE);
+                        hardLimit = MAX_ALLOWED_VALUE;
+                    } else {
+                        log.warn("myjpa-plus.in-clause-hard-limit value ({}) is not positive. Using default {}.", val,
+                            hardLimit);
+                    }
+                } catch (NumberFormatException ignored) {
+                    log.warn("myjpa-plus.in-clause-hard-limit value '{}' is not a valid integer. Using default {}.",
+                        hardProp, hardLimit);
+                }
+            }
+            // [FIX] P1-3: 确保 hardLimit >= maxSize，避免配置验证不一致
+            if (hardLimit < maxSize) {
+                log.warn("hardLimit ({}) < maxInClauseSize ({}). Adjusting hardLimit to {}.", hardLimit, maxSize,
+                    maxSize);
+                hardLimit = maxSize;
+            }
+            return new Config(maxSize, hardLimit);
+        }
+    }
+
+    /** 持有不可变配置，原子切换，消除多线程读写不一致问题。 */
+    private static final AtomicReference<Config> CONFIG_REF = new AtomicReference<>(Config.loadFromSystemProperties());
 
     /**
-     * 单个 IN 子句中的最大参数数量。
-     *
-     * <p>
-     * 配置优先级：Spring Boot 配置 > 系统属性 {@code myjpa-plus.in-clause-max-size} > 默认值 (1000)。
+     * 原子替换当前配置。由 Spring Boot 自动配置调用。
      */
-    private static volatile int maxInClauseSize;
-
-    static {
-        int configured = 1000;
-        String prop = System.getProperty("myjpa-plus.in-clause-max-size");
-        if (prop != null) {
-            try {
-                int val = Integer.parseInt(prop);
-                if (val > 0 && val <= MAX_ALLOWED_VALUE) {
-                    configured = val;
-                } else if (val > MAX_ALLOWED_VALUE) {
-                    log.warn("myjpa-plus.in-clause-max-size value ({}) exceeds upper limit ({}). Using {}.", val,
-                        MAX_ALLOWED_VALUE, MAX_ALLOWED_VALUE);
-                    configured = MAX_ALLOWED_VALUE;
-                }
-            } catch (NumberFormatException ignored) {
-                // 使用默认值
-            }
-        }
-        maxInClauseSize = configured;
-
-        int hardConfigured = 5000;
-        String hardProp = System.getProperty("myjpa-plus.in-clause-hard-limit");
-        if (hardProp != null) {
-            try {
-                int val = Integer.parseInt(hardProp);
-                if (val > 0 && val <= MAX_ALLOWED_VALUE) {
-                    hardConfigured = val;
-                } else if (val > MAX_ALLOWED_VALUE) {
-                    log.warn("myjpa-plus.in-clause-hard-limit value ({}) exceeds upper limit ({}). Using {}.", val,
-                        MAX_ALLOWED_VALUE, MAX_ALLOWED_VALUE);
-                    hardConfigured = MAX_ALLOWED_VALUE;
-                } else {
-                    log.warn("myjpa-plus.in-clause-hard-limit value ({}) is not positive. Using default {}.", val,
-                        hardConfigured);
-                }
-            } catch (NumberFormatException ignored) {
-                log.warn("myjpa-plus.in-clause-hard-limit value '{}' is not a valid integer. Using default {}.",
-                    hardProp, hardConfigured);
-            }
-        }
-        hardLimit = hardConfigured;
+    public static void setConfig(Config config) {
+        CONFIG_REF.set(config);
+        log.info("IN clause config updated: maxSize={}, hardLimit={}", config.maxInClauseSize(), config.hardLimit());
     }
 
     /**
      * 获取单个 IN 子句中的最大参数数量。
-     *
-     * @return 最大参数数量
      */
     public static int getMaxInClauseSize() {
-        return maxInClauseSize;
-    }
-
-    /**
-     * 设置单个 IN 子句中的最大参数数量。由 Spring Boot 自动配置调用。
-     *
-     * <p>
-     * 有效范围：1-100000。超出范围的值将被忽略并记录警告。
-     *
-     * @param size 最大参数数量
-     */
-    public static void setMaxInClauseSize(int size) {
-        if (size > 0 && size <= MAX_ALLOWED_VALUE) {
-            maxInClauseSize = size;
-            log.info("IN clause max size configured to {}", size);
-        } else if (size > MAX_ALLOWED_VALUE) {
-            log.warn("IN clause max size ({}) exceeds upper limit ({}). Ignoring.", size, MAX_ALLOWED_VALUE);
-        }
+        return CONFIG_REF.get().maxInClauseSize();
     }
 
     /**
      * 获取 IN 子句的硬限制。
-     *
-     * @return 硬限制值
      */
     public static int getHardLimit() {
-        return hardLimit;
+        return CONFIG_REF.get().hardLimit();
     }
 
     /**
-     * 设置 IN 子句的硬限制。由 Spring Boot 自动配置调用。
+     * 获取当前配置。
      *
-     * <p>
-     * 有效范围：1-100000。超出范围的值将被忽略并记录警告。
-     *
-     * @param limit 硬限制值
+     * @return 当前配置
      */
-    public static void setHardLimit(int limit) {
-        if (limit > 0 && limit <= MAX_ALLOWED_VALUE) {
-            hardLimit = limit;
-            log.info("IN clause hard limit configured to {}", limit);
-        } else if (limit > MAX_ALLOWED_VALUE) {
-            log.warn("IN clause hard limit ({}) exceeds upper limit ({}). Ignoring.", limit, MAX_ALLOWED_VALUE);
-        }
+    public static Config getConfig() {
+        return CONFIG_REF.get();
     }
 
     private InClauseBuilder() {}
+
+    private static Config cfg() {
+        return CONFIG_REF.get();
+    }
 
     /**
      * 构建 {@code IN} 谓词：{@code field IN (values)}。
@@ -176,10 +177,11 @@ public final class InClauseBuilder {
         if (values == null || values.length == 0) {
             throw new IllegalArgumentException("values must not be empty");
         }
-        if (values.length <= maxInClauseSize) {
+        Config config = cfg();
+        if (values.length <= config.maxInClauseSize()) {
             return buildSingleIn(cb, path, values);
         }
-        return buildBatchedIn(cb, path, Arrays.asList(values));
+        return buildBatchedIn(cb, path, Arrays.asList(values), config);
     }
 
     /**
@@ -198,17 +200,18 @@ public final class InClauseBuilder {
         if (values == null || values.isEmpty()) {
             throw new IllegalArgumentException("values must not be empty");
         }
-        if (values.size() <= maxInClauseSize) {
+        Config config = cfg();
+        if (values.size() <= config.maxInClauseSize()) {
             return buildSingleIn(cb, path, values);
         }
-        return buildBatchedIn(cb, path, values);
+        return buildBatchedIn(cb, path, values, config);
     }
 
     /**
      * 构建 {@code NOT IN} 谓词：{@code field NOT IN (values)}。
      *
      * <p>
-     * 如果值的数量超过 {@link #maxInClauseSize}，NOT IN 子句会自动拆分为多个 AND NOT 连接的批次。
+     * 如果值的数量超过 {@link #getMaxInClauseSize()}，NOT IN 子句会自动拆分为多个 AND NOT 连接的批次。
      *
      * @param cb CriteriaBuilder 实例
      * @param path 字段路径
@@ -220,8 +223,6 @@ public final class InClauseBuilder {
         if (values == null || values.length == 0) {
             throw new IllegalArgumentException("values must not be empty");
         }
-        // SQL NOT IN 语义：NULL IN (x, y) 返回 UNKNOWN，导致 NOT IN 整体返回空。
-        // 过滤 NULL 值并附加 IS NOT NULL 条件，确保结果符合预期。
         List<Object> nonNullValues = new ArrayList<>(values.length);
         boolean hasNull = false;
         for (Object v : values) {
@@ -232,20 +233,17 @@ public final class InClauseBuilder {
             }
         }
         if (nonNullValues.isEmpty()) {
-            // 全部为 NULL：NOT IN (空) 等价于所有行都匹配，但为安全起见返回 IS NOT NULL
-            return cb.isNotNull(path);
+            // NOT IN (NULL) returns UNKNOWN for any row — predicate never matches.
+            return cb.disjunction();
         }
-        // 先构建 NOT IN 谓词（含批拆分），再根据 hasNull 决定是否追加 IS NOT NULL。
-        // 之前的实现在 hasNull=true 且 nonNullValues.size() > maxInClauseSize 时
-        // 会提前返回未经批拆分的 notInPredicate，绕过了 buildBatchedNotIn。
+        Config config = cfg();
         Predicate notInPredicate;
-        if (nonNullValues.size() <= maxInClauseSize) {
+        if (nonNullValues.size() <= config.maxInClauseSize()) {
             notInPredicate = cb.not(buildSingleIn(cb, path, nonNullValues));
         } else {
-            notInPredicate = buildBatchedNotIn(cb, path, nonNullValues);
+            notInPredicate = buildBatchedNotIn(cb, path, nonNullValues, config);
         }
         if (hasNull) {
-            // 额外添加 IS NOT NULL 条件，排除字段为 NULL 的行
             return cb.and(notInPredicate, cb.isNotNull(path));
         }
         return notInPredicate;
@@ -255,7 +253,7 @@ public final class InClauseBuilder {
      * 构建 {@code NOT IN} 谓词：{@code field NOT IN (values)}。
      *
      * <p>
-     * 如果值的数量超过 {@link #maxInClauseSize}，NOT IN 子句会自动拆分为多个 AND NOT 连接的批次。
+     * 如果值的数量超过 {@link #getMaxInClauseSize()}，NOT IN 子句会自动拆分为多个 AND NOT 连接的批次。
      *
      * @param cb CriteriaBuilder 实例
      * @param path 字段路径
@@ -267,8 +265,6 @@ public final class InClauseBuilder {
         if (values == null || values.isEmpty()) {
             throw new IllegalArgumentException("values must not be empty");
         }
-        // SQL NOT IN 语义：NULL IN (x, y) 返回 UNKNOWN，导致 NOT IN 整体返回空。
-        // 过滤 NULL 值并附加 IS NOT NULL 条件，确保结果符合预期。
         List<Object> nonNullValues = new ArrayList<>(values.size());
         boolean hasNull = false;
         for (Object v : values) {
@@ -279,15 +275,15 @@ public final class InClauseBuilder {
             }
         }
         if (nonNullValues.isEmpty()) {
-            return cb.isNotNull(path);
+            // NOT IN (NULL) returns UNKNOWN for any row — predicate never matches.
+            return cb.disjunction();
         }
-        // 先构建 NOT IN 谓词（含批拆分），再根据 hasNull 决定是否追加 IS NOT NULL。
-        // 与数组版本相同的 bug 修复：hasNull=true 且大列表时不应绕过批拆分。
+        Config config = cfg();
         Predicate notInPredicate;
-        if (nonNullValues.size() <= maxInClauseSize) {
+        if (nonNullValues.size() <= config.maxInClauseSize()) {
             notInPredicate = cb.not(buildSingleIn(cb, path, nonNullValues));
         } else {
-            notInPredicate = buildBatchedNotIn(cb, path, nonNullValues);
+            notInPredicate = buildBatchedNotIn(cb, path, nonNullValues, config);
         }
         if (hasNull) {
             return cb.and(notInPredicate, cb.isNotNull(path));
@@ -311,63 +307,59 @@ public final class InClauseBuilder {
         return in;
     }
 
-    private static Predicate buildBatchedIn(CriteriaBuilder cb, Path<?> path, Collection<?> values) {
-        if (values.size() > hardLimit) {
-            throw new MyJpaPlusException("IN clause size " + values.size() + " exceeds hard limit " + hardLimit
+    private static Predicate buildBatchedIn(CriteriaBuilder cb, Path<?> path, Collection<?> values, Config config) {
+        if (values.size() > config.hardLimit()) {
+            throw new MyJpaPlusException("IN clause size " + values.size() + " exceeds hard limit " + config.hardLimit()
                 + ". Consider using temporary tables or subqueries for better performance. "
                 + "You can adjust the limit via -Dmyjpa-plus.in-clause-hard-limit=<value>.");
         }
-        int warningThreshold = hardLimit / 2;
+        int warningThreshold = (int)(config.hardLimit() * 0.8);
         if (values.size() > warningThreshold) {
-            log.warn(
-                "IN clause has {} values (hard limit: {}), which may cause severe database performance degradation. "
-                    + "Consider using temporary tables or subqueries.",
-                values.size(), hardLimit);
+            log.warn("IN clause has {} values (hard limit: {}), which may cause database performance degradation. "
+                + "Consider using temporary tables or subqueries.", values.size(), config.hardLimit());
         } else if (values.size() > 10_000) {
             log.warn("IN clause has {} values, which may cause performance issues. "
                 + "Consider using temporary tables or subqueries for better performance.", values.size());
         }
         if (log.isDebugEnabled()) {
             log.debug("IN clause has {} values, exceeding limit of {}. Splitting into batches.", values.size(),
-                maxInClauseSize);
+                config.maxInClauseSize());
         }
-        // 一次性转换为List以启用subList()视图，避免临时List复制
         List<?> valueList = values instanceof List<?> l ? l : new ArrayList<>(values);
-        int estimatedBatches = (valueList.size() + maxInClauseSize - 1) / maxInClauseSize;
+        int estimatedBatches = (valueList.size() + config.maxInClauseSize() - 1) / config.maxInClauseSize();
         List<Predicate> batchPredicates = new ArrayList<>(estimatedBatches);
-        for (int i = 0; i < valueList.size(); i += maxInClauseSize) {
-            int end = Math.min(i + maxInClauseSize, valueList.size());
+        for (int i = 0; i < valueList.size(); i += config.maxInClauseSize()) {
+            int end = Math.min(i + config.maxInClauseSize(), valueList.size());
             batchPredicates.add(buildSingleIn(cb, path, valueList.subList(i, end)));
         }
         return cb.or(batchPredicates.toArray(new Predicate[0]));
     }
 
-    private static Predicate buildBatchedNotIn(CriteriaBuilder cb, Path<?> path, Collection<?> values) {
-        if (values.size() > hardLimit) {
-            throw new MyJpaPlusException("NOT IN clause size " + values.size() + " exceeds hard limit " + hardLimit
-                + ". Consider using temporary tables or subqueries for better performance. "
+    private static Predicate buildBatchedNotIn(CriteriaBuilder cb, Path<?> path, Collection<?> values, Config config) {
+        if (values.size() > config.hardLimit()) {
+            throw new MyJpaPlusException("NOT IN clause size " + values.size() + " exceeds hard limit "
+                + config.hardLimit() + ". Consider using temporary tables or subqueries for better performance. "
                 + "You can adjust the limit via -Dmyjpa-plus.in-clause-hard-limit=<value>.");
         }
-        int warningThreshold = hardLimit / 2;
+        int warningThreshold = config.hardLimit() / 2;
         if (values.size() > warningThreshold) {
             log.warn(
                 "NOT IN clause has {} values (hard limit: {}), which may cause severe database performance degradation. "
                     + "Consider using temporary tables or subqueries.",
-                values.size(), hardLimit);
+                values.size(), config.hardLimit());
         } else if (values.size() > 10_000) {
             log.warn("NOT IN clause has {} values, which may cause performance issues. "
                 + "Consider using temporary tables or subqueries for better performance.", values.size());
         }
         if (log.isDebugEnabled()) {
             log.debug("NOT IN clause has {} values, exceeding limit of {}. Splitting into batches.", values.size(),
-                maxInClauseSize);
+                config.maxInClauseSize());
         }
-        // 一次性转换为List以启用subList()视图，避免临时List复制
         List<?> valueList = values instanceof List<?> l ? l : new ArrayList<>(values);
-        int estimatedBatches = (valueList.size() + maxInClauseSize - 1) / maxInClauseSize;
+        int estimatedBatches = (valueList.size() + config.maxInClauseSize() - 1) / config.maxInClauseSize();
         List<Predicate> batchPredicates = new ArrayList<>(estimatedBatches);
-        for (int i = 0; i < valueList.size(); i += maxInClauseSize) {
-            int end = Math.min(i + maxInClauseSize, valueList.size());
+        for (int i = 0; i < valueList.size(); i += config.maxInClauseSize()) {
+            int end = Math.min(i + config.maxInClauseSize(), valueList.size());
             batchPredicates.add(cb.not(buildSingleIn(cb, path, valueList.subList(i, end))));
         }
         return cb.and(batchPredicates.toArray(new Predicate[0]));

@@ -5,6 +5,7 @@ import com.zsubera.jpa.spec.QuerySpec;
 import com.zsubera.jpa.update.DeleteSpec;
 import com.zsubera.jpa.update.UpdateSpec;
 import com.zsubera.jpa.util.EntityGraphHelper;
+import com.zsubera.jpa.util.QueryTimeoutHelper;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.EntityManagerFactory;
 import jakarta.persistence.PersistenceContext;
@@ -134,13 +135,13 @@ public class MyJpaTemplate {
     private QueryCacheManager cacheManager;
 
     /** 批量操作执行模板，封装 UpdateSpec/DeleteSpec/MergeSpec 的批量执行逻辑。 */
-    private BulkOperationTemplate bulkOperationTemplate;
+    private volatile BulkOperationTemplate bulkOperationTemplate;
 
     /** 批量保存操作模板，封装 persist/merge 的批量保存逻辑。 */
-    private BatchSaveTemplate batchSaveTemplate;
+    private volatile BatchSaveTemplate batchSaveTemplate;
 
     /** Keyset 分页辅助类，封装游标分页的核心逻辑。 */
-    private KeysetPaginationHelper keysetPaginationHelper;
+    private volatile KeysetPaginationHelper keysetPaginationHelper;
 
     /** 创建 MyJpaTemplate 实例，使用默认配置。 */
     public MyJpaTemplate() {
@@ -162,12 +163,15 @@ public class MyJpaTemplate {
     /**
      * 设置最大返回行数。
      *
-     * @param maxResults 最大返回行数
-     * @throws IllegalArgumentException 如果值不是正数
+     * <p>
+     * 设置为 {@code -1} 表示禁用限制（不限制返回行数）。 默认值为 {@value #DEFAULT_MAX_RESULTS}。
+     *
+     * @param maxResults 最大返回行数，或 {@code -1} 表示禁用
+     * @throws IllegalArgumentException 如果值不是正数且不等于 -1
      */
     public void setMaxResults(int maxResults) {
-        if (maxResults <= 0) {
-            throw new IllegalArgumentException("maxResults must be positive");
+        if (maxResults <= 0 && maxResults != -1) {
+            throw new IllegalArgumentException("maxResults must be positive or -1 (disabled)");
         }
         this.maxResults = maxResults;
     }
@@ -362,12 +366,12 @@ public class MyJpaTemplate {
         List<T> cached = cacheManager.get(cacheKey);
         if (cached != null) {
             log.debug("Cache hit for key: {}", cacheKey);
-            return cached;
+            return new ArrayList<>(cached);
         }
         log.debug("Cache miss for key: {}", cacheKey);
         List<T> result = findAll(entityClass, spec);
         cacheManager.put(cacheKey, Collections.unmodifiableList(new ArrayList<>(result)), ttlSeconds);
-        return result;
+        return new ArrayList<>(result);
     }
 
     /**
@@ -526,6 +530,7 @@ public class MyJpaTemplate {
         }
         TypedQuery<T> query = entityManager.createQuery(cq);
         query.setMaxResults(1);
+        QueryTimeoutHelper.applyTimeout(query);
         List<T> results = query.getResultList();
         return results.isEmpty() ? Optional.empty() : Optional.of(results.get(0));
     }
@@ -555,6 +560,7 @@ public class MyJpaTemplate {
         }
         TypedQuery<T> query = entityManager.createQuery(cq);
         query.setMaxResults(1);
+        QueryTimeoutHelper.applyTimeout(query);
         spec.applyQuerySettings(query);
         List<T> results = query.getResultList();
         return results.isEmpty() ? Optional.empty() : Optional.of(results.get(0));
@@ -643,10 +649,11 @@ public class MyJpaTemplate {
         if (spec == null) {
             throw new IllegalArgumentException("spec must not be null");
         }
-        if (maxResults <= 0) {
-            throw new IllegalArgumentException("maxResults must be positive");
+        if (maxResults <= 0 && maxResults != -1) {
+            throw new IllegalArgumentException("maxResults must be positive or -1 (disabled)");
         }
-        TypedQuery<T> query = buildTypedQuery(entityClass, spec, null, maxResults);
+        Integer effectiveMaxResults = maxResults == -1 ? null : maxResults;
+        TypedQuery<T> query = buildTypedQuery(entityClass, spec, null, effectiveMaxResults);
         return query.getResultList();
     }
 
@@ -709,10 +716,11 @@ public class MyJpaTemplate {
         if (spec == null) {
             throw new IllegalArgumentException("spec must not be null");
         }
-        if (maxResults <= 0) {
-            throw new IllegalArgumentException("maxResults must be positive");
+        if (maxResults <= 0 && maxResults != -1) {
+            throw new IllegalArgumentException("maxResults must be positive or -1 (disabled)");
         }
-        TypedQuery<T> query = buildTypedQuery(entityClass, spec, entityGraph, maxResults);
+        Integer effectiveMaxResults = maxResults == -1 ? null : maxResults;
+        TypedQuery<T> query = buildTypedQuery(entityClass, spec, entityGraph, effectiveMaxResults);
         return query.getResultList();
     }
 
@@ -847,6 +855,7 @@ public class MyJpaTemplate {
         }
         TypedQuery<T> query = entityManager.createQuery(cq);
         query.setMaxResults(1);
+        QueryTimeoutHelper.applyTimeout(query);
         List<T> results = query.getResultList();
         return results.isEmpty() ? Optional.empty() : Optional.of(results.get(0));
     }
@@ -918,10 +927,7 @@ public class MyJpaTemplate {
         if (maxResults != null) {
             query.setMaxResults(maxResults);
         }
-        // 如果已配置默认查询超时则应用
-        if (defaultTimeoutSeconds > 0) {
-            query.setHint("jakarta.persistence.query.timeout", Math.toIntExact(defaultTimeoutSeconds * 1000L));
-        }
+        QueryTimeoutHelper.applyTimeout(query);
         return query;
     }
 
@@ -1013,7 +1019,9 @@ public class MyJpaTemplate {
         if (countPredicate != null) {
             countCq.where(countPredicate);
         }
-        return entityManager.createQuery(countCq).getSingleResult();
+        TypedQuery<Long> countQuery = entityManager.createQuery(countCq);
+        QueryTimeoutHelper.applyTimeout(countQuery);
+        return countQuery.getSingleResult();
     }
 
     /**
@@ -1394,6 +1402,7 @@ public class MyJpaTemplate {
         }
         applySort(cq, root, cb, pageable.getSort());
         TypedQuery<T> query = entityManager.createQuery(cq);
+        QueryTimeoutHelper.applyTimeout(query);
         try {
             query.setFirstResult(Math.toIntExact(pageable.getOffset()));
         } catch (ArithmeticException e) {
@@ -1412,10 +1421,10 @@ public class MyJpaTemplate {
         List<T> content = query.getResultList();
         boolean hasNext;
         if (maxResultsLimited) {
-            // 当 maxResults 限制了请求行数时，需要区分两种情况：
-            // 1. 返回的行数 == maxResults 且 maxResults > pageSize → 可能还有更多数据
-            // 2. 返回的行数 == maxResults 但 maxResults == pageSize → 已到达边界，没有下一页
-            hasNext = content.size() >= this.maxResults && content.size() > pageable.getPageSize();
+            // 当 maxResults 限制了请求行数时：
+            // - 返回行数 == fetchLimit（即 maxResults）→ 可能还有更多数据，保守标记 hasNext=true
+            // - 返回行数 < fetchLimit → 已到达数据末尾，没有下一页
+            hasNext = content.size() >= this.maxResults;
         } else {
             hasNext = content.size() > pageable.getPageSize();
         }
@@ -1452,7 +1461,9 @@ public class MyJpaTemplate {
         Root<T> root = cq.from(entityClass);
         // 直接传递 ids Collection 以避免不必要的 toArray() 转换
         cq.where(com.zsubera.jpa.util.InClauseBuilder.in(cb, root.get(idFieldName), ids));
-        return entityManager.createQuery(cq).getResultList();
+        TypedQuery<T> query = entityManager.createQuery(cq);
+        QueryTimeoutHelper.applyTimeout(query);
+        return query.getResultList();
     }
 
     /**
@@ -1489,7 +1500,9 @@ public class MyJpaTemplate {
         if (predicate != null) {
             cq.where(predicate);
         }
-        return entityManager.createQuery(cq).getResultList();
+        TypedQuery<T> query = entityManager.createQuery(cq);
+        QueryTimeoutHelper.applyTimeout(query);
+        return query.getResultList();
     }
 
     // ---- Keyset 分页 ----

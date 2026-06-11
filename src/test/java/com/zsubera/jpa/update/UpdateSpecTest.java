@@ -713,4 +713,140 @@ class UpdateSpecTest {
         entity.setStatus(status);
         return entity;
     }
+
+    @Test
+    void testUpdateWithVersionIncrement() {
+        repository.save(newEntity("version-test", 1));
+        em.flush();
+        em.clear();
+
+        int count = new UpdateSpec<>(TestEntity.class).set(TestEntity::getStatus, 2).withVersionIncrement(true)
+            .eq(TestEntity::getName, "version-test").execute(em);
+        em.flush();
+        em.clear();
+
+        assertEquals(1, count);
+        TestEntity found =
+            repository.findAll().stream().filter(e -> "version-test".equals(e.getName())).findFirst().orElseThrow();
+        assertEquals(Integer.valueOf(2), found.getStatus());
+    }
+
+    @Test
+    void testUpdateSetAddAtomicIncrement() {
+        TestEntity saved = repository.save(newEntity("increment-test", 10));
+        em.flush();
+        em.clear();
+
+        int count = new UpdateSpec<>(TestEntity.class).setAdd(TestEntity::getStatus, 5)
+            .eq(TestEntity::getId, saved.getId()).execute(em);
+        em.flush();
+        em.clear();
+
+        assertEquals(1, count);
+        TestEntity found = repository.findById(saved.getId()).orElseThrow();
+        assertEquals(Integer.valueOf(15), found.getStatus());
+    }
+
+    @Test
+    void testUpdateSetSubtractAtomicDecrement() {
+        TestEntity saved = repository.save(newEntity("decrement-test", 20));
+        em.flush();
+        em.clear();
+
+        int count = new UpdateSpec<>(TestEntity.class).setSubtract(TestEntity::getStatus, 7)
+            .eq(TestEntity::getId, saved.getId()).execute(em);
+        em.flush();
+        em.clear();
+
+        assertEquals(1, count);
+        TestEntity found = repository.findById(saved.getId()).orElseThrow();
+        assertEquals(Integer.valueOf(13), found.getStatus());
+    }
+
+    @Test
+    void testUpdateAllowUnconditionalExplicitlyFalse() {
+        assertThrows(IllegalStateException.class, () -> new UpdateSpec<>(TestEntity.class).set(TestEntity::getName, "x")
+            .allowUnconditional(false).updateAll(em));
+    }
+
+    @Test
+    void testUpdateSetConditionalWithFalseCondition() {
+        repository.save(newEntity("cond-test", 1));
+        em.flush();
+
+        int count = new UpdateSpec<>(TestEntity.class).set(false, TestEntity::getStatus, 99)
+            .set(true, TestEntity::getName, "updated").eq(TestEntity::getName, "cond-test").execute(em);
+        em.flush();
+        em.clear();
+
+        assertEquals(1, count);
+        TestEntity found =
+            repository.findAll().stream().filter(e -> "updated".equals(e.getName())).findFirst().orElseThrow();
+        assertEquals(Integer.valueOf(1), found.getStatus());
+    }
+
+    @Test
+    void testUpdateSetAddWithNullFieldThrows() {
+        assertThrows(IllegalArgumentException.class, () -> new UpdateSpec<>(TestEntity.class).setAdd(null, 1));
+    }
+
+    @Test
+    void testUpdateSetSubtractWithNullAmountThrows() {
+        assertThrows(IllegalArgumentException.class,
+            () -> new UpdateSpec<>(TestEntity.class).setSubtract(TestEntity::getStatus, null));
+    }
+
+    @Test
+    void testUpdateOrGroupWithConsumer() {
+        repository.save(newEntity("or-consumer-1", 1));
+        repository.save(newEntity("or-consumer-2", 2));
+        repository.save(newEntity("other", 3));
+        em.flush();
+        em.clear();
+
+        int count = new UpdateSpec<>(TestEntity.class).set(TestEntity::getStatus, 99)
+            .or(o -> o.eq(TestEntity::getName, "or-consumer-1").eq(TestEntity::getStatus, 2)).execute(em);
+        em.flush();
+        em.clear();
+
+        assertEquals(2, count);
+    }
+
+    // [FIX] P0-2: 测试 UpdateSpec.eqIgnoreCase(null) 转为 IS NULL，与 ConditionBuilder 一致
+    @Test
+    void testUpdateWithEqIgnoreCaseNull() {
+        repository.save(newEntity("alice", 1));
+        repository.save(newEntity(null, 2));
+        em.flush();
+        em.clear();
+
+        int count = new UpdateSpec<>(TestEntity.class).set(TestEntity::getStatus, 99)
+            .eqIgnoreCase(TestEntity::getName, null).execute(em);
+        em.flush();
+        em.clear();
+
+        assertEquals(1, count);
+        List<TestEntity> all = repository.findAll();
+        assertTrue(all.stream().anyMatch(e -> e.getStatus() == 99 && e.getName() == null));
+        assertTrue(all.stream().anyMatch(e -> e.getStatus() == 1 && "alice".equals(e.getName())));
+    }
+
+    // [FIX] P0-2: 测试 UpdateSpec.neIgnoreCase(null) 转为 IS NOT NULL，与 ConditionBuilder 一致
+    @Test
+    void testUpdateWithNeIgnoreCaseNull() {
+        repository.save(newEntity("alice", 1));
+        repository.save(newEntity(null, 2));
+        em.flush();
+        em.clear();
+
+        int count = new UpdateSpec<>(TestEntity.class).set(TestEntity::getStatus, 99)
+            .neIgnoreCase(TestEntity::getName, null).execute(em);
+        em.flush();
+        em.clear();
+
+        assertEquals(1, count);
+        List<TestEntity> all = repository.findAll();
+        assertTrue(all.stream().anyMatch(e -> e.getStatus() == 99 && "alice".equals(e.getName())));
+        assertTrue(all.stream().anyMatch(e -> e.getStatus() == 2 && e.getName() == null));
+    }
 }

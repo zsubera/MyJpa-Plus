@@ -191,6 +191,32 @@ class OrConditionBuilderTest {
         assertThrows(IllegalArgumentException.class, () -> builder.endsWith(TestEntity::getName, null));
     }
 
+    // [FIX] P0-2: 测试 BulkConditionSupport.eqIgnoreCase(null) 转为 IS NULL，与 ConditionBuilder 一致
+    @Test
+    void orCondition_eqIgnoreCase_null_shouldConvertToIsNull() {
+        repository.save(newEntity("alice", 1));
+        repository.save(newEntity(null, 2));
+
+        List<TestEntity> result = repository.findAll(
+            new com.zsubera.jpa.spec.QuerySpec<TestEntity>().or(or -> or.eqIgnoreCase(TestEntity::getName, null)));
+
+        assertEquals(1, result.size());
+        assertNull(result.get(0).getName());
+    }
+
+    // [FIX] P0-2: 测试 BulkConditionSupport.neIgnoreCase(null) 转为 IS NOT NULL，与 ConditionBuilder 一致
+    @Test
+    void orCondition_neIgnoreCase_null_shouldConvertToIsNotNull() {
+        repository.save(newEntity("alice", 1));
+        repository.save(newEntity(null, 2));
+
+        List<TestEntity> result = repository.findAll(
+            new com.zsubera.jpa.spec.QuerySpec<TestEntity>().or(or -> or.neIgnoreCase(TestEntity::getName, null)));
+
+        assertEquals(1, result.size());
+        assertNotNull(result.get(0).getName());
+    }
+
     private TestEntity newEntity(String name, int status) {
         TestEntity e = new TestEntity();
         e.setName(name);

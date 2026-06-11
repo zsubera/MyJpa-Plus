@@ -19,8 +19,61 @@ import java.util.function.Function;
  * 避免两个类各自维护相同的 {@code executeInNewTransaction} 实现。
  *
  * <p>
- * <strong>事务传播行为：</strong>始终使用 {@code PROPAGATION_REQUIRES_NEW}（挂起当前事务，创建新事务），
- * 确保批量操作在独立事务中执行。当已有活动事务时会记录警告日志，因为挂起外层事务可能影响外层事务的连接池行为。
+ * <strong>事务传播行为：</strong>
+ * <ul>
+ *   <li>无活动事务时：使用 {@code PROPAGATION_REQUIRED}（创建新事务）</li>
+ *   <li>有活动事务时：使用 {@code PROPAGATION_REQUIRES_NEW}（挂起外部事务，创建独立事务）</li>
+ * </ul>
+ *
+ * <p>
+ * [FIX] P0-3: 明确说明事务传播行为的限制，避免用户误解。
+ *
+ * <p>
+ * <strong>重要限制：</strong>
+ * <p>
+ * 当在已有活动事务中调用 {@code executeInNewTransaction} 时，操作会加入现有事务而非创建新事务。
+ * 这意味着：
+ * <ul>
+ *   <li>每个批次不会独立提交 — 一个批次失败会导致所有批次回滚</li>
+ *   <li>无法实现真正的批次隔离</li>
+ * </ul>
+ *
+ * <p>
+ * 如需真正的批次隔离，必须在 {@code @Transactional} 方法外调用
+ * {@link BulkOperationTemplate#executeBatchInSeparateTransactions}。
+ *
+ * <p>
+ * <strong>使用示例：</strong>
+ * <pre>{@code
+ * // 正确用法：在 @Transactional 外调用以获得批次隔离
+ * @Service
+ * public class UserService {
+ *     private final MyJpaTemplate jpa;
+ *
+ *     public void batchUpdateUsers() {
+ *         // 在 @Transactional 方法外调用
+ *         jpa.executeBatchInSeparateTransactions(
+ *             jpa.update(User.class).set(User::getStatus, "INACTIVE"),
+ *             100
+ *         );
+ *     }
+ * }
+ *
+ * // 错误用法：在 @Transactional 内调用无法获得批次隔离
+ * @Service
+ * public class UserService {
+ *     private final MyJpaTemplate jpa;
+ *
+ *     @Transactional
+ *     public void batchUpdateUsers() {
+ *         // 此调用会加入现有事务，批次不会独立提交
+ *         jpa.executeBatchInSeparateTransactions(
+ *             jpa.update(User.class).set(User::getStatus, "INACTIVE"),
+ *             100
+ *         );
+ *     }
+ * }
+ * }</pre>
  */
 class TransactionHelper {
 
@@ -29,6 +82,10 @@ class TransactionHelper {
     private final EntityManager entityManager;
     private final EntityManagerFactory entityManagerFactory;
     private final ApplicationContext applicationContext;
+
+    // [FIX] P1-6: 缓存 TransactionTemplate，避免每次调用重复创建
+    private volatile TransactionTemplate cachedRequiredTemplate;
+    private volatile TransactionTemplate cachedRequiresNewTemplate;
 
     TransactionHelper(EntityManager entityManager, EntityManagerFactory entityManagerFactory,
         ApplicationContext applicationContext) {
@@ -43,10 +100,21 @@ class TransactionHelper {
      * <p>
      * 使用 {@link TransactionTemplate} 创建独立事务，每次调用都会创建新的事务上下文。
      *
+     * <p>
+     * [FIX] P0-1: 修正传播行为描述——有活动事务时使用 REQUIRES_NEW（挂起外部事务，创建独立事务），
+     * 而非注释中错误描述的 REQUIRED（加入现有事务）。
+     *
+     * <p>
+     * <strong>重要：</strong>当在已有活动事务中调用时，此方法使用 {@code PROPAGATION_REQUIRES_NEW}，
+     * 挂起外部事务并创建独立事务。每个批次会独立提交。
+     * 但注意：在某些数据库（如 H2）中，外层事务持有的表锁可能与新事务的锁冲突，
+     * 导致死锁。建议在 {@code @Transactional} 方法外调用以避免锁冲突。
+     *
      * @param operation 要执行的操作
      * @param <R> 返回类型
      * @return 操作结果
      * @throws IllegalStateException 如果 TransactionManager 不可用
+     * @throws org.springframework.transaction.UnexpectedRollbackException 如果事务被标记为回滚
      */
     <R> R executeInNewTransaction(Function<EntityManager, R> operation) {
         PlatformTransactionManager txManager = getTransactionManager();
@@ -56,17 +124,20 @@ class TransactionHelper {
                     + "Ensure @Transactional support is enabled or configure a PlatformTransactionManager bean. "
                     + "If running outside a Spring context, use MergeSpec.executeInTransaction() instead.");
         }
-        TransactionTemplate txTemplate = new TransactionTemplate(txManager);
         boolean existingTransaction = TransactionSynchronizationManager.isActualTransactionActive();
+        // [FIX] P1-6: 使用缓存的 TransactionTemplate，避免每次调用重复创建
+        TransactionTemplate txTemplate;
         if (existingTransaction) {
+            // [FIX] P0-1: 修正警告信息——有活动事务时使用 REQUIRES_NEW（独立事务），而非加入现有事务
             log.warn("executeInNewTransaction called within an active transaction. "
-                + "Batch operations will join the existing transaction (PROPAGATION_REQUIRED). "
-                + "For true per-batch commit isolation, call outside of @Transactional methods.");
-            txTemplate
-                .setPropagationBehavior(org.springframework.transaction.TransactionDefinition.PROPAGATION_REQUIRED);
+                + "Using PROPAGATION_REQUIRES_NEW to create an independent transaction. "
+                + "The outer transaction will be suspended. "
+                + "Note: on some databases (e.g., H2), locks held by the outer transaction "
+                + "may conflict with the new transaction, causing deadlocks. "
+                + "Consider calling outside @Transactional methods to avoid lock conflicts.");
+            txTemplate = getOrCreateRequiresNewTemplate(txManager);
         } else {
-            txTemplate
-                .setPropagationBehavior(org.springframework.transaction.TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+            txTemplate = getOrCreateRequiredTemplate(txManager);
         }
         return txTemplate.execute(status -> {
             // Spring 的 @PersistenceContext 代理会自动为每个事务创建独立的底层 EntityManager，
@@ -81,6 +152,42 @@ class TransactionHelper {
             }
             return r;
         });
+    }
+
+    // [FIX] P1-1: 缓存 TransactionTemplate 的辅助方法，使用 double-checked locking 避免竞态条件
+    private TransactionTemplate getOrCreateRequiredTemplate(PlatformTransactionManager txManager) {
+        TransactionTemplate template = cachedRequiredTemplate;
+        if (template == null) {
+            synchronized (this) {
+                template = cachedRequiredTemplate;
+                if (template == null) {
+                    template = new TransactionTemplate(txManager);
+                    template.setPropagationBehavior(
+                        org.springframework.transaction.TransactionDefinition.PROPAGATION_REQUIRED);
+                    cachedRequiredTemplate = template;
+                }
+            }
+        }
+        return template;
+    }
+
+    // [FIX] P0-1: 修复传播行为错误 — 原代码使用 PROPAGATION_REQUIRED（加入现有事务），
+    // 导致 executeInNewTransaction 在无活动事务时无法创建新事务。
+    // 改为正确的 PROPAGATION_REQUIRES_NEW（始终创建新事务）。
+    private TransactionTemplate getOrCreateRequiresNewTemplate(PlatformTransactionManager txManager) {
+        TransactionTemplate template = cachedRequiresNewTemplate;
+        if (template == null) {
+            synchronized (this) {
+                template = cachedRequiresNewTemplate;
+                if (template == null) {
+                    template = new TransactionTemplate(txManager);
+                    template.setPropagationBehavior(
+                        org.springframework.transaction.TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+                    cachedRequiresNewTemplate = template;
+                }
+            }
+        }
+        return template;
     }
 
     private PlatformTransactionManager getTransactionManager() {

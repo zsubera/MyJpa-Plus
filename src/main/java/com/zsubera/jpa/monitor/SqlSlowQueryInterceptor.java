@@ -46,8 +46,8 @@ public class SqlSlowQueryInterceptor implements StatementInspector {
     private static final ConcurrentMap<Class<?>, Class<?>> PROXY_CLASS_CACHE = new ConcurrentHashMap<>();
 
     /** 代理类缓存驱逐锁，确保只有一个线程执行驱逐 */
-    private static final java.util.concurrent.atomic.AtomicBoolean EVICTING =
-        new java.util.concurrent.atomic.AtomicBoolean(false);
+    private static final java.util.concurrent.locks.ReentrantLock EVICT_LOCK =
+        new java.util.concurrent.locks.ReentrantLock();
 
     private final long slowQueryThresholdMs;
 
@@ -78,16 +78,18 @@ public class SqlSlowQueryInterceptor implements StatementInspector {
      */
     public DataSource wrapDataSource(DataSource dataSource) {
         return (DataSource)Proxy.newProxyInstance(DataSource.class.getClassLoader(), new Class<?>[] {DataSource.class},
-            new DataSourceProxyHandler(dataSource));
+            new DataSourceProxyHandler(dataSource, slowQueryThresholdMs));
     }
 
-    public class DataSourceProxyHandler implements InvocationHandler {
+    public static class DataSourceProxyHandler implements InvocationHandler {
 
         private final DataSource target;
+        private final long slowQueryThresholdMs;
 
         @SuppressFBWarnings("EI_EXPOSE_REP2")
-        DataSourceProxyHandler(DataSource target) {
+        DataSourceProxyHandler(DataSource target, long slowQueryThresholdMs) {
             this.target = target;
+            this.slowQueryThresholdMs = slowQueryThresholdMs;
         }
 
         @Override
@@ -110,51 +112,53 @@ public class SqlSlowQueryInterceptor implements StatementInspector {
                     stmtClass.getName());
                 return stmt;
             }
-            // 采样驱逐：每 64 次调用检查一次缓存大小，避免每次调用都检查
-            if (PROXY_CLASS_CACHE.size() > MAX_PROXY_CLASS_CACHE_SIZE
-                && java.util.concurrent.ThreadLocalRandom.current().nextInt(64) == 0) {
-                // 使用 CAS 确保只有一个线程执行驱逐
-                if (EVICTING.compareAndSet(false, true)) {
-                    try {
-                        int currentSize = PROXY_CLASS_CACHE.size();
-                        if (currentSize > MAX_PROXY_CLASS_CACHE_SIZE) {
-                            int toRemove = currentSize / 4;
-                            java.util.Iterator<?> it = PROXY_CLASS_CACHE.keySet().iterator();
-                            int removed = 0;
-                            while (it.hasNext() && removed < toRemove) {
-                                it.next();
-                                it.remove();
-                                removed++;
-                            }
+            // [FIX] P1-4: 改进代理类缓存驱逐逻辑，使用部分驱逐替代全量清空，避免冷缓存尖峰
+            if (PROXY_CLASS_CACHE.size() > MAX_PROXY_CLASS_CACHE_SIZE) {
+                EVICT_LOCK.lock();
+                try {
+                    int currentSize = PROXY_CLASS_CACHE.size();
+                    if (currentSize > MAX_PROXY_CLASS_CACHE_SIZE) {
+                        // 部分驱逐：移除最旧的 64 个条目，而非清空全部
+                        // ConcurrentHashMap 迭代顺序近似插入顺序
+                        int evictCount = Math.min(64, currentSize / 4);
+                        int removed = 0;
+                        java.util.Iterator<Class<?>> it = PROXY_CLASS_CACHE.keySet().iterator();
+                        while (it.hasNext() && removed < evictCount) {
+                            it.next();
+                            it.remove();
+                            removed++;
                         }
-                    } finally {
-                        EVICTING.set(false);
+                        log.debug("Evicted {} proxy class cache entries (was size {})", removed, currentSize);
                     }
+                } finally {
+                    EVICT_LOCK.unlock();
                 }
             }
             Class<?> proxyClass = PROXY_CLASS_CACHE.computeIfAbsent(stmtClass,
                 clz -> Proxy.getProxyClass(clz.getClassLoader(), clz.getInterfaces()));
             try {
                 return proxyClass.getConstructor(InvocationHandler.class)
-                    .newInstance(new PreparedStatementTimingHandler(stmt, sql));
+                    .newInstance(new PreparedStatementTimingHandler(stmt, sql, slowQueryThresholdMs));
             } catch (ReflectiveOperationException e) {
                 // 回退到直接创建代理
                 return Proxy.newProxyInstance(stmtClass.getClassLoader(), stmtClass.getInterfaces(),
-                    new PreparedStatementTimingHandler(stmt, sql));
+                    new PreparedStatementTimingHandler(stmt, sql, slowQueryThresholdMs));
             }
         }
     }
 
-    private class PreparedStatementTimingHandler implements InvocationHandler {
+    private static class PreparedStatementTimingHandler implements InvocationHandler {
 
         private static final String SLOW_QUERY_MARKER = "[SLOW QUERY]";
         private final Object target;
         private final String sql;
+        private final long slowQueryThresholdMs;
 
         @SuppressFBWarnings("EI_EXPOSE_REP2")
-        PreparedStatementTimingHandler(Object target, String sql) {
+        PreparedStatementTimingHandler(Object target, String sql, long slowQueryThresholdMs) {
             this.target = target;
             this.sql = sql;
+            this.slowQueryThresholdMs = slowQueryThresholdMs;
         }
 
         @Override

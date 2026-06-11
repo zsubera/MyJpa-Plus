@@ -40,10 +40,9 @@ final class EntityFieldExtractor<T> {
     /** 采样概率分母——每 1024 次调用检查一次缓存大小 */
     private static final int CACHE_CHECK_SAMPLING = 1024;
 
-    /** 自动生成 ID 字段检测结果的缓存。使用弱引用防止类加载器泄漏。 */
+    /** 自动生成 ID 字段检测结果的缓存。使用弱引用键防止类加载器泄漏。值使用强引用避免被立即 GC。 */
     private static final java.util.concurrent.ConcurrentMap<String, Boolean> AUTO_GENERATED_ID_CACHE =
-        new org.springframework.util.ConcurrentReferenceHashMap<>(16,
-            org.springframework.util.ConcurrentReferenceHashMap.ReferenceType.WEAK);
+        new java.util.concurrent.ConcurrentHashMap<>(16);
 
     private final Class<T> entityClass;
 
@@ -150,23 +149,30 @@ final class EntityFieldExtractor<T> {
     }
 
     /**
-     * 从实体类层次结构中获取所有字段，包括继承的字段。
+     * 从实体类层次结构中获取所有字段，包括继承的字段。结果使用 FIELD_CACHE 缓存。
      *
      * @param clazz 要扫描的类
      * @return 所有字段列表（不包括静态和合成字段）
      */
     private static List<Field> getAllFields(Class<?> clazz) {
-        List<Field> fields = new ArrayList<>();
-        Class<?> current = clazz;
-        while (current != null && current != Object.class) {
-            for (Field f : current.getDeclaredFields()) {
-                if (!java.lang.reflect.Modifier.isStatic(f.getModifiers()) && !f.isSynthetic()) {
-                    fields.add(f);
+        return FIELD_CACHE.computeIfAbsent(clazz, cls -> {
+            List<Field> fields = new ArrayList<>();
+            Class<?> current = cls;
+            while (current != null && current != Object.class) {
+                for (Field f : current.getDeclaredFields()) {
+                    if (!java.lang.reflect.Modifier.isStatic(f.getModifiers()) && !f.isSynthetic()
+                        && !f.isAnnotationPresent(jakarta.persistence.Transient.class)
+                        && !f.isAnnotationPresent(jakarta.persistence.OneToMany.class)
+                        && !f.isAnnotationPresent(jakarta.persistence.ManyToOne.class)
+                        && !f.isAnnotationPresent(jakarta.persistence.ManyToMany.class)
+                        && !f.isAnnotationPresent(jakarta.persistence.OneToOne.class)) {
+                        fields.add(f);
+                    }
                 }
+                current = current.getSuperclass();
             }
-            current = current.getSuperclass();
-        }
-        return fields;
+            return List.copyOf(fields);
+        });
     }
 
     /**

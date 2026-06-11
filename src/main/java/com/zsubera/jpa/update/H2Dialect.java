@@ -17,7 +17,7 @@ import com.zsubera.jpa.update.EntityFieldExtractor.EntityFieldValue;
  * <p>
  * 标识符使用双引号转义，且转换为大写以匹配 H2 默认的大小写不敏感行为：{@code "IDENTIFIER"}
  */
-class H2Dialect implements DialectStrategy {
+final class H2Dialect implements DialectStrategy {
 
     @Override
     public String name() {
@@ -26,6 +26,9 @@ class H2Dialect implements DialectStrategy {
 
     @Override
     public String escapeIdentifier(String identifier) {
+        // H2 默认 DATABASE_TO_UPPER=true，标识符存储为大写。
+        // 使用双引号引用并转为大写以匹配默认行为。
+        // 若 H2 配置 DATABASE_TO_UPPER=false，需通过系统属性或方言扩展适配。
         return "\"" + identifier.toUpperCase(java.util.Locale.ROOT).replace("\"", "\"\"") + "\"";
     }
 

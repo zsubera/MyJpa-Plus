@@ -206,6 +206,9 @@ public final class PredicateHelper {
      * @return LIKE 谓词
      */
     public static Predicate like(Path<?> path, String fieldName, String value, CriteriaBuilder cb) {
+        if (value == null) {
+            return cb.conjunction();
+        }
         return cb.like(path.get(fieldName).as(String.class), value, LIKE_ESCAPE_CHAR);
     }
 
@@ -220,6 +223,9 @@ public final class PredicateHelper {
      * @return LIKE 谓词
      */
     public static Predicate like(Path<?> path, String fieldName, String value, CriteriaBuilder cb, char escapeChar) {
+        if (value == null) {
+            return cb.conjunction();
+        }
         return cb.like(path.get(fieldName).as(String.class), value, escapeChar);
     }
 
@@ -233,6 +239,9 @@ public final class PredicateHelper {
      * @return NOT LIKE 谓词
      */
     public static Predicate notLike(Path<?> path, String fieldName, String value, CriteriaBuilder cb) {
+        if (value == null) {
+            return cb.disjunction();
+        }
         return cb.notLike(path.get(fieldName).as(String.class), value, LIKE_ESCAPE_CHAR);
     }
 
@@ -247,6 +256,9 @@ public final class PredicateHelper {
      * @return NOT LIKE 谓词
      */
     public static Predicate notLike(Path<?> path, String fieldName, String value, CriteriaBuilder cb, char escapeChar) {
+        if (value == null) {
+            return cb.disjunction();
+        }
         return cb.notLike(path.get(fieldName).as(String.class), value, escapeChar);
     }
 
@@ -369,6 +381,9 @@ public final class PredicateHelper {
      */
     public static Predicate likeIgnoreCase(Path<?> path, String fieldName, String value, CriteriaBuilder cb,
         char escapeChar) {
+        if (value == null) {
+            return cb.conjunction();
+        }
         if (escapeChar != '\0') {
             return cb.like(cb.upper(path.get(fieldName).as(String.class)), value.toUpperCase(java.util.Locale.ROOT),
                 escapeChar);
@@ -542,11 +557,17 @@ public final class PredicateHelper {
             case LE:
                 return cb.lessThanOrEqualTo((Expression<Comparable>)fieldPath, (Comparable)node.value);
             case LIKE:
+                if (node.value == null) {
+                    return cb.conjunction();
+                }
                 if (node.escapeChar != '\0') {
                     return cb.like(fieldPath.as(String.class), (String)node.value, node.escapeChar);
                 }
                 return cb.like(fieldPath.as(String.class), (String)node.value);
             case NOT_LIKE:
+                if (node.value == null) {
+                    return cb.disjunction();
+                }
                 if (node.escapeChar != '\0') {
                     return cb.notLike(fieldPath.as(String.class), (String)node.value, node.escapeChar);
                 }
@@ -565,12 +586,11 @@ public final class PredicateHelper {
                     ((String)node.value).toUpperCase(java.util.Locale.ROOT));
             case LIKE_IGNORE_CASE:
                 if (node.value == null) {
-                    return cb.isNull(fieldPath);
-                } {
+                    return cb.conjunction();
+                }
                 char escape = node.escapeChar != '\0' ? node.escapeChar : LIKE_ESCAPE_CHAR;
                 return cb.like(cb.upper(fieldPath.as(String.class)),
                     ((String)node.value).toUpperCase(java.util.Locale.ROOT), escape);
-            }
             case IS_NULL:
                 return cb.isNull(fieldPath);
             case IS_NOT_NULL:

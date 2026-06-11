@@ -119,13 +119,16 @@ public class QueryMetricsCollector {
             return;
         }
 
-        // 防止指标存储无限增长：超过上限时跳过新查询名的记录
+        // 防止指标存储无限增长：超过上限时淘汰执行次数最少的条目
         if (metricsMap.size() >= MAX_METRICS_ENTRIES && !metricsMap.containsKey(queryName)) {
-            log.warn(
-                "QueryMetricsCollector: max entries ({}) reached, skipping metrics for '{}'. "
+            evictLeastUsed();
+            // 淘汰后仍然满了则跳过
+            if (metricsMap.size() >= MAX_METRICS_ENTRIES) {
+                log.warn("QueryMetricsCollector: max entries ({}) reached after eviction, skipping metrics for '{}'. "
                     + "This may indicate high-cardinality query names (e.g., dynamic queries with parameter values).",
-                MAX_METRICS_ENTRIES, queryName);
-            return;
+                    MAX_METRICS_ENTRIES, queryName);
+                return;
+            }
         }
 
         QueryMetrics metrics = metricsMap.computeIfAbsent(queryName, k -> new QueryMetrics());
@@ -191,6 +194,20 @@ public class QueryMetricsCollector {
     public long getExecutionCount(String queryName) {
         QueryMetrics metrics = metricsMap.get(queryName);
         return metrics != null ? metrics.count.sum() : 0;
+    }
+
+    /**
+     * 淘汰执行次数最少的条目，为新条目腾出空间。
+     * [FIX] P1-3: 使用概率淘汰替代 O(n) 遍历，避免高并发下的性能瓶颈。
+     */
+    private void evictLeastUsed() {
+        // 概率淘汰：随机选择一个条目移除，O(1) 时间复杂度
+        String[] keys = metricsMap.keySet().toArray(new String[0]);
+        if (keys.length > 0) {
+            String randomKey = keys[java.util.concurrent.ThreadLocalRandom.current().nextInt(keys.length)];
+            metricsMap.remove(randomKey);
+            log.debug("Evicted random metrics entry: '{}'", randomKey);
+        }
     }
 
     /**

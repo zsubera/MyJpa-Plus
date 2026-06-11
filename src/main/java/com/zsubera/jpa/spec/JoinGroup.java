@@ -240,6 +240,50 @@ public class JoinGroup<T, J> implements ConditionBuilder<J, JoinGroup<T, J>> {
     }
 
     /**
+     * 使用消费者构建嵌套 FETCH JOIN，自动关闭关联组。
+     *
+     * @param field 关联字段的方法引用
+     * @param config JoinGroup 配置消费者
+     * @param <J2> 关联实体类型
+     * @return 当前 JoinGroup 实例，支持链式调用
+     */
+    public <J2> JoinGroup<T, J> fetchJoin(SFunction<J, ?> field, Consumer<JoinGroup<T, J2>> config) {
+        if (field == null) {
+            throw new IllegalArgumentException("field must not be null");
+        }
+        if (config == null) {
+            throw new IllegalArgumentException("config must not be null");
+        }
+        ConditionNode.JoinNode nestedJoin =
+            new ConditionNode.JoinNode(LambdaUtils.getPropertyName(field), ConditionNode.JoinType.FETCH);
+        joinNode.innerConditions.add(nestedJoin);
+        config.accept(new JoinGroup<>(root, nestedJoin));
+        return this;
+    }
+
+    /**
+     * 使用消费者构建嵌套 LEFT FETCH JOIN，自动关闭关联组。
+     *
+     * @param field 关联字段的方法引用
+     * @param config JoinGroup 配置消费者
+     * @param <J2> 关联实体类型
+     * @return 当前 JoinGroup 实例，支持链式调用
+     */
+    public <J2> JoinGroup<T, J> leftFetchJoin(SFunction<J, ?> field, Consumer<JoinGroup<T, J2>> config) {
+        if (field == null) {
+            throw new IllegalArgumentException("field must not be null");
+        }
+        if (config == null) {
+            throw new IllegalArgumentException("config must not be null");
+        }
+        ConditionNode.JoinNode nestedJoin =
+            new ConditionNode.JoinNode(LambdaUtils.getPropertyName(field), ConditionNode.JoinType.LEFT_FETCH);
+        joinNode.innerConditions.add(nestedJoin);
+        config.accept(new JoinGroup<>(root, nestedJoin));
+        return this;
+    }
+
+    /**
      * 使用消费者构建 JOIN 内的 OR 条件组，自动关闭组。
      *
      * @param config OrJoinGroup 配置消费者

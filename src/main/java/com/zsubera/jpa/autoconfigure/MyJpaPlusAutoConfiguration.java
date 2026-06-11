@@ -6,9 +6,11 @@ import com.zsubera.jpa.repository.SoftDeleteJpaRepository;
 import com.zsubera.jpa.template.MyJpaTemplate;
 import com.zsubera.jpa.util.InClauseBuilder;
 import com.zsubera.jpa.util.LambdaUtils;
+import com.zsubera.jpa.util.QueryTimeoutHelper;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import jakarta.persistence.EntityManager;
 import java.lang.invoke.SerializedLambda;
+import java.lang.reflect.InaccessibleObjectException;
 import java.lang.reflect.Method;
 import javax.sql.DataSource;
 import org.slf4j.Logger;
@@ -42,6 +44,7 @@ import org.springframework.lang.NonNull;
  * <li>{@code myjpa-plus.query.in-clause-max-size} — IN 子句最大参数数量（默认：1000）
  * <li>{@code myjpa-plus.query.in-clause-hard-limit} — IN 子句硬限制（默认：5000）
  * <li>{@code myjpa-plus.query.lambda-cache-size} — Lambda 缓存大小（默认：4096）
+ * <li>{@code myjpa-plus.query.default-timeout-seconds} — 查询超时时间（秒），-1 禁用（默认：30）
  * <li>{@code myjpa-plus.monitoring.enabled} — 启用 SQL 慢查询监控（默认：false）
  * <li>{@code myjpa-plus.monitoring.slow-query-threshold-ms} — 慢查询阈值，单位毫秒（默认：1000）
  * </ul>
@@ -64,12 +67,24 @@ public class MyJpaPlusAutoConfiguration {
         SoftDeleteJpaRepository.setAutoFilterEnabled(properties.getSoftDelete().isAutoFilter());
         SoftDeleteJpaRepository.setBlockUnconditionalDelete(properties.getSoftDelete().isBlockUnconditionalDelete());
 
-        // 应用 IN 子句配置
-        InClauseBuilder.setMaxInClauseSize(properties.getQuery().getInClauseMaxSize());
-        InClauseBuilder.setHardLimit(properties.getQuery().getInClauseHardLimit());
+        // 应用 IN 子句配置（原子替换 Config，消除竞态条件）
+        // 跨字段校验：hardLimit 必须 >= maxInClauseSize
+        int inMax = properties.getQuery().getInClauseMaxSize();
+        int inHard = properties.getQuery().getInClauseHardLimit();
+        if (inHard < inMax) {
+            throw new IllegalArgumentException(
+                "inClauseHardLimit (" + inHard + ") must be >= inClauseMaxSize (" + inMax + ")");
+        }
+        InClauseBuilder.setConfig(new InClauseBuilder.Config(inMax, inHard));
 
         // 应用 Lambda 缓存配置
         LambdaUtils.setMaxCacheSize(properties.getQuery().getLambdaCacheSize());
+
+        // 应用查询超时配置到全局静态助手
+        int timeout = properties.getQuery().getDefaultTimeoutSeconds();
+        if (timeout > 0 || timeout == -1) {
+            QueryTimeoutHelper.setDefaultTimeoutSeconds(timeout);
+        }
 
         log.info("MyJpa-Plus AutoConfiguration initialized");
         if (log.isDebugEnabled()) {
@@ -84,6 +99,7 @@ public class MyJpaPlusAutoConfiguration {
             log.debug("  query.in-clause-max-size = {}", properties.getQuery().getInClauseMaxSize());
             log.debug("  query.in-clause-hard-limit = {}", properties.getQuery().getInClauseHardLimit());
             log.debug("  query.lambda-cache-size = {}", properties.getQuery().getLambdaCacheSize());
+            log.debug("  query.default-timeout-seconds = {}", properties.getQuery().getDefaultTimeoutSeconds());
         }
     }
 
@@ -111,13 +127,14 @@ public class MyJpaPlusAutoConfiguration {
                 Method writeReplace = SerializedLambda.class.getDeclaredMethod("writeReplace");
                 writeReplace.setAccessible(true);
             } catch (NoSuchMethodException e) {
-                // 不可能发生：writeReplace 是 SerializedLambda 的固有方法
                 log.warn("Unexpected: SerializedLambda.writeReplace() not found. LambdaUtils may not work correctly.");
-            } catch (SecurityException e) {
+            } catch (InaccessibleObjectException | SecurityException e) {
                 log.warn(
-                    "Java module system restriction detected. LambdaUtils uses reflection on SerializedLambda.writeReplace() "
-                        + "which may fail at runtime. If you encounter InaccessibleObjectException, add this JVM argument: "
-                        + "--add-opens java.base/java.lang.invoke=ALL-UNNAMED");
+                    "Java module system restriction detected. LambdaUtils uses reflection on SerializedLambda.writeReplace(). "
+                        + "All lambda-based property name resolution will fail at runtime. "
+                        + "Fix: add this JVM argument: --add-opens java.base/java.lang.invoke=ALL-UNNAMED");
+                log.warn("Without the --add-opens argument, any code using SFunction method references "
+                    + "(e.g., QuerySpec, UpdateSpec, ProjectionSpec) will throw MyJpaPlusException with the fix suggestion.");
             }
         }
     }

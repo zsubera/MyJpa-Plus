@@ -9,7 +9,6 @@ import java.security.SecureRandom;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
-import java.util.concurrent.atomic.AtomicInteger;
 import javax.crypto.Cipher;
 import javax.crypto.SecretKeyFactory;
 import javax.crypto.spec.GCMParameterSpec;
@@ -84,8 +83,8 @@ public class EncryptConverter implements AttributeConverter<String, String> {
     /** 按版本缓存的密钥规范，避免重复读取环境变量和 KDF 派生。 */
     private static final ConcurrentMap<String, SecretKeySpec> KEY_CACHE = new ConcurrentHashMap<>();
 
-    /** 当前缓存中的密钥版本数（用于无竞态的大小限制检查） */
-    private static final AtomicInteger KEY_CACHE_SIZE = new AtomicInteger(0);
+    // [FIX] P2-1: 移除未使用的 KEY_CACHE_SIZE AtomicInteger（死代码），
+    // 实际大小检查使用 KEY_CACHE.size()
 
     /** 缓存的密钥规范最大数量，防止恶意版本前缀导致内存耗尽。 */
     private static final int MAX_KEY_CACHE_SIZE = 16;
@@ -104,6 +103,21 @@ public class EncryptConverter implements AttributeConverter<String, String> {
 
     /** 密钥版本缓存刷新间隔（毫秒），默认 5 分钟。 */
     private static final long KEY_VERSION_REFRESH_INTERVAL_MS = 300_000L;
+
+    // [FIX] P1-2: 使用专用线程池替代 ForkJoinPool.commonPool()，避免 PBKDF2 CPU 密集操作阻塞公共线程池
+    // [FIX] P2-1: 添加 JVM shutdown hook，确保应用退出时线程池被正确关闭
+    private static final java.util.concurrent.ExecutorService WARM_UP_EXECUTOR =
+        java.util.concurrent.Executors.newFixedThreadPool(1, r -> {
+            Thread t = new Thread(r, "encrypt-key-warmup");
+            t.setDaemon(true);
+            return t;
+        });
+
+    static {
+        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+            WARM_UP_EXECUTOR.shutdownNow();
+        }, "encrypt-key-warmup-shutdown"));
+    }
 
     /**
      * 开发环境默认盐值。仅用于未配置 {@code MYJPA_ENCRYPT_SALT} 的非生产环境。
@@ -125,6 +139,71 @@ public class EncryptConverter implements AttributeConverter<String, String> {
         cachedKeyVersion = null;
         lastKeyVersionRefresh = 0;
         keyValidated = false;
+    }
+
+    // [FIX] P1-2: 添加异步预热密钥缓存方法，减少首次加密/解密操作的延迟
+
+    /**
+     * 异步预热密钥缓存。在应用启动后调用此方法可避免首次请求的延迟。
+     *
+     * <p>
+     * PBKDF2 密钥派生耗时约 100ms，首次加密/解密操作会因此产生较高延迟。
+     * 调用此方法可在后台线程中预先执行密钥派生，将结果缓存以供后续使用。
+     *
+     * <p>
+     * 使用示例：
+     *
+     * <pre>{@code
+     * @Configuration
+     * public class AppConfig {
+     *     @Bean
+     *     public ApplicationRunner keyWarmUpRunner() {
+     *         return args -> EncryptConverter.warmUpKeyCache();
+     *     }
+     * }
+     * }</pre>
+     *
+     * <p>
+     * 此方法在后台线程中执行密钥派生，不阻塞主线程。如果密钥未配置，会记录警告日志。
+     */
+    public static void warmUpKeyCache() {
+        // [FIX] P1-2: 使用专用线程池而非 ForkJoinPool.commonPool()，避免 PBKDF2 阻塞公共线程池
+        java.util.concurrent.CompletableFuture.runAsync(() -> {
+            try {
+                String version = getKeyVersion();
+                getKeySpec(version);
+                log.info("Encryption key cache warmed up for version: {}", version);
+            } catch (Exception e) {
+                log.warn("Failed to warm up encryption key cache: {}", e.getMessage());
+            }
+        }, WARM_UP_EXECUTOR);
+    }
+
+    /**
+     * 同步预热密钥缓存。在应用启动时调用此方法确保密钥已就绪。
+     *
+     * <p>
+     * 与 {@link #warmUpKeyCache()} 不同，此方法是同步执行的，会阻塞直到密钥派生完成。
+     * 适用于需要确保密钥在首次使用前已就绪的场景。
+     *
+     * <p>
+     * 使用示例：
+     *
+     * <pre>{@code
+     * @PostConstruct
+     * public void init() {
+     *     EncryptConverter.warmUpKeyCacheSync();
+     * }
+     * }</pre>
+     */
+    public static void warmUpKeyCacheSync() {
+        try {
+            String version = getKeyVersion();
+            getKeySpec(version);
+            log.info("Encryption key cache warmed up synchronously for version: {}", version);
+        } catch (Exception e) {
+            log.warn("Failed to warm up encryption key cache synchronously: {}", e.getMessage());
+        }
     }
 
     /**
@@ -397,8 +476,13 @@ public class EncryptConverter implements AttributeConverter<String, String> {
             }
         }
 
-        // 单密钥模式：如果指定了版本但没有找到对应密钥，使用主密钥
+        // 单密钥模式：如果指定了版本但没有找到对应密钥，抛出明确错误而非使用整个多密钥字符串
         if (version != null && !"v1".equals(version) && !"default".equals(version)) {
+            if (MULTI_KEY_PATTERN.matcher(allKeys).matches()) {
+                throw new MyJpaPlusException("Key version '" + version + "' not found in multi-key configuration. "
+                    + "Available versions must match 'vN:key' format. " + "Set the correct key version via "
+                    + KEY_VERSION_ENV + " or " + KEY_VERSION_PROPERTY + ".");
+            }
             logVersionMismatch(version);
         }
         validateKeyLength(allKeys);
@@ -479,7 +563,7 @@ public class EncryptConverter implements AttributeConverter<String, String> {
                 + "For production, set environment variable {} or system property {}. "
                 + "This salt is publicly visible in source code and must NOT be used in production.",
             SALT_ENV, SALT_PROPERTY);
-        return DEV_SALT;
+        return DEV_SALT.clone();
     }
 
     /**
@@ -505,15 +589,30 @@ public class EncryptConverter implements AttributeConverter<String, String> {
             return true;
         }
         String profile = System.getProperty("spring.profiles.active", "");
-        if (profile.contains("prod") || profile.contains("production")) {
+        if (isProdProfile(profile)) {
             return true;
         }
         profile = System.getenv("SPRING_PROFILES_ACTIVE");
-        if (profile != null && (profile.contains("prod") || profile.contains("production"))) {
+        if (profile != null && isProdProfile(profile)) {
             return true;
         }
         profile = System.getenv("SPRING_PROFILES");
-        return profile != null && (profile.contains("prod") || profile.contains("production"));
+        return profile != null && isProdProfile(profile);
+    }
+
+    /**
+     * 检查 profile 字符串是否包含生产环境标识。
+     * 使用精确匹配避免 "reproduction" 等误判。
+     */
+    private static boolean isProdProfile(String profile) {
+        String lower = profile.toLowerCase(java.util.Locale.ROOT);
+        // 逗号分隔多 profile 支持
+        for (String p : lower.split("[,\\s]+")) {
+            if ("prod".equals(p) || "production".equals(p)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**
@@ -537,11 +636,12 @@ public class EncryptConverter implements AttributeConverter<String, String> {
      * @throws IllegalArgumentException 如果 encryptedValue 为 null
      * @throws MyJpaPlusException 如果解密或加密失败
      */
-    public String reEncrypt(String encryptedValue) {
+    public static String reEncrypt(String encryptedValue) {
         if (encryptedValue == null) {
             throw new IllegalArgumentException("encryptedValue must not be null");
         }
-        String decrypted = convertToEntityAttribute(encryptedValue);
-        return convertToDatabaseColumn(decrypted);
+        EncryptConverter instance = new EncryptConverter();
+        String decrypted = instance.convertToEntityAttribute(encryptedValue);
+        return instance.convertToDatabaseColumn(decrypted);
     }
 }

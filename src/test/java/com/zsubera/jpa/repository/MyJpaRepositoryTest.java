@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.*;
 
 import java.util.List;
 import java.util.Optional;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
@@ -20,12 +21,21 @@ import org.springframework.test.context.ContextConfiguration;
 class MyJpaRepositoryTest {
 
     @SpringBootApplication
-    @EntityScan(basePackageClasses = MyJpaTestEntity.class)
-    @EnableJpaRepositories(basePackageClasses = MyJpaTestRepository.class)
+    @EntityScan(basePackageClasses = {MyJpaTestEntity.class, SimpleTestEntity.class})
+    @EnableJpaRepositories(basePackageClasses = {MyJpaTestRepository.class, SimpleTestRepository.class})
     static class TestConfig {}
 
     @Autowired
     private MyJpaTestRepository repository;
+
+    @Autowired
+    private SimpleTestRepository simpleRepository;
+
+    @BeforeEach
+    void setUp() {
+        simpleRepository.deleteAll();
+        simpleRepository.flush();
+    }
 
     @Test
     void testFindNotDeletedByIdReturnsActiveEntity() {
@@ -165,5 +175,46 @@ class MyJpaRepositoryTest {
         Page<MyJpaTestEntity> page = repository.findNotDeletedAll(
             (Specification<MyJpaTestEntity>)(root, query, cb) -> cb.conjunction(), PageRequest.of(0, 10));
         assertEquals(2, page.getTotalElements());
+    }
+
+    // [FIX] P1-4: 测试无 @SoftDelete 实体的 findNotDeletedOne(null) 不会全表加载
+    @Test
+    void testFindNotDeletedOneNullSpecWithoutSoftDelete() {
+        SimpleTestEntity e1 = new SimpleTestEntity();
+        e1.setName("first");
+        simpleRepository.save(e1);
+
+        SimpleTestEntity e2 = new SimpleTestEntity();
+        e2.setName("second");
+        simpleRepository.save(e2);
+
+        // findNotDeletedOne(null) 对无 @SoftDelete 的实体应返回第一个实体，而非加载全表
+        Optional<SimpleTestEntity> result = simpleRepository.findNotDeletedOne(null);
+        assertTrue(result.isPresent(), "Should find at least one entity");
+        assertEquals("first", result.get().getName());
+    }
+
+    // [FIX] P1-4: 测试无 @SoftDelete 实体的 findNotDeletedOne(null) 空表返回 empty
+    @Test
+    void testFindNotDeletedOneNullSpecEmptyTable() {
+        Optional<SimpleTestEntity> result = simpleRepository.findNotDeletedOne(null);
+        assertFalse(result.isPresent(), "Should return empty for empty table");
+    }
+
+    // [FIX] P1-4: 测试无 @SoftDelete 实体的 findNotDeletedOne(spec) 正常工作
+    @Test
+    void testFindNotDeletedOneWithSpecWithoutSoftDelete() {
+        SimpleTestEntity e1 = new SimpleTestEntity();
+        e1.setName("target");
+        simpleRepository.save(e1);
+
+        SimpleTestEntity e2 = new SimpleTestEntity();
+        e2.setName("other");
+        simpleRepository.save(e2);
+
+        Optional<SimpleTestEntity> result = simpleRepository
+            .findOne((Specification<SimpleTestEntity>)(root, query, cb) -> cb.equal(root.get("name"), "target"));
+        assertTrue(result.isPresent());
+        assertEquals("target", result.get().getName());
     }
 }

@@ -204,9 +204,9 @@ class SoftDeleteHelperTest {
 
     @Test
     void testEscapeIdentifierWithSchemaTable() {
-        // escapeIdentifier wraps the entire identifier in quotes, not individual segments
+        // [FIX] P1-3: escapeIdentifier now quotes each segment individually for proper SQL
         String result = SoftDeleteHelper.escapeIdentifier("schema.table");
-        assertEquals("\"schema.table\"", result);
+        assertEquals("\"schema\".\"table\"", result);
     }
 
     @Test
@@ -314,6 +314,40 @@ class SoftDeleteHelperTest {
         // notDeletedQuery returns a QuerySpec with soft delete filter
         var qs = SoftDeleteHelper.notDeletedQuery(SoftDeleteTestEntity.class);
         assertFalse(qs.conditions().isEmpty(), "notDeletedQuery should have at least one condition");
+    }
+
+    // [FIX] P1-3: 测试 escapeIdentifier 对简单标识符的转义
+    @Test
+    void testEscapeIdentifier_simpleIdentifier() {
+        assertEquals("\"my_column\"", SoftDeleteHelper.escapeIdentifier("my_column"));
+    }
+
+    // [FIX] P1-3: 测试 escapeIdentifier 对 schema.table 格式的分段转义
+    @Test
+    void testEscapeIdentifier_schemaQualified() {
+        assertEquals("\"myschema\".\"mytable\"", SoftDeleteHelper.escapeIdentifier("myschema.mytable"));
+    }
+
+    // [FIX] P1-3: 测试 escapeIdentifier 对 catalog.schema.table 格式的分段转义
+    @Test
+    void testEscapeIdentifier_catalogSchemaQualified() {
+        assertEquals("\"mycatalog\".\"myschema\".\"mytable\"",
+            SoftDeleteHelper.escapeIdentifier("mycatalog.myschema.mytable"));
+    }
+
+    // [FIX] P1-3: 测试 escapeIdentifier 拒绝包含非法字符的标识符
+    @Test
+    void testEscapeIdentifier_invalidCharactersThrows() {
+        assertThrows(IllegalArgumentException.class, () -> SoftDeleteHelper.escapeIdentifier("my column"));
+        assertThrows(IllegalArgumentException.class, () -> SoftDeleteHelper.escapeIdentifier("my-table"));
+        assertThrows(IllegalArgumentException.class, () -> SoftDeleteHelper.escapeIdentifier("'; DROP TABLE --"));
+    }
+
+    // [FIX] P1-3: 测试 escapeIdentifier 拒绝 null 和空字符串
+    @Test
+    void testEscapeIdentifier_nullOrEmptyThrows() {
+        assertThrows(IllegalArgumentException.class, () -> SoftDeleteHelper.escapeIdentifier(null));
+        assertThrows(IllegalArgumentException.class, () -> SoftDeleteHelper.escapeIdentifier(""));
     }
 
     private TestEntity newEntity(String name, int status) {

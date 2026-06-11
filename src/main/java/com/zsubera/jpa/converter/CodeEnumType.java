@@ -58,11 +58,12 @@ public class CodeEnumType implements UserType<Object>, DynamicParameterizedType 
         new org.springframework.util.ConcurrentReferenceHashMap<>(16,
             org.springframework.util.ConcurrentReferenceHashMap.ReferenceType.WEAK);
 
-    /** 哨兵字段，用于区分缓存中"未扫描"和"已扫描但未找到"的状态。使用专用哨兵而非反射获取字段名。 */
+    /** 哨兵值，用于区分缓存中"未扫描"和"已扫描但未找到"的状态。 */
     private static final Field NO_CODE_FIELD_SENTINEL;
 
     static {
         try {
+            // 使用本类的稳定字段作为哨兵——不会被重命名
             NO_CODE_FIELD_SENTINEL = CodeEnumType.class.getDeclaredField("enumClass");
         } catch (NoSuchFieldException e) {
             throw new ExceptionInInitializerError(e);

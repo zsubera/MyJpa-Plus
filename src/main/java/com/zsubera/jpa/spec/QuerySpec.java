@@ -127,17 +127,33 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
      * @return 包含参数值的缓存键字符串
      */
     public String cacheKey() {
-        StringBuilder sb = new StringBuilder();
+        // [FIX] P1-1: 使用明确的前缀和分隔符减少哈希碰撞风险
+        StringBuilder sb = new StringBuilder("Q:");
+        // Always include root-level conditions for cache key correctness,
+        // even when an or()/not() group is currently open.
+        if (!groupStack.isEmpty()) {
+            sb.append("ROOT(");
+            for (ConditionNode node : conditions) {
+                appendCacheKey(sb, node);
+            }
+            sb.append(")#NESTED(");
+        }
         for (ConditionNode node : currentGroup()) {
             appendCacheKey(sb, node);
+        }
+        if (!groupStack.isEmpty()) {
+            sb.append(")");
         }
         if (distinct) {
             sb.append("#DISTINCT");
         }
         if (!groupByFields.isEmpty()) {
             sb.append("#GROUPBY(");
-            for (String f : groupByFields) {
-                sb.append(f).append(",");
+            for (int i = 0; i < groupByFields.size(); i++) {
+                if (i > 0) {
+                    sb.append(",");
+                }
+                sb.append(groupByFields.get(i));
             }
             sb.append(")");
         }
@@ -146,8 +162,12 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
         }
         if (!orderNodes.isEmpty()) {
             sb.append("#ORDERBY(");
-            for (ConditionNode.OrderNode node : orderNodes) {
-                sb.append(node.fieldName).append(node.asc ? " ASC" : " DESC").append(",");
+            for (int i = 0; i < orderNodes.size(); i++) {
+                if (i > 0) {
+                    sb.append(",");
+                }
+                ConditionNode.OrderNode node = orderNodes.get(i);
+                sb.append(node.fieldName).append(node.asc ? "ASC" : "DESC");
             }
             sb.append(")");
         }
@@ -200,10 +220,12 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
             sb.append("COLLECTION(").append(cn.fieldName).append(",").append(cn.op).append(")");
         } else if (node instanceof ConditionNode.ExistsNode<?> en) {
             sb.append(en.negate ? "NOTEXISTS(" : "EXISTS(");
-            sb.append(en.subEntity.getSimpleName()).append(")");
+            sb.append(en.subEntity.getSimpleName());
+            sb.append(",condHash=").append(en.config.hashCode()).append(")");
         } else if (node instanceof ConditionNode.InSubQueryNode<?> isn) {
             sb.append(isn.negate ? "NOTINSUBQUERY(" : "INSUBQUERY(");
-            sb.append(isn.outerFieldName).append(",").append(isn.subEntity.getSimpleName()).append(")");
+            sb.append(isn.outerFieldName).append(",").append(isn.subEntity.getSimpleName());
+            sb.append(",condHash=").append(isn.config.hashCode()).append(")");
         } else if (node instanceof ConditionNode.NegateNode nn) {
             sb.append("NOT(");
             appendCacheKey(sb, nn.inner());
@@ -221,20 +243,18 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
         } else if (value instanceof Collection<?> col) {
             sb.append("COLLECTION[").append(col.size()).append("]");
             for (Object item : col) {
-                sb.append(":").append(item);
+                String s = String.valueOf(item);
+                sb.append('|').append(s.length()).append('|').append(s);
             }
         } else if (value instanceof Object[] arr) {
             sb.append("ARRAY[").append(arr.length).append("]");
             for (Object item : arr) {
-                sb.append(":").append(item);
-            }
-        } else if (value instanceof Comparable<?>[] arr) {
-            sb.append("BETWEEN[").append(arr.length).append("]");
-            for (Object item : arr) {
-                sb.append(":").append(item);
+                String s = String.valueOf(item);
+                sb.append('|').append(s.length()).append('|').append(s);
             }
         } else {
-            sb.append(value);
+            String s = String.valueOf(value);
+            sb.append('|').append(s.length()).append('|').append(s);
         }
     }
 
@@ -918,12 +938,16 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
         if (other == null) {
             return this;
         }
-        // 验证另一个 spec 的组已正确关闭，防止状态不一致
+        // 验证两个 spec 的组都已正确关闭，防止状态不一致
+        if (!this.groupStack.isEmpty()) {
+            throw new IllegalStateException(
+                "Cannot merge into a QuerySpec with unclosed or() groups. Close all groups with endOr() before calling then().");
+        }
         if (!other.groupStack.isEmpty()) {
             throw new IllegalStateException(
                 "Cannot merge a QuerySpec with unclosed or() groups. Close all groups with endOr() before calling then().");
         }
-        this.conditions.addAll(other.conditions);
+        this.conditions.addAll(new ArrayList<>(other.conditions));
         if (other.distinct) {
             this.distinct = true;
         }

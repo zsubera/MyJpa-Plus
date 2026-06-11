@@ -136,9 +136,9 @@ public class MyJpaPlusProperties {
         private int lambdaCacheSize = 4096;
 
         /**
-         * 查询超时默认时间（秒）。设置后所有查询将自动应用此超时。 设置为 {@code -1} 表示不设置默认超时。 默认值：{@code -1}（不设置）
+         * 查询超时默认时间（秒）。设置后所有查询将自动应用此超时。 设置为 {@code -1} 表示不设置默认超时。 默认值：{@code 30}（30秒）
          */
-        private int defaultTimeoutSeconds = -1;
+        private int defaultTimeoutSeconds = 30;
 
         public int getMaxResults() {
             return maxResults;
@@ -181,11 +181,6 @@ public class MyJpaPlusProperties {
             if (inClauseMaxSize <= 0) {
                 throw new IllegalArgumentException("inClauseMaxSize must be positive");
             }
-            // 跨字段校验：maxInClauseSize 必须 <= hardLimit
-            if (this.inClauseHardLimit > 0 && inClauseMaxSize > this.inClauseHardLimit) {
-                throw new IllegalArgumentException("inClauseMaxSize (" + inClauseMaxSize
-                    + ") must be <= inClauseHardLimit (" + this.inClauseHardLimit + ")");
-            }
             this.inClauseMaxSize = inClauseMaxSize;
         }
 
@@ -196,11 +191,6 @@ public class MyJpaPlusProperties {
         public void setInClauseHardLimit(int inClauseHardLimit) {
             if (inClauseHardLimit <= 0) {
                 throw new IllegalArgumentException("inClauseHardLimit must be positive");
-            }
-            // 跨字段校验：hardLimit 必须 >= maxInClauseSize
-            if (inClauseHardLimit < this.inClauseMaxSize) {
-                throw new IllegalArgumentException("inClauseHardLimit (" + inClauseHardLimit
-                    + ") must be >= inClauseMaxSize (" + this.inClauseMaxSize + ")");
             }
             this.inClauseHardLimit = inClauseHardLimit;
         }

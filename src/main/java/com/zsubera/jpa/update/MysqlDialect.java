@@ -18,7 +18,7 @@ import com.zsubera.jpa.update.EntityFieldExtractor.EntityFieldValue;
  * <p>
  * 标识符使用反引号转义：{@code `identifier`}
  */
-class MysqlDialect implements DialectStrategy {
+final class MysqlDialect implements DialectStrategy {
 
     @Override
     public String name() {
@@ -56,18 +56,33 @@ class MysqlDialect implements DialectStrategy {
         sql.append(")");
 
         // ON DUPLICATE KEY UPDATE `col` = `_new`.`col`
+        if (updateColumns.isEmpty()) {
+            // 无更新字段时使用 INSERT IGNORE 语义：忽略冲突，不执行任何更新
+            sql = new StringBuilder("INSERT IGNORE INTO ").append(escapedTable);
+            sql.append(" (");
+            List<String> escapedInsertCols2 = new ArrayList<>();
+            for (String col : insertColumns) {
+                escapedInsertCols2.add(escapeIdentifier(col));
+            }
+            sql.append(String.join(", ", escapedInsertCols2));
+            sql.append(") VALUES (");
+            List<Object> params2 = new ArrayList<>();
+            for (int i = 0; i < insertFieldValues.size(); i++) {
+                if (i > 0) {
+                    sql.append(", ");
+                }
+                sql.append("?");
+                params2.add(insertFieldValues.get(i).value());
+            }
+            sql.append(")");
+            return new SqlWithParams(sql.toString(), params2);
+        }
         sql.append(" ON DUPLICATE KEY UPDATE ");
         List<String> setClauses = new ArrayList<>();
         String escapedAlias = escapeIdentifier(rowAlias);
-        if (updateColumns.isEmpty()) {
-            // 无更新字段时使用 no-op：`col` = `col`
-            String firstCol = escapedInsertCols.get(0);
-            setClauses.add(firstCol + " = " + firstCol);
-        } else {
-            for (String col : updateColumns) {
-                String escaped = escapeIdentifier(col);
-                setClauses.add(escaped + " = " + escapedAlias + "." + escaped);
-            }
+        for (String col : updateColumns) {
+            String escaped = escapeIdentifier(col);
+            setClauses.add(escaped + " = " + escapedAlias + "." + escaped);
         }
         sql.append(String.join(", ", setClauses));
         return new SqlWithParams(sql.toString(), params);

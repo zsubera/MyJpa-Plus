@@ -29,7 +29,10 @@ class BulkOperationTemplate {
     private static final Logger log = LoggerFactory.getLogger(BulkOperationTemplate.class);
 
     /** 批量执行最大迭代次数保护，防止无限循环。 */
-    private static final int MAX_BATCH_ITERATIONS = 10000;
+    private static final int DEFAULT_maxBatchIterations = 10000;
+
+    // [FIX] P2-3: 最大迭代次数可配置
+    private volatile int maxBatchIterations = DEFAULT_maxBatchIterations;
 
     private final EntityManager entityManager;
     private volatile int maxBulkOperationRows;
@@ -58,16 +61,26 @@ class BulkOperationTemplate {
         this.maxBulkOperationRows = maxBulkOperationRows;
     }
 
+    // [FIX] P2-3: 设置最大批量迭代次数
+    void setMaxBatchIterations(int maxBatchIterations) {
+        if (maxBatchIterations <= 0) {
+            throw new IllegalArgumentException("maxBatchIterations must be positive");
+        }
+        this.maxBatchIterations = maxBatchIterations;
+    }
+
     // ---- 单次执行 ----
 
     /**
      * 使用给定的 {@link UpdateSpec} 执行批量更新。
      *
+     * <p>
+     * 事务由调用方（{@link MyJpaTemplate}）的 {@code @Transactional} 注解管理。
+     *
      * @param spec 要执行的 UpdateSpec
      * @param <T> 实体类型
      * @return 受影响的行数
      */
-    @org.springframework.transaction.annotation.Transactional(rollbackFor = Exception.class)
     public <T> int execute(UpdateSpec<T> spec) {
         if (spec == null) {
             throw new IllegalArgumentException("spec must not be null");
@@ -78,11 +91,13 @@ class BulkOperationTemplate {
     /**
      * 使用给定的 {@link DeleteSpec} 执行批量删除。
      *
+     * <p>
+     * 事务由调用方（{@link MyJpaTemplate}）的 {@code @Transactional} 注解管理。
+     *
      * @param spec 要执行的 DeleteSpec
      * @param <T> 实体类型
      * @return 受影响的行数
      */
-    @org.springframework.transaction.annotation.Transactional(rollbackFor = Exception.class)
     public <T> int execute(DeleteSpec<T> spec) {
         if (spec == null) {
             throw new IllegalArgumentException("spec must not be null");
@@ -93,11 +108,13 @@ class BulkOperationTemplate {
     /**
      * 使用给定的 {@link MergeSpec} 执行 UPSERT 操作。
      *
+     * <p>
+     * 事务由调用方（{@link MyJpaTemplate}）的 {@code @Transactional} 注解管理。
+     *
      * @param spec 要执行的 MergeSpec
      * @param <T> 实体类型
      * @return 受影响的行数
      */
-    @org.springframework.transaction.annotation.Transactional(rollbackFor = Exception.class)
     public <T> int execute(MergeSpec<T> spec) {
         if (spec == null) {
             throw new IllegalArgumentException("spec must not be null");
@@ -115,7 +132,6 @@ class BulkOperationTemplate {
      * @param <T> 实体类型
      * @return 受影响的行数
      */
-    @org.springframework.transaction.annotation.Transactional(rollbackFor = Exception.class)
     public <T> int executeWithMaxRows(UpdateSpec<T> spec, int maxRows) {
         if (spec == null) {
             throw new IllegalArgumentException("spec must not be null");
@@ -138,7 +154,6 @@ class BulkOperationTemplate {
      * @param <T> 实体类型
      * @return 受影响的行数
      */
-    @org.springframework.transaction.annotation.Transactional(rollbackFor = Exception.class)
     public <T> int executeWithMaxRows(DeleteSpec<T> spec, int maxRows) {
         if (spec == null) {
             throw new IllegalArgumentException("spec must not be null");
@@ -164,7 +179,6 @@ class BulkOperationTemplate {
      * @param <T> 实体类型
      * @return 受影响的总行数
      */
-    @org.springframework.transaction.annotation.Transactional(rollbackFor = Exception.class)
     public <T> int executeBatch(MergeSpec<T> mergeSpec, java.util.List<T> entities, int batchSize) {
         if (mergeSpec == null) {
             throw new IllegalArgumentException("mergeSpec must not be null");
@@ -188,7 +202,6 @@ class BulkOperationTemplate {
      * @param <T> 实体类型
      * @return 受影响的总行数
      */
-    @org.springframework.transaction.annotation.Transactional(rollbackFor = Exception.class)
     public <T> int executeBatch(UpdateSpec<T> spec, int batchSize) {
         if (spec == null) {
             throw new IllegalArgumentException("spec must not be null");
@@ -207,7 +220,6 @@ class BulkOperationTemplate {
      * @param <T> 实体类型
      * @return 受影响的总行数
      */
-    @org.springframework.transaction.annotation.Transactional(rollbackFor = Exception.class)
     public <T> int executeBatch(DeleteSpec<T> spec, int batchSize) {
         if (spec == null) {
             throw new IllegalArgumentException("spec must not be null");
@@ -238,9 +250,9 @@ class BulkOperationTemplate {
                 }
             }
             iteration++;
-            if (iteration >= MAX_BATCH_ITERATIONS) {
+            if (iteration >= maxBatchIterations) {
                 log.error("Batch {} reached maximum iterations ({}). Possible infinite loop. Total rows: {}",
-                    operationName, MAX_BATCH_ITERATIONS, total);
+                    operationName, maxBatchIterations, total);
                 break;
             }
         } while (batchResult > 0);
@@ -332,6 +344,7 @@ class BulkOperationTemplate {
         int failedBatchIndex = -1;
         Throwable failureCause = null;
         boolean shouldContinue = true;
+        int iteration = 0;
         while (shouldContinue) {
             int batchResult;
             try {
@@ -356,6 +369,13 @@ class BulkOperationTemplate {
             }
             if (batchResult < batchSize) {
                 shouldContinue = false;
+            }
+            // [FIX] P1-2: 添加最大迭代次数保护，防止 batchExecutor 始终返回 batchSize 时无限循环
+            iteration++;
+            if (iteration >= maxBatchIterations) {
+                log.error("Batch {} reached maximum iterations ({}). Possible infinite loop. Total rows: {}",
+                    operationName, maxBatchIterations, total);
+                break;
             }
         }
         return new BatchResult(total, batchCount, failedBatchIndex == -1, failedBatchIndex, failureCause);
@@ -415,9 +435,9 @@ class BulkOperationTemplate {
                     operationName, total);
             }
             iteration++;
-            if (iteration >= MAX_BATCH_ITERATIONS) {
+            if (iteration >= maxBatchIterations) {
                 log.error("Batch {} reached maximum iterations ({}). Possible infinite loop. Total rows: {}",
-                    operationName, MAX_BATCH_ITERATIONS, total);
+                    operationName, maxBatchIterations, total);
                 break;
             }
         } while (batchResult > 0);

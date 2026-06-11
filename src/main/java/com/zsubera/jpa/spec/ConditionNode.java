@@ -90,9 +90,7 @@ public sealed interface ConditionNode permits ConditionNode.SimpleNode, Conditio
             if (value == null) {
                 maskedValue = "null";
             } else if (value instanceof Object[] arr) {
-                maskedValue = "IN[" + arr.length + " items]";
-            } else if (value instanceof Comparable<?>[] arr) {
-                maskedValue = "BETWEEN[" + arr.length + " items]";
+                maskedValue = "ARRAY[" + arr.length + " items]";
             } else if (value instanceof Collection<?> col) {
                 maskedValue = "IN[" + col.size() + " items]";
             } else if (value instanceof String str) {
@@ -394,11 +392,17 @@ public sealed interface ConditionNode permits ConditionNode.SimpleNode, Conditio
             if (params == null) {
                 throw new IllegalArgumentException("params must not be null");
             }
-            // 验证函数名是否在白名单中，防止 SQL 注入
+            // 验证函数名是否在白名单中，防止 SQL 注入，同时确保是布尔函数
             String upperName = functionName.toUpperCase();
             if (!ConditionBuilder.SAFE_FUNCTION_NAMES.contains(upperName)) {
                 String msg = "Function not in whitelist: '" + functionName + "'. "
                     + "Only whitelisted functions are allowed. Contact administrator to add new functions.";
+                throw new com.zsubera.jpa.exception.MyJpaPlusException(msg,
+                    com.zsubera.jpa.exception.MyJpaPlusException.ErrorCode.SECURITY, null, null);
+            }
+            if (!ConditionBuilder.BOOLEAN_FUNCTION_NAMES.contains(upperName)) {
+                String msg = "Function must be a boolean-returning function: '" + functionName + "'. "
+                    + "Only boolean functions like IF, DECODE, COALESCE, NULLIF, NVL, JSONB_EXISTS, ST_CONTAINS are allowed in func().";
                 throw new com.zsubera.jpa.exception.MyJpaPlusException(msg,
                     com.zsubera.jpa.exception.MyJpaPlusException.ErrorCode.SECURITY, null, null);
             }

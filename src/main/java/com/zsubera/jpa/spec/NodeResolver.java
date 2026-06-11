@@ -1,5 +1,6 @@
 package com.zsubera.jpa.spec;
 
+import com.zsubera.jpa.exception.MyJpaPlusException;
 import jakarta.persistence.criteria.CriteriaBuilder;
 import jakarta.persistence.criteria.CriteriaQuery;
 import jakarta.persistence.criteria.Expression;
@@ -30,6 +31,9 @@ final class NodeResolver {
 
     private static final Logger log = LoggerFactory.getLogger(NodeResolver.class);
 
+    // [FIX] P1-4: 添加递归深度限制，防止 StackOverflowError
+    private static final int MAX_RECURSION_DEPTH = 50;
+
     private NodeResolver() {}
 
     /**
@@ -46,39 +50,66 @@ final class NodeResolver {
      */
     static Predicate resolveNode(ConditionNode node, Path<?> path, Path<?> rootPath, CriteriaQuery<?> query,
         CriteriaBuilder cb, Map<String, Join<?, ?>> joinCache, String pathPrefix) {
-        if (node instanceof ConditionNode.SimpleNode simpleNode) {
-            return resolveSimple(simpleNode, path, cb);
+        return resolveNodeWithDepth(node, path, rootPath, query, cb, joinCache, pathPrefix, 0);
+    }
+
+    /**
+     * 解析条件节点并转换为 Predicate（带深度限制）。
+     *
+     * @param node 条件节点
+     * @param path 当前路径
+     * @param rootPath 查询根路径（用于 EXISTS/IN 子查询关联）
+     * @param query Criteria 查询对象
+     * @param cb Criteria 构建器
+     * @param joinCache JOIN 缓存
+     * @param pathPrefix 路径前缀
+     * @param depth 当前递归深度
+     * @return 生成的 Predicate，如果节点无条件则返回 null
+     */
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    private static Predicate resolveNodeWithDepth(ConditionNode node, Path<?> path, Path<?> rootPath,
+        CriteriaQuery<?> query, CriteriaBuilder cb, Map<String, Join<?, ?>> joinCache, String pathPrefix, int depth) {
+        // [FIX] P1-4: 检查递归深度限制
+        if (depth > MAX_RECURSION_DEPTH) {
+            throw new MyJpaPlusException("Condition node recursion depth exceeded maximum limit (" + MAX_RECURSION_DEPTH
+                + "). This may indicate a circular condition tree or excessively "
+                + "nested condition structure. Please simplify your query conditions.");
         }
-        if (node instanceof ConditionNode.JoinNode joinNode) {
-            return resolveJoin(joinNode, path, rootPath, query, cb, joinCache, pathPrefix);
+
+        if (node instanceof ConditionNode.SimpleNode n) {
+            return resolveSimple(n, path, cb);
         }
-        if (node instanceof ConditionNode.OrNode orNode) {
-            return resolveOr(orNode, path, rootPath, query, cb, joinCache, pathPrefix);
+        if (node instanceof ConditionNode.JoinNode n) {
+            return resolveJoin(n, path, rootPath, query, cb, joinCache, pathPrefix, depth);
         }
-        if (node instanceof ConditionNode.AndNode andNode) {
-            return resolveAnd(andNode, path, rootPath, query, cb, joinCache, pathPrefix);
+        if (node instanceof ConditionNode.OrNode n) {
+            return resolveOr(n, path, rootPath, query, cb, joinCache, pathPrefix, depth);
         }
-        if (node instanceof ConditionNode.MultiLikeNode multiLikeNode) {
-            return resolveMultiLike(multiLikeNode, path, cb);
+        if (node instanceof ConditionNode.AndNode n) {
+            return resolveAnd(n, path, rootPath, query, cb, joinCache, pathPrefix, depth);
         }
-        if (node instanceof ConditionNode.CollectionNode collectionNode) {
-            return resolveCollection(collectionNode, path, cb);
+        if (node instanceof ConditionNode.MultiLikeNode n) {
+            return resolveMultiLike(n, path, cb);
         }
-        if (node instanceof ConditionNode.ExistsNode<?> existsNode) {
-            return resolveExists(existsNode, rootPath, query, cb);
+        if (node instanceof ConditionNode.CollectionNode n) {
+            return resolveCollection(n, path, cb);
         }
-        if (node instanceof ConditionNode.InSubQueryNode<?> inSubQueryNode) {
-            return resolveInSubQuery(inSubQueryNode, path, query, cb);
+        if (node instanceof ConditionNode.ExistsNode<?> n) {
+            return resolveExists(n, rootPath, query, cb);
         }
-        if (node instanceof ConditionNode.RawNode rawNode) {
-            return rawNode.fn.apply(path, cb);
+        if (node instanceof ConditionNode.InSubQueryNode<?> n) {
+            return resolveInSubQuery(n, path, query, cb);
         }
-        if (node instanceof ConditionNode.NegateNode negateNode) {
-            Predicate inner = resolveNode(negateNode.inner, path, rootPath, query, cb, joinCache, pathPrefix);
+        if (node instanceof ConditionNode.RawNode n) {
+            return n.fn.apply(path, cb);
+        }
+        if (node instanceof ConditionNode.NegateNode n) {
+            Predicate inner =
+                resolveNodeWithDepth(n.inner, path, rootPath, query, cb, joinCache, pathPrefix, depth + 1);
             return inner != null ? cb.not(inner) : null;
         }
-        if (node instanceof ConditionNode.FuncNode funcNode) {
-            return resolveFuncNode(funcNode, path, cb);
+        if (node instanceof ConditionNode.FuncNode n) {
+            return resolveFuncNode(n, path, cb);
         }
         throw new IllegalArgumentException("Unknown ConditionNode type: " + node.getClass().getName());
     }
@@ -93,40 +124,19 @@ final class NodeResolver {
         Expression<?>[] args = new Expression[node.params.length];
         for (int i = 0; i < node.params.length; i++) {
             Object param = node.params[i];
-            // FuncNode 参数约定：params[0] 总是由 ConditionBuilder.func() 设置为字段名
-            // （通过 resolveProperty(field) 获取），后续参数为函数的额外参数（通过 cb.literal 绑定）。
-            // 此处使用 instanceof String 判断是安全的，因为字段名始终是 String 类型。
             if (param instanceof String fieldName && i == 0) {
                 args[i] = path.get(fieldName);
             } else {
                 args[i] = cb.literal(param);
             }
         }
-        Expression<Boolean> funcExpr;
-        // 如果函数名为已知的布尔函数，直接使用 Boolean.class 返回类型
-        // 否则包装为 isTrue() 处理（适用于返回非布尔类型的函数如 LENGTH、ABS 等）
-        if (isBooleanFunction(node.functionName)) {
-            funcExpr = cb.function(node.functionName, Boolean.class, args);
-            return cb.isTrue(funcExpr);
-        }
-        // 非布尔函数：尝试作为数值/字符串表达式，在 CriteriaBuilder 中直接返回
-        // 注意：func() 的设计初衷是布尔条件，非布尔函数需要额外的比较操作
-        // 这里保留原有行为以保持向后兼容，但记录警告
-        log.debug("func() called with non-boolean function '{}'. "
-            + "Result will be wrapped in isTrue() which may produce unexpected results. "
-            + "Consider using a boolean-returning function.", node.functionName);
-        funcExpr = cb.function(node.functionName, Boolean.class, args);
+        Expression<Boolean> funcExpr = cb.function(node.functionName, Boolean.class, args);
         return cb.isTrue(funcExpr);
-    }
-
-    private static boolean isBooleanFunction(String functionName) {
-        return "IF".equals(functionName) || "DECODE".equals(functionName) || "COALESCE".equals(functionName)
-            || "NULLIF".equals(functionName) || "CASE".equals(functionName) || "EXISTS".equals(functionName);
     }
 
     @SuppressWarnings({"unchecked", "rawtypes"})
     private static Predicate resolveJoin(ConditionNode.JoinNode node, Path<?> path, Path<?> rootPath,
-        CriteriaQuery<?> query, CriteriaBuilder cb, Map<String, Join<?, ?>> joinCache, String pathPrefix) {
+        CriteriaQuery<?> query, CriteriaBuilder cb, Map<String, Join<?, ?>> joinCache, String pathPrefix, int depth) {
         String fullPath = (pathPrefix != null && !pathPrefix.isEmpty() ? pathPrefix + "." : "") + node.fieldName;
 
         boolean isFetch =
@@ -139,8 +149,10 @@ final class NodeResolver {
         if (join != null) {
             boolean existingIsFetch = join instanceof jakarta.persistence.criteria.Fetch;
             if (!isFetch && existingIsFetch) {
-                // FETCH → 非 FETCH：fetch 是超集，复用安全
-                log.debug("Join path '{}' reusing existing fetch join (requested non-fetch).", fullPath);
+                // FETCH → 非 FETCH：fetch 是超集，复用安全，但记录警告以帮助调试
+                log.warn("Join path '{}' reusing existing fetch join (requested non-fetch). "
+                    + "This means conditions will be applied to a fetch join, which may change query semantics "
+                    + "(eager loading instead of lazy).", fullPath);
             } else if (isFetch && !existingIsFetch) {
                 // 非 FETCH → FETCH：用户明确要求急加载但缓存中是普通 join，会导致 N+1
                 throw new IllegalStateException("Join path '" + fullPath
@@ -164,7 +176,7 @@ final class NodeResolver {
 
         List<Predicate> innerPredicates = new ArrayList<>();
         for (ConditionNode inner : node.innerConditions) {
-            Predicate p = resolveNode(inner, join, rootPath, query, cb, joinCache, fullPath);
+            Predicate p = resolveNodeWithDepth(inner, join, rootPath, query, cb, joinCache, fullPath, depth + 1);
             if (p != null) {
                 innerPredicates.add(p);
             }
@@ -173,10 +185,10 @@ final class NodeResolver {
     }
 
     private static Predicate resolveOr(ConditionNode.OrNode node, Path<?> path, Path<?> rootPath,
-        CriteriaQuery<?> query, CriteriaBuilder cb, Map<String, Join<?, ?>> joinCache, String pathPrefix) {
+        CriteriaQuery<?> query, CriteriaBuilder cb, Map<String, Join<?, ?>> joinCache, String pathPrefix, int depth) {
         List<Predicate> childPredicates = new ArrayList<>();
         for (ConditionNode child : node.nodes) {
-            Predicate p = resolveNode(child, path, rootPath, query, cb, joinCache, pathPrefix);
+            Predicate p = resolveNodeWithDepth(child, path, rootPath, query, cb, joinCache, pathPrefix, depth + 1);
             if (p != null) {
                 childPredicates.add(p);
             }
@@ -191,10 +203,10 @@ final class NodeResolver {
     }
 
     private static Predicate resolveAnd(ConditionNode.AndNode node, Path<?> path, Path<?> rootPath,
-        CriteriaQuery<?> query, CriteriaBuilder cb, Map<String, Join<?, ?>> joinCache, String pathPrefix) {
+        CriteriaQuery<?> query, CriteriaBuilder cb, Map<String, Join<?, ?>> joinCache, String pathPrefix, int depth) {
         List<Predicate> childPredicates = new ArrayList<>();
         for (ConditionNode child : node.nodes) {
-            Predicate p = resolveNode(child, path, rootPath, query, cb, joinCache, pathPrefix);
+            Predicate p = resolveNodeWithDepth(child, path, rootPath, query, cb, joinCache, pathPrefix, depth + 1);
             if (p != null) {
                 childPredicates.add(p);
             }
@@ -276,30 +288,15 @@ final class NodeResolver {
     @SuppressWarnings({"unchecked", "rawtypes"})
     private static <S> Predicate resolveInSubQueryInternal(ConditionNode.InSubQueryNode<S> node, Path<?> outerPath,
         CriteriaQuery<?> query, CriteriaBuilder cb) {
-        Object[] selectInfo = SubQuerySpec.extractSelectInfo(node.subEntity, node.config, cb);
-        Class<?> selectType = (Class<?>)selectInfo[0];
-        String selectFieldName = (String)selectInfo[1];
-
-        jakarta.persistence.criteria.Subquery<?> subquery;
-        Root<S> subRoot;
-        if (selectType != null) {
-            subquery = query.subquery(selectType);
-            subRoot = (Root<S>)subquery.from(node.subEntity);
-        } else {
-            subquery = query.subquery(node.subEntity);
-            subRoot = (Root<S>)subquery.from(node.subEntity);
-        }
+        Class<?> outerFieldType = outerPath.get(node.outerFieldName).getJavaType();
+        jakarta.persistence.criteria.Subquery<?> subquery = query.subquery(outerFieldType);
+        Root<S> subRoot = (Root<S>)subquery.from(node.subEntity);
 
         SubQuerySpec<S> subSpec = SubQuerySpec.create((Subquery<S>)subquery, subRoot, subRoot, cb);
-        if (selectType != null) {
-            subSpec.presetSelectType(selectType, selectFieldName);
-        }
         node.config.accept(subSpec);
         subSpec.applyWhere();
 
-        if (selectType != null) {
-            subSpec.applySelectToSubquery();
-        } else if (!subSpec.isSelectSet()) {
+        if (!subSpec.isSelectSet()) {
             ((jakarta.persistence.criteria.Subquery<S>)subquery).select(subRoot);
         }
 

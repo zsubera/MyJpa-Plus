@@ -8,6 +8,8 @@ import com.zsubera.jpa.spec.TestEntityRepository;
 import com.zsubera.jpa.update.DeleteSpec;
 import com.zsubera.jpa.update.MergeSpec;
 import com.zsubera.jpa.update.UpdateSpec;
+import jakarta.persistence.EntityManager;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
@@ -42,6 +44,18 @@ class BulkOperationTemplateTest {
 
     @Autowired
     private TestEntityRepository repository;
+
+    @Autowired
+    private EntityManager entityManager;
+
+    @Autowired
+    private ApplicationContext applicationContext;
+
+    // [FIX] P0-1: 清理持久化上下文，避免 REQUIRES_NEW 挂起外层事务后恢复时缓存脏数据
+    @AfterEach
+    void clearEntityManager() {
+        entityManager.clear();
+    }
 
     // ---- execute(UpdateSpec) ----
 
@@ -255,15 +269,11 @@ class BulkOperationTemplateTest {
 
     // ---- executeBatchInSeparateTransactions ----
 
+    // [FIX] P0-1: REQUIRES_NEW 挂起外层事务，batch 的新 EM 无法看到外层未提交的数据。
+    // 使用 TransactionTemplate 在独立事务中插入数据，确保数据对后续 REQUIRES_NEW 事务可见。
     @Test
     void testExecuteBatchInSeparateTransactionsUpdate() {
-        for (int i = 0; i < 5; i++) {
-            TestEntity e = new TestEntity();
-            e.setName("sepTxBatchUpd" + i);
-            e.setStatus(0);
-            repository.save(e);
-        }
-        repository.flush();
+        insertTestData("sepTxBatchUpd", 5);
 
         UpdateSpec<TestEntity> spec =
             template.update(TestEntity.class).set(TestEntity::getStatus, 1).eq(TestEntity::getStatus, 0);
@@ -273,13 +283,7 @@ class BulkOperationTemplateTest {
 
     @Test
     void testExecuteBatchInSeparateTransactionsDelete() {
-        for (int i = 0; i < 5; i++) {
-            TestEntity e = new TestEntity();
-            e.setName("sepTxBatchDel" + i);
-            e.setStatus(0);
-            repository.save(e);
-        }
-        repository.flush();
+        insertTestData("sepTxBatchDel", 5);
 
         DeleteSpec<TestEntity> spec = template.delete(TestEntity.class).eq(TestEntity::getStatus, 0);
         int count = bulkOperationTemplate.executeBatchInSeparateTransactions(spec, 2);
@@ -311,13 +315,7 @@ class BulkOperationTemplateTest {
 
     @Test
     void testExecuteBatchInSeparateTransactionsWithResultUpdate() {
-        for (int i = 0; i < 5; i++) {
-            TestEntity e = new TestEntity();
-            e.setName("resultSepTx" + i);
-            e.setStatus(0);
-            repository.save(e);
-        }
-        repository.flush();
+        insertTestData("resultSepTx", 5);
 
         UpdateSpec<TestEntity> spec =
             template.update(TestEntity.class).set(TestEntity::getStatus, 1).eq(TestEntity::getStatus, 0);
@@ -331,13 +329,7 @@ class BulkOperationTemplateTest {
 
     @Test
     void testExecuteBatchInSeparateTransactionsWithResultDelete() {
-        for (int i = 0; i < 5; i++) {
-            TestEntity e = new TestEntity();
-            e.setName("resultSepTxDel" + i);
-            e.setStatus(0);
-            repository.save(e);
-        }
-        repository.flush();
+        insertTestData("resultSepTxDel", 5);
 
         DeleteSpec<TestEntity> spec = template.delete(TestEntity.class).eq(TestEntity::getStatus, 0);
         BulkOperationTemplate.BatchResult result = bulkOperationTemplate.executeBatchInSeparateTransactions(spec, 2,
@@ -389,5 +381,29 @@ class BulkOperationTemplateTest {
         assertTrue(result.success());
         assertEquals(-1, result.failedBatchIndex());
         assertNull(result.failureCause());
+    }
+
+    /**
+     * [FIX] P0-1: 在独立已提交事务中插入测试数据，确保 REQUIRES_NEW 批量操作能看到数据。
+     * @DataJpaTest 的 @Transactional 在测试方法结束前不会提交，
+     * 而 REQUIRES_NEW 会挂起外层事务创建新 EM，新 EM 无法看到外层未提交的数据。
+     */
+    private void insertTestData(String namePrefix, int count) {
+        org.springframework.transaction.PlatformTransactionManager txManager =
+            applicationContext.getBean(org.springframework.transaction.PlatformTransactionManager.class);
+        org.springframework.transaction.support.TransactionTemplate txTemplate =
+            new org.springframework.transaction.support.TransactionTemplate(txManager);
+        // [FIX] P0-1: 使用 REQUIRES_NEW 确保数据在独立事务中提交，对后续 REQUIRES_NEW 批量操作可见
+        txTemplate
+            .setPropagationBehavior(org.springframework.transaction.TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+        txTemplate.executeWithoutResult(status -> {
+            for (int i = 0; i < count; i++) {
+                TestEntity e = new TestEntity();
+                e.setName(namePrefix + i);
+                e.setStatus(0);
+                entityManager.persist(e);
+            }
+            entityManager.flush();
+        });
     }
 }
