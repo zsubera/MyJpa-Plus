@@ -364,15 +364,19 @@ class BulkOperationTemplate {
                 log.error("Batch {} failed at batch index {}: {}", operationName, failedBatchIndex, e.getMessage(), e);
                 if (failureStrategy == BatchFailureStrategy.ABORT) {
                     shouldContinue = false;
-                    continue;
                 }
                 // CONTINUE 模式：记录失败但不中断，继续下一批
+                iteration++;
+                if (iteration >= maxBatchIterations) {
+                    log.error("Batch {} reached maximum iterations ({}). Possible infinite loop. Total rows: {}",
+                        operationName, maxBatchIterations, total);
+                    break;
+                }
                 continue;
             }
             if (batchResult < batchSize) {
                 shouldContinue = false;
             }
-            // [FIX] P1-2: 添加最大迭代次数保护，防止 batchExecutor 始终返回 batchSize 时无限循环
             iteration++;
             if (iteration >= maxBatchIterations) {
                 log.error("Batch {} reached maximum iterations ({}). Possible infinite loop. Total rows: {}",

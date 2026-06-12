@@ -97,7 +97,20 @@ final class DialectDetector {
             Object workProxy = java.lang.reflect.Proxy.newProxyInstance(workClass.getClassLoader(),
                 new Class<?>[] {workClass}, (proxy, method, args) -> {
                     if (method.getDeclaringClass() == Object.class) {
-                        return method.invoke(proxy, args);
+                        switch (method.getName()) {
+                            case "toString" -> {
+                                return "DialectDetector.WorkProxy";
+                            }
+                            case "equals" -> {
+                                return proxy == args[0];
+                            }
+                            case "hashCode" -> {
+                                return System.identityHashCode(proxy);
+                            }
+                            default -> {
+                                return method.invoke(proxy, args);
+                            }
+                        }
                     }
                     if ("execute".equals(method.getName()) && args.length == 1
                         && args[0] instanceof java.sql.Connection conn) {

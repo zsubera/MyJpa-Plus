@@ -460,7 +460,8 @@ public class QuerySpecTest {
     @Test
     void testNullFieldInJoinThrowsException() {
         QuerySpec<TestEntity> qs = new QuerySpec<>();
-        assertThrows(IllegalArgumentException.class, () -> qs.join(null, jg -> {}));
+        assertThrows(IllegalArgumentException.class, () -> qs.join(null, jg -> {
+        }));
     }
 
     @Test
@@ -851,14 +852,16 @@ public class QuerySpecTest {
         repository.save(child);
 
         QuerySpec<TestEntity> qs = new QuerySpec<>();
-        qs.<ParentEntity>fetchJoin(TestEntity::getParent, jg -> {});
+        qs.<ParentEntity>fetchJoin(TestEntity::getParent, jg -> {
+        });
         assertNotNull(qs.toSpecification());
     }
 
     @Test
     void testLeftFetchJoin() {
         QuerySpec<TestEntity> qs = new QuerySpec<>();
-        qs.<ParentEntity>leftJoin(TestEntity::getParent, jg -> {});
+        qs.<ParentEntity>leftJoin(TestEntity::getParent, jg -> {
+        });
         assertNotNull(qs.toSpecification());
     }
 

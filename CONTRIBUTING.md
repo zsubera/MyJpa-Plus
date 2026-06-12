@@ -93,7 +93,7 @@ cd myjpa-plus
 
 ## 测试约定
 
-- 单元测试使用 `@DataJpaTest` + H2 内存数据库
+- 单元测试使用 `@DataJpaTest` + 本地 MySQL（通过 `DB_USERNAME`/`DB_PASSWORD` 环境变量配置）
 - 集成测试使用 `@Tag("integration")` + Testcontainers（PostgreSQL、MySQL）
 - 核心测试类：`QuerySpecTest`、`ConditionBuilderValidationTest`
 

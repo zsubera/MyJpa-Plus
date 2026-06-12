@@ -109,12 +109,9 @@ public class CodeEnumType implements UserType<Object>, DynamicParameterizedType 
         this.codeField = resolveCodeField(enumClass);
         this.useOrdinal = (codeField == null);
         if (useOrdinal) {
-            // 未找到 @CodeEnumValue 时记录警告，回退到基于 ordinal 的映射
-            log.warn(
-                "@CodeEnumValue not found in enum {}. Falling back to ordinal-based mapping. "
-                    + "Add @CodeEnumValue annotation to the code field for explicit mapping.",
-                enumClass.getSimpleName());
-            this.sqlType = Types.INTEGER;
+            throw new HibernateException("@CodeEnumValue not found in enum " + enumClass.getSimpleName()
+                + ". Add @CodeEnumValue annotation to the code field. "
+                + "Ordinal-based mapping is not supported to prevent silent data corruption when enum constants are reordered.");
         } else {
             Class<?> fieldType = codeField.getType();
             if (fieldType == String.class) {

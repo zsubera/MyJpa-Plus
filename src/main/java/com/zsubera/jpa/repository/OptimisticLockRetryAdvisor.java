@@ -111,7 +111,7 @@ public class OptimisticLockRetryAdvisor {
             throw ex;
         }
         long shift = Math.min(attempt - 1, 30);
-        long baseDelay = Math.min(backoffMs, MAX_BACKOFF_MS >> shift) * (1L << shift);
+        long baseDelay = Math.min(backoffMs * (1L << shift), MAX_BACKOFF_MS);
         baseDelay = Math.max(baseDelay, 1);
         long remainingTimeout = MAX_TOTAL_TIMEOUT_MS - totalElapsed;
         baseDelay = Math.min(baseDelay, remainingTimeout);

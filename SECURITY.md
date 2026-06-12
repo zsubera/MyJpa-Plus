@@ -15,6 +15,6 @@
 本项目依赖极简：
 
 - **Spring Boot 3.x**（可选，compile 作用域）— 提供 JPA Criteria API 的框架
-- **H2 Database**（仅 test 作用域）— 用于集成测试的内存数据库
+- **MySQL Connector/J**（仅 test 作用域）— 用于单元测试
 
 无任何 Web 框架、日志库或序列化库的运行时依赖。

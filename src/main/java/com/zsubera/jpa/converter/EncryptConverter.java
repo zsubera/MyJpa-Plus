@@ -119,14 +119,9 @@ public class EncryptConverter implements AttributeConverter<String, String> {
         }, "encrypt-key-warmup-shutdown"));
     }
 
-    /**
-     * 开发环境默认盐值。仅用于未配置 {@code MYJPA_ENCRYPT_SALT} 的非生产环境。
-     *
-     * <p>
-     * <strong>安全警告：</strong>此盐值是公开的（源码可见），不得用于生产环境。
-     * 生产环境必须通过环境变量配置唯一的盐值。
-     */
-    private static final byte[] DEV_SALT = "myjpa-plus-dev-salt!".getBytes(StandardCharsets.UTF_8);
+    /** 开发环境可选：显式设置为 true 时跳过盐值检查（仅限开发环境）。 */
+    private static final String SKIP_SALT_PROPERTY = "myjpa-plus.encrypt.skip-salt-check";
+    private static final String SKIP_SALT_ENV = "MYJPA_ENCRYPT_SKIP_SALT_CHECK";
 
     /** 跟踪密钥验证是否已执行的标志。 */
     private static volatile boolean keyValidated = false;
@@ -367,7 +362,13 @@ public class EncryptConverter implements AttributeConverter<String, String> {
                 // 带版本前缀格式: "v1:base64data"
                 int colonIndex = dbData.indexOf(':');
                 version = dbData.substring(0, colonIndex);
-                base64Data = dbData.substring(colonIndex + 1);
+                if (!version.matches("v\\d+")) {
+                    log.warn("Invalid version prefix format '{}' in encrypted data, treating as unversioned", version);
+                    version = null;
+                    base64Data = dbData;
+                } else {
+                    base64Data = dbData.substring(colonIndex + 1);
+                }
             } else {
                 // 兼容旧格式（无版本前缀）
                 base64Data = dbData;
@@ -556,18 +557,28 @@ public class EncryptConverter implements AttributeConverter<String, String> {
         if (salt != null && !salt.isEmpty()) {
             return salt.getBytes(StandardCharsets.UTF_8);
         }
-        // 未配置盐值
-        if (isProductionEnvironment()) {
-            throw new IllegalStateException("PBKDF2 salt must be configured in production. "
-                + "Set environment variable " + SALT_ENV + " or system property " + SALT_PROPERTY);
+        // 未配置盐值 — 默认拒绝，除非显式跳过
+        String skipCheck = System.getProperty(SKIP_SALT_PROPERTY);
+        if (!"true".equalsIgnoreCase(skipCheck)) {
+            skipCheck = System.getenv(SKIP_SALT_ENV);
         }
-        log.warn(
-            "SECURITY: Using fixed development PBKDF2 salt. "
-                + "Encrypted data is NOT secure and will be consistent across restarts. "
-                + "For production, set environment variable {} or system property {}. "
-                + "This salt is publicly visible in source code and must NOT be used in production.",
-            SALT_ENV, SALT_PROPERTY);
-        return DEV_SALT.clone();
+        if ("true".equalsIgnoreCase(skipCheck)) {
+            log.warn("SECURITY: PBKDF2 salt check is skipped via configuration. "
+                + "Encrypted data will use a predictable default salt. "
+                + "Set environment variable {} or system property {} for production.", SALT_ENV, SALT_PROPERTY);
+            // 使用基于密钥材料的确定性盐值（非硬编码），每个环境不同
+            String keyEnv = System.getenv(KEY_ENV);
+            String keyProp = System.getProperty(KEY_PROPERTY);
+            String key = (keyEnv != null && !keyEnv.isEmpty()) ? keyEnv : keyProp;
+            if (key != null) {
+                return key.getBytes(StandardCharsets.UTF_8);
+            }
+            throw new IllegalStateException("PBKDF2 salt not configured and encryption key unavailable. " + "Set "
+                + SALT_ENV + " environment variable or " + SALT_PROPERTY + " system property.");
+        }
+        throw new IllegalStateException("PBKDF2 salt must be configured. " + "Set environment variable " + SALT_ENV
+            + " or system property " + SALT_PROPERTY + ". " + "Salt is required for PBKDF2 key derivation security. "
+            + "To skip this check (development only), set " + SKIP_SALT_PROPERTY + "=true.");
     }
 
     /**

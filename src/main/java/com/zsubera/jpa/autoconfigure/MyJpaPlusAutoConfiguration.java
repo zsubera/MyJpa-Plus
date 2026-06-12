@@ -140,12 +140,6 @@ public class MyJpaPlusAutoConfiguration {
         justification = "MyJpaPlusProperties is a Spring-managed @ConfigurationProperties bean; copying would break property binding")
     private final MyJpaPlusProperties properties;
 
-    @Bean
-    @org.springframework.context.annotation.Lazy(false)
-    static MyJpaPlusConfigInitializer myJpaPlusConfigInitializer(MyJpaPlusProperties properties) {
-        return new MyJpaPlusConfigInitializer(properties);
-    }
-
     /**
      * 创建 AuditEntityListener Bean。
      *

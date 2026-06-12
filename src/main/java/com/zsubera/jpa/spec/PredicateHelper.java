@@ -275,6 +275,9 @@ public final class PredicateHelper {
      * @return 前缀匹配谓词
      */
     public static Predicate startsWith(Path<?> path, String fieldName, String value, CriteriaBuilder cb) {
+        if (value == null) {
+            return cb.conjunction();
+        }
         return cb.like(path.get(fieldName).as(String.class), escapeLikeWildcards(value) + "%", LIKE_ESCAPE_CHAR);
     }
 
@@ -291,6 +294,9 @@ public final class PredicateHelper {
      * @return 后缀匹配谓词
      */
     public static Predicate endsWith(Path<?> path, String fieldName, String value, CriteriaBuilder cb) {
+        if (value == null) {
+            return cb.conjunction();
+        }
         return cb.like(path.get(fieldName).as(String.class), "%" + escapeLikeWildcards(value), LIKE_ESCAPE_CHAR);
     }
 
@@ -307,6 +313,9 @@ public final class PredicateHelper {
      * @return 包含匹配谓词
      */
     public static Predicate contains(Path<?> path, String fieldName, String value, CriteriaBuilder cb) {
+        if (value == null) {
+            return cb.conjunction();
+        }
         return cb.like(path.get(fieldName).as(String.class), "%" + escapeLikeWildcards(value) + "%", LIKE_ESCAPE_CHAR);
     }
 

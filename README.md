@@ -5,7 +5,7 @@
 [![许可证](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 [![JDK](https://img.shields.io/badge/JDK-17%2B-green.svg)](https://adoptium.net)
 
-基于 Lambda 表达式的类型安全 JPA 工具库，专为 Spring Data JPA 设计。提供查询构建、批量操作、UPSERT/MERGE、CTE、投影查询、查询模板、多租户隔离、字段加密/脱敏、SQL 慢查询监控、乐观锁自动重试、查询缓存和代码生成。
+基于 Lambda 表达式的类型安全 JPA 工具库，专为 Spring Data JPA 设计。提供查询构建、批量操作、UPSERT/MERGE、CTE、投影查询、查询模板、字段加密/脱敏、SQL 慢查询监控、乐观锁自动重试、查询缓存和代码生成。
 
 ## 特性
 
@@ -47,7 +47,7 @@
 - **类型安全 UPSERT** — `new MergeSpec<>(User.class).withEntity(user).onConflict(User::getEmail).execute(em)`
 - **冲突列指定** — `onConflict(User::getEmail)` 支持单列或多列唯一键
 - **选择性更新** — `updateOnConflict(User::getName, User::getAge)` 仅更新指定列
-- **多数据库方言** — 自动检测并生成对应 SQL：PostgreSQL (`ON CONFLICT DO UPDATE`)、MySQL (`ON DUPLICATE KEY UPDATE`)、H2 (`MERGE INTO`)
+- **多数据库方言** — 自动检测并生成对应 SQL：PostgreSQL (`ON CONFLICT DO UPDATE`)、MySQL (`ON DUPLICATE KEY UPDATE`)
 - **事务支持** — `executeInTransaction(em)` 自动管理事务
 
 ### CTE 公共表表达式（CteSpec）
@@ -636,15 +636,17 @@ myjpa-plus:
     in-clause-max-size: 1000              # IN 子句最大参数数量
     in-clause-hard-limit: 5000            # IN 子句硬限制
     lambda-cache-size: 4096               # Lambda 属性名缓存大小
+    default-timeout-seconds: 30           # 查询超时（秒），-1 禁用
   soft-delete:
     auto-filter: true                     # 自动应用软删除过滤器
   monitoring:
     enabled: true                         # 启用 SQL 慢查询监控
     slow-query-threshold-ms: 1000         # 慢查询阈值（毫秒）
 
-# 字段加密密钥（二选一）
-# 环境变量: MYJPA_ENCRYPT_KEY=0123456789abcdef
-# 系统属性: -Dmyjpa.encrypt.key=0123456789abcdef
+# 字段加密配置
+# 环境变量: MYJPA_ENCRYPT_KEY=<密钥>  MYJPA_ENCRYPT_SALT=<盐值>
+# 系统属性: -Dmyjpa.encrypt.key=<密钥>  -Dmyjpa.encrypt.salt=<盐值>
+# 开发环境可选: -Dmyjpa-plus.encrypt.skip-salt-check=true（跳过盐值检查）
 ```
 
 ## API 一览

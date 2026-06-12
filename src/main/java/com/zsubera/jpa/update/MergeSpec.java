@@ -251,12 +251,12 @@ public class MergeSpec<T> {
         }
         int total = 0;
         for (int i = 0; i < entities.size(); i++) {
-            this.entity = entities.get(i);
-            total += execute(em);
             if (i > 0 && i % batchSize == 0) {
                 em.flush();
                 em.clear();
             }
+            this.entity = entities.get(i);
+            total += execute(em);
         }
         return total;
     }
@@ -346,8 +346,17 @@ public class MergeSpec<T> {
         for (T ent : entities) {
             if (count % batchSize == 0) {
                 if (txStarted && tx != null && tx.isActive()) {
-                    em.flush();
-                    tx.commit();
+                    try {
+                        em.flush();
+                        tx.commit();
+                    } catch (RuntimeException commitEx) {
+                        try {
+                            tx.rollback();
+                        } catch (Exception rollbackEx) {
+                            commitEx.addSuppressed(rollbackEx);
+                        }
+                        throw commitEx;
+                    }
                 }
                 tx = em.getTransaction();
                 if (tx != null && !tx.isActive()) {

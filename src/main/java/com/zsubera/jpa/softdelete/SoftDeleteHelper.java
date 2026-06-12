@@ -326,7 +326,9 @@ public final class SoftDeleteHelper {
         boolean useParamBinding = false;
         Object deletedParamValue = null;
         if (resolved.booleanField()) {
-            setClause = escapedColumn + " = true";
+            setClause = escapedColumn + " = :" + setParamName;
+            useParamBinding = true;
+            deletedParamValue = Boolean.TRUE;
         } else {
             setClause = escapedColumn + " = :" + setParamName;
             useParamBinding = true;

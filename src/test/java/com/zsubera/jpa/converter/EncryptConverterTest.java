@@ -15,6 +15,7 @@ class EncryptConverterTest {
     @BeforeEach
     void setUp() {
         System.setProperty("myjpa.encrypt.key", TEST_KEY);
+        System.setProperty("myjpa-plus.encrypt.skip-salt-check", "true");
         EncryptConverter.clearCacheForTesting();
         converter = new EncryptConverter();
     }
@@ -22,6 +23,7 @@ class EncryptConverterTest {
     @AfterEach
     void tearDown() {
         System.clearProperty("myjpa.encrypt.key");
+        System.clearProperty("myjpa-plus.encrypt.skip-salt-check");
         EncryptConverter.clearCacheForTesting();
     }
 
