@@ -136,6 +136,8 @@ public class MyJpaPlusAutoConfiguration {
         }
     }
 
+    @edu.umd.cs.findbugs.annotations.SuppressFBWarnings(value = "EI_EXPOSE_REP2",
+        justification = "MyJpaPlusProperties is a Spring-managed @ConfigurationProperties bean; copying would break property binding")
     private final MyJpaPlusProperties properties;
 
     @Bean
