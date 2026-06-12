@@ -45,7 +45,13 @@ jobs:
       - name: Check code formatting
         run: mvn spotless:check --batch-mode --no-transfer-progress
       - name: Build and verify
-        run: mvn clean verify --batch-mode --no-transfer-progress -Dgpg.skip=true -Ddependency-check.skip=true -DexcludedGroups=integration
+        run: |
+          mvn clean verify --batch-mode --no-transfer-progress \
+            -Dgpg.skip=true \
+            -Ddependency-check.skip=true \
+            -DexcludedGroups=integration \
+            -Dspring.datasource.username=root \
+            -Dspring.datasource.password=ci_test_2024
 
   integration:
     needs: build
