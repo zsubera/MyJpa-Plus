@@ -33,7 +33,7 @@ class OrGroupTest {
         repository.save(newEntity("b", 10));
         repository.save(newEntity("c", 3));
         QuerySpec<TestEntity> qs = new QuerySpec<>();
-        qs.or().gt(TestEntity::getStatus, 5).eq(TestEntity::getName, "a").endOr();
+        qs.or(g -> g.gt(TestEntity::getStatus, 5).eq(TestEntity::getName, "a"));
         List<TestEntity> result = repository.findAll(qs.toSpecification());
         assertEquals(2, result.size());
     }
@@ -44,7 +44,7 @@ class OrGroupTest {
         repository.save(newEntity("b", 10));
         repository.save(newEntity("c", 3));
         QuerySpec<TestEntity> qs = new QuerySpec<>();
-        qs.or().ge(TestEntity::getStatus, 5).endOr();
+        qs.or(g -> g.ge(TestEntity::getStatus, 5));
         List<TestEntity> result = repository.findAll(qs.toSpecification());
         assertEquals(2, result.size());
     }
@@ -55,7 +55,7 @@ class OrGroupTest {
         repository.save(newEntity("b", 10));
         repository.save(newEntity("c", 3));
         QuerySpec<TestEntity> qs = new QuerySpec<>();
-        qs.or().lt(TestEntity::getStatus, 5).endOr();
+        qs.or(g -> g.lt(TestEntity::getStatus, 5));
         List<TestEntity> result = repository.findAll(qs.toSpecification());
         assertEquals(2, result.size());
     }
@@ -66,7 +66,7 @@ class OrGroupTest {
         repository.save(newEntity("b", 10));
         repository.save(newEntity("c", 3));
         QuerySpec<TestEntity> qs = new QuerySpec<>();
-        qs.or().le(TestEntity::getStatus, 5).endOr();
+        qs.or(g -> g.le(TestEntity::getStatus, 5));
         List<TestEntity> result = repository.findAll(qs.toSpecification());
         assertEquals(2, result.size());
     }
@@ -77,7 +77,7 @@ class OrGroupTest {
         repository.save(newEntity("world", 0));
         repository.save(newEntity("help", 0));
         QuerySpec<TestEntity> qs = new QuerySpec<>();
-        qs.or().startsWith(TestEntity::getName, "hel").endOr();
+        qs.or(g -> g.startsWith(TestEntity::getName, "hel"));
         List<TestEntity> result = repository.findAll(qs.toSpecification());
         assertEquals(2, result.size());
     }
@@ -87,7 +87,7 @@ class OrGroupTest {
         repository.save(newEntity("hello", 0));
         repository.save(newEntity("world", 0));
         QuerySpec<TestEntity> qs = new QuerySpec<>();
-        qs.or().notLike(TestEntity::getName, "hello").endOr();
+        qs.or(g -> g.notLike(TestEntity::getName, "hello"));
         List<TestEntity> result = repository.findAll(qs.toSpecification());
         assertEquals(1, result.size());
         assertEquals("world", result.get(0).getName());
@@ -99,7 +99,7 @@ class OrGroupTest {
         repository.save(newEntity("pending", 0));
         repository.save(newEntity("start", 0));
         QuerySpec<TestEntity> qs = new QuerySpec<>();
-        qs.or().endsWith(TestEntity::getName, "ing").endOr();
+        qs.or(g -> g.endsWith(TestEntity::getName, "ing"));
         List<TestEntity> result = repository.findAll(qs.toSpecification());
         assertEquals(2, result.size());
     }
@@ -110,7 +110,7 @@ class OrGroupTest {
         repository.save(newEntity("xabcx", 0));
         repository.save(newEntity("xyz", 0));
         QuerySpec<TestEntity> qs = new QuerySpec<>();
-        qs.or().like(TestEntity::getName, "ab").endOr();
+        qs.or(g -> g.like(TestEntity::getName, "ab"));
         List<TestEntity> result = repository.findAll(qs.toSpecification());
         assertEquals(2, result.size());
     }
@@ -121,7 +121,7 @@ class OrGroupTest {
         repository.save(newEntity("b", 2));
         repository.save(newEntity("c", 3));
         QuerySpec<TestEntity> qs = new QuerySpec<>();
-        qs.or().in(TestEntity::getStatus, 1, 3).endOr();
+        qs.or(g -> g.in(TestEntity::getStatus, 1, 3));
         List<TestEntity> result = repository.findAll(qs.toSpecification());
         assertEquals(2, result.size());
     }
@@ -132,7 +132,7 @@ class OrGroupTest {
         repository.save(newEntity("b", 2));
         repository.save(newEntity("c", 3));
         QuerySpec<TestEntity> qs = new QuerySpec<>();
-        qs.or().notIn(TestEntity::getStatus, 1, 3).endOr();
+        qs.or(g -> g.notIn(TestEntity::getStatus, 1, 3));
         List<TestEntity> result = repository.findAll(qs.toSpecification());
         assertEquals(1, result.size());
         assertEquals(2, result.get(0).getStatus());
@@ -144,7 +144,7 @@ class OrGroupTest {
         repository.save(newEntity("b", 5));
         repository.save(newEntity("c", 10));
         QuerySpec<TestEntity> qs = new QuerySpec<>();
-        qs.or().between(TestEntity::getStatus, 3, 7).endOr();
+        qs.or(g -> g.between(TestEntity::getStatus, 3, 7));
         List<TestEntity> result = repository.findAll(qs.toSpecification());
         assertEquals(1, result.size());
         assertEquals(5, result.get(0).getStatus());
@@ -158,7 +158,7 @@ class OrGroupTest {
         nullName.setStatus(99);
         repository.save(nullName);
         QuerySpec<TestEntity> qs = new QuerySpec<>();
-        qs.or().isNull(TestEntity::getName).endOr();
+        qs.or(g -> g.isNull(TestEntity::getName));
         List<TestEntity> result = repository.findAll(qs.toSpecification());
         assertEquals(1, result.size());
         assertNull(result.get(0).getName());
@@ -172,7 +172,7 @@ class OrGroupTest {
         nullName.setStatus(99);
         repository.save(nullName);
         QuerySpec<TestEntity> qs = new QuerySpec<>();
-        qs.or().isNotNull(TestEntity::getName).endOr();
+        qs.or(g -> g.isNotNull(TestEntity::getName));
         List<TestEntity> result = repository.findAll(qs.toSpecification());
         assertEquals(1, result.size());
         assertEquals("hasName", result.get(0).getName());
@@ -184,7 +184,7 @@ class OrGroupTest {
         repository.save(newEntity("hello", 2));
         repository.save(newEntity("WORLD", 3));
         QuerySpec<TestEntity> qs = new QuerySpec<>();
-        qs.or().eqIgnoreCase(TestEntity::getName, "HELLO").endOr();
+        qs.or(g -> g.eqIgnoreCase(TestEntity::getName, "HELLO"));
         List<TestEntity> result = repository.findAll(qs.toSpecification());
         assertEquals(2, result.size());
     }
@@ -195,7 +195,7 @@ class OrGroupTest {
         repository.save(newEntity("HELLO", 2));
         repository.save(newEntity("xyz", 3));
         QuerySpec<TestEntity> qs = new QuerySpec<>();
-        qs.or().likeIgnoreCase(TestEntity::getName, "hello").endOr();
+        qs.or(g -> g.likeIgnoreCase(TestEntity::getName, "hello"));
         List<TestEntity> result = repository.findAll(qs.toSpecification());
         assertEquals(2, result.size());
     }
@@ -207,7 +207,7 @@ class OrGroupTest {
         repository.save(newEntity("help", 0));
         repository.save(newEntity("welcome", 0));
         QuerySpec<TestEntity> qs = new QuerySpec<>();
-        qs.or().multiLike("hel", TestEntity::getName).endOr();
+        qs.or(g -> g.multiLike("hel", TestEntity::getName));
         List<TestEntity> result = repository.findAll(qs.toSpecification());
         assertEquals(2, result.size());
     }
@@ -263,14 +263,14 @@ class OrGroupTest {
         repository.save(child);
 
         QuerySpec<TestEntity> qs = new QuerySpec<>();
-        OrGroup<TestEntity> og = qs.or();
-        JoinGroup<TestEntity, ParentEntity> jg = og.leftJoin(TestEntity::getParent);
-        OrJoinGroup<TestEntity, ParentEntity> ojg = jg.or();
-        ojg.eq(ParentEntity::getCategory, "admin");
-        ojg.isNull(ParentEntity::getCategory);
-        jg = ojg.endOr();
-        jg.endJoin();
-        og.endOr();
+        qs.or(og -> {
+            og.<ParentEntity>leftJoin(TestEntity::getParent, jg -> {
+                jg.or(ojg -> {
+                    ojg.eq(ParentEntity::getCategory, "admin");
+                    ojg.isNull(ParentEntity::getCategory);
+                });
+            });
+        });
 
         List<TestEntity> result = repository.findAll(qs.toSpecification());
         assertEquals(2, result.size());
@@ -342,7 +342,7 @@ class OrGroupTest {
         repository.save(newEntity("b", 5));
         repository.save(newEntity("c", 10));
         QuerySpec<TestEntity> qs = new QuerySpec<>();
-        qs.or().notBetween(TestEntity::getStatus, 3, 7).endOr();
+        qs.or(g -> g.notBetween(TestEntity::getStatus, 3, 7));
         List<TestEntity> result = repository.findAll(qs.toSpecification());
         assertEquals(2, result.size());
     }

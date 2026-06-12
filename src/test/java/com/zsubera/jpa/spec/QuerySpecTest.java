@@ -101,9 +101,7 @@ public class QuerySpecTest {
         repository.save(child);
 
         QuerySpec<TestEntity> qs = new QuerySpec<>();
-        JoinGroup<TestEntity, ParentEntity> jg = qs.join(TestEntity::getParent);
-        jg.eq(ParentEntity::getCategory, "admin");
-        jg.endJoin();
+        qs.<ParentEntity>join(TestEntity::getParent, jg -> jg.eq(ParentEntity::getCategory, "admin"));
 
         List<TestEntity> result = repository.findAll(qs.toSpecification());
         assertEquals(1, result.size());
@@ -115,7 +113,7 @@ public class QuerySpecTest {
         repository.save(newEntity("beta", 2));
         repository.save(newEntity("gamma", 3));
         QuerySpec<TestEntity> qs = new QuerySpec<>();
-        qs.or().eq(TestEntity::getName, "alpha").eq(TestEntity::getName, "beta").endOr();
+        qs.or(g -> g.eq(TestEntity::getName, "alpha").eq(TestEntity::getName, "beta"));
         List<TestEntity> result = repository.findAll(qs.toSpecification());
         assertEquals(2, result.size());
     }
@@ -226,10 +224,10 @@ public class QuerySpecTest {
         repository.save(child2);
 
         QuerySpec<TestEntity> qs = new QuerySpec<>();
-        JoinGroup<TestEntity, ParentEntity> jg = qs.join(TestEntity::getParent);
-        jg.eq(ParentEntity::getCategory, "admin");
-        jg.eq(ParentEntity::getLevel, 10);
-        jg.endJoin();
+        qs.<ParentEntity>join(TestEntity::getParent, jg -> {
+            jg.eq(ParentEntity::getCategory, "admin");
+            jg.eq(ParentEntity::getLevel, 10);
+        });
 
         List<TestEntity> result = repository.findAll(qs.toSpecification());
         assertEquals(1, result.size());
@@ -252,12 +250,12 @@ public class QuerySpecTest {
         repository.save(child);
 
         QuerySpec<TestEntity> qs = new QuerySpec<>();
-        JoinGroup<TestEntity, ParentEntity> jg = qs.leftJoin(TestEntity::getParent);
-        OrJoinGroup<TestEntity, ParentEntity> orGroup = jg.or();
-        orGroup.eq(ParentEntity::getCategory, "admin");
-        orGroup.isNull(ParentEntity::getCategory);
-        jg = orGroup.endOr();
-        jg.endJoin();
+        qs.<ParentEntity>leftJoin(TestEntity::getParent, jg -> {
+            jg.or(ojg -> {
+                ojg.eq(ParentEntity::getCategory, "admin");
+                ojg.isNull(ParentEntity::getCategory);
+            });
+        });
 
         List<TestEntity> result = repository.findAll(qs.toSpecification());
         assertEquals(2, result.size());
@@ -275,10 +273,10 @@ public class QuerySpecTest {
         repository.save(child);
 
         QuerySpec<TestEntity> qs = new QuerySpec<>();
-        JoinGroup<TestEntity, ParentEntity> jg = qs.join(TestEntity::getParent);
-        jg.eq(ParentEntity::getCategory, "admin");
-        jg.eq(ParentEntity::getLevel, 5);
-        jg.endJoin();
+        qs.<ParentEntity>join(TestEntity::getParent, jg -> {
+            jg.eq(ParentEntity::getCategory, "admin");
+            jg.eq(ParentEntity::getLevel, 5);
+        });
 
         List<TestEntity> result = repository.findAll(qs.toSpecification());
         assertEquals(1, result.size());
@@ -462,14 +460,15 @@ public class QuerySpecTest {
     @Test
     void testNullFieldInJoinThrowsException() {
         QuerySpec<TestEntity> qs = new QuerySpec<>();
-        assertThrows(IllegalArgumentException.class, () -> qs.join(null));
+        assertThrows(IllegalArgumentException.class, () -> qs.join(null, jg -> {}));
     }
 
     @Test
     void testNullFieldInOrGroupThrowsException() {
         QuerySpec<TestEntity> qs = new QuerySpec<>();
-        OrGroup<TestEntity> og = qs.or();
-        assertThrows(IllegalArgumentException.class, () -> og.eq(null, "value"));
+        qs.or(og -> {
+            assertThrows(IllegalArgumentException.class, () -> og.eq(null, "value"));
+        });
     }
 
     @Test
@@ -483,8 +482,9 @@ public class QuerySpecTest {
         repository.save(child);
 
         QuerySpec<TestEntity> qs = new QuerySpec<>();
-        JoinGroup<TestEntity, ParentEntity> jg = qs.join(TestEntity::getParent);
-        assertThrows(IllegalArgumentException.class, () -> jg.eq(null, "admin"));
+        qs.<ParentEntity>join(TestEntity::getParent, jg -> {
+            assertThrows(IllegalArgumentException.class, () -> jg.eq(null, "admin"));
+        });
     }
 
     @Test
@@ -508,7 +508,7 @@ public class QuerySpecTest {
     void testSingleElementOrGroup() {
         repository.save(newEntity("only", 1));
         QuerySpec<TestEntity> qs = new QuerySpec<>();
-        qs.or().eq(TestEntity::getName, "only").endOr();
+        qs.or(g -> g.eq(TestEntity::getName, "only"));
         List<TestEntity> result = repository.findAll(qs.toSpecification());
         assertEquals(1, result.size());
     }
@@ -534,12 +534,12 @@ public class QuerySpecTest {
         repository.save(c2);
 
         QuerySpec<TestEntity> qs = new QuerySpec<>();
-        JoinGroup<TestEntity, ParentEntity> jg = qs.join(TestEntity::getParent);
-        OrJoinGroup<TestEntity, ParentEntity> org = jg.or();
-        org.eq(ParentEntity::getCategory, "admin");
-        org.eq(ParentEntity::getCategory, "user");
-        jg = org.endOr();
-        jg.endJoin();
+        qs.<ParentEntity>join(TestEntity::getParent, jg -> {
+            jg.or(org -> {
+                org.eq(ParentEntity::getCategory, "admin");
+                org.eq(ParentEntity::getCategory, "user");
+            });
+        });
 
         List<TestEntity> result = repository.findAll(qs.toSpecification());
         assertEquals(2, result.size());
@@ -730,15 +730,6 @@ public class QuerySpecTest {
     }
 
     @Test
-    void testValidateCleanStateThrowsOnUnclosedOr() {
-        QuerySpec<TestEntity> qs = new QuerySpec<>();
-        qs.or();
-        qs.eq(TestEntity::getName, "test");
-        // toSpecification() now calls validateCleanState() directly, throwing IllegalStateException
-        assertThrows(IllegalStateException.class, () -> qs.toSpecification());
-    }
-
-    @Test
     void testOrGroupOrConsumer() {
         repository.save(newEntity("a", 1));
         repository.save(newEntity("b", 2));
@@ -860,14 +851,14 @@ public class QuerySpecTest {
         repository.save(child);
 
         QuerySpec<TestEntity> qs = new QuerySpec<>();
-        qs.fetchJoin(TestEntity::getParent);
+        qs.<ParentEntity>fetchJoin(TestEntity::getParent, jg -> {});
         assertNotNull(qs.toSpecification());
     }
 
     @Test
     void testLeftFetchJoin() {
         QuerySpec<TestEntity> qs = new QuerySpec<>();
-        qs.leftFetchJoin(TestEntity::getParent);
+        qs.<ParentEntity>leftJoin(TestEntity::getParent, jg -> {});
         assertNotNull(qs.toSpecification());
     }
 

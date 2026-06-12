@@ -45,13 +45,4 @@ public class OrJoinGroup<T, J> implements ConditionBuilder<J, OrJoinGroup<T, J>>
     public List<ConditionNode> conditions() {
         return orNode.nodes;
     }
-
-    /**
-     * 结束当前 OR 组，返回父级 {@link JoinGroup}。
-     *
-     * @return 父级 JoinGroup 实例
-     */
-    public JoinGroup<T, J> endOr() {
-        return new JoinGroup<>(root, joinNode);
-    }
 }

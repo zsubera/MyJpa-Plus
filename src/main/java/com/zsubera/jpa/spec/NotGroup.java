@@ -53,9 +53,7 @@ public class NotGroup<T> implements ConditionBuilder<T, NotGroup<T>> {
      * @return 新的 JoinGroup 实例，用于添加 JOIN 条件
      * @throws IllegalArgumentException 如果 {@code field} 为 null
      */
-    public <J> JoinGroup<T, J> join(SFunction<T, ?> field) {
-        return internalJoin(field, ConditionNode.JoinType.INNER);
-    }
+    // ---- 内部 JOIN 实现方法 ----
 
     /**
      * 在 NOT 组内添加 INNER JOIN，并配置 JOIN 条件。
@@ -75,17 +73,7 @@ public class NotGroup<T> implements ConditionBuilder<T, NotGroup<T>> {
         return this;
     }
 
-    /**
-     * 在 NOT 组内添加 LEFT JOIN。
-     *
-     * @param field 关联字段的方法引用
-     * @param <J> 关联实体类型
-     * @return 新的 JoinGroup 实例，用于添加 JOIN 条件
-     * @throws IllegalArgumentException 如果 {@code field} 为 null
-     */
-    public <J> JoinGroup<T, J> leftJoin(SFunction<T, ?> field) {
-        return internalJoin(field, ConditionNode.JoinType.LEFT);
-    }
+    // ---- 内部 LEFT JOIN 实现方法 ----
 
     /**
      * 在 NOT 组内添加 LEFT JOIN，并配置 JOIN 条件。

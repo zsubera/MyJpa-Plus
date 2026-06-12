@@ -495,107 +495,6 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
      * @param <J> 关联实体类型
      * @return JoinGroup 实例，用于配置关联条件
      */
-    public <J> JoinGroup<T, J> join(SFunction<T, ?> field) {
-        return internalJoin(field, ConditionNode.JoinType.INNER);
-    }
-
-    /**
-     * 添加 INNER JOIN 关联，通过显式指定实体类辅助类型推断。
-     *
-     * <p>
-     * 当链式调用导致类型丢失时，使用此方法显式指定关联实体类型：
-     *
-     * <pre>{@code
-     * JoinGroup<User, Role> roleJoin = qs.join(User::getRoles, Role.class);
-     * roleJoin.eq(Role::getName, "ADMIN");
-     * }</pre>
-     *
-     * @param field 关联字段的方法引用
-     * @param joinEntityClass 关联实体类（仅用于类型推断，不影响运行时行为）
-     * @param <J> 关联实体类型
-     * @return JoinGroup 实例，用于配置关联条件
-     */
-    public <J> JoinGroup<T, J> join(SFunction<T, ?> field, Class<J> joinEntityClass) {
-        return internalJoin(field, ConditionNode.JoinType.INNER);
-    }
-
-    /**
-     * 添加 LEFT JOIN 关联。
-     *
-     * @param field 关联字段的方法引用
-     * @param <J> 关联实体类型
-     * @return JoinGroup 实例，用于配置关联条件
-     */
-    public <J> JoinGroup<T, J> leftJoin(SFunction<T, ?> field) {
-        return internalJoin(field, ConditionNode.JoinType.LEFT);
-    }
-
-    /**
-     * 添加 LEFT JOIN 关联，通过显式指定实体类辅助类型推断。
-     *
-     * @param field 关联字段的方法引用
-     * @param joinEntityClass 关联实体类（仅用于类型推断，不影响运行时行为）
-     * @param <J> 关联实体类型
-     * @return JoinGroup 实例，用于配置关联条件
-     */
-    public <J> JoinGroup<T, J> leftJoin(SFunction<T, ?> field, Class<J> joinEntityClass) {
-        return internalJoin(field, ConditionNode.JoinType.LEFT);
-    }
-
-    /**
-     * 添加 FETCH JOIN 以急切加载关联关系。
-     *
-     * @param field 关联字段的方法引用
-     * @param <J> 关联实体类型
-     * @return JoinGroup 实例，用于配置关联条件
-     */
-    public <J> JoinGroup<T, J> fetchJoin(SFunction<T, ?> field) {
-        return internalJoin(field, ConditionNode.JoinType.FETCH);
-    }
-
-    /**
-     * 添加 FETCH JOIN 以急切加载关联关系，通过显式指定实体类辅助类型推断。
-     *
-     * @param field 关联字段的方法引用
-     * @param joinEntityClass 关联实体类（仅用于类型推断，不影响运行时行为）
-     * @param <J> 关联实体类型
-     * @return JoinGroup 实例，用于配置关联条件
-     */
-    public <J> JoinGroup<T, J> fetchJoin(SFunction<T, ?> field, Class<J> joinEntityClass) {
-        return internalJoin(field, ConditionNode.JoinType.FETCH);
-    }
-
-    /**
-     * 添加 LEFT FETCH JOIN 关联。
-     *
-     * @param field 关联字段的方法引用
-     * @param <J> 关联实体类型
-     * @return JoinGroup 实例，用于配置关联条件
-     */
-    public <J> JoinGroup<T, J> leftFetchJoin(SFunction<T, ?> field) {
-        return internalJoin(field, ConditionNode.JoinType.LEFT_FETCH);
-    }
-
-    /**
-     * 添加 LEFT FETCH JOIN 关联，通过显式指定实体类辅助类型推断。
-     *
-     * @param field 关联字段的方法引用
-     * @param joinEntityClass 关联实体类（仅用于类型推断，不影响运行时行为）
-     * @param <J> 关联实体类型
-     * @return JoinGroup 实例，用于配置关联条件
-     */
-    public <J> JoinGroup<T, J> leftFetchJoin(SFunction<T, ?> field, Class<J> joinEntityClass) {
-        return internalJoin(field, ConditionNode.JoinType.LEFT_FETCH);
-    }
-
-    /**
-     * 内部 JOIN 实现方法，消除重复代码。
-     *
-     * @param field 关联字段的方法引用
-     * @param joinType JOIN 类型
-     * @param <J> 关联实体类型
-     * @return JoinGroup 实例，用于配置关联条件
-     */
     private <J> JoinGroup<T, J> internalJoin(SFunction<T, ?> field, ConditionNode.JoinType joinType) {
         if (field == null) {
             throw new IllegalArgumentException("field must not be null");
@@ -664,6 +563,7 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
      * @return 当前 QuerySpec 实例，支持链式调用
      * @throws IllegalArgumentException 如果任何参数为 null
      */
+    @Override
     public <S> QuerySpec<T> inSubQuery(SFunction<T, ?> outerField, Class<S> subEntity,
         java.util.function.Consumer<SubQuerySpec<S>> config) {
         if (outerField == null) {
@@ -701,6 +601,7 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
      * @return 当前 QuerySpec 实例，支持链式调用
      * @throws IllegalArgumentException 如果任何参数为 null
      */
+    @Override
     public <S> QuerySpec<T> notInSubQuery(SFunction<T, ?> outerField, Class<S> subEntity,
         java.util.function.Consumer<SubQuerySpec<S>> config) {
         if (outerField == null) {
@@ -717,13 +618,16 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
         return this;
     }
 
+    // ---- 内部方法：Consumer 模式自动关闭 ----
+
     /**
-     * 打开一个 OR 条件组。
-     *
-     * @return OrGroup 实例，用于添加 OR 条件
+     * 关闭 OR 条件组（仅限内部使用，由 Consumer 模式自动调用）。
      */
-    public OrGroup<T> or() {
-        return pushOrGroup();
+    void endOr() {
+        if (groupStack.isEmpty()) {
+            throw new IllegalStateException("endOr() called without a matching or()");
+        }
+        groupStack.pop();
     }
 
     /**
@@ -736,18 +640,6 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
         currentGroup().add(orNode);
         groupStack.push(orNode.nodes);
         return new OrGroup<>(this);
-    }
-
-    /**
-     * 关闭 OR 条件组。
-     *
-     * @throws IllegalStateException 如果没有匹配的 or() 调用
-     */
-    void endOr() {
-        if (groupStack.isEmpty()) {
-            throw new IllegalStateException("endOr() called without a matching or()");
-        }
-        groupStack.pop();
     }
 
     // ---- 基于 Consumer 的 API（自动关闭） ----

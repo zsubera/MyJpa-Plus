@@ -38,10 +38,10 @@ class JoinGroupTest {
         repository.save(child);
 
         QuerySpec<TestEntity> qs = new QuerySpec<>();
-        JoinGroup<TestEntity, ParentEntity> jg = qs.join(TestEntity::getParent);
-        jg.eq(ParentEntity::getCategory, "admin");
-        jg.eq(ParentEntity::getLevel, 10);
-        jg.endJoin();
+        qs.<ParentEntity>join(TestEntity::getParent, jg -> {
+            jg.eq(ParentEntity::getCategory, "admin");
+            jg.eq(ParentEntity::getLevel, 10);
+        });
 
         List<TestEntity> result = repository.findAll(qs.toSpecification());
         assertEquals(1, result.size());
@@ -58,9 +58,7 @@ class JoinGroupTest {
         repository.save(child);
 
         QuerySpec<TestEntity> qs = new QuerySpec<>();
-        JoinGroup<TestEntity, ParentEntity> jg = qs.join(TestEntity::getParent);
-        jg.gt(ParentEntity::getLevel, 5);
-        jg.endJoin();
+        qs.<ParentEntity>join(TestEntity::getParent, jg -> jg.gt(ParentEntity::getLevel, 5));
 
         List<TestEntity> result = repository.findAll(qs.toSpecification());
         assertEquals(1, result.size());
@@ -77,9 +75,7 @@ class JoinGroupTest {
         repository.save(child);
 
         QuerySpec<TestEntity> qs = new QuerySpec<>();
-        JoinGroup<TestEntity, ParentEntity> jg = qs.join(TestEntity::getParent);
-        jg.ge(ParentEntity::getLevel, 10);
-        jg.endJoin();
+        qs.<ParentEntity>join(TestEntity::getParent, jg -> jg.ge(ParentEntity::getLevel, 10));
 
         List<TestEntity> result = repository.findAll(qs.toSpecification());
         assertEquals(1, result.size());
@@ -96,9 +92,7 @@ class JoinGroupTest {
         repository.save(child);
 
         QuerySpec<TestEntity> qs = new QuerySpec<>();
-        JoinGroup<TestEntity, ParentEntity> jg = qs.join(TestEntity::getParent);
-        jg.lt(ParentEntity::getLevel, 5);
-        jg.endJoin();
+        qs.<ParentEntity>join(TestEntity::getParent, jg -> jg.lt(ParentEntity::getLevel, 5));
 
         List<TestEntity> result = repository.findAll(qs.toSpecification());
         assertEquals(1, result.size());
@@ -115,9 +109,7 @@ class JoinGroupTest {
         repository.save(child);
 
         QuerySpec<TestEntity> qs = new QuerySpec<>();
-        JoinGroup<TestEntity, ParentEntity> jg = qs.join(TestEntity::getParent);
-        jg.le(ParentEntity::getLevel, 3);
-        jg.endJoin();
+        qs.<ParentEntity>join(TestEntity::getParent, jg -> jg.le(ParentEntity::getLevel, 3));
 
         List<TestEntity> result = repository.findAll(qs.toSpecification());
         assertEquals(1, result.size());
@@ -134,9 +126,7 @@ class JoinGroupTest {
         repository.save(child);
 
         QuerySpec<TestEntity> qs = new QuerySpec<>();
-        JoinGroup<TestEntity, ParentEntity> jg = qs.join(TestEntity::getParent);
-        jg.startsWith(ParentEntity::getCategory, "admin");
-        jg.endJoin();
+        qs.<ParentEntity>join(TestEntity::getParent, jg -> jg.startsWith(ParentEntity::getCategory, "admin"));
 
         List<TestEntity> result = repository.findAll(qs.toSpecification());
         assertEquals(1, result.size());
@@ -153,9 +143,7 @@ class JoinGroupTest {
         repository.save(child);
 
         QuerySpec<TestEntity> qs = new QuerySpec<>();
-        JoinGroup<TestEntity, ParentEntity> jg = qs.join(TestEntity::getParent);
-        jg.ne(ParentEntity::getCategory, "user");
-        jg.endJoin();
+        qs.<ParentEntity>join(TestEntity::getParent, jg -> jg.ne(ParentEntity::getCategory, "user"));
 
         List<TestEntity> result = repository.findAll(qs.toSpecification());
         assertEquals(1, result.size());
@@ -172,9 +160,7 @@ class JoinGroupTest {
         repository.save(child);
 
         QuerySpec<TestEntity> qs = new QuerySpec<>();
-        JoinGroup<TestEntity, ParentEntity> jg = qs.join(TestEntity::getParent);
-        jg.in(ParentEntity::getCategory, "admin", "moderator");
-        jg.endJoin();
+        qs.<ParentEntity>join(TestEntity::getParent, jg -> jg.in(ParentEntity::getCategory, "admin", "moderator"));
 
         List<TestEntity> result = repository.findAll(qs.toSpecification());
         assertEquals(1, result.size());
@@ -191,9 +177,7 @@ class JoinGroupTest {
         repository.save(child);
 
         QuerySpec<TestEntity> qs = new QuerySpec<>();
-        JoinGroup<TestEntity, ParentEntity> jg = qs.join(TestEntity::getParent);
-        jg.between(ParentEntity::getLevel, 3, 7);
-        jg.endJoin();
+        qs.<ParentEntity>join(TestEntity::getParent, jg -> jg.between(ParentEntity::getLevel, 3, 7));
 
         List<TestEntity> result = repository.findAll(qs.toSpecification());
         assertEquals(1, result.size());
@@ -210,9 +194,7 @@ class JoinGroupTest {
         repository.save(child);
 
         QuerySpec<TestEntity> qs = new QuerySpec<>();
-        JoinGroup<TestEntity, ParentEntity> jg = qs.join(TestEntity::getParent);
-        jg.isNull(ParentEntity::getCategory);
-        jg.endJoin();
+        qs.<ParentEntity>join(TestEntity::getParent, jg -> jg.isNull(ParentEntity::getCategory));
 
         List<TestEntity> result = repository.findAll(qs.toSpecification());
         assertEquals(1, result.size());
@@ -229,9 +211,7 @@ class JoinGroupTest {
         repository.save(child);
 
         QuerySpec<TestEntity> qs = new QuerySpec<>();
-        JoinGroup<TestEntity, ParentEntity> jg = qs.join(TestEntity::getParent);
-        jg.isNotNull(ParentEntity::getCategory);
-        jg.endJoin();
+        qs.<ParentEntity>join(TestEntity::getParent, jg -> jg.isNotNull(ParentEntity::getCategory));
 
         List<TestEntity> result = repository.findAll(qs.toSpecification());
         assertEquals(1, result.size());
@@ -248,9 +228,7 @@ class JoinGroupTest {
         repository.save(child);
 
         QuerySpec<TestEntity> qs = new QuerySpec<>();
-        JoinGroup<TestEntity, ParentEntity> jg = qs.join(TestEntity::getParent);
-        jg.startsWith(ParentEntity::getCategory, "adm");
-        jg.endJoin();
+        qs.<ParentEntity>join(TestEntity::getParent, jg -> jg.startsWith(ParentEntity::getCategory, "adm"));
 
         List<TestEntity> result = repository.findAll(qs.toSpecification());
         assertEquals(1, result.size());
@@ -267,9 +245,7 @@ class JoinGroupTest {
         repository.save(child);
 
         QuerySpec<TestEntity> qs = new QuerySpec<>();
-        JoinGroup<TestEntity, ParentEntity> jg = qs.join(TestEntity::getParent);
-        jg.endsWith(ParentEntity::getCategory, "ator");
-        jg.endJoin();
+        qs.<ParentEntity>join(TestEntity::getParent, jg -> jg.endsWith(ParentEntity::getCategory, "ator"));
 
         List<TestEntity> result = repository.findAll(qs.toSpecification());
         assertEquals(1, result.size());
@@ -286,9 +262,7 @@ class JoinGroupTest {
         repository.save(child);
 
         QuerySpec<TestEntity> qs = new QuerySpec<>();
-        JoinGroup<TestEntity, ParentEntity> jg = qs.join(TestEntity::getParent);
-        jg.like(ParentEntity::getCategory, "inis");
-        jg.endJoin();
+        qs.<ParentEntity>join(TestEntity::getParent, jg -> jg.like(ParentEntity::getCategory, "inis"));
 
         List<TestEntity> result = repository.findAll(qs.toSpecification());
         assertEquals(1, result.size());
@@ -305,9 +279,7 @@ class JoinGroupTest {
         repository.save(child);
 
         QuerySpec<TestEntity> qs = new QuerySpec<>();
-        JoinGroup<TestEntity, ParentEntity> jg = qs.join(TestEntity::getParent);
-        jg.eqIgnoreCase(ParentEntity::getCategory, "ADMIN");
-        jg.endJoin();
+        qs.<ParentEntity>join(TestEntity::getParent, jg -> jg.eqIgnoreCase(ParentEntity::getCategory, "ADMIN"));
 
         List<TestEntity> result = repository.findAll(qs.toSpecification());
         assertEquals(1, result.size());
@@ -331,9 +303,9 @@ class JoinGroupTest {
         repository.save(c2);
 
         QuerySpec<TestEntity> qs = new QuerySpec<>();
-        JoinGroup<TestEntity, ParentEntity> jg = qs.join(TestEntity::getParent);
-        jg.or(oj -> oj.eq(ParentEntity::getCategory, "admin").eq(ParentEntity::getCategory, "moderator"));
-        jg.endJoin();
+        qs.<ParentEntity>join(TestEntity::getParent, jg -> {
+            jg.or(oj -> oj.eq(ParentEntity::getCategory, "admin").eq(ParentEntity::getCategory, "moderator"));
+        });
 
         List<TestEntity> result = repository.findAll(qs.toSpecification());
         assertEquals(2, result.size());
@@ -384,8 +356,7 @@ class JoinGroupTest {
 
         // rawLike() now delegates to contains(), which works normally
         QuerySpec<TestEntity> qs = new QuerySpec<>();
-        JoinGroup<TestEntity, ParentEntity> jg = qs.join(TestEntity::getParent);
-        jg.like(ParentEntity::getCategory, "adm");
+        qs.<ParentEntity>join(TestEntity::getParent, jg -> jg.like(ParentEntity::getCategory, "adm"));
         List<TestEntity> result = repository.findAll(qs.toSpecification());
         assertEquals(1, result.size());
     }
@@ -402,8 +373,7 @@ class JoinGroupTest {
         repository.save(child);
 
         QuerySpec<TestEntity> qs = new QuerySpec<>();
-        qs.<ParentEntity>join(TestEntity::getParent,
-            j -> j.eq(ParentEntity::getCategory, "admin").eq(ParentEntity::getLevel, 10));
+        qs.<ParentEntity>join(TestEntity::getParent, jg -> jg.like(ParentEntity::getCategory, "adm"));
         List<TestEntity> result = repository.findAll(qs.toSpecification());
         assertEquals(1, result.size());
     }
@@ -420,11 +390,9 @@ class JoinGroupTest {
         repository.save(child);
 
         QuerySpec<TestEntity> qs = new QuerySpec<>();
-        JoinGroup<TestEntity, ParentEntity> jg = qs.join(TestEntity::getParent);
-        JoinGroup<TestEntity, TestEntity> j2 = jg.join(ParentEntity::getChildren);
-        j2.eq(TestEntity::getName, "child");
-        j2.endJoin();
-        jg.endJoin();
+        qs.<ParentEntity>join(TestEntity::getParent, jg -> {
+            jg.<TestEntity>join(ParentEntity::getChildren, j2 -> j2.eq(TestEntity::getName, "child"));
+        });
         List<TestEntity> result = repository.findAll(qs.toSpecification());
         assertEquals(1, result.size());
     }
@@ -441,11 +409,9 @@ class JoinGroupTest {
         repository.save(child);
 
         QuerySpec<TestEntity> qs = new QuerySpec<>();
-        JoinGroup<TestEntity, ParentEntity> jg = qs.join(TestEntity::getParent);
-        JoinGroup<TestEntity, TestEntity> j2 = jg.leftJoin(ParentEntity::getChildren);
-        j2.eq(TestEntity::getName, "child");
-        j2.endJoin();
-        jg.endJoin();
+        qs.<ParentEntity>join(TestEntity::getParent, jg -> {
+            jg.<TestEntity>leftJoin(ParentEntity::getChildren, j2 -> j2.eq(TestEntity::getName, "child"));
+        });
         List<TestEntity> result = repository.findAll(qs.toSpecification());
         assertEquals(1, result.size());
     }
