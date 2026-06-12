@@ -24,7 +24,7 @@ import java.util.Collection;
  * 内部工具类——不建议应用代码直接使用。
  *
  * @author zsubera
- * @since 1.0
+ * @since 0.0.2
  */
 public final class PredicateHelper {
 

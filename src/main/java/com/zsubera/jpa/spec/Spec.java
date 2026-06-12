@@ -31,8 +31,6 @@ import org.springframework.data.jpa.domain.Specification;
  *     Spec.not((root, query, cb) -> cb.isNull(root.get("deletedAt")))
  * );
  * }</pre>
- *
- * @since 1.3.0
  */
 public final class Spec {
 

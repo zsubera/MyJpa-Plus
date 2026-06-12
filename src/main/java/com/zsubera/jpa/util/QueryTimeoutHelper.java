@@ -15,7 +15,7 @@ import jakarta.persistence.Query;
  * 设置为 {@code -1} 表示禁用超时限制。
  *
  * @author myjpa-plus
- * @since 1.3.0
+ * @since 1.2.0
  */
 public final class QueryTimeoutHelper {
 

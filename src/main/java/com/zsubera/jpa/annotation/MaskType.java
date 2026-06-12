@@ -7,7 +7,7 @@ package com.zsubera.jpa.annotation;
  * 定义常见的数据脱敏模式，配合 {@link Mask} 注解使用。
  *
  * @author myjpa-plus
- * @since 1.0.0
+ * @since 1.2.0.0
  */
 public enum MaskType {
     /** 手机号脱敏：保留前 3 位和后 4 位，中间用 **** 替代。例如：138****1234 */

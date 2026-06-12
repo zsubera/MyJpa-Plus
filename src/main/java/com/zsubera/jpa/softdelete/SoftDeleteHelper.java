@@ -52,7 +52,7 @@ import org.springframework.util.ConcurrentReferenceHashMap;
  * @author myjpa-plus
  * @see SoftDelete
  * @see Specification
- * @since 1.2.0
+ * @since 0.0.2
  */
 public final class SoftDeleteHelper {
 
