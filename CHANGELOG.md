@@ -1,6 +1,6 @@
 # MyJpa-Plus 更新日志
 
-## [1.2.0] - 2026-05-31
+## [1.3.0] - 2026-05-31
 
 ### 新增
 - **UPSERT/MERGE 支持** — `MergeSpec` 构建器，支持 PostgreSQL `ON CONFLICT`、MySQL `ON DUPLICATE KEY`、H2 `MERGE`

@@ -141,7 +141,7 @@
 <dependency>
     <groupId>io.github.zsubera</groupId>
     <artifactId>myjpa-plus</artifactId>
-    <version>1.2.0</version>
+    <version>1.3.0</version>
 </dependency>
 ```
 
@@ -150,12 +150,11 @@
 ### 查询构建
 
 ```java
-// 简单等值查询（null 值自动转为 IS NULL）
+// 简单等值查询（null 值自动转为 IS NULL，toSpecification() 可选）
 List<User> users = userRepository.findAll(
     new QuerySpec<User>()
         .eq(User::getStatus, "ACTIVE")
         .eq(User::getDeletedAt, null)          // → IS NULL
-        .toSpecification()
 );
 
 // OR 多条件组合（Consumer 模式，无需 endOr）
