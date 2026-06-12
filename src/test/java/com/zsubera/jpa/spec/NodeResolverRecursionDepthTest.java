@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.*;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.BeforeEach;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
 
@@ -14,7 +15,15 @@ import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
  * <p>测试 P1-4 修复：递归深度无限制导致 StackOverflowError
  */
 @DataJpaTest
+@org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabase(
+    replace = org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabase.Replace.NONE)
 class NodeResolverRecursionDepthTest {
+
+    @BeforeEach
+    void setUp() {
+        repository.deleteAll();
+        repository.flush();
+    }
 
     @Autowired
     private TestEntityRepository repository;

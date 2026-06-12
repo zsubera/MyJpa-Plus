@@ -9,6 +9,8 @@ import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
 
 @DataJpaTest
+@org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabase(
+    replace = org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabase.Replace.NONE)
 class CteSpecTest {
 
     @PersistenceContext
@@ -146,8 +148,8 @@ class CteSpecTest {
 
     @Test
     void testGetSingleResultEmpty() {
-        var result = CteSpec.with("empty").as("SELECT id, name FROM test_entity WHERE status = -999")
-            .select("SELECT * FROM empty").getSingleResult(em);
+        var result = CteSpec.with("empty_result").as("SELECT id, name FROM test_entity WHERE status = -999")
+            .select("SELECT * FROM empty_result").getSingleResult(em);
 
         assertTrue(result.isEmpty());
     }

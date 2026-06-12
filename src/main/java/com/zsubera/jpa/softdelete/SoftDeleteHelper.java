@@ -129,6 +129,23 @@ public final class SoftDeleteHelper {
         return escaped.toString();
     }
 
+    /**
+     * 验证表名标识符但不添加双引号。用于原生 SQL 中不需要大小写敏感的场景。
+     */
+    static String validateTableName(String identifier) {
+        if (identifier == null || identifier.isEmpty()) {
+            throw new IllegalArgumentException("Identifier must not be null or empty");
+        }
+        String[] parts = identifier.split("\\.");
+        for (String part : parts) {
+            if (!SAFE_IDENTIFIER_PART_PATTERN.matcher(part).matches()) {
+                throw new IllegalArgumentException("Invalid SQL identifier: '" + identifier
+                    + "'. Each part must contain only alphanumeric characters and underscores.");
+            }
+        }
+        return identifier;
+    }
+
     private SoftDeleteHelper() {}
 
     /**
@@ -220,8 +237,8 @@ public final class SoftDeleteHelper {
             throw new IllegalArgumentException("Cannot resolve @SoftDelete field: " + fieldName);
         }
         SoftDelete annotation = field.getAnnotation(SoftDelete.class);
-        String escapedTable = escapeIdentifier(tableName);
-        String escapedColumn = escapeIdentifier(columnName);
+        String escapedTable = validateTableName(tableName);
+        String escapedColumn = validateTableName(columnName);
         ResolvedDeletedValue resolved = resolveDeletedValue(entityClass, field, annotation);
         int updated;
         if (resolved.booleanField()) {
@@ -299,9 +316,9 @@ public final class SoftDeleteHelper {
             throw new IllegalArgumentException("Cannot resolve @SoftDelete field: " + fieldName);
         }
         SoftDelete annotation = field.getAnnotation(SoftDelete.class);
-        String escapedTable = escapeIdentifier(tableName);
-        String escapedColumn = escapeIdentifier(columnName);
-        String escapedIdColumn = escapeIdentifier(idFieldName);
+        String escapedTable = validateTableName(tableName);
+        String escapedColumn = validateTableName(columnName);
+        String escapedIdColumn = validateTableName(idFieldName);
         ResolvedDeletedValue resolved = resolveDeletedValue(entityClass, field, annotation);
         // 使用命名参数替代位置参数以避免某些 JPA 实现中的索引冲突
         String setParamName = "deletedValue";

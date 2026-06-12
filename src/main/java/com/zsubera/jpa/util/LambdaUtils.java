@@ -251,12 +251,8 @@ public final class LambdaUtils {
     private static final java.util.concurrent.locks.ReentrantLock METHOD_EVICT_LOCK =
         new java.util.concurrent.locks.ReentrantLock();
 
-    /** 调用计数器，用于采样驱逐检查（仅用于主缓存 CACHE） */
+    /** 调用计数器，用于采样驱逐检查（合并主缓存和方法缓存的检查） */
     private static final java.util.concurrent.atomic.AtomicInteger CALL_COUNTER =
-        new java.util.concurrent.atomic.AtomicInteger(0);
-
-    /** METHOD_CACHE 独立调用计数器，避免与主缓存共享计数器导致采样驱逐不精确 */
-    private static final java.util.concurrent.atomic.AtomicInteger METHOD_CALL_COUNTER =
         new java.util.concurrent.atomic.AtomicInteger(0);
 
     /** 采样间隔：每 N 次调用检查一次驱逐 */
@@ -314,7 +310,7 @@ public final class LambdaUtils {
     }
 
     private static void evictMethodCacheIfNeeded() {
-        if (METHOD_CALL_COUNTER.incrementAndGet() % EVICTION_CHECK_INTERVAL != 0) {
+        if (CALL_COUNTER.get() % EVICTION_CHECK_INTERVAL != 0) {
             return;
         }
         // 快速检查：如果缓存大小未超过阈值，直接返回

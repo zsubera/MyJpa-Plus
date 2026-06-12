@@ -158,7 +158,14 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
             sb.append(")");
         }
         if (!havingConditions.isEmpty()) {
-            sb.append("#HAVING(").append(havingConditions.size()).append(")");
+            sb.append("#HAVING(");
+            for (int i = 0; i < havingConditions.size(); i++) {
+                if (i > 0) {
+                    sb.append(",");
+                }
+                sb.append(havingConditions.get(i).hashCode());
+            }
+            sb.append(")");
         }
         if (!orderNodes.isEmpty()) {
             sb.append("#ORDERBY(");
@@ -285,7 +292,6 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
      * <ul>
      * <li>PostgreSQL: 通过 {@code jakarta.persistence.query.timeout} hint 设置（毫秒），支持语句级超时</li>
      * <li>MySQL: 通过 {@code jakarta.persistence.query.timeout} hint 设置，但支持有限</li>
-     * <li>H2: 支持查询超时</li>
      * <li>Oracle: 通过 {@code jakarta.persistence.query.timeout} hint 设置</li>
      * </ul>
      * 超时值通过 JPA hint {@code jakarta.persistence.query.timeout} 传递（转换为毫秒）， 实际行为取决于 JPA 提供者和数据库的实现。
@@ -447,8 +453,10 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
             }
             orderNodes.add(new ConditionNode.OrderNode(LambdaUtils.getPropertyName(f), true));
         }
-        log.debug("QuerySpec: ORDER BY ASC {}",
-            Arrays.stream(fields).map(LambdaUtils::getPropertyName).collect(Collectors.joining(", ")));
+        if (log.isDebugEnabled()) {
+            log.debug("QuerySpec: ORDER BY ASC {}",
+                Arrays.stream(fields).map(LambdaUtils::getPropertyName).collect(Collectors.joining(", ")));
+        }
         return this;
     }
 
@@ -473,8 +481,10 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
             }
             orderNodes.add(new ConditionNode.OrderNode(LambdaUtils.getPropertyName(f), false));
         }
-        log.debug("QuerySpec: ORDER BY DESC {}",
-            Arrays.stream(fields).map(LambdaUtils::getPropertyName).collect(Collectors.joining(", ")));
+        if (log.isDebugEnabled()) {
+            log.debug("QuerySpec: ORDER BY DESC {}",
+                Arrays.stream(fields).map(LambdaUtils::getPropertyName).collect(Collectors.joining(", ")));
+        }
         return this;
     }
 

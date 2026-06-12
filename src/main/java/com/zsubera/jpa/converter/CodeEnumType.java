@@ -145,12 +145,14 @@ public class CodeEnumType implements UserType<Object>, DynamicParameterizedType 
                 if (field.isAnnotationPresent(CodeEnumValue.class)) {
                     try {
                         field.setAccessible(true);
+                        return field;
                     } catch (java.lang.reflect.InaccessibleObjectException e) {
-                        throw new IllegalStateException("Cannot access @CodeEnumValue field '" + field.getName()
-                            + "' in " + cls.getName() + ". On Java 17+, add JVM argument: "
-                            + "--add-opens java.base/java.lang.reflect=ALL-UNNAMED", e);
+                        log.warn(
+                            "Cannot access @CodeEnumValue field '{}' in {}. On Java 17+, add JVM argument: "
+                                + "--add-opens java.base/java.lang.reflect=ALL-UNNAMED",
+                            field.getName(), cls.getName());
+                        return NO_CODE_FIELD_SENTINEL;
                     }
-                    return field;
                 }
             }
             return NO_CODE_FIELD_SENTINEL;

@@ -439,7 +439,10 @@ public class CteSpec {
                         && args[0] instanceof java.sql.Connection conn) {
                         return conn.getMetaData().getDatabaseProductName();
                     }
-                    return method.invoke(proxy, args);
+                    if (method.getDeclaringClass() == Object.class) {
+                        return method.invoke(this, args);
+                    }
+                    throw new UnsupportedOperationException("Unexpected method on ReturningWork: " + method.getName());
                 });
             java.lang.reflect.Method doReturningWork = sessionClass.getMethod("doReturningWork", returningWorkClass);
             productNameHolder[0] = (String)doReturningWork.invoke(session, workProxy);

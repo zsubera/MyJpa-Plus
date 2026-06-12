@@ -34,7 +34,10 @@ final class EntityFieldExtractor<T> {
     private static final ConcurrentReferenceHashMap<Class<?>, List<Field>> FIELD_CACHE =
         new ConcurrentReferenceHashMap<>(16, ConcurrentReferenceHashMap.ReferenceType.WEAK);
 
-    /** 缓存大小超过限制前的警告阈值。 */
+    /** getAllFields() 使用独立缓存，避免与 extractFieldValues() 的不同过滤器共享缓存。 */
+    private static final ConcurrentReferenceHashMap<Class<?>, List<Field>> ALL_FIELDS_CACHE =
+        new ConcurrentReferenceHashMap<>(16, ConcurrentReferenceHashMap.ReferenceType.WEAK);
+
     private static final int MAX_FIELD_CACHE_SIZE = 1024;
 
     /** 采样概率分母——每 1024 次调用检查一次缓存大小 */
@@ -155,7 +158,7 @@ final class EntityFieldExtractor<T> {
      * @return 所有字段列表（不包括静态和合成字段）
      */
     private static List<Field> getAllFields(Class<?> clazz) {
-        return FIELD_CACHE.computeIfAbsent(clazz, cls -> {
+        return ALL_FIELDS_CACHE.computeIfAbsent(clazz, cls -> {
             List<Field> fields = new ArrayList<>();
             Class<?> current = cls;
             while (current != null && current != Object.class) {

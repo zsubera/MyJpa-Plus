@@ -24,6 +24,8 @@ import org.springframework.data.jpa.domain.Specification;
 import org.springframework.test.context.ContextConfiguration;
 
 @DataJpaTest
+@org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabase(
+    replace = org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabase.Replace.NONE)
 @ContextConfiguration(classes = {TestApplication.class, MyJpaTemplateTest.TestConfig.class})
 class MyJpaTemplateTest {
 
@@ -584,7 +586,7 @@ class MyJpaTemplateTest {
 
     // ---- executeBatchInSeparateTransactions 测试 ----
 
-    // [FIX] P0-1: 使用 NOT_SUPPORTED 挂起测试事务，避免 REQUIRES_NEW 与 H2 PESSIMISTIC_WRITE 锁冲突
+    // [FIX] P0-1: 使用 NOT_SUPPORTED 挂起测试事务，避免 REQUIRES_NEW 与 PESSIMISTIC_WRITE 锁冲突
     @Test
     @org.springframework.transaction.annotation.Transactional(
         propagation = org.springframework.transaction.annotation.Propagation.NOT_SUPPORTED)
@@ -666,6 +668,8 @@ class MyJpaTemplateTest {
     // ---- saveAllBatchedInSeparateTransactions 测试 ----
 
     @Test
+    @org.springframework.transaction.annotation.Transactional(
+        propagation = org.springframework.transaction.annotation.Propagation.NOT_SUPPORTED)
     void testSaveAllBatchedInSeparateTransactions() {
         List<TestEntity> entities = new java.util.ArrayList<>();
         for (int i = 0; i < 5; i++) {

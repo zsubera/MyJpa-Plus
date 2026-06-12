@@ -243,6 +243,7 @@ public class MyJpaTemplate {
                 + defaultTimeoutSeconds + " (max " + (Integer.MAX_VALUE / 1000) + ")");
         }
         this.defaultTimeoutSeconds = defaultTimeoutSeconds;
+        com.zsubera.jpa.util.QueryTimeoutHelper.setDefaultTimeoutSeconds(defaultTimeoutSeconds);
     }
 
     /**
@@ -371,7 +372,7 @@ public class MyJpaTemplate {
         log.debug("Cache miss for key: {}", cacheKey);
         List<T> result = findAll(entityClass, spec);
         cacheManager.put(cacheKey, Collections.unmodifiableList(new ArrayList<>(result)), ttlSeconds);
-        return new ArrayList<>(result);
+        return result;
     }
 
     /**

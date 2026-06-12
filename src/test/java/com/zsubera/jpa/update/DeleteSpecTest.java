@@ -8,12 +8,15 @@ import com.zsubera.jpa.spec.TestEntityRepository;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
 import java.util.List;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
 import org.springframework.test.context.ContextConfiguration;
 
 @DataJpaTest
+@org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabase(
+    replace = org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabase.Replace.NONE)
 @ContextConfiguration(classes = TestApplication.class)
 class DeleteSpecTest {
 
@@ -22,6 +25,12 @@ class DeleteSpecTest {
 
     @PersistenceContext
     private EntityManager em;
+
+    @BeforeEach
+    void setUp() {
+        repository.deleteAll();
+        repository.flush();
+    }
 
     @Test
     void testDeleteByEqCondition() {

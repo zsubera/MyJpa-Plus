@@ -16,6 +16,8 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.test.context.ContextConfiguration;
 
 @DataJpaTest
+@org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabase(
+    replace = org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabase.Replace.NONE)
 @ContextConfiguration(classes = {TestApplication.class, BatchSaveTemplateTest.TestConfig.class})
 class BatchSaveTemplateTest {
 
@@ -148,6 +150,8 @@ class BatchSaveTemplateTest {
     // ---- saveAllBatchedInSeparateTransactions ----
 
     @Test
+    @org.springframework.transaction.annotation.Transactional(
+        propagation = org.springframework.transaction.annotation.Propagation.NOT_SUPPORTED)
     void testSaveAllBatchedInSeparateTransactions() {
         List<TestEntity> entities = new ArrayList<>();
         for (int i = 0; i < 5; i++) {
@@ -163,6 +167,8 @@ class BatchSaveTemplateTest {
     }
 
     @Test
+    @org.springframework.transaction.annotation.Transactional(
+        propagation = org.springframework.transaction.annotation.Propagation.NOT_SUPPORTED)
     void testSaveAllBatchedInSeparateTransactionsSingleBatch() {
         List<TestEntity> entities = new ArrayList<>();
         for (int i = 0; i < 3; i++) {

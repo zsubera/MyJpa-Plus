@@ -35,13 +35,8 @@ public final class EntityClassResolver {
      */
     @SuppressWarnings("unchecked")
     public static <T> Class<T> resolve(Class<?> repositoryClass) {
-        Class<?> cached = CACHE.get(repositoryClass);
-        if (cached != null) {
-            return cached == UNRESOLVABLE_SENTINEL ? null : (Class<T>)cached;
-        }
-        Class<?> result = doResolve(repositoryClass);
-        CACHE.put(repositoryClass, result != null ? result : UNRESOLVABLE_SENTINEL);
-        return (Class<T>)result;
+        Class<?> cached = CACHE.computeIfAbsent(repositoryClass, EntityClassResolver::doResolve);
+        return cached == UNRESOLVABLE_SENTINEL ? null : (Class<T>)cached;
     }
 
     private static Class<?> doResolve(Class<?> repositoryClass) {

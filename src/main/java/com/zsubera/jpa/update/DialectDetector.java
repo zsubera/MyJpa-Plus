@@ -11,7 +11,7 @@ import org.slf4j.LoggerFactory;
  * 数据库方言检测器。
  *
  * <p>
- * 从 EntityManager 自动检测数据库类型（PostgreSQL、MySQL、H2），支持多级回退策略：
+ * 从 EntityManager 自动检测数据库类型（PostgreSQL、MySQL），支持多级回退策略：
  * <ol>
  * <li>JDBC URL 属性检测</li>
  * <li>JDBC Connection.getMetaData() 检测</li>
@@ -30,7 +30,7 @@ final class DialectDetector {
 
     /** 方言策略实例映射，避免重复创建。 */
     static final Map<String, DialectStrategy> DIALECT_STRATEGIES =
-        Map.of("postgresql", new PostgresDialect(), "mysql", new MysqlDialect(), "h2", new H2Dialect());
+        Map.of("postgresql", new PostgresDialect(), "mysql", new MysqlDialect());
 
     /** 每个 EntityManagerFactory 缓存的方言，避免重复检测。 */
     private static final ConcurrentHashMap<String, String> DIALECT_CACHE = new ConcurrentHashMap<>();
@@ -41,7 +41,7 @@ final class DialectDetector {
      * 检测数据库方言。
      *
      * @param em 实体管理器
-     * @return 数据库方言标识（postgresql、mysql 或 h2）
+     * @return 数据库方言标识（postgresql 或 mysql）
      * @throws MyJpaPlusException 如果无法检测方言且未手动配置
      */
     static String detectDialect(EntityManager em) {
@@ -67,10 +67,6 @@ final class DialectDetector {
                     DIALECT_CACHE.putIfAbsent(factoryKey, "mysql");
                     return "mysql";
                 }
-                if (url.contains("h2")) {
-                    DIALECT_CACHE.putIfAbsent(factoryKey, "h2");
-                    return "h2";
-                }
             }
         } catch (Exception ex) {
             log.debug("Failed to detect dialect from properties: {}", ex.getMessage());
@@ -82,8 +78,11 @@ final class DialectDetector {
             if (conn != null) {
                 String productName = conn.getMetaData().getDatabaseProductName().toLowerCase();
                 String dialect = mapDialect(productName);
-                DIALECT_CACHE.putIfAbsent(factoryKey, dialect);
-                return dialect;
+                if (DIALECT_STRATEGIES.containsKey(dialect)) {
+                    DIALECT_CACHE.putIfAbsent(factoryKey, dialect);
+                    return dialect;
+                }
+                // 未识别的方言不缓存，允许手动配置覆盖
             }
         } catch (Exception e) {
             log.debug("Failed to detect dialect via JDBC Connection.unwrap(): {}", e.getMessage());
@@ -110,8 +109,11 @@ final class DialectDetector {
             java.lang.reflect.Method doWork = sessionClass.getMethod("doWork", workClass);
             doWork.invoke(session, workProxy);
             String dialect = mapDialect(dialectHolder[0]);
-            DIALECT_CACHE.putIfAbsent(factoryKey, dialect);
-            return dialect;
+            if (DIALECT_STRATEGIES.containsKey(dialect)) {
+                DIALECT_CACHE.putIfAbsent(factoryKey, dialect);
+                return dialect;
+            }
+            // 未识别的方言不缓存，允许手动配置覆盖
         } catch (ClassNotFoundException e) {
             log.debug("Hibernate not available on classpath");
         } catch (Exception e) {
@@ -120,7 +122,7 @@ final class DialectDetector {
 
         // 优先级 4：手动配置
         log.warn("Failed to detect database dialect automatically. "
-            + "Set system property 'myjpa-plus.dialect' to 'postgresql', 'mysql', or 'h2' to specify manually.");
+            + "Set system property 'myjpa-plus.dialect' to 'postgresql' or 'mysql' to specify manually.");
         String manualDialect = System.getProperty("myjpa-plus.dialect");
         if (manualDialect != null && !manualDialect.isEmpty()) {
             String mapped = mapDialect(manualDialect.toLowerCase());
@@ -129,7 +131,7 @@ final class DialectDetector {
             return mapped;
         }
         throw new MyJpaPlusException("Failed to detect database dialect and no manual dialect configured. "
-            + "Set system property 'myjpa-plus.dialect' to 'postgresql', 'mysql', or 'h2'.");
+            + "Set system property 'myjpa-plus.dialect' to 'postgresql' or 'mysql'.");
     }
 
     /**
@@ -148,11 +150,8 @@ final class DialectDetector {
         if (productName.contains("mysql")) {
             return "mysql";
         }
-        if (productName.contains("h2")) {
-            return "h2";
-        }
         log.warn("Unknown database product '{}'. "
-            + "Set system property 'myjpa-plus.dialect' to 'postgresql', 'mysql', or 'h2' manually.", productName);
+            + "Set system property 'myjpa-plus.dialect' to 'postgresql' or 'mysql' manually.", productName);
         return productName;
     }
 

@@ -11,6 +11,7 @@ import com.zsubera.jpa.update.UpdateSpec;
 import jakarta.persistence.EntityManager;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.BeforeEach;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
 import org.springframework.boot.test.context.TestConfiguration;
@@ -19,11 +20,20 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.test.context.ContextConfiguration;
 
 @DataJpaTest
+@org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabase(
+    replace = org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabase.Replace.NONE)
 @ContextConfiguration(classes = {TestApplication.class, BulkOperationTemplateTest.TestConfig.class})
 class BulkOperationTemplateTest {
 
+    @BeforeEach
+    void setUp() {
+        repository.deleteAll();
+        repository.flush();
+    }
+
     @TestConfiguration
     static class TestConfig {
+
         @Bean
         public MyJpaTemplate myJpaTemplate() {
             return new MyJpaTemplate();
@@ -272,6 +282,8 @@ class BulkOperationTemplateTest {
     // [FIX] P0-1: REQUIRES_NEW 挂起外层事务，batch 的新 EM 无法看到外层未提交的数据。
     // 使用 TransactionTemplate 在独立事务中插入数据，确保数据对后续 REQUIRES_NEW 事务可见。
     @Test
+    @org.springframework.transaction.annotation.Transactional(
+        propagation = org.springframework.transaction.annotation.Propagation.NOT_SUPPORTED)
     void testExecuteBatchInSeparateTransactionsUpdate() {
         insertTestData("sepTxBatchUpd", 5);
 
@@ -282,6 +294,8 @@ class BulkOperationTemplateTest {
     }
 
     @Test
+    @org.springframework.transaction.annotation.Transactional(
+        propagation = org.springframework.transaction.annotation.Propagation.NOT_SUPPORTED)
     void testExecuteBatchInSeparateTransactionsDelete() {
         insertTestData("sepTxBatchDel", 5);
 
@@ -314,6 +328,8 @@ class BulkOperationTemplateTest {
     // ---- executeBatchInSeparateTransactions with BatchResult ----
 
     @Test
+    @org.springframework.transaction.annotation.Transactional(
+        propagation = org.springframework.transaction.annotation.Propagation.NOT_SUPPORTED)
     void testExecuteBatchInSeparateTransactionsWithResultUpdate() {
         insertTestData("resultSepTx", 5);
 
@@ -328,6 +344,8 @@ class BulkOperationTemplateTest {
     }
 
     @Test
+    @org.springframework.transaction.annotation.Transactional(
+        propagation = org.springframework.transaction.annotation.Propagation.NOT_SUPPORTED)
     void testExecuteBatchInSeparateTransactionsWithResultDelete() {
         insertTestData("resultSepTxDel", 5);
 
@@ -385,7 +403,8 @@ class BulkOperationTemplateTest {
 
     /**
      * [FIX] P0-1: 在独立已提交事务中插入测试数据，确保 REQUIRES_NEW 批量操作能看到数据。
-     * @DataJpaTest 的 @Transactional 在测试方法结束前不会提交，
+     * @DataJpaTest
+    @org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabase(replace = org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabase.Replace.NONE) 的 @Transactional 在测试方法结束前不会提交，
      * 而 REQUIRES_NEW 会挂起外层事务创建新 EM，新 EM 无法看到外层未提交的数据。
      */
     private void insertTestData(String namePrefix, int count) {

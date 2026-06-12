@@ -84,81 +84,49 @@ public class OptimisticLockRetryAdvisor {
             try {
                 return pjp.proceed();
             } catch (OptimisticLockException | ObjectOptimisticLockingFailureException ex) {
-                attempt++;
-                if (attempt > maxRetries) {
-                    log.warn("OptimisticLockException after {} retries for method {}.{}", maxRetries,
-                        method.getDeclaringClass().getSimpleName(), method.getName());
-                    throw ex;
-                }
-                // 检查总超时，防止无限重试风暴
-                totalElapsed = System.currentTimeMillis() - startTime;
-                if (totalElapsed >= MAX_TOTAL_TIMEOUT_MS) {
-                    log.warn("OptimisticLockException after {} retries ({}ms elapsed, timeout={}ms) for method {}.{}",
-                        attempt, totalElapsed, MAX_TOTAL_TIMEOUT_MS, method.getDeclaringClass().getSimpleName(),
-                        method.getName());
-                    throw ex;
-                }
-                // 指数退避：backoffMs * 2^(attempt-1)，上限 MAX_BACKOFF_MS
-                // 先 clamp 再乘法，避免大 backoffMs 值溢出
-                long shift = Math.min(attempt - 1, 30);
-                long baseDelay = Math.min(backoffMs, MAX_BACKOFF_MS >> shift) * (1L << shift);
-                // 确保最小延迟为 1ms，防止紧密重试循环
-                baseDelay = Math.max(baseDelay, 1);
-                // 确保延迟不超过剩余超时时间
-                long remainingTimeout = MAX_TOTAL_TIMEOUT_MS - totalElapsed;
-                baseDelay = Math.min(baseDelay, remainingTimeout);
-                // 正向抖动（基础延迟的 0~20%），防止多线程同时重试时的惊群效应
-                long jitter = (long)(baseDelay * 0.2 * ThreadLocalRandom.current().nextDouble());
-                long delay = baseDelay + jitter;
-                log.debug("OptimisticLockException on attempt {}/{} for method {}.{}, retrying in {}ms", attempt,
-                    maxRetries, method.getDeclaringClass().getSimpleName(), method.getName(), delay);
-                try {
-                    Thread.sleep(delay);
-                } catch (InterruptedException ie) {
-                    Thread.currentThread().interrupt();
-                    ex.addSuppressed(ie);
-                    throw ex;
-                }
+                attempt = handleRetry(ex, attempt, maxRetries, backoffMs, startTime, method, "");
             } catch (PersistenceException ex) {
-                // 检查是否为包装的 OptimisticLockException
                 if (isOptimisticLockCause(ex)) {
-                    attempt++;
-                    if (attempt > maxRetries) {
-                        log.warn("OptimisticLockException (wrapped) after {} retries for method {}.{}", maxRetries,
-                            method.getDeclaringClass().getSimpleName(), method.getName());
-                        throw ex;
-                    }
-                    totalElapsed = System.currentTimeMillis() - startTime;
-                    if (totalElapsed >= MAX_TOTAL_TIMEOUT_MS) {
-                        log.warn(
-                            "OptimisticLockException (wrapped) after {} retries ({}ms elapsed, timeout={}ms) for method {}.{}",
-                            attempt, totalElapsed, MAX_TOTAL_TIMEOUT_MS, method.getDeclaringClass().getSimpleName(),
-                            method.getName());
-                        throw ex;
-                    }
-                    // 指数退避：backoffMs * 2^(attempt-1)，上限 MAX_BACKOFF_MS
-                    // 先 clamp 再乘法，避免大 backoffMs 值溢出
-                    long shift2 = Math.min(attempt - 1, 30);
-                    long baseDelay = Math.min(backoffMs, MAX_BACKOFF_MS >> shift2) * (1L << shift2);
-                    baseDelay = Math.max(baseDelay, 1);
-                    long remainingTimeout = MAX_TOTAL_TIMEOUT_MS - totalElapsed;
-                    baseDelay = Math.min(baseDelay, remainingTimeout);
-                    long jitter = (long)(baseDelay * 0.2 * ThreadLocalRandom.current().nextDouble());
-                    long delay = baseDelay + jitter;
-                    log.debug("OptimisticLockException (wrapped) on attempt {}/{} for method {}.{}, retrying in {}ms",
-                        attempt, maxRetries, method.getDeclaringClass().getSimpleName(), method.getName(), delay);
-                    try {
-                        Thread.sleep(delay);
-                    } catch (InterruptedException ie) {
-                        Thread.currentThread().interrupt();
-                        ex.addSuppressed(ie);
-                        throw ex;
-                    }
+                    attempt = handleRetry(ex, attempt, maxRetries, backoffMs, startTime, method, " (wrapped)");
                 } else {
                     throw ex;
                 }
             }
         }
+    }
+
+    private int handleRetry(Exception ex, int attempt, int maxRetries, long backoffMs, long startTime,
+        java.lang.reflect.Method method, String label) throws Exception {
+        attempt++;
+        if (attempt > maxRetries) {
+            log.warn("OptimisticLockException{} after {} retries for method {}.{}", label, maxRetries,
+                method.getDeclaringClass().getSimpleName(), method.getName());
+            throw ex;
+        }
+        long totalElapsed = System.currentTimeMillis() - startTime;
+        if (totalElapsed >= MAX_TOTAL_TIMEOUT_MS) {
+            log.warn("OptimisticLockException{} after {} retries ({}ms elapsed, timeout={}ms) for method {}.{}", label,
+                attempt, totalElapsed, MAX_TOTAL_TIMEOUT_MS, method.getDeclaringClass().getSimpleName(),
+                method.getName());
+            throw ex;
+        }
+        long shift = Math.min(attempt - 1, 30);
+        long baseDelay = Math.min(backoffMs, MAX_BACKOFF_MS >> shift) * (1L << shift);
+        baseDelay = Math.max(baseDelay, 1);
+        long remainingTimeout = MAX_TOTAL_TIMEOUT_MS - totalElapsed;
+        baseDelay = Math.min(baseDelay, remainingTimeout);
+        long jitter = (long)(baseDelay * 0.2 * ThreadLocalRandom.current().nextDouble());
+        long delay = baseDelay + jitter;
+        log.debug("OptimisticLockException{} on attempt {}/{} for method {}.{}, retrying in {}ms", label, attempt,
+            maxRetries, method.getDeclaringClass().getSimpleName(), method.getName(), delay);
+        try {
+            Thread.sleep(delay);
+        } catch (InterruptedException ie) {
+            Thread.currentThread().interrupt();
+            ex.addSuppressed(ie);
+            throw ex;
+        }
+        return attempt;
     }
 
     /**

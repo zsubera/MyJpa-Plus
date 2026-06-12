@@ -48,6 +48,7 @@ public class SoftDeleteJpaRepository<T, ID> extends SimpleJpaRepository<T, ID> {
 
     private final Class<T> domainClass;
     private final EntityManager entityManager;
+    private final JpaEntityInformation<T, ?> entityInformation;
 
     /**
      * 全局自动过滤开关，由自动配置类设置。当为 false 时，所有 Repository 层面的软删除过滤将被禁用。
@@ -189,6 +190,7 @@ public class SoftDeleteJpaRepository<T, ID> extends SimpleJpaRepository<T, ID> {
         super(entityInformation, entityManager);
         this.domainClass = entityInformation.getJavaType();
         this.entityManager = entityManager;
+        this.entityInformation = entityInformation;
     }
 
     /**
@@ -405,6 +407,31 @@ public class SoftDeleteJpaRepository<T, ID> extends SimpleJpaRepository<T, ID> {
         jakarta.persistence.TypedQuery<Long> query = super.getCountQuery(spec, domainClass);
         QueryTimeoutHelper.applyTimeout(query);
         return query;
+    }
+
+    /**
+     * 覆写 delete(entity) 以支持软删除。当实体有 @SoftDelete 字段且软删除过滤启用时，
+     * 执行软删除（UPDATE 设置删除标记）而非硬删除（DELETE）。
+     *
+     * <p>
+     * 这确保了 deleteById()（调用 delete()）与 deleteAll() 行为一致。
+     *
+     * @param entity 要删除的实体
+     */
+    @Override
+    public void delete(T entity) {
+        if (entity == null) {
+            throw new IllegalArgumentException("Entity must not be null");
+        }
+        if (shouldApplySoftDeleteFilter() && SoftDeleteHelper.findSoftDeleteField(domainClass) != null) {
+            SoftDeleteHelper.softDeleteByIds(entityManager, domainClass, List.of(entityInformation.getId(entity)));
+        } else if (shouldBlockHardDelete() && SoftDeleteHelper.findSoftDeleteField(domainClass) != null) {
+            throw new IllegalStateException("Hard DELETE on " + domainClass.getSimpleName()
+                + " entity is blocked because it has a @SoftDelete field. "
+                + "Set SoftDeleteJpaRepository.setBlockUnconditionalDelete(false) to allow this operation.");
+        } else {
+            super.delete(entity);
+        }
     }
 
     /**

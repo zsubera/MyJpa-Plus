@@ -315,9 +315,10 @@ public class QueryCacheManager {
                 break;
             }
             if (entry.getValue().isExpired()) {
-                // 原子移除：仅当条目确实是当前过期条目时才移除
                 if (store.remove(entry.getKey(), entry.getValue())) {
-                    // 不在此处清理 insertionOrder，由 evictOldestEntry 的漂移检测统一处理
+                    if (insertionOrder.remove(entry.getKey())) {
+                        dequeSize.decrementAndGet();
+                    }
                     log.debug("Cache expired for key: {}", entry.getKey());
                 }
             }

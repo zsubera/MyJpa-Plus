@@ -17,6 +17,8 @@ import org.springframework.test.context.ContextConfiguration;
  * Tests for {@link IgnoreSoftDeleteAdvisor} AOP interception and {@link SoftDeleteContext} integration.
  */
 @DataJpaTest
+@org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabase(
+    replace = org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabase.Replace.NONE)
 @ContextConfiguration(classes = IgnoreSoftDeleteAdvisorTest.TestConfig.class)
 class IgnoreSoftDeleteAdvisorTest {
 

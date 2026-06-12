@@ -5,7 +5,6 @@ import jakarta.persistence.criteria.CriteriaBuilder;
 import jakarta.persistence.criteria.Path;
 import jakarta.persistence.criteria.Predicate;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collection;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicReference;
@@ -177,11 +176,29 @@ public final class InClauseBuilder {
         if (values == null || values.length == 0) {
             throw new IllegalArgumentException("values must not be empty");
         }
-        Config config = cfg();
-        if (values.length <= config.maxInClauseSize()) {
-            return buildSingleIn(cb, path, values);
+        List<Object> nonNullValues = new ArrayList<>();
+        boolean hasNull = false;
+        for (Object v : values) {
+            if (v == null) {
+                hasNull = true;
+            } else {
+                nonNullValues.add(v);
+            }
         }
-        return buildBatchedIn(cb, path, Arrays.asList(values), config);
+        if (nonNullValues.isEmpty()) {
+            return cb.isNull(path);
+        }
+        Config config = cfg();
+        Predicate inPredicate;
+        if (nonNullValues.size() <= config.maxInClauseSize()) {
+            inPredicate = buildSingleIn(cb, path, nonNullValues.toArray());
+        } else {
+            inPredicate = buildBatchedIn(cb, path, nonNullValues, config);
+        }
+        if (hasNull) {
+            return cb.or(inPredicate, cb.isNull(path));
+        }
+        return inPredicate;
     }
 
     /**
@@ -200,11 +217,29 @@ public final class InClauseBuilder {
         if (values == null || values.isEmpty()) {
             throw new IllegalArgumentException("values must not be empty");
         }
-        Config config = cfg();
-        if (values.size() <= config.maxInClauseSize()) {
-            return buildSingleIn(cb, path, values);
+        List<Object> nonNullValues = new ArrayList<>();
+        boolean hasNull = false;
+        for (Object v : values) {
+            if (v == null) {
+                hasNull = true;
+            } else {
+                nonNullValues.add(v);
+            }
         }
-        return buildBatchedIn(cb, path, values, config);
+        if (nonNullValues.isEmpty()) {
+            return cb.isNull(path);
+        }
+        Config config = cfg();
+        Predicate inPredicate;
+        if (nonNullValues.size() <= config.maxInClauseSize()) {
+            inPredicate = buildSingleIn(cb, path, nonNullValues);
+        } else {
+            inPredicate = buildBatchedIn(cb, path, nonNullValues, config);
+        }
+        if (hasNull) {
+            return cb.or(inPredicate, cb.isNull(path));
+        }
+        return inPredicate;
     }
 
     /**

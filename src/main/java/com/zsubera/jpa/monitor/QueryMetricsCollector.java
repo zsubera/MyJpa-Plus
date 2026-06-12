@@ -121,7 +121,7 @@ public class QueryMetricsCollector {
 
         // 防止指标存储无限增长：超过上限时淘汰执行次数最少的条目
         if (metricsMap.size() >= MAX_METRICS_ENTRIES && !metricsMap.containsKey(queryName)) {
-            evictLeastUsed();
+            evictRandomEntry();
             // 淘汰后仍然满了则跳过
             if (metricsMap.size() >= MAX_METRICS_ENTRIES) {
                 log.warn("QueryMetricsCollector: max entries ({}) reached after eviction, skipping metrics for '{}'. "
@@ -197,11 +197,9 @@ public class QueryMetricsCollector {
     }
 
     /**
-     * 淘汰执行次数最少的条目，为新条目腾出空间。
-     * [FIX] P1-3: 使用概率淘汰替代 O(n) 遍历，避免高并发下的性能瓶颈。
+     * 概率淘汰：随机选择一个条目移除，O(1) 时间复杂度。
      */
-    private void evictLeastUsed() {
-        // 概率淘汰：随机选择一个条目移除，O(1) 时间复杂度
+    private void evictRandomEntry() {
         String[] keys = metricsMap.keySet().toArray(new String[0]);
         if (keys.length > 0) {
             String randomKey = keys[java.util.concurrent.ThreadLocalRandom.current().nextInt(keys.length)];

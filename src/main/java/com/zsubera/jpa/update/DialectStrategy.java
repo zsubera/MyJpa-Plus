@@ -16,7 +16,6 @@ import com.zsubera.jpa.update.EntityFieldExtractor.EntityFieldValue;
  * <ul>
  * <li>{@code postgresql} — {@code INSERT ... ON CONFLICT (...) DO UPDATE SET ...}</li>
  * <li>{@code mysql} — {@code INSERT ... ON DUPLICATE KEY UPDATE ...}</li>
- * <li>{@code h2} — {@code MERGE INTO ... KEY(...) VALUES(...)}</li>
  * </ul>
  *
  * @see MergeSpec
@@ -25,7 +24,7 @@ import com.zsubera.jpa.update.EntityFieldExtractor.EntityFieldValue;
 interface DialectStrategy {
 
     /**
-     * 返回方言标识符（如 "postgresql"、"mysql"、"h2"）。
+     * 返回方言标识符（如 "postgresql"、"mysql"）。
      *
      * @return 方言名称
      */
@@ -53,24 +52,7 @@ interface DialectStrategy {
         List<String> conflictColumns, List<String> updateColumns);
 
     /**
-     * 构建简单的 INSERT SQL（不处理冲突，用于 H2 冲突键全为 null 的场景）。
-     *
-     * <p>
-     * 默认实现抛出 UnsupportedOperationException，仅 H2 方言需要重写。
-     *
-     * @param tableName 表名
-     * @param insertColumns 插入列名列表
-     * @param insertFieldValues 插入字段值列表
-     * @return SQL 和参数
-     * @throws UnsupportedOperationException 如果方言不支持此操作
-     */
-    default SqlWithParams buildInsertOnlySql(String tableName, List<String> insertColumns,
-        List<EntityFieldValue> insertFieldValues) {
-        throw new UnsupportedOperationException("Simple INSERT not supported for dialect: " + name());
-    }
-
-    /**
-     * 构建 INSERT 部分的 SQL（PostgresDialect 共用，MysqlDialect 和 H2Dialect 自行实现）。
+     * 构建 INSERT 部分的 SQL（PostgresDialect 共用，MysqlDialect 自行实现）。
      *
      * @param escapedTable 转义后的表名
      * @param dialect 方言实例，用于转义列名

@@ -17,6 +17,8 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.test.context.ContextConfiguration;
 
 @DataJpaTest
+@org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabase(
+    replace = org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabase.Replace.NONE)
 @ContextConfiguration(classes = TestApplication.class)
 class ProjectionSpecTest {
 
@@ -419,6 +421,7 @@ class ProjectionSpecTest {
     }
 
     public static class NameStatusDto {
+
         public final String name;
         public final int status;
 

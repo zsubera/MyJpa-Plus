@@ -114,24 +114,23 @@ public class SqlSlowQueryInterceptor implements StatementInspector {
             }
             // [FIX] P1-4: 改进代理类缓存驱逐逻辑，使用部分驱逐替代全量清空，避免冷缓存尖峰
             if (PROXY_CLASS_CACHE.size() > MAX_PROXY_CLASS_CACHE_SIZE) {
-                EVICT_LOCK.lock();
-                try {
-                    int currentSize = PROXY_CLASS_CACHE.size();
-                    if (currentSize > MAX_PROXY_CLASS_CACHE_SIZE) {
-                        // 部分驱逐：移除最旧的 64 个条目，而非清空全部
-                        // ConcurrentHashMap 迭代顺序近似插入顺序
-                        int evictCount = Math.min(64, currentSize / 4);
-                        int removed = 0;
-                        java.util.Iterator<Class<?>> it = PROXY_CLASS_CACHE.keySet().iterator();
-                        while (it.hasNext() && removed < evictCount) {
-                            it.next();
-                            it.remove();
-                            removed++;
+                if (EVICT_LOCK.tryLock()) {
+                    try {
+                        int currentSize = PROXY_CLASS_CACHE.size();
+                        if (currentSize > MAX_PROXY_CLASS_CACHE_SIZE) {
+                            int evictCount = Math.min(64, currentSize / 4);
+                            int removed = 0;
+                            java.util.Iterator<Class<?>> it = PROXY_CLASS_CACHE.keySet().iterator();
+                            while (it.hasNext() && removed < evictCount) {
+                                it.next();
+                                it.remove();
+                                removed++;
+                            }
+                            log.debug("Evicted {} proxy class cache entries (was size {})", removed, currentSize);
                         }
-                        log.debug("Evicted {} proxy class cache entries (was size {})", removed, currentSize);
+                    } finally {
+                        EVICT_LOCK.unlock();
                     }
-                } finally {
-                    EVICT_LOCK.unlock();
                 }
             }
             Class<?> proxyClass = PROXY_CLASS_CACHE.computeIfAbsent(stmtClass,

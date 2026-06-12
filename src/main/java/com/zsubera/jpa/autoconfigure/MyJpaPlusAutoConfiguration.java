@@ -9,9 +9,6 @@ import com.zsubera.jpa.util.LambdaUtils;
 import com.zsubera.jpa.util.QueryTimeoutHelper;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import jakarta.persistence.EntityManager;
-import java.lang.invoke.SerializedLambda;
-import java.lang.reflect.InaccessibleObjectException;
-import java.lang.reflect.Method;
 import javax.sql.DataSource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -52,7 +49,8 @@ import org.springframework.lang.NonNull;
 @AutoConfiguration
 @ConditionalOnClass({EntityManager.class})
 @EnableConfigurationProperties(MyJpaPlusProperties.class)
-@Import({SoftDeleteFilterBean.class, MyJpaPlusAutoConfiguration.ModuleCompatibilityChecker.class})
+@Import({SoftDeleteFilterBean.class, MyJpaPlusAutoConfiguration.ModuleCompatibilityChecker.class,
+    MyJpaPlusAutoConfiguration.MyJpaPlusConfigInitializer.class})
 @SuppressFBWarnings(value = "CT_CONSTRUCTOR_THROW",
     justification = "Constructor validates parameters before assignment")
 public class MyJpaPlusAutoConfiguration {
@@ -63,43 +61,48 @@ public class MyJpaPlusAutoConfiguration {
         if (properties == null) {
             throw new IllegalArgumentException("properties must not be null");
         }
-        // 将 auto-filter 配置同步到 SoftDeleteJpaRepository 的静态标志，确保 Repository 层面行为一致
-        SoftDeleteJpaRepository.setAutoFilterEnabled(properties.getSoftDelete().isAutoFilter());
-        SoftDeleteJpaRepository.setBlockUnconditionalDelete(properties.getSoftDelete().isBlockUnconditionalDelete());
+        this.properties = properties;
+        log.info("MyJpa-Plus AutoConfiguration created");
+    }
 
-        // 应用 IN 子句配置（原子替换 Config，消除竞态条件）
-        // 跨字段校验：hardLimit 必须 >= maxInClauseSize
-        int inMax = properties.getQuery().getInClauseMaxSize();
-        int inHard = properties.getQuery().getInClauseHardLimit();
-        if (inHard < inMax) {
-            throw new IllegalArgumentException(
-                "inClauseHardLimit (" + inHard + ") must be >= inClauseMaxSize (" + inMax + ")");
-        }
-        InClauseBuilder.setConfig(new InClauseBuilder.Config(inMax, inHard));
+    @org.springframework.context.annotation.Lazy(false)
+    @org.springframework.stereotype.Component
+    static class MyJpaPlusConfigInitializer {
 
-        // 应用 Lambda 缓存配置
-        LambdaUtils.setMaxCacheSize(properties.getQuery().getLambdaCacheSize());
+        MyJpaPlusConfigInitializer(MyJpaPlusProperties properties) {
+            // 将 auto-filter 配置同步到 SoftDeleteJpaRepository 的静态标志
+            SoftDeleteJpaRepository.setAutoFilterEnabled(properties.getSoftDelete().isAutoFilter());
+            SoftDeleteJpaRepository
+                .setBlockUnconditionalDelete(properties.getSoftDelete().isBlockUnconditionalDelete());
 
-        // 应用查询超时配置到全局静态助手
-        int timeout = properties.getQuery().getDefaultTimeoutSeconds();
-        if (timeout > 0 || timeout == -1) {
-            QueryTimeoutHelper.setDefaultTimeoutSeconds(timeout);
-        }
+            // 应用 IN 子句配置
+            int inMax = properties.getQuery().getInClauseMaxSize();
+            int inHard = properties.getQuery().getInClauseHardLimit();
+            if (inHard < inMax) {
+                throw new IllegalArgumentException(
+                    "inClauseHardLimit (" + inHard + ") must be >= inClauseMaxSize (" + inMax + ")");
+            }
+            InClauseBuilder.setConfig(new InClauseBuilder.Config(inMax, inHard));
 
-        log.info("MyJpa-Plus AutoConfiguration initialized");
-        if (log.isDebugEnabled()) {
-            log.debug("  soft-delete.auto-filter = {}", properties.getSoftDelete().isAutoFilter());
-            log.debug("  soft-delete.block-unconditional-delete = {}",
-                properties.getSoftDelete().isBlockUnconditionalDelete());
-            log.debug("  query.max-results = {}", properties.getQuery().getMaxResults());
-            log.debug("  query.deep-pagination-offset-threshold = {}",
-                properties.getQuery().getDeepPaginationOffsetThreshold());
-            log.debug("  query.deep-pagination-offset-limit = {}",
-                properties.getQuery().getDeepPaginationOffsetLimit());
-            log.debug("  query.in-clause-max-size = {}", properties.getQuery().getInClauseMaxSize());
-            log.debug("  query.in-clause-hard-limit = {}", properties.getQuery().getInClauseHardLimit());
-            log.debug("  query.lambda-cache-size = {}", properties.getQuery().getLambdaCacheSize());
-            log.debug("  query.default-timeout-seconds = {}", properties.getQuery().getDefaultTimeoutSeconds());
+            // 应用 Lambda 缓存配置
+            LambdaUtils.setMaxCacheSize(properties.getQuery().getLambdaCacheSize());
+
+            // 应用查询超时配置
+            int timeout = properties.getQuery().getDefaultTimeoutSeconds();
+            if (timeout > 0 || timeout == -1) {
+                QueryTimeoutHelper.setDefaultTimeoutSeconds(timeout);
+            }
+
+            if (log.isDebugEnabled()) {
+                log.debug("  soft-delete.auto-filter = {}", properties.getSoftDelete().isAutoFilter());
+                log.debug("  soft-delete.block-unconditional-delete = {}",
+                    properties.getSoftDelete().isBlockUnconditionalDelete());
+                log.debug("  query.max-results = {}", properties.getQuery().getMaxResults());
+                log.debug("  query.in-clause-max-size = {}", properties.getQuery().getInClauseMaxSize());
+                log.debug("  query.in-clause-hard-limit = {}", properties.getQuery().getInClauseHardLimit());
+                log.debug("  query.lambda-cache-size = {}", properties.getQuery().getLambdaCacheSize());
+                log.debug("  query.default-timeout-seconds = {}", properties.getQuery().getDefaultTimeoutSeconds());
+            }
         }
     }
 
@@ -115,20 +118,14 @@ public class MyJpaPlusAutoConfiguration {
             checkModuleCompatibility();
         }
 
-        /**
-         * 检测 Java 17+ 模块系统兼容性。
-         *
-         * <p>
-         * LambdaUtils 通过反射调用 {@code SerializedLambda.writeReplace()} 并使用 {@code setAccessible(true)}。 在 Java 17+
-         * 的强封装模块系统下，此操作可能因缺少 {@code --add-opens} 参数而失败。 此方法在启动时检测并给出明确的警告信息。
-         */
         private static void checkModuleCompatibility() {
             try {
-                Method writeReplace = SerializedLambda.class.getDeclaredMethod("writeReplace");
+                java.lang.reflect.Method writeReplace =
+                    java.lang.invoke.SerializedLambda.class.getDeclaredMethod("writeReplace");
                 writeReplace.setAccessible(true);
             } catch (NoSuchMethodException e) {
                 log.warn("Unexpected: SerializedLambda.writeReplace() not found. LambdaUtils may not work correctly.");
-            } catch (InaccessibleObjectException | SecurityException e) {
+            } catch (java.lang.reflect.InaccessibleObjectException | SecurityException e) {
                 log.warn(
                     "Java module system restriction detected. LambdaUtils uses reflection on SerializedLambda.writeReplace(). "
                         + "All lambda-based property name resolution will fail at runtime. "
@@ -137,6 +134,14 @@ public class MyJpaPlusAutoConfiguration {
                     + "(e.g., QuerySpec, UpdateSpec, ProjectionSpec) will throw MyJpaPlusException with the fix suggestion.");
             }
         }
+    }
+
+    private final MyJpaPlusProperties properties;
+
+    @Bean
+    @org.springframework.context.annotation.Lazy(false)
+    static MyJpaPlusConfigInitializer myJpaPlusConfigInitializer(MyJpaPlusProperties properties) {
+        return new MyJpaPlusConfigInitializer(properties);
     }
 
     /**

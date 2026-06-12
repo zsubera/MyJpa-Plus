@@ -29,10 +29,10 @@ class BulkOperationTemplate {
     private static final Logger log = LoggerFactory.getLogger(BulkOperationTemplate.class);
 
     /** 批量执行最大迭代次数保护，防止无限循环。 */
-    private static final int DEFAULT_maxBatchIterations = 10000;
+    private static final int DEFAULT_MAX_BATCH_ITERATIONS = 10000;
 
     // [FIX] P2-3: 最大迭代次数可配置
-    private volatile int maxBatchIterations = DEFAULT_maxBatchIterations;
+    private volatile int maxBatchIterations = DEFAULT_MAX_BATCH_ITERATIONS;
 
     private final EntityManager entityManager;
     private volatile int maxBulkOperationRows;

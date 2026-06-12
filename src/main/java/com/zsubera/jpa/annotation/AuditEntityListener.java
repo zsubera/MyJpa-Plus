@@ -116,14 +116,14 @@ public class AuditEntityListener implements ApplicationContextAware {
         if (providerLookupAttempted) {
             return userProvider == NO_PROVIDER_SENTINEL ? null : userProvider;
         }
-        if (applicationContext != null) {
+        ApplicationContext ctx = applicationContext;
+        if (ctx != null) {
             synchronized (AuditEntityListener.class) {
                 if (!providerLookupAttempted) {
                     try {
-                        userProvider = applicationContext.getBean(AuditUserProvider.class);
+                        userProvider = ctx.getBean(AuditUserProvider.class);
                     } catch (Exception e) {
                         log.debug("No AuditUserProvider bean found, createdBy/updatedBy will not be auto-filled");
-                        // 设置哨兵值，防止重复查找
                         userProvider = NO_PROVIDER_SENTINEL;
                     }
                     providerLookupAttempted = true;
@@ -201,13 +201,23 @@ public class AuditEntityListener implements ApplicationContextAware {
                 for (Field field : c.getDeclaredFields()) {
                     if (field.isAnnotationPresent(CreatedAt.class)) {
                         if (fields.createdAt == null) {
-                            validateAuditFieldType(field, entityClass);
+                            try {
+                                validateAuditFieldType(field, entityClass);
+                            } catch (IllegalArgumentException e) {
+                                log.warn("Skipping @CreatedAt field {}: {}", field.getName(), e.getMessage());
+                                continue;
+                            }
                             field.setAccessible(true);
                             fields.createdAt = field;
                         }
                     } else if (field.isAnnotationPresent(UpdatedAt.class)) {
                         if (fields.updatedAt == null) {
-                            validateAuditFieldType(field, entityClass);
+                            try {
+                                validateAuditFieldType(field, entityClass);
+                            } catch (IllegalArgumentException e) {
+                                log.warn("Skipping @UpdatedAt field {}: {}", field.getName(), e.getMessage());
+                                continue;
+                            }
                             field.setAccessible(true);
                             fields.updatedAt = field;
                         }
@@ -248,12 +258,9 @@ public class AuditEntityListener implements ApplicationContextAware {
         Class<?> type = field.getType();
         if (type != Instant.class && type != LocalDateTime.class && type != Date.class && type != Long.class
             && type != long.class) {
-            log.warn(
-                "@{}/@{} field {} on {} has unsupported type {}. "
-                    + "Supported types: Instant, LocalDateTime, Date, Long. Field will not be auto-filled.",
-                field.isAnnotationPresent(CreatedAt.class) ? "CreatedAt" : "UpdatedAt",
-                field.isAnnotationPresent(CreatedAt.class) ? "CreatedAt" : "UpdatedAt", field.getName(),
-                entityClass.getSimpleName(), type.getSimpleName());
+            throw new IllegalArgumentException("@CreatedAt/@UpdatedAt field " + field.getName() + " on "
+                + entityClass.getSimpleName() + " has unsupported type " + type.getSimpleName()
+                + ". Supported types: Instant, LocalDateTime, Date, Long.");
         }
     }
 

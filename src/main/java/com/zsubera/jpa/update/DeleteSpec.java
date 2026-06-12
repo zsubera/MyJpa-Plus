@@ -253,19 +253,14 @@ public class DeleteSpec<T> extends AbstractBulkOperationSpec<T, DeleteSpec<T>> {
             return 0;
         }
 
-        // [FIX] P0-1: 清除持久化上下文，防止 L1 缓存中已加载的实体干扰批量删除
-        // 警告：此操作会分离当前事务中的所有托管实体，包括调用者可能持有的其他托管实例。
-        log.warn(
-            "executeLimited() calling em.clear() — all managed entities in current persistence context will be detached. "
-                + "Entity: {}, IDs affected: {}. Re-query any needed entities after this call.",
-            entityClass.getSimpleName(), ids.size());
-        em.clear();
         CriteriaDelete<T> delete = cb.createCriteriaDelete(entityClass);
         Root<T> deleteRoot = delete.from(entityClass);
         delete.where(InClauseBuilder.in(cb, deleteRoot.get(idFieldName), ids));
         var dq = em.createQuery(delete);
         applyTimeout(dq);
         int deleted = dq.executeUpdate();
+        // 在 DELETE 执行后再清除持久化上下文，保留悲观锁直到操作完成
+        em.clear();
         return deleted;
     }
 

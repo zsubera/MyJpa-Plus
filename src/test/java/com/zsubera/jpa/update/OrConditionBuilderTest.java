@@ -9,6 +9,7 @@ import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
 import java.util.ArrayList;
 import java.util.List;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
@@ -18,6 +19,8 @@ import org.springframework.test.context.ContextConfiguration;
  * Tests for {@link OrConditionBuilder}.
  */
 @DataJpaTest
+@org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabase(
+    replace = org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabase.Replace.NONE)
 @ContextConfiguration(classes = TestApplication.class)
 class OrConditionBuilderTest {
 
@@ -26,6 +29,12 @@ class OrConditionBuilderTest {
 
     @PersistenceContext
     private EntityManager em;
+
+    @BeforeEach
+    void setUp() {
+        repository.deleteAll();
+        repository.flush();
+    }
 
     @Test
     void orCondition_eq_matchesCorrectly() {

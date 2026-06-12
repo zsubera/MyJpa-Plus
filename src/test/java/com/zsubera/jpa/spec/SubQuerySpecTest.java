@@ -7,11 +7,20 @@ import jakarta.persistence.PersistenceContext;
 import java.util.Arrays;
 import java.util.List;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.BeforeEach;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
 
 @DataJpaTest
+@org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabase(
+    replace = org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabase.Replace.NONE)
 class SubQuerySpecTest {
+
+    @BeforeEach
+    void setUp() {
+        repository.deleteAll();
+        repository.flush();
+    }
 
     @Autowired
     private TestEntityRepository repository;

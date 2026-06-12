@@ -213,9 +213,11 @@ public class EncryptConverter implements AttributeConverter<String, String> {
      * 此方法线程安全，可在运行时调用以支持在线密钥轮换。
      */
     public static void refreshKeyVersion() {
-        cachedKeyVersion = null;
-        KEY_CACHE.clear();
-        lastKeyVersionRefresh = System.currentTimeMillis();
+        synchronized (EncryptConverter.class) {
+            cachedKeyVersion = null;
+            KEY_CACHE.clear();
+            lastKeyVersionRefresh = System.currentTimeMillis();
+        }
         log.info("Encryption key version cache refreshed");
     }
 
@@ -416,15 +418,17 @@ public class EncryptConverter implements AttributeConverter<String, String> {
         if (existing != null) {
             return existing;
         }
-        // 使用 KEY_CACHE.size() 替代独立计数器，避免计数器漂移
-        if (KEY_CACHE.size() >= MAX_KEY_CACHE_SIZE && !KEY_CACHE.containsKey(cacheKey)) {
-            throw new MyJpaPlusException(
-                "Encryption key cache is full (" + MAX_KEY_CACHE_SIZE + " entries). " + "Cannot load key version '"
-                    + cacheKey + "'. " + "This may indicate a malicious attempt to exhaust CPU via PBKDF2 derivation. "
-                    + "Clear cache or increase MAX_KEY_CACHE_SIZE if this is legitimate key rotation.");
-        }
-        SecretKeySpec result = KEY_CACHE.computeIfAbsent(cacheKey, v -> {
-            String rawKey = resolveRawKey(v);
+        SecretKeySpec result = KEY_CACHE.compute(cacheKey, (k, v) -> {
+            if (v != null) {
+                return v;
+            }
+            if (KEY_CACHE.size() >= MAX_KEY_CACHE_SIZE) {
+                throw new MyJpaPlusException(
+                    "Encryption key cache is full (" + MAX_KEY_CACHE_SIZE + " entries). " + "Cannot load key version '"
+                        + k + "'. " + "This may indicate a malicious attempt to exhaust CPU via PBKDF2 derivation. "
+                        + "Clear cache or increase MAX_KEY_CACHE_SIZE if this is legitimate key rotation.");
+            }
+            String rawKey = resolveRawKey(k);
             return deriveKey(rawKey);
         });
         return result;

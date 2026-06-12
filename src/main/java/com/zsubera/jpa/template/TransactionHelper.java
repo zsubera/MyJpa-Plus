@@ -31,16 +31,16 @@ import java.util.function.Function;
  * <p>
  * <strong>重要限制：</strong>
  * <p>
- * 当在已有活动事务中调用 {@code executeInNewTransaction} 时，操作会加入现有事务而非创建新事务。
+ * 当在已有活动事务中调用 {@code executeInNewTransaction} 时，操作会挂起外部事务并创建独立的新事务（REQUIRES_NEW）。
  * 这意味着：
  * <ul>
- *   <li>每个批次不会独立提交 — 一个批次失败会导致所有批次回滚</li>
- *   <li>无法实现真正的批次隔离</li>
+ *   <li>每个批次独立提交 — 一个批次失败不会导致其他批次回滚</li>
+ *   <li>外部事务在新事务提交前被挂起，新事务提交后外部事务恢复</li>
  * </ul>
  *
  * <p>
- * 如需真正的批次隔离，必须在 {@code @Transactional} 方法外调用
- * {@link BulkOperationTemplate#executeBatchInSeparateTransactions}。
+ * 如需在 {@code @Transactional} 方法外调用以获得真正的批次隔离，
+ * 请使用 {@link BulkOperationTemplate#executeBatchInSeparateTransactions}。
  *
  * <p>
  * <strong>使用示例：</strong>
@@ -107,7 +107,7 @@ class TransactionHelper {
      * <p>
      * <strong>重要：</strong>当在已有活动事务中调用时，此方法使用 {@code PROPAGATION_REQUIRES_NEW}，
      * 挂起外部事务并创建独立事务。每个批次会独立提交。
-     * 但注意：在某些数据库（如 H2）中，外层事务持有的表锁可能与新事务的锁冲突，
+     * 但注意：在某些数据库中，外层事务持有的表锁可能与新事务的锁冲突，
      * 导致死锁。建议在 {@code @Transactional} 方法外调用以避免锁冲突。
      *
      * @param operation 要执行的操作

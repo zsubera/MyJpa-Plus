@@ -492,16 +492,6 @@ public class UpdateSpec<T> extends AbstractBulkOperationSpec<T, UpdateSpec<T>> {
             return 0;
         }
 
-        // [FIX] P0-1: 清除持久化上下文，分离已查询的实体
-        // 这防止持久化上下文持有过期数据，并为批量更新释放内存。
-        // 警告：此操作会分离当前事务中的所有托管实体，包括调用者可能持有的其他托管实例。
-        // 调用方应在 executeLimited 返回后重新查询需要的实体，或使用独立的 EntityManager。
-        log.warn(
-            "executeLimited() calling em.clear() — all managed entities in current persistence context will be detached. "
-                + "Entity: {}, IDs affected: {}. Re-query any needed entities after this call.",
-            entityClass.getSimpleName(), ids.size());
-        em.clear();
-
         // 步骤 2：用ID列表执行更新
         CriteriaUpdate<T> update = cb.createCriteriaUpdate(entityClass);
         Root<T> updateRoot = update.from(entityClass);
@@ -513,7 +503,10 @@ public class UpdateSpec<T> extends AbstractBulkOperationSpec<T, UpdateSpec<T>> {
         update.where(InClauseBuilder.in(cb, updateRoot.get(idFieldName), ids));
         var uq = em.createQuery(update);
         applyTimeout(uq);
-        return uq.executeUpdate();
+        int updated = uq.executeUpdate();
+        // 在 UPDATE 执行后再清除持久化上下文，保留悲观锁直到操作完成
+        em.clear();
+        return updated;
     }
 
     /**

@@ -151,10 +151,9 @@ public final class EntityCodeGenerator {
             throw new IllegalArgumentException("tableName must not be blank");
         }
         // 校验 tableName 以防止代码注入
-        if (!tableName.matches("[a-zA-Z0-9_.]+")) {
+        if (!tableName.matches("[a-zA-Z0-9_]+")) {
             throw new IllegalArgumentException(
-                "tableName contains invalid characters. Only alphanumeric, underscore, and dot are allowed: "
-                    + tableName);
+                "tableName contains invalid characters. Only alphanumeric and underscore are allowed: " + tableName);
         }
         if (columns == null) {
             throw new IllegalArgumentException("columns must not be null");

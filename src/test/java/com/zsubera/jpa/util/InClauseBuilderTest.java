@@ -12,6 +12,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.List;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
 import org.springframework.test.context.ContextConfiguration;
@@ -19,11 +20,19 @@ import com.zsubera.jpa.spec.TestApplication;
 import com.zsubera.jpa.spec.TestEntity;
 
 @DataJpaTest
+@org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabase(
+    replace = org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabase.Replace.NONE)
 @ContextConfiguration(classes = TestApplication.class)
 class InClauseBuilderTest {
 
     @PersistenceContext
     private EntityManager em;
+
+    @BeforeEach
+    void setUp() {
+        em.createQuery("DELETE FROM testEntity").executeUpdate();
+        em.flush();
+    }
 
     @Test
     void in_array_normalValues() {
