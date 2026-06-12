@@ -86,14 +86,29 @@ public final class EntityCodeGenerator {
             this.nullable = nullable;
         }
 
+        /**
+         * 获取列名。
+         *
+         * @return 列名
+         */
         public String getName() {
             return name;
         }
 
+        /**
+         * 获取 Java 类型名称。
+         *
+         * @return Java 类型简单名称（如 "String"、"Long"）
+         */
         public String getJavaType() {
             return javaType;
         }
 
+        /**
+         * 检查列是否可为空。
+         *
+         * @return 如果列可为空返回 true
+         */
         public boolean isNullable() {
             return nullable;
         }

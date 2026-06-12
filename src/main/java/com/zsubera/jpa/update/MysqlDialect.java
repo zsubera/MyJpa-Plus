@@ -19,16 +19,35 @@ import com.zsubera.jpa.update.EntityFieldExtractor.EntityFieldValue;
  */
 final class MysqlDialect implements DialectStrategy {
 
+    /**
+     * {@inheritDoc}
+     *
+     * <p>返回 "mysql"。
+     */
     @Override
     public String name() {
         return "mysql";
     }
 
+    /**
+     * {@inheritDoc}
+     *
+     * <p>使用反引号转义：{@code `identifier`}。
+     */
     @Override
     public String escapeIdentifier(String identifier) {
         return "`" + identifier.replace("`", "``") + "`";
     }
 
+    /**
+     * {@inheritDoc}
+     *
+     * <p>生成 MySQL UPSERT SQL：
+     * <ul>
+     * <li>有更新列时：{@code INSERT INTO t (...) VALUES (...) ON DUPLICATE KEY UPDATE col = VALUES(col)}</li>
+     * <li>无更新列时：{@code INSERT IGNORE INTO t (...) VALUES (...)}</li>
+     * </ul>
+     */
     @Override
     public SqlWithParams buildUpsertSql(String tableName, List<String> insertColumns,
         List<EntityFieldValue> insertFieldValues, List<String> conflictColumns, List<String> updateColumns) {

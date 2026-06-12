@@ -9,6 +9,23 @@ import org.springframework.core.ResolvableType;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.util.ConcurrentReferenceHashMap;
 
+/**
+ * 实体类解析工具，从 Repository 接口或实体类中解析关联信息。
+ *
+ * <p>
+ * 提供以下能力：
+ * <ul>
+ * <li>从 {@code JpaRepository<T, ID>} 泛型参数解析实体类 {@code T}</li>
+ * <li>解析实体类的 {@code @Id} 字段名</li>
+ * <li>检测复合主键（{@code @EmbeddedId} 或 {@code @IdClass}）</li>
+ * </ul>
+ *
+ * <p>
+ * 所有解析结果均通过 {@link org.springframework.util.ConcurrentReferenceHashMap} 缓存， 使用弱引用键以支持热部署/OSGi 场景下的类加载器回收。
+ *
+ * @author myjpa-plus
+ * @since 1.3.0
+ */
 public final class EntityClassResolver {
 
     private static final Logger log = LoggerFactory.getLogger(EntityClassResolver.class);

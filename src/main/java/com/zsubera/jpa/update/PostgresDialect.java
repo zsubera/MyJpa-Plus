@@ -16,16 +16,35 @@ import com.zsubera.jpa.update.EntityFieldExtractor.EntityFieldValue;
  */
 final class PostgresDialect implements DialectStrategy {
 
+    /**
+     * {@inheritDoc}
+     *
+     * <p>返回 "postgresql"。
+     */
     @Override
     public String name() {
         return "postgresql";
     }
 
+    /**
+     * {@inheritDoc}
+     *
+     * <p>使用双引号转义：{@code "identifier"}。
+     */
     @Override
     public String escapeIdentifier(String identifier) {
         return "\"" + identifier.replace("\"", "\"\"") + "\"";
     }
 
+    /**
+     * {@inheritDoc}
+     *
+     * <p>生成 PostgreSQL UPSERT SQL：
+     * <ul>
+     * <li>有更新列时：{@code INSERT INTO t (...) VALUES (...) ON CONFLICT (...) DO UPDATE SET col = EXCLUDED.col}</li>
+     * <li>无更新列时：{@code INSERT INTO t (...) VALUES (...) ON CONFLICT (...) DO NOTHING}</li>
+     * </ul>
+     */
     @Override
     public SqlWithParams buildUpsertSql(String tableName, List<String> insertColumns,
         List<EntityFieldValue> insertFieldValues, List<String> conflictColumns, List<String> updateColumns) {
