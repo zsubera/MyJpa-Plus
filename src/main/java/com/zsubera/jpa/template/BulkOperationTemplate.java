@@ -4,6 +4,7 @@ import com.zsubera.jpa.update.DeleteSpec;
 import com.zsubera.jpa.update.MergeSpec;
 import com.zsubera.jpa.update.UpdateSpec;
 import jakarta.persistence.EntityManager;
+import jakarta.persistence.EntityManagerFactory;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -43,13 +44,14 @@ class BulkOperationTemplate {
      *
      * @param entityManager 实体管理器
      * @param maxBulkOperationRows 批量操作最大影响行数限制（-1 表示不限制）
+     * @param entityManagerFactory 实体管理器工厂（用于 TransactionHelper）
      * @param applicationContext Spring 应用上下文（用于获取 TransactionManager）
      */
     BulkOperationTemplate(EntityManager entityManager, int maxBulkOperationRows,
-        org.springframework.context.ApplicationContext applicationContext) {
+        EntityManagerFactory entityManagerFactory, org.springframework.context.ApplicationContext applicationContext) {
         this.entityManager = entityManager;
         this.maxBulkOperationRows = maxBulkOperationRows;
-        this.transactionHelper = new TransactionHelper(entityManager, null, applicationContext);
+        this.transactionHelper = new TransactionHelper(entityManager, entityManagerFactory, applicationContext);
     }
 
     /**

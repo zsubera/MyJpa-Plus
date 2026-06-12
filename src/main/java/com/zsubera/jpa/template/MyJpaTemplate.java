@@ -278,7 +278,8 @@ public class MyJpaTemplate {
      */
     @PostConstruct
     void initBulkOperationTemplate() {
-        this.bulkOperationTemplate = new BulkOperationTemplate(entityManager, maxBulkOperationRows, applicationContext);
+        this.bulkOperationTemplate =
+            new BulkOperationTemplate(entityManager, maxBulkOperationRows, entityManagerFactory, applicationContext);
         /* 事务工具类，用于在新事务中执行批量保存操作。 */
         TransactionHelper transactionHelper =
             new TransactionHelper(entityManager, entityManagerFactory, applicationContext);

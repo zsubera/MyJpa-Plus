@@ -670,6 +670,11 @@ public class SubQuerySpec<S> {
      *     o.eq(Order::getStatus, "PENDING").eq(Order::getStatus, "PROCESSING")));
      * }</pre>
      *
+     * <p>
+     * <strong>子查询共享：</strong>child SubQuerySpec 与 parent 共享同一个 {@code subquery} 引用。
+     * child 的条件独立累积，但 {@code applyWhere()} 和 {@code applySelectToSubquery()} 仅在顶层 SubQuerySpec 调用。
+     * 因此，child 中的条件不会影响共享的 subquery，这是安全的。
+     *
      * @param config OR 组配置消费者
      * @return 当前 SubQuerySpec 实例，支持链式调用
      * @throws IllegalArgumentException 如果 config 为 null

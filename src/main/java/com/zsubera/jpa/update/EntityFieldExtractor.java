@@ -254,18 +254,26 @@ final class EntityFieldExtractor<T> {
      * 从实体类层次结构中解析 @Id 注解字段对应的数据库列名。
      *
      * @return ID 列名列表
-     * @throws IllegalStateException 如果实体类没有 @Id 注解的字段
+     * @throws IllegalStateException 如果实体类没有 @Id 或 @EmbeddedId 注解的字段
      */
     List<String> resolveIdColumnNames() {
         List<String> idColumns = new ArrayList<>();
+        boolean hasEmbeddedId = false;
         for (Class<?> c = entityClass; c != null && c != Object.class; c = c.getSuperclass()) {
             for (Field f : c.getDeclaredFields()) {
                 if (f.isAnnotationPresent(Id.class)) {
                     idColumns.add(resolveColumnName(f));
                 }
+                if (f.isAnnotationPresent(jakarta.persistence.EmbeddedId.class)) {
+                    hasEmbeddedId = true;
+                }
             }
         }
         if (idColumns.isEmpty()) {
+            if (hasEmbeddedId) {
+                throw new IllegalStateException("Entity " + entityClass.getName() + " uses @EmbeddedId. "
+                    + "Call onConflict() to specify the conflict columns explicitly for MergeSpec.");
+            }
             throw new IllegalStateException(
                 "No @Id field found in " + (entityClass != null ? entityClass.getName() : "null")
                     + ". Ensure the entity has a field annotated with @jakarta.persistence.Id");

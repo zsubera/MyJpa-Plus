@@ -126,6 +126,11 @@ final class KeysetPaginationHelper {
      * <p>
      * 对于单字段排序 {@code ORDER BY id ASC}，条件为 {@code id > lastValue}。 对于多字段排序 {@code ORDER BY a ASC, b DESC}，条件为：
      * {@code (a > lastA) OR (a = lastA AND b < lastB)}。
+     *
+     * <p>
+     * <strong>NULL 排序说明：</strong>此方法假设数据库使用 "NULLS FIRST" 语义（MySQL、PostgreSQL 默认）。
+     * 对于 Oracle/SQL Server（默认 NULLS LAST），需要在 ORDER BY 中显式指定 NULLS FIRST/LAST，
+     * 或在查询中使用 {@code COALESCE(column, default_value)} 替代 NULL 值。
      */
     @SuppressWarnings({"unchecked", "rawtypes"})
     private static jakarta.persistence.criteria.Predicate buildKeysetPredicate(Root<?> root, CriteriaBuilder cb,

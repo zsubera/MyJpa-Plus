@@ -940,6 +940,12 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
      * <li>查询超时/锁模式：仅当当前实例未设置时，采用另一个实例的值</li>
      * </ul>
      *
+     * <p>
+     * <strong>所有权转移：</strong>调用 {@code then()} 后，{@code other} 的条件节点列表被追加到当前 spec。
+     * 虽然顶层列表是浅拷贝，但 {@link ConditionNode} 对象本身是共享引用。
+     * 因此，调用后不应再修改 {@code other} 的条件节点，否则会影响当前 spec。
+     * 推荐用法：创建新的 {@code other} 并在调用 {@code then()} 后不再使用它。
+     *
      * @param other 另一个 QuerySpec 实例
      * @return 当前 QuerySpec 实例，支持链式调用
      * @throws IllegalStateException 如果另一个 spec 存在未关闭的 or() 组

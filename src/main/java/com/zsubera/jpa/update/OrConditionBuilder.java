@@ -98,8 +98,7 @@ public class OrConditionBuilder<T, SELF extends AbstractBulkOperationSpec<T, SEL
                 }
                 fieldNames[i] = parent.property(fields[i]);
             }
-            String escaped = com.zsubera.jpa.spec.PredicateHelper.escapeLikeWildcards(keyword);
-            String pattern = "%" + escaped + "%";
+            String pattern = com.zsubera.jpa.spec.ConditionalMethods.wrapLikePattern(keyword);
             nodes.add(new BulkConditionNode.LeafNode((root, cb) -> {
                 List<Predicate> likes = new java.util.ArrayList<>();
                 for (String fieldName : fieldNames) {
