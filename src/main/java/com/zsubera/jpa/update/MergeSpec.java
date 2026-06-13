@@ -146,7 +146,9 @@ public class MergeSpec<T> {
         if (entity == null) {
             throw new IllegalStateException("Entity must be specified via withEntity() before executing");
         }
-        return executeWith(em, this.entity);
+        // Snapshot entity to avoid race condition with concurrent withEntity() calls
+        T entitySnapshot = this.entity;
+        return executeWith(em, entitySnapshot);
     }
 
     /**
@@ -436,15 +438,6 @@ public class MergeSpec<T> {
         return total;
     }
 
-    private int executeSingle(EntityManager em, T entityToMerge) {
-        String dialect = DialectDetector.detectDialect(em);
-        SqlWithParams sqlWithParams = buildSqlFor(em, entityToMerge, dialect);
-        if (log.isTraceEnabled()) {
-            log.trace("Executing UPSERT SQL: {}", sqlWithParams.sql());
-        }
-        return executeNativeQuery(em, sqlWithParams.sql(), sqlWithParams.params());
-    }
-
     private SqlWithParams buildSqlFor(EntityManager em, T entity, String dialect) {
         List<String> effectiveConflictFields =
             conflictFields.isEmpty() ? fieldExtractor.resolveIdColumnNames() : new ArrayList<>(conflictFields);
@@ -470,6 +463,18 @@ public class MergeSpec<T> {
             effectiveUpdateFields);
     }
 
+    /**
+     * 解析实体对应的数据库表名。优先使用 {@code @Table(name)} 注解，
+     * 其次使用 {@code @Entity(name)} 注解，最后使用驼峰转下划线策略。
+     *
+     * <p>
+     * <strong>注意：</strong>JPA Metamodel 的 {@code EntityType.getName()} 返回的是
+     * {@code @Entity(name)} 的值而非表名，因此此处通过注解直接扫描获取表名。
+     * 对于使用 {@code @SecondaryTable} 或 {@code @AttributeOverride} 的复杂映射，
+     * 建议显式使用 {@code @Table(name)} 注解。
+     *
+     * @return 数据库表名
+     */
     private String resolveTableName() {
         jakarta.persistence.Table tableAnnotation = entityClass.getAnnotation(jakarta.persistence.Table.class);
         if (tableAnnotation != null && !tableAnnotation.name().isEmpty()) {

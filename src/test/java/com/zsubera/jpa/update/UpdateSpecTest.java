@@ -2,6 +2,7 @@ package com.zsubera.jpa.update;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+import com.zsubera.jpa.spec.QuerySpec;
 import com.zsubera.jpa.spec.TestApplication;
 import com.zsubera.jpa.spec.TestEntity;
 import com.zsubera.jpa.spec.TestEntityRepository;
@@ -12,6 +13,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.test.context.ContextConfiguration;
 
 @DataJpaTest
@@ -857,5 +859,82 @@ class UpdateSpecTest {
         List<TestEntity> all = repository.findAll();
         assertTrue(all.stream().anyMatch(e -> e.getStatus() == 99 && "alice".equals(e.getName())));
         assertTrue(all.stream().anyMatch(e -> e.getStatus() == 2 && e.getName() == null));
+    }
+
+    // ---- where(Specification) 桥接测试 ----
+
+    @Test
+    void testWhereWithQuerySpec() {
+        repository.save(newEntity("active", 1));
+        repository.save(newEntity("inactive", 2));
+        repository.save(newEntity("active2", 1));
+        em.flush();
+        em.clear();
+
+        QuerySpec<TestEntity> activeSpec = new QuerySpec<TestEntity>().eq(TestEntity::getStatus, 1);
+
+        int count =
+            new UpdateSpec<>(TestEntity.class).set(TestEntity::getName, "updated").where(activeSpec).execute(em);
+        em.flush();
+        em.clear();
+
+        assertEquals(2, count);
+        List<TestEntity> all = repository.findAll();
+        assertTrue(all.stream().allMatch(e -> {
+            if ("updated".equals(e.getName())) {
+                return Integer.valueOf(1).equals(e.getStatus());
+            }
+            return true;
+        }));
+    }
+
+    @Test
+    void testWhereWithQuerySpecCombinedWithDirectConditions() {
+        repository.save(newEntity("active", 1));
+        repository.save(newEntity("active", 2));
+        repository.save(newEntity("inactive", 1));
+        em.flush();
+        em.clear();
+
+        QuerySpec<TestEntity> activeSpec = new QuerySpec<TestEntity>().eq(TestEntity::getStatus, 1);
+
+        int count = new UpdateSpec<>(TestEntity.class).set(TestEntity::getName, "updated").where(activeSpec)
+            .eq(TestEntity::getName, "active").execute(em);
+        em.flush();
+        em.clear();
+
+        assertEquals(1, count);
+        em.clear();
+        List<TestEntity> all = repository.findAll();
+        assertTrue(
+            all.stream().anyMatch(e -> "updated".equals(e.getName()) && Integer.valueOf(1).equals(e.getStatus())));
+    }
+
+    @Test
+    void testWhereWithNullSpecThrows() {
+        assertThrows(IllegalArgumentException.class,
+            () -> new UpdateSpec<>(TestEntity.class).set(TestEntity::getName, "x").where(null));
+    }
+
+    @Test
+    void testWhereWithPlainSpecification() {
+        repository.save(newEntity("a", 10));
+        repository.save(newEntity("b", 20));
+        repository.save(newEntity("c", 30));
+        em.flush();
+        em.clear();
+
+        Specification<TestEntity> spec = (root, query, cb) -> cb.greaterThan(root.get("status"), 15);
+
+        int count = new UpdateSpec<>(TestEntity.class).set(TestEntity::getName, "high").where(spec).execute(em);
+        em.flush();
+        em.clear();
+
+        assertEquals(2, count);
+        List<TestEntity> all = repository.findAll();
+        assertTrue(
+            all.stream().noneMatch(e -> Integer.valueOf(10).equals(e.getStatus()) && "high".equals(e.getName())));
+        assertTrue(all.stream().anyMatch(e -> Integer.valueOf(20).equals(e.getStatus()) && "high".equals(e.getName())));
+        assertTrue(all.stream().anyMatch(e -> Integer.valueOf(30).equals(e.getStatus()) && "high".equals(e.getName())));
     }
 }

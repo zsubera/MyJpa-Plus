@@ -116,7 +116,11 @@ public final class PageableHelper {
                     return Integer.MIN_VALUE;
                 }
             }
-        } catch (Exception ignored) {
+        } catch (SecurityException e) {
+            org.slf4j.LoggerFactory.getLogger(PageableHelper.class)
+                .warn("SecurityException while determining fetch size for JDBC URL: {}. "
+                    + "Add --add-opens java.sql/java.sql=ALL-UNNAMED if needed.", e.getMessage());
+        } catch (Exception e) {
             // 无法从 JDBC URL 确定 fetchSize
         }
         return 0;

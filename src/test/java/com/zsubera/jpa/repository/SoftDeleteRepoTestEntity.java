@@ -4,7 +4,7 @@ import com.zsubera.jpa.annotation.SoftDelete;
 import jakarta.persistence.*;
 
 /**
- * Test entity for {@link SoftDeleteJpaRepository} tests.
+ * Test entity for {@link DefaultMyJpaRepository} tests.
  */
 @Entity
 @Table(name = "soft_delete_repo_test_entity")

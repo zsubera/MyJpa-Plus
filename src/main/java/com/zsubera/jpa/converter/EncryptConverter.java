@@ -79,6 +79,18 @@ public class EncryptConverter implements AttributeConverter<String, String> {
     private static final int PBKDF2_KEY_LENGTH = 256;
     private static final Logger log = LoggerFactory.getLogger(EncryptConverter.class);
 
+    /**
+     * Cipher 实例缓存。Cipher.getInstance() 涉及 JCE Provider 查找，开销较大。
+     * Cipher 非线程安全，使用 ThreadLocal 保证线程隔离。
+     */
+    private static final ThreadLocal<Cipher> CIPHER_THREAD_LOCAL = ThreadLocal.withInitial(() -> {
+        try {
+            return Cipher.getInstance(ALGORITHM);
+        } catch (GeneralSecurityException e) {
+            throw new MyJpaPlusException("Failed to initialize cipher", e);
+        }
+    });
+
     /** 防止弱密钥攻击的最小密钥长度（字符数）。 */
     private static final int MIN_KEY_LENGTH = 16;
 
@@ -133,6 +145,17 @@ public class EncryptConverter implements AttributeConverter<String, String> {
 
     /** 跟踪是否已记录过开发盐值警告（避免每次加密都记录）。 */
     private static volatile boolean devSaltWarningLogged = false;
+
+    /**
+     * 清除当前线程的 Cipher 缓存。在请求结束后调用此方法可防止 ThreadLocal 泄漏。
+     *
+     * <p>
+     * 在 Servlet 容器线程池中，线程会被复用。如果不清理 ThreadLocal，Cipher 实例会一直保留，
+     * 阻止类加载器被垃圾回收。在热重载或 OSGi 环境中，这会导致整个类加载器泄漏。
+     */
+    public static void removeCipher() {
+        CIPHER_THREAD_LOCAL.remove();
+    }
 
     /**
      * 清除所有缓存的密钥和版本信息。用于测试环境和应用关闭时清理。
@@ -336,7 +359,7 @@ public class EncryptConverter implements AttributeConverter<String, String> {
         }
         try {
             SecretKeySpec keySpec = getKeySpec();
-            Cipher cipher = Cipher.getInstance(ALGORITHM);
+            Cipher cipher = CIPHER_THREAD_LOCAL.get();
             byte[] iv = new byte[GCM_IV_LENGTH];
             SECURE_RANDOM.nextBytes(iv);
             cipher.init(Cipher.ENCRYPT_MODE, keySpec, new GCMParameterSpec(GCM_TAG_LENGTH, iv));
@@ -407,7 +430,7 @@ public class EncryptConverter implements AttributeConverter<String, String> {
             byte[] encrypted = new byte[combined.length - GCM_IV_LENGTH];
             System.arraycopy(combined, GCM_IV_LENGTH, encrypted, 0, encrypted.length);
             SecretKeySpec keySpec = getKeySpec(version);
-            Cipher cipher = Cipher.getInstance(ALGORITHM);
+            Cipher cipher = CIPHER_THREAD_LOCAL.get();
             cipher.init(Cipher.DECRYPT_MODE, keySpec, new GCMParameterSpec(GCM_TAG_LENGTH, iv));
             byte[] decrypted = cipher.doFinal(encrypted);
             return new String(decrypted, StandardCharsets.UTF_8);

@@ -370,17 +370,29 @@ public class ProjectionSpec<T> {
     }
 
     /**
-     * 添加 GROUP BY 字段。
+     * 添加 GROUP BY 字段。支持多个字段分组。
      *
-     * @param field 要分组的实体属性方法引用
+     * <p>
+     * 使用示例：
+     * <pre>{@code
+     * projection.groupBy(User::getDepartment, User::getStatus);
+     * }</pre>
+     *
+     * @param fields 要分组的实体属性方法引用
      * @return 当前 ProjectionSpec 实例，支持链式调用
-     * @throws IllegalArgumentException 如果 field 为 null
+     * @throws IllegalArgumentException 如果 fields 为空或包含 null
      */
-    public ProjectionSpec<T> groupBy(SFunction<T, ?> field) {
-        if (field == null) {
-            throw new IllegalArgumentException("field must not be null");
+    @SafeVarargs
+    public final ProjectionSpec<T> groupBy(SFunction<T, ?>... fields) {
+        if (fields == null || fields.length == 0) {
+            throw new IllegalArgumentException("fields must not be empty");
         }
-        groupByFields.add(LambdaUtils.getPropertyName(field));
+        for (SFunction<T, ?> field : fields) {
+            if (field == null) {
+                throw new IllegalArgumentException("field must not be null");
+            }
+            groupByFields.add(LambdaUtils.getPropertyName(field));
+        }
         return this;
     }
 
@@ -729,17 +741,10 @@ public class ProjectionSpec<T> {
         checkDeepPagination(pageable.getOffset());
 
         try {
-            // 构建计数和数据查询，每个 root 共享一次 JOIN 解析
             Long total;
-            // 计数查询
-            CriteriaQuery<Long> countQuery = cb.createQuery(Long.class);
-            Root<T> countRoot = countQuery.from(entityClass);
-            resolveJoins(countRoot, cb);
             if (!groupByFields.isEmpty()) {
                 // 当存在 GROUP BY 时，使用单独的计数查询，
                 // 按相同字段分组并对分组计数（而非总行数）。
-                // 之前仅在同时存在 HAVING 时才走此分支，导致仅有 GROUP BY 时
-                // count 查询返回总行数而非分组数，分页总数不正确。
                 CriteriaQuery<Long> groupCountQuery = cb.createQuery(Long.class);
                 Root<T> groupRoot = groupCountQuery.from(entityClass);
                 resolveJoins(groupRoot, cb);
@@ -761,6 +766,9 @@ public class ProjectionSpec<T> {
                 total = groupCountTypedQuery.getSingleResult();
             } else {
                 // 仅在用户显式启用 distinct 时使用 countDistinct
+                CriteriaQuery<Long> countQuery = cb.createQuery(Long.class);
+                Root<T> countRoot = countQuery.from(entityClass);
+                resolveJoins(countRoot, cb);
                 if (this.distinct) {
                     countQuery.select(cb.countDistinct(countRoot));
                 } else {

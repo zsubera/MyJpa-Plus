@@ -76,9 +76,7 @@ public final class EntityClassResolver {
         if (cached != null) {
             return cached;
         }
-        String result = doResolveIdFieldName(entityClass);
-        ID_FIELD_CACHE.put(entityClass, result);
-        return result;
+        return ID_FIELD_CACHE.computeIfAbsent(entityClass, EntityClassResolver::doResolveIdFieldName);
     }
 
     private static String doResolveIdFieldName(Class<?> entityClass) {

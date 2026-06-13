@@ -142,6 +142,24 @@ public interface ConditionalMethods<E, SELF extends ConditionalMethods<E, SELF>>
     SELF endsWith(SFunction<E, ?> field, String value);
 
     /**
+     * 添加不匹配前缀条件：{@code field NOT LIKE 'value%'}。
+     *
+     * @param field 实体属性的方法引用
+     * @param value 前缀字符串值
+     * @return 当前构建器实例
+     */
+    SELF notStartsWith(SFunction<E, ?> field, String value);
+
+    /**
+     * 添加不匹配后缀条件：{@code field NOT LIKE '%value'}。
+     *
+     * @param field 实体属性的方法引用
+     * @param value 后缀字符串值
+     * @return 当前构建器实例
+     */
+    SELF notEndsWith(SFunction<E, ?> field, String value);
+
+    /**
      * 添加 IN 条件。
      *
      * @param field 实体属性的方法引用
@@ -376,6 +394,30 @@ public interface ConditionalMethods<E, SELF extends ConditionalMethods<E, SELF>>
      */
     default SELF endsWith(boolean condition, SFunction<E, ?> field, String value) {
         return condition ? endsWith(field, value) : self();
+    }
+
+    /**
+     * 仅在 {@code condition} 为 true 时添加不匹配前缀条件。
+     *
+     * @param condition 是否添加条件的标志
+     * @param field 实体属性的方法引用
+     * @param value 前缀字符串值
+     * @return 当前构建器以支持链式调用
+     */
+    default SELF notStartsWith(boolean condition, SFunction<E, ?> field, String value) {
+        return condition ? notStartsWith(field, value) : self();
+    }
+
+    /**
+     * 仅在 {@code condition} 为 true 时添加不匹配后缀条件。
+     *
+     * @param condition 是否添加条件的标志
+     * @param field 实体属性的方法引用
+     * @param value 后缀字符串值
+     * @return 当前构建器以支持链式调用
+     */
+    default SELF notEndsWith(boolean condition, SFunction<E, ?> field, String value) {
+        return condition ? notEndsWith(field, value) : self();
     }
 
     /**

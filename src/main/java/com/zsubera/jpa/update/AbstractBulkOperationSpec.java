@@ -13,6 +13,7 @@ import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.EntityTransaction;
 import jakarta.persistence.criteria.CriteriaBuilder;
+import jakarta.persistence.criteria.CriteriaQuery;
 import jakarta.persistence.criteria.Predicate;
 import jakarta.persistence.criteria.Root;
 import java.util.ArrayList;
@@ -22,6 +23,7 @@ import java.util.function.Consumer;
 import java.util.function.Function;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 /**
@@ -316,6 +318,44 @@ public abstract class AbstractBulkOperationSpec<T, SELF extends AbstractBulkOper
         conditionNodes.add(new BulkConditionNode.NotNode(combined));
         return self();
     }
+
+    /**
+     * 复用 {@link Specification} 作为 WHERE 条件。
+     *
+     * <p>
+     * 允许将 {@link com.zsubera.jpa.spec.QuerySpec} 或任何 {@link Specification} 实例直接用于批量操作的 WHERE 子句，
+     * 避免查询和更新/删除之间的条件逻辑重复。
+     *
+     * <pre>{@code
+     * QuerySpec<User> active = new QuerySpec<User>().eq(User::getStatus, "ACTIVE");
+     *
+     * // 复用同一条件进行查询和更新
+     * List<User> users = repository.findAll(active);
+     * repository.update(s -> s.set(User::getStatus, "INACTIVE").where(active));
+     * }</pre>
+     *
+     * <p>
+     * <strong>实现说明：</strong>{@link Specification#toPredicate} 需要 {@link CriteriaQuery} 参数，
+     * 但大多数实现（包括 {@code QuerySpec}）仅在子查询中使用该参数。此处创建临时 {@code CriteriaQuery}
+     * 以满足接口签名，不影响运行时行为。
+     *
+     * @param spec 查询规格说明，用作 WHERE 条件
+     * @return 当前构建器实例，支持链式调用
+     * @throws IllegalArgumentException 如果 spec 为 null
+     */
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    public SELF where(Specification<T> spec) {
+        if (spec == null) {
+            throw new IllegalArgumentException("spec must not be null");
+        }
+        BiFunction<Root<?>, CriteriaBuilder, Predicate> specFn = (root, cb) -> {
+            CriteriaQuery<?> tempQuery = cb.createQuery(entityClass);
+            return spec.toPredicate((Root<T>)root, tempQuery, cb);
+        };
+        conditionNodes.add(new BulkConditionNode.LeafNode((BiFunction)specFn));
+        return self();
+    }
+
     // ---- 条件方法由 BulkConditionSupport 默认实现提供 ----
 
     @Override

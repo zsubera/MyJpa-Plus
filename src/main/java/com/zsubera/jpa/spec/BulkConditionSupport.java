@@ -111,6 +111,18 @@ public interface BulkConditionSupport<T, SELF extends BulkConditionSupport<T, SE
         return addCondition((root, cb) -> PredicateHelper.endsWith(root, property(field), value, cb));
     }
 
+    default SELF notStartsWith(SFunction<T, ?> field, String value) {
+        requireField(field);
+        requireValue(value, "notStartsWith");
+        return addCondition((root, cb) -> cb.not(PredicateHelper.startsWith(root, property(field), value, cb)));
+    }
+
+    default SELF notEndsWith(SFunction<T, ?> field, String value) {
+        requireField(field);
+        requireValue(value, "notEndsWith");
+        return addCondition((root, cb) -> cb.not(PredicateHelper.endsWith(root, property(field), value, cb)));
+    }
+
     // ---- 忽略大小写运算符 ----
 
     // [FIX] P0-2: null 值语义与 ConditionBuilder 保持一致——eqIgnoreCase(null) → isNull, neIgnoreCase(null) → isNotNull

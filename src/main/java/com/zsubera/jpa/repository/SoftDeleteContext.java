@@ -16,7 +16,7 @@ import org.slf4j.LoggerFactory;
  * 通常由 {@link IgnoreSoftDeleteAdvisor} 自动管理，不建议手动调用。
  *
  * @see IgnoreSoftDeleteAdvisor
- * @see SoftDeleteJpaRepository
+ * @see DefaultMyJpaRepository
  */
 public final class SoftDeleteContext {
 

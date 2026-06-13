@@ -30,6 +30,24 @@ final class EntityFieldExtractor<T> {
 
     private static final Logger log = LoggerFactory.getLogger(EntityFieldExtractor.class);
 
+    /** 缓存 Spring PhysicalNamingStrategy 实例，避免每次 resolveColumnName 都通过反射创建。 */
+    private static final Object CACHED_NAMING_STRATEGY;
+    private static final java.lang.reflect.Method CACHED_TO_PHYSICAL_METHOD;
+
+    static {
+        Object strategy = null;
+        java.lang.reflect.Method method = null;
+        try {
+            Class<?> strategyClass = Class.forName("org.springframework.boot.orm.jpa.SpringPhysicalNamingStrategy");
+            strategy = strategyClass.getDeclaredConstructor().newInstance();
+            method = strategyClass.getMethod("toPhysicalColumnName", String.class, java.util.Locale.class);
+        } catch (Exception ignored) {
+            // Spring 命名策略不在类路径上
+        }
+        CACHED_NAMING_STRATEGY = strategy;
+        CACHED_TO_PHYSICAL_METHOD = method;
+    }
+
     /** 缓存实体类的持久化字段列表，避免每次反射遍历。使用弱引用键防止类加载器泄漏。 */
     private static final ConcurrentReferenceHashMap<Class<?>, List<Field>> FIELD_CACHE =
         new ConcurrentReferenceHashMap<>(16, ConcurrentReferenceHashMap.ReferenceType.WEAK);
@@ -105,7 +123,7 @@ final class EntityFieldExtractor<T> {
                         && !f.isAnnotationPresent(jakarta.persistence.ManyToOne.class)
                         && !f.isAnnotationPresent(jakarta.persistence.ManyToMany.class)
                         && !f.isAnnotationPresent(jakarta.persistence.OneToOne.class)
-                        && !f.isAnnotationPresent(jakarta.persistence.EmbeddedId.class)) {
+                        && !f.isAnnotationPresent(jakarta.persistence.EmbeddedId.class) && !isInsertableFalse(f)) {
                         fields.add(f);
                     }
                 }
@@ -194,7 +212,7 @@ final class EntityFieldExtractor<T> {
                         && !f.isAnnotationPresent(jakarta.persistence.OneToMany.class)
                         && !f.isAnnotationPresent(jakarta.persistence.ManyToOne.class)
                         && !f.isAnnotationPresent(jakarta.persistence.ManyToMany.class)
-                        && !f.isAnnotationPresent(jakarta.persistence.OneToOne.class)) {
+                        && !f.isAnnotationPresent(jakarta.persistence.OneToOne.class) && !isInsertableFalse(f)) {
                         fields.add(f);
                     }
                 }
@@ -277,6 +295,14 @@ final class EntityFieldExtractor<T> {
     }
 
     /**
+     * 检查字段是否标注了 {@code @Column(insertable = false)}。
+     */
+    private static boolean isInsertableFalse(Field f) {
+        Column column = f.getAnnotation(Column.class);
+        return column != null && !column.insertable();
+    }
+
+    /**
      * 从实体类层次结构中解析 @Id 注解字段对应的数据库列名。
      *
      * @return ID 列名列表
@@ -308,7 +334,8 @@ final class EntityFieldExtractor<T> {
     }
 
     /**
-     * 解析字段对应的数据库列名。优先使用 {@code @Column(name)} 注解，否则使用字段名。
+     * 解析字段对应的数据库列名。优先使用 {@code @Column(name)} 注解，否则使用 Spring Boot 命名策略
+     * （camelCase → snake_case）。命名策略实例在类加载时缓存，避免重复反射创建。
      *
      * @param field 实体字段
      * @return 数据库列名
@@ -321,17 +348,19 @@ final class EntityFieldExtractor<T> {
             IdentifierValidator.validateColumnName(name);
             return name;
         }
-        // 尝试应用 Spring Boot 的命名策略（camelCase → snake_case）
-        try {
-            Class<?> strategyClass = Class.forName("org.springframework.boot.orm.jpa.SpringPhysicalNamingStrategy");
-            java.lang.reflect.Method toPhysical =
-                strategyClass.getMethod("toPhysicalColumnName", String.class, java.util.Locale.class);
-            Object strategy = strategyClass.getDeclaredConstructor().newInstance();
-            return (String)toPhysical.invoke(strategy, field.getName(), java.util.Locale.ROOT);
-        } catch (Exception e) {
-            // Spring 命名策略不在类路径上，回退到字段名
-            return field.getName();
+        // 使用缓存的 Spring 命名策略实例（camelCase → snake_case）
+        if (CACHED_NAMING_STRATEGY != null && CACHED_TO_PHYSICAL_METHOD != null) {
+            try {
+                return (String)CACHED_TO_PHYSICAL_METHOD.invoke(CACHED_NAMING_STRATEGY, field.getName(),
+                    java.util.Locale.ROOT);
+            } catch (Exception e) {
+                log.debug("Failed to apply Spring naming strategy for field {}: {}", field.getName(), e.getMessage());
+            }
         }
+        // 回退到字段名
+        String name = field.getName();
+        IdentifierValidator.validateColumnName(name);
+        return name;
     }
 
     /**

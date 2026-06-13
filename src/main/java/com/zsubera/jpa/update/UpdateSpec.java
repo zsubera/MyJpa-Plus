@@ -51,6 +51,10 @@ public class UpdateSpec<T> extends AbstractBulkOperationSpec<T, UpdateSpec<T>> {
     private static final java.util.concurrent.ConcurrentMap<String, String> VERSION_FIELD_CACHE =
         new java.util.concurrent.ConcurrentHashMap<>();
 
+    /** 记录已知无 @Version 字段的实体类，避免哨兵值碰撞风险。 */
+    private static final java.util.concurrent.ConcurrentMap<String, Boolean> NO_VERSION_CACHE =
+        new java.util.concurrent.ConcurrentHashMap<>();
+
     /** 缓存最大容量限制 */
     private static final int MAX_CACHE_SIZE = 256;
 
@@ -319,23 +323,27 @@ public class UpdateSpec<T> extends AbstractBulkOperationSpec<T, UpdateSpec<T>> {
      */
     private static String resolveVersionFieldName(Class<?> clazz) {
         String cacheKey = clazz.getName();
+        if (Boolean.TRUE.equals(NO_VERSION_CACHE.get(cacheKey))) {
+            return null;
+        }
         String cached = VERSION_FIELD_CACHE.get(cacheKey);
         if (cached != null) {
-            return "__NONE__".equals(cached) ? null : cached;
+            return cached;
         }
         // 使用 computeIfAbsent 原子操作避免缓存竞争
-        String result = VERSION_FIELD_CACHE.computeIfAbsent(cacheKey, k -> {
-            for (Class<?> c = clazz; c != null && c != Object.class; c = c.getSuperclass()) {
-                for (java.lang.reflect.Field f : c.getDeclaredFields()) {
-                    if (f.isAnnotationPresent(jakarta.persistence.Version.class)) {
-                        return f.getName();
-                    }
+        for (Class<?> c = clazz; c != null && c != Object.class; c = c.getSuperclass()) {
+            for (java.lang.reflect.Field f : c.getDeclaredFields()) {
+                if (f.isAnnotationPresent(jakarta.persistence.Version.class)) {
+                    String result = f.getName();
+                    VERSION_FIELD_CACHE.put(cacheKey, result);
+                    evictCacheIfNeeded(VERSION_FIELD_CACHE);
+                    return result;
                 }
             }
-            return "__NONE__";
-        });
-        evictCacheIfNeeded(VERSION_FIELD_CACHE);
-        return "__NONE__".equals(result) ? null : result;
+        }
+        NO_VERSION_CACHE.put(cacheKey, Boolean.TRUE);
+        evictCacheIfNeeded(NO_VERSION_CACHE);
+        return null;
     }
 
     /**
@@ -357,9 +365,7 @@ public class UpdateSpec<T> extends AbstractBulkOperationSpec<T, UpdateSpec<T>> {
         if (setClauses.isEmpty() && expressionSetClauses.isEmpty()) {
             throw new IllegalStateException("At least one set() clause is required");
         }
-        // 审计日志：记录无条件更新操作及调用栈，便于生产环境追踪危险操作
-        log.warn("AUDIT: Executing unconditional UPDATE on {} — this will affect ALL rows! Call stack: {}",
-            entityClass.getSimpleName(), AuditUtils.getCallStack());
+        log.warn("AUDIT: Executing unconditional UPDATE on {}", entityClass.getSimpleName());
         CriteriaBuilder cb = em.getCriteriaBuilder();
         CriteriaUpdate<T> update = cb.createCriteriaUpdate(entityClass);
         Root<T> root = update.from(entityClass);

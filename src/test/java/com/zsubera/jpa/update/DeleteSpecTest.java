@@ -2,6 +2,7 @@ package com.zsubera.jpa.update;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+import com.zsubera.jpa.spec.QuerySpec;
 import com.zsubera.jpa.spec.TestApplication;
 import com.zsubera.jpa.spec.TestEntity;
 import com.zsubera.jpa.spec.TestEntityRepository;
@@ -12,6 +13,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.test.context.ContextConfiguration;
 
 @DataJpaTest
@@ -762,5 +764,59 @@ class DeleteSpecTest {
         entity.setName(name);
         entity.setStatus(status);
         return entity;
+    }
+
+    // ---- where(Specification) 桥接测试 ----
+
+    @Test
+    void testDeleteWhereWithQuerySpec() {
+        repository.save(newEntity("active", 1));
+        repository.save(newEntity("inactive", 2));
+        repository.save(newEntity("active2", 1));
+
+        QuerySpec<TestEntity> activeSpec = new QuerySpec<TestEntity>().eq(TestEntity::getStatus, 1);
+
+        int count = new DeleteSpec<>(TestEntity.class).where(activeSpec).execute(em);
+
+        assertEquals(2, count);
+        List<TestEntity> remaining = repository.findAll();
+        assertEquals(1, remaining.size());
+        assertEquals(Integer.valueOf(2), remaining.get(0).getStatus());
+    }
+
+    @Test
+    void testDeleteWhereWithQuerySpecCombinedWithDirectConditions() {
+        repository.save(newEntity("active", 1));
+        repository.save(newEntity("active", 2));
+        repository.save(newEntity("inactive", 1));
+
+        QuerySpec<TestEntity> activeSpec = new QuerySpec<TestEntity>().eq(TestEntity::getStatus, 1);
+
+        int count = new DeleteSpec<>(TestEntity.class).where(activeSpec).eq(TestEntity::getName, "active").execute(em);
+
+        assertEquals(1, count);
+        List<TestEntity> remaining = repository.findAll();
+        assertTrue(remaining.stream().anyMatch(e -> "inactive".equals(e.getName())));
+    }
+
+    @Test
+    void testDeleteWhereWithNullSpecThrows() {
+        assertThrows(IllegalArgumentException.class, () -> new DeleteSpec<>(TestEntity.class).where(null));
+    }
+
+    @Test
+    void testDeleteWhereWithPlainSpecification() {
+        repository.save(newEntity("a", 10));
+        repository.save(newEntity("b", 20));
+        repository.save(newEntity("c", 30));
+
+        Specification<TestEntity> spec = (root, query, cb) -> cb.greaterThan(root.get("status"), 15);
+
+        int count = new DeleteSpec<>(TestEntity.class).where(spec).execute(em);
+
+        assertEquals(2, count);
+        List<TestEntity> remaining = repository.findAll();
+        assertEquals(1, remaining.size());
+        assertEquals("a", remaining.get(0).getName());
     }
 }

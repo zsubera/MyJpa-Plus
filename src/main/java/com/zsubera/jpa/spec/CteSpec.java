@@ -54,6 +54,15 @@ public class CteSpec {
      */
     private static final Pattern SAFE_IDENTIFIER_PATTERN = Pattern.compile("^[a-zA-Z_][a-zA-Z0-9_]*$");
 
+    /**
+     * 用于检测 SQL 中未绑定命名参数的正则表达式。
+     *
+     * <p>
+     * 使用负向后行断言排除 PostgreSQL :: 类型转换（如 ::text、::integer）。
+     * 提取为静态字段避免每次调用 {@code checkUnboundParameters} 时重新编译。
+     */
+    private static final Pattern UNBOUND_PARAM_PATTERN = Pattern.compile("(?<!:):([a-zA-Z_][a-zA-Z0-9_]*)");
+
     private final List<CteEntry> cteEntries = new ArrayList<>();
     private String mainSql;
     private final Map<String, Object> parameters = new LinkedHashMap<>();
@@ -199,13 +208,12 @@ public class CteSpec {
         }
         CteEntry current = currentCte();
         if (params != null && params.length > 0) {
-            // 使用正则替换，避免替换 SQL 字符串字面量中的 ?N（如 WHERE name = '?1'）
-            // 负向断言：?N 前面不能是字母数字或下划线（避免匹配命名参数 :paramN）
+            // 使用字面量替换（非正则），反向迭代避免 ?1 匹配 ?10 等多位数占位符
             String rewrittenSql = sqlTemplate;
             for (int i = params.length - 1; i >= 0; i--) {
-                String placeholder = "\\?" + (i + 1) + "(?![0-9])";
+                String placeholder = "?" + (i + 1);
                 String namedParam = "_cte_param_" + i;
-                rewrittenSql = rewrittenSql.replaceAll(placeholder, ":" + namedParam);
+                rewrittenSql = rewrittenSql.replace("?" + (i + 1), ":" + namedParam);
                 parameters.put(namedParam, params[i]);
             }
             current.sql = rewrittenSql;
@@ -428,24 +436,25 @@ public class CteSpec {
      */
     private void applyFetchSize(EntityManager em, Query query) {
         try {
-            // 使用纯反射避免对 Hibernate 的编译时依赖
+            // 使用 Hibernate Session.doWork 获取数据库连接并检测类型
             Class<?> sessionClass = Class.forName("org.hibernate.Session");
+            Class<?> workClass = Class.forName("org.hibernate.jdbc.Work");
             Object session = em.unwrap(sessionClass);
-            Class<?> returningWorkClass = Class.forName("org.hibernate.jdbc.ReturningWork");
             String[] productNameHolder = new String[1];
-            Object workProxy = java.lang.reflect.Proxy.newProxyInstance(returningWorkClass.getClassLoader(),
-                new Class<?>[] {returningWorkClass}, (proxy, method, args) -> {
+            Object workProxy = java.lang.reflect.Proxy.newProxyInstance(workClass.getClassLoader(),
+                new Class<?>[] {workClass}, (proxy, method, args) -> {
                     if ("execute".equals(method.getName()) && args.length == 1
                         && args[0] instanceof java.sql.Connection conn) {
-                        return conn.getMetaData().getDatabaseProductName();
+                        productNameHolder[0] = conn.getMetaData().getDatabaseProductName();
+                        return null;
                     }
                     if (method.getDeclaringClass() == Object.class) {
                         return method.invoke(this, args);
                     }
-                    throw new UnsupportedOperationException("Unexpected method on ReturningWork: " + method.getName());
+                    throw new UnsupportedOperationException("Unexpected method on Work: " + method.getName());
                 });
-            java.lang.reflect.Method doReturningWork = sessionClass.getMethod("doReturningWork", returningWorkClass);
-            productNameHolder[0] = (String)doReturningWork.invoke(session, workProxy);
+            java.lang.reflect.Method doWork = sessionClass.getMethod("doWork", workClass);
+            doWork.invoke(session, workProxy);
             if (productNameHolder[0] != null) {
                 String lower = productNameHolder[0].toLowerCase();
                 if (lower.contains("postgresql") || lower.contains("mysql")) {
@@ -613,9 +622,7 @@ public class CteSpec {
      * @param boundParams 已绑定的参数映射
      */
     private static void checkUnboundParameters(String sql, Map<String, Object> boundParams) {
-        // 使用负向后行断言排除 PostgreSQL :: 类型转换（如 ::text、::integer）
-        java.util.regex.Matcher matcher =
-            java.util.regex.Pattern.compile("(?<!:):([a-zA-Z_][a-zA-Z0-9_]*)").matcher(sql);
+        java.util.regex.Matcher matcher = UNBOUND_PARAM_PATTERN.matcher(sql);
         List<String> unboundParams = new ArrayList<>();
         while (matcher.find()) {
             String paramName = matcher.group(1);

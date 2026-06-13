@@ -86,11 +86,16 @@ public class AuditEntityListener implements ApplicationContextAware {
 
     /**
      * 清理静态资源引用。在 Bean 销毁时调用，防止内存泄漏。
+     *
+     * <p>
+     * 此方法使用 synchronized 保护，防止与并发的 getUserProvider() 调用产生竞态条件。
      */
     public static void destroy() {
-        applicationContext = null;
-        userProvider = null;
-        providerLookupAttempted = false;
+        synchronized (AuditEntityListener.class) {
+            applicationContext = null;
+            userProvider = null;
+            providerLookupAttempted = false;
+        }
     }
 
     /**

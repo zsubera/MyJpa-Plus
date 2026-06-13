@@ -34,7 +34,7 @@ import org.springframework.util.ConcurrentReferenceHashMap;
  * <li>{@code Boolean} / {@code boolean} — {@code true} 表示"已删除"，{@code false}（或 {@code null}）表示"未删除"</li>
  * <li>{@code Integer} / {@code int} — 通过 {@link SoftDelete#deletedIntValue()} 指定表示"已删除"的整数值（默认 1），其他值表示"未删除"</li>
  * <li>{@code Enum} — 通过 {@link SoftDelete#deletedValue()} 指定表示"已删除"的枚举值名称</li>
- * <li>{@code String} — 通过 {@link SoftDelete#deletedStringValue()} 指定表示"已删除"的字符串值（默认 "2"），适用于 {@code char(1)} 等场景</li>
+ * <li>{@code String} — 通过 {@link SoftDelete#deletedStringValue()} 指定表示"已删除"的字符串值（默认 "1"），适用于 {@code char(1)} 等场景</li>
  * </ul>
  *
  * <p>
@@ -127,17 +127,7 @@ public final class SoftDeleteHelper {
      * 验证表名标识符但不添加双引号。用于原生 SQL 中不需要大小写敏感的场景。
      */
     static String validateTableName(String identifier) {
-        if (identifier == null || identifier.isEmpty()) {
-            throw new IllegalArgumentException("Identifier must not be null or empty");
-        }
-        String[] parts = identifier.split("\\.");
-        for (String part : parts) {
-            if (!SAFE_IDENTIFIER_PART_PATTERN.matcher(part).matches()) {
-                throw new IllegalArgumentException("Invalid SQL identifier: '" + identifier
-                    + "'. Each part must contain only alphanumeric characters and underscores.");
-            }
-        }
-        return identifier;
+        return escapeIdentifier(identifier);
     }
 
     private SoftDeleteHelper() {}
@@ -182,7 +172,7 @@ public final class SoftDeleteHelper {
         }
         if (field.getType() == String.class) {
             String deletedValue = (annotation != null && !annotation.deletedStringValue().isEmpty())
-                ? annotation.deletedStringValue() : "2";
+                ? annotation.deletedStringValue() : "1";
             return new ResolvedDeletedValue(false, deletedValue);
         }
         throw new MyJpaPlusException(
@@ -196,6 +186,16 @@ public final class SoftDeleteHelper {
      * <p>
      * <strong>安全要求：</strong>必须传入 {@code allowUnconditional=true} 显式确认， 否则将抛出
      * {@link IllegalStateException}。此机制防止误调用导致全表数据被意外标记为已删除。
+     *
+     * <p>
+     * <strong>已知限制：</strong>此方法使用原生 SQL UPDATE 语句，会绕过以下 JPA 机制：
+     * <ul>
+     * <li>JPA 生命周期回调（{@code @PreUpdate}、{@code @PostUpdate}）不会被触发</li>
+     * <li>乐观锁（{@code @Version}）不会被检查或递增</li>
+     * <li>执行后会调用 {@code EntityManager.clear()} 以使一级缓存失效</li>
+     * </ul>
+     * 如果您的实体依赖上述机制，请使用 {@link com.zsubera.jpa.update.UpdateSpec} 逐条更新，
+     * 或直接使用 JPQL/CriteriaUpdate。
      *
      * @param em EntityManager 实例
      * @param entityClass 实体类
@@ -586,10 +586,10 @@ public final class SoftDeleteHelper {
             return cb.equal(path.get(fieldName), deletedEnumValue);
         }
 
-        // String 类型（支持 char(1) 等字符串软删除，如 '0'/'2'）
+        // String 类型（支持 char(1) 等字符串软删除，如 '0'/'1'）
         if (field.getType() == String.class) {
             String deletedValue = (annotation != null && !annotation.deletedStringValue().isEmpty())
-                ? annotation.deletedStringValue() : "2";
+                ? annotation.deletedStringValue() : "1";
             if (isNotDeleted) {
                 return cb.or(cb.isNull(path.get(fieldName)), cb.notEqual(path.get(fieldName), deletedValue));
             }
@@ -685,12 +685,12 @@ public final class SoftDeleteHelper {
                 } catch (NoSuchFieldException e) {
                     current = current.getSuperclass();
                 } catch (SecurityException e) {
-                    // setAccessible 失败时仍返回 Field 对象，调用方处理异常
-                    try {
-                        return current.getDeclaredField(fieldName);
-                    } catch (NoSuchFieldException ex) {
-                        current = current.getSuperclass();
-                    }
+                    // 不缓存不可访问字段——setAccessible 永久失败，缓存会导致后续调用也失败
+                    String moduleName = current.getModule() != null ? current.getModule().getName() : "unnamed";
+                    String pkg = current.getPackageName();
+                    throw new MyJpaPlusException("Cannot access field '" + fieldName + "' in " + current.getName() + "."
+                        + " Module '" + moduleName + "' does not open package '" + pkg + "'."
+                        + " Add JVM argument: --add-opens " + pkg + "=ALL-UNNAMED", e);
                 }
             }
             return null;

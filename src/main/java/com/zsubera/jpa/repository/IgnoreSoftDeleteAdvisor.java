@@ -18,11 +18,11 @@ import org.springframework.stereotype.Component;
  *
  * <p>
  * 替代原先基于 {@code Thread.currentThread().getStackTrace()} 的栈遍历方案。 拦截所有 JPA Repository 方法调用（包括
- * {@link com.zsubera.jpa.repository.MyJpaRepository} 和 {@link SoftDeleteJpaRepository}），检查目标方法或接口上是否存在
+ * {@link com.zsubera.jpa.repository.MyJpaRepository} 和 {@link DefaultMyJpaRepository}），检查目标方法或接口上是否存在
  * {@code @IgnoreSoftDelete} 注解。
  *
  * @see SoftDeleteContext
- * @see SoftDeleteJpaRepository
+ * @see DefaultMyJpaRepository
  * @see com.zsubera.jpa.repository.MyJpaRepository
  */
 @Aspect
@@ -40,7 +40,7 @@ public class IgnoreSoftDeleteAdvisor {
      * 拦截所有 Spring Data JPA Repository 方法调用。
      *
      * <p>
-     * 切面范围覆盖所有 {@code JpaRepository} 子接口，确保 {@code @IgnoreSoftDelete} 注解在 {@link SoftDeleteJpaRepository} 和
+     * 切面范围覆盖所有 {@code JpaRepository} 子接口，确保 {@code @IgnoreSoftDelete} 注解在 {@link DefaultMyJpaRepository} 和
      * {@link com.zsubera.jpa.repository.MyJpaRepository} 上均生效。
      *
      * <p>

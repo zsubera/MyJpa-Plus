@@ -22,13 +22,13 @@ import org.springframework.test.context.ContextConfiguration;
 @DataJpaTest
 @org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabase(
     replace = org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabase.Replace.NONE)
-@ContextConfiguration(classes = SoftDeleteJpaRepositoryTest.TestConfig.class)
-class SoftDeleteJpaRepositoryTest {
+@ContextConfiguration(classes = DefaultMyJpaRepositoryTest.TestConfig.class)
+class DefaultMyJpaRepositoryTest {
 
     @SpringBootApplication
     @EntityScan(basePackageClasses = SoftDeleteRepoTestEntity.class)
     @EnableJpaRepositories(basePackages = "com.zsubera.jpa.repository",
-        repositoryBaseClass = SoftDeleteJpaRepository.class)
+        repositoryBaseClass = DefaultMyJpaRepository.class)
     static class TestConfig {}
 
     @Autowired
@@ -36,17 +36,17 @@ class SoftDeleteJpaRepositoryTest {
 
     @BeforeEach
     void setup() {
-        SoftDeleteJpaRepository.setAutoFilterEnabled(true);
-        SoftDeleteJpaRepository.setBlockUnconditionalDelete(true);
+        DefaultMyJpaRepository.setAutoFilterEnabled(true);
+        DefaultMyJpaRepository.setBlockUnconditionalDelete(true);
         SoftDeleteContext.reset();
     }
 
     @AfterEach
     void cleanup() {
         SoftDeleteContext.reset();
-        SoftDeleteJpaRepository.setAutoFilterEnabled(true);
-        SoftDeleteJpaRepository.setBlockUnconditionalDelete(true);
-        SoftDeleteJpaRepository.clearThreadLocal();
+        DefaultMyJpaRepository.setAutoFilterEnabled(true);
+        DefaultMyJpaRepository.setBlockUnconditionalDelete(true);
+        DefaultMyJpaRepository.clearThreadLocal();
     }
 
     // ---- findAll ----
@@ -267,8 +267,8 @@ class SoftDeleteJpaRepositoryTest {
     @Test
     void deleteAll_blockedWhenAutoFilterDisabled() {
         saveEntity("a", false);
-        SoftDeleteJpaRepository.setAutoFilterEnabled(false);
-        SoftDeleteJpaRepository.setBlockUnconditionalDelete(true);
+        DefaultMyJpaRepository.setAutoFilterEnabled(false);
+        DefaultMyJpaRepository.setBlockUnconditionalDelete(true);
 
         assertThrows(Exception.class, () -> repository.deleteAll());
     }
@@ -276,8 +276,8 @@ class SoftDeleteJpaRepositoryTest {
     @Test
     void deleteAllAllById_blockedWhenAutoFilterDisabled() {
         SoftDeleteRepoTestEntity entity = saveEntity("a", false);
-        SoftDeleteJpaRepository.setAutoFilterEnabled(false);
-        SoftDeleteJpaRepository.setBlockUnconditionalDelete(true);
+        DefaultMyJpaRepository.setAutoFilterEnabled(false);
+        DefaultMyJpaRepository.setBlockUnconditionalDelete(true);
 
         assertThrows(Exception.class, () -> repository.deleteAllById(Arrays.asList(entity.getId())));
     }
@@ -285,8 +285,8 @@ class SoftDeleteJpaRepositoryTest {
     @Test
     void deleteAllInBatch_blockedWhenAutoFilterDisabled() {
         saveEntity("a", false);
-        SoftDeleteJpaRepository.setAutoFilterEnabled(false);
-        SoftDeleteJpaRepository.setBlockUnconditionalDelete(true);
+        DefaultMyJpaRepository.setAutoFilterEnabled(false);
+        DefaultMyJpaRepository.setBlockUnconditionalDelete(true);
 
         assertThrows(Exception.class, () -> repository.deleteAllInBatch());
     }
@@ -295,24 +295,24 @@ class SoftDeleteJpaRepositoryTest {
 
     @Test
     void autoFilterEnabled_staticMethods() {
-        assertTrue(SoftDeleteJpaRepository.isAutoFilterEnabled());
+        assertTrue(DefaultMyJpaRepository.isAutoFilterEnabled());
 
-        SoftDeleteJpaRepository.setAutoFilterEnabled(false);
-        assertFalse(SoftDeleteJpaRepository.isAutoFilterEnabled());
+        DefaultMyJpaRepository.setAutoFilterEnabled(false);
+        assertFalse(DefaultMyJpaRepository.isAutoFilterEnabled());
 
-        SoftDeleteJpaRepository.setAutoFilterEnabled(true);
-        assertTrue(SoftDeleteJpaRepository.isAutoFilterEnabled());
+        DefaultMyJpaRepository.setAutoFilterEnabled(true);
+        assertTrue(DefaultMyJpaRepository.isAutoFilterEnabled());
     }
 
     @Test
     void blockUnconditionalDelete_staticMethods() {
-        assertTrue(SoftDeleteJpaRepository.isBlockUnconditionalDelete());
+        assertTrue(DefaultMyJpaRepository.isBlockUnconditionalDelete());
 
-        SoftDeleteJpaRepository.setBlockUnconditionalDelete(false);
-        assertFalse(SoftDeleteJpaRepository.isBlockUnconditionalDelete());
+        DefaultMyJpaRepository.setBlockUnconditionalDelete(false);
+        assertFalse(DefaultMyJpaRepository.isBlockUnconditionalDelete());
 
-        SoftDeleteJpaRepository.setBlockUnconditionalDelete(true);
-        assertTrue(SoftDeleteJpaRepository.isBlockUnconditionalDelete());
+        DefaultMyJpaRepository.setBlockUnconditionalDelete(true);
+        assertTrue(DefaultMyJpaRepository.isBlockUnconditionalDelete());
     }
 
     @Test
@@ -321,7 +321,7 @@ class SoftDeleteJpaRepositoryTest {
         saveEntity("deleted", true);
 
         // Override to disable filtering within the block
-        SoftDeleteJpaRepository.withAutoFilterOverride(false, () -> {
+        DefaultMyJpaRepository.withAutoFilterOverride(false, () -> {
             List<SoftDeleteRepoTestEntity> result = repository.findAll();
             assertEquals(2, result.size(), "Auto-filter should be disabled inside override block");
         });
@@ -336,12 +336,12 @@ class SoftDeleteJpaRepositoryTest {
         saveEntity("active", false);
         saveEntity("deleted", true);
 
-        SoftDeleteJpaRepository.withAutoFilterOverride(false, () -> {
+        DefaultMyJpaRepository.withAutoFilterOverride(false, () -> {
             // Outer: filtering disabled
             List<SoftDeleteRepoTestEntity> outer = repository.findAll();
             assertEquals(2, outer.size());
 
-            SoftDeleteJpaRepository.withAutoFilterOverride(true, () -> {
+            DefaultMyJpaRepository.withAutoFilterOverride(true, () -> {
                 // Inner: filtering re-enabled
                 List<SoftDeleteRepoTestEntity> inner = repository.findAll();
                 assertEquals(1, inner.size());
@@ -359,7 +359,7 @@ class SoftDeleteJpaRepositoryTest {
 
     @Test
     void withAutoFilterOverride_supplierReturnsValue() {
-        String result = SoftDeleteJpaRepository.withAutoFilterOverride(null, () -> "hello");
+        String result = DefaultMyJpaRepository.withAutoFilterOverride(null, () -> "hello");
         assertEquals("hello", result);
     }
 

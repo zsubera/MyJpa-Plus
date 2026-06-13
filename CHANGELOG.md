@@ -64,7 +64,7 @@
 ### 修复
 - 修复 EXISTS 子查询关联限制，支持从 Join 路径关联
 - 修复 `MyJpaTemplate.findAllStream` 废弃策略，恢复为可调用的 @Deprecated 方法
-- 修复 `SoftDeleteJpaRepository.deleteById` 方法，正确处理软删除实体
+- 修复 `DefaultMyJpaRepository.deleteById` 方法，正确处理软删除实体
 
 ## [0.1.0-SNAPSHOT] - 2026-05-26（开发版本，已合并至 1.1.0）
 

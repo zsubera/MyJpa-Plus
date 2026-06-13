@@ -20,12 +20,28 @@ import org.springframework.data.repository.NoRepositoryBean;
  * 基础仓库接口，结合了 {@link JpaRepository} 和 {@link JpaSpecificationExecutor}， 使消费者只需扩展单个接口即可使用。
  *
  * <p>
- * 添加了直接接受 {@code QuerySpec} 的便捷重载方法：
+ * 查询用法：
  *
  * <pre>{@code
  * public interface UserRepository extends MyJpaRepository<User, Long> {}
  *
  * List<User> users = repository.findAll(new QuerySpec<User>().eq(User::getStatus, "ACTIVE"));
+ * }</pre>
+ *
+ * <p>
+ * 批量操作用法（Lambda 模式）：
+ *
+ * <pre>{@code
+ * repository.update(s -> s.set(User::getStatus, "INACTIVE").eq(User::getStatus, "ACTIVE"));
+ * repository.delete(s -> s.lt(User::getCreatedAt, cutoffDate));
+ * repository.merge(s -> s.withEntity(user).onConflict(User::getEmail).updateOnConflict(User::getName));
+ * }</pre>
+ *
+ * <p>
+ * 批量操作用法（execute 模式）：
+ *
+ * <pre>{@code
+ * repository.execute(new UpdateSpec<>(User.class).set(User::getStatus, "INACTIVE"));
  * }</pre>
  *
  * @param <T> 实体类型
@@ -221,137 +237,100 @@ public interface MyJpaRepository<T, ID> extends JpaRepository<T, ID>, JpaSpecifi
     // ---- 批量操作 Lambda 方法 ----
 
     /**
-     * 使用 Lambda 构建并执行批量更新。
+     * 使用 Lambda 模式执行批量更新。
      *
      * <pre>{@code
-     * int count = repository.update(s -> s
+     * repository.update(s -> s
      *     .set(User::getStatus, "INACTIVE")
-     *     .lt(User::getLastLogin, cutoffDate)
-     * );
+     *     .eq(User::getStatus, "ACTIVE"));
      * }</pre>
      *
-     * @param config 配置函数
+     * @param config 配置 UpdateSpec 的 Consumer
      * @return 受影响的行数
      */
     default int update(Consumer<UpdateSpec<T>> config) {
-        throw new UnsupportedOperationException("update() requires SoftDeleteJpaRepository as the base class.");
+        throw new UnsupportedOperationException(
+            "update(Consumer) requires DefaultMyJpaRepository as repository base class. "
+                + "Ensure myjpa-plus auto-configuration is active or specify repositoryBaseClass manually.");
     }
 
     /**
-     * 使用 Lambda 构建并执行批量删除。
+     * 使用 Lambda 模式执行批量删除。
      *
      * <pre>{@code
-     * int deleted = repository.delete(s -> s
-     *     .lt(User::getCreatedAt, cutoffDate)
-     * );
+     * repository.delete(s -> s.lt(User::getCreatedAt, cutoffDate));
      * }</pre>
      *
-     * @param config 配置函数
+     * @param config 配置 DeleteSpec 的 Consumer
      * @return 受影响的行数
      */
     default int delete(Consumer<DeleteSpec<T>> config) {
-        throw new UnsupportedOperationException("delete() requires SoftDeleteJpaRepository as the base class.");
+        throw new UnsupportedOperationException(
+            "delete(Consumer) requires DefaultMyJpaRepository as repository base class. "
+                + "Ensure myjpa-plus auto-configuration is active or specify repositoryBaseClass manually.");
     }
 
     /**
-     * 使用 Lambda 构建并执行 UPSERT 操作。
+     * 使用 Lambda 模式执行批量 merge（upsert）。
      *
      * <pre>{@code
-     * int affected = repository.merge(s -> s
+     * repository.merge(s -> s
      *     .withEntity(user)
      *     .onConflict(User::getEmail)
-     *     .updateOnConflict(User::getName)
-     * );
+     *     .updateOnConflict(User::getName));
      * }</pre>
      *
-     * @param config 配置函数
+     * @param config 配置 MergeSpec 的 Consumer
      * @return 受影响的行数
      */
     default int merge(Consumer<MergeSpec<T>> config) {
-        throw new UnsupportedOperationException("merge() requires SoftDeleteJpaRepository as the base class.");
+        throw new UnsupportedOperationException(
+            "merge(Consumer) requires DefaultMyJpaRepository as repository base class. "
+                + "Ensure myjpa-plus auto-configuration is active or specify repositoryBaseClass manually.");
     }
 
-    // ---- 批量操作 execute 方法（传入已构建的 Spec）----
+    // ---- 批量操作 execute 方法 ----
 
     /**
-     * 使用给定的 {@link UpdateSpec} 执行批量更新。
-     *
-     * <p>
-     * 使用示例：
+     * 执行已构建的 UpdateSpec。
      *
      * <pre>{@code
-     * int count = repository.execute(
-     *     new UpdateSpec<>(User.class)
-     *         .set(User::getStatus, "INACTIVE")
-     *         .lt(User::getLastLogin, cutoffDate)
-     * );
+     * repository.execute(new UpdateSpec<>(User.class)
+     *     .set(User::getStatus, "INACTIVE")
+     *     .eq(User::getStatus, "ACTIVE"));
      * }</pre>
      *
-     * @param spec 要执行的 UpdateSpec
+     * @param spec 已构建的 UpdateSpec
      * @return 受影响的行数
-     * @throws IllegalArgumentException 如果 spec 为 null
      */
     default int execute(UpdateSpec<T> spec) {
-        if (spec == null) {
-            throw new IllegalArgumentException("spec must not be null");
-        }
         throw new UnsupportedOperationException(
-            "execute(UpdateSpec) is not supported by this repository implementation. "
-                + "Use SoftDeleteJpaRepository as the base class, or use MyJpaTemplate instead.");
+            "execute(UpdateSpec) requires DefaultMyJpaRepository as repository base class. "
+                + "Ensure myjpa-plus auto-configuration is active or specify repositoryBaseClass manually.");
     }
 
     /**
-     * 使用给定的 {@link DeleteSpec} 执行批量删除。
+     * 执行已构建的 DeleteSpec。
      *
-     * <p>
-     * 使用示例：
-     *
-     * <pre>{@code
-     * int deleted = repository.execute(
-     *     new DeleteSpec<>(User.class)
-     *         .lt(User::getCreatedAt, cutoffDate)
-     * );
-     * }</pre>
-     *
-     * @param spec 要执行的 DeleteSpec
+     * @param spec 已构建的 DeleteSpec
      * @return 受影响的行数
-     * @throws IllegalArgumentException 如果 spec 为 null
      */
     default int execute(DeleteSpec<T> spec) {
-        if (spec == null) {
-            throw new IllegalArgumentException("spec must not be null");
-        }
         throw new UnsupportedOperationException(
-            "execute(DeleteSpec) is not supported by this repository implementation. "
-                + "Use SoftDeleteJpaRepository as the base class, or use MyJpaTemplate instead.");
+            "execute(DeleteSpec) requires DefaultMyJpaRepository as repository base class. "
+                + "Ensure myjpa-plus auto-configuration is active or specify repositoryBaseClass manually.");
     }
 
     /**
-     * 使用给定的 {@link MergeSpec} 执行 UPSERT 操作。
+     * 执行已构建的 MergeSpec。
      *
-     * <p>
-     * 使用示例：
-     *
-     * <pre>{@code
-     * int affected = repository.execute(
-     *     new MergeSpec<>(User.class)
-     *         .withEntity(user)
-     *         .onConflict(User::getEmail)
-     *         .updateOnConflict(User::getName, User::getAge)
-     * );
-     * }</pre>
-     *
-     * @param spec 要执行的 MergeSpec
+     * @param spec 已构建的 MergeSpec
      * @return 受影响的行数
-     * @throws IllegalArgumentException 如果 spec 为 null
      */
     default int execute(MergeSpec<T> spec) {
-        if (spec == null) {
-            throw new IllegalArgumentException("spec must not be null");
-        }
         throw new UnsupportedOperationException(
-            "execute(MergeSpec) is not supported by this repository implementation. "
-                + "Use SoftDeleteJpaRepository as the base class, or use MyJpaTemplate instead.");
+            "execute(MergeSpec) requires DefaultMyJpaRepository as repository base class. "
+                + "Ensure myjpa-plus auto-configuration is active or specify repositoryBaseClass manually.");
     }
 
     /**

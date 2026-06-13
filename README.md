@@ -122,7 +122,7 @@
 
 - `@SoftDelete` — 支持 Boolean、Integer、Enum 类型
 - `@IgnoreSoftDelete` — 临时禁用软删除过滤
-- `SoftDeleteJpaRepository` — 提供 `findNotDeletedAll` / `findNotDeletedById` / `countNotDeleted` 等便捷方法
+- `DefaultMyJpaRepository` — 提供 `findNotDeletedAll` / `findNotDeletedById` / `countNotDeleted` 等便捷方法
 
 ### Spring Boot 自动配置
 

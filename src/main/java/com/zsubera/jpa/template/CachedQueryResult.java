@@ -31,6 +31,12 @@ public class CachedQueryResult<T> {
         if (value == null) {
             throw new IllegalArgumentException("CachedQueryResult value must not be null");
         }
+        if (ttlSeconds < 0) {
+            throw new IllegalArgumentException("CachedQueryResult ttlSeconds must not be negative: " + ttlSeconds);
+        }
+        if (ttlSeconds > 365L * 24 * 3600) {
+            throw new IllegalArgumentException("CachedQueryResult ttlSeconds exceeds maximum (1 year): " + ttlSeconds);
+        }
         this.value = value;
         this.ttlSeconds = ttlSeconds;
         this.createdAtNanos = System.nanoTime();

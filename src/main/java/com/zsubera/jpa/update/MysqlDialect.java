@@ -53,16 +53,37 @@ final class MysqlDialect implements DialectStrategy {
         List<EntityFieldValue> insertFieldValues, List<String> conflictColumns, List<String> updateColumns) {
         String escapedTable = escapeIdentifier(tableName);
 
-        // INSERT INTO `table` (`col1`, `col2`) VALUES (?, ?)
-        // ON DUPLICATE KEY UPDATE `col` = VALUES(`col`)
-        StringBuilder sql = new StringBuilder("INSERT INTO ").append(escapedTable).append(" (");
-        List<String> escapedInsertCols = new ArrayList<>();
-        for (String col : insertColumns) {
-            escapedInsertCols.add(escapeIdentifier(col));
+        if (updateColumns.isEmpty()) {
+            // 无更新字段时使用 INSERT IGNORE 语义：忽略冲突，不执行任何更新
+            SqlWithParams insert = buildInsertClause(escapedTable, insertColumns, insertFieldValues);
+            return new SqlWithParams("INSERT IGNORE INTO " + insert.sql(), insert.params());
         }
-        sql.append(String.join(", ", escapedInsertCols));
+
+        // INSERT INTO `table` (`col1`, `col2`) VALUES (?, ?)
+        SqlWithParams insert = buildInsertClause(escapedTable, insertColumns, insertFieldValues);
+        StringBuilder sql = new StringBuilder(insert.sql());
+
+        // ON DUPLICATE KEY UPDATE `col` = VALUES(`col`)
+        sql.append(" ON DUPLICATE KEY UPDATE ");
+        List<String> setClauses = new ArrayList<>();
+        for (String col : updateColumns) {
+            String escaped = escapeIdentifier(col);
+            setClauses.add(escaped + " = VALUES(" + escaped + ")");
+        }
+        sql.append(String.join(", ", setClauses));
+        return new SqlWithParams(sql.toString(), insert.params());
+    }
+
+    private SqlWithParams buildInsertClause(String escapedTable, List<String> insertColumns,
+        List<EntityFieldValue> insertFieldValues) {
+        List<String> escapedCols = new ArrayList<>(insertColumns.size());
+        for (String col : insertColumns) {
+            escapedCols.add(escapeIdentifier(col));
+        }
+        StringBuilder sql = new StringBuilder("INSERT INTO ").append(escapedTable).append(" (");
+        sql.append(String.join(", ", escapedCols));
         sql.append(") VALUES (");
-        List<Object> params = new ArrayList<>();
+        List<Object> params = new ArrayList<>(insertFieldValues.size());
         for (int i = 0; i < insertFieldValues.size(); i++) {
             if (i > 0) {
                 sql.append(", ");
@@ -71,36 +92,6 @@ final class MysqlDialect implements DialectStrategy {
             params.add(insertFieldValues.get(i).value());
         }
         sql.append(")");
-
-        // ON DUPLICATE KEY UPDATE `col` = VALUES(`col`)
-        if (updateColumns.isEmpty()) {
-            // 无更新字段时使用 INSERT IGNORE 语义：忽略冲突，不执行任何更新
-            sql = new StringBuilder("INSERT IGNORE INTO ").append(escapedTable);
-            sql.append(" (");
-            List<String> escapedInsertCols2 = new ArrayList<>();
-            for (String col : insertColumns) {
-                escapedInsertCols2.add(escapeIdentifier(col));
-            }
-            sql.append(String.join(", ", escapedInsertCols2));
-            sql.append(") VALUES (");
-            List<Object> params2 = new ArrayList<>();
-            for (int i = 0; i < insertFieldValues.size(); i++) {
-                if (i > 0) {
-                    sql.append(", ");
-                }
-                sql.append("?");
-                params2.add(insertFieldValues.get(i).value());
-            }
-            sql.append(")");
-            return new SqlWithParams(sql.toString(), params2);
-        }
-        sql.append(" ON DUPLICATE KEY UPDATE ");
-        List<String> setClauses = new ArrayList<>();
-        for (String col : updateColumns) {
-            String escaped = escapeIdentifier(col);
-            setClauses.add(escaped + " = VALUES(" + escaped + ")");
-        }
-        sql.append(String.join(", ", setClauses));
         return new SqlWithParams(sql.toString(), params);
     }
 }

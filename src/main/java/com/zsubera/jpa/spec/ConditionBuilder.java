@@ -96,7 +96,7 @@ public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> ext
             "SIGN", "POWER", "SQRT", "LOG", "LN", "EXP", "POSITION", "OVERLAY", "TRANSLATE", "REVERSE", "REPEAT",
             "SPACE", "YEAR", "MONTH", "DAY", "HOUR", "MINUTE", "SECOND", "ADD_MONTHS", "ADD_DAYS", "DATE_DIFF",
             "DATEDIFF", "IFNULL", "IF", "NVL", "NVL2", "DECODE", "JSON_OBJECT", "JSON_ARRAY", "JSON_EXTRACT",
-            "JSON_UNQUOTE", "UUID", "UUID_GENERATE_V4", "MD5", "SHA1", "SHA2", "HEX", "UNHEX", "ENCODE"));
+            "JSON_UNQUOTE", "UUID", "UUID_GENERATE_V4", "HEX", "UNHEX"));
         // 日期/时间截断函数
         names.addAll(Set.of("TRUNCATE", "DATE_TRUNC", "DATE_TRUNCATE", "DATETRUNC"));
         // 窗口函数（用于 ORDER BY 或子查询中的表达式）
@@ -339,6 +339,40 @@ public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> ext
         requireValue(value, "endsWith");
         conditions().add(new ConditionNode.SimpleNode(resolveProperty(field), suffixLikePattern(value),
             ConditionNode.Op.LIKE, PredicateHelper.LIKE_ESCAPE_CHAR));
+        return self();
+    }
+
+    /**
+     * 添加不匹配前缀条件：{@code field NOT LIKE 'value%'}。
+     *
+     * @param field 实体属性的方法引用
+     * @param value 前缀字符串值
+     * @return 当前构建器以支持链式调用
+     * @throws IllegalArgumentException 如果 {@code field} 或 {@code value} 为 null
+     */
+    @Override
+    default SELF notStartsWith(SFunction<E, ?> field, String value) {
+        requireField(field);
+        requireValue(value, "notStartsWith");
+        conditions().add(new ConditionNode.SimpleNode(resolveProperty(field), prefixLikePattern(value),
+            ConditionNode.Op.NOT_LIKE, PredicateHelper.LIKE_ESCAPE_CHAR));
+        return self();
+    }
+
+    /**
+     * 添加不匹配后缀条件：{@code field NOT LIKE '%value'}。
+     *
+     * @param field 实体属性的方法引用
+     * @param value 后缀字符串值
+     * @return 当前构建器以支持链式调用
+     * @throws IllegalArgumentException 如果 {@code field} 或 {@code value} 为 null
+     */
+    @Override
+    default SELF notEndsWith(SFunction<E, ?> field, String value) {
+        requireField(field);
+        requireValue(value, "notEndsWith");
+        conditions().add(new ConditionNode.SimpleNode(resolveProperty(field), suffixLikePattern(value),
+            ConditionNode.Op.NOT_LIKE, PredicateHelper.LIKE_ESCAPE_CHAR));
         return self();
     }
 

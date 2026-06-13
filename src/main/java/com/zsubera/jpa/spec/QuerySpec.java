@@ -63,8 +63,8 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
 
     private static final Logger log = LoggerFactory.getLogger(QuerySpec.class);
 
-    /** 查询超时时间上限（秒） */
-    private static final int MAX_TIMEOUT_SECONDS = 300;
+    /** 查询超时时间上限（秒），可通过 {@link #setMaxTimeoutSeconds(int)} 调整 */
+    private static volatile int maxTimeoutSeconds = 300;
 
     /**
      * 阻止序列化。QuerySpec 包含不可序列化的内部状态（如 lambda、SFunction）， 不应被序列化。在分布式会话或缓存场景中，请使用可序列化的查询参数重新构建 QuerySpec。
@@ -96,6 +96,23 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
     private final List<ConditionNode.OrderNode> orderNodes = new ArrayList<>();
     private Integer queryTimeout;
     private LockModeType lockMode;
+
+    /**
+     * 设置查询超时时间上限。默认值为 300 秒。
+     *
+     * <p>
+     * 此方法影响所有后续创建的 {@code QuerySpec} 实例的 {@link #timeout(int)} 验证。
+     * 适用于需要更长查询超时的分析型查询场景。
+     *
+     * @param seconds 超时上限（秒），必须为正数
+     * @throws IllegalArgumentException 如果 seconds 不是正数
+     */
+    public static void setMaxTimeoutSeconds(int seconds) {
+        if (seconds <= 0) {
+            throw new IllegalArgumentException("maxTimeoutSeconds must be positive, got: " + seconds);
+        }
+        maxTimeoutSeconds = seconds;
+    }
 
     /**
      * 获取当前活跃的条件组。
@@ -305,17 +322,17 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
      * </ul>
      * 超时值通过 JPA hint {@code jakarta.persistence.query.timeout} 传递（转换为毫秒）， 实际行为取决于 JPA 提供者和数据库的实现。
      *
-     * @param seconds 超时时间（秒），必须为正数且不超过 300 秒
+     * @param seconds 超时时间（秒），必须为正数且不超过上限（默认 300 秒，可通过 {@link #setMaxTimeoutSeconds(int)} 调整）
      * @return 当前 QuerySpec 实例，支持链式调用
-     * @throws IllegalArgumentException 如果 seconds 不是正数或超过 300 秒
+     * @throws IllegalArgumentException 如果 seconds 不是正数或超过上限
      */
     public QuerySpec<T> timeout(int seconds) {
         if (seconds <= 0) {
             throw new IllegalArgumentException("timeout must be positive, got: " + seconds);
         }
-        if (seconds > MAX_TIMEOUT_SECONDS) {
+        if (seconds > maxTimeoutSeconds) {
             throw new IllegalArgumentException(
-                "timeout must not exceed " + MAX_TIMEOUT_SECONDS + " seconds, got: " + seconds);
+                "timeout must not exceed " + maxTimeoutSeconds + " seconds, got: " + seconds);
         }
         this.queryTimeout = seconds;
         return this;
@@ -404,9 +421,20 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
      * 添加 HAVING 条件，与 {@link #groupBy} 配合使用。 多个 HAVING 条件之间为 AND 关系。
      *
      * <p>
-     * 如需 OR 关系的 HAVING 条件，请使用 {@link #having(java.util.function.Function)} 方法。
+     * <strong>推荐使用类型安全的替代方法：</strong>
+     * <ul>
+     * <li>{@link #havingCount(SFunction, ConditionNode.Op, long)} — COUNT 聚合条件</li>
+     * <li>{@link #havingSum(SFunction, ConditionNode.Op, Number)} — SUM 聚合条件</li>
+     * <li>{@link #havingAvg(SFunction, ConditionNode.Op, Number)} — AVG 聚合条件</li>
+     * <li>{@link #havingMax(SFunction, ConditionNode.Op, Comparable)} — MAX 聚合条件</li>
+     * <li>{@link #havingMin(SFunction, ConditionNode.Op, Comparable)} — MIN 聚合条件</li>
+     * </ul>
      *
-     * @param condition HAVING 条件函数
+     * <p>
+     * 此方法暴露了 JPA Criteria API 的 {@link CriteriaBuilder} 和 {@link Path} 类型，
+     * 仅作为逃生舱供高级用户使用。类型安全方法无法覆盖的场景才应使用此方法。
+     *
+     * @param condition HAVING 条件函数，接收 {@link Path} 和 {@link CriteriaBuilder} 返回 {@link Predicate}
      * @return 当前 QuerySpec 实例，支持链式调用
      */
     public QuerySpec<T> having(BiFunction<Path<T>, CriteriaBuilder, Predicate> condition) {
@@ -422,11 +450,8 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
      * 添加 HAVING 条件，使用 {@link Root} 参数。此重载避免了 {@link #having(BiFunction)} 的类型推断问题。
      *
      * <p>
-     * 推荐使用此方法代替 {@link #having(BiFunction)}，因为 {@code Root<T>} 的类型推断更可靠：
-     *
-     * <pre>{@code
-     * qs.groupBy(User::getStatus).having(root -> cb.greaterThan(cb.count(root), 5L));
-     * }</pre>
+     * <strong>推荐使用类型安全的替代方法：</strong> {@link #havingCount(SFunction, ConditionNode.Op, long)} 等。
+     * 此方法仅作为逃生舱供高级用户使用。
      *
      * @param condition HAVING 条件函数，接收 Root 返回 Predicate
      * @return 当前 QuerySpec 实例，支持链式调用
@@ -801,9 +826,12 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
     }
 
     /**
-     * 将此 QuerySpec 与外部 {@link Specification} 使用 AND 组合。
+     * 将此 QuerySpec 与另一个 Specification 使用 AND 组合。
      *
-     * @param external 外部 Specification，可为 null
+     * <p>
+     * 如果 {@code external} 为 null，则返回自身（等价于无额外条件）。
+     *
+     * @param external 要组合的外部 Specification（可以为 null）
      * @return 组合后的 Specification 实例
      */
     public Specification<T> toSpecification(@Nullable Specification<T> external) {
@@ -814,17 +842,23 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
     }
 
     /**
-     * 将此 QuerySpec 与另一个 QuerySpec 使用 AND 组合，返回新的组合 {@link Specification}。 使用 {@link #then(QuerySpec)} 可在保留 QuerySpec
-     * 类型的同时组合条件以支持链式调用。
+     * 将此 QuerySpec 与另一个 QuerySpec 使用 OR 组合，返回组合后的 {@link Specification}。
+     *
+     * <p>
+     * 如果需要在保持 {@link QuerySpec} 类型的同时构建 OR 条件，请使用
+     * {@link #or(java.util.function.Consumer)} 消费者模式：
+     * <pre>{@code
+     * qs.or(o -> o.eq(User::getStatus, "PENDING").eq(User::getStatus, "REVIEW"));
+     * }</pre>
      *
      * @param other 另一个 QuerySpec 实例
      * @return 组合后的 Specification 实例
      */
-    public Specification<T> and(QuerySpec<T> other) {
+    public Specification<T> or(QuerySpec<T> other) {
         if (other == null) {
             return this;
         }
-        return this.and(other.toSpecification());
+        return this.or(other.toSpecification());
     }
 
     /**
@@ -874,7 +908,7 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
         // 复制查询设置：仅当当前实例未设置时，采用另一个实例的值
         if (other.queryTimeout != null && this.queryTimeout == null) {
             // 从另一个 spec 复制时验证超时范围（必须与 timeout() 验证一致）
-            if (other.queryTimeout <= 0 || other.queryTimeout > MAX_TIMEOUT_SECONDS) {
+            if (other.queryTimeout <= 0 || other.queryTimeout > maxTimeoutSeconds) {
                 throw new IllegalArgumentException(
                     "queryTimeout from source spec is out of range: " + other.queryTimeout);
             }
@@ -887,16 +921,18 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
     }
 
     /**
-     * 将此 QuerySpec 与另一个 QuerySpec 使用 OR 组合，返回新的组合 {@link Specification}。
+     * 将另一个 QuerySpec 的条件以 AND 语义合并到当前实例。
+     *
+     * <p>
+     * 等价于 {@link #then(QuerySpec)}，保留 {@link QuerySpec} 类型以支持链式调用。
+     * 如果需要得到 {@link Specification} 类型，使用 {@link #toSpecification()} 或直接传入
+     * {@code repository.findAll(this.and(other.toSpecification()))}。
      *
      * @param other 另一个 QuerySpec 实例
-     * @return 组合后的 Specification 实例
+     * @return 当前 QuerySpec 实例（条件已合并），支持链式调用
      */
-    public Specification<T> or(QuerySpec<T> other) {
-        if (other == null) {
-            return this;
-        }
-        return this.or(other.toSpecification());
+    public QuerySpec<T> and(QuerySpec<T> other) {
+        return then(other);
     }
 
     /**

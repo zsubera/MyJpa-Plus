@@ -25,7 +25,7 @@ class IgnoreSoftDeleteAdvisorTest {
     @SpringBootApplication
     @EntityScan(basePackageClasses = SoftDeleteRepoTestEntity.class)
     @EnableJpaRepositories(basePackages = "com.zsubera.jpa.repository",
-        repositoryBaseClass = SoftDeleteJpaRepository.class)
+        repositoryBaseClass = DefaultMyJpaRepository.class)
     static class TestConfig {}
 
     @Autowired
@@ -33,14 +33,14 @@ class IgnoreSoftDeleteAdvisorTest {
 
     @BeforeEach
     void setup() {
-        SoftDeleteJpaRepository.setAutoFilterEnabled(true);
+        DefaultMyJpaRepository.setAutoFilterEnabled(true);
         SoftDeleteContext.reset();
     }
 
     @AfterEach
     void cleanup() {
         SoftDeleteContext.reset();
-        SoftDeleteJpaRepository.setAutoFilterEnabled(true);
+        DefaultMyJpaRepository.setAutoFilterEnabled(true);
     }
 
     @Test
@@ -114,13 +114,13 @@ class IgnoreSoftDeleteAdvisorTest {
 
     @Test
     void advisor_staticMethodsWork() {
-        assertTrue(SoftDeleteJpaRepository.isAutoFilterEnabled());
+        assertTrue(DefaultMyJpaRepository.isAutoFilterEnabled());
 
-        SoftDeleteJpaRepository.setAutoFilterEnabled(false);
-        assertFalse(SoftDeleteJpaRepository.isAutoFilterEnabled());
+        DefaultMyJpaRepository.setAutoFilterEnabled(false);
+        assertFalse(DefaultMyJpaRepository.isAutoFilterEnabled());
 
         // Reset
-        SoftDeleteJpaRepository.setAutoFilterEnabled(true);
+        DefaultMyJpaRepository.setAutoFilterEnabled(true);
     }
 
     @Test
@@ -128,7 +128,7 @@ class IgnoreSoftDeleteAdvisorTest {
         saveEntity("active", false);
         saveEntity("deleted", true);
 
-        SoftDeleteJpaRepository.setAutoFilterEnabled(false);
+        DefaultMyJpaRepository.setAutoFilterEnabled(false);
         List<SoftDeleteRepoTestEntity> result = repository.findAll();
         assertEquals(2, result.size());
     }

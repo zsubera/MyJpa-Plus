@@ -1443,7 +1443,7 @@ public class MyJpaTemplate {
             hasNext = content.size() > pageable.getPageSize();
         }
         if (hasNext) {
-            content = content.subList(0, pageable.getPageSize());
+            content = content.subList(0, Math.min(content.size(), pageable.getPageSize()));
         }
         return new org.springframework.data.domain.SliceImpl<>(content, pageable, hasNext);
     }

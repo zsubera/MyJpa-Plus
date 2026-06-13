@@ -2,7 +2,8 @@ package com.zsubera.jpa.autoconfigure;
 
 import com.zsubera.jpa.annotation.AuditEntityListener;
 import com.zsubera.jpa.monitor.SqlSlowQueryInterceptor;
-import com.zsubera.jpa.repository.SoftDeleteJpaRepository;
+import com.zsubera.jpa.repository.DefaultMyJpaRepository;
+import com.zsubera.jpa.repository.MyJpaRepositoryFactoryBean;
 import com.zsubera.jpa.template.MyJpaTemplate;
 import com.zsubera.jpa.util.InClauseBuilder;
 import com.zsubera.jpa.util.LambdaUtils;
@@ -12,7 +13,11 @@ import jakarta.persistence.EntityManager;
 import javax.sql.DataSource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.BeansException;
 import org.springframework.beans.factory.config.BeanPostProcessor;
+import org.springframework.beans.factory.config.ConfigurableListableBeanFactory;
+import org.springframework.beans.factory.support.BeanDefinitionRegistry;
+import org.springframework.beans.factory.support.BeanDefinitionRegistryPostProcessor;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
@@ -23,6 +28,7 @@ import org.springframework.context.annotation.Import;
 import org.springframework.context.event.ContextClosedEvent;
 import org.springframework.context.event.EventListener;
 import org.springframework.lang.NonNull;
+import org.springframework.core.Ordered;
 
 /**
  * MyJpa-Plus 的自动配置类。
@@ -44,6 +50,7 @@ import org.springframework.lang.NonNull;
  * <li>{@code myjpa-plus.query.default-timeout-seconds} — 查询超时时间（秒），-1 禁用（默认：30）
  * <li>{@code myjpa-plus.monitoring.enabled} — 启用 SQL 慢查询监控（默认：false）
  * <li>{@code myjpa-plus.monitoring.slow-query-threshold-ms} — 慢查询阈值，单位毫秒（默认：1000）
+ * <li>{@code myjpa-plus.auto-repository-base-class} — 自动注册 DefaultMyJpaRepository 为仓库基类（默认：true）
  * </ul>
  */
 @AutoConfiguration
@@ -70,10 +77,9 @@ public class MyJpaPlusAutoConfiguration {
     static class MyJpaPlusConfigInitializer {
 
         MyJpaPlusConfigInitializer(MyJpaPlusProperties properties) {
-            // 将 auto-filter 配置同步到 SoftDeleteJpaRepository 的静态标志
-            SoftDeleteJpaRepository.setAutoFilterEnabled(properties.getSoftDelete().isAutoFilter());
-            SoftDeleteJpaRepository
-                .setBlockUnconditionalDelete(properties.getSoftDelete().isBlockUnconditionalDelete());
+            // 将 auto-filter 配置同步到 DefaultMyJpaRepository 的静态标志
+            DefaultMyJpaRepository.setAutoFilterEnabled(properties.getSoftDelete().isAutoFilter());
+            DefaultMyJpaRepository.setBlockUnconditionalDelete(properties.getSoftDelete().isBlockUnconditionalDelete());
 
             // 应用 IN 子句配置
             int inMax = properties.getQuery().getInClauseMaxSize();
@@ -233,6 +239,23 @@ public class MyJpaPlusAutoConfiguration {
     }
 
     /**
+     * 自动注册 {@link MyJpaRepositoryFactoryBean} 作为所有仓库的默认 FactoryBean。
+     *
+     * <p>
+     * 通过 {@link BeanDefinitionRegistryPostProcessor} 在 Spring 启动阶段自动修改仓库 Bean 定义，
+     * 无需用户手动配置 {@code @EnableJpaRepositories(repositoryFactoryBeanClass = ...)}。
+     *
+     * @return RepositoryBaseClassPostProcessor 实例
+     */
+    @Bean
+    @ConditionalOnMissingBean(RepositoryBaseClassPostProcessor.class)
+    @ConditionalOnProperty(prefix = "myjpa-plus", name = "auto-repository-base-class", havingValue = "true",
+        matchIfMissing = true)
+    static RepositoryBaseClassPostProcessor repositoryBaseClassPostProcessor() {
+        return new RepositoryBaseClassPostProcessor();
+    }
+
+    /**
      * 应用关闭时清理 LambdaUtils 后台缓存清理线程，防止在 OSGi 或热部署环境中导致类加载器泄漏。
      *
      * @param event 上下文关闭事件
@@ -242,8 +265,50 @@ public class MyJpaPlusAutoConfiguration {
         LambdaUtils.shutdown();
         com.zsubera.jpa.converter.EncryptConverter.clearCacheForTesting();
         com.zsubera.jpa.softdelete.SoftDeleteHelper.shutdown();
-        SoftDeleteJpaRepository.clearThreadLocal();
+        DefaultMyJpaRepository.clearThreadLocal();
         com.zsubera.jpa.repository.SoftDeleteContext.reset();
         log.info("MyJpa-Plus context closed, caches cleaned");
+    }
+
+    /**
+     * {@link BeanDefinitionRegistryPostProcessor}，自动为所有仓库 Bean 定义注入
+     * {@link MyJpaRepositoryFactoryBean} 作为 {@code repositoryFactoryBeanClass}。
+     *
+     * <p>
+     * 此处理器仅在用户未手动指定 {@code repositoryFactoryBeanClass} 时生效，
+     * 保留用户的自定义配置优先级。
+     *
+     * @see MyJpaRepositoryFactoryBean
+     */
+    static class RepositoryBaseClassPostProcessor implements BeanDefinitionRegistryPostProcessor, Ordered {
+
+        private static final Logger postProcessorLog = LoggerFactory.getLogger(RepositoryBaseClassPostProcessor.class);
+
+        @Override
+        public int getOrder() {
+            return Ordered.LOWEST_PRECEDENCE;
+        }
+
+        @Override
+        public void postProcessBeanDefinitionRegistry(BeanDefinitionRegistry registry) throws BeansException {
+            String factoryBeanClassName = MyJpaRepositoryFactoryBean.class.getName();
+            for (String beanName : registry.getBeanDefinitionNames()) {
+                var bd = registry.getBeanDefinition(beanName);
+                // Repository Factory Bean 都有 "repositoryInterface" 属性
+                if (bd.getPropertyValues().contains("repositoryInterface")
+                    && !bd.getPropertyValues().contains("repositoryFactoryBeanClass")) {
+                    bd.getPropertyValues().add("repositoryFactoryBeanClass", factoryBeanClassName);
+                    if (postProcessorLog.isDebugEnabled()) {
+                        postProcessorLog.debug("Auto-registered MyJpaRepositoryFactoryBean for repository: {}",
+                            beanName);
+                    }
+                }
+            }
+        }
+
+        @Override
+        public void postProcessBeanFactory(ConfigurableListableBeanFactory beanFactory) throws BeansException {
+            // No-op — 所有修改在 postProcessBeanDefinitionRegistry 中完成
+        }
     }
 }

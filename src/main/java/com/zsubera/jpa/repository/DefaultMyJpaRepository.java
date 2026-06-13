@@ -31,24 +31,23 @@ import org.springframework.lang.Nullable;
  * {@link com.zsubera.jpa.annotation.IgnoreSoftDelete @IgnoreSoftDelete} 注解可跳过自动过滤。
  *
  * <p>
- * 使用方式：在 {@code @EnableJpaRepositories} 中指定 {@code repositoryBaseClass}：
+ * <strong>自动注册：</strong>引入 myjpa-plus 依赖后，此基类通过
+ * {@link com.zsubera.jpa.autoconfigure.MyJpaPlusAutoConfiguration} 自动注册，
+ * 无需在 {@code @EnableJpaRepositories} 中手动指定 {@code repositoryBaseClass}。
  *
- * <pre>{@code
- * @Configuration
- * @EnableJpaRepositories(basePackages = "com.example.repository",
- *     repositoryBaseClass = SoftDeleteJpaRepository.class)
- * public class JpaConfig {}
- * }</pre>
+ * <p>
+ * 如需自定义基类，可通过 {@code @EnableJpaRepositories(repositoryBaseClass = ...)} 覆盖。
  *
  * @param <T> 实体类型
  * @param <ID> ID 类型
  * @see com.zsubera.jpa.annotation.SoftDelete
  * @see com.zsubera.jpa.annotation.IgnoreSoftDelete
+ * @see com.zsubera.jpa.repository.MyJpaRepositoryFactoryBean
  */
 @NoRepositoryBean
-public class SoftDeleteJpaRepository<T, ID> extends SimpleJpaRepository<T, ID> implements MyJpaRepository<T, ID> {
+public class DefaultMyJpaRepository<T, ID> extends SimpleJpaRepository<T, ID> implements MyJpaRepository<T, ID> {
 
-    private static final Logger log = LoggerFactory.getLogger(SoftDeleteJpaRepository.class);
+    private static final Logger log = LoggerFactory.getLogger(DefaultMyJpaRepository.class);
 
     private final Class<T> domainClass;
     private final EntityManager entityManager;
@@ -190,7 +189,7 @@ public class SoftDeleteJpaRepository<T, ID> extends SimpleJpaRepository<T, ID> i
     }
 
     @SuppressFBWarnings("EI_EXPOSE_REP2")
-    public SoftDeleteJpaRepository(JpaEntityInformation<T, ?> entityInformation, EntityManager entityManager) {
+    public DefaultMyJpaRepository(JpaEntityInformation<T, ?> entityInformation, EntityManager entityManager) {
         super(entityInformation, entityManager);
         this.domainClass = entityInformation.getJavaType();
         this.entityManager = entityManager;
@@ -433,7 +432,7 @@ public class SoftDeleteJpaRepository<T, ID> extends SimpleJpaRepository<T, ID> i
         } else if (shouldBlockHardDelete() && softField != null) {
             throw new IllegalStateException("Hard DELETE on " + domainClass.getSimpleName()
                 + " entity is blocked because it has a @SoftDelete field. "
-                + "Set SoftDeleteJpaRepository.setBlockUnconditionalDelete(false) to allow this operation.");
+                + "Set DefaultMyJpaRepository.setBlockUnconditionalDelete(false) to allow this operation.");
         } else {
             super.delete(entity);
         }
@@ -519,7 +518,7 @@ public class SoftDeleteJpaRepository<T, ID> extends SimpleJpaRepository<T, ID> i
         } else if (shouldBlockHardDelete()) {
             throw new IllegalStateException("Unconditional hard DELETE ALL on " + domainClass.getSimpleName()
                 + " is blocked because the entity has a @SoftDelete field. "
-                + "Set SoftDeleteJpaRepository.setBlockUnconditionalDelete(false) to allow this operation.");
+                + "Set DefaultMyJpaRepository.setBlockUnconditionalDelete(false) to allow this operation.");
         } else {
             if (SoftDeleteHelper.findSoftDeleteField(domainClass) != null && log.isWarnEnabled()) {
                 log.warn("AUDIT: Executing unconditional hard DELETE ALL on {} with @SoftDelete field "
@@ -549,7 +548,7 @@ public class SoftDeleteJpaRepository<T, ID> extends SimpleJpaRepository<T, ID> i
         } else if (shouldBlockHardDelete()) {
             throw new IllegalStateException("Hard DELETE ALL BY ID on " + domainClass.getSimpleName()
                 + " is blocked because the entity has a @SoftDelete field. "
-                + "Set SoftDeleteJpaRepository.setBlockUnconditionalDelete(false) to allow this operation.");
+                + "Set DefaultMyJpaRepository.setBlockUnconditionalDelete(false) to allow this operation.");
         } else {
             super.deleteAllById(idList);
         }
@@ -584,7 +583,7 @@ public class SoftDeleteJpaRepository<T, ID> extends SimpleJpaRepository<T, ID> i
         } else if (shouldBlockHardDelete()) {
             throw new IllegalStateException("Hard DELETE IN BATCH on " + domainClass.getSimpleName()
                 + " is blocked because the entity has a @SoftDelete field. "
-                + "Set SoftDeleteJpaRepository.setBlockUnconditionalDelete(false) to allow this operation.");
+                + "Set DefaultMyJpaRepository.setBlockUnconditionalDelete(false) to allow this operation.");
         } else {
             super.deleteInBatch(entities);
         }
@@ -604,7 +603,7 @@ public class SoftDeleteJpaRepository<T, ID> extends SimpleJpaRepository<T, ID> i
         } else if (shouldBlockHardDelete()) {
             throw new IllegalStateException("Unconditional hard DELETE ALL IN BATCH on " + domainClass.getSimpleName()
                 + " is blocked because the entity has a @SoftDelete field. "
-                + "Set SoftDeleteJpaRepository.setBlockUnconditionalDelete(false) to allow this operation.");
+                + "Set DefaultMyJpaRepository.setBlockUnconditionalDelete(false) to allow this operation.");
         } else {
             super.deleteAllInBatch();
         }
