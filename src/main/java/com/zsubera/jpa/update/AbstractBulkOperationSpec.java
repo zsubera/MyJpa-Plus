@@ -98,7 +98,15 @@ public abstract class AbstractBulkOperationSpec<T, SELF extends AbstractBulkOper
     }
 
     /**
-     * 在新事务中执行批量操作，如果当前没有活动事务则创建新事务，否则在当前事务中执行。
+     * 在事务中执行批量操作。
+     *
+     * <p>
+     * <strong>事务管理策略：</strong>
+     * <ul>
+     * <li>如果当前存在活动事务（Spring 管理或 JTA），直接在该事务中执行</li>
+     * <li>如果没有活动事务，创建新的 JPA EntityTransaction 并在完成后提交</li>
+     * <li>执行过程中发生异常时，如果是新创建的事务则回滚</li>
+     * </ul>
      *
      * @param em 实体管理器
      * @return 受影响的行数
@@ -108,7 +116,7 @@ public abstract class AbstractBulkOperationSpec<T, SELF extends AbstractBulkOper
     }
 
     /**
-     * 在新事务中执行给定操作，如果当前没有活动事务则创建新事务，否则在当前事务中执行。
+     * 在事务中执行给定操作。
      *
      * <p>
      * 此重载方法允许子类执行自定义操作（如无条件 deleteAll）并进行正确的事务管理。
@@ -118,15 +126,19 @@ public abstract class AbstractBulkOperationSpec<T, SELF extends AbstractBulkOper
      * @return 受影响的行数
      */
     protected int executeInTransaction(EntityManager em, Function<EntityManager, Integer> operation) {
-        // 首先检查 Spring 是否管理事务（容器管理的 JTA 或 Spring 事务）
+        // 如果当前存在活动事务，直接执行
         if (TransactionSynchronizationManager.isActualTransactionActive()) {
             return operation.apply(em);
         }
-        // 没有 Spring 事务 — 使用 JPA 的 EntityTransaction 用于独立场景。
+
+        // 没有 Spring 事务，检查是否为 JTA 环境
         EntityTransaction tx = em.getTransaction();
         if (tx == null) {
+            // JTA 环境：容器管理事务，直接执行
             return executeInJtaEnvironment(em, operation);
         }
+
+        // 非 JTA 环境：使用 EntityTransaction 管理事务
         return executeWithEntityTransaction(em, tx, operation);
     }
 

@@ -64,6 +64,8 @@ public class MyJpaPlusAutoConfiguration {
 
     private static final Logger log = LoggerFactory.getLogger(MyJpaPlusAutoConfiguration.class);
 
+    private final MyJpaPlusProperties properties;
+
     public MyJpaPlusAutoConfiguration(MyJpaPlusProperties properties) {
         if (properties == null) {
             throw new IllegalArgumentException("properties must not be null");
@@ -72,14 +74,45 @@ public class MyJpaPlusAutoConfiguration {
         log.info("MyJpa-Plus AutoConfiguration created");
     }
 
+    /**
+     * 创建全局配置 Bean，替代分散的静态可变状态。
+     *
+     * @param properties 配置属性
+     * @return MyJpaPlusGlobalConfig 实例
+     */
+    @Bean
+    @ConditionalOnMissingBean(MyJpaPlusGlobalConfig.class)
+    public MyJpaPlusGlobalConfig myJpaPlusGlobalConfig(MyJpaPlusProperties properties) {
+        MyJpaPlusGlobalConfig config = new MyJpaPlusGlobalConfig();
+        config.setSoftDeleteAutoFilter(properties.getSoftDelete().isAutoFilter());
+        config.setBlockUnconditionalDelete(properties.getSoftDelete().isBlockUnconditionalDelete());
+        config.setDefaultTimeoutSeconds(properties.getQuery().getDefaultTimeoutSeconds());
+        config.setMaxResults(properties.getQuery().getMaxResults());
+        config.setMaxBulkOperationRows(10000);
+        config.setDeepPaginationOffsetThreshold(properties.getQuery().getDeepPaginationOffsetThreshold());
+        config.setDeepPaginationOffsetLimit(properties.getQuery().getDeepPaginationOffsetLimit());
+        return config;
+    }
+
     @org.springframework.context.annotation.Lazy(false)
     @org.springframework.stereotype.Component
     static class MyJpaPlusConfigInitializer {
 
-        MyJpaPlusConfigInitializer(MyJpaPlusProperties properties) {
-            // 将 auto-filter 配置同步到 DefaultMyJpaRepository 的静态标志
-            DefaultMyJpaRepository.setAutoFilterEnabled(properties.getSoftDelete().isAutoFilter());
-            DefaultMyJpaRepository.setBlockUnconditionalDelete(properties.getSoftDelete().isBlockUnconditionalDelete());
+        MyJpaPlusConfigInitializer(MyJpaPlusProperties properties,
+            @org.springframework.beans.factory.annotation.Autowired(
+                required = false) MyJpaPlusGlobalConfig globalConfig) {
+            // 使用全局配置提供者替代静态可变状态
+            if (globalConfig != null) {
+                DefaultMyJpaRepository.setGlobalConfigProvider(DefaultMyJpaRepository.createMutableConfigProvider(
+                    globalConfig.isSoftDeleteAutoFilter(), globalConfig.isBlockUnconditionalDelete()));
+                // 设置 QuerySpec 的全局配置
+                com.zsubera.jpa.spec.QuerySpec.setGlobalConfig(globalConfig);
+            } else {
+                // 向后兼容：使用旧的静态方法
+                DefaultMyJpaRepository.setAutoFilterEnabled(properties.getSoftDelete().isAutoFilter());
+                DefaultMyJpaRepository
+                    .setBlockUnconditionalDelete(properties.getSoftDelete().isBlockUnconditionalDelete());
+            }
 
             // 应用 IN 子句配置
             int inMax = properties.getQuery().getInClauseMaxSize();
@@ -141,10 +174,6 @@ public class MyJpaPlusAutoConfiguration {
             }
         }
     }
-
-    @edu.umd.cs.findbugs.annotations.SuppressFBWarnings(value = "EI_EXPOSE_REP2",
-        justification = "MyJpaPlusProperties is a Spring-managed @ConfigurationProperties bean; copying would break property binding")
-    private final MyJpaPlusProperties properties;
 
     /**
      * 创建 AuditEntityListener Bean。

@@ -406,4 +406,63 @@ public class QueryCacheManager {
     public int size() {
         return store.size();
     }
+
+    /**
+     * 在事务提交后自动清除指定前缀的缓存条目。
+     *
+     * <p>
+     * 此方法注册一个 {@link org.springframework.transaction.support.TransactionSynchronization}，
+     * 在事务提交成功后执行缓存清除操作。如果当前没有活动事务，则立即清除。
+     *
+     * <p>
+     * 使用示例：
+     * <pre>{@code
+     * @Transactional
+     * public void updateUser(User user) {
+     *     userRepository.save(user);
+     *     // 事务提交后清除相关缓存
+     *     cacheManager.evictByPrefixAfterTransactionCommit("User:");
+     * }
+     * }</pre>
+     *
+     * @param keyPrefix 要清除的缓存键前缀
+     */
+    public void evictByPrefixAfterTransactionCommit(String keyPrefix) {
+        if (keyPrefix == null || keyPrefix.isEmpty()) {
+            return;
+        }
+        if (org.springframework.transaction.support.TransactionSynchronizationManager.isActualTransactionActive()) {
+            org.springframework.transaction.support.TransactionSynchronizationManager
+                .registerSynchronization(new org.springframework.transaction.support.TransactionSynchronization() {
+                    @Override
+                    public void afterCommit() {
+                        evictByPrefix(keyPrefix);
+                        log.debug("Cache evicted after transaction commit for prefix: {}", keyPrefix);
+                    }
+                });
+        } else {
+            evictByPrefix(keyPrefix);
+        }
+    }
+
+    /**
+     * 注册事务同步器，在事务提交后清除所有缓存条目。
+     *
+     * <p>
+     * 此方法适用于批量操作后需要清除所有查询缓存的场景。
+     */
+    public void clearAfterTransactionCommit() {
+        if (org.springframework.transaction.support.TransactionSynchronizationManager.isActualTransactionActive()) {
+            org.springframework.transaction.support.TransactionSynchronizationManager
+                .registerSynchronization(new org.springframework.transaction.support.TransactionSynchronization() {
+                    @Override
+                    public void afterCommit() {
+                        clear();
+                        log.debug("Cache cleared after transaction commit");
+                    }
+                });
+        } else {
+            clear();
+        }
+    }
 }

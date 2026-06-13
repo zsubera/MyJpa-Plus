@@ -63,8 +63,34 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
 
     private static final Logger log = LoggerFactory.getLogger(QuerySpec.class);
 
-    /** 查询超时时间上限（秒），可通过 {@link #setMaxTimeoutSeconds(int)} 调整 */
-    private static volatile int maxTimeoutSeconds = 300;
+    /**
+     * 全局配置引用。通过 {@link #setGlobalConfig(MyJpaPlusGlobalConfig)} 注入。
+     * 静态字段，由自动配置类在启动时设置一次。
+     */
+    private static volatile com.zsubera.jpa.autoconfigure.MyJpaPlusGlobalConfig globalConfig;
+
+    /**
+     * 设置全局配置。由自动配置类在启动时调用。
+     *
+     * @param config 全局配置实例
+     */
+    public static void setGlobalConfig(com.zsubera.jpa.autoconfigure.MyJpaPlusGlobalConfig config) {
+        globalConfig = config;
+    }
+
+    /**
+     * 获取全局配置。如果未配置则使用默认值。
+     *
+     * @return 全局配置实例
+     */
+    private static com.zsubera.jpa.autoconfigure.MyJpaPlusGlobalConfig getGlobalConfig() {
+        com.zsubera.jpa.autoconfigure.MyJpaPlusGlobalConfig config = globalConfig;
+        if (config == null) {
+            // 创建默认配置，用于未通过自动配置初始化的场景
+            config = new com.zsubera.jpa.autoconfigure.MyJpaPlusGlobalConfig();
+        }
+        return config;
+    }
 
     /**
      * 阻止序列化。QuerySpec 包含不可序列化的内部状态（如 lambda、SFunction）， 不应被序列化。在分布式会话或缓存场景中，请使用可序列化的查询参数重新构建 QuerySpec。
@@ -106,12 +132,14 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
      *
      * @param seconds 超时上限（秒），必须为正数
      * @throws IllegalArgumentException 如果 seconds 不是正数
+     * @deprecated 请使用 {@code myjpa-plus.query.max-timeout-seconds} 配置属性替代
      */
+    @Deprecated
     public static void setMaxTimeoutSeconds(int seconds) {
         if (seconds <= 0) {
             throw new IllegalArgumentException("maxTimeoutSeconds must be positive, got: " + seconds);
         }
-        maxTimeoutSeconds = seconds;
+        getGlobalConfig().setMaxTimeoutSeconds(seconds);
     }
 
     /**
@@ -322,7 +350,7 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
      * </ul>
      * 超时值通过 JPA hint {@code jakarta.persistence.query.timeout} 传递（转换为毫秒）， 实际行为取决于 JPA 提供者和数据库的实现。
      *
-     * @param seconds 超时时间（秒），必须为正数且不超过上限（默认 300 秒，可通过 {@link #setMaxTimeoutSeconds(int)} 调整）
+     * @param seconds 超时时间（秒），必须为正数且不超过上限（默认 300 秒，可通过配置属性调整）
      * @return 当前 QuerySpec 实例，支持链式调用
      * @throws IllegalArgumentException 如果 seconds 不是正数或超过上限
      */
@@ -330,9 +358,9 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
         if (seconds <= 0) {
             throw new IllegalArgumentException("timeout must be positive, got: " + seconds);
         }
-        if (seconds > maxTimeoutSeconds) {
-            throw new IllegalArgumentException(
-                "timeout must not exceed " + maxTimeoutSeconds + " seconds, got: " + seconds);
+        int maxTimeout = getGlobalConfig().getMaxTimeoutSeconds();
+        if (seconds > maxTimeout) {
+            throw new IllegalArgumentException("timeout must not exceed " + maxTimeout + " seconds, got: " + seconds);
         }
         this.queryTimeout = seconds;
         return this;
@@ -908,7 +936,8 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
         // 复制查询设置：仅当当前实例未设置时，采用另一个实例的值
         if (other.queryTimeout != null && this.queryTimeout == null) {
             // 从另一个 spec 复制时验证超时范围（必须与 timeout() 验证一致）
-            if (other.queryTimeout <= 0 || other.queryTimeout > maxTimeoutSeconds) {
+            int maxTimeout = getGlobalConfig().getMaxTimeoutSeconds();
+            if (other.queryTimeout <= 0 || other.queryTimeout > maxTimeout) {
                 throw new IllegalArgumentException(
                     "queryTimeout from source spec is out of range: " + other.queryTimeout);
             }
@@ -1348,6 +1377,71 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
         }
         if (lockMode != null) {
             sb.append(", lockMode=").append(lockMode);
+        }
+        sb.append('}');
+        return sb.toString();
+    }
+
+    /**
+     * 生成查询条件的可读描述，用于调试和分析。
+     *
+     * <p>
+     * 返回条件树的结构化描述，包括 WHERE 条件、GROUP BY、HAVING、ORDER BY 等子句。
+     * 此方法不生成可执行的 JPQL，而是生成人类可读的查询结构描述。
+     *
+     * <p>
+     * <strong>使用示例：</strong>
+     *
+     * <pre>{@code
+     * String desc = new QuerySpec<User>()
+     *     .eq(User::getStatus, "ACTIVE")
+     *     .gt(User::getAge, 18)
+     *     .orderByAsc(User::getName)
+     *     .toSql();
+     * // 返回: "Query{SELECT DISTINCT, WHERE: [status = EQ, age = GT], ORDER BY: [name ASC]}"
+     * }</pre>
+     *
+     * @return 查询条件描述字符串
+     */
+    public String toSql() {
+        StringBuilder sb = new StringBuilder("Query{");
+
+        if (distinct) {
+            sb.append("SELECT DISTINCT, ");
+        }
+
+        // WHERE 条件
+        if (!conditions.isEmpty()) {
+            sb.append("WHERE: ").append(conditions).append(", ");
+        }
+
+        // GROUP BY
+        if (!groupByFields.isEmpty()) {
+            sb.append("GROUP BY: ").append(groupByFields).append(", ");
+        }
+
+        // HAVING
+        if (!havingConditions.isEmpty()) {
+            sb.append("HAVING: ").append(havingConditions.size()).append(" conditions, ");
+        }
+
+        // ORDER BY
+        if (!orderNodes.isEmpty()) {
+            sb.append("ORDER BY: ").append(orderNodes).append(", ");
+        }
+
+        // 超时和锁模式
+        if (queryTimeout != null) {
+            sb.append("timeout=").append(queryTimeout).append("s, ");
+        }
+        if (lockMode != null) {
+            sb.append("lockMode=").append(lockMode).append(", ");
+        }
+
+        // 移除末尾的逗号和空格
+        int len = sb.length();
+        if (len > 6 && sb.charAt(len - 2) == ',') {
+            sb.setLength(len - 2);
         }
         sb.append('}');
         return sb.toString();

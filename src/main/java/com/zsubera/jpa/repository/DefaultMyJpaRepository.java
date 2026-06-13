@@ -54,36 +54,73 @@ public class DefaultMyJpaRepository<T, ID> extends SimpleJpaRepository<T, ID> im
     private final JpaEntityInformation<T, ?> entityInformation;
 
     /**
-     * 全局自动过滤开关，由自动配置类设置。当为 false 时，所有 Repository 层面的软删除过滤将被禁用。
-     * <p>
-     * 默认值为 true，与 {@link com.zsubera.jpa.autoconfigure.SoftDeleteFilterBean} 的行为保持一致。
+     * 全局配置提供者。通过 {@link #setGlobalConfigProvider(ConfigProvider)} 注入。
      */
-    private static volatile boolean autoFilterEnabled = true;
-
-    /**
-     * 全局无条件硬删除阻断开关。当为 true 时，对拥有 {@code @SoftDelete} 字段的实体， 在软删除过滤被禁用的情况下执行 {@code deleteAll()} 等无条件硬删除操作将被阻断。
-     *
-     * <p>
-     * 此开关防止在 {@code autoFilter=false} 或 {@code @IgnoreSoftDelete} 上下文中意外执行全表硬删除。 仅对拥有 {@code @SoftDelete}
-     * 字段的实体生效，无该字段的实体不受影响。
-     *
-     * <p>
-     * 默认值为 {@code true}（生产环境最安全）。如需临时放开（如数据迁移），可设为 {@code false}。
-     */
-    private static volatile boolean blockUnconditionalDelete = true;
+    private static volatile ConfigProvider globalConfigProvider;
 
     /**
      * autoFilter 的 ThreadLocal 覆盖值。设置后（非 null）会覆盖全局配置，支持按请求控制软删除过滤行为。
      */
-    private static final ThreadLocal<Boolean> autoFilterOverride = new ThreadLocal<>();
+    private static final ThreadLocal<Boolean> AUTO_FILTER_OVERRIDE = new ThreadLocal<>();
 
     /**
-     * 设置全局自动过滤开关。由自动配置类在启动时调用。
-     *
-     * @param enabled 是否启用自动过滤
+     * 配置提供者接口，用于替代静态可变状态。
      */
-    public static void setAutoFilterEnabled(boolean enabled) {
-        autoFilterEnabled = enabled;
+    public interface ConfigProvider {
+        boolean isAutoFilterEnabled();
+
+        boolean isBlockUnconditionalDelete();
+    }
+
+    /**
+     * 创建可变的配置提供者实例。
+     *
+     * @param autoFilter 自动过滤开关初始值
+     * @param blockDelete 阻断无条件删除开关初始值
+     * @return 可变的配置提供者实例
+     */
+    public static ConfigProvider createMutableConfigProvider(boolean autoFilter, boolean blockDelete) {
+        return new MutableConfigProvider(autoFilter, blockDelete);
+    }
+
+    /**
+     * 可变的配置提供者实现，支持运行时更新配置值。
+     */
+    private static class MutableConfigProvider implements ConfigProvider {
+        private volatile boolean autoFilter;
+        private volatile boolean blockDelete;
+
+        MutableConfigProvider(boolean autoFilter, boolean blockDelete) {
+            this.autoFilter = autoFilter;
+            this.blockDelete = blockDelete;
+        }
+
+        @Override
+        public boolean isAutoFilterEnabled() {
+            return autoFilter;
+        }
+
+        @Override
+        public boolean isBlockUnconditionalDelete() {
+            return blockDelete;
+        }
+
+        void setAutoFilterEnabled(boolean enabled) {
+            this.autoFilter = enabled;
+        }
+
+        void setBlockUnconditionalDelete(boolean blocked) {
+            this.blockDelete = blocked;
+        }
+    }
+
+    /**
+     * 设置全局配置提供者。由自动配置类在启动时调用。
+     *
+     * @param provider 配置提供者
+     */
+    public static void setGlobalConfigProvider(ConfigProvider provider) {
+        globalConfigProvider = provider;
     }
 
     /**
@@ -92,16 +129,8 @@ public class DefaultMyJpaRepository<T, ID> extends SimpleJpaRepository<T, ID> im
      * @return 如果自动过滤已启用返回 true
      */
     public static boolean isAutoFilterEnabled() {
-        return autoFilterEnabled;
-    }
-
-    /**
-     * 设置全局无条件硬删除阻断开关。由自动配置类在启动时调用。
-     *
-     * @param blocked 是否阻断无条件硬删除
-     */
-    public static void setBlockUnconditionalDelete(boolean blocked) {
-        blockUnconditionalDelete = blocked;
+        ConfigProvider provider = globalConfigProvider;
+        return provider == null || provider.isAutoFilterEnabled();
     }
 
     /**
@@ -110,7 +139,44 @@ public class DefaultMyJpaRepository<T, ID> extends SimpleJpaRepository<T, ID> im
      * @return 如果阻断已启用返回 true
      */
     public static boolean isBlockUnconditionalDelete() {
-        return blockUnconditionalDelete;
+        ConfigProvider provider = globalConfigProvider;
+        return provider == null || provider.isBlockUnconditionalDelete();
+    }
+
+    /**
+     * 设置全局自动过滤开关。
+     *
+     * @param enabled 是否启用自动过滤
+     * @deprecated 请使用 {@link #setGlobalConfigProvider(ConfigProvider)} 替代
+     */
+    @Deprecated
+    public static void setAutoFilterEnabled(boolean enabled) {
+        ConfigProvider existing = globalConfigProvider;
+        if (existing instanceof MutableConfigProvider mutable) {
+            mutable.setAutoFilterEnabled(enabled);
+        } else if (existing == null) {
+            setGlobalConfigProvider(new MutableConfigProvider(enabled, true));
+        } else {
+            setGlobalConfigProvider(new MutableConfigProvider(enabled, existing.isBlockUnconditionalDelete()));
+        }
+    }
+
+    /**
+     * 设置全局无条件硬删除阻断开关。
+     *
+     * @param blocked 是否阻断无条件硬删除
+     * @deprecated 请使用 {@link #setGlobalConfigProvider(ConfigProvider)} 替代
+     */
+    @Deprecated
+    public static void setBlockUnconditionalDelete(boolean blocked) {
+        ConfigProvider existing = globalConfigProvider;
+        if (existing instanceof MutableConfigProvider mutable) {
+            mutable.setBlockUnconditionalDelete(blocked);
+        } else if (existing == null) {
+            setGlobalConfigProvider(new MutableConfigProvider(true, blocked));
+        } else {
+            setGlobalConfigProvider(new MutableConfigProvider(existing.isAutoFilterEnabled(), blocked));
+        }
     }
 
     /**
@@ -126,36 +192,36 @@ public class DefaultMyJpaRepository<T, ID> extends SimpleJpaRepository<T, ID> im
      * @return 如果应该阻断返回 true
      */
     private boolean shouldBlockHardDelete() {
-        return blockUnconditionalDelete && SoftDeleteHelper.findSoftDeleteField(domainClass) != null;
+        return isBlockUnconditionalDelete() && SoftDeleteHelper.findSoftDeleteField(domainClass) != null;
     }
 
     /**
-     * 使用 autoFilterOverride 执行操作，自动在 finally 块中清理。防止异常发生时 ThreadLocal 泄漏。
+     * 使用 AUTO_FILTER_OVERRIDE 执行操作，自动在 finally 块中清理。防止异常发生时 ThreadLocal 泄漏。
      *
      * @param value 覆盖值（null 表示清除）
      * @param action 要执行的操作
      */
     public static void withAutoFilterOverride(Boolean value, Runnable action) {
-        Boolean previous = autoFilterOverride.get();
+        Boolean previous = AUTO_FILTER_OVERRIDE.get();
         if (value == null) {
-            autoFilterOverride.remove();
+            AUTO_FILTER_OVERRIDE.remove();
         } else {
-            autoFilterOverride.set(value);
+            AUTO_FILTER_OVERRIDE.set(value);
         }
         try {
             action.run();
         } finally {
             // 恢复之前的值，支持嵌套调用
             if (previous != null) {
-                autoFilterOverride.set(previous);
+                AUTO_FILTER_OVERRIDE.set(previous);
             } else {
-                autoFilterOverride.remove();
+                AUTO_FILTER_OVERRIDE.remove();
             }
         }
     }
 
     /**
-     * 使用 autoFilterOverride 执行 Supplier，自动在 finally 块中清理。防止异常发生时 ThreadLocal 泄漏。
+     * 使用 AUTO_FILTER_OVERRIDE 执行 Supplier，自动在 finally 块中清理。防止异常发生时 ThreadLocal 泄漏。
      *
      * @param value 覆盖值（null 表示清除）
      * @param supplier 要执行的 Supplier
@@ -163,29 +229,29 @@ public class DefaultMyJpaRepository<T, ID> extends SimpleJpaRepository<T, ID> im
      * @return Supplier 的返回结果
      */
     public static <R> R withAutoFilterOverride(Boolean value, java.util.function.Supplier<R> supplier) {
-        Boolean previous = autoFilterOverride.get();
+        Boolean previous = AUTO_FILTER_OVERRIDE.get();
         if (value == null) {
-            autoFilterOverride.remove();
+            AUTO_FILTER_OVERRIDE.remove();
         } else {
-            autoFilterOverride.set(value);
+            AUTO_FILTER_OVERRIDE.set(value);
         }
         try {
             return supplier.get();
         } finally {
             // 恢复之前的值，支持嵌套调用
             if (previous != null) {
-                autoFilterOverride.set(previous);
+                AUTO_FILTER_OVERRIDE.set(previous);
             } else {
-                autoFilterOverride.remove();
+                AUTO_FILTER_OVERRIDE.remove();
             }
         }
     }
 
     /**
-     * 清除当前线程的 autoFilterOverride ThreadLocal 值。 在应用关闭或 ServletContext 销毁时调用以防止 ThreadLocal 泄漏。
+     * 清除当前线程的 AUTO_FILTER_OVERRIDE ThreadLocal 值。 在应用关闭或 ServletContext 销毁时调用以防止 ThreadLocal 泄漏。
      */
     public static void clearThreadLocal() {
-        autoFilterOverride.remove();
+        AUTO_FILTER_OVERRIDE.remove();
     }
 
     @SuppressFBWarnings("EI_EXPOSE_REP2")
@@ -210,8 +276,8 @@ public class DefaultMyJpaRepository<T, ID> extends SimpleJpaRepository<T, ID> im
      */
     private boolean shouldApplySoftDeleteFilter() {
         // 优先检查 ThreadLocal 覆盖值，再检查全局配置
-        Boolean override = autoFilterOverride.get();
-        boolean effectiveAutoFilter = (override != null) ? override : autoFilterEnabled;
+        Boolean override = AUTO_FILTER_OVERRIDE.get();
+        boolean effectiveAutoFilter = (override != null) ? override : isAutoFilterEnabled();
         return effectiveAutoFilter && SoftDeleteHelper.findSoftDeleteField(domainClass) != null
             && !SoftDeleteContext.isIgnoreSoftDelete();
     }

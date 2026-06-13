@@ -232,16 +232,65 @@ public class UpdateSpec<T> extends AbstractBulkOperationSpec<T, UpdateSpec<T>> {
      * <p>
      * <strong>需要活动事务。</strong>建议使用 {@link #executeInTransaction(EntityManager)}。
      *
+     * <p>
+     * <strong>安全保护：</strong>如果配置了最大批量操作行数限制，执行前会先计数验证，
+     * 超过限制时抛出 {@link IllegalStateException} 阻止执行。
+     *
      * @param em 实体管理器
      * @return 更新的实体数量
-     * @throws IllegalStateException 如果未指定 SET 子句
+     * @throws IllegalStateException 如果未指定 SET 子句或超过最大行数限制
      * @throws jakarta.persistence.TransactionRequiredException 如果没有活动事务
      */
     @Override
     public int execute(EntityManager em) {
+        // 检查是否有最大行数保护配置
+        com.zsubera.jpa.autoconfigure.MyJpaPlusGlobalConfig config = getGlobalConfig();
+        if (config != null && config.getMaxBulkOperationRows() > 0) {
+            // 先计数验证
+            long count = countBeforeExecute(em);
+            if (count > config.getMaxBulkOperationRows()) {
+                throw new IllegalStateException("Bulk UPDATE would affect " + count
+                    + " rows, which exceeds the configured limit of " + config.getMaxBulkOperationRows() + " rows. "
+                    + "Use executeLimited() with an explicit limit, or adjust myjpa-plus.query.max-bulk-operation-rows.");
+            }
+        }
         var query = em.createQuery(toUpdate(em));
         applyTimeout(query);
         return query.executeUpdate();
+    }
+
+    /**
+     * 获取全局配置实例。
+     *
+     * @return 全局配置，如果未配置则返回 null
+     */
+    private static com.zsubera.jpa.autoconfigure.MyJpaPlusGlobalConfig getGlobalConfig() {
+        // 通过反射获取 QuerySpec 中的全局配置
+        try {
+            java.lang.reflect.Method method = com.zsubera.jpa.spec.QuerySpec.class.getDeclaredMethod("getGlobalConfig");
+            method.setAccessible(true);
+            return (com.zsubera.jpa.autoconfigure.MyJpaPlusGlobalConfig)method.invoke(null);
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    /**
+     * 在执行前计数受影响的行数。
+     *
+     * @param em 实体管理器
+     * @return 预计受影响的行数
+     */
+    private long countBeforeExecute(EntityManager em) {
+        CriteriaBuilder cb = em.getCriteriaBuilder();
+        CriteriaQuery<Long> countQuery = cb.createQuery(Long.class);
+        Root<T> root = countQuery.from(entityClass);
+        countQuery.select(cb.count(root));
+        Predicate[] predicates = buildPredicates(root, cb);
+        if (predicates.length > 0) {
+            countQuery.where(cb.and(predicates));
+        }
+        return em.createQuery(countQuery).getSingleResult();
     }
 
     @Override

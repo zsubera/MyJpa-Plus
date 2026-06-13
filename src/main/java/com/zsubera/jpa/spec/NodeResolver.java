@@ -182,6 +182,28 @@ final class NodeResolver {
         }
 
         List<Predicate> innerPredicates = new ArrayList<>();
+
+        // [FIX] P1-7: 自动为 JOIN 的实体应用软删除过滤
+        if (!isFetch) {
+            Class<?> joinEntityType = join.getJavaType();
+            if (joinEntityType != null) {
+                String softDeleteFieldName =
+                    com.zsubera.jpa.softdelete.SoftDeleteHelper.findSoftDeleteField(joinEntityType);
+                if (softDeleteFieldName != null) {
+                    jakarta.persistence.criteria.Path<?> deletedPath = join.get(softDeleteFieldName);
+                    // 检查字段类型是否为 Boolean
+                    try {
+                        java.lang.reflect.Field field = joinEntityType.getDeclaredField(softDeleteFieldName);
+                        if (field.getType() == Boolean.class || field.getType() == boolean.class) {
+                            innerPredicates.add(cb.or(cb.isNull(deletedPath), cb.equal(deletedPath, false)));
+                        }
+                    } catch (NoSuchFieldException e) {
+                        // 字段不存在，忽略
+                    }
+                }
+            }
+        }
+
         for (ConditionNode inner : node.innerConditions) {
             Predicate p =
                 resolveNodeWithDepth(inner, join, rootPath, query, cb, joinCache, fullPath, depth + 1, fetchPaths);

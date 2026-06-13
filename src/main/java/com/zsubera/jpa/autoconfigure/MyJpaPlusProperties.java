@@ -1,6 +1,7 @@
 package com.zsubera.jpa.autoconfigure;
 
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import jakarta.annotation.PostConstruct;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 /**
@@ -35,6 +36,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  * </ul>
  */
 @ConfigurationProperties(prefix = "myjpa-plus")
+@SuppressFBWarnings("EI_EXPOSE_REP")
 public class MyJpaPlusProperties {
 
     /** 软删除相关配置。 */
@@ -45,6 +47,14 @@ public class MyJpaPlusProperties {
 
     /** 监控相关配置。 */
     private Monitoring monitoring = new Monitoring();
+
+    /**
+     * 启动时验证所有配置属性的合法性。
+     */
+    @PostConstruct
+    void validate() {
+        query.validate();
+    }
 
     @SuppressFBWarnings("EI_EXPOSE_REP")
     public SoftDelete getSoftDelete() {
@@ -140,6 +150,55 @@ public class MyJpaPlusProperties {
          */
         private int defaultTimeoutSeconds = 30;
 
+        /**
+         * 批量操作最大影响行数。超过此限制时将抛出异常，防止意外大规模更新/删除。 设置为 {@code 0} 表示禁用限制。 默认值：{@code 10000}
+         */
+        private int maxBulkOperationRows = 10000;
+
+        /**
+         * 验证所有查询配置的跨字段关系。
+         */
+        void validate() {
+            if (inClauseHardLimit < inClauseMaxSize) {
+                throw new IllegalArgumentException("myjpa-plus.query.in-clause-hard-limit (" + inClauseHardLimit
+                    + ") must be >= myjpa-plus.query.in-clause-max-size (" + inClauseMaxSize + ")");
+            }
+            if (maxResults <= 0) {
+                throw new IllegalArgumentException("myjpa-plus.query.max-results must be positive, got: " + maxResults);
+            }
+            if (deepPaginationOffsetThreshold <= 0) {
+                throw new IllegalArgumentException(
+                    "myjpa-plus.query.deep-pagination-offset-threshold must be positive, got: "
+                        + deepPaginationOffsetThreshold);
+            }
+            if (deepPaginationOffsetLimit <= 0 && deepPaginationOffsetLimit != -1) {
+                throw new IllegalArgumentException(
+                    "myjpa-plus.query.deep-pagination-offset-limit must be positive or -1 (disabled), got: "
+                        + deepPaginationOffsetLimit);
+            }
+            if (inClauseMaxSize <= 0) {
+                throw new IllegalArgumentException(
+                    "myjpa-plus.query.in-clause-max-size must be positive, got: " + inClauseMaxSize);
+            }
+            if (inClauseHardLimit <= 0) {
+                throw new IllegalArgumentException(
+                    "myjpa-plus.query.in-clause-hard-limit must be positive, got: " + inClauseHardLimit);
+            }
+            if (lambdaCacheSize <= 0) {
+                throw new IllegalArgumentException(
+                    "myjpa-plus.query.lambda-cache-size must be positive, got: " + lambdaCacheSize);
+            }
+            if (defaultTimeoutSeconds <= 0 && defaultTimeoutSeconds != -1) {
+                throw new IllegalArgumentException(
+                    "myjpa-plus.query.default-timeout-seconds must be positive or -1 (disabled), got: "
+                        + defaultTimeoutSeconds);
+            }
+            if (maxBulkOperationRows < 0) {
+                throw new IllegalArgumentException(
+                    "myjpa-plus.query.max-bulk-operation-rows must be >= 0, got: " + maxBulkOperationRows);
+            }
+        }
+
         public int getMaxResults() {
             return maxResults;
         }
@@ -215,6 +274,17 @@ public class MyJpaPlusProperties {
                 throw new IllegalArgumentException("defaultTimeoutSeconds must be positive or -1 (disabled)");
             }
             this.defaultTimeoutSeconds = defaultTimeoutSeconds;
+        }
+
+        public int getMaxBulkOperationRows() {
+            return maxBulkOperationRows;
+        }
+
+        public void setMaxBulkOperationRows(int maxBulkOperationRows) {
+            if (maxBulkOperationRows < 0) {
+                throw new IllegalArgumentException("maxBulkOperationRows must be >= 0");
+            }
+            this.maxBulkOperationRows = maxBulkOperationRows;
         }
     }
 
