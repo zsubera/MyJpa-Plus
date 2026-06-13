@@ -424,7 +424,6 @@ public class ProjectionSpec<T> {
     }
 
     /** HAVING 条件函数列表，延迟应用。多个条件通过 AND 组合。 */
-    @SuppressWarnings("rawtypes")
     private final List<java.util.function.BiFunction<jakarta.persistence.criteria.Root<T>, CriteriaBuilder,
         jakarta.persistence.criteria.Predicate>> havingPredicateFns = new ArrayList<>();
 
@@ -635,7 +634,6 @@ public class ProjectionSpec<T> {
      * @return 返回 DTO 结果的 TypedQuery 实例
      * @throws IllegalStateException 如果未调用 {@link #asDto(Class)} 方法
      */
-    @SuppressWarnings("unchecked")
     public <R> TypedQuery<R> toDtoQuery(EntityManager em) {
         return toDtoQuery(em, MyJpaTemplate.DEFAULT_MAX_RESULTS);
     }
@@ -929,7 +927,6 @@ public class ProjectionSpec<T> {
      * @param cb CriteriaBuilder 实例
      * @return JOIN 映射关系
      */
-    @SuppressWarnings({"unchecked"})
     private Map<String, Join<?, ?>> resolveJoins(Root<T> root, CriteriaBuilder cb) {
         Map<String, Join<?, ?>> joinMap = new LinkedHashMap<>();
         // 按字段名收集所有条件，避免同名 join 的 ON 子句被覆盖

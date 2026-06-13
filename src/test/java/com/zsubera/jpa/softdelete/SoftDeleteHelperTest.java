@@ -246,7 +246,7 @@ class SoftDeleteHelperTest {
 
     @Test
     void testSoftDeleteAllWithoutAllowUnconditionalThrowsException() {
-        // P0-2: softDeleteAll without allowUnconditional=true should throw IllegalStateException
+
         // Use a mock EntityManager to pass the null check for em
         jakarta.persistence.EntityManager mockEm = org.mockito.Mockito.mock(jakarta.persistence.EntityManager.class);
         assertThrows(IllegalStateException.class,
@@ -325,25 +325,21 @@ class SoftDeleteHelperTest {
         assertFalse(qs.conditions().isEmpty(), "notDeletedQuery should have at least one condition");
     }
 
-    // [FIX] P1-3: 测试 escapeIdentifier 对简单标识符的验证
     @Test
     void testEscapeIdentifier_simpleIdentifier() {
         assertEquals("my_column", SoftDeleteHelper.escapeIdentifier("my_column"));
     }
 
-    // [FIX] P1-3: 测试 escapeIdentifier 对 schema.table 格式的分段验证
     @Test
     void testEscapeIdentifier_schemaQualified() {
         assertEquals("myschema.mytable", SoftDeleteHelper.escapeIdentifier("myschema.mytable"));
     }
 
-    // [FIX] P1-3: 测试 escapeIdentifier 对 catalog.schema.table 格式的分段验证
     @Test
     void testEscapeIdentifier_catalogSchemaQualified() {
         assertEquals("mycatalog.myschema.mytable", SoftDeleteHelper.escapeIdentifier("mycatalog.myschema.mytable"));
     }
 
-    // [FIX] P1-3: 测试 escapeIdentifier 拒绝包含非法字符的标识符
     @Test
     void testEscapeIdentifier_invalidCharactersThrows() {
         assertThrows(IllegalArgumentException.class, () -> SoftDeleteHelper.escapeIdentifier("my column"));
@@ -351,7 +347,6 @@ class SoftDeleteHelperTest {
         assertThrows(IllegalArgumentException.class, () -> SoftDeleteHelper.escapeIdentifier("'; DROP TABLE --"));
     }
 
-    // [FIX] P1-3: 测试 escapeIdentifier 拒绝 null 和空字符串
     @Test
     void testEscapeIdentifier_nullOrEmptyThrows() {
         assertThrows(IllegalArgumentException.class, () -> SoftDeleteHelper.escapeIdentifier(null));

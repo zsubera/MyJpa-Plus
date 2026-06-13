@@ -686,7 +686,7 @@ class DeleteSpecTest {
         repository.save(newEntity("a", 1));
         repository.save(newEntity("b", 10));
         repository.save(newEntity("c", 5));
-        // [FIX] P1-1: not() 使用 AND 语义（与 QuerySpec.not() 一致）
+
         // NOT(status > 3 AND status < 8) = status <= 3 OR status >= 8
         // entity a: status=1 <=3 → matches; entity b: status=10 >=8 → matches; entity c: status=5 → no match
         int count = new DeleteSpec<>(TestEntity.class)

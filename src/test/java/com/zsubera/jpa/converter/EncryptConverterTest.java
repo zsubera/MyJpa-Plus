@@ -106,7 +106,7 @@ class EncryptConverterTest {
         System.setProperty("myjpa.encrypt.key", "short");
         EncryptConverter.clearCacheForTesting();
         EncryptConverter shortKeyConverter = new EncryptConverter();
-        // P0-3: Short keys are now rejected to prevent weak key dictionary attacks
+
         assertThrows(com.zsubera.jpa.exception.MyJpaPlusException.class,
             () -> shortKeyConverter.convertToDatabaseColumn("test-data"));
     }

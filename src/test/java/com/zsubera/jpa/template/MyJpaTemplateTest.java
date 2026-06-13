@@ -49,7 +49,6 @@ class MyJpaTemplateTest {
     @Autowired
     private jakarta.persistence.EntityManager entityManager;
 
-    // [FIX] 清理测试数据，避免测试间数据泄漏导致断言失败
     @BeforeEach
     void cleanUp() {
         repository.deleteAll();
@@ -586,7 +585,6 @@ class MyJpaTemplateTest {
 
     // ---- executeBatchInSeparateTransactions 测试 ----
 
-    // [FIX] P0-1: 使用 NOT_SUPPORTED 挂起测试事务，避免 REQUIRES_NEW 与 PESSIMISTIC_WRITE 锁冲突
     @Test
     @org.springframework.transaction.annotation.Transactional(
         propagation = org.springframework.transaction.annotation.Propagation.NOT_SUPPORTED)

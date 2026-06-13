@@ -53,7 +53,6 @@ public class SqlSlowQueryInterceptor implements StatementInspector {
      * @param slowQueryThresholdMs 慢查询阈值（毫秒），超过此值的查询将记录警告日志
      * @throws IllegalArgumentException 如果 slowQueryThresholdMs 小于等于 0
      */
-    @SuppressFBWarnings("EI_EXPOSE_REP2")
     public SqlSlowQueryInterceptor(long slowQueryThresholdMs) {
         if (slowQueryThresholdMs <= 0) {
             throw new IllegalArgumentException("slowQueryThresholdMs must be positive");
@@ -108,7 +107,7 @@ public class SqlSlowQueryInterceptor implements StatementInspector {
                     stmtClass.getName());
                 return stmt;
             }
-            // [FIX] P1-4: 先做无锁快速检查，仅在确实需要驱逐时才进入 synchronized 块，
+
             // 减少高并发场景下的锁竞争
             if (PROXY_CLASS_CACHE.size() > MAX_PROXY_CLASS_CACHE_SIZE) {
                 synchronized (PROXY_CLASS_CACHE) {

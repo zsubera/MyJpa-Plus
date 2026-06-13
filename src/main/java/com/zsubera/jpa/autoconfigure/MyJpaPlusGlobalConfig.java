@@ -1,7 +1,5 @@
 package com.zsubera.jpa.autoconfigure;
 
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-
 /**
  * MyJpa-Plus 全局配置中心，替代分散的静态可变状态。
  *
@@ -16,8 +14,6 @@ import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
  * @author myjpa-plus
  * @since 2.0.0
  */
-@SuppressFBWarnings(value = "EI_EXPOSE_REP",
-    justification = "Configuration holder - fields are intentionally exposed for read access")
 public class MyJpaPlusGlobalConfig {
 
     /** 软删除相关配置。 */

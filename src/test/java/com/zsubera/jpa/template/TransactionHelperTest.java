@@ -9,14 +9,14 @@ import org.springframework.transaction.support.TransactionTemplate;
 /**
  * TransactionHelper 事务传播行为测试。
  *
- * <p>测试 P0-1 修复：事务传播行为注释与实现一致性
+
  */
 class TransactionHelperTest {
 
     /**
      * 测试无活动事务时使用 REQUIRED（创建新事务）。
      *
-     * <p>P0-1 修复验证：getOrCreateRequiredTemplate 应设置 PROPAGATION_REQUIRED
+
      */
     @Test
     void shouldUseRequiredWhenNoActiveTransaction() throws Exception {
@@ -39,7 +39,7 @@ class TransactionHelperTest {
     /**
      * 测试有活动事务时使用 REQUIRES_NEW（挂起外部事务，创建独立事务）。
      *
-     * <p>P0-1 修复验证：getOrCreateRequiresNewTemplate 应设置 PROPAGATION_REQUIRES_NEW
+
      */
     @Test
     void shouldUseRequiresNewWhenActiveTransactionExists() throws Exception {

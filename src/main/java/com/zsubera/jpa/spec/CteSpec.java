@@ -1,7 +1,6 @@
 package com.zsubera.jpa.spec;
 
 import com.zsubera.jpa.util.QueryTimeoutHelper;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.Query;
 import java.util.ArrayList;
@@ -41,7 +40,6 @@ import org.slf4j.LoggerFactory;
  * <p>
  * <strong>此类是可变的且非线程安全。</strong>每次查询操作应创建新的 {@code CteSpec} 实例。
  */
-@SuppressFBWarnings("SE_BAD_FIELD")
 public class CteSpec {
 
     private static final Logger log = LoggerFactory.getLogger(CteSpec.class);
@@ -302,7 +300,6 @@ public class CteSpec {
      * @throws IllegalStateException 如果 CTE 或主查询未完整配置
      * @throws IllegalArgumentException 如果 em 为 null
      */
-    @SuppressWarnings("unchecked")
     public List<Object[]> getResultList(EntityManager em) {
         if (em == null) {
             throw new IllegalArgumentException("em must not be null");
@@ -333,7 +330,6 @@ public class CteSpec {
      * @throws IllegalArgumentException 如果 em 为 null
      * @since 1.2.0
      */
-    @SuppressWarnings("unchecked")
     public Optional<Object[]> getSingleResult(EntityManager em) {
         if (em == null) {
             throw new IllegalArgumentException("em must not be null");
@@ -376,7 +372,6 @@ public class CteSpec {
      * @throws IllegalStateException 如果 CTE 或主查询未完整配置
      * @throws IllegalArgumentException 如果 em 为 null
      */
-    @SuppressWarnings("unchecked")
     public java.util.stream.Stream<Object[]> getResultStream(EntityManager em) {
         if (em == null) {
             throw new IllegalArgumentException("em must not be null");

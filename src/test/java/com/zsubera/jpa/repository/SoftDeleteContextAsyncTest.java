@@ -9,7 +9,7 @@ import org.junit.jupiter.api.Test;
 /**
  * SoftDeleteContext 异步安全测试。
  *
- * <p>测试 P0-2 修复：ThreadLocal 泄漏风险
+
  */
 class SoftDeleteContextAsyncTest {
 
@@ -21,7 +21,7 @@ class SoftDeleteContextAsyncTest {
     /**
      * 测试异步边界捕获和重置功能。
      *
-     * <p>P0-2 修复验证：确保异步任务不会错误继承父线程状态
+
      */
     @Test
     void captureAndResetForAsyncShouldPreserveState() {
@@ -45,7 +45,7 @@ class SoftDeleteContextAsyncTest {
     /**
      * 测试线程池中状态不会泄漏。
      *
-     * <p>P0-2 修复验证：确保线程复用时不会残留旧状态
+
      */
     @Test
     void threadPoolShouldNotLeakState() throws Exception {

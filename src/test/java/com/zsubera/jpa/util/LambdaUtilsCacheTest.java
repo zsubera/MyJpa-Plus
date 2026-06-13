@@ -35,7 +35,6 @@ class LambdaUtilsCacheTest {
         assertTrue(LambdaUtils.cacheSize() > 0);
     }
 
-    // [FIX] P1-2: 测试缓存命中路径也能触发驱逐——100% 命中率下缓存不应无限增长
     @Test
     void cacheShouldEvictOnHitPath() {
         int originalMaxSize = LambdaUtils.getMaxCacheSize();

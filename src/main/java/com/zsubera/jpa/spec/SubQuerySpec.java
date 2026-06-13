@@ -1,7 +1,6 @@
 package com.zsubera.jpa.spec;
 
 import com.zsubera.jpa.util.LambdaUtils;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import jakarta.persistence.criteria.CriteriaBuilder;
 import jakarta.persistence.criteria.Path;
 import jakarta.persistence.criteria.Predicate;
@@ -41,8 +40,6 @@ import org.springframework.lang.Nullable;
  *
  * @param <S> 子查询实体类型
  */
-@SuppressFBWarnings(value = "CT_CONSTRUCTOR_THROW",
-    justification = "Static factory method validates parameters before constructor call")
 public class SubQuerySpec<S> {
 
     private final Subquery<S> subquery;

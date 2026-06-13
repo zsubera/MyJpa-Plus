@@ -118,7 +118,7 @@ public final class InClauseBuilder {
                         hardProp, hardLimit);
                 }
             }
-            // [FIX] P1-3: 确保 hardLimit >= maxSize，避免配置验证不一致
+
             if (hardLimit < maxSize) {
                 log.warn("hardLimit ({}) < maxInClauseSize ({}). Adjusting hardLimit to {}.", hardLimit, maxSize,
                     maxSize);

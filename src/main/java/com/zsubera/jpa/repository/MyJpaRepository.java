@@ -169,12 +169,12 @@ public interface MyJpaRepository<T, ID> extends JpaRepository<T, ID>, JpaSpecifi
      */
     default Optional<T> findNotDeletedOne(Specification<T> spec) {
         Specification<T> notDeleted = SoftDeleteHelper.isNotDeleted(getEntityClass());
-        // [FIX] P1-4: 使用 findSoftDeleteField 判断实体是否有 @SoftDelete 字段，
+
         // 而非检查 notDeleted 是否为 null（无 @SoftDelete 时 isNotDeleted 返回 conjunction 而非 null）
         boolean hasSoftDelete = SoftDeleteHelper.findSoftDeleteField(getEntityClass()) != null;
         if (!hasSoftDelete) {
             if (spec == null) {
-                // [FIX] P1-4: 无 @SoftDelete 且无 spec 时，使用分页查询而非全表加载
+
                 // 原代码 findAll().stream().findFirst() 会加载全部实体到内存
                 List<T> content = findAll(org.springframework.data.domain.Pageable.ofSize(1)).getContent();
                 return content.isEmpty() ? Optional.empty() : Optional.of(content.get(0));

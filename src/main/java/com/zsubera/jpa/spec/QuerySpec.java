@@ -1,5 +1,6 @@
 package com.zsubera.jpa.spec;
 
+import com.zsubera.jpa.autoconfigure.MyJpaPlusGlobalConfig;
 import com.zsubera.jpa.util.LambdaUtils;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import jakarta.persistence.LockModeType;
@@ -64,17 +65,17 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
     private static final Logger log = LoggerFactory.getLogger(QuerySpec.class);
 
     /**
-     * 全局配置引用。通过 {@link #setGlobalConfig(MyJpaPlusGlobalConfig)} 注入。
+     * 全局配置引用。
      * 静态字段，由自动配置类在启动时设置一次。
      */
-    private static volatile com.zsubera.jpa.autoconfigure.MyJpaPlusGlobalConfig globalConfig;
+    private static volatile MyJpaPlusGlobalConfig globalConfig;
 
     /**
      * 设置全局配置。由自动配置类在启动时调用。
      *
      * @param config 全局配置实例
      */
-    public static void setGlobalConfig(com.zsubera.jpa.autoconfigure.MyJpaPlusGlobalConfig config) {
+    public static void setGlobalConfig(MyJpaPlusGlobalConfig config) {
         globalConfig = config;
     }
 
@@ -171,10 +172,8 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
      * @return 包含参数值哈希的缓存键字符串
      */
     public String cacheKey() {
-        // [FIX] P1-1: 使用明确的前缀和分隔符减少哈希碰撞风险
+
         StringBuilder sb = new StringBuilder("Q:");
-        // Always include root-level conditions for cache key correctness,
-        // even when an or()/not() group is currently open.
         if (!groupStack.isEmpty()) {
             sb.append("ROOT(");
             for (ConditionNode node : conditions) {

@@ -26,7 +26,7 @@ import java.util.function.Function;
  * </ul>
  *
  * <p>
- * [FIX] P0-3: 明确说明事务传播行为的限制，避免用户误解。
+
  *
  * <p>
  * <strong>重要限制：</strong>
@@ -83,7 +83,6 @@ class TransactionHelper {
     private final EntityManagerFactory entityManagerFactory;
     private final ApplicationContext applicationContext;
 
-    // [FIX] P1-6: 缓存 TransactionTemplate，避免每次调用重复创建
     private volatile TransactionTemplate cachedRequiredTemplate;
     private volatile TransactionTemplate cachedRequiresNewTemplate;
 
@@ -101,7 +100,7 @@ class TransactionHelper {
      * 使用 {@link TransactionTemplate} 创建独立事务，每次调用都会创建新的事务上下文。
      *
      * <p>
-     * [FIX] P0-1: 修正传播行为描述——有活动事务时使用 REQUIRES_NEW（挂起外部事务，创建独立事务），
+
      * 而非注释中错误描述的 REQUIRED（加入现有事务）。
      *
      * <p>
@@ -125,10 +124,10 @@ class TransactionHelper {
                     + "If running outside a Spring context, use MergeSpec.executeInTransaction() instead.");
         }
         boolean existingTransaction = TransactionSynchronizationManager.isActualTransactionActive();
-        // [FIX] P1-6: 使用缓存的 TransactionTemplate，避免每次调用重复创建
+
         TransactionTemplate txTemplate;
         if (existingTransaction) {
-            // [FIX] P0-1: 修正警告信息——有活动事务时使用 REQUIRES_NEW（独立事务），而非加入现有事务
+
             log.warn("executeInNewTransaction called within an active transaction. "
                 + "Using PROPAGATION_REQUIRES_NEW to create an independent transaction. "
                 + "The outer transaction will be suspended. "
@@ -154,7 +153,6 @@ class TransactionHelper {
         });
     }
 
-    // [FIX] P1-1: 缓存 TransactionTemplate 的辅助方法，使用 double-checked locking 避免竞态条件
     private TransactionTemplate getOrCreateRequiredTemplate(PlatformTransactionManager txManager) {
         TransactionTemplate template = cachedRequiredTemplate;
         if (template == null) {
@@ -171,7 +169,6 @@ class TransactionHelper {
         return template;
     }
 
-    // [FIX] P0-1: 修复传播行为错误 — 原代码使用 PROPAGATION_REQUIRED（加入现有事务），
     // 导致 executeInNewTransaction 在无活动事务时无法创建新事务。
     // 改为正确的 PROPAGATION_REQUIRES_NEW（始终创建新事务）。
     private TransactionTemplate getOrCreateRequiresNewTemplate(PlatformTransactionManager txManager) {

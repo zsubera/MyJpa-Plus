@@ -61,7 +61,6 @@ class BulkOperationTemplateTest {
     @Autowired
     private ApplicationContext applicationContext;
 
-    // [FIX] P0-1: 清理持久化上下文，避免 REQUIRES_NEW 挂起外层事务后恢复时缓存脏数据
     @AfterEach
     void clearEntityManager() {
         entityManager.clear();
@@ -279,7 +278,6 @@ class BulkOperationTemplateTest {
 
     // ---- executeBatchInSeparateTransactions ----
 
-    // [FIX] P0-1: REQUIRES_NEW 挂起外层事务，batch 的新 EM 无法看到外层未提交的数据。
     // 使用 TransactionTemplate 在独立事务中插入数据，确保数据对后续 REQUIRES_NEW 事务可见。
     @Test
     @org.springframework.transaction.annotation.Transactional(
@@ -402,7 +400,7 @@ class BulkOperationTemplateTest {
     }
 
     /**
-     * [FIX] P0-1: 在独立已提交事务中插入测试数据，确保 REQUIRES_NEW 批量操作能看到数据。
+
      * @DataJpaTest
     @org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabase(replace = org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabase.Replace.NONE) 的 @Transactional 在测试方法结束前不会提交，
      * 而 REQUIRES_NEW 会挂起外层事务创建新 EM，新 EM 无法看到外层未提交的数据。
@@ -412,7 +410,7 @@ class BulkOperationTemplateTest {
             applicationContext.getBean(org.springframework.transaction.PlatformTransactionManager.class);
         org.springframework.transaction.support.TransactionTemplate txTemplate =
             new org.springframework.transaction.support.TransactionTemplate(txManager);
-        // [FIX] P0-1: 使用 REQUIRES_NEW 确保数据在独立事务中提交，对后续 REQUIRES_NEW 批量操作可见
+
         txTemplate
             .setPropagationBehavior(org.springframework.transaction.TransactionDefinition.PROPAGATION_REQUIRES_NEW);
         txTemplate.executeWithoutResult(status -> {

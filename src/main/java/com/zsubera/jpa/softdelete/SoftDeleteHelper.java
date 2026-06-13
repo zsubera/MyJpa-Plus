@@ -111,7 +111,7 @@ public final class SoftDeleteHelper {
         if (identifier == null || identifier.isEmpty()) {
             throw new IllegalArgumentException("Identifier must not be null or empty");
         }
-        // [FIX] P1-3: 按点号分段校验，支持 schema.table 和 catalog.schema.table 格式
+
         // 仅验证不转义——标识符已通过正则校验确保安全，避免 MySQL/PostgreSQL 引号风格差异
         String[] parts = identifier.split("\\.");
         for (String part : parts) {
@@ -655,7 +655,7 @@ public final class SoftDeleteHelper {
                     try {
                         field.setAccessible(true);
                     } catch (SecurityException e) {
-                        // [FIX] P2-2: 提供更详细的模块系统诊断信息
+
                         String moduleName = cls.getModule() != null ? cls.getModule().getName() : "unnamed";
                         String pkg = cls.getPackageName();
                         throw new IllegalStateException(String.format(

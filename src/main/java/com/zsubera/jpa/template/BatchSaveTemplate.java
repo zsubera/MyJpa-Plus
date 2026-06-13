@@ -206,7 +206,7 @@ class BatchSaveTemplate {
 
     /**
      * 采样驱逐 ID_METHOD_CACHE：移除约 25% 的条目，避免全量清空导致的性能抖动。
-     * [FIX] P1-3: 使用 keySet().toArray() 快照 + remove() 替代 iterator.remove()，
+
      * 避免 ConcurrentHashMap 弱一致性迭代器在并发写入时跳过条目导致驱逐不完全。
      */
     private static void evictIdMethodCache() {

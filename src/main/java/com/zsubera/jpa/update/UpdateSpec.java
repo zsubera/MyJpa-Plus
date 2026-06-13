@@ -67,7 +67,7 @@ public class UpdateSpec<T> extends AbstractBulkOperationSpec<T, UpdateSpec<T>> {
      * 但不会无限增长。
      */
     private static void evictCacheIfNeeded(java.util.concurrent.ConcurrentMap<?, ?> cache) {
-        // [FIX] P1-5: 使用同一快照值避免两次 size() 调用之间的竞态窗口
+
         int currentSize = cache.size();
         if (currentSize > MAX_CACHE_SIZE && ThreadLocalRandom.current().nextInt(10) == 0) {
             int toRemove = currentSize / 2;

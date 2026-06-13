@@ -81,11 +81,13 @@ public abstract class AbstractBulkOperationSpec<T, SELF extends AbstractBulkOper
      *
      * @return 当前构建器实例
      */
+    @Override
     @SuppressWarnings("unchecked")
     public SELF self() {
         return (SELF)this;
     }
 
+    @Override
     public String property(SFunction<T, ?> field) {
         return LambdaUtils.property(field);
     }
@@ -323,7 +325,7 @@ public abstract class AbstractBulkOperationSpec<T, SELF extends AbstractBulkOper
             throw new IllegalArgumentException(
                 "Empty not() consumer produces no conditions. Add at least one condition inside the consumer.");
         }
-        // [FIX] P1-1: 使用 AndNode 组合子条件，与 QuerySpec.not() 语义一致
+
         // 之前使用 OrNode 导致 NOT(A OR B)，与 QuerySpec.not() 的 NOT(A AND B) 语义不同
         BulkConditionNode combined =
             children.size() == 1 ? children.get(0) : new BulkConditionNode.AndNode(List.copyOf(children));
@@ -551,7 +553,6 @@ public abstract class AbstractBulkOperationSpec<T, SELF extends AbstractBulkOper
      * @param cb 条件构建器
      * @return 解析后的 Predicate
      */
-    @SuppressWarnings({"unchecked", "rawtypes"})
     private Predicate resolveNode(BulkConditionNode node, Root<T> root, CriteriaBuilder cb) {
         return resolveNodeWithDepth(node, root, cb, 0);
     }

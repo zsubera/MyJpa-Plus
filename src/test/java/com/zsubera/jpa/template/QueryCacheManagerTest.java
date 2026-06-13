@@ -122,7 +122,6 @@ class QueryCacheManagerTest {
         assertEquals("test", result.getValue());
     }
 
-    // [FIX] P0-2: 测试 deque 大小跟踪准确性
     @Test
     void put_shouldTrackDequeSizeCorrectly() {
         cache = new QueryCacheManager(100);
@@ -139,7 +138,6 @@ class QueryCacheManagerTest {
         assertEquals(0, cache.size());
     }
 
-    // [FIX] P0-2: 测试大量 put 不会因 O(n) size() 导致性能退化
     @Test
     void put_shouldNotDegradeWithLargeCache() {
         cache = new QueryCacheManager(10000);
@@ -154,7 +152,6 @@ class QueryCacheManagerTest {
         assertTrue(elapsed < 200_000_000L, "5000 puts took " + (elapsed / 1_000_000) + "ms, expected < 200ms");
     }
 
-    // [FIX] P1-1: 测试过期条目从 insertionOrder 清理
     @Test
     void expiredEntries_shouldNotLeakInInsertionOrder() throws InterruptedException {
         cache = new QueryCacheManager(100);
@@ -176,7 +173,6 @@ class QueryCacheManagerTest {
         assertEquals(0, cache.size());
     }
 
-    // [FIX] P1-1: 测试 evict 时 deque 大小正确递减
     @Test
     void evict_shouldDecrementDequeSize() {
         cache = new QueryCacheManager(100);
@@ -193,7 +189,6 @@ class QueryCacheManagerTest {
         assertEquals(Integer.valueOf(3), cache.get("c"));
     }
 
-    // [FIX] P1-1: 测试重复 put 同一 key 不会导致 deque 膨胀
     @Test
     void put_repeatedSameKey_shouldNotGrowDeque() {
         cache = new QueryCacheManager(100);
@@ -209,7 +204,6 @@ class QueryCacheManagerTest {
         assertEquals("value-99", cache.get("same-key"));
     }
 
-    // [FIX] P1-1: 测试混合新 key 和重复 key 时驱逐行为正确
     @Test
     void put_mixedNewAndDuplicateKeys_evictionShouldWork() {
         cache = new QueryCacheManager(100);
@@ -231,7 +225,6 @@ class QueryCacheManagerTest {
         }
     }
 
-    // [FIX] P2-5: 测试类型转换异常信息改进
     @Test
     void get_typeMismatch_shouldThrowInformativeException() {
         cache = new QueryCacheManager(100);

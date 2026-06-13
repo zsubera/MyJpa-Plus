@@ -37,7 +37,6 @@ class BatchSaveTemplateTest {
     @Autowired
     private TestEntityRepository repository;
 
-    // [FIX] 清理测试数据，避免测试间数据泄漏导致断言失败
     @BeforeEach
     void cleanUp() {
         repository.deleteAll();

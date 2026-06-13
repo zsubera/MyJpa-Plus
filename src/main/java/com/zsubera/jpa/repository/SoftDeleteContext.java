@@ -132,8 +132,6 @@ public final class SoftDeleteContext {
         IGNORE_COUNT.remove();
     }
 
-    // [FIX] P0-2: 添加异步边界支持方法，防止线程池环境下 ThreadLocal 泄漏
-
     /**
      * 在异步边界前捕获并重置状态，返回原始忽略计数用于后续恢复。
      *

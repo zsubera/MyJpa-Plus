@@ -837,7 +837,6 @@ public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> ext
      * @return 当前构建器以支持链式调用
      * @throws IllegalArgumentException 如果 field、functionName 或 params 为 null，或 functionName 包含非法字符
      */
-    @SuppressWarnings("unchecked")
     default SELF func(SFunction<E, ?> field, String functionName, Object... params) {
         if (field == null) {
             throw new IllegalArgumentException("field must not be null");

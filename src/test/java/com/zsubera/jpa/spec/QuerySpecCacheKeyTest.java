@@ -7,14 +7,14 @@ import org.junit.jupiter.api.Test;
 /**
  * QuerySpec.cacheKey() 哈希碰撞测试。
  *
- * <p>测试 P1-1 修复：减少哈希碰撞风险
+
  */
 class QuerySpecCacheKeyTest {
 
     /**
      * 测试不同查询应该有不同的缓存键。
      *
-     * <p>P1-1 修复验证：确保缓存键唯一性
+
      */
     @Test
     void differentQueriesShouldHaveDifferentCacheKeys() {

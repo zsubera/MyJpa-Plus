@@ -181,7 +181,6 @@ class MyJpaRepositoryTest {
         assertEquals(2, page.getTotalElements());
     }
 
-    // [FIX] P1-4: 测试无 @SoftDelete 实体的 findNotDeletedOne(null) 不会全表加载
     @Test
     void testFindNotDeletedOneNullSpecWithoutSoftDelete() {
         SimpleTestEntity e1 = new SimpleTestEntity();
@@ -198,14 +197,12 @@ class MyJpaRepositoryTest {
         assertEquals("first", result.get().getName());
     }
 
-    // [FIX] P1-4: 测试无 @SoftDelete 实体的 findNotDeletedOne(null) 空表返回 empty
     @Test
     void testFindNotDeletedOneNullSpecEmptyTable() {
         Optional<SimpleTestEntity> result = simpleRepository.findNotDeletedOne(null);
         assertFalse(result.isPresent(), "Should return empty for empty table");
     }
 
-    // [FIX] P1-4: 测试无 @SoftDelete 实体的 findNotDeletedOne(spec) 正常工作
     @Test
     void testFindNotDeletedOneWithSpecWithoutSoftDelete() {
         SimpleTestEntity e1 = new SimpleTestEntity();

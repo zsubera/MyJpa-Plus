@@ -125,7 +125,6 @@ public final class LambdaUtils {
      * <li>考虑使用 Caffeine 等高性能缓存库替换（需要额外依赖）</li>
      * </ul>
      */
-    @SuppressWarnings("serial")
     private static final Map<String, String> CACHE = new ConcurrentHashMap<>(DEFAULT_CACHE_SIZE);
 
     /**
@@ -202,7 +201,7 @@ public final class LambdaUtils {
             });
             SerializedLambda lambda = (SerializedLambda)writeReplace.invoke(fn);
             String key = lambda.getImplClass() + "#" + lambda.getImplMethodName();
-            // [FIX] P1-2: 驱逐检查移到缓存查找之前，确保命中路径也能触发采样驱逐
+
             // 使用采样策略（每 100 次调用检查一次），开销可忽略
             evictCacheIfNeeded();
             evictMethodCacheIfNeeded();

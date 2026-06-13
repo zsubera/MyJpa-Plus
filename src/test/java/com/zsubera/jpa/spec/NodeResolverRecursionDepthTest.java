@@ -12,7 +12,7 @@ import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
 /**
  * NodeResolver 递归深度限制测试。
  *
- * <p>测试 P1-4 修复：递归深度无限制导致 StackOverflowError
+
  */
 @DataJpaTest
 @org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabase(
@@ -34,7 +34,7 @@ class NodeResolverRecursionDepthTest {
     /**
      * 测试正常深度的条件树应该成功解析。
      *
-     * <p>P1-4 修复验证：确保正常查询不受影响
+
      */
     @Test
     void normalDepthConditionTreeShouldResolve() {

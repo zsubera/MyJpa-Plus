@@ -236,7 +236,6 @@ public class MyJpaPlusAutoConfiguration {
         return new DataSourceSlowQueryProxyPostProcessor(interceptor);
     }
 
-    @SuppressFBWarnings("EQ_UNUSUAL")
     static class DataSourceSlowQueryProxyPostProcessor implements BeanPostProcessor {
 
         private final SqlSlowQueryInterceptor interceptor;

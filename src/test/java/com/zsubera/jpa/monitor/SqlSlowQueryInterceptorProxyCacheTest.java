@@ -11,7 +11,7 @@ import org.junit.jupiter.api.Test;
 /**
  * SqlSlowQueryInterceptor 代理类缓存测试。
  *
- * <p>测试 P2-1 修复：代理类缓存无界增长
+
  */
 class SqlSlowQueryInterceptorProxyCacheTest {
 
@@ -25,7 +25,7 @@ class SqlSlowQueryInterceptorProxyCacheTest {
     /**
      * 测试代理类缓存应该有大小限制。
      *
-     * <p>P2-1 修复验证：确保缓存不会无限增长
+
      */
     @Test
     void proxyClassCacheShouldHaveSizeLimit() {

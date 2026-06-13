@@ -10,7 +10,7 @@ import org.junit.jupiter.api.Test;
 /**
  * EncryptConverter 密钥预热测试。
  *
- * <p>测试 P1-2 修复：密钥派生性能优化
+
  */
 class EncryptConverterWarmUpTest {
 
@@ -31,7 +31,7 @@ class EncryptConverterWarmUpTest {
     /**
      * 测试异步预热不会阻塞主线程。
      *
-     * <p>P1-2 修复验证：确保异步预热不阻塞
+
      */
     @Test
     void warmUpKeyCacheShouldNotBlockMainThread() {

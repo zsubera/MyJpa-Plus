@@ -31,7 +31,6 @@ final class NodeResolver {
 
     private static final Logger log = LoggerFactory.getLogger(NodeResolver.class);
 
-    // [FIX] P1-4: 添加递归深度限制，防止 StackOverflowError
     private static final int MAX_RECURSION_DEPTH = 50;
 
     private NodeResolver() {}
@@ -72,11 +71,10 @@ final class NodeResolver {
      * @param depth 当前递归深度
      * @return 生成的 Predicate，如果节点无条件则返回 null
      */
-    @SuppressWarnings({"unchecked", "rawtypes"})
     private static Predicate resolveNodeWithDepth(ConditionNode node, Path<?> path, Path<?> rootPath,
         CriteriaQuery<?> query, CriteriaBuilder cb, Map<String, Join<?, ?>> joinCache, String pathPrefix, int depth,
         java.util.Set<String> fetchPaths) {
-        // [FIX] P1-4: 检查递归深度限制
+
         if (depth > MAX_RECURSION_DEPTH) {
             throw new MyJpaPlusException("Condition node recursion depth exceeded maximum limit (" + MAX_RECURSION_DEPTH
                 + "). This may indicate a circular condition tree or excessively "
@@ -121,7 +119,6 @@ final class NodeResolver {
         throw new IllegalArgumentException("Unknown ConditionNode type: " + node.getClass().getName());
     }
 
-    @SuppressWarnings({"unchecked", "rawtypes"})
     private static Predicate resolveSimple(ConditionNode.SimpleNode node, Path<?> path, CriteriaBuilder cb) {
         return PredicateHelper.resolveSimplePredicate(path, node, cb);
     }
@@ -183,7 +180,6 @@ final class NodeResolver {
 
         List<Predicate> innerPredicates = new ArrayList<>();
 
-        // [FIX] P1-7: 自动为 JOIN 的实体应用软删除过滤
         if (!isFetch) {
             Class<?> joinEntityType = join.getJavaType();
             if (joinEntityType != null) {
@@ -298,7 +294,6 @@ final class NodeResolver {
         return node.negate ? cb.not(cb.exists(subquery)) : cb.exists(subquery);
     }
 
-    @SuppressWarnings("unchecked")
     private static Root<?> resolveCorrelationRoot(jakarta.persistence.criteria.Subquery<?> subquery, Path<?> path) {
         if (path instanceof Root<?> root) {
             return subquery.correlate(root);
@@ -307,7 +302,6 @@ final class NodeResolver {
             + path.getClass().getSimpleName() + ". Ensure EXISTS is used at the query root level.");
     }
 
-    @SuppressWarnings("unchecked")
     private static <S> Predicate resolveInSubQuery(ConditionNode.InSubQueryNode<S> node, Path<?> path,
         CriteriaQuery<?> query, CriteriaBuilder cb) {
         if (query == null) {

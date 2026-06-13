@@ -125,7 +125,6 @@ public interface BulkConditionSupport<T, SELF extends BulkConditionSupport<T, SE
 
     // ---- 忽略大小写运算符 ----
 
-    // [FIX] P0-2: null 值语义与 ConditionBuilder 保持一致——eqIgnoreCase(null) → isNull, neIgnoreCase(null) → isNotNull
     default SELF eqIgnoreCase(SFunction<T, ?> field, @Nullable String value) {
         requireField(field);
         if (value == null) {
@@ -134,7 +133,6 @@ public interface BulkConditionSupport<T, SELF extends BulkConditionSupport<T, SE
         return addCondition((root, cb) -> PredicateHelper.eqIgnoreCase(root, property(field), value, cb));
     }
 
-    // [FIX] P0-2: null 值语义与 ConditionBuilder 保持一致
     default SELF neIgnoreCase(SFunction<T, ?> field, @Nullable String value) {
         requireField(field);
         if (value == null) {

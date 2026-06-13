@@ -823,7 +823,6 @@ class UpdateSpecTest {
         assertEquals(2, count);
     }
 
-    // [FIX] P0-2: 测试 UpdateSpec.eqIgnoreCase(null) 转为 IS NULL，与 ConditionBuilder 一致
     @Test
     void testUpdateWithEqIgnoreCaseNull() {
         repository.save(newEntity("alice", 1));
@@ -842,7 +841,6 @@ class UpdateSpecTest {
         assertTrue(all.stream().anyMatch(e -> e.getStatus() == 1 && "alice".equals(e.getName())));
     }
 
-    // [FIX] P0-2: 测试 UpdateSpec.neIgnoreCase(null) 转为 IS NOT NULL，与 ConditionBuilder 一致
     @Test
     void testUpdateWithNeIgnoreCaseNull() {
         repository.save(newEntity("alice", 1));

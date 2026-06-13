@@ -97,7 +97,6 @@ public class EncryptConverter implements AttributeConverter<String, String> {
     /** 按版本缓存的密钥规范，避免重复读取环境变量和 KDF 派生。 */
     private static final ConcurrentMap<String, SecretKeySpec> KEY_CACHE = new ConcurrentHashMap<>();
 
-    // [FIX] P2-1: 移除未使用的 KEY_CACHE_SIZE AtomicInteger（死代码），
     // 实际大小检查使用 KEY_CACHE.size()
 
     /** 缓存的密钥规范最大数量，防止恶意版本前缀导致内存耗尽。 */
@@ -118,8 +117,6 @@ public class EncryptConverter implements AttributeConverter<String, String> {
     /** 密钥版本缓存刷新间隔（毫秒），默认 5 分钟。 */
     private static final long KEY_VERSION_REFRESH_INTERVAL_MS = 300_000L;
 
-    // [FIX] P1-2: 使用专用线程池替代 ForkJoinPool.commonPool()，避免 PBKDF2 CPU 密集操作阻塞公共线程池
-    // [FIX] P2-1: 添加 JVM shutdown hook，确保应用退出时线程池被正确关闭
     private static final java.util.concurrent.ExecutorService WARM_UP_EXECUTOR =
         java.util.concurrent.Executors.newFixedThreadPool(1, r -> {
             Thread t = new Thread(r, "encrypt-key-warmup");
@@ -168,8 +165,6 @@ public class EncryptConverter implements AttributeConverter<String, String> {
         devSaltWarningLogged = false;
     }
 
-    // [FIX] P1-2: 添加异步预热密钥缓存方法，减少首次加密/解密操作的延迟
-
     /**
      * 异步预热密钥缓存。在应用启动后调用此方法可避免首次请求的延迟。
      *
@@ -194,7 +189,7 @@ public class EncryptConverter implements AttributeConverter<String, String> {
      * 此方法在后台线程中执行密钥派生，不阻塞主线程。如果密钥未配置，会记录警告日志。
      */
     public static void warmUpKeyCache() {
-        // [FIX] P1-2: 使用专用线程池而非 ForkJoinPool.commonPool()，避免 PBKDF2 阻塞公共线程池
+
         java.util.concurrent.CompletableFuture.runAsync(() -> {
             try {
                 String version = getKeyVersion();

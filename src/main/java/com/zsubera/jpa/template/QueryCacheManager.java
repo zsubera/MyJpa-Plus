@@ -89,12 +89,10 @@ public class QueryCacheManager {
     private final java.util.concurrent.ConcurrentLinkedDeque<String> insertionOrder =
         new java.util.concurrent.ConcurrentLinkedDeque<>();
 
-    // [FIX] P0-2: 使用 AtomicInteger 跟踪 deque 大小，避免 ConcurrentLinkedDeque.size() 的 O(n) 开销
     /** deque 中的条目数量（包括可能不在 store 中的陈旧条目）。 */
     private final java.util.concurrent.atomic.AtomicInteger dequeSize =
         new java.util.concurrent.atomic.AtomicInteger(0);
 
-    // [FIX] P0-1: 添加驱逐锁，确保多线程并发 put 时驱逐操作的原子性
     /** 驱逐操作锁，确保只有一个线程执行驱逐，避免重复扫描和内存泄漏 */
     private final ReentrantLock evictionLock = new ReentrantLock();
 
@@ -168,7 +166,7 @@ public class QueryCacheManager {
             // 原子移除：仅当条目确实是当前过期条目时才移除，避免竞态条件误删新条目
             boolean removed = store.remove(key, result);
             if (removed) {
-                // [FIX] P1-1: 同步清理 insertionOrder 中的陈旧条目，防止 deque 无限增长
+
                 if (insertionOrder.remove(key)) {
                     dequeSize.decrementAndGet();
                 }
@@ -179,7 +177,7 @@ public class QueryCacheManager {
         try {
             return (T)result.getValue();
         } catch (ClassCastException e) {
-            // [FIX] P2-5: 改进类型转换异常信息
+
             throw new ClassCastException(String.format(
                 "Cache type mismatch for key '%s'. Cached type: %s. "
                     + "Ensure the same key is not used for different value types.",
@@ -212,14 +210,14 @@ public class QueryCacheManager {
                 key.substring(0, 64));
             return false;
         }
-        // [FIX] P0-2: 仅使用采样驱逐策略，移除 else-if 分支。
+
         // 原代码在缓存满时每次 put 都调用 evictIfNeeded()，绕过了采样策略，
         // 导致高写入场景下每次 put 都执行缓存扫描。采样策略（每 10 次检查一次）
         // 结合 post-put 兜底循环已足够保证缓存有界。
         if (putCounter.incrementAndGet() % EVICTION_CHECK_INTERVAL == 0) {
             evictIfNeeded();
         }
-        // [FIX] P1-1: 仅当 key 是新写入（非更新）时才追加到 insertionOrder，避免重复键累积
+
         CachedQueryResult<?> oldValue = store.put(key, new CachedQueryResult<>(value, ttlSeconds));
         if (oldValue == null) {
             // 新 key：追加到 deque 并更新计数
@@ -227,11 +225,8 @@ public class QueryCacheManager {
             dequeSize.incrementAndGet();
         }
         // 更新已有 key 时不需要修改 insertionOrder——旧条目会在 deque 漂移清理时被跳过
-        // [FIX] P0-2: 使用 dequeSize 计数器替代 insertionOrder.size()，避免 O(n) 遍历
+
         // 清理 deque 中不在 store 中的陈旧条目
-        // [FIX] P2-1: 降低漂移容忍阈值从 100 到 maxEntries/10（最少 10），减少并发下 deque 无限增长风险
-        // [FIX] 修复漂移清理逻辑：遇到有效条目时跳过并继续检查后续条目，
-        // 而非直接 break，防止 deque 中间/尾部的陈旧条目长期积累导致内存泄漏
         int driftTolerance = Math.max(10, maxEntries / 10);
         int driftCleaned = 0;
         int maxDriftCleanAttempts = Math.max(16, driftTolerance * 2);
@@ -248,7 +243,6 @@ public class QueryCacheManager {
                 break;
             }
         }
-        // [FIX] 并发安全：tryLock 可能导致多线程同时跳过驱逐，此处做无锁兜底驱逐
         // ConcurrentLinkedDeque.pollFirst() 和 ConcurrentHashMap.remove() 都是线程安全的，
         // 最多尝试 maxEntries 次以保证有界（避免 deque 中大量陈旧条目导致长时间循环）
         int attempts = 0;
@@ -272,11 +266,11 @@ public class QueryCacheManager {
      * 清除过期条目，再按容量限制驱逐最早条目。在 put() 之前调用以保证线程安全。
      *
      * <p>
-     * [FIX] P0-1: 使用 tryLock 确保只有一个线程执行驱逐，避免多线程并发时的重复扫描和内存泄漏。
+
      * 如果另一个线程正在执行驱逐，当前线程直接返回，因为驱逐操作是幂等的。
      */
     private void evictIfNeeded() {
-        // [FIX] P0-1: 使用 tryLock 避免阻塞，如果另一个线程正在驱逐则直接返回
+
         if (!evictionLock.tryLock()) {
             return;
         }

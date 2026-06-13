@@ -8,7 +8,7 @@ import org.junit.jupiter.api.Test;
 /**
  * InClauseBuilder 配置验证测试。
  *
- * <p>测试 P1-3 修复：配置验证不一致
+
  */
 class InClauseBuilderConfigTest {
 
@@ -23,7 +23,7 @@ class InClauseBuilderConfigTest {
     /**
      * 测试有效配置应该被接受。
      *
-     * <p>P1-3 修复验证：确保配置验证正确
+
      */
     @Test
     void validConfigShouldBeAccepted() {
@@ -45,7 +45,7 @@ class InClauseBuilderConfigTest {
     /**
      * 测试系统属性配置 hardLimit < maxSize 应该自动调整。
      *
-     * <p>P1-3 修复验证：确保自动调整 hardLimit
+
      */
     @Test
     void systemPropertyHardLimitLessThanMaxSizeShouldBeAdjusted() {

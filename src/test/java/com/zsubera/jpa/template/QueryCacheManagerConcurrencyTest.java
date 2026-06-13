@@ -9,14 +9,14 @@ import org.junit.jupiter.api.Test;
 /**
  * QueryCacheManager 并发安全测试。
  *
- * <p>测试 P0-1 修复：并发驱逐竞态条件
+
  */
 class QueryCacheManagerConcurrencyTest {
 
     /**
      * 测试并发 put 不会导致内存泄漏或缓存大小超过限制。
      *
-     * <p>P0-1 修复验证：使用 ReentrantLock 确保驱逐操作的原子性
+
      */
     @Test
     void concurrentPutShouldNotCauseMemoryLeak() throws InterruptedException {
