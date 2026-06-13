@@ -111,22 +111,16 @@ public final class SoftDeleteHelper {
         if (identifier == null || identifier.isEmpty()) {
             throw new IllegalArgumentException("Identifier must not be null or empty");
         }
-        // [FIX] P1-3: 按点号分段校验并逐段转义，支持 schema.table 和 catalog.schema.table 格式
-        // 例如: "myschema.mytable" → "myschema"."mytable"（而非整体 "myschema.mytable"）
+        // [FIX] P1-3: 按点号分段校验，支持 schema.table 和 catalog.schema.table 格式
+        // 仅验证不转义——标识符已通过正则校验确保安全，避免 MySQL/PostgreSQL 引号风格差异
         String[] parts = identifier.split("\\.");
-        StringBuilder escaped = new StringBuilder();
-        for (int i = 0; i < parts.length; i++) {
-            String part = parts[i];
+        for (String part : parts) {
             if (!SAFE_IDENTIFIER_PART_PATTERN.matcher(part).matches()) {
                 throw new IllegalArgumentException("Invalid SQL identifier: '" + identifier
                     + "'. Each part must contain only alphanumeric characters and underscores.");
             }
-            if (i > 0) {
-                escaped.append('.');
-            }
-            escaped.append('"').append(part).append('"');
         }
-        return escaped.toString();
+        return identifier;
     }
 
     /**
@@ -237,8 +231,8 @@ public final class SoftDeleteHelper {
             throw new IllegalArgumentException("Cannot resolve @SoftDelete field: " + fieldName);
         }
         SoftDelete annotation = field.getAnnotation(SoftDelete.class);
-        String escapedTable = validateTableName(tableName);
-        String escapedColumn = validateTableName(columnName);
+        String escapedTable = escapeIdentifier(tableName);
+        String escapedColumn = escapeIdentifier(columnName);
         ResolvedDeletedValue resolved = resolveDeletedValue(entityClass, field, annotation);
         int updated;
         if (resolved.booleanField()) {
@@ -316,9 +310,9 @@ public final class SoftDeleteHelper {
             throw new IllegalArgumentException("Cannot resolve @SoftDelete field: " + fieldName);
         }
         SoftDelete annotation = field.getAnnotation(SoftDelete.class);
-        String escapedTable = validateTableName(tableName);
-        String escapedColumn = validateTableName(columnName);
-        String escapedIdColumn = validateTableName(idFieldName);
+        String escapedTable = escapeIdentifier(tableName);
+        String escapedColumn = escapeIdentifier(columnName);
+        String escapedIdColumn = escapeIdentifier(idFieldName);
         ResolvedDeletedValue resolved = resolveDeletedValue(entityClass, field, annotation);
         // 使用命名参数替代位置参数以避免某些 JPA 实现中的索引冲突
         String setParamName = "deletedValue";
@@ -685,9 +679,18 @@ public final class SoftDeleteHelper {
             Class<?> current = entityClass;
             while (current != null && current != Object.class) {
                 try {
-                    return current.getDeclaredField(fieldName);
+                    Field f = current.getDeclaredField(fieldName);
+                    f.setAccessible(true);
+                    return f;
                 } catch (NoSuchFieldException e) {
                     current = current.getSuperclass();
+                } catch (SecurityException e) {
+                    // setAccessible 失败时仍返回 Field 对象，调用方处理异常
+                    try {
+                        return current.getDeclaredField(fieldName);
+                    } catch (NoSuchFieldException ex) {
+                        current = current.getSuperclass();
+                    }
                 }
             }
             return null;
@@ -717,15 +720,6 @@ public final class SoftDeleteHelper {
         Field field = getField(entityClass, fieldName);
         if (field == null) {
             return false;
-        }
-        try {
-            field.setAccessible(true);
-        } catch (SecurityException e) {
-            log.warn(
-                "Cannot set accessible on field '{}' in {}. " + "If using Java 17+ module system, add JVM argument: "
-                    + "--add-opens java.base/java.lang.reflect=ALL-UNNAMED",
-                field.getName(), entityClass.getSimpleName());
-            throw new MyJpaPlusException("Cannot access soft delete field '" + fieldName + "'", e);
         }
         try {
             Object value = field.get(entity);

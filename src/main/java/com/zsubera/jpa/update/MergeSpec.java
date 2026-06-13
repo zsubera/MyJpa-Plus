@@ -146,8 +146,24 @@ public class MergeSpec<T> {
         if (entity == null) {
             throw new IllegalStateException("Entity must be specified via withEntity() before executing");
         }
+        return executeWith(em, this.entity);
+    }
+
+    /**
+     * 使用指定实体执行 UPSERT，不修改实例的 {@code entity} 字段。
+     * 供 {@link #executeBatch} 内部使用，避免状态污染。
+     */
+    private int executeWith(EntityManager em, T entityToMerge) {
         String dialect = DialectDetector.detectDialect(em);
-        SqlWithParams sqlWithParams = buildSqlFor(em, this.entity, dialect);
+        return executeWith(em, entityToMerge, dialect);
+    }
+
+    /**
+     * 使用指定实体和缓存的方言执行 UPSERT。
+     * 供 {@link #executeBatch} 批量循环内部使用，避免重复检测方言。
+     */
+    private int executeWith(EntityManager em, T entityToMerge, String dialect) {
+        SqlWithParams sqlWithParams = buildSqlFor(em, entityToMerge, dialect);
         if (log.isTraceEnabled()) {
             log.trace("Executing UPSERT SQL: {}", sqlWithParams.sql());
         }
@@ -204,6 +220,7 @@ public class MergeSpec<T> {
                 try {
                     tx.rollback();
                 } catch (Exception rollbackEx) {
+                    log.error("Transaction rollback failed after merge failure", rollbackEx);
                     e.addSuppressed(rollbackEx);
                 }
             }
@@ -213,6 +230,7 @@ public class MergeSpec<T> {
                 try {
                     tx.rollback();
                 } catch (Exception rollbackEx) {
+                    log.error("Transaction rollback failed after merge failure", rollbackEx);
                     e.addSuppressed(rollbackEx);
                 }
             }
@@ -249,14 +267,18 @@ public class MergeSpec<T> {
         if (batchSize <= 0) {
             throw new IllegalArgumentException("batchSize must be positive");
         }
+        String cachedDialect = DialectDetector.detectDialect(em);
         int total = 0;
         for (int i = 0; i < entities.size(); i++) {
+            T entity = entities.get(i);
+            if (entity == null) {
+                throw new IllegalArgumentException("entities[" + i + "] must not be null");
+            }
             if (i > 0 && i % batchSize == 0) {
                 em.flush();
                 em.clear();
             }
-            this.entity = entities.get(i);
-            total += execute(em);
+            total += executeWith(em, entity, cachedDialect);
         }
         return total;
     }
@@ -298,6 +320,7 @@ public class MergeSpec<T> {
                 try {
                     tx.rollback();
                 } catch (Exception rollbackEx) {
+                    log.error("Transaction rollback failed after batch merge failure", rollbackEx);
                     e.addSuppressed(rollbackEx);
                 }
             }
@@ -307,6 +330,7 @@ public class MergeSpec<T> {
                 try {
                     tx.rollback();
                 } catch (Exception rollbackEx) {
+                    log.error("Transaction rollback failed after batch merge failure", rollbackEx);
                     e.addSuppressed(rollbackEx);
                 }
             }
@@ -333,10 +357,10 @@ public class MergeSpec<T> {
             throw new IllegalArgumentException("batchSize must be positive");
         }
         if (TransactionSynchronizationManager.isActualTransactionActive()) {
-            log.warn("executeBatchInSeparateTransactions called within an active Spring transaction. "
-                + "All operations will execute within the existing transaction. "
-                + "Use executeBatch() for Spring-managed transactions.");
-            return executeBatch(entities, em, batchSize);
+            throw new MyJpaPlusException(
+                "executeBatchInSeparateTransactions cannot be called within an active @Transactional method. "
+                    + "Use executeBatch() to run within the existing transaction, "
+                    + "or call from a non-transactional context for true batch isolation.");
         }
         int total = 0;
         int count = 0;
@@ -353,6 +377,7 @@ public class MergeSpec<T> {
                         try {
                             tx.rollback();
                         } catch (Exception rollbackEx) {
+                            log.error("Transaction rollback failed after batch commit failure", rollbackEx);
                             commitEx.addSuppressed(rollbackEx);
                         }
                         throw commitEx;
@@ -387,6 +412,7 @@ public class MergeSpec<T> {
                     try {
                         tx.rollback();
                     } catch (Exception rollbackEx) {
+                        log.error("Transaction rollback failed after batch UPSERT failure", rollbackEx);
                         e.addSuppressed(rollbackEx);
                     }
                 }
@@ -401,6 +427,7 @@ public class MergeSpec<T> {
                 try {
                     tx.rollback();
                 } catch (Exception rollbackEx) {
+                    log.error("Transaction rollback failed after final batch commit failure", rollbackEx);
                     e.addSuppressed(rollbackEx);
                 }
                 throw e;

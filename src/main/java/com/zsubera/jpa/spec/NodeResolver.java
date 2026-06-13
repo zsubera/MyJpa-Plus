@@ -50,7 +50,13 @@ final class NodeResolver {
      */
     static Predicate resolveNode(ConditionNode node, Path<?> path, Path<?> rootPath, CriteriaQuery<?> query,
         CriteriaBuilder cb, Map<String, Join<?, ?>> joinCache, String pathPrefix) {
-        return resolveNodeWithDepth(node, path, rootPath, query, cb, joinCache, pathPrefix, 0);
+        return resolveNodeWithDepth(node, path, rootPath, query, cb, joinCache, pathPrefix, 0,
+            java.util.Collections.newSetFromMap(new java.util.HashMap<>()));
+    }
+
+    static Predicate resolveNode(ConditionNode node, Path<?> path, Path<?> rootPath, CriteriaQuery<?> query,
+        CriteriaBuilder cb, Map<String, Join<?, ?>> joinCache, String pathPrefix, java.util.Set<String> fetchPaths) {
+        return resolveNodeWithDepth(node, path, rootPath, query, cb, joinCache, pathPrefix, 0, fetchPaths);
     }
 
     /**
@@ -68,7 +74,8 @@ final class NodeResolver {
      */
     @SuppressWarnings({"unchecked", "rawtypes"})
     private static Predicate resolveNodeWithDepth(ConditionNode node, Path<?> path, Path<?> rootPath,
-        CriteriaQuery<?> query, CriteriaBuilder cb, Map<String, Join<?, ?>> joinCache, String pathPrefix, int depth) {
+        CriteriaQuery<?> query, CriteriaBuilder cb, Map<String, Join<?, ?>> joinCache, String pathPrefix, int depth,
+        java.util.Set<String> fetchPaths) {
         // [FIX] P1-4: 检查递归深度限制
         if (depth > MAX_RECURSION_DEPTH) {
             throw new MyJpaPlusException("Condition node recursion depth exceeded maximum limit (" + MAX_RECURSION_DEPTH
@@ -80,13 +87,13 @@ final class NodeResolver {
             return resolveSimple(n, path, cb);
         }
         if (node instanceof ConditionNode.JoinNode n) {
-            return resolveJoin(n, path, rootPath, query, cb, joinCache, pathPrefix, depth);
+            return resolveJoin(n, path, rootPath, query, cb, joinCache, pathPrefix, depth, fetchPaths);
         }
         if (node instanceof ConditionNode.OrNode n) {
-            return resolveOr(n, path, rootPath, query, cb, joinCache, pathPrefix, depth);
+            return resolveOr(n, path, rootPath, query, cb, joinCache, pathPrefix, depth, fetchPaths);
         }
         if (node instanceof ConditionNode.AndNode n) {
-            return resolveAnd(n, path, rootPath, query, cb, joinCache, pathPrefix, depth);
+            return resolveAnd(n, path, rootPath, query, cb, joinCache, pathPrefix, depth, fetchPaths);
         }
         if (node instanceof ConditionNode.MultiLikeNode n) {
             return resolveMultiLike(n, path, cb);
@@ -105,7 +112,7 @@ final class NodeResolver {
         }
         if (node instanceof ConditionNode.NegateNode n) {
             Predicate inner =
-                resolveNodeWithDepth(n.inner, path, rootPath, query, cb, joinCache, pathPrefix, depth + 1);
+                resolveNodeWithDepth(n.inner, path, rootPath, query, cb, joinCache, pathPrefix, depth + 1, fetchPaths);
             return inner != null ? cb.not(inner) : null;
         }
         if (node instanceof ConditionNode.FuncNode n) {
@@ -136,7 +143,8 @@ final class NodeResolver {
 
     @SuppressWarnings({"unchecked", "rawtypes"})
     private static Predicate resolveJoin(ConditionNode.JoinNode node, Path<?> path, Path<?> rootPath,
-        CriteriaQuery<?> query, CriteriaBuilder cb, Map<String, Join<?, ?>> joinCache, String pathPrefix, int depth) {
+        CriteriaQuery<?> query, CriteriaBuilder cb, Map<String, Join<?, ?>> joinCache, String pathPrefix, int depth,
+        java.util.Set<String> fetchPaths) {
         String fullPath = (pathPrefix != null && !pathPrefix.isEmpty() ? pathPrefix + "." : "") + node.fieldName;
 
         boolean isFetch =
@@ -147,14 +155,12 @@ final class NodeResolver {
 
         Join<?, ?> join = joinCache.get(fullPath);
         if (join != null) {
-            boolean existingIsFetch = join instanceof jakarta.persistence.criteria.Fetch;
+            boolean existingIsFetch = fetchPaths.contains(fullPath);
             if (!isFetch && existingIsFetch) {
-                // FETCH → 非 FETCH：fetch 是超集，复用安全，但记录警告以帮助调试
                 log.warn("Join path '{}' reusing existing fetch join (requested non-fetch). "
                     + "This means conditions will be applied to a fetch join, which may change query semantics "
                     + "(eager loading instead of lazy).", fullPath);
             } else if (isFetch && !existingIsFetch) {
-                // 非 FETCH → FETCH：用户明确要求急加载但缓存中是普通 join，会导致 N+1
                 throw new IllegalStateException("Join path '" + fullPath
                     + "' was previously created as non-fetch join, but now requested as fetch join. "
                     + "This would cause eager loading to be silently ignored. "
@@ -168,6 +174,7 @@ final class NodeResolver {
             }
             if (isFetch) {
                 join = (Join<?, ?>)((From<?, ?>)path).fetch(node.fieldName, jt);
+                fetchPaths.add(fullPath);
             } else {
                 join = ((From<?, ?>)path).join(node.fieldName, jt);
             }
@@ -176,7 +183,8 @@ final class NodeResolver {
 
         List<Predicate> innerPredicates = new ArrayList<>();
         for (ConditionNode inner : node.innerConditions) {
-            Predicate p = resolveNodeWithDepth(inner, join, rootPath, query, cb, joinCache, fullPath, depth + 1);
+            Predicate p =
+                resolveNodeWithDepth(inner, join, rootPath, query, cb, joinCache, fullPath, depth + 1, fetchPaths);
             if (p != null) {
                 innerPredicates.add(p);
             }
@@ -185,10 +193,12 @@ final class NodeResolver {
     }
 
     private static Predicate resolveOr(ConditionNode.OrNode node, Path<?> path, Path<?> rootPath,
-        CriteriaQuery<?> query, CriteriaBuilder cb, Map<String, Join<?, ?>> joinCache, String pathPrefix, int depth) {
+        CriteriaQuery<?> query, CriteriaBuilder cb, Map<String, Join<?, ?>> joinCache, String pathPrefix, int depth,
+        java.util.Set<String> fetchPaths) {
         List<Predicate> childPredicates = new ArrayList<>();
         for (ConditionNode child : node.nodes) {
-            Predicate p = resolveNodeWithDepth(child, path, rootPath, query, cb, joinCache, pathPrefix, depth + 1);
+            Predicate p =
+                resolveNodeWithDepth(child, path, rootPath, query, cb, joinCache, pathPrefix, depth + 1, fetchPaths);
             if (p != null) {
                 childPredicates.add(p);
             }
@@ -203,10 +213,12 @@ final class NodeResolver {
     }
 
     private static Predicate resolveAnd(ConditionNode.AndNode node, Path<?> path, Path<?> rootPath,
-        CriteriaQuery<?> query, CriteriaBuilder cb, Map<String, Join<?, ?>> joinCache, String pathPrefix, int depth) {
+        CriteriaQuery<?> query, CriteriaBuilder cb, Map<String, Join<?, ?>> joinCache, String pathPrefix, int depth,
+        java.util.Set<String> fetchPaths) {
         List<Predicate> childPredicates = new ArrayList<>();
         for (ConditionNode child : node.nodes) {
-            Predicate p = resolveNodeWithDepth(child, path, rootPath, query, cb, joinCache, pathPrefix, depth + 1);
+            Predicate p =
+                resolveNodeWithDepth(child, path, rootPath, query, cb, joinCache, pathPrefix, depth + 1, fetchPaths);
             if (p != null) {
                 childPredicates.add(p);
             }

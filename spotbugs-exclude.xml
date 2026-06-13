@@ -91,4 +91,20 @@
         <Class name="com.zsubera.jpa.template.MyJpaTemplate$KeysetPage"/>
         <Bug pattern="EI_EXPOSE_REP2"/>
     </Match>
+
+    <!-- Exclude ST_WRITE_TO_STATIC_FROM_INSTANCE_METHOD for EncryptConverter -->
+    <!-- devSaltWarningLogged is a static volatile flag written from convertToDatabaseColumn()
+         to ensure the one-time warning is logged exactly once across all instances. -->
+    <Match>
+        <Class name="com.zsubera.jpa.converter.EncryptConverter"/>
+        <Bug pattern="ST_WRITE_TO_STATIC_FROM_INSTANCE_METHOD"/>
+    </Match>
+
+    <!-- Exclude JLM_JSR166_UTILCONCURRENT_MONITORENTER for SqlSlowQueryInterceptor -->
+    <!-- Synchronization on PROXY_CLASS_CACHE (ConcurrentMap) is intentional: double-checked locking
+         for periodic cache eviction. The synchronized block only triggers when cache exceeds threshold. -->
+    <Match>
+        <Class name="com.zsubera.jpa.monitor.SqlSlowQueryInterceptor$DataSourceProxyHandler"/>
+        <Bug pattern="JLM_JSR166_UTILCONCURRENT_MONITORENTER"/>
+    </Match>
 </FindBugsFilter>

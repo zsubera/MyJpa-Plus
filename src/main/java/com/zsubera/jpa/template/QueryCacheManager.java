@@ -229,11 +229,21 @@ public class QueryCacheManager {
         // 更新已有 key 时不需要修改 insertionOrder——旧条目会在 deque 漂移清理时被跳过
         // [FIX] P0-2: 使用 dequeSize 计数器替代 insertionOrder.size()，避免 O(n) 遍历
         // 清理 deque 中不在 store 中的陈旧条目
-        while (dequeSize.get() > store.size() + 100) {
+        // [FIX] P2-1: 降低漂移容忍阈值从 100 到 maxEntries/10（最少 10），减少并发下 deque 无限增长风险
+        // [FIX] 修复漂移清理逻辑：遇到有效条目时跳过并继续检查后续条目，
+        // 而非直接 break，防止 deque 中间/尾部的陈旧条目长期积累导致内存泄漏
+        int driftTolerance = Math.max(10, maxEntries / 10);
+        int driftCleaned = 0;
+        int maxDriftCleanAttempts = Math.max(16, driftTolerance * 2);
+        while (dequeSize.get() > store.size() + driftTolerance && driftCleaned < maxDriftCleanAttempts) {
             String oldest = insertionOrder.peekFirst();
-            if (oldest != null && !store.containsKey(oldest)) {
+            if (oldest == null) {
+                break;
+            }
+            if (!store.containsKey(oldest)) {
                 insertionOrder.pollFirst();
                 dequeSize.decrementAndGet();
+                driftCleaned++;
             } else {
                 break;
             }
@@ -340,6 +350,10 @@ public class QueryCacheManager {
 
     /**
      * 清除所有缓存条目。
+     *
+     * <p>
+     * <strong>并发说明：</strong>此方法非原子操作。与并发 {@link #put(String, Object, long)} 之间存在窗口期，
+     * 可能导致 deque 与 store 之间的漂移。漂移是自愈的——后续 {@link #put} 调用中的 drift cleanup 会修复。
      */
     public void clear() {
         store.clear();

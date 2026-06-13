@@ -142,11 +142,11 @@ public sealed interface ConditionNode permits ConditionNode.SimpleNode, Conditio
     final class OrNode implements ConditionNode {
         final List<ConditionNode> nodes = new ArrayList<>();
 
-        /** 返回 OR 组中的子条件列表。 */
+        /** 返回 OR 组中的子条件列表（不可变视图）。 */
         @edu.umd.cs.findbugs.annotations.SuppressFBWarnings(value = "EI_EXPOSE_REP",
-            justification = "Nodes list is intentionally exposed for condition tree traversal by QuerySpec and ProjectionSpec")
+            justification = "Nodes list is exposed as unmodifiable view for condition tree traversal by QuerySpec and ProjectionSpec")
         public List<ConditionNode> nodes() {
-            return nodes;
+            return java.util.Collections.unmodifiableList(nodes);
         }
 
         @Override
@@ -159,11 +159,11 @@ public sealed interface ConditionNode permits ConditionNode.SimpleNode, Conditio
     final class AndNode implements ConditionNode {
         final List<ConditionNode> nodes = new ArrayList<>();
 
-        /** 返回 AND 组中的子条件列表。 */
+        /** 返回 AND 组中的子条件列表（不可变视图）。 */
         @edu.umd.cs.findbugs.annotations.SuppressFBWarnings(value = "EI_EXPOSE_REP",
-            justification = "Nodes list is intentionally exposed for condition tree traversal by QuerySpec and ProjectionSpec")
+            justification = "Nodes list is exposed as unmodifiable view for condition tree traversal by QuerySpec and ProjectionSpec")
         public List<ConditionNode> nodes() {
-            return nodes;
+            return java.util.Collections.unmodifiableList(nodes);
         }
 
         @Override
@@ -393,7 +393,7 @@ public sealed interface ConditionNode permits ConditionNode.SimpleNode, Conditio
                 throw new IllegalArgumentException("params must not be null");
             }
             // 验证函数名是否在白名单中，防止 SQL 注入，同时确保是布尔函数
-            String upperName = functionName.toUpperCase();
+            String upperName = functionName.toUpperCase(java.util.Locale.ROOT);
             if (!ConditionBuilder.SAFE_FUNCTION_NAMES.contains(upperName)) {
                 String msg = "Function not in whitelist: '" + functionName + "'. "
                     + "Only whitelisted functions are allowed. Contact administrator to add new functions.";

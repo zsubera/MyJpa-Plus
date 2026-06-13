@@ -124,7 +124,8 @@ public class AuditEntityListener implements ApplicationContextAware {
                         userProvider = ctx.getBean(AuditUserProvider.class);
                         providerLookupAttempted = true;
                     } catch (Exception e) {
-                        // 不缓存查找失败 — 允许后续重试（如 Bean 延迟初始化场景）
+                        providerLookupAttempted = true;
+                        userProvider = NO_PROVIDER_SENTINEL;
                         log.debug("No AuditUserProvider bean found, createdBy/updatedBy will not be auto-filled");
                     }
                 }

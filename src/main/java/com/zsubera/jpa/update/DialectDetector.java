@@ -184,7 +184,15 @@ final class DialectDetector {
                 jdbcUrl = emf.getProperties().get("hibernate.connection.url");
             }
             if (jdbcUrl != null) {
-                return jdbcUrl.toString();
+                String url = jdbcUrl.toString();
+                Object user = emf.getProperties().get("jakarta.persistence.jdbc.user");
+                if (user == null) {
+                    user = emf.getProperties().get("hibernate.connection.username");
+                }
+                if (user != null) {
+                    return url + "#" + user;
+                }
+                return url;
             }
         } catch (Exception ignored) {
             // 回退到基于 identity 的键

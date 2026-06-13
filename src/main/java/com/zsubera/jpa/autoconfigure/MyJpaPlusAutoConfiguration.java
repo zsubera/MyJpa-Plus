@@ -171,7 +171,7 @@ public class MyJpaPlusAutoConfiguration {
             template.setDeepPaginationOffsetLimit(limit);
         }
         int timeout = properties.getQuery().getDefaultTimeoutSeconds();
-        if (timeout > 0) {
+        if (timeout > 0 || timeout == -1) {
             template.setDefaultTimeoutSeconds(timeout);
         }
         return template;
@@ -242,6 +242,8 @@ public class MyJpaPlusAutoConfiguration {
         LambdaUtils.shutdown();
         com.zsubera.jpa.converter.EncryptConverter.clearCacheForTesting();
         com.zsubera.jpa.softdelete.SoftDeleteHelper.shutdown();
+        SoftDeleteJpaRepository.clearThreadLocal();
+        com.zsubera.jpa.repository.SoftDeleteContext.reset();
         log.info("MyJpa-Plus context closed, caches cleaned");
     }
 }

@@ -377,15 +377,12 @@ class MergeSpecTest {
     }
 
     @Test
-    void testMergeBatchInSeparateTransactionsDelegatesToBatch() {
+    void testMergeBatchInSeparateTransactionsThrowsInActiveTransaction() {
         List<TestEntity> entities = List.of(newEntity("sep-tx-1", 1), newEntity("sep-tx-2", 2));
 
         MergeSpec<TestEntity> spec = new MergeSpec<>(TestEntity.class).onConflict(TestEntity::getName);
-        int count = spec.executeBatchInSeparateTransactions(entities, em, 2);
-        em.flush();
-
-        assertEquals(2, count);
-        assertEquals(2, repository.count());
+        assertThrows(com.zsubera.jpa.exception.MyJpaPlusException.class,
+            () -> spec.executeBatchInSeparateTransactions(entities, em, 2));
     }
 
     @Test

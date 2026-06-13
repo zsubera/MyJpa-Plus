@@ -2,12 +2,16 @@ package com.zsubera.jpa.repository;
 
 import com.zsubera.jpa.softdelete.SoftDeleteHelper;
 import com.zsubera.jpa.update.AuditUtils;
+import com.zsubera.jpa.update.DeleteSpec;
+import com.zsubera.jpa.update.MergeSpec;
+import com.zsubera.jpa.update.UpdateSpec;
 import com.zsubera.jpa.util.EntityClassResolver;
 import com.zsubera.jpa.util.QueryTimeoutHelper;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import jakarta.persistence.EntityManager;
 import java.util.List;
 import java.util.Optional;
+import java.util.function.Consumer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.Page;
@@ -42,7 +46,7 @@ import org.springframework.lang.Nullable;
  * @see com.zsubera.jpa.annotation.IgnoreSoftDelete
  */
 @NoRepositoryBean
-public class SoftDeleteJpaRepository<T, ID> extends SimpleJpaRepository<T, ID> {
+public class SoftDeleteJpaRepository<T, ID> extends SimpleJpaRepository<T, ID> implements MyJpaRepository<T, ID> {
 
     private static final Logger log = LoggerFactory.getLogger(SoftDeleteJpaRepository.class);
 
@@ -423,9 +427,10 @@ public class SoftDeleteJpaRepository<T, ID> extends SimpleJpaRepository<T, ID> {
         if (entity == null) {
             throw new IllegalArgumentException("Entity must not be null");
         }
-        if (shouldApplySoftDeleteFilter() && SoftDeleteHelper.findSoftDeleteField(domainClass) != null) {
+        String softField = SoftDeleteHelper.findSoftDeleteField(domainClass);
+        if (shouldApplySoftDeleteFilter() && softField != null) {
             SoftDeleteHelper.softDeleteByIds(entityManager, domainClass, List.of(entityInformation.getId(entity)));
-        } else if (shouldBlockHardDelete() && SoftDeleteHelper.findSoftDeleteField(domainClass) != null) {
+        } else if (shouldBlockHardDelete() && softField != null) {
             throw new IllegalStateException("Hard DELETE on " + domainClass.getSimpleName()
                 + " entity is blocked because it has a @SoftDelete field. "
                 + "Set SoftDeleteJpaRepository.setBlockUnconditionalDelete(false) to allow this operation.");
@@ -506,6 +511,10 @@ public class SoftDeleteJpaRepository<T, ID> extends SimpleJpaRepository<T, ID> {
     @Override
     public void deleteAll() {
         if (shouldApplySoftDeleteFilter()) {
+            if (log.isWarnEnabled()) {
+                log.warn("AUDIT: Executing soft DELETE ALL on {} (autoFilter enabled). Call stack: {}",
+                    domainClass.getSimpleName(), AuditUtils.getCallStack());
+            }
             SoftDeleteHelper.softDeleteAll(entityManager, domainClass, true);
         } else if (shouldBlockHardDelete()) {
             throw new IllegalStateException("Unconditional hard DELETE ALL on " + domainClass.getSimpleName()
@@ -587,6 +596,10 @@ public class SoftDeleteJpaRepository<T, ID> extends SimpleJpaRepository<T, ID> {
     @Override
     public void deleteAllInBatch() {
         if (shouldApplySoftDeleteFilter()) {
+            if (log.isWarnEnabled()) {
+                log.warn("AUDIT: Executing soft DELETE ALL IN BATCH on {} (autoFilter enabled). Call stack: {}",
+                    domainClass.getSimpleName(), AuditUtils.getCallStack());
+            }
             SoftDeleteHelper.softDeleteAll(entityManager, domainClass, true);
         } else if (shouldBlockHardDelete()) {
             throw new IllegalStateException("Unconditional hard DELETE ALL IN BATCH on " + domainClass.getSimpleName()
@@ -595,5 +608,54 @@ public class SoftDeleteJpaRepository<T, ID> extends SimpleJpaRepository<T, ID> {
         } else {
             super.deleteAllInBatch();
         }
+    }
+
+    // ---- 批量操作 Lambda 方法 ----
+
+    @Override
+    public int update(Consumer<UpdateSpec<T>> config) {
+        UpdateSpec<T> spec = new UpdateSpec<>(domainClass);
+        config.accept(spec);
+        return spec.executeInTransaction(entityManager);
+    }
+
+    @Override
+    public int delete(Consumer<DeleteSpec<T>> config) {
+        DeleteSpec<T> spec = new DeleteSpec<>(domainClass);
+        config.accept(spec);
+        return spec.executeInTransaction(entityManager);
+    }
+
+    @Override
+    public int merge(Consumer<MergeSpec<T>> config) {
+        MergeSpec<T> spec = new MergeSpec<>(domainClass);
+        config.accept(spec);
+        return spec.executeInTransaction(entityManager);
+    }
+
+    // ---- 批量操作 execute 方法 ----
+
+    @Override
+    public int execute(UpdateSpec<T> spec) {
+        if (spec == null) {
+            throw new IllegalArgumentException("spec must not be null");
+        }
+        return spec.executeInTransaction(entityManager);
+    }
+
+    @Override
+    public int execute(DeleteSpec<T> spec) {
+        if (spec == null) {
+            throw new IllegalArgumentException("spec must not be null");
+        }
+        return spec.executeInTransaction(entityManager);
+    }
+
+    @Override
+    public int execute(MergeSpec<T> spec) {
+        if (spec == null) {
+            throw new IllegalArgumentException("spec must not be null");
+        }
+        return spec.executeInTransaction(entityManager);
     }
 }

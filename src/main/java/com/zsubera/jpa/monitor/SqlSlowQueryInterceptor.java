@@ -45,10 +45,6 @@ public class SqlSlowQueryInterceptor implements StatementInspector {
     private static final int MAX_PROXY_CLASS_CACHE_SIZE = 512;
     private static final ConcurrentMap<Class<?>, Class<?>> PROXY_CLASS_CACHE = new ConcurrentHashMap<>();
 
-    /** 代理类缓存驱逐锁，确保只有一个线程执行驱逐 */
-    private static final java.util.concurrent.locks.ReentrantLock EVICT_LOCK =
-        new java.util.concurrent.locks.ReentrantLock();
-
     private final long slowQueryThresholdMs;
 
     /**
@@ -112,24 +108,22 @@ public class SqlSlowQueryInterceptor implements StatementInspector {
                     stmtClass.getName());
                 return stmt;
             }
-            // [FIX] P1-4: 改进代理类缓存驱逐逻辑，使用部分驱逐替代全量清空，避免冷缓存尖峰
+            // [FIX] P1-4: 先做无锁快速检查，仅在确实需要驱逐时才进入 synchronized 块，
+            // 减少高并发场景下的锁竞争
             if (PROXY_CLASS_CACHE.size() > MAX_PROXY_CLASS_CACHE_SIZE) {
-                if (EVICT_LOCK.tryLock()) {
-                    try {
+                synchronized (PROXY_CLASS_CACHE) {
+                    // double-check：进入锁后再次检查，避免重复驱逐
+                    if (PROXY_CLASS_CACHE.size() > MAX_PROXY_CLASS_CACHE_SIZE) {
                         int currentSize = PROXY_CLASS_CACHE.size();
-                        if (currentSize > MAX_PROXY_CLASS_CACHE_SIZE) {
-                            int evictCount = Math.min(64, currentSize / 4);
-                            int removed = 0;
-                            java.util.Iterator<Class<?>> it = PROXY_CLASS_CACHE.keySet().iterator();
-                            while (it.hasNext() && removed < evictCount) {
-                                it.next();
-                                it.remove();
-                                removed++;
-                            }
-                            log.debug("Evicted {} proxy class cache entries (was size {})", removed, currentSize);
+                        int evictCount = Math.min(64, currentSize / 4);
+                        int removed = 0;
+                        java.util.Iterator<Class<?>> it = PROXY_CLASS_CACHE.keySet().iterator();
+                        while (it.hasNext() && removed < evictCount) {
+                            it.next();
+                            it.remove();
+                            removed++;
                         }
-                    } finally {
-                        EVICT_LOCK.unlock();
+                        log.debug("Evicted {} proxy class cache entries (was size {})", removed, currentSize);
                     }
                 }
             }

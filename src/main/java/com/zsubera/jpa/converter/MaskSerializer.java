@@ -77,37 +77,47 @@ public class MaskSerializer extends JsonSerializer<String> {
     }
 
     private static String maskPhone(String phone) {
-        if (phone.length() < 3) {
-            return "*".repeat(phone.length());
+        int len = phone.codePointCount(0, phone.length());
+        if (len < 3) {
+            return "*".repeat(len);
         }
-        if (phone.length() < 7) {
-            return phone.substring(0, 2) + "*".repeat(phone.length() - 2);
+        if (len < 7) {
+            int end = phone.offsetByCodePoints(0, 2);
+            return phone.substring(0, end) + "*".repeat(len - 2);
         }
-        return phone.substring(0, 3) + "****" + phone.substring(phone.length() - 4);
+        int prefixEnd = phone.offsetByCodePoints(0, 3);
+        int suffixStart = phone.offsetByCodePoints(0, len - 4);
+        return phone.substring(0, prefixEnd) + "****" + phone.substring(suffixStart);
     }
 
     private static String maskEmail(String email) {
-        // 使用lastIndexOf正确处理多个@符号
         int atIndex = email.lastIndexOf('@');
         if (atIndex <= 0) {
             return email;
         }
         String localPart = email.substring(0, atIndex);
         String domain = email.substring(atIndex);
-        if (localPart.length() <= 1) {
+        int localLen = localPart.codePointCount(0, localPart.length());
+        if (localLen <= 1) {
             return "***" + domain;
         }
-        return localPart.charAt(0) + "***" + domain;
+        int firstEnd = localPart.offsetByCodePoints(0, 1);
+        return localPart.substring(0, firstEnd) + "***" + domain;
     }
 
     private static String maskIdCard(String idCard) {
-        if (idCard.length() < 4) {
-            return "*".repeat(idCard.length());
+        int len = idCard.codePointCount(0, idCard.length());
+        if (len < 4) {
+            return "*".repeat(len);
         }
-        if (idCard.length() < 8) {
-            return idCard.substring(0, 1) + "*".repeat(idCard.length() - 2) + idCard.substring(idCard.length() - 1);
+        if (len < 8) {
+            int firstEnd = idCard.offsetByCodePoints(0, 1);
+            int lastStart = idCard.offsetByCodePoints(0, len - 1);
+            return idCard.substring(0, firstEnd) + "*".repeat(len - 2) + idCard.substring(lastStart);
         }
-        return idCard.substring(0, 3) + "*".repeat(idCard.length() - 7) + idCard.substring(idCard.length() - 4);
+        int prefixEnd = idCard.offsetByCodePoints(0, 3);
+        int suffixStart = idCard.offsetByCodePoints(0, len - 4);
+        return idCard.substring(0, prefixEnd) + "*".repeat(len - 7) + idCard.substring(suffixStart);
     }
 
     private static String maskName(String name) {
@@ -132,38 +142,47 @@ public class MaskSerializer extends JsonSerializer<String> {
     }
 
     private static String maskBankCard(String bankCard) {
-        if (bankCard.length() < 4) {
-            return "*".repeat(bankCard.length());
+        int len = bankCard.codePointCount(0, bankCard.length());
+        if (len < 4) {
+            return "*".repeat(len);
         }
-        if (bankCard.length() < 8) {
-            return "*".repeat(bankCard.length() - 2) + bankCard.substring(bankCard.length() - 2);
+        int suffixStart2 = bankCard.offsetByCodePoints(0, len - 2);
+        if (len < 8) {
+            return "*".repeat(len - 2) + bankCard.substring(suffixStart2);
         }
-        return "*".repeat(bankCard.length() - 4) + bankCard.substring(bankCard.length() - 4);
+        int suffixStart4 = bankCard.offsetByCodePoints(0, len - 4);
+        return "*".repeat(len - 4) + bankCard.substring(suffixStart4);
     }
 
     private static String maskAddress(String address) {
-        // 对于短地址（长度<=6），保留前2个字符，遮蔽其余部分
-        if (address.length() <= 2) {
+        int len = address.codePointCount(0, address.length());
+        if (len <= 2) {
             return address;
         }
-        if (address.length() <= 6) {
-            return address.substring(0, 2) + "*".repeat(address.length() - 2);
+        if (len <= 6) {
+            int prefixEnd = address.offsetByCodePoints(0, 2);
+            return address.substring(0, prefixEnd) + "*".repeat(len - 2);
         }
-        return address.substring(0, 6) + "*".repeat(address.length() - 6);
+        int prefixEnd = address.offsetByCodePoints(0, 6);
+        return address.substring(0, prefixEnd) + "*".repeat(len - 6);
     }
 
     private static String maskLicensePlate(String plate) {
-        if (plate.length() < 2) {
+        int len = plate.codePointCount(0, plate.length());
+        if (len < 2) {
             return plate;
         }
-        if (plate.length() == 2) {
-            return plate.charAt(0) + "*";
+        if (len == 2) {
+            int firstEnd = plate.offsetByCodePoints(0, 1);
+            return plate.substring(0, firstEnd) + "*";
         }
-        // 3字符车牌：保留首字符和尾字符，遮蔽中间
-        if (plate.length() == 3) {
-            return plate.charAt(0) + "*" + plate.charAt(2);
+        int firstEnd = plate.offsetByCodePoints(0, 1);
+        int lastStart = plate.offsetByCodePoints(0, len - 1);
+        if (len == 3) {
+            return plate.substring(0, firstEnd) + "*" + plate.substring(lastStart);
         }
-        return plate.substring(0, 2) + "*".repeat(plate.length() - 3) + plate.charAt(plate.length() - 1);
+        int prefixEnd = plate.offsetByCodePoints(0, 2);
+        return plate.substring(0, prefixEnd) + "*".repeat(len - 3) + plate.substring(lastStart);
     }
 
     /**

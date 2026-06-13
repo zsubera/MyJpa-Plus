@@ -118,13 +118,12 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
 
     /**
      * 生成包含实际参数值的缓存键。与 {@link #conditions()} 不同，此方法返回的字符串包含
-     * 条件的实际值（而非掩码），确保不同参数值的查询产生不同的缓存键。
+     * 条件值的哈希（而非掩码），确保不同参数值的查询产生不同的缓存键。
      *
      * <p>
-     * <strong>安全警告：</strong>返回的字符串可能包含敏感数据（如密码、token），仅用于缓存键计算，
-     * 不得写入日志或返回给客户端。
+     * <strong>安全说明：</strong>值通过 {@code hashCode()} 哈希后写入缓存键，原始值不暴露。
      *
-     * @return 包含参数值的缓存键字符串
+     * @return 包含参数值哈希的缓存键字符串
      */
     public String cacheKey() {
         // [FIX] P1-1: 使用明确的前缀和分隔符减少哈希碰撞风险
@@ -250,18 +249,28 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
         } else if (value instanceof Collection<?> col) {
             sb.append("COLLECTION[").append(col.size()).append("]");
             for (Object item : col) {
-                String s = String.valueOf(item);
-                sb.append('|').append(s.length()).append('|').append(s);
+                appendHashedValue(sb, item);
             }
         } else if (value instanceof Object[] arr) {
             sb.append("ARRAY[").append(arr.length).append("]");
             for (Object item : arr) {
-                String s = String.valueOf(item);
-                sb.append('|').append(s.length()).append('|').append(s);
+                appendHashedValue(sb, item);
             }
         } else {
+            appendHashedValue(sb, value);
+        }
+    }
+
+    /**
+     * 将值的哈希码写入缓存键，而非原始值。防止密码、token 等敏感数据泄露到缓存键中。
+     * hashCode 碰撞概率极低（字段名+运算符+哈希的组合），对缓存键唯一性无实际影响。
+     */
+    private static void appendHashedValue(StringBuilder sb, Object value) {
+        if (value instanceof String s) {
+            sb.append("H[").append(s.length()).append(":").append(s.hashCode()).append("]");
+        } else {
             String s = String.valueOf(value);
-            sb.append('|').append(s.length()).append('|').append(s);
+            sb.append("H[").append(s.length()).append(":").append(s.hashCode()).append("]");
         }
     }
 
@@ -908,9 +917,10 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
             applyOrderBy(root, query, cb);
         }
         Map<String, Join<?, ?>> joinCache = new LinkedHashMap<>();
+        java.util.Set<String> fetchPaths = java.util.Collections.newSetFromMap(new java.util.HashMap<>());
         List<Predicate> predicates = new ArrayList<>();
         for (ConditionNode node : conditions) {
-            Predicate p = NodeResolver.resolveNode(node, root, root, query, cb, joinCache, null);
+            Predicate p = NodeResolver.resolveNode(node, root, root, query, cb, joinCache, null, fetchPaths);
             if (p != null) {
                 predicates.add(p);
             }

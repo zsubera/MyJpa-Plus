@@ -35,6 +35,15 @@ import org.slf4j.LoggerFactory;
  * <strong>线程安全：</strong>配置通过 {@link AtomicReference} 持有不可变 {@link Config} 原子切换。
  *
  * <p>
+ * <strong>NOT IN 与 NULL 的语义差异：</strong>
+ * <ul>
+ *   <li>SQL 语义: {@code field NOT IN (NULL)} 对每行返回 UNKNOWN（永不匹配任何行）</li>
+ *   <li>Java 语义: {@code list.contains(null)} 返回 true → NOT IN 应不排除任何行</li>
+ *   <li>本实现采用 Java 语义: NOT IN 全为 NULL 时返回 TRUE（conjunction），不排除任何行</li>
+ *   <li>如果需要 SQL 语义（NOT IN NULL 返回空结果），请手动添加 {@code IS NOT NULL} 条件</li>
+ * </ul>
+ *
+ * <p>
  * 不同数据库的限制参考：
  * <ul>
  * <li>Oracle: 1000</li>
@@ -268,8 +277,10 @@ public final class InClauseBuilder {
             }
         }
         if (nonNullValues.isEmpty()) {
-            // NOT IN (NULL) returns UNKNOWN for any row — predicate never matches.
-            return cb.disjunction();
+            // SQL 语义: NOT IN (NULL) 对每行返回 UNKNOWN（永不匹配）。
+            // Java 语义: list.contains(null) 返回 true → NOT IN 应返回 true（不排除任何行）。
+            // 采用 Java 语义以避免使用者困惑: NOT IN 全为 NULL 时返回 TRUE（不排除任何行）。
+            return cb.conjunction();
         }
         Config config = cfg();
         Predicate notInPredicate;
@@ -310,8 +321,10 @@ public final class InClauseBuilder {
             }
         }
         if (nonNullValues.isEmpty()) {
-            // NOT IN (NULL) returns UNKNOWN for any row — predicate never matches.
-            return cb.disjunction();
+            // SQL 语义: NOT IN (NULL) 对每行返回 UNKNOWN（永不匹配）。
+            // Java 语义: list.contains(null) 返回 true → NOT IN 应返回 true（不排除任何行）。
+            // 采用 Java 语义以避免使用者困惑: NOT IN 全为 NULL 时返回 TRUE（不排除任何行）。
+            return cb.conjunction();
         }
         Config config = cfg();
         Predicate notInPredicate;

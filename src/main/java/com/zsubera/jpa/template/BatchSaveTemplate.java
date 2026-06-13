@@ -165,7 +165,14 @@ class BatchSaveTemplate {
             jakarta.persistence.PersistenceUnitUtil puu =
                 entityManager.getEntityManagerFactory().getPersistenceUnitUtil();
             Object id = puu.getIdentifier(entity);
-            return id == null;
+            if (id == null) {
+                return true;
+            }
+            // primitive 数值类型的默认值（0, 0L 等）视为新实体
+            if (id instanceof Number number && number.longValue() == 0) {
+                return true;
+            }
+            return false;
         } catch (RuntimeException e) {
             if (log.isDebugEnabled()) {
                 log.debug("PersistenceUnitUtil.getIdentifier() failed for {}: {}", entity.getClass().getSimpleName(),

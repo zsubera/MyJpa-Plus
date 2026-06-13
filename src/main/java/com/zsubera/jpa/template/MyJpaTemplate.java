@@ -277,7 +277,7 @@ public class MyJpaTemplate {
      * 初始化批量操作模板。在所有依赖注入完成后调用。
      */
     @PostConstruct
-    void initBulkOperationTemplate() {
+    private void initBulkOperationTemplate() {
         this.bulkOperationTemplate =
             new BulkOperationTemplate(entityManager, maxBulkOperationRows, entityManagerFactory, applicationContext);
         /* 事务工具类，用于在新事务中执行批量保存操作。 */
@@ -372,8 +372,20 @@ public class MyJpaTemplate {
         }
         log.debug("Cache miss for key: {}", cacheKey);
         List<T> result = findAll(entityClass, spec);
-        cacheManager.put(cacheKey, Collections.unmodifiableList(new ArrayList<>(result)), ttlSeconds);
-        return result;
+        List<T> immutableResult = Collections.unmodifiableList(new ArrayList<>(result));
+        if (org.springframework.transaction.support.TransactionSynchronizationManager.isActualTransactionActive()) {
+            org.springframework.transaction.support.TransactionSynchronizationManager
+                .registerSynchronization(new org.springframework.transaction.support.TransactionSynchronization() {
+                    @Override
+                    public void afterCommit() {
+                        cacheManager.put(cacheKey, immutableResult, ttlSeconds);
+                        log.debug("Cache populated after transaction commit for key: {}", cacheKey);
+                    }
+                });
+        } else {
+            cacheManager.put(cacheKey, immutableResult, ttlSeconds);
+        }
+        return new ArrayList<>(result);
     }
 
     /**

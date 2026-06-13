@@ -123,16 +123,7 @@ final class EntityFieldExtractor<T> {
                         for (jakarta.persistence.AttributeOverride override : overrides) {
                             overrideMap.put(override.name(), override.column().name());
                         }
-                        for (Field subField : getAllFields(embeddedValue.getClass())) {
-                            if (!java.lang.reflect.Modifier.isStatic(subField.getModifiers()) && !subField.isSynthetic()
-                                && !subField.isAnnotationPresent(jakarta.persistence.Embedded.class)) {
-                                Object subValue = getFieldValue(embeddedValue, subField);
-                                String columnName =
-                                    overrideMap.getOrDefault(subField.getName(), resolveColumnName(subField));
-                                fieldValues.add(
-                                    new EntityFieldValue(f.getName() + "." + subField.getName(), columnName, subValue));
-                            }
-                        }
+                        extractEmbeddedFields(embeddedValue, f.getName(), overrideMap, fieldValues, visited);
                     }
                 } else {
                     Object value = getFieldValue(entity, f);
@@ -149,6 +140,41 @@ final class EntityFieldExtractor<T> {
             }
         }
         return fieldValues;
+    }
+
+    /**
+     * 递归提取 @Embedded 字段中的子字段，支持嵌套 @Embedded。
+     */
+    private void extractEmbeddedFields(Object embeddedValue, String prefix, java.util.Map<String, String> overrideMap,
+        List<EntityFieldValue> fieldValues, Set<Class<?>> visited) throws Exception {
+        for (Field subField : getAllFields(embeddedValue.getClass())) {
+            if (java.lang.reflect.Modifier.isStatic(subField.getModifiers()) || subField.isSynthetic()) {
+                continue;
+            }
+            if (subField.isAnnotationPresent(jakarta.persistence.Embedded.class)) {
+                // 递归处理嵌套的 @Embedded
+                Object nestedValue = getFieldValue(embeddedValue, subField);
+                if (nestedValue != null) {
+                    if (!visited.add(nestedValue.getClass())) {
+                        throw new MyJpaPlusException("Circular @Embedded reference detected in field '" + prefix + "."
+                            + subField.getName() + "': " + nestedValue.getClass().getName());
+                    }
+                    jakarta.persistence.AttributeOverride[] nestedOverrides =
+                        subField.getAnnotationsByType(jakarta.persistence.AttributeOverride.class);
+                    java.util.Map<String, String> nestedOverrideMap = new java.util.LinkedHashMap<>(overrideMap);
+                    for (jakarta.persistence.AttributeOverride ov : nestedOverrides) {
+                        nestedOverrideMap.put(ov.name(), ov.column().name());
+                    }
+                    extractEmbeddedFields(nestedValue, prefix + "." + subField.getName(), nestedOverrideMap,
+                        fieldValues, visited);
+                    visited.remove(nestedValue.getClass());
+                }
+            } else {
+                Object subValue = getFieldValue(embeddedValue, subField);
+                String columnName = overrideMap.getOrDefault(subField.getName(), resolveColumnName(subField));
+                fieldValues.add(new EntityFieldValue(prefix + "." + subField.getName(), columnName, subValue));
+            }
+        }
     }
 
     /**
@@ -295,7 +321,17 @@ final class EntityFieldExtractor<T> {
             IdentifierValidator.validateColumnName(name);
             return name;
         }
-        return field.getName();
+        // 尝试应用 Spring Boot 的命名策略（camelCase → snake_case）
+        try {
+            Class<?> strategyClass = Class.forName("org.springframework.boot.orm.jpa.SpringPhysicalNamingStrategy");
+            java.lang.reflect.Method toPhysical =
+                strategyClass.getMethod("toPhysicalColumnName", String.class, java.util.Locale.class);
+            Object strategy = strategyClass.getDeclaredConstructor().newInstance();
+            return (String)toPhysical.invoke(strategy, field.getName(), java.util.Locale.ROOT);
+        } catch (Exception e) {
+            // Spring 命名策略不在类路径上，回退到字段名
+            return field.getName();
+        }
     }
 
     /**

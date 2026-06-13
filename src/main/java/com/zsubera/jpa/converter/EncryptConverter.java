@@ -5,6 +5,8 @@ import jakarta.persistence.AttributeConverter;
 
 import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
@@ -123,8 +125,14 @@ public class EncryptConverter implements AttributeConverter<String, String> {
     private static final String SKIP_SALT_PROPERTY = "myjpa-plus.encrypt.skip-salt-check";
     private static final String SKIP_SALT_ENV = "MYJPA_ENCRYPT_SKIP_SALT_CHECK";
 
+    /** 加密数据版本前缀匹配模式（如 "v1"、"v2"）。 */
+    private static final java.util.regex.Pattern VERSION_PATTERN = java.util.regex.Pattern.compile("v\\d+");
+
     /** 跟踪密钥验证是否已执行的标志。 */
     private static volatile boolean keyValidated = false;
+
+    /** 跟踪是否已记录过开发盐值警告（避免每次加密都记录）。 */
+    private static volatile boolean devSaltWarningLogged = false;
 
     /**
      * 清除所有缓存的密钥和版本信息。用于测试环境和应用关闭时清理。
@@ -134,6 +142,7 @@ public class EncryptConverter implements AttributeConverter<String, String> {
         cachedKeyVersion = null;
         lastKeyVersionRefresh = 0;
         keyValidated = false;
+        devSaltWarningLogged = false;
     }
 
     // [FIX] P1-2: 添加异步预热密钥缓存方法，减少首次加密/解密操作的延迟
@@ -212,6 +221,7 @@ public class EncryptConverter implements AttributeConverter<String, String> {
             cachedKeyVersion = null;
             KEY_CACHE.clear();
             lastKeyVersionRefresh = System.currentTimeMillis();
+            devSaltWarningLogged = false;
         }
         log.info("Encryption key version cache refreshed");
     }
@@ -317,6 +327,13 @@ public class EncryptConverter implements AttributeConverter<String, String> {
         if (!keyValidated) {
             validateKeyConfiguration();
         }
+        // 首次加密时检查是否使用开发盐值，发出一次性 CRITICAL 警告
+        if (!devSaltWarningLogged && isUsingDevSalt()) {
+            devSaltWarningLogged = true;
+            log.error("CRITICAL: Encryption is using a predictable development salt! "
+                + "Encrypted data WILL NOT BE SECURE in production. "
+                + "Set environment variable {} or system property {} before deploying.", SALT_ENV, SALT_PROPERTY);
+        }
         try {
             SecretKeySpec keySpec = getKeySpec();
             Cipher cipher = Cipher.getInstance(ALGORITHM);
@@ -362,7 +379,7 @@ public class EncryptConverter implements AttributeConverter<String, String> {
                 // 带版本前缀格式: "v1:base64data"
                 int colonIndex = dbData.indexOf(':');
                 version = dbData.substring(0, colonIndex);
-                if (!version.matches("v\\d+")) {
+                if (!VERSION_PATTERN.matcher(version).matches()) {
                     log.warn("Invalid version prefix format '{}' in encrypted data, treating as unversioned", version);
                     version = null;
                     base64Data = dbData;
@@ -419,15 +436,15 @@ public class EncryptConverter implements AttributeConverter<String, String> {
         if (existing != null) {
             return existing;
         }
+        if (KEY_CACHE.size() >= MAX_KEY_CACHE_SIZE && !KEY_CACHE.containsKey(cacheKey)) {
+            throw new MyJpaPlusException(
+                "Encryption key cache is full (" + MAX_KEY_CACHE_SIZE + " entries). " + "Cannot load key version '"
+                    + cacheKey + "'. " + "This may indicate a malicious attempt to exhaust CPU via PBKDF2 derivation. "
+                    + "Clear cache or increase MAX_KEY_CACHE_SIZE if this is legitimate key rotation.");
+        }
         SecretKeySpec result = KEY_CACHE.compute(cacheKey, (k, v) -> {
             if (v != null) {
                 return v;
-            }
-            if (KEY_CACHE.size() >= MAX_KEY_CACHE_SIZE) {
-                throw new MyJpaPlusException(
-                    "Encryption key cache is full (" + MAX_KEY_CACHE_SIZE + " entries). " + "Cannot load key version '"
-                        + k + "'. " + "This may indicate a malicious attempt to exhaust CPU via PBKDF2 derivation. "
-                        + "Clear cache or increase MAX_KEY_CACHE_SIZE if this is legitimate key rotation.");
             }
             String rawKey = resolveRawKey(k);
             return deriveKey(rawKey);
@@ -450,44 +467,47 @@ public class EncryptConverter implements AttributeConverter<String, String> {
         Objects.requireNonNull(allKeys,
             "Encryption key not set. Set environment variable " + KEY_ENV + " or system property " + KEY_PROPERTY);
 
-        // 使用显式正则表达式匹配多密钥格式 "vN:key,vN:key"
-        // 之前的检测（contains(":") && contains(",")）在单个密钥同时包含这两个字符时存在歧义。
-        // 新格式要求每个条目匹配 "vN:key" 模式。
-        if (MULTI_KEY_PATTERN.matcher(allKeys).matches()) {
+        // 检测是否为多密钥格式: "v1:key1,v2:key2"
+        // 使用显式正则表达式匹配，避免 contains(":") && contains(",") 的歧义
+        boolean looksLikeMultiKey = MULTI_KEY_PATTERN.matcher(allKeys).matches();
+        if (looksLikeMultiKey) {
             String[] entries = allKeys.split(",");
-            boolean validMultiKey = true;
+            // 验证所有条目格式，收集无效条目用于诊断
+            List<String> invalidEntries = new ArrayList<>();
             for (String entry : entries) {
-                entry = entry.trim();
-                if (!SINGLE_ENTRY_PATTERN.matcher(entry).matches()) {
-                    log.warn("SECURITY: Invalid multi-key entry format '{}'. Expected 'vN:key'. "
-                        + "Falling back to single-key mode.", entry);
-                    validMultiKey = false;
-                    break;
+                String trimmed = entry.trim();
+                if (!SINGLE_ENTRY_PATTERN.matcher(trimmed).matches()) {
+                    invalidEntries.add(trimmed);
                 }
             }
-            if (validMultiKey) {
-                for (String entry : entries) {
-                    entry = entry.trim();
-                    int colonIdx = entry.indexOf(':');
-                    if (colonIdx > 0) {
-                        String entryVersion = entry.substring(0, colonIdx).trim();
-                        String entryKey = entry.substring(colonIdx + 1).trim();
-                        if (entryVersion.equals(version)) {
-                            validateKeyLength(entryKey);
-                            return entryKey;
-                        }
+            if (!invalidEntries.isEmpty()) {
+                // 格式看起来像多密钥但有无效条目 — 抛出明确错误而非静默回退，
+                // 因为静默回退可能导致使用整个多密钥字符串作为单一密钥，解密必然失败
+                throw new MyJpaPlusException("Multi-key format detected but contains invalid entries: " + invalidEntries
+                    + ". Expected format: 'vN:key1,vN:key2'. "
+                    + "If this is a single key containing commas, ensure it does not start with 'vN:'.");
+            }
+            // 所有条目格式有效 — 在多密钥配置中查找目标版本
+            for (String entry : entries) {
+                String trimmed = entry.trim();
+                int colonIdx = trimmed.indexOf(':');
+                if (colonIdx > 0) {
+                    String entryVersion = trimmed.substring(0, colonIdx).trim();
+                    String entryKey = trimmed.substring(colonIdx + 1).trim();
+                    if (entryVersion.equals(version)) {
+                        validateKeyLength(entryKey);
+                        return entryKey;
                     }
                 }
             }
+            // 多密钥配置中未找到目标版本 — 抛出明确错误
+            throw new MyJpaPlusException("Key version '" + version + "' not found in multi-key configuration. "
+                + "Available entries: " + java.util.Arrays.toString(entries) + ". " + "Set the correct key version via "
+                + KEY_VERSION_ENV + " or " + KEY_VERSION_PROPERTY + ".");
         }
 
-        // 单密钥模式：如果指定了版本但没有找到对应密钥，抛出明确错误而非使用整个多密钥字符串
+        // 单密钥模式
         if (version != null && !"v1".equals(version) && !"default".equals(version)) {
-            if (MULTI_KEY_PATTERN.matcher(allKeys).matches()) {
-                throw new MyJpaPlusException("Key version '" + version + "' not found in multi-key configuration. "
-                    + "Available versions must match 'vN:key' format. " + "Set the correct key version via "
-                    + KEY_VERSION_ENV + " or " + KEY_VERSION_PROPERTY + ".");
-            }
             logVersionMismatch(version);
         }
         validateKeyLength(allKeys);
@@ -540,6 +560,25 @@ public class EncryptConverter implements AttributeConverter<String, String> {
     }
 
     /**
+     * 检查当前是否使用开发盐值（未配置生产盐值且启用了 skip-salt-check）。
+     */
+    private static boolean isUsingDevSalt() {
+        String salt = System.getenv(SALT_ENV);
+        if (salt != null && !salt.isEmpty()) {
+            return false;
+        }
+        salt = System.getProperty(SALT_PROPERTY);
+        if (salt != null && !salt.isEmpty()) {
+            return false;
+        }
+        String skipCheck = System.getProperty(SKIP_SALT_PROPERTY);
+        if (!"true".equalsIgnoreCase(skipCheck)) {
+            skipCheck = System.getenv(SKIP_SALT_ENV);
+        }
+        return "true".equalsIgnoreCase(skipCheck);
+    }
+
+    /**
      * 获取 PBKDF2 盐值。优先从环境变量/系统属性获取，未配置时使用开发盐值常量。
      *
      * <p>
@@ -563,15 +602,20 @@ public class EncryptConverter implements AttributeConverter<String, String> {
             skipCheck = System.getenv(SKIP_SALT_ENV);
         }
         if ("true".equalsIgnoreCase(skipCheck)) {
+            if (isProductionEnvironment()) {
+                throw new IllegalStateException("Cannot skip PBKDF2 salt check in production environment. "
+                    + "Set environment variable " + SALT_ENV + " or system property " + SALT_PROPERTY + ".");
+            }
             log.warn("SECURITY: PBKDF2 salt check is skipped via configuration. "
                 + "Encrypted data will use a predictable default salt. "
+                + "Data encrypted with this salt WILL NOT BE RECOVERABLE if the key changes. "
                 + "Set environment variable {} or system property {} for production.", SALT_ENV, SALT_PROPERTY);
-            // 使用基于密钥材料的确定性盐值（非硬编码），每个环境不同
             String keyEnv = System.getenv(KEY_ENV);
             String keyProp = System.getProperty(KEY_PROPERTY);
             String key = (keyEnv != null && !keyEnv.isEmpty()) ? keyEnv : keyProp;
             if (key != null) {
-                return key.getBytes(StandardCharsets.UTF_8);
+                String saltSeed = "myjpa-plus-dev-salt:" + sha256Hex(key);
+                return saltSeed.getBytes(StandardCharsets.UTF_8);
             }
             throw new IllegalStateException("PBKDF2 salt not configured and encryption key unavailable. " + "Set "
                 + SALT_ENV + " environment variable or " + SALT_PROPERTY + " system property.");
@@ -579,6 +623,24 @@ public class EncryptConverter implements AttributeConverter<String, String> {
         throw new IllegalStateException("PBKDF2 salt must be configured. " + "Set environment variable " + SALT_ENV
             + " or system property " + SALT_PROPERTY + ". " + "Salt is required for PBKDF2 key derivation security. "
             + "To skip this check (development only), set " + SKIP_SALT_PROPERTY + "=true.");
+    }
+
+    /**
+     * 计算字符串的 SHA-256 哈希并返回十六进制表示。
+     * 用于开发环境盐值派生，替代 hashCode() 以提高安全性。
+     */
+    private static String sha256Hex(String input) {
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            byte[] hash = digest.digest(input.getBytes(StandardCharsets.UTF_8));
+            StringBuilder hex = new StringBuilder(hash.length * 2);
+            for (byte b : hash) {
+                hex.append(String.format("%02x", b & 0xff));
+            }
+            return hex.toString();
+        } catch (NoSuchAlgorithmException e) {
+            throw new MyJpaPlusException("SHA-256 algorithm not available", e);
+        }
     }
 
     /**
@@ -654,6 +716,9 @@ public class EncryptConverter implements AttributeConverter<String, String> {
     public static String reEncrypt(String encryptedValue) {
         if (encryptedValue == null) {
             throw new IllegalArgumentException("encryptedValue must not be null");
+        }
+        if (!keyValidated) {
+            validateKeyConfiguration();
         }
         EncryptConverter instance = new EncryptConverter();
         String decrypted = instance.convertToEntityAttribute(encryptedValue);

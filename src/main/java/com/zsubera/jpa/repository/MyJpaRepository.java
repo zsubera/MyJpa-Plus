@@ -1,9 +1,13 @@
 package com.zsubera.jpa.repository;
 
 import com.zsubera.jpa.softdelete.SoftDeleteHelper;
+import com.zsubera.jpa.update.DeleteSpec;
+import com.zsubera.jpa.update.MergeSpec;
+import com.zsubera.jpa.update.UpdateSpec;
 import com.zsubera.jpa.util.EntityClassResolver;
 import java.util.List;
 import java.util.Optional;
+import java.util.function.Consumer;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
@@ -212,6 +216,142 @@ public interface MyJpaRepository<T, ID> extends JpaRepository<T, ID>, JpaSpecifi
     default long countNotDeleted() {
         Specification<T> notDeleted = SoftDeleteHelper.isNotDeleted(getEntityClass());
         return notDeleted == null ? count() : count(notDeleted);
+    }
+
+    // ---- 批量操作 Lambda 方法 ----
+
+    /**
+     * 使用 Lambda 构建并执行批量更新。
+     *
+     * <pre>{@code
+     * int count = repository.update(s -> s
+     *     .set(User::getStatus, "INACTIVE")
+     *     .lt(User::getLastLogin, cutoffDate)
+     * );
+     * }</pre>
+     *
+     * @param config 配置函数
+     * @return 受影响的行数
+     */
+    default int update(Consumer<UpdateSpec<T>> config) {
+        throw new UnsupportedOperationException("update() requires SoftDeleteJpaRepository as the base class.");
+    }
+
+    /**
+     * 使用 Lambda 构建并执行批量删除。
+     *
+     * <pre>{@code
+     * int deleted = repository.delete(s -> s
+     *     .lt(User::getCreatedAt, cutoffDate)
+     * );
+     * }</pre>
+     *
+     * @param config 配置函数
+     * @return 受影响的行数
+     */
+    default int delete(Consumer<DeleteSpec<T>> config) {
+        throw new UnsupportedOperationException("delete() requires SoftDeleteJpaRepository as the base class.");
+    }
+
+    /**
+     * 使用 Lambda 构建并执行 UPSERT 操作。
+     *
+     * <pre>{@code
+     * int affected = repository.merge(s -> s
+     *     .withEntity(user)
+     *     .onConflict(User::getEmail)
+     *     .updateOnConflict(User::getName)
+     * );
+     * }</pre>
+     *
+     * @param config 配置函数
+     * @return 受影响的行数
+     */
+    default int merge(Consumer<MergeSpec<T>> config) {
+        throw new UnsupportedOperationException("merge() requires SoftDeleteJpaRepository as the base class.");
+    }
+
+    // ---- 批量操作 execute 方法（传入已构建的 Spec）----
+
+    /**
+     * 使用给定的 {@link UpdateSpec} 执行批量更新。
+     *
+     * <p>
+     * 使用示例：
+     *
+     * <pre>{@code
+     * int count = repository.execute(
+     *     new UpdateSpec<>(User.class)
+     *         .set(User::getStatus, "INACTIVE")
+     *         .lt(User::getLastLogin, cutoffDate)
+     * );
+     * }</pre>
+     *
+     * @param spec 要执行的 UpdateSpec
+     * @return 受影响的行数
+     * @throws IllegalArgumentException 如果 spec 为 null
+     */
+    default int execute(UpdateSpec<T> spec) {
+        if (spec == null) {
+            throw new IllegalArgumentException("spec must not be null");
+        }
+        throw new UnsupportedOperationException(
+            "execute(UpdateSpec) is not supported by this repository implementation. "
+                + "Use SoftDeleteJpaRepository as the base class, or use MyJpaTemplate instead.");
+    }
+
+    /**
+     * 使用给定的 {@link DeleteSpec} 执行批量删除。
+     *
+     * <p>
+     * 使用示例：
+     *
+     * <pre>{@code
+     * int deleted = repository.execute(
+     *     new DeleteSpec<>(User.class)
+     *         .lt(User::getCreatedAt, cutoffDate)
+     * );
+     * }</pre>
+     *
+     * @param spec 要执行的 DeleteSpec
+     * @return 受影响的行数
+     * @throws IllegalArgumentException 如果 spec 为 null
+     */
+    default int execute(DeleteSpec<T> spec) {
+        if (spec == null) {
+            throw new IllegalArgumentException("spec must not be null");
+        }
+        throw new UnsupportedOperationException(
+            "execute(DeleteSpec) is not supported by this repository implementation. "
+                + "Use SoftDeleteJpaRepository as the base class, or use MyJpaTemplate instead.");
+    }
+
+    /**
+     * 使用给定的 {@link MergeSpec} 执行 UPSERT 操作。
+     *
+     * <p>
+     * 使用示例：
+     *
+     * <pre>{@code
+     * int affected = repository.execute(
+     *     new MergeSpec<>(User.class)
+     *         .withEntity(user)
+     *         .onConflict(User::getEmail)
+     *         .updateOnConflict(User::getName, User::getAge)
+     * );
+     * }</pre>
+     *
+     * @param spec 要执行的 MergeSpec
+     * @return 受影响的行数
+     * @throws IllegalArgumentException 如果 spec 为 null
+     */
+    default int execute(MergeSpec<T> spec) {
+        if (spec == null) {
+            throw new IllegalArgumentException("spec must not be null");
+        }
+        throw new UnsupportedOperationException(
+            "execute(MergeSpec) is not supported by this repository implementation. "
+                + "Use SoftDeleteJpaRepository as the base class, or use MyJpaTemplate instead.");
     }
 
     /**

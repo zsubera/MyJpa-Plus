@@ -15,6 +15,12 @@ import org.slf4j.LoggerFactory;
  * 从 {@link MyJpaTemplate} 中提取，将批量操作的执行、分批、事务管理等逻辑集中在此类中， 使 {@link MyJpaTemplate} 专注于查询操作。
  *
  * <p>
+ * <strong>重要约束：</strong>此类不是 Spring Bean（由 {@link MyJpaTemplate} 手动实例化），
+ * 因此此类方法上的 {@code @Transactional} 注解不会生效（无 AOP 代理介入）。
+ * 事务由调用方（{@link MyJpaTemplate}）的 {@code @Transactional} 注解管理。
+ * 如需独立事务管理，请使用 {@link TransactionHelper}。
+ *
+ * <p>
  * <strong>功能：</strong>
  * <ul>
  * <li>单次执行：{@link #execute(UpdateSpec)}、{@link #execute(DeleteSpec)}、{@link #execute(MergeSpec)}</li>
@@ -237,6 +243,7 @@ class BulkOperationTemplate {
      */
     private int executeBatchInternal(int batchSize, String operationName,
         java.util.function.IntUnaryOperator batchExecutor) {
+        int effectiveLimit = maxBulkOperationRows;
         int total = 0;
         int batchResult;
         int iteration = 0;
@@ -257,7 +264,7 @@ class BulkOperationTemplate {
                     operationName, maxBatchIterations, total);
                 break;
             }
-        } while (batchResult > 0);
+        } while (batchResult > 0 && (effectiveLimit <= 0 || total < effectiveLimit));
         return total;
     }
 
@@ -377,6 +384,9 @@ class BulkOperationTemplate {
             if (batchResult < batchSize) {
                 shouldContinue = false;
             }
+            if (maxBulkOperationRows > 0 && total >= maxBulkOperationRows) {
+                shouldContinue = false;
+            }
             iteration++;
             if (iteration >= maxBatchIterations) {
                 log.error("Batch {} reached maximum iterations ({}). Possible infinite loop. Total rows: {}",
@@ -446,7 +456,7 @@ class BulkOperationTemplate {
                     operationName, maxBatchIterations, total);
                 break;
             }
-        } while (batchResult > 0);
+        } while (batchResult > 0 && (maxBulkOperationRows <= 0 || total < maxBulkOperationRows));
         return total;
     }
 }

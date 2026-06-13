@@ -208,14 +208,14 @@ class SoftDeleteHelperTest {
     @Test
     void testEscapeIdentifierWithValidInput() {
         String result = SoftDeleteHelper.escapeIdentifier("test_table");
-        assertEquals("\"test_table\"", result);
+        assertEquals("test_table", result);
     }
 
     @Test
     void testEscapeIdentifierWithSchemaTable() {
-        // [FIX] P1-3: escapeIdentifier now quotes each segment individually for proper SQL
+        // escapeIdentifier validates each segment individually without quoting
         String result = SoftDeleteHelper.escapeIdentifier("schema.table");
-        assertEquals("\"schema\".\"table\"", result);
+        assertEquals("schema.table", result);
     }
 
     @Test
@@ -325,23 +325,22 @@ class SoftDeleteHelperTest {
         assertFalse(qs.conditions().isEmpty(), "notDeletedQuery should have at least one condition");
     }
 
-    // [FIX] P1-3: 测试 escapeIdentifier 对简单标识符的转义
+    // [FIX] P1-3: 测试 escapeIdentifier 对简单标识符的验证
     @Test
     void testEscapeIdentifier_simpleIdentifier() {
-        assertEquals("\"my_column\"", SoftDeleteHelper.escapeIdentifier("my_column"));
+        assertEquals("my_column", SoftDeleteHelper.escapeIdentifier("my_column"));
     }
 
-    // [FIX] P1-3: 测试 escapeIdentifier 对 schema.table 格式的分段转义
+    // [FIX] P1-3: 测试 escapeIdentifier 对 schema.table 格式的分段验证
     @Test
     void testEscapeIdentifier_schemaQualified() {
-        assertEquals("\"myschema\".\"mytable\"", SoftDeleteHelper.escapeIdentifier("myschema.mytable"));
+        assertEquals("myschema.mytable", SoftDeleteHelper.escapeIdentifier("myschema.mytable"));
     }
 
-    // [FIX] P1-3: 测试 escapeIdentifier 对 catalog.schema.table 格式的分段转义
+    // [FIX] P1-3: 测试 escapeIdentifier 对 catalog.schema.table 格式的分段验证
     @Test
     void testEscapeIdentifier_catalogSchemaQualified() {
-        assertEquals("\"mycatalog\".\"myschema\".\"mytable\"",
-            SoftDeleteHelper.escapeIdentifier("mycatalog.myschema.mytable"));
+        assertEquals("mycatalog.myschema.mytable", SoftDeleteHelper.escapeIdentifier("mycatalog.myschema.mytable"));
     }
 
     // [FIX] P1-3: 测试 escapeIdentifier 拒绝包含非法字符的标识符

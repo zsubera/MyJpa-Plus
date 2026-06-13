@@ -195,6 +195,7 @@ public abstract class AbstractBulkOperationSpec<T, SELF extends AbstractBulkOper
             try {
                 tx.rollback();
             } catch (Exception rollbackEx) {
+                log.error("Transaction rollback failed", rollbackEx);
                 original.addSuppressed(rollbackEx);
             }
         }
@@ -487,6 +488,9 @@ public abstract class AbstractBulkOperationSpec<T, SELF extends AbstractBulkOper
         QueryTimeoutHelper.applyTimeout(query);
     }
 
+    /** 批量操作条件节点递归深度限制，防止 StackOverflowError。 */
+    private static final int MAX_BULK_RECURSION_DEPTH = 50;
+
     /**
      * 解析条件节点为 JPA Predicate。
      *
@@ -497,13 +501,26 @@ public abstract class AbstractBulkOperationSpec<T, SELF extends AbstractBulkOper
      */
     @SuppressWarnings({"unchecked", "rawtypes"})
     private Predicate resolveNode(BulkConditionNode node, Root<T> root, CriteriaBuilder cb) {
+        return resolveNodeWithDepth(node, root, cb, 0);
+    }
+
+    /**
+     * 解析条件节点为 JPA Predicate（带深度限制）。
+     */
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    private Predicate resolveNodeWithDepth(BulkConditionNode node, Root<T> root, CriteriaBuilder cb, int depth) {
+        if (depth > MAX_BULK_RECURSION_DEPTH) {
+            throw new MyJpaPlusException(
+                "Bulk condition node recursion depth exceeded maximum limit (" + MAX_BULK_RECURSION_DEPTH
+                    + "). This may indicate a circular condition tree or " + "excessively nested condition structure.");
+        }
         if (node instanceof BulkConditionNode.LeafNode l) {
             return ((BiFunction<Root<T>, CriteriaBuilder, Predicate>)(BiFunction)l.fn()).apply(root, cb);
         }
         if (node instanceof BulkConditionNode.AndNode a) {
             List<Predicate> childPredicates = new ArrayList<>();
             for (BulkConditionNode child : a.children()) {
-                childPredicates.add(resolveNode(child, root, cb));
+                childPredicates.add(resolveNodeWithDepth(child, root, cb, depth + 1));
             }
             if (childPredicates.isEmpty()) {
                 return cb.conjunction();
@@ -516,7 +533,7 @@ public abstract class AbstractBulkOperationSpec<T, SELF extends AbstractBulkOper
         if (node instanceof BulkConditionNode.OrNode o) {
             List<Predicate> childPredicates = new ArrayList<>();
             for (BulkConditionNode child : o.children()) {
-                childPredicates.add(resolveNode(child, root, cb));
+                childPredicates.add(resolveNodeWithDepth(child, root, cb, depth + 1));
             }
             if (childPredicates.isEmpty()) {
                 return cb.disjunction();
@@ -527,7 +544,7 @@ public abstract class AbstractBulkOperationSpec<T, SELF extends AbstractBulkOper
             return cb.or(childPredicates.toArray(new Predicate[0]));
         }
         if (node instanceof BulkConditionNode.NotNode n) {
-            return cb.not(resolveNode(n.child(), root, cb));
+            return cb.not(resolveNodeWithDepth(n.child(), root, cb, depth + 1));
         }
         throw new IllegalArgumentException("Unknown BulkConditionNode type: " + node.getClass().getName());
     }
