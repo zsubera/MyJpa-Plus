@@ -53,6 +53,41 @@ public class CteSpec {
     private static final Pattern SAFE_IDENTIFIER_PATTERN = Pattern.compile("^[a-zA-Z_][a-zA-Z0-9_]*$");
 
     /**
+     * SQL 保留字集合（MySQL + PostgreSQL 交集），CTE 名称不应使用这些关键字。
+     *
+     * <p>
+     * MySQL 中使用保留字作为 CTE 名称会导致语法错误（如 {@code WITH empty AS ...} 被解析为 {@code WITH EMPTY}）。
+     * PostgreSQL 对保留字更宽松，但为跨数据库兼容性仍应避免。
+     */
+    private static final java.util.Set<String> SQL_RESERVED_WORDS = java.util.Set.of(
+        // DML
+        "SELECT", "INSERT", "UPDATE", "DELETE", "FROM", "WHERE", "INTO", "VALUES", "SET", "JOIN", "LEFT", "RIGHT",
+        "INNER", "OUTER", "CROSS", "ON", "USING", "AS", "DISTINCT", "ALL", "UNION", "EXCEPT", "INTERSECT", "ORDER",
+        "BY", "GROUP", "HAVING", "LIMIT", "OFFSET", "FETCH", "FIRST", "NEXT", "ROWS",
+        // DDL
+        "CREATE", "ALTER", "DROP", "TRUNCATE", "RENAME", "INDEX", "TABLE", "VIEW", "SCHEMA", "DATABASE",
+        // Constraint
+        "PRIMARY", "KEY", "FOREIGN", "REFERENCES", "UNIQUE", "CHECK", "DEFAULT", "NULL", "NOT", "CONSTRAINT",
+        // Transaction
+        "BEGIN", "COMMIT", "ROLLBACK", "SAVEPOINT", "TRANSACTION", "ISOLATION", "LEVEL", "READ", "WRITE",
+        // Boolean
+        "TRUE", "FALSE",
+        // Operators
+        "AND", "OR", "IN", "EXISTS", "BETWEEN", "LIKE", "IS", "ANY", "SOME",
+        // Functions reserved
+        "COUNT", "SUM", "AVG", "MIN", "MAX", "COALESCE", "NULLIF", "CASE", "WHEN", "THEN", "ELSE", "END", "CAST",
+        "CONVERT", "EXTRACT", "CURRENT_DATE", "CURRENT_TIME", "CURRENT_TIMESTAMP",
+        // Common identifiers that conflict
+        "USER", "COLUMN", "ROW", "VALUE", "TYPE", "STATUS", "NAME", "ID", "DATA", "TEXT", "DATE", "TIME",
+        // MySQL specific
+        "EMPTY", "DUAL", "FORCE", "IGNORE", "DELAYED", "LOW_PRIORITY", "HIGH_PRIORITY", "OUTFILE", "INFILE", "LOAD",
+        "LOCAL",
+        // PostgreSQL specific
+        "RETURNING", "ILIKE", "SIMILAR", "OVERLAPS", "UNKNOWN", "ARRAY", "MULTISET", "PERFORM", "EXECUTE", "PL/pgSQL",
+        // CTE specific
+        "WITH", "RECURSIVE", "MATERIALIZED", "SEARCH", "CYCLE");
+
+    /**
      * 用于检测 SQL 中未绑定命名参数的正则表达式。
      *
      * <p>
@@ -110,6 +145,7 @@ public class CteSpec {
             throw new IllegalArgumentException(
                 "cteName contains invalid characters: " + cteName + ". Only alphanumeric and underscore are allowed.");
         }
+        validateNotReservedWord(cteName);
         return new CteSpec(false).addCte(cteName);
     }
 
@@ -128,7 +164,26 @@ public class CteSpec {
             throw new IllegalArgumentException(
                 "cteName contains invalid characters: " + cteName + ". Only alphanumeric and underscore are allowed.");
         }
+        validateNotReservedWord(cteName);
         return new CteSpec(true).addCte(cteName);
+    }
+
+    /**
+     * 校验 CTE 名称是否为 SQL 保留字。使用保留字作为 CTE 名称会导致语法错误或意外行为。
+     *
+     * <p>
+     * MySQL 中 {@code WITH empty AS ...} 会被解析为 {@code WITH EMPTY AS ...}（保留字），
+     * 导致语法错误。PostgreSQL 虽然允许，但为跨数据库兼容性仍应避免。
+     *
+     * @param name 要校验的名称
+     * @throws IllegalArgumentException 如果名称是 SQL 保留字
+     */
+    private static void validateNotReservedWord(String name) {
+        if (SQL_RESERVED_WORDS.contains(name.toUpperCase(java.util.Locale.ROOT))) {
+            throw new IllegalArgumentException(
+                "CTE name '" + name + "' is a SQL reserved word and may cause syntax errors. "
+                    + "Please use a different name (e.g., '" + name + "_ct' or 'result_" + name + "').");
+        }
     }
 
     /**

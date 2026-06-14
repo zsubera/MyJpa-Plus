@@ -397,14 +397,12 @@ public sealed interface ConditionNode permits ConditionNode.SimpleNode, Conditio
             if (!ConditionBuilder.SAFE_FUNCTION_NAMES.contains(upperName)) {
                 String msg = "Function not in whitelist: '" + functionName + "'. "
                     + "Only whitelisted functions are allowed. Contact administrator to add new functions.";
-                throw new com.zsubera.jpa.exception.MyJpaPlusException(msg,
-                    com.zsubera.jpa.exception.MyJpaPlusException.ErrorCode.SECURITY, null, null);
+                throw new com.zsubera.jpa.exception.SecurityViolationException(msg);
             }
             if (!ConditionBuilder.BOOLEAN_FUNCTION_NAMES.contains(upperName)) {
                 String msg = "Function must be a boolean-returning function: '" + functionName + "'. "
                     + "Only boolean functions like IF, DECODE, COALESCE, NULLIF, NVL, JSONB_EXISTS, ST_CONTAINS are allowed in func().";
-                throw new com.zsubera.jpa.exception.MyJpaPlusException(msg,
-                    com.zsubera.jpa.exception.MyJpaPlusException.ErrorCode.SECURITY, null, null);
+                throw new com.zsubera.jpa.exception.SecurityViolationException(msg);
             }
             return new FuncNode(functionName, params);
         }

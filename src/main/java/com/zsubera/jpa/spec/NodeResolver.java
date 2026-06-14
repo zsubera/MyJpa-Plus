@@ -1,6 +1,6 @@
 package com.zsubera.jpa.spec;
 
-import com.zsubera.jpa.exception.MyJpaPlusException;
+import com.zsubera.jpa.exception.QueryBuildException;
 import jakarta.persistence.criteria.CriteriaBuilder;
 import jakarta.persistence.criteria.CriteriaQuery;
 import jakarta.persistence.criteria.Expression;
@@ -14,6 +14,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -32,6 +33,63 @@ final class NodeResolver {
     private static final Logger log = LoggerFactory.getLogger(NodeResolver.class);
 
     private static final int MAX_RECURSION_DEPTH = 50;
+
+    /**
+     * 解析上下文，封装节点解析所需的所有参数。
+     *
+     * @param path 当前路径
+     * @param rootPath 查询根路径（用于 EXISTS/IN 子查询关联）
+     * @param query Criteria 查询对象
+     * @param cb Criteria 构建器
+     * @param joinCache JOIN 缓存
+     * @param pathPrefix 路径前缀
+     * @param depth 当前递归深度
+     * @param fetchPaths 已获取的路径集合
+     */
+    record NodeContext(Path<?> path, Path<?> rootPath, CriteriaQuery<?> query, CriteriaBuilder cb,
+        Map<String, Join<?, ?>> joinCache, String pathPrefix, int depth, java.util.Set<String> fetchPaths) {
+    }
+
+    /**
+     * 节点解析策略接口。
+     *
+     * <p>
+     * 每种 {@link ConditionNode} 类型对应一个策略实现，负责将节点转换为 JPA {@link Predicate}。
+     */
+    @FunctionalInterface
+    interface NodeStrategy {
+        /**
+         * 解析条件节点并转换为 Predicate。
+         *
+         * @param node 条件节点
+         * @param ctx 解析上下文
+         * @return 生成的 Predicate，如果节点无条件则返回 null
+         */
+        Predicate resolve(ConditionNode node, NodeContext ctx);
+    }
+
+    /** 节点类型到解析策略的映射表。 */
+    private static final Map<Class<? extends ConditionNode>, NodeStrategy> STRATEGIES = new ConcurrentHashMap<>();
+
+    static {
+        STRATEGIES.put(ConditionNode.SimpleNode.class,
+            (node, ctx) -> resolveSimple((ConditionNode.SimpleNode)node, ctx));
+        STRATEGIES.put(ConditionNode.JoinNode.class, (node, ctx) -> resolveJoin((ConditionNode.JoinNode)node, ctx));
+        STRATEGIES.put(ConditionNode.OrNode.class, (node, ctx) -> resolveOr((ConditionNode.OrNode)node, ctx));
+        STRATEGIES.put(ConditionNode.AndNode.class, (node, ctx) -> resolveAnd((ConditionNode.AndNode)node, ctx));
+        STRATEGIES.put(ConditionNode.MultiLikeNode.class,
+            (node, ctx) -> resolveMultiLike((ConditionNode.MultiLikeNode)node, ctx));
+        STRATEGIES.put(ConditionNode.CollectionNode.class,
+            (node, ctx) -> resolveCollection((ConditionNode.CollectionNode)node, ctx));
+        STRATEGIES.put(ConditionNode.ExistsNode.class,
+            (node, ctx) -> resolveExists((ConditionNode.ExistsNode<?>)node, ctx));
+        STRATEGIES.put(ConditionNode.InSubQueryNode.class,
+            (node, ctx) -> resolveInSubQuery((ConditionNode.InSubQueryNode<?>)node, ctx));
+        STRATEGIES.put(ConditionNode.RawNode.class, (node, ctx) -> resolveRaw((ConditionNode.RawNode)node, ctx));
+        STRATEGIES.put(ConditionNode.NegateNode.class,
+            (node, ctx) -> resolveNegate((ConditionNode.NegateNode)node, ctx));
+        STRATEGIES.put(ConditionNode.FuncNode.class, (node, ctx) -> resolveFuncNode((ConditionNode.FuncNode)node, ctx));
+    }
 
     private NodeResolver() {}
 
@@ -76,55 +134,28 @@ final class NodeResolver {
         java.util.Set<String> fetchPaths) {
 
         if (depth > MAX_RECURSION_DEPTH) {
-            throw new MyJpaPlusException("Condition node recursion depth exceeded maximum limit (" + MAX_RECURSION_DEPTH
-                + "). This may indicate a circular condition tree or excessively "
+            throw new QueryBuildException("Condition node recursion depth exceeded maximum limit ("
+                + MAX_RECURSION_DEPTH + "). This may indicate a circular condition tree or excessively "
                 + "nested condition structure. Please simplify your query conditions.");
         }
 
-        if (node instanceof ConditionNode.SimpleNode n) {
-            return resolveSimple(n, path, cb);
+        NodeStrategy strategy = STRATEGIES.get(node.getClass());
+        if (strategy == null) {
+            throw new IllegalArgumentException("Unknown ConditionNode type: " + node.getClass().getName());
         }
-        if (node instanceof ConditionNode.JoinNode n) {
-            return resolveJoin(n, path, rootPath, query, cb, joinCache, pathPrefix, depth, fetchPaths);
-        }
-        if (node instanceof ConditionNode.OrNode n) {
-            return resolveOr(n, path, rootPath, query, cb, joinCache, pathPrefix, depth, fetchPaths);
-        }
-        if (node instanceof ConditionNode.AndNode n) {
-            return resolveAnd(n, path, rootPath, query, cb, joinCache, pathPrefix, depth, fetchPaths);
-        }
-        if (node instanceof ConditionNode.MultiLikeNode n) {
-            return resolveMultiLike(n, path, cb);
-        }
-        if (node instanceof ConditionNode.CollectionNode n) {
-            return resolveCollection(n, path, cb);
-        }
-        if (node instanceof ConditionNode.ExistsNode<?> n) {
-            return resolveExists(n, rootPath, query, cb);
-        }
-        if (node instanceof ConditionNode.InSubQueryNode<?> n) {
-            return resolveInSubQuery(n, path, query, cb);
-        }
-        if (node instanceof ConditionNode.RawNode n) {
-            return n.fn.apply(path, cb);
-        }
-        if (node instanceof ConditionNode.NegateNode n) {
-            Predicate inner =
-                resolveNodeWithDepth(n.inner, path, rootPath, query, cb, joinCache, pathPrefix, depth + 1, fetchPaths);
-            return inner != null ? cb.not(inner) : null;
-        }
-        if (node instanceof ConditionNode.FuncNode n) {
-            return resolveFuncNode(n, path, cb);
-        }
-        throw new IllegalArgumentException("Unknown ConditionNode type: " + node.getClass().getName());
+
+        NodeContext ctx = new NodeContext(path, rootPath, query, cb, joinCache, pathPrefix, depth, fetchPaths);
+        return strategy.resolve(node, ctx);
     }
 
-    private static Predicate resolveSimple(ConditionNode.SimpleNode node, Path<?> path, CriteriaBuilder cb) {
-        return PredicateHelper.resolveSimplePredicate(path, node, cb);
+    private static Predicate resolveSimple(ConditionNode.SimpleNode node, NodeContext ctx) {
+        return PredicateHelper.resolveSimplePredicate(ctx.path(), node, ctx.cb());
     }
 
     @SuppressWarnings({"unchecked", "rawtypes"})
-    private static Predicate resolveFuncNode(ConditionNode.FuncNode node, Path<?> path, CriteriaBuilder cb) {
+    private static Predicate resolveFuncNode(ConditionNode.FuncNode node, NodeContext ctx) {
+        CriteriaBuilder cb = ctx.cb();
+        Path<?> path = ctx.path();
         Expression<?>[] args = new Expression[node.params.length];
         for (int i = 0; i < node.params.length; i++) {
             Object param = node.params[i];
@@ -139,9 +170,16 @@ final class NodeResolver {
     }
 
     @SuppressWarnings({"unchecked", "rawtypes"})
-    private static Predicate resolveJoin(ConditionNode.JoinNode node, Path<?> path, Path<?> rootPath,
-        CriteriaQuery<?> query, CriteriaBuilder cb, Map<String, Join<?, ?>> joinCache, String pathPrefix, int depth,
-        java.util.Set<String> fetchPaths) {
+    private static Predicate resolveJoin(ConditionNode.JoinNode node, NodeContext ctx) {
+        Path<?> path = ctx.path();
+        Path<?> rootPath = ctx.rootPath();
+        CriteriaQuery<?> query = ctx.query();
+        CriteriaBuilder cb = ctx.cb();
+        Map<String, Join<?, ?>> joinCache = ctx.joinCache();
+        String pathPrefix = ctx.pathPrefix();
+        int depth = ctx.depth();
+        java.util.Set<String> fetchPaths = ctx.fetchPaths();
+
         String fullPath = (pathPrefix != null && !pathPrefix.isEmpty() ? pathPrefix + "." : "") + node.fieldName;
 
         boolean isFetch =
@@ -187,7 +225,6 @@ final class NodeResolver {
                     com.zsubera.jpa.softdelete.SoftDeleteHelper.findSoftDeleteField(joinEntityType);
                 if (softDeleteFieldName != null) {
                     jakarta.persistence.criteria.Path<?> deletedPath = join.get(softDeleteFieldName);
-                    // 检查字段类型是否为 Boolean
                     try {
                         java.lang.reflect.Field field = joinEntityType.getDeclaredField(softDeleteFieldName);
                         if (field.getType() == Boolean.class || field.getType() == boolean.class) {
@@ -210,47 +247,45 @@ final class NodeResolver {
         return innerPredicates.isEmpty() ? cb.conjunction() : cb.and(innerPredicates.toArray(new Predicate[0]));
     }
 
-    private static Predicate resolveOr(ConditionNode.OrNode node, Path<?> path, Path<?> rootPath,
-        CriteriaQuery<?> query, CriteriaBuilder cb, Map<String, Join<?, ?>> joinCache, String pathPrefix, int depth,
-        java.util.Set<String> fetchPaths) {
+    private static Predicate resolveOr(ConditionNode.OrNode node, NodeContext ctx) {
         List<Predicate> childPredicates = new ArrayList<>();
         for (ConditionNode child : node.nodes) {
-            Predicate p =
-                resolveNodeWithDepth(child, path, rootPath, query, cb, joinCache, pathPrefix, depth + 1, fetchPaths);
+            Predicate p = resolveNodeWithDepth(child, ctx.path(), ctx.rootPath(), ctx.query(), ctx.cb(),
+                ctx.joinCache(), ctx.pathPrefix(), ctx.depth() + 1, ctx.fetchPaths());
             if (p != null) {
                 childPredicates.add(p);
             }
         }
         if (childPredicates.isEmpty()) {
-            return cb.disjunction();
+            return ctx.cb().disjunction();
         }
         if (childPredicates.size() == 1) {
             return childPredicates.get(0);
         }
-        return cb.or(childPredicates.toArray(new Predicate[0]));
+        return ctx.cb().or(childPredicates.toArray(new Predicate[0]));
     }
 
-    private static Predicate resolveAnd(ConditionNode.AndNode node, Path<?> path, Path<?> rootPath,
-        CriteriaQuery<?> query, CriteriaBuilder cb, Map<String, Join<?, ?>> joinCache, String pathPrefix, int depth,
-        java.util.Set<String> fetchPaths) {
+    private static Predicate resolveAnd(ConditionNode.AndNode node, NodeContext ctx) {
         List<Predicate> childPredicates = new ArrayList<>();
         for (ConditionNode child : node.nodes) {
-            Predicate p =
-                resolveNodeWithDepth(child, path, rootPath, query, cb, joinCache, pathPrefix, depth + 1, fetchPaths);
+            Predicate p = resolveNodeWithDepth(child, ctx.path(), ctx.rootPath(), ctx.query(), ctx.cb(),
+                ctx.joinCache(), ctx.pathPrefix(), ctx.depth() + 1, ctx.fetchPaths());
             if (p != null) {
                 childPredicates.add(p);
             }
         }
         if (childPredicates.isEmpty()) {
-            return cb.conjunction();
+            return ctx.cb().conjunction();
         }
         if (childPredicates.size() == 1) {
             return childPredicates.get(0);
         }
-        return cb.and(childPredicates.toArray(new Predicate[0]));
+        return ctx.cb().and(childPredicates.toArray(new Predicate[0]));
     }
 
-    private static Predicate resolveMultiLike(ConditionNode.MultiLikeNode node, Path<?> path, CriteriaBuilder cb) {
+    private static Predicate resolveMultiLike(ConditionNode.MultiLikeNode node, NodeContext ctx) {
+        CriteriaBuilder cb = ctx.cb();
+        Path<?> path = ctx.path();
         List<Predicate> likes = new ArrayList<>();
         String pattern = ConditionalMethods.wrapLikePattern(node.keyword);
         for (String fieldName : node.fieldNames) {
@@ -260,8 +295,9 @@ final class NodeResolver {
     }
 
     @SuppressWarnings("unchecked")
-    private static Predicate resolveCollection(ConditionNode.CollectionNode node, Path<?> path, CriteriaBuilder cb) {
-        Path<?> fieldPath = path.get(node.fieldName);
+    private static Predicate resolveCollection(ConditionNode.CollectionNode node, NodeContext ctx) {
+        CriteriaBuilder cb = ctx.cb();
+        Path<?> fieldPath = ctx.path().get(node.fieldName);
         if (node.op == ConditionNode.CollectionOp.IS_EMPTY) {
             return cb.isEmpty((Expression<Collection<?>>)fieldPath);
         }
@@ -269,15 +305,15 @@ final class NodeResolver {
     }
 
     @SuppressWarnings("unchecked")
-    private static <S> Predicate resolveExists(ConditionNode.ExistsNode<S> node, Path<?> outerPath,
-        CriteriaQuery<?> query, CriteriaBuilder cb) {
+    private static <S> Predicate resolveExists(ConditionNode.ExistsNode<S> node, NodeContext ctx) {
+        CriteriaQuery<?> query = ctx.query();
         if (query == null) {
             log.debug("EXISTS subquery used in count query context (query=null). "
                 + "Creating temporary CriteriaQuery for subquery construction.");
-            CriteriaQuery<S> tempQuery = cb.createQuery(node.subEntity);
-            return resolveExistsInternal(node, outerPath, tempQuery, cb);
+            CriteriaQuery<S> tempQuery = ctx.cb().createQuery(node.subEntity);
+            return resolveExistsInternal(node, ctx.rootPath(), tempQuery, ctx.cb());
         }
-        return resolveExistsInternal(node, outerPath, query, cb);
+        return resolveExistsInternal(node, ctx.rootPath(), query, ctx.cb());
     }
 
     private static <S> Predicate resolveExistsInternal(ConditionNode.ExistsNode<S> node, Path<?> rootPath,
@@ -302,15 +338,15 @@ final class NodeResolver {
             + path.getClass().getSimpleName() + ". Ensure EXISTS is used at the query root level.");
     }
 
-    private static <S> Predicate resolveInSubQuery(ConditionNode.InSubQueryNode<S> node, Path<?> path,
-        CriteriaQuery<?> query, CriteriaBuilder cb) {
+    private static <S> Predicate resolveInSubQuery(ConditionNode.InSubQueryNode<S> node, NodeContext ctx) {
+        CriteriaQuery<?> query = ctx.query();
         if (query == null) {
             log.debug("IN subquery used in count query context (query=null). "
                 + "Creating temporary CriteriaQuery for subquery construction.");
-            CriteriaQuery<S> tempQuery = cb.createQuery(node.subEntity);
-            return resolveInSubQueryInternal(node, path, tempQuery, cb);
+            CriteriaQuery<S> tempQuery = ctx.cb().createQuery(node.subEntity);
+            return resolveInSubQueryInternal(node, ctx.path(), tempQuery, ctx.cb());
         }
-        return resolveInSubQueryInternal(node, path, query, cb);
+        return resolveInSubQueryInternal(node, ctx.path(), query, ctx.cb());
     }
 
     @SuppressWarnings({"unchecked", "rawtypes"})
@@ -331,5 +367,15 @@ final class NodeResolver {
         CriteriaBuilder.In inClause = cb.in(outerPath.get(node.outerFieldName));
         inClause.value((jakarta.persistence.criteria.Subquery)subquery);
         return node.negate ? cb.not(inClause) : inClause;
+    }
+
+    private static Predicate resolveRaw(ConditionNode.RawNode node, NodeContext ctx) {
+        return node.fn.apply(ctx.path(), ctx.cb());
+    }
+
+    private static Predicate resolveNegate(ConditionNode.NegateNode node, NodeContext ctx) {
+        Predicate inner = resolveNodeWithDepth(node.inner, ctx.path(), ctx.rootPath(), ctx.query(), ctx.cb(),
+            ctx.joinCache(), ctx.pathPrefix(), ctx.depth() + 1, ctx.fetchPaths());
+        return inner != null ? ctx.cb().not(inner) : null;
     }
 }
