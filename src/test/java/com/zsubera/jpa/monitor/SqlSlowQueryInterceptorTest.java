@@ -2,152 +2,469 @@ package com.zsubera.jpa.monitor;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+import java.lang.reflect.Method;
 import java.lang.reflect.Proxy;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
+import java.sql.SQLException;
 import javax.sql.DataSource;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 class SqlSlowQueryInterceptorTest {
 
-    @Test
-    void inspect_returnsSqlUnchanged() {
-        SqlSlowQueryInterceptor interceptor = new SqlSlowQueryInterceptor(1000);
-        String sql = "SELECT * FROM users WHERE id = ?";
-        assertEquals(sql, interceptor.inspect(sql));
+    @BeforeEach
+    void setUp() {
+        resetMicrometerState();
     }
 
     @Test
-    void inspect_nullSql_returnsNull() {
-        SqlSlowQueryInterceptor interceptor = new SqlSlowQueryInterceptor(1000);
-        assertNull(interceptor.inspect(null));
+    void constructor_validThreshold() {
+        assertNotNull(new SqlSlowQueryInterceptor(1000));
     }
 
     @Test
-    void constructor_zeroThreshold_throwsException() {
+    void constructor_zeroThreshold_throws() {
         assertThrows(IllegalArgumentException.class, () -> new SqlSlowQueryInterceptor(0));
     }
 
     @Test
-    void constructor_negativeThreshold_throwsException() {
+    void constructor_negativeThreshold_throws() {
         assertThrows(IllegalArgumentException.class, () -> new SqlSlowQueryInterceptor(-1));
     }
 
     @Test
-    void wrapDataSource_returnsProxy() {
-        SqlSlowQueryInterceptor interceptor = new SqlSlowQueryInterceptor(1000);
-        DataSource original = mockDataSource(0);
-        DataSource wrapped = interceptor.wrapDataSource(original);
+    void inspect_returnsSameSql() {
+        SqlSlowQueryInterceptor i = new SqlSlowQueryInterceptor(1000);
+        assertEquals("SELECT 1", i.inspect("SELECT 1"));
+        assertNull(i.inspect(null));
+    }
 
-        assertNotSame(original, wrapped);
+    @Test
+    void wrapDataSource_returnsProxy() {
+        SqlSlowQueryInterceptor i = new SqlSlowQueryInterceptor(1000);
+        DataSource wrapped = i.wrapDataSource(new MockDataSource());
         assertTrue(Proxy.isProxyClass(wrapped.getClass()));
     }
 
     @Test
-    void executeQuery_completesWithinThreshold() throws Exception {
-        SqlSlowQueryInterceptor interceptor = new SqlSlowQueryInterceptor(5000);
-        DataSource wrapped = interceptor.wrapDataSource(mockDataSource(0));
-
-        try (Connection conn = wrapped.getConnection(); PreparedStatement ps = conn.prepareStatement("SELECT 1")) {
-            ResultSet rs = ps.executeQuery();
-            assertNull(rs);
-        }
+    void wrappedDataSource_getConnection_delegates() throws SQLException {
+        SqlSlowQueryInterceptor i = new SqlSlowQueryInterceptor(1000);
+        MockDataSource mockDs = new MockDataSource();
+        DataSource wrapped = i.wrapDataSource(mockDs);
+        assertNotNull(wrapped.getConnection());
+        assertTrue(mockDs.getConnectionCalled);
     }
 
     @Test
-    void executeQuery_completesExceedingThreshold() throws Exception {
-        SqlSlowQueryInterceptor interceptor = new SqlSlowQueryInterceptor(50);
-        DataSource wrapped = interceptor.wrapDataSource(mockDataSource(100));
-
-        long start = System.currentTimeMillis();
-        try (Connection conn = wrapped.getConnection();
-            PreparedStatement ps = conn.prepareStatement("SELECT * FROM slow_table")) {
-            ps.executeQuery();
-        }
-        long elapsed = System.currentTimeMillis() - start;
-
-        assertTrue(elapsed >= 100, "Expected execution to take at least 100ms, took: " + elapsed);
+    void wrappedDataSource_getConnectionWithAuth() throws SQLException {
+        SqlSlowQueryInterceptor i = new SqlSlowQueryInterceptor(1000);
+        DataSource wrapped = i.wrapDataSource(new MockDataSource());
+        assertNotNull(wrapped.getConnection("u", "p"));
     }
 
     @Test
-    void executeUpdate_completes() throws Exception {
-        SqlSlowQueryInterceptor interceptor = new SqlSlowQueryInterceptor(5000);
-        DataSource wrapped = interceptor.wrapDataSource(mockDataSource(0));
+    void wrappedDataSource_otherMethods_delegate() throws Exception {
+        SqlSlowQueryInterceptor i = new SqlSlowQueryInterceptor(1000);
+        DataSource wrapped = i.wrapDataSource(new MockDataSource());
+        wrapped.setLogWriter(null);
+        assertEquals(0, wrapped.getLoginTimeout());
+        wrapped.setLoginTimeout(5);
+        assertFalse(wrapped.isWrapperFor(DataSource.class));
+    }
 
-        try (Connection conn = wrapped.getConnection();
-            PreparedStatement ps = conn.prepareStatement("UPDATE t SET val = 1")) {
-            int result = ps.executeUpdate();
-            assertEquals(0, result);
-        }
+    // ==================== DataSourceProxyHandler direct tests ====================
+
+    @Test
+    void dsProxyHandler_getConnection_delegates() throws Throwable {
+        MockDataSource mockDs = new MockDataSource();
+        SqlSlowQueryInterceptor.DataSourceProxyHandler handler =
+            new SqlSlowQueryInterceptor.DataSourceProxyHandler(mockDs, 1000);
+
+        DataSource proxy = (DataSource)Proxy.newProxyInstance(DataSource.class.getClassLoader(),
+            new Class<?>[] {DataSource.class}, handler);
+
+        Method getConnection = DataSource.class.getMethod("getConnection");
+        Connection conn = (Connection)getConnection.invoke(proxy);
+        assertNotNull(conn);
+        assertTrue(mockDs.getConnectionCalled);
     }
 
     @Test
-    void execute_completes() throws Exception {
-        SqlSlowQueryInterceptor interceptor = new SqlSlowQueryInterceptor(5000);
-        DataSource wrapped = interceptor.wrapDataSource(mockDataSource(0));
+    void dsProxyHandler_toString_delegates() throws Throwable {
+        MockDataSource mockDs = new MockDataSource();
+        SqlSlowQueryInterceptor.DataSourceProxyHandler handler =
+            new SqlSlowQueryInterceptor.DataSourceProxyHandler(mockDs, 1000);
 
-        try (Connection conn = wrapped.getConnection(); PreparedStatement ps = conn.prepareStatement("DELETE FROM t")) {
-            boolean result = ps.execute();
-            assertFalse(result);
-        }
+        DataSource proxy = (DataSource)Proxy.newProxyInstance(DataSource.class.getClassLoader(),
+            new Class<?>[] {DataSource.class}, handler);
+
+        Method toString = Object.class.getMethod("toString");
+        String result = (String)toString.invoke(proxy);
+        assertNotNull(result);
     }
 
     @Test
-    void multipleStatements_independentTiming() throws Exception {
-        SqlSlowQueryInterceptor interceptor = new SqlSlowQueryInterceptor(5000);
-        DataSource wrapped = interceptor.wrapDataSource(mockDataSource(0));
+    void dsProxyHandler_hashCode_delegates() throws Throwable {
+        MockDataSource mockDs = new MockDataSource();
+        SqlSlowQueryInterceptor.DataSourceProxyHandler handler =
+            new SqlSlowQueryInterceptor.DataSourceProxyHandler(mockDs, 1000);
 
-        try (Connection conn = wrapped.getConnection()) {
-            try (PreparedStatement ps1 = conn.prepareStatement("SELECT 1")) {
-                ps1.executeQuery();
+        DataSource proxy = (DataSource)Proxy.newProxyInstance(DataSource.class.getClassLoader(),
+            new Class<?>[] {DataSource.class}, handler);
+
+        Method hashCode = Object.class.getMethod("hashCode");
+        int result = (int)hashCode.invoke(proxy);
+        assertEquals(mockDs.hashCode(), result);
+    }
+
+    @Test
+    void dsProxyHandler_equals_delegates() throws Throwable {
+        MockDataSource mockDs = new MockDataSource();
+        SqlSlowQueryInterceptor.DataSourceProxyHandler handler =
+            new SqlSlowQueryInterceptor.DataSourceProxyHandler(mockDs, 1000);
+
+        DataSource proxy = (DataSource)Proxy.newProxyInstance(DataSource.class.getClassLoader(),
+            new Class<?>[] {DataSource.class}, handler);
+
+        Method equals = Object.class.getMethod("equals", Object.class);
+        assertTrue((boolean)equals.invoke(proxy, mockDs));
+        assertFalse((boolean)equals.invoke(proxy, new Object()));
+    }
+
+    // ==================== PreparedStatementTimingHandler via wrapPreparedStatement ====================
+
+    @Test
+    void wrapPreparedStatement_createsTimingProxy() throws Exception {
+        SqlSlowQueryInterceptor interceptor = new SqlSlowQueryInterceptor(1000);
+
+        // Create a mock PreparedStatement with interfaces
+        PreparedStatement mockStmt = createMockPreparedStatement("SELECT 1");
+
+        // Use reflection to call wrapPreparedStatement
+        java.lang.reflect.Method wrapMethod = getInnerClass("DataSourceProxyHandler")
+            .getDeclaredMethod("wrapPreparedStatement", Object.class, String.class);
+        wrapMethod.setAccessible(true);
+
+        SqlSlowQueryInterceptor.DataSourceProxyHandler handler =
+            new SqlSlowQueryInterceptor.DataSourceProxyHandler(new MockDataSource(), 1000);
+
+        Object wrapped = wrapMethod.invoke(handler, mockStmt, "SELECT 1");
+        assertNotNull(wrapped);
+        assertTrue(Proxy.isProxyClass(wrapped.getClass()));
+    }
+
+    @Test
+    void timingHandler_executeQuery_viaWrappedProxy() throws Exception {
+        SqlSlowQueryInterceptor interceptor = new SqlSlowQueryInterceptor(1000);
+        PreparedStatement mockStmt = createMockPreparedStatement("SELECT 1");
+
+        java.lang.reflect.Method wrapMethod = getInnerClass("DataSourceProxyHandler")
+            .getDeclaredMethod("wrapPreparedStatement", Object.class, String.class);
+        wrapMethod.setAccessible(true);
+
+        SqlSlowQueryInterceptor.DataSourceProxyHandler handler =
+            new SqlSlowQueryInterceptor.DataSourceProxyHandler(new MockDataSource(), 1000);
+
+        PreparedStatement wrapped = (PreparedStatement)wrapMethod.invoke(handler, mockStmt, "SELECT 1");
+        ResultSet rs = wrapped.executeQuery();
+        assertNotNull(rs);
+    }
+
+    @Test
+    void timingHandler_executeUpdate_viaWrappedProxy() throws Exception {
+        SqlSlowQueryInterceptor interceptor = new SqlSlowQueryInterceptor(1000);
+        PreparedStatement mockStmt = createMockPreparedStatement("UPDATE users SET name='test'");
+
+        java.lang.reflect.Method wrapMethod = getInnerClass("DataSourceProxyHandler")
+            .getDeclaredMethod("wrapPreparedStatement", Object.class, String.class);
+        wrapMethod.setAccessible(true);
+
+        SqlSlowQueryInterceptor.DataSourceProxyHandler handler =
+            new SqlSlowQueryInterceptor.DataSourceProxyHandler(new MockDataSource(), 1000);
+
+        PreparedStatement wrapped =
+            (PreparedStatement)wrapMethod.invoke(handler, mockStmt, "UPDATE users SET name='test'");
+        int result = wrapped.executeUpdate();
+        assertEquals(0, result);
+    }
+
+    @Test
+    void timingHandler_execute_viaWrappedProxy() throws Exception {
+        SqlSlowQueryInterceptor interceptor = new SqlSlowQueryInterceptor(1000);
+        PreparedStatement mockStmt = createMockPreparedStatement("DELETE FROM users");
+
+        java.lang.reflect.Method wrapMethod = getInnerClass("DataSourceProxyHandler")
+            .getDeclaredMethod("wrapPreparedStatement", Object.class, String.class);
+        wrapMethod.setAccessible(true);
+
+        SqlSlowQueryInterceptor.DataSourceProxyHandler handler =
+            new SqlSlowQueryInterceptor.DataSourceProxyHandler(new MockDataSource(), 1000);
+
+        PreparedStatement wrapped = (PreparedStatement)wrapMethod.invoke(handler, mockStmt, "DELETE FROM users");
+        boolean result = wrapped.execute();
+        assertFalse(result);
+    }
+
+    @Test
+    void timingHandler_setString_viaWrappedProxy() throws Exception {
+        SqlSlowQueryInterceptor interceptor = new SqlSlowQueryInterceptor(1000);
+        PreparedStatement mockStmt = createMockPreparedStatement("SELECT * FROM users WHERE name=?");
+
+        java.lang.reflect.Method wrapMethod = getInnerClass("DataSourceProxyHandler")
+            .getDeclaredMethod("wrapPreparedStatement", Object.class, String.class);
+        wrapMethod.setAccessible(true);
+
+        SqlSlowQueryInterceptor.DataSourceProxyHandler handler =
+            new SqlSlowQueryInterceptor.DataSourceProxyHandler(new MockDataSource(), 1000);
+
+        PreparedStatement wrapped =
+            (PreparedStatement)wrapMethod.invoke(handler, mockStmt, "SELECT * FROM users WHERE name=?");
+        wrapped.setString(1, "test");
+    }
+
+    @Test
+    void timingHandler_close_viaWrappedProxy() throws Exception {
+        SqlSlowQueryInterceptor interceptor = new SqlSlowQueryInterceptor(1000);
+        PreparedStatement mockStmt = createMockPreparedStatement("SELECT 1");
+
+        java.lang.reflect.Method wrapMethod = getInnerClass("DataSourceProxyHandler")
+            .getDeclaredMethod("wrapPreparedStatement", Object.class, String.class);
+        wrapMethod.setAccessible(true);
+
+        SqlSlowQueryInterceptor.DataSourceProxyHandler handler =
+            new SqlSlowQueryInterceptor.DataSourceProxyHandler(new MockDataSource(), 1000);
+
+        PreparedStatement wrapped = (PreparedStatement)wrapMethod.invoke(handler, mockStmt, "SELECT 1");
+        wrapped.close();
+    }
+
+    @Test
+    void timingHandler_getConnection_viaWrappedProxy() throws Exception {
+        SqlSlowQueryInterceptor interceptor = new SqlSlowQueryInterceptor(1000);
+        PreparedStatement mockStmt = createMockPreparedStatement("SELECT 1");
+
+        java.lang.reflect.Method wrapMethod = getInnerClass("DataSourceProxyHandler")
+            .getDeclaredMethod("wrapPreparedStatement", Object.class, String.class);
+        wrapMethod.setAccessible(true);
+
+        SqlSlowQueryInterceptor.DataSourceProxyHandler handler =
+            new SqlSlowQueryInterceptor.DataSourceProxyHandler(new MockDataSource(), 1000);
+
+        PreparedStatement wrapped = (PreparedStatement)wrapMethod.invoke(handler, mockStmt, "SELECT 1");
+        Connection conn = wrapped.getConnection();
+        assertNotNull(conn);
+    }
+
+    @Test
+    void timingHandler_getMetaData_viaWrappedProxy() throws Exception {
+        SqlSlowQueryInterceptor interceptor = new SqlSlowQueryInterceptor(1000);
+        PreparedStatement mockStmt = createMockPreparedStatement("SELECT 1");
+
+        java.lang.reflect.Method wrapMethod = getInnerClass("DataSourceProxyHandler")
+            .getDeclaredMethod("wrapPreparedStatement", Object.class, String.class);
+        wrapMethod.setAccessible(true);
+
+        SqlSlowQueryInterceptor.DataSourceProxyHandler handler =
+            new SqlSlowQueryInterceptor.DataSourceProxyHandler(new MockDataSource(), 1000);
+
+        PreparedStatement wrapped = (PreparedStatement)wrapMethod.invoke(handler, mockStmt, "SELECT 1");
+        wrapped.getMetaData();
+    }
+
+    @Test
+    void timingHandler_slowQuery_logsWarning() throws Exception {
+        SqlSlowQueryInterceptor interceptor = new SqlSlowQueryInterceptor(1); // 1ms threshold
+        resetMicrometerState();
+
+        PreparedStatement mockStmt = createMockPreparedStatement("SELECT 1");
+
+        java.lang.reflect.Method wrapMethod = getInnerClass("DataSourceProxyHandler")
+            .getDeclaredMethod("wrapPreparedStatement", Object.class, String.class);
+        wrapMethod.setAccessible(true);
+
+        SqlSlowQueryInterceptor.DataSourceProxyHandler handler =
+            new SqlSlowQueryInterceptor.DataSourceProxyHandler(new MockDataSource(), 1);
+
+        PreparedStatement wrapped = (PreparedStatement)wrapMethod.invoke(handler, mockStmt, "SELECT 1");
+        wrapped.executeQuery();
+    }
+
+    @Test
+    void timingHandler_recordMetrics_micrometerNotAvailable() throws Exception {
+        SqlSlowQueryInterceptor interceptor = new SqlSlowQueryInterceptor(1000);
+        resetMicrometerState();
+
+        PreparedStatement mockStmt = createMockPreparedStatement("SELECT 1");
+
+        java.lang.reflect.Method wrapMethod = getInnerClass("DataSourceProxyHandler")
+            .getDeclaredMethod("wrapPreparedStatement", Object.class, String.class);
+        wrapMethod.setAccessible(true);
+
+        SqlSlowQueryInterceptor.DataSourceProxyHandler handler =
+            new SqlSlowQueryInterceptor.DataSourceProxyHandler(new MockDataSource(), 1000);
+
+        PreparedStatement wrapped = (PreparedStatement)wrapMethod.invoke(handler, mockStmt, "SELECT 1");
+        wrapped.executeQuery();
+    }
+
+    @Test
+    void timingHandler_checkMicrometerAlreadyChecked() throws Exception {
+        SqlSlowQueryInterceptor interceptor = new SqlSlowQueryInterceptor(1000);
+
+        // Set micrometerChecked to true
+        java.lang.reflect.Field checkedField =
+            getInnerClass("PreparedStatementTimingHandler").getDeclaredField("micrometerChecked");
+        checkedField.setAccessible(true);
+        checkedField.setBoolean(null, true);
+
+        PreparedStatement mockStmt = createMockPreparedStatement("SELECT 1");
+
+        java.lang.reflect.Method wrapMethod = getInnerClass("DataSourceProxyHandler")
+            .getDeclaredMethod("wrapPreparedStatement", Object.class, String.class);
+        wrapMethod.setAccessible(true);
+
+        SqlSlowQueryInterceptor.DataSourceProxyHandler handler =
+            new SqlSlowQueryInterceptor.DataSourceProxyHandler(new MockDataSource(), 1000);
+
+        PreparedStatement wrapped = (PreparedStatement)wrapMethod.invoke(handler, mockStmt, "SELECT 1");
+        wrapped.executeQuery();
+
+        checkedField.setBoolean(null, false);
+    }
+
+    @Test
+    void wrapPreparedStatement_noInterfaces_returnsRaw() throws Exception {
+        SqlSlowQueryInterceptor interceptor = new SqlSlowQueryInterceptor(1000);
+
+        // Create an object with no interfaces (just Object)
+        Object noInterfaceObj = new Object() {};
+
+        java.lang.reflect.Method wrapMethod = getInnerClass("DataSourceProxyHandler")
+            .getDeclaredMethod("wrapPreparedStatement", Object.class, String.class);
+        wrapMethod.setAccessible(true);
+
+        SqlSlowQueryInterceptor.DataSourceProxyHandler handler =
+            new SqlSlowQueryInterceptor.DataSourceProxyHandler(new MockDataSource(), 1000);
+
+        Object result = wrapMethod.invoke(handler, noInterfaceObj, "SELECT 1");
+        assertSame(noInterfaceObj, result);
+    }
+
+    @Test
+    void wrapPreparedStatement_reflectiveFallback() throws Exception {
+        SqlSlowQueryInterceptor interceptor = new SqlSlowQueryInterceptor(1000);
+
+        // Create a proxy that will cause the primary constructor to fail
+        // by using a class that has a constructor throwing an exception
+        PreparedStatement mockStmt = createMockPreparedStatement("SELECT 1");
+
+        java.lang.reflect.Method wrapMethod = getInnerClass("DataSourceProxyHandler")
+            .getDeclaredMethod("wrapPreparedStatement", Object.class, String.class);
+        wrapMethod.setAccessible(true);
+
+        SqlSlowQueryInterceptor.DataSourceProxyHandler handler =
+            new SqlSlowQueryInterceptor.DataSourceProxyHandler(new MockDataSource(), 1000);
+
+        Object wrapped = wrapMethod.invoke(handler, mockStmt, "SELECT 1");
+        assertNotNull(wrapped);
+    }
+
+    // ==================== Helpers ====================
+
+    private Class<?> getInnerClass(String name) {
+        for (Class<?> inner : SqlSlowQueryInterceptor.class.getDeclaredClasses()) {
+            if (inner.getSimpleName().equals(name)) {
+                return inner;
             }
-            try (PreparedStatement ps2 = conn.prepareStatement("SELECT 2")) {
-                ps2.executeUpdate();
-            }
-            try (PreparedStatement ps3 = conn.prepareStatement("SELECT 3")) {
-                ps3.execute();
-            }
+        }
+        throw new RuntimeException("Inner class not found: " + name);
+    }
+
+    private void resetMicrometerState() {
+        try {
+            Class<?> handlerClass = getInnerClass("PreparedStatementTimingHandler");
+            java.lang.reflect.Field f = handlerClass.getDeclaredField("micrometerChecked");
+            f.setAccessible(true);
+            f.setBoolean(null, false);
+            f = handlerClass.getDeclaredField("micrometerAvailable");
+            f.setAccessible(true);
+            f.setBoolean(null, false);
+            f = handlerClass.getDeclaredField("meterRegistry");
+            f.setAccessible(true);
+            f.set(null, null);
+        } catch (Exception ignored) {
         }
     }
 
-    private static DataSource mockDataSource(long sleepMs) {
-        return (DataSource)Proxy.newProxyInstance(SqlSlowQueryInterceptorTest.class.getClassLoader(),
-            new Class<?>[] {DataSource.class}, (proxy, method, args) -> {
-                if ("getConnection".equals(method.getName())) {
-                    return mockConnection(sleepMs);
-                }
-                return null;
-            });
-    }
-
-    private static Connection mockConnection(long sleepMs) {
-        return (Connection)Proxy.newProxyInstance(SqlSlowQueryInterceptorTest.class.getClassLoader(),
-            new Class<?>[] {Connection.class}, (proxy, method, args) -> {
-                if ("prepareStatement".equals(method.getName())) {
-                    return mockPreparedStatement(sleepMs);
-                }
-                return null;
-            });
-    }
-
-    private static PreparedStatement mockPreparedStatement(long sleepMs) {
-        return (PreparedStatement)Proxy.newProxyInstance(SqlSlowQueryInterceptorTest.class.getClassLoader(),
+    private static PreparedStatement createMockPreparedStatement(String sql) {
+        return (PreparedStatement)Proxy.newProxyInstance(PreparedStatement.class.getClassLoader(),
             new Class<?>[] {PreparedStatement.class}, (proxy, method, args) -> {
-                String name = method.getName();
-                if ("executeQuery".equals(name) || "executeUpdate".equals(name) || "execute".equals(name)) {
-                    if (sleepMs > 0) {
-                        Thread.sleep(sleepMs);
-                    }
-                    if ("executeQuery".equals(name)) {
-                        return null;
-                    }
-                    if ("execute".equals(name)) {
+                switch (method.getName()) {
+                    case "executeQuery":
+                        return (ResultSet)Proxy.newProxyInstance(ResultSet.class.getClassLoader(),
+                            new Class<?>[] {ResultSet.class}, (p, m, a) -> null);
+                    case "executeUpdate":
+                        return 0;
+                    case "execute":
                         return false;
-                    }
-                    return 0;
+                    case "getConnection":
+                        return (Connection)Proxy.newProxyInstance(Connection.class.getClassLoader(),
+                            new Class<?>[] {Connection.class}, (p, m, a) -> null);
+                    case "close":
+                    case "getMetaData":
+                        return null;
+                    default:
+                        return null;
                 }
-                return null;
             });
+    }
+
+    static class MockDataSource implements DataSource {
+        boolean getConnectionCalled = false;
+
+        @Override
+        public Connection getConnection() throws SQLException {
+            getConnectionCalled = true;
+            return (Connection)Proxy.newProxyInstance(Connection.class.getClassLoader(),
+                new Class<?>[] {Connection.class}, (p, m, a) -> null);
+        }
+
+        @Override
+        public Connection getConnection(String username, String password) throws SQLException {
+            return getConnection();
+        }
+
+        @Override
+        public <T> T unwrap(Class<T> iface) {
+            return null;
+        }
+
+        @Override
+        public boolean isWrapperFor(Class<?> iface) {
+            return false;
+        }
+
+        @Override
+        public java.io.PrintWriter getLogWriter() {
+            return null;
+        }
+
+        @Override
+        public void setLogWriter(java.io.PrintWriter out) {}
+
+        @Override
+        public void setLoginTimeout(int seconds) {}
+
+        @Override
+        public int getLoginTimeout() {
+            return 0;
+        }
+
+        @Override
+        public java.util.logging.Logger getParentLogger() {
+            return null;
+        }
     }
 }

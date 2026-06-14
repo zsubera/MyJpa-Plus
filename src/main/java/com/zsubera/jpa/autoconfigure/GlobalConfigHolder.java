@@ -1,5 +1,7 @@
 package com.zsubera.jpa.autoconfigure;
 
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+
 /**
  * 全局配置访问的集中入口，替代分散的静态 volatile 字段和反射调用。
  *
@@ -30,6 +32,8 @@ public final class GlobalConfigHolder {
      *
      * @param globalConfig 全局配置实例
      */
+    @SuppressFBWarnings(value = "EI_EXPOSE_STATIC_REP2",
+        justification = "Spring-managed singleton intentionally stored for global access")
     public static void setConfig(MyJpaPlusGlobalConfig globalConfig) {
         config = globalConfig;
     }

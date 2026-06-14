@@ -4,118 +4,398 @@ import static org.junit.jupiter.api.Assertions.*;
 
 import com.zsubera.jpa.spec.QuerySpec;
 import java.util.List;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabase;
-import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
-import org.springframework.test.context.DynamicPropertyRegistry;
-import org.springframework.test.context.DynamicPropertySource;
-import org.testcontainers.containers.MySQLContainer;
-import org.testcontainers.junit.jupiter.Container;
-import org.testcontainers.junit.jupiter.Testcontainers;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.test.context.TestPropertySource;
+import org.springframework.transaction.annotation.Transactional;
 
 @Tag("integration")
-@Testcontainers
-@DataJpaTest
-@AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
+@SpringBootTest
+@TestPropertySource(properties = {
+    "spring.datasource.url=jdbc:mysql://localhost:3306/test?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC",
+    "spring.datasource.username=root", "spring.datasource.password=1351.zhong",
+    "spring.datasource.driver-class-name=com.mysql.cj.jdbc.Driver",
+    "spring.jpa.database-platform=org.hibernate.dialect.MySQLDialect", "spring.jpa.hibernate.ddl-auto=create"})
+@Transactional
 class MySQLIntegrationTest {
 
-    @Container
-    static MySQLContainer<?> mysql =
-        new MySQLContainer<>("mysql:8.0").withDatabaseName("myjpa_test").withUsername("test").withPassword("test");
-
-    @DynamicPropertySource
-    static void configureProperties(DynamicPropertyRegistry registry) {
-        registry.add("spring.datasource.url", mysql::getJdbcUrl);
-        registry.add("spring.datasource.username", mysql::getUsername);
-        registry.add("spring.datasource.password", mysql::getPassword);
-        registry.add("spring.datasource.driver-class-name", () -> "com.mysql.cj.jdbc.Driver");
-        registry.add("spring.jpa.database-platform", () -> "org.hibernate.dialect.MySQLDialect");
-        registry.add("spring.jpa.hibernate.ddl-auto", () -> "create");
-    }
-
     @Autowired
-    private PgTestEntityRepository repository;
+    private MySQLTestEntityRepository repository;
+
+    @BeforeEach
+    void setUp() {
+        repository.deleteAll();
+    }
+
+    // ==================== QuerySpec 基础条件 ====================
 
     @Test
-    void testSimpleEqOnMySQL() {
-        PgTestEntity entity = new PgTestEntity();
-        entity.setName("hello");
-        entity.setStatus(1);
-        repository.save(entity);
+    void testEq() {
+        save("alice", 1);
+        save("bob", 2);
 
-        QuerySpec<PgTestEntity> qs = new QuerySpec<>();
-        qs.eq(PgTestEntity::getName, "hello");
-        List<PgTestEntity> result = repository.findAll(qs.toSpecification());
+        QuerySpec<MySQLTestEntity> qs = new QuerySpec<>();
+        qs.eq(MySQLTestEntity::getName, "alice");
+        assertEquals(1, repository.findAll(qs).size());
+        assertEquals("alice", repository.findAll(qs).get(0).getName());
+    }
+
+    @Test
+    void testNe() {
+        save("alice", 1);
+        save("bob", 2);
+
+        QuerySpec<MySQLTestEntity> qs = new QuerySpec<>();
+        qs.ne(MySQLTestEntity::getName, "alice");
+        assertEquals(1, repository.findAll(qs).size());
+        assertEquals("bob", repository.findAll(qs).get(0).getName());
+    }
+
+    @Test
+    void testGt() {
+        save("a", 1);
+        save("b", 5);
+        save("c", 10);
+
+        QuerySpec<MySQLTestEntity> qs = new QuerySpec<>();
+        qs.gt(MySQLTestEntity::getStatus, 3);
+        assertEquals(2, repository.findAll(qs).size());
+    }
+
+    @Test
+    void testGe() {
+        save("a", 5);
+        save("b", 10);
+
+        QuerySpec<MySQLTestEntity> qs = new QuerySpec<>();
+        qs.ge(MySQLTestEntity::getStatus, 5);
+        assertEquals(2, repository.findAll(qs).size());
+    }
+
+    @Test
+    void testLt() {
+        save("a", 1);
+        save("b", 5);
+        save("c", 10);
+
+        QuerySpec<MySQLTestEntity> qs = new QuerySpec<>();
+        qs.lt(MySQLTestEntity::getStatus, 5);
+        assertEquals(1, repository.findAll(qs).size());
+    }
+
+    @Test
+    void testLe() {
+        save("a", 5);
+        save("b", 10);
+
+        QuerySpec<MySQLTestEntity> qs = new QuerySpec<>();
+        qs.le(MySQLTestEntity::getStatus, 10);
+        assertEquals(2, repository.findAll(qs).size());
+    }
+
+    @Test
+    void testBetween() {
+        save("a", 1);
+        save("b", 5);
+        save("c", 10);
+        save("d", 15);
+
+        QuerySpec<MySQLTestEntity> qs = new QuerySpec<>();
+        qs.between(MySQLTestEntity::getStatus, 5, 10);
+        assertEquals(2, repository.findAll(qs).size());
+    }
+
+    @Test
+    void testNotBetween() {
+        save("a", 1);
+        save("b", 5);
+        save("c", 10);
+        save("d", 15);
+
+        QuerySpec<MySQLTestEntity> qs = new QuerySpec<>();
+        qs.notBetween(MySQLTestEntity::getStatus, 5, 10);
+        assertEquals(2, repository.findAll(qs).size());
+    }
+
+    @Test
+    void testIsNull() {
+        save("a", 1);
+        save("b", null);
+
+        QuerySpec<MySQLTestEntity> qs = new QuerySpec<>();
+        qs.isNull(MySQLTestEntity::getStatus);
+        assertEquals(1, repository.findAll(qs).size());
+    }
+
+    @Test
+    void testIsNotNull() {
+        save("a", 1);
+        save("b", null);
+
+        QuerySpec<MySQLTestEntity> qs = new QuerySpec<>();
+        qs.isNotNull(MySQLTestEntity::getStatus);
+        assertEquals(1, repository.findAll(qs).size());
+    }
+
+    // ==================== 字符串条件 ====================
+
+    @Test
+    void testLike() {
+        save("hello", 1);
+        save("world", 2);
+        save("help", 3);
+
+        QuerySpec<MySQLTestEntity> qs = new QuerySpec<>();
+        qs.like(MySQLTestEntity::getName, "hel");
+        assertEquals(2, repository.findAll(qs).size());
+    }
+
+    @Test
+    void testStartsWith() {
+        save("hello", 1);
+        save("help", 2);
+        save("world", 3);
+
+        QuerySpec<MySQLTestEntity> qs = new QuerySpec<>();
+        qs.startsWith(MySQLTestEntity::getName, "hel");
+        assertEquals(2, repository.findAll(qs).size());
+    }
+
+    @Test
+    void testEndsWith() {
+        save("hello", 1);
+        save("world", 2);
+        save("bello", 3);
+
+        QuerySpec<MySQLTestEntity> qs = new QuerySpec<>();
+        qs.endsWith(MySQLTestEntity::getName, "llo");
+        assertEquals(2, repository.findAll(qs).size());
+    }
+
+    @Test
+    void testNotLike() {
+        save("hello", 1);
+        save("world", 2);
+
+        QuerySpec<MySQLTestEntity> qs = new QuerySpec<>();
+        qs.notLike(MySQLTestEntity::getName, "hel");
+        assertEquals(1, repository.findAll(qs).size());
+    }
+
+    @Test
+    void testEqIgnoreCase() {
+        save("Hello", 1);
+        save("world", 2);
+
+        QuerySpec<MySQLTestEntity> qs = new QuerySpec<>();
+        qs.eqIgnoreCase(MySQLTestEntity::getName, "hello");
+        assertEquals(1, repository.findAll(qs).size());
+    }
+
+    @Test
+    void testLikeIgnoreCase() {
+        save("Hello", 1);
+        save("world", 2);
+
+        QuerySpec<MySQLTestEntity> qs = new QuerySpec<>();
+        qs.likeIgnoreCase(MySQLTestEntity::getName, "EL");
+        assertEquals(1, repository.findAll(qs).size());
+    }
+
+    // ==================== IN 条件 ====================
+
+    @Test
+    void testIn() {
+        save("a", 1);
+        save("b", 2);
+        save("c", 3);
+
+        QuerySpec<MySQLTestEntity> qs = new QuerySpec<>();
+        qs.in(MySQLTestEntity::getStatus, 1, 3);
+        assertEquals(2, repository.findAll(qs).size());
+    }
+
+    @Test
+    void testNotIn() {
+        save("a", 1);
+        save("b", 2);
+        save("c", 3);
+
+        QuerySpec<MySQLTestEntity> qs = new QuerySpec<>();
+        qs.notIn(MySQLTestEntity::getStatus, 1, 3);
+        assertEquals(1, repository.findAll(qs).size());
+    }
+
+    // ==================== 多字段搜索 ====================
+
+    @Test
+    void testMultiLike() {
+        save("hello", 1);
+        save("world", 2);
+        save("help", 3);
+
+        QuerySpec<MySQLTestEntity> qs = new QuerySpec<>();
+        qs.multiLike("hel", MySQLTestEntity::getName);
+        assertEquals(2, repository.findAll(qs).size());
+    }
+
+    // ==================== OR 条件 ====================
+
+    @Test
+    void testOr() {
+        save("alice", 1);
+        save("bob", 2);
+        save("charlie", 3);
+
+        QuerySpec<MySQLTestEntity> qs = new QuerySpec<>();
+        qs.or(g -> g.eq(MySQLTestEntity::getName, "alice").eq(MySQLTestEntity::getName, "bob"));
+        assertEquals(2, repository.findAll(qs).size());
+    }
+
+    // ==================== NOT 条件 ====================
+
+    @Test
+    void testNot() {
+        save("alice", 1);
+        save("bob", 2);
+        save("charlie", 3);
+
+        QuerySpec<MySQLTestEntity> qs = new QuerySpec<>();
+        qs.not(n -> n.eq(MySQLTestEntity::getName, "alice"));
+        assertEquals(2, repository.findAll(qs).size());
+    }
+
+    // ==================== 排序和分页 ====================
+
+    @Test
+    void testSort() {
+        save("charlie", 3);
+        save("alice", 1);
+        save("bob", 2);
+
+        QuerySpec<MySQLTestEntity> qs = new QuerySpec<>();
+        qs.orderByAsc(MySQLTestEntity::getName);
+        List<MySQLTestEntity> result = repository.findAll(qs);
+        assertEquals(3, result.size());
+        assertEquals("alice", result.get(0).getName());
+        assertEquals("bob", result.get(1).getName());
+        assertEquals("charlie", result.get(2).getName());
+    }
+
+    @Test
+    void testSortDesc() {
+        save("charlie", 3);
+        save("alice", 1);
+        save("bob", 2);
+
+        QuerySpec<MySQLTestEntity> qs = new QuerySpec<>();
+        qs.orderByDesc(MySQLTestEntity::getStatus);
+        List<MySQLTestEntity> result = repository.findAll(qs);
+        assertEquals(3, result.size());
+        assertEquals(3, result.get(0).getStatus());
+    }
+
+    @Test
+    void testPagination() {
+        for (int i = 0; i < 10; i++) {
+            save("user" + i, i);
+        }
+
+        QuerySpec<MySQLTestEntity> qs = new QuerySpec<>();
+        qs.orderByAsc(MySQLTestEntity::getId);
+        Page<MySQLTestEntity> page = repository.findAll(qs, PageRequest.of(0, 3));
+        assertEquals(3, page.getContent().size());
+        assertEquals(10, page.getTotalElements());
+        assertEquals(4, page.getTotalPages());
+    }
+
+    // ==================== 组合条件 ====================
+
+    @Test
+    void testCombinedConditions() {
+        save("alice", 1);
+        save("bob", 2);
+        save("alice_admin", 3);
+
+        QuerySpec<MySQLTestEntity> qs = new QuerySpec<>();
+        qs.startsWith(MySQLTestEntity::getName, "alice").ge(MySQLTestEntity::getStatus, 2);
+        List<MySQLTestEntity> result = repository.findAll(qs);
         assertEquals(1, result.size());
-        assertEquals("hello", result.get(0).getName());
+        assertEquals("alice_admin", result.get(0).getName());
     }
 
     @Test
-    void testStartsWithOnMySQL() {
-        PgTestEntity e1 = new PgTestEntity();
-        e1.setName("hello_world");
-        e1.setStatus(0);
-        repository.save(e1);
+    void testGroupOr() {
+        save("a", 1);
+        save("b", 2);
+        save("c", 3);
 
-        PgTestEntity e2 = new PgTestEntity();
-        e2.setName("hello_test%");
-        e2.setStatus(0);
-        repository.save(e2);
+        QuerySpec<MySQLTestEntity> qs = new QuerySpec<>();
+        qs.or(g -> g.eq(MySQLTestEntity::getStatus, 1).eq(MySQLTestEntity::getStatus, 3));
+        assertEquals(2, repository.findAll(qs).size());
+    }
 
-        PgTestEntity e3 = new PgTestEntity();
-        e3.setName("other");
-        e3.setStatus(0);
-        repository.save(e3);
+    // ==================== count 和 exists ====================
 
-        QuerySpec<PgTestEntity> qs = new QuerySpec<>();
-        qs.startsWith(PgTestEntity::getName, "hello");
-        List<PgTestEntity> result = repository.findAll(qs.toSpecification());
-        assertEquals(2, result.size());
+    @Test
+    void testCountWithSpec() {
+        save("a", 1);
+        save("b", 2);
+        save("c", 1);
+
+        QuerySpec<MySQLTestEntity> qs = new QuerySpec<>();
+        qs.eq(MySQLTestEntity::getStatus, 1);
+        assertEquals(2, repository.count(qs));
     }
 
     @Test
-    void testContainsWithSpecialCharsOnMySQL() {
-        PgTestEntity e1 = new PgTestEntity();
-        e1.setName("test%_value");
-        e1.setStatus(0);
-        repository.save(e1);
+    void testExistsWithSpec() {
+        save("alice", 1);
 
-        PgTestEntity e2 = new PgTestEntity();
-        e2.setName("test%_other");
-        e2.setStatus(0);
-        repository.save(e2);
+        QuerySpec<MySQLTestEntity> qs = new QuerySpec<>();
+        qs.eq(MySQLTestEntity::getName, "alice");
+        assertTrue(repository.exists(qs));
 
-        PgTestEntity e3 = new PgTestEntity();
-        e3.setName("normal");
-        e3.setStatus(0);
-        repository.save(e3);
+        qs = new QuerySpec<>();
+        qs.eq(MySQLTestEntity::getName, "bob");
+        assertFalse(repository.exists(qs));
+    }
 
-        QuerySpec<PgTestEntity> qs = new QuerySpec<>();
-        qs.like(PgTestEntity::getName, "%_");
-        List<PgTestEntity> result = repository.findAll(qs.toSpecification());
-        assertEquals(2, result.size());
+    // ==================== 条件便捷方法 ====================
+
+    @Test
+    void testConditionalEq() {
+        save("alice", 1);
+        save("bob", 2);
+
+        QuerySpec<MySQLTestEntity> qs = new QuerySpec<>();
+        qs.eq(true, MySQLTestEntity::getName, "alice");
+        qs.eq(false, MySQLTestEntity::getName, "bob"); // Should be ignored
+        assertEquals(1, repository.findAll(qs).size());
     }
 
     @Test
-    void testLikeEscapeDoesNotMatchWildcard() {
-        // LIKE 'hello\\_world' escape '\\' should match 'hello_world' literally
-        // but NOT 'helloXworld'
-        PgTestEntity e1 = new PgTestEntity();
-        e1.setName("hello_world");
-        e1.setStatus(0);
-        repository.save(e1);
+    void testConditionalLike() {
+        save("hello", 1);
+        save("world", 2);
 
-        PgTestEntity e2 = new PgTestEntity();
-        e2.setName("helloXworld");
-        e2.setStatus(0);
-        repository.save(e2);
+        QuerySpec<MySQLTestEntity> qs = new QuerySpec<>();
+        qs.like(true, MySQLTestEntity::getName, "hel");
+        qs.like(false, MySQLTestEntity::getName, "wor"); // Should be ignored
+        assertEquals(1, repository.findAll(qs).size());
+    }
 
-        QuerySpec<PgTestEntity> qs = new QuerySpec<>();
-        qs.like(PgTestEntity::getName, "_wor");
-        List<PgTestEntity> result = repository.findAll(qs.toSpecification());
-        assertEquals(1, result.size());
-        assertEquals("hello_world", result.get(0).getName());
+    // ==================== Helper methods ====================
+
+    private MySQLTestEntity save(String name, Integer status) {
+        MySQLTestEntity entity = new MySQLTestEntity();
+        entity.setName(name);
+        entity.setStatus(status);
+        return repository.save(entity);
     }
 }

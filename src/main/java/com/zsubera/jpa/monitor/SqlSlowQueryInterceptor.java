@@ -205,8 +205,8 @@ public class SqlSlowQueryInterceptor implements StatementInspector {
 
                 distributionSummaryClass.getMethod("record", tagsClass, double.class).invoke(summary, tags,
                     (double)elapsedMs);
-            } catch (Exception ignored) {
-                // Micrometer 调用失败时静默忽略，不影响查询执行
+            } catch (ReflectiveOperationException e) {
+                log.debug("Failed to record Micrometer metrics", e);
             }
         }
 
@@ -223,8 +223,8 @@ public class SqlSlowQueryInterceptor implements StatementInspector {
                 if (micrometerAvailable) {
                     log.info("Micrometer detected — SQL query metrics will be recorded to myjpa.query.duration");
                 }
-            } catch (Exception ignored) {
-                // Micrometer 不在类路径上，静默降级
+            } catch (ReflectiveOperationException e) {
+                log.trace("Micrometer not available on classpath", e);
             }
         }
     }

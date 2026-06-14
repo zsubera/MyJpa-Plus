@@ -7,8 +7,8 @@ import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
 
 @SpringBootApplication
-@EntityScan(basePackageClasses = PgTestApplication.class)
-@EnableJpaRepositories(basePackageClasses = PgTestApplication.class)
+@EntityScan(basePackages = "com.zsubera.jpa.integration")
+@EnableJpaRepositories(basePackages = "com.zsubera.jpa.integration")
 class PgTestApplication {}
 
 interface PgTestEntityRepository extends JpaRepository<PgTestEntity, Long>, JpaSpecificationExecutor<PgTestEntity> {}

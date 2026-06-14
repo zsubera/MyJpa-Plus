@@ -1,5 +1,6 @@
 package com.zsubera.jpa.template;
 
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.event.EventListener;
@@ -57,6 +58,7 @@ public class CacheInvalidationListener {
      *
      * @param cacheManager 查询缓存管理器
      */
+    @SuppressFBWarnings(value = "EI_EXPOSE_REP2", justification = "Spring-managed singleton intentionally stored")
     public CacheInvalidationListener(QueryCacheManager cacheManager) {
         this.cacheManager = cacheManager;
     }
