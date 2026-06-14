@@ -65,18 +65,15 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
     private static final Logger log = LoggerFactory.getLogger(QuerySpec.class);
 
     /**
-     * 全局配置引用。
-     * 静态字段，由自动配置类在启动时设置一次。
-     */
-    private static volatile MyJpaPlusGlobalConfig globalConfig;
-
-    /**
      * 设置全局配置。由自动配置类在启动时调用。
      *
      * @param config 全局配置实例
+     * @deprecated 请使用 {@link com.zsubera.jpa.autoconfigure.GlobalConfigHolder#setConfig(MyJpaPlusGlobalConfig)} 代替。
+     * 此方法保留以兼容现有调用方，内部委托给 GlobalConfigHolder。
      */
+    @Deprecated(since = "2.1.0")
     public static void setGlobalConfig(MyJpaPlusGlobalConfig config) {
-        globalConfig = config;
+        com.zsubera.jpa.autoconfigure.GlobalConfigHolder.setConfig(config);
     }
 
     /**
@@ -85,12 +82,7 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
      * @return 全局配置实例
      */
     private static com.zsubera.jpa.autoconfigure.MyJpaPlusGlobalConfig getGlobalConfig() {
-        com.zsubera.jpa.autoconfigure.MyJpaPlusGlobalConfig config = globalConfig;
-        if (config == null) {
-            // 创建默认配置，用于未通过自动配置初始化的场景
-            config = new com.zsubera.jpa.autoconfigure.MyJpaPlusGlobalConfig();
-        }
-        return config;
+        return com.zsubera.jpa.autoconfigure.GlobalConfigHolder.getConfig();
     }
 
     /**
@@ -123,6 +115,44 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
     private final List<ConditionNode.OrderNode> orderNodes = new ArrayList<>();
     private Integer queryTimeout;
     private LockModeType lockMode;
+
+    /**
+     * 创建此 QuerySpec 的防御性拷贝。
+     *
+     * <p>
+     * 返回的副本包含所有条件、排序、分组等配置的独立副本，修改副本不会影响原始实例。
+     * 这对于将 QuerySpec 定义为单例 Bean 并在多线程间共享的场景至关重要。
+     *
+     * <p>
+     * <strong>线程安全建议：</strong>如果 QuerySpec 实例会在多线程间共享，应使用此方法在每次查询前创建副本：
+     *
+     * <pre>{@code
+     * // 定义为单例 Bean
+     * @Bean
+     * public QuerySpec<User> activeUserSpec() {
+     *     return new QuerySpec<User>().eq(User::getStatus, "ACTIVE");
+     * }
+     *
+     * // 使用时创建防御性拷贝
+     * List<User> users = repository.findAll(activeUserSpec.copy());
+     * }</pre>
+     *
+     * @return QuerySpec 的独立副本
+     */
+    @SuppressWarnings("unchecked")
+    public QuerySpec<T> copy() {
+        QuerySpec<T> copy = new QuerySpec<>();
+        copy.conditions.addAll(this.conditions);
+        // groupStack 是构建过程中的临时状态（or/not/join 的 Consumer 作用域），
+        // 不属于查询定义的一部分。构建完成后应为空，拷贝时不复制。
+        copy.distinct = this.distinct;
+        copy.groupByFields.addAll(this.groupByFields);
+        copy.havingConditions.addAll(this.havingConditions);
+        copy.orderNodes.addAll(this.orderNodes);
+        copy.queryTimeout = this.queryTimeout;
+        copy.lockMode = this.lockMode;
+        return copy;
+    }
 
     /**
      * 设置查询超时时间上限。默认值为 300 秒。

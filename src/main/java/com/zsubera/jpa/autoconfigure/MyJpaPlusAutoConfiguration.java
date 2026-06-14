@@ -107,7 +107,9 @@ public class MyJpaPlusAutoConfiguration {
             if (globalConfig != null) {
                 DefaultMyJpaRepository.setGlobalConfigProvider(DefaultMyJpaRepository.createMutableConfigProvider(
                     globalConfig.isSoftDeleteAutoFilter(), globalConfig.isBlockUnconditionalDelete()));
-                // 设置 QuerySpec 的全局配置
+                // 通过 GlobalConfigHolder 集中管理全局配置访问
+                GlobalConfigHolder.setConfig(globalConfig);
+                // 向后兼容：设置 QuerySpec 的全局配置（委托给 GlobalConfigHolder）
                 com.zsubera.jpa.spec.QuerySpec.setGlobalConfig(globalConfig);
             } else {
                 // 向后兼容：使用旧的静态方法
@@ -212,6 +214,22 @@ public class MyJpaPlusAutoConfiguration {
             template.setDefaultTimeoutSeconds(timeout);
         }
         return template;
+    }
+
+    /**
+     * 创建缓存失效监听器 Bean，监听实体变更事件并自动清除相关查询缓存。
+     *
+     * @param cacheManager 查询缓存管理器
+     * @return CacheInvalidationListener 实例
+     */
+    @Bean
+    @ConditionalOnMissingBean(com.zsubera.jpa.template.CacheInvalidationListener.class)
+    @ConditionalOnProperty(prefix = "myjpa-plus.cache", name = "auto-invalidation-enabled", havingValue = "true",
+        matchIfMissing = true)
+    public com.zsubera.jpa.template.CacheInvalidationListener
+        cacheInvalidationListener(com.zsubera.jpa.template.QueryCacheManager cacheManager) {
+        log.info("CacheInvalidationListener enabled — query cache will auto-invalidate on entity modification");
+        return new com.zsubera.jpa.template.CacheInvalidationListener(cacheManager);
     }
 
     /**

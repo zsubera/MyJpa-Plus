@@ -243,16 +243,10 @@ public class UpdateSpec<T> extends AbstractBulkOperationSpec<T, UpdateSpec<T>> {
      */
     @Override
     public int execute(EntityManager em) {
-        // 检查是否有最大行数保护配置
+        // 检查是否有最大行数保护配置（使用快速估算避免全表 COUNT）
         com.zsubera.jpa.autoconfigure.MyJpaPlusGlobalConfig config = getGlobalConfig();
         if (config != null && config.getMaxBulkOperationRows() > 0) {
-            // 先计数验证
-            long count = countBeforeExecute(em);
-            if (count > config.getMaxBulkOperationRows()) {
-                throw new IllegalStateException("Bulk UPDATE would affect " + count
-                    + " rows, which exceeds the configured limit of " + config.getMaxBulkOperationRows() + " rows. "
-                    + "Use executeLimited() with an explicit limit, or adjust myjpa-plus.query.max-bulk-operation-rows.");
-            }
+            checkRowCountBeforeExecute(em, config.getMaxBulkOperationRows());
         }
         var query = em.createQuery(toUpdate(em));
         applyTimeout(query);
@@ -262,24 +256,52 @@ public class UpdateSpec<T> extends AbstractBulkOperationSpec<T, UpdateSpec<T>> {
     /**
      * 获取全局配置实例。
      *
-     * @return 全局配置，如果未配置则返回 null
+     * @return 全局配置，如果未配置则返回默认配置
      */
     private static com.zsubera.jpa.autoconfigure.MyJpaPlusGlobalConfig getGlobalConfig() {
-        // 通过反射获取 QuerySpec 中的全局配置
-        try {
-            java.lang.reflect.Method method = com.zsubera.jpa.spec.QuerySpec.class.getDeclaredMethod("getGlobalConfig");
-            method.setAccessible(true);
-            return (com.zsubera.jpa.autoconfigure.MyJpaPlusGlobalConfig)method.invoke(null);
-        } catch (Exception e) {
-            return null;
+        return com.zsubera.jpa.autoconfigure.GlobalConfigHolder.getConfig();
+    }
+
+    /**
+     * 在执行前快速估算受影响的行数是否超过限制。
+     *
+     * <p>
+     * 使用 {@code SELECT 1 FROM table WHERE conditions LIMIT (limit+1)} 进行快速存在性检查，
+     * 避免昂贵的 {@code SELECT COUNT(*)} 全表扫描。当结果数量 {@code <= limit} 时，
+     * 可安全执行操作；当结果数量 {@code > limit} 时，执行精确 COUNT 验证。
+     *
+     * @param em 实体管理器
+     * @param limit 最大允许行数
+     * @throws IllegalStateException 如果受影响行数超过限制
+     */
+    private void checkRowCountBeforeExecute(EntityManager em, long limit) {
+        CriteriaBuilder cb = em.getCriteriaBuilder();
+        CriteriaQuery<Long> probeQuery = cb.createQuery(Long.class);
+        Root<T> root = probeQuery.from(entityClass);
+        probeQuery.select(cb.literal(1L));
+        Predicate[] predicates = buildPredicates(root, cb);
+        if (predicates.length > 0) {
+            probeQuery.where(cb.and(predicates));
+        }
+        TypedQuery<Long> query = em.createQuery(probeQuery);
+        query.setMaxResults((int)limit + 1);
+        int probeCount = query.getResultList().size();
+        if (probeCount <= limit) {
+            return;
+        }
+        long exactCount = countBeforeExecute(em);
+        if (exactCount > limit) {
+            throw new IllegalStateException("Bulk UPDATE would affect " + exactCount
+                + " rows, which exceeds the configured limit of " + limit + " rows. "
+                + "Use executeLimited() with an explicit limit, or adjust myjpa-plus.query.max-bulk-operation-rows.");
         }
     }
 
     /**
-     * 在执行前计数受影响的行数。
+     * 在执行前精确计数受影响的行数（仅在快速估算超限时调用）。
      *
      * @param em 实体管理器
-     * @return 预计受影响的行数
+     * @return 精确受影响的行数
      */
     private long countBeforeExecute(EntityManager em) {
         CriteriaBuilder cb = em.getCriteriaBuilder();

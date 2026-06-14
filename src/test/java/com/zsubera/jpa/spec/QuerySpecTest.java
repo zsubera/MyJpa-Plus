@@ -1296,4 +1296,127 @@ public class QuerySpecTest {
         ConditionNode.SimpleNode numberNode = new ConditionNode.SimpleNode("status", 42, ConditionNode.Op.EQ);
         assertTrue(numberNode.toString().contains("Integer[***]"));
     }
+
+    // ---- copy() tests ----
+
+    @Test
+    void testCopyPreservesConditionsInCleanState() {
+        repository.save(newEntity("a", 1));
+        repository.save(newEntity("b", 2));
+        repository.save(newEntity("c", 3));
+
+        QuerySpec<TestEntity> qs = new QuerySpec<>();
+        qs.eq(TestEntity::getName, "a");
+        qs.or(o -> o.eq(TestEntity::getStatus, 1).eq(TestEntity::getStatus, 2));
+
+        QuerySpec<TestEntity> copy = qs.copy();
+
+        // Both should produce identical results
+        // name='a' AND (status=1 OR status=2) => matches 'a' with status 1
+        List<TestEntity> original = repository.findAll(qs.toSpecification());
+        List<TestEntity> copied = repository.findAll(copy.toSpecification());
+        assertEquals(original.size(), copied.size());
+        assertEquals(1, original.size());
+    }
+
+    @Test
+    void testCopyInsideOrConsumer() {
+        // Verify copy() inside or() consumer: copy's groupStack is empty (not copied)
+        // so subsequent conditions go to root (AND), not to the OR group
+        repository.save(newEntity("a", 1));
+        repository.save(newEntity("b", 2));
+        repository.save(newEntity("c", 3));
+
+        final QuerySpec<TestEntity>[] copyHolder = new QuerySpec[1];
+
+        QuerySpec<TestEntity> qs = new QuerySpec<>();
+        qs.or(o -> {
+            o.eq(TestEntity::getStatus, 1);
+            copyHolder[0] = qs.copy();
+        });
+
+        QuerySpec<TestEntity> copy = copyHolder[0];
+        // groupStack is not copied, so eq goes to root conditions (AND)
+        copy.eq(TestEntity::getStatus, 2);
+
+        // Original: OR(status=1) => matches status=1
+        List<TestEntity> originalResult = repository.findAll(qs.toSpecification());
+        assertEquals(1, originalResult.size());
+
+        // Copy: OR(status=1) AND status=2 => no match (status can't be both 1 AND 2)
+        List<TestEntity> copyResult = repository.findAll(copy.toSpecification());
+        assertEquals(0, copyResult.size());
+    }
+
+    @Test
+    void testCopyInsideNestedOrConsumer() {
+        // Verify copy() with nested OR: conditions are correctly copied
+        repository.save(newEntity("a", 1));
+        repository.save(newEntity("b", 2));
+        repository.save(newEntity("c", 3));
+        repository.save(newEntity("d", 4));
+
+        final QuerySpec<TestEntity>[] copyHolder = new QuerySpec[1];
+
+        QuerySpec<TestEntity> qs = new QuerySpec<>();
+        qs.or(outer -> {
+            outer.eq(TestEntity::getStatus, 1);
+            outer.or(inner -> {
+                inner.eq(TestEntity::getStatus, 2);
+                copyHolder[0] = qs.copy();
+            });
+        });
+
+        QuerySpec<TestEntity> copy = copyHolder[0];
+        // groupStack is not copied, so eq goes to root
+        copy.eq(TestEntity::getStatus, 3);
+
+        // Original: OR(status=1, OR(status=2)) => matches status=1 and status=2
+        List<TestEntity> originalResult = repository.findAll(qs.toSpecification());
+        assertEquals(2, originalResult.size());
+
+        // Copy: OR(status=1, OR(status=2)) AND status=3 => matches status=1 AND status=3? No.
+        // Since groupStack is not copied, status=3 goes to root (AND)
+        List<TestEntity> copyResult = repository.findAll(copy.toSpecification());
+        assertEquals(0, copyResult.size()); // No match: OR matches 1,2 but AND status=3 fails
+    }
+
+    @Test
+    void testCopyDeepNestedOrGroupStackOrder() {
+        // Verify that copy() does NOT copy groupStack (it's transient build state)
+        QuerySpec<TestEntity> qs = new QuerySpec<>();
+        final QuerySpec<TestEntity>[] copyHolder = new QuerySpec[1];
+
+        qs.or(outer -> {
+            outer.eq(TestEntity::getStatus, 1);
+            outer.or(mid -> {
+                mid.eq(TestEntity::getStatus, 2);
+                mid.or(inner -> {
+                    inner.eq(TestEntity::getStatus, 3);
+                    copyHolder[0] = qs.copy();
+                });
+            });
+        });
+
+        QuerySpec<TestEntity> copy = copyHolder[0];
+
+        try {
+            java.lang.reflect.Field stackField = QuerySpec.class.getDeclaredField("groupStack");
+            stackField.setAccessible(true);
+
+            @SuppressWarnings("unchecked")
+            java.util.Deque<?> originalStack = (java.util.Deque<?>)stackField.get(qs);
+            @SuppressWarnings("unchecked")
+            java.util.Deque<?> copyStack = (java.util.Deque<?>)stackField.get(copy);
+
+            // Original stack should be empty (all OR groups closed)
+            assertEquals(0, originalStack.size(), "Original groupStack should be empty after all OR groups are closed");
+
+            // Copy's groupStack should also be empty (not copied — it's transient state)
+            assertEquals(0, copyStack.size(),
+                "Copy groupStack should be empty (groupStack is transient build state, not copied)");
+        } catch (Exception e) {
+            fail("Reflection failed: " + e.getMessage());
+        }
+    }
 }

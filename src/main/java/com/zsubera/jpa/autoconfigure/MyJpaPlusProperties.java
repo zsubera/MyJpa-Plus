@@ -48,6 +48,9 @@ public class MyJpaPlusProperties {
     /** 监控相关配置。 */
     private Monitoring monitoring = new Monitoring();
 
+    /** 缓存相关配置。 */
+    private Cache cache = new Cache();
+
     /**
      * 启动时验证所有配置属性的合法性。
      */
@@ -84,6 +87,16 @@ public class MyJpaPlusProperties {
     @SuppressFBWarnings("EI_EXPOSE_REP2")
     public void setMonitoring(Monitoring monitoring) {
         this.monitoring = monitoring;
+    }
+
+    @SuppressFBWarnings("EI_EXPOSE_REP")
+    public Cache getCache() {
+        return cache;
+    }
+
+    @SuppressFBWarnings("EI_EXPOSE_REP2")
+    public void setCache(Cache cache) {
+        this.cache = cache;
     }
 
     public static class SoftDelete {
@@ -312,6 +325,22 @@ public class MyJpaPlusProperties {
 
         public void setEnabled(boolean enabled) {
             this.enabled = enabled;
+        }
+    }
+
+    public static class Cache {
+        /**
+         * 是否启用缓存自动失效。启用后，当实体发生变更时（通过发布 {@link com.zsubera.jpa.template.EntityModifiedEvent}），
+         * 相关查询缓存会自动在事务提交后清除。 默认值：{@code true}
+         */
+        private boolean autoInvalidationEnabled = true;
+
+        public boolean isAutoInvalidationEnabled() {
+            return autoInvalidationEnabled;
+        }
+
+        public void setAutoInvalidationEnabled(boolean autoInvalidationEnabled) {
+            this.autoInvalidationEnabled = autoInvalidationEnabled;
         }
     }
 }

@@ -146,6 +146,11 @@ public class SqlSlowQueryInterceptor implements StatementInspector {
         private final String sql;
         private final long slowQueryThresholdMs;
 
+        /** 可选的 Micrometer MeterRegistry，通过反射延迟加载以避免强依赖。 */
+        private static volatile Object meterRegistry;
+        private static volatile boolean micrometerAvailable;
+        private static volatile boolean micrometerChecked;
+
         @SuppressFBWarnings("EI_EXPOSE_REP2")
         PreparedStatementTimingHandler(Object target, String sql, long slowQueryThresholdMs) {
             this.target = target;
@@ -163,6 +168,7 @@ public class SqlSlowQueryInterceptor implements StatementInspector {
                 } finally {
                     long elapsedNanos = System.nanoTime() - start;
                     long elapsedMs = java.util.concurrent.TimeUnit.NANOSECONDS.toMillis(elapsedNanos);
+                    recordMetrics(name, elapsedMs);
                     if (elapsedMs >= slowQueryThresholdMs) {
                         String sanitizedSql = SqlSanitizer.sanitize(sql);
                         log.warn("{} SQL execution took {} ms (threshold: {} ms) - {}", SLOW_QUERY_MARKER, elapsedMs,
@@ -171,6 +177,55 @@ public class SqlSlowQueryInterceptor implements StatementInspector {
                 }
             }
             return method.invoke(target, args);
+        }
+
+        /**
+         * 记录查询执行指标到 Micrometer（如果可用）。
+         */
+        private void recordMetrics(String operationType, long elapsedMs) {
+            if (!micrometerChecked) {
+                checkMicrometerAvailable();
+            }
+            if (!micrometerAvailable || meterRegistry == null) {
+                return;
+            }
+            try {
+                Class<?> meterRegistryClass = Class.forName("io.micrometer.core.instrument.MeterRegistry");
+                Class<?> distributionSummaryClass = Class.forName("io.micrometer.core.instrument.DistributionSummary");
+                Class<?> tagsClass = Class.forName("io.micrometer.core.instrument.Tags");
+
+                Object tags = tagsClass.getMethod("of", String.class, String.class).invoke(null, "type", operationType);
+
+                Object summary =
+                    distributionSummaryClass.getMethod("builder", String.class).invoke(null, "myjpa.query.duration");
+                summary = distributionSummaryClass.getMethod("description", String.class).invoke(summary,
+                    "JPA query execution duration");
+                summary =
+                    distributionSummaryClass.getMethod("register", meterRegistryClass).invoke(summary, meterRegistry);
+
+                distributionSummaryClass.getMethod("record", tagsClass, double.class).invoke(summary, tags,
+                    (double)elapsedMs);
+            } catch (Exception ignored) {
+                // Micrometer 调用失败时静默忽略，不影响查询执行
+            }
+        }
+
+        private static synchronized void checkMicrometerAvailable() {
+            if (micrometerChecked) {
+                return;
+            }
+            micrometerChecked = true;
+            try {
+                Class<?> registryClass = Class.forName("io.micrometer.core.instrument.MeterRegistry");
+                Class<?> globalRegistryClass = Class.forName("io.micrometer.core.instrument.Metrics");
+                meterRegistry = globalRegistryClass.getMethod("globalRegistry").invoke(null);
+                micrometerAvailable = meterRegistry != null;
+                if (micrometerAvailable) {
+                    log.info("Micrometer detected — SQL query metrics will be recorded to myjpa.query.duration");
+                }
+            } catch (Exception ignored) {
+                // Micrometer 不在类路径上，静默降级
+            }
         }
     }
 }
