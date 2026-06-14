@@ -71,6 +71,15 @@ public class MergeSpec<T> {
     }
 
     /**
+     * 获取实体类。
+     *
+     * @return 实体类
+     */
+    public Class<T> getEntityClass() {
+        return entityClass;
+    }
+
+    /**
      * 指定要 upsert 的实体实例。
      *
      * @param entity 实体实例

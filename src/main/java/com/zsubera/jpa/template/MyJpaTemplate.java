@@ -1121,7 +1121,9 @@ public class MyJpaTemplate {
         if (spec == null) {
             throw new IllegalArgumentException("spec must not be null");
         }
-        return getBulkOperationTemplate().execute(spec);
+        int affected = getBulkOperationTemplate().execute(spec);
+        publishEntityModifiedEvent(spec.getEntityClass(), affected);
+        return affected;
     }
 
     /**
@@ -1136,7 +1138,9 @@ public class MyJpaTemplate {
         if (spec == null) {
             throw new IllegalArgumentException("spec must not be null");
         }
-        return getBulkOperationTemplate().execute(spec);
+        int affected = getBulkOperationTemplate().execute(spec);
+        publishEntityModifiedEvent(spec.getEntityClass(), affected);
+        return affected;
     }
 
     /**
@@ -1152,7 +1156,9 @@ public class MyJpaTemplate {
         if (spec == null) {
             throw new IllegalArgumentException("spec must not be null");
         }
-        return getBulkOperationTemplate().execute(spec);
+        int affected = getBulkOperationTemplate().execute(spec);
+        publishEntityModifiedEvent(spec.getEntityClass(), affected);
+        return affected;
     }
 
     /**
@@ -1590,5 +1596,17 @@ public class MyJpaTemplate {
         }
 
         return getKeysetPaginationHelper().findKeysetPage(entityClass, spec, sort, pageSize, lastSortValues);
+    }
+
+    /**
+     * 发布实体变更事件，触发缓存自动失效。
+     *
+     * @param entityClass 变更的实体类
+     * @param affectedRows 受影响的行数
+     */
+    private void publishEntityModifiedEvent(Class<?> entityClass, int affectedRows) {
+        if (affectedRows > 0 && applicationContext != null) {
+            applicationContext.publishEvent(new EntityModifiedEvent(entityClass, affectedRows));
+        }
     }
 }

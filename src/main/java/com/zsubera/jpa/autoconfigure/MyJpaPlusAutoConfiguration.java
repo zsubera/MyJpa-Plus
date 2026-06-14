@@ -217,6 +217,17 @@ public class MyJpaPlusAutoConfiguration {
     }
 
     /**
+     * 创建查询缓存管理器 Bean。
+     *
+     * @return QueryCacheManager 实例
+     */
+    @Bean
+    @ConditionalOnMissingBean(com.zsubera.jpa.template.QueryCacheManager.class)
+    public com.zsubera.jpa.template.QueryCacheManager queryCacheManager() {
+        return new com.zsubera.jpa.template.QueryCacheManager();
+    }
+
+    /**
      * 创建缓存失效监听器 Bean，监听实体变更事件并自动清除相关查询缓存。
      *
      * @param cacheManager 查询缓存管理器

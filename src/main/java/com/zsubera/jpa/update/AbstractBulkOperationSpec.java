@@ -77,6 +77,15 @@ public abstract class AbstractBulkOperationSpec<T, SELF extends AbstractBulkOper
     }
 
     /**
+     * 获取实体类类型。
+     *
+     * @return 实体类类型
+     */
+    public Class<T> getEntityClass() {
+        return entityClass;
+    }
+
+    /**
      * 返回当前构建器实例，用于链式调用。
      *
      * @return 当前构建器实例
