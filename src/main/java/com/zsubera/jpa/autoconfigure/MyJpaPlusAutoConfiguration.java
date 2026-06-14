@@ -66,6 +66,8 @@ public class MyJpaPlusAutoConfiguration {
 
     private final MyJpaPlusProperties properties;
 
+    @SuppressFBWarnings(value = "EI_EXPOSE_REP2",
+        justification = "AutoConfiguration stores Spring-managed properties bean; lifecycle managed by Spring container")
     public MyJpaPlusAutoConfiguration(MyJpaPlusProperties properties) {
         if (properties == null) {
             throw new IllegalArgumentException("properties must not be null");

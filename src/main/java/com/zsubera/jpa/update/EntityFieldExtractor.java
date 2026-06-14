@@ -41,7 +41,8 @@ final class EntityFieldExtractor<T> {
             Class<?> strategyClass = Class.forName("org.springframework.boot.orm.jpa.SpringPhysicalNamingStrategy");
             strategy = strategyClass.getDeclaredConstructor().newInstance();
             method = strategyClass.getMethod("toPhysicalColumnName", String.class, java.util.Locale.class);
-        } catch (Exception ignored) {
+        } catch (ClassNotFoundException | NoSuchMethodException | InstantiationException | IllegalAccessException
+            | java.lang.reflect.InvocationTargetException ignored) {
             // Spring 命名策略不在类路径上
         }
         CACHED_NAMING_STRATEGY = strategy;
