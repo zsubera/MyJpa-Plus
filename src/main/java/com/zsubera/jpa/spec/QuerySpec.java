@@ -1426,13 +1426,13 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
      *     .eq(User::getStatus, "ACTIVE")
      *     .gt(User::getAge, 18)
      *     .orderByAsc(User::getName)
-     *     .toSql();
-     * // 返回: "Query{SELECT DISTINCT, WHERE: [status = EQ, age = GT], ORDER BY: [name ASC]}"
+     *     .toDescription();
+     * // 返回: "Query{WHERE: [status = EQ, age = GT], ORDER BY: [name ASC]}"
      * }</pre>
      *
      * @return 查询条件描述字符串
      */
-    public String toSql() {
+    public String toDescription() {
         StringBuilder sb = new StringBuilder("Query{");
 
         if (distinct) {
@@ -1474,5 +1474,16 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
         }
         sb.append('}');
         return sb.toString();
+    }
+
+    /**
+     * 生成查询条件的可读描述（此方法名称具有误导性，请使用 {@link #toDescription()}）。
+     *
+     * @return 查询条件描述字符串
+     * @deprecated 使用 {@link #toDescription()} 替代。此方法名称暗示返回可执行 SQL，但实际返回的是人类可读的查询结构描述。
+     */
+    @Deprecated
+    public String toSql() {
+        return toDescription();
     }
 }

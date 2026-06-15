@@ -32,6 +32,16 @@ out/
 /AGENTS.md
 /run-audit.bat
 
+# Sensitive files
+.env
+.env.*
+*.key
+*.pem
+*.p12
+*.jks
+*.keystore
+credentials.json
+
 # Audit workflow
 .opencode/
 .opencode1/

@@ -3,7 +3,79 @@
     {
       "name": "myjpa-plus.soft-delete.auto-filter",
       "type": "java.lang.Boolean",
-      "description": "Enable automatic soft-delete filtering for entities annotated with @SoftDelete. When true, the SoftDeleteFilterBean component is registered and provides transparent soft-delete filtering for Specifications.",
+      "description": "Enable automatic soft-delete filtering for entities annotated with @SoftDelete.",
+      "defaultValue": true
+    },
+    {
+      "name": "myjpa-plus.soft-delete.block-unconditional-delete",
+      "type": "java.lang.Boolean",
+      "description": "Block unconditional hard-delete operations on entities with @SoftDelete field.",
+      "defaultValue": true
+    },
+    {
+      "name": "myjpa-plus.query.max-results",
+      "type": "java.lang.Integer",
+      "description": "Default maximum number of rows returned by findAll and find methods.",
+      "defaultValue": 10000
+    },
+    {
+      "name": "myjpa-plus.query.deep-pagination-offset-threshold",
+      "type": "java.lang.Integer",
+      "description": "Offset threshold for deep pagination warning log.",
+      "defaultValue": 100000
+    },
+    {
+      "name": "myjpa-plus.query.deep-pagination-offset-limit",
+      "type": "java.lang.Integer",
+      "description": "Hard limit for deep pagination offset. Set to -1 to disable.",
+      "defaultValue": -1
+    },
+    {
+      "name": "myjpa-plus.query.in-clause-max-size",
+      "type": "java.lang.Integer",
+      "description": "Maximum number of parameters in a single IN clause batch.",
+      "defaultValue": 1000
+    },
+    {
+      "name": "myjpa-plus.query.in-clause-hard-limit",
+      "type": "java.lang.Integer",
+      "description": "Hard limit for IN clause total parameters. Exceeding this throws an exception.",
+      "defaultValue": 5000
+    },
+    {
+      "name": "myjpa-plus.query.lambda-cache-size",
+      "type": "java.lang.Integer",
+      "description": "Maximum size of the Lambda property name cache.",
+      "defaultValue": 4096
+    },
+    {
+      "name": "myjpa-plus.query.default-timeout-seconds",
+      "type": "java.lang.Integer",
+      "description": "Default query timeout in seconds. Set to -1 to disable.",
+      "defaultValue": 30
+    },
+    {
+      "name": "myjpa-plus.query.max-bulk-operation-rows",
+      "type": "java.lang.Integer",
+      "description": "Maximum rows affected by bulk operations. Set to 0 to disable.",
+      "defaultValue": 10000
+    },
+    {
+      "name": "myjpa-plus.monitoring.enabled",
+      "type": "java.lang.Boolean",
+      "description": "Enable SQL slow query monitoring via DataSource proxy.",
+      "defaultValue": false
+    },
+    {
+      "name": "myjpa-plus.monitoring.slow-query-threshold-ms",
+      "type": "java.lang.Long",
+      "description": "Slow query threshold in milliseconds.",
+      "defaultValue": 1000
+    },
+    {
+      "name": "myjpa-plus.cache.auto-invalidation-enabled",
+      "type": "java.lang.Boolean",
+      "description": "Enable automatic cache invalidation when entities are modified.",
       "defaultValue": true
     }
   ]

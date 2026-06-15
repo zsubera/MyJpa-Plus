@@ -61,10 +61,12 @@ cd myjpa-plus
 
 1. 在 `ConditionNode.Op` 中添加枚举值
 2. 在 `ConditionBuilder<E, SELF>` 中添加默认方法
-3. 在 `NodeResolver` 中添加对应的 `if-else instanceof` 分支（Java 17，不用 switch 模式匹配）
-4. 在 `SubQuerySpec` 中添加对应方法
-5. 在 `AbstractBulkOperationSpec` 中添加对应方法
-6. 在 `QuerySpecTest` 中添加测试
+3. 在 `ConditionalMethods.java` 中添加抽象方法声明（若批量操作也需要）
+4. 在 `NodeResolver` 中添加对应的 `if-else instanceof` 分支（Java 17，不用 switch 模式匹配）
+5. 在 `SubQuerySpec` 中添加对应方法
+6. 在 `AbstractBulkOperationSpec` 中添加对应方法（若需要）
+7. 在 `OrConditionBuilder` 中添加实现（若批量 OR 组也需要）
+8. 在 `QuerySpecTest` 中添加测试
 
 ### 新增条件类型同步检查清单
 
@@ -93,14 +95,20 @@ cd myjpa-plus
 
 ## 测试约定
 
-- 单元测试使用 `@DataJpaTest` + 本地 MySQL（通过 `DB_USERNAME`/`DB_PASSWORD` 环境变量配置）
+- **单元测试需要本地 MySQL 实例**（不再使用 H2）
+- 连接信息：`src/test/resources/application.properties`（URL: `jdbc:mysql://localhost:3306/test`）
+- 测试前确保 MySQL 运行且 `test` 数据库存在：`CREATE DATABASE IF NOT EXISTS test`
+- `ddl-auto=create`，Hibernate 自动建表（测试间数据通过 `@BeforeEach deleteAll` 清理）
+- 单元测试使用 `@DataJpaTest` + `@AutoConfigureTestDatabase(replace = NONE)` + 本地 MySQL
 - 集成测试使用 `@Tag("integration")` + Testcontainers（PostgreSQL、MySQL）
 - 核心测试类：`QuerySpecTest`、`ConditionBuilderValidationTest`
 
 ## Pull Request 检查清单
 
 - [ ] 格式检查通过：`./mvnw spotless:check`
-- [ ] 构建通过：`./mvnw clean verify`
+- [ ] 构建通过：`./mvnw clean verify -Dgpg.skip=true -Ddependency-check.skip=true`
+- [ ] SpotBugs 检查通过（Medium 阈值）
+- [ ] JaCoCo 覆盖率 >= 48%
 - [ ] 为新增功能添加了测试
 - [ ] 已更新 CHANGELOG.md
 - [ ] 已更新 README.md（如有 API 变更）

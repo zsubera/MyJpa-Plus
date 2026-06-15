@@ -121,7 +121,7 @@
 ### 软删除
 
 - `@SoftDelete` — 支持 Boolean、Integer、Enum 类型
-- `@IgnoreSoftDelete` — 临时禁用软删除过滤
+- `@IgnoreSoftDelete` — 临时禁用软删除过滤（标注在方法或 Repository 接口上）
 - `DefaultMyJpaRepository` — 提供 `findNotDeletedAll` / `findNotDeletedById` / `countNotDeleted` 等便捷方法
 
 ### Spring Boot 自动配置
@@ -160,7 +160,7 @@ List<User> users = userRepository.findAll(
 // OR 多条件组合（Consumer 模式，无需 endOr）
 List<User> users = userRepository.findAll(
     new QuerySpec<User>()
-        .like(User::getName, "%John%")
+        .likeSafe(User::getName, "%John%")
         .or(g -> g.eq(User::getRole, "ADMIN").eq(User::getRole, "MODERATOR"))
         .toSpecification()
 );
@@ -637,11 +637,15 @@ myjpa-plus:
     in-clause-hard-limit: 5000            # IN 子句硬限制
     lambda-cache-size: 4096               # Lambda 属性名缓存大小
     default-timeout-seconds: 30           # 查询超时（秒），-1 禁用
+    max-bulk-operation-rows: 10000        # 批量操作最大影响行数（0 禁用）
   soft-delete:
     auto-filter: true                     # 自动应用软删除过滤器
+    block-unconditional-delete: true      # 阻止无条件删除
   monitoring:
     enabled: true                         # 启用 SQL 慢查询监控
     slow-query-threshold-ms: 1000         # 慢查询阈值（毫秒）
+  cache:
+    auto-invalidation-enabled: true       # 缓存自动失效（实体修改后清除相关缓存）
 
 # 字段加密配置
 # 环境变量: MYJPA_ENCRYPT_KEY=<密钥>  MYJPA_ENCRYPT_SALT=<盐值>
@@ -657,7 +661,7 @@ myjpa-plus:
 |---|---|
 | 比较 | `eq`, `ne`, `gt`, `ge`, `lt`, `le` |
 | 不区分大小写 | `eqIgnoreCase`, `neIgnoreCase`, `likeIgnoreCase` |
-| 字符串 | `like`, `notLike`, `startsWith`, `endsWith`, `contains` |
+| 字符串 | `likeSafe`, `notLikeSafe`, `startsWith`, `endsWith`, `contains` |
 | 集合 | `in`, `notIn`, `in(Collection)`, `notIn(Collection)`, `between`, `isEmpty`, `isNotEmpty` |
 | 空值 | `isNull`, `isNotNull` |
 | 搜索 | `multiLike(keyword, fields...)` — 支持方法引用和字符串字段名 |

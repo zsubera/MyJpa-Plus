@@ -12,9 +12,9 @@ import jakarta.persistence.criteria.Root;
 import jakarta.persistence.criteria.Subquery;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -69,7 +69,7 @@ final class NodeResolver {
     }
 
     /** 节点类型到解析策略的映射表。 */
-    private static final Map<Class<? extends ConditionNode>, NodeStrategy> STRATEGIES = new ConcurrentHashMap<>();
+    private static final Map<Class<? extends ConditionNode>, NodeStrategy> STRATEGIES = new HashMap<>();
 
     static {
         STRATEGIES.put(ConditionNode.SimpleNode.class,

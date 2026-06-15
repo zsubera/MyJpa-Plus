@@ -142,6 +142,14 @@ public sealed interface ConditionNode permits ConditionNode.SimpleNode, Conditio
     final class OrNode implements ConditionNode {
         final List<ConditionNode> nodes = new ArrayList<>();
 
+        /** 向 OR 组添加一个条件节点。 */
+        void addNode(ConditionNode node) {
+            if (node == null) {
+                throw new IllegalArgumentException("node must not be null");
+            }
+            nodes.add(node);
+        }
+
         /** 返回 OR 组中的子条件列表（不可变视图）。 */
         @edu.umd.cs.findbugs.annotations.SuppressFBWarnings(value = "EI_EXPOSE_REP",
             justification = "Nodes list is exposed as unmodifiable view for condition tree traversal by QuerySpec and ProjectionSpec")
