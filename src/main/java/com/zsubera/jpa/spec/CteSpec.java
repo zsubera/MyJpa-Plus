@@ -1,5 +1,6 @@
 package com.zsubera.jpa.spec;
 
+import com.zsubera.jpa.util.IdentifierValidator;
 import com.zsubera.jpa.util.QueryTimeoutHelper;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.Query;
@@ -43,14 +44,6 @@ import org.slf4j.LoggerFactory;
 public class CteSpec {
 
     private static final Logger log = LoggerFactory.getLogger(CteSpec.class);
-
-    /**
-     * 安全标识符正则表达式：仅允许字母、数字和下划线，防止 SQL 注入。
-     *
-     * <p>
-     * 用于校验 CTE 名称和列名，防止恶意 SQL 拼接。
-     */
-    private static final Pattern SAFE_IDENTIFIER_PATTERN = Pattern.compile("^[a-zA-Z_][a-zA-Z0-9_]*$");
 
     /**
      * SQL 保留字集合（MySQL + PostgreSQL 交集），CTE 名称不应使用这些关键字。
@@ -141,7 +134,7 @@ public class CteSpec {
         if (cteName == null || cteName.isEmpty()) {
             throw new IllegalArgumentException("cteName must not be null or empty");
         }
-        if (!SAFE_IDENTIFIER_PATTERN.matcher(cteName).matches()) {
+        if (!IdentifierValidator.SAFE_IDENTIFIER_PATTERN.matcher(cteName).matches()) {
             throw new IllegalArgumentException(
                 "cteName contains invalid characters: " + cteName + ". Only alphanumeric and underscore are allowed.");
         }
@@ -160,7 +153,7 @@ public class CteSpec {
         if (cteName == null || cteName.isEmpty()) {
             throw new IllegalArgumentException("cteName must not be null or empty");
         }
-        if (!SAFE_IDENTIFIER_PATTERN.matcher(cteName).matches()) {
+        if (!IdentifierValidator.SAFE_IDENTIFIER_PATTERN.matcher(cteName).matches()) {
             throw new IllegalArgumentException(
                 "cteName contains invalid characters: " + cteName + ". Only alphanumeric and underscore are allowed.");
         }
@@ -201,7 +194,7 @@ public class CteSpec {
             if (col == null || col.isEmpty()) {
                 throw new IllegalArgumentException("columns must not contain null or empty elements");
             }
-            if (!SAFE_IDENTIFIER_PATTERN.matcher(col).matches()) {
+            if (!IdentifierValidator.SAFE_IDENTIFIER_PATTERN.matcher(col).matches()) {
                 throw new IllegalArgumentException("column name contains invalid characters: " + col
                     + ". Only alphanumeric and underscore are allowed.");
             }
@@ -301,7 +294,7 @@ public class CteSpec {
         if (cteName == null || cteName.isEmpty()) {
             throw new IllegalArgumentException("cteName must not be null or empty");
         }
-        if (!SAFE_IDENTIFIER_PATTERN.matcher(cteName).matches()) {
+        if (!IdentifierValidator.SAFE_IDENTIFIER_PATTERN.matcher(cteName).matches()) {
             throw new IllegalArgumentException(
                 "cteName contains invalid characters: " + cteName + ". Only alphanumeric and underscore are allowed.");
         }

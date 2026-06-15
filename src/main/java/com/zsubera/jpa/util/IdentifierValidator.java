@@ -43,7 +43,7 @@ public final class IdentifierValidator {
     private static final Logger log = LoggerFactory.getLogger(IdentifierValidator.class);
 
     /** 安全标识符正则：仅允许字母、数字和下划线。用于单段和 schema.table 格式的每一段校验。 */
-    private static final Pattern SAFE_IDENTIFIER_PATTERN = Pattern.compile("^[a-zA-Z_][a-zA-Z0-9_]*$");
+    public static final Pattern SAFE_IDENTIFIER_PATTERN = Pattern.compile("^[a-zA-Z_][a-zA-Z0-9_]*$");
 
     /** Unicode 标识符正则：允许 Unicode 字母、数字和下划线，支持国际化标识符。 */
     private static final Pattern UNICODE_IDENTIFIER_PART_PATTERN = Pattern.compile("^[\\p{L}_][\\p{L}\\p{N}_]*$");

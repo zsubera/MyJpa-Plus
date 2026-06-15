@@ -150,7 +150,7 @@ public class DefaultMyJpaRepository<T, ID> extends SimpleJpaRepository<T, ID> im
      * @deprecated 请使用 {@link #setGlobalConfigProvider(ConfigProvider)} 替代
      */
     @Deprecated
-    public static void setAutoFilterEnabled(boolean enabled) {
+    public static synchronized void setAutoFilterEnabled(boolean enabled) {
         ConfigProvider existing = globalConfigProvider;
         if (existing instanceof MutableConfigProvider mutable) {
             mutable.setAutoFilterEnabled(enabled);
@@ -168,7 +168,7 @@ public class DefaultMyJpaRepository<T, ID> extends SimpleJpaRepository<T, ID> im
      * @deprecated 请使用 {@link #setGlobalConfigProvider(ConfigProvider)} 替代
      */
     @Deprecated
-    public static void setBlockUnconditionalDelete(boolean blocked) {
+    public static synchronized void setBlockUnconditionalDelete(boolean blocked) {
         ConfigProvider existing = globalConfigProvider;
         if (existing instanceof MutableConfigProvider mutable) {
             mutable.setBlockUnconditionalDelete(blocked);

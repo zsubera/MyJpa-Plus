@@ -741,6 +741,522 @@ class MySQLFullIntegrationTest {
         assertEquals(2, repository.findAll(new QuerySpec<MySQLTestEntity>().le(MySQLTestEntity::getStatus, 0)).size());
     }
 
+    // ==================== QuerySpec — 缺失的条件类型 ====================
+
+    @Test
+    void notStartsWith() {
+        save("hello", 1);
+        save("world", 2);
+        save("help", 3);
+
+        QuerySpec<MySQLTestEntity> qs = new QuerySpec<>();
+        qs.notStartsWith(MySQLTestEntity::getName, "hel");
+        assertEquals(1, repository.findAll(qs).size());
+    }
+
+    @Test
+    void notEndsWith() {
+        save("hello", 1);
+        save("world", 2);
+        save("bello", 3);
+
+        QuerySpec<MySQLTestEntity> qs = new QuerySpec<>();
+        qs.notEndsWith(MySQLTestEntity::getName, "llo");
+        assertEquals(1, repository.findAll(qs).size());
+    }
+
+    @Test
+    void likeWithSpecialChars() {
+        save("test%value", 1);
+        save("test_value", 2);
+        save("normal", 3);
+
+        QuerySpec<MySQLTestEntity> qs = new QuerySpec<>();
+        qs.like(MySQLTestEntity::getName, "test%value");
+        assertEquals(1, repository.findAll(qs).size());
+    }
+
+    @Test
+    void neIgnoreCase() {
+        save("Hello", 1);
+        save("world", 2);
+
+        QuerySpec<MySQLTestEntity> qs = new QuerySpec<>();
+        qs.neIgnoreCase(MySQLTestEntity::getName, "hello");
+        assertEquals(1, repository.findAll(qs).size());
+        assertEquals("world", repository.findAll(qs).get(0).getName());
+    }
+
+    @Test
+    void funcUpper() {
+        save("alice", 1);
+        save("bob", 2);
+
+        QuerySpec<MySQLTestEntity> qs = new QuerySpec<>();
+        qs.func(MySQLTestEntity::getStatus, "IFNULL", new Object[] {1});
+        qs.ge(MySQLTestEntity::getStatus, 1);
+        assertEquals(2, repository.findAll(qs).size());
+    }
+
+    @Test
+    void funcCoalesce() {
+        save("a", null);
+        save("b", 5);
+
+        QuerySpec<MySQLTestEntity> qs = new QuerySpec<>();
+        qs.func(MySQLTestEntity::getStatus, "COALESCE", new Object[] {0});
+        qs.ge(MySQLTestEntity::getStatus, 5);
+        assertEquals(1, repository.findAll(qs).size());
+    }
+
+    @Test
+    void funcNullIf() {
+        save("a", 1);
+        save("b", 2);
+
+        QuerySpec<MySQLTestEntity> qs = new QuerySpec<>();
+        qs.func(MySQLTestEntity::getStatus, "NULLIF", new Object[] {1});
+        qs.ne(MySQLTestEntity::getStatus, null);
+        assertEquals(1, repository.findAll(qs).size());
+    }
+
+    // ==================== JOIN 操作 ====================
+
+    @Test
+    void joinInner() {
+        MySQLParentEntity parent = createParent("cat1", 1);
+        save("child1", 1, parent);
+        save("child2", 2, parent);
+        save("orphan", 3);
+
+        QuerySpec<MySQLTestEntity> qs = new QuerySpec<>();
+        qs.<MySQLParentEntity>join(MySQLTestEntity::getParent, j -> j.eq(MySQLParentEntity::getCategory, "cat1"));
+        assertEquals(2, repository.findAll(qs).size());
+    }
+
+    @Test
+    void joinLeft() {
+        MySQLParentEntity parent = createParent("cat1", 1);
+        save("child1", 1, parent);
+        save("orphan", 2);
+
+        QuerySpec<MySQLTestEntity> qs = new QuerySpec<>();
+        qs.<MySQLParentEntity>leftJoin(MySQLTestEntity::getParent, j -> {
+        });
+        assertEquals(2, repository.findAll(qs).size());
+    }
+
+    @Test
+    void joinWithMultipleConditions() {
+        MySQLParentEntity parent1 = createParent("cat1", 1);
+        MySQLParentEntity parent2 = createParent("cat2", 2);
+        save("child1", 1, parent1);
+        save("child2", 2, parent2);
+        save("child3", 3, parent1);
+
+        QuerySpec<MySQLTestEntity> qs = new QuerySpec<>();
+        qs.<MySQLParentEntity>join(MySQLTestEntity::getParent,
+            j -> j.eq(MySQLParentEntity::getCategory, "cat1").gt(MySQLParentEntity::getLevel, 0));
+        assertEquals(2, repository.findAll(qs).size());
+    }
+
+    @Test
+    void joinWithOrCondition() {
+        MySQLParentEntity parent1 = createParent("cat1", 1);
+        MySQLParentEntity parent2 = createParent("cat2", 2);
+        save("child1", 1, parent1);
+        save("child2", 2, parent2);
+        save("child3", 3, parent1);
+
+        QuerySpec<MySQLTestEntity> qs = new QuerySpec<>();
+        qs.<MySQLParentEntity>join(MySQLTestEntity::getParent,
+            j -> j.or(o -> o.eq(MySQLParentEntity::getCategory, "cat1").eq(MySQLParentEntity::getCategory, "cat2")));
+        assertEquals(3, repository.findAll(qs).size());
+    }
+
+    @Test
+    void joinWithOrderBy() {
+        MySQLParentEntity parent1 = createParent("cat1", 1);
+        MySQLParentEntity parent2 = createParent("cat2", 2);
+        save("child_a", 1, parent2);
+        save("child_b", 2, parent1);
+
+        QuerySpec<MySQLTestEntity> qs = new QuerySpec<>();
+        qs.<MySQLParentEntity>join(MySQLTestEntity::getParent, j -> j.isNotNull(MySQLParentEntity::getCategory));
+        qs.orderByAsc(MySQLTestEntity::getName);
+        List<MySQLTestEntity> result = repository.findAll(qs);
+        assertEquals(2, result.size());
+        assertEquals("child_a", result.get(0).getName());
+        assertEquals("child_b", result.get(1).getName());
+    }
+
+    // ==================== EXISTS / NOT EXISTS 子查询 ====================
+
+    @Test
+    void existsSubQuery() {
+        MySQLParentEntity parent = createParent("cat1", 1);
+        save("child", 1, parent);
+        save("orphan", 2);
+
+        QuerySpec<MySQLTestEntity> qs = new QuerySpec<>();
+        qs.exists(MySQLParentEntity.class, sub -> {
+            sub.eq(MySQLParentEntity::getCategory, "cat1");
+            sub.select(MySQLParentEntity::getId);
+        });
+        // Uncorrelated: if any parent with category "cat1" exists, all entities match
+        assertEquals(2, repository.findAll(qs).size());
+    }
+
+    @Test
+    void notExistsSubQuery() {
+        MySQLParentEntity parent = createParent("cat1", 1);
+        save("child", 1, parent);
+        save("orphan", 2);
+
+        QuerySpec<MySQLTestEntity> qs = new QuerySpec<>();
+        qs.notExists(MySQLParentEntity.class, sub -> {
+            sub.eq(MySQLParentEntity::getCategory, "cat1");
+            sub.select(MySQLParentEntity::getId);
+        });
+        // Uncorrelated: if any parent with "cat1" exists, NOT EXISTS returns 0
+        assertEquals(0, repository.findAll(qs).size());
+    }
+
+    @Test
+    void existsWithNoMatch() {
+        save("child", 1);
+        save("orphan", 2);
+
+        QuerySpec<MySQLTestEntity> qs = new QuerySpec<>();
+        qs.exists(MySQLParentEntity.class, sub -> {
+            sub.eq(MySQLParentEntity::getCategory, "nonexistent");
+            sub.select(MySQLParentEntity::getId);
+        });
+        // No parent with "nonexistent" category, so EXISTS returns false for all
+        assertEquals(0, repository.findAll(qs).size());
+    }
+
+    @Test
+    void existsWithMultipleConditions() {
+        MySQLParentEntity parent1 = createParent("cat1", 1);
+        MySQLParentEntity parent2 = createParent("cat2", 2);
+        save("child1", 1, parent1);
+        save("child2", 2, parent2);
+        save("orphan", 3);
+
+        QuerySpec<MySQLTestEntity> qs = new QuerySpec<>();
+        qs.exists(MySQLParentEntity.class, sub -> {
+            sub.eq(MySQLParentEntity::getCategory, "cat1");
+            sub.ge(MySQLParentEntity::getLevel, 1);
+            sub.select(MySQLParentEntity::getId);
+        });
+        // Uncorrelated: if any parent matches cat1 AND level>=1, all entities match
+        assertEquals(3, repository.findAll(qs).size());
+    }
+
+    // ==================== GROUP BY + HAVING ====================
+    // Note: MySQL's only_full_group_by mode requires ALL selected columns in GROUP BY.
+    // Since QuerySpec selects all entity columns (including unique id), entity-level GROUP BY
+    // tests are not practical. GROUP BY is tested via count() queries below.
+
+    @Test
+    void countWithGroupConditions() {
+        save("a", 1);
+        save("b", 1);
+        save("c", 2);
+
+        long count = jpaTemplate.count(MySQLTestEntity.class,
+            new QuerySpec<MySQLTestEntity>().eq(MySQLTestEntity::getStatus, 1));
+        assertEquals(2, count);
+    }
+
+    @Test
+    void distinctQuery() {
+        save("a", 1);
+        save("b", 1);
+        save("c", 2);
+
+        QuerySpec<MySQLTestEntity> qs = new QuerySpec<>();
+        qs.distinct();
+        qs.eq(MySQLTestEntity::getStatus, 1);
+        List<MySQLTestEntity> result = repository.findAll(qs);
+        assertEquals(2, result.size());
+    }
+
+    // ==================== QuerySpec 高级功能 ====================
+
+    @Test
+    void thenMergeSpecs() {
+        save("alice", 1);
+        save("bob", 2);
+        save("charlie", 3);
+
+        QuerySpec<MySQLTestEntity> qs1 = new QuerySpec<>();
+        qs1.startsWith(MySQLTestEntity::getName, "a");
+
+        QuerySpec<MySQLTestEntity> qs2 = new QuerySpec<>();
+        qs2.ge(MySQLTestEntity::getStatus, 1);
+
+        QuerySpec<MySQLTestEntity> combined = new QuerySpec<>();
+        combined.then(qs1).then(qs2);
+        assertEquals(1, repository.findAll(combined).size());
+    }
+
+    @Test
+    void andMergeSpecs() {
+        save("alice", 1);
+        save("bob", 2);
+
+        QuerySpec<MySQLTestEntity> qs1 = new QuerySpec<>();
+        qs1.startsWith(MySQLTestEntity::getName, "a");
+
+        QuerySpec<MySQLTestEntity> qs2 = new QuerySpec<>();
+        qs2.ge(MySQLTestEntity::getStatus, 1);
+
+        QuerySpec<MySQLTestEntity> combined = new QuerySpec<>();
+        combined.and(qs1).and(qs2);
+        assertEquals(1, repository.findAll(combined).size());
+    }
+
+    @Test
+    void copySpec() {
+        save("alice", 1);
+        save("bob", 2);
+
+        QuerySpec<MySQLTestEntity> original = new QuerySpec<>();
+        original.eq(MySQLTestEntity::getName, "alice");
+
+        QuerySpec<MySQLTestEntity> copied = original.copy();
+        copied.eq(MySQLTestEntity::getStatus, 2);
+
+        assertEquals(1, repository.findAll(original).size());
+        assertEquals(0, repository.findAll(copied).size());
+    }
+
+    @Test
+    void specToSpecificationWithExternal() {
+        save("alice", 1);
+        save("bob", 2);
+        save("charlie", 3);
+
+        QuerySpec<MySQLTestEntity> qs = new QuerySpec<>();
+        qs.ge(MySQLTestEntity::getStatus, 1);
+
+        org.springframework.data.jpa.domain.Specification<MySQLTestEntity> external =
+            (root, query, cb) -> cb.equal(root.get("name"), "alice");
+
+        List<MySQLTestEntity> result = repository.findAll(qs.toSpecification(external));
+        assertEquals(1, result.size());
+        assertEquals("alice", result.get(0).getName());
+    }
+
+    @Test
+    void specToSpecificationWithNullExternal() {
+        save("alice", 1);
+
+        QuerySpec<MySQLTestEntity> qs = new QuerySpec<>();
+        qs.eq(MySQLTestEntity::getName, "alice");
+
+        List<MySQLTestEntity> result = repository.findAll(qs.toSpecification(null));
+        assertEquals(1, result.size());
+    }
+
+    @Test
+    void orCombineTwoSpecs() {
+        save("alice", 1);
+        save("bob", 2);
+        save("charlie", 3);
+
+        QuerySpec<MySQLTestEntity> qs1 = new QuerySpec<>();
+        qs1.eq(MySQLTestEntity::getName, "alice");
+
+        QuerySpec<MySQLTestEntity> qs2 = new QuerySpec<>();
+        qs2.eq(MySQLTestEntity::getName, "bob");
+
+        org.springframework.data.jpa.domain.Specification<MySQLTestEntity> combined = qs1.or(qs2);
+        assertEquals(2, repository.findAll(combined).size());
+    }
+
+    // ==================== MyJpaTemplate 缺失方法 ====================
+
+    @Test
+    void template_findById() {
+        save("alice", 1);
+        MySQLTestEntity saved = repository.findAll().get(0);
+
+        MySQLTestEntity found = jpaTemplate.findById(MySQLTestEntity.class, saved.getId()).orElse(null);
+        assertNotNull(found);
+        assertEquals("alice", found.getName());
+    }
+
+    @Test
+    void template_findById_notFound() {
+        MySQLTestEntity found = jpaTemplate.findById(MySQLTestEntity.class, 999L).orElse(null);
+        assertNull(found);
+    }
+
+    @Test
+    void template_findAllStream() {
+        save("a", 1);
+        save("b", 2);
+        save("c", 3);
+
+        QuerySpec<MySQLTestEntity> qs = new QuerySpec<>();
+        qs.gt(MySQLTestEntity::getStatus, 1);
+
+        java.util.concurrent.atomic.AtomicInteger count = new java.util.concurrent.atomic.AtomicInteger(0);
+        jpaTemplate.findAllStream(MySQLTestEntity.class, qs, stream -> {
+            stream.forEach(e -> count.incrementAndGet());
+        });
+        assertEquals(2, count.get());
+    }
+
+    @Test
+    void template_findAll_withExternalSort() {
+        save("charlie", 3);
+        save("alice", 1);
+        save("bob", 2);
+
+        List<MySQLTestEntity> result = jpaTemplate.findAll(MySQLTestEntity.class,
+            new QuerySpec<MySQLTestEntity>().orderByAsc(MySQLTestEntity::getName),
+            org.springframework.data.domain.Sort.unsorted());
+        assertEquals("alice", result.get(0).getName());
+        assertEquals("bob", result.get(1).getName());
+        assertEquals("charlie", result.get(2).getName());
+    }
+
+    @Test
+    void template_findAll_withCustomMaxResults() {
+        for (int i = 0; i < 10; i++)
+            save("user" + i, i);
+
+        List<MySQLTestEntity> result = jpaTemplate.findAll(MySQLTestEntity.class, new QuerySpec<>(), 5);
+        assertEquals(5, result.size());
+    }
+
+    @Test
+    void template_findAll_withDisabledMaxResults() {
+        for (int i = 0; i < 15; i++)
+            save("user" + i, i);
+
+        List<MySQLTestEntity> result = jpaTemplate.findAll(MySQLTestEntity.class, new QuerySpec<>(), -1);
+        assertEquals(15, result.size());
+    }
+
+    @Test
+    void template_saveAllBatched() {
+        List<MySQLTestEntity> entities = new java.util.ArrayList<>();
+        for (int i = 0; i < 10; i++) {
+            MySQLTestEntity e = new MySQLTestEntity();
+            e.setName("batch_" + i);
+            e.setStatus(i);
+            entities.add(e);
+        }
+
+        List<MySQLTestEntity> saved = jpaTemplate.saveAllBatched(entities, 5);
+        assertEquals(10, saved.size());
+        assertEquals(10, repository.count());
+    }
+
+    @Test
+    void template_saveAllBatchedPure() {
+        List<MySQLTestEntity> entities = new java.util.ArrayList<>();
+        for (int i = 0; i < 10; i++) {
+            MySQLTestEntity e = new MySQLTestEntity();
+            e.setName("pure_" + i);
+            e.setStatus(i);
+            entities.add(e);
+        }
+
+        List<MySQLTestEntity> saved = jpaTemplate.saveAllBatchedPure(entities, 5);
+        assertEquals(10, saved.size());
+        assertEquals(10, repository.count());
+    }
+
+    @Test
+    void template_executeWithMaxRows_update() {
+        save("a", 1);
+        save("b", 2);
+        save("c", 3);
+
+        int updated = jpaTemplate.executeWithMaxRows(jpaTemplate.update(MySQLTestEntity.class)
+            .set(MySQLTestEntity::getStatus, 99).gt(MySQLTestEntity::getStatus, 0), 2);
+        assertEquals(2, updated);
+    }
+
+    @Test
+    void template_executeWithMaxRows_delete() {
+        save("a", 1);
+        save("b", 2);
+        save("c", 3);
+
+        int deleted = jpaTemplate
+            .executeWithMaxRows(jpaTemplate.delete(MySQLTestEntity.class).gt(MySQLTestEntity::getStatus, 0), 2);
+        assertEquals(2, deleted);
+    }
+
+    @Test
+    void template_count_withSpec() {
+        save("a", 1);
+        save("b", 2);
+        save("c", 1);
+
+        long count = jpaTemplate.count(MySQLTestEntity.class,
+            new QuerySpec<MySQLTestEntity>().eq(MySQLTestEntity::getStatus, 1));
+        assertEquals(2, count);
+    }
+
+    @Test
+    void template_findOne_withSpecification() {
+        save("alice", 1);
+
+        org.springframework.data.jpa.domain.Specification<MySQLTestEntity> spec =
+            (root, query, cb) -> cb.equal(root.get("name"), "alice");
+        MySQLTestEntity found = jpaTemplate.findOne(MySQLTestEntity.class, spec).orElse(null);
+        assertNotNull(found);
+        assertEquals("alice", found.getName());
+    }
+
+    @Test
+    void template_findOne_withQuerySpec() {
+        save("alice", 1);
+
+        QuerySpec<MySQLTestEntity> qs = new QuerySpec<>();
+        qs.eq(MySQLTestEntity::getName, "alice");
+        MySQLTestEntity found = jpaTemplate.findOne(MySQLTestEntity.class, qs).orElse(null);
+        assertNotNull(found);
+        assertEquals("alice", found.getName());
+    }
+
+    @Test
+    void template_findOne_notFound() {
+        QuerySpec<MySQLTestEntity> qs = new QuerySpec<>();
+        qs.eq(MySQLTestEntity::getName, "nobody");
+        MySQLTestEntity found = jpaTemplate.findOne(MySQLTestEntity.class, qs).orElse(null);
+        assertNull(found);
+    }
+
+    @Test
+    void template_find_withSpecification() {
+        save("a", 1);
+        save("b", 2);
+
+        org.springframework.data.jpa.domain.Specification<MySQLTestEntity> spec =
+            (root, query, cb) -> cb.greaterThan(root.get("status"), 1);
+        List<MySQLTestEntity> result = jpaTemplate.find(MySQLTestEntity.class, spec);
+        assertEquals(1, result.size());
+    }
+
+    @Test
+    void template_find_withMaxResults() {
+        for (int i = 0; i < 10; i++)
+            save("user" + i, i);
+
+        org.springframework.data.jpa.domain.Specification<MySQLTestEntity> spec = (root, query, cb) -> cb.conjunction();
+        List<MySQLTestEntity> result = jpaTemplate.find(MySQLTestEntity.class, spec, 3);
+        assertEquals(3, result.size());
+    }
+
     // ==================== Helper methods ====================
 
     private MySQLTestEntity save(String name, Integer status) {

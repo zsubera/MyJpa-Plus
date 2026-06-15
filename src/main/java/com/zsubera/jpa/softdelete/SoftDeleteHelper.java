@@ -4,6 +4,7 @@ import com.zsubera.jpa.annotation.SoftDelete;
 import com.zsubera.jpa.exception.MyJpaPlusException;
 import com.zsubera.jpa.spec.ConditionNode;
 import com.zsubera.jpa.spec.QuerySpec;
+import com.zsubera.jpa.util.IdentifierValidator;
 import com.zsubera.jpa.util.QueryTimeoutHelper;
 import com.zsubera.jpa.update.AuditUtils;
 import com.zsubera.jpa.util.StringHelper;
@@ -63,10 +64,6 @@ public final class SoftDeleteHelper {
     private static final java.util.concurrent.atomic.AtomicInteger CALL_COUNTER =
         new java.util.concurrent.atomic.AtomicInteger(0);
 
-    /** 安全标识符段正则：用于校验 schema.table 格式中每一段。 */
-    private static final java.util.regex.Pattern SAFE_IDENTIFIER_PART_PATTERN =
-        java.util.regex.Pattern.compile("^[a-zA-Z_][a-zA-Z0-9_]*$");
-
     /** 没有 @SoftDelete 字段的实体的哨兵值（避免在缓存中出现空缓存）。 */
     private static final String NO_FIELD_SENTINEL = "\0";
 
@@ -95,6 +92,10 @@ public final class SoftDeleteHelper {
     private static final ConcurrentMap<String, Field> FIELD_OBJECT_CACHE =
         new ConcurrentReferenceHashMap<>(64, ConcurrentReferenceHashMap.ReferenceType.WEAK);
 
+    /** 缓存: entityClass -> SoftDelete annotation，避免每次查询重复反射查找。 */
+    private static final ConcurrentMap<Class<?>, SoftDelete> ANNOTATION_CACHE =
+        new ConcurrentReferenceHashMap<>(16, ConcurrentReferenceHashMap.ReferenceType.WEAK);
+
     /**
      * 转义 SQL 标识符，防止注入。
      *
@@ -115,7 +116,7 @@ public final class SoftDeleteHelper {
         // 仅验证不转义——标识符已通过正则校验确保安全，避免 MySQL/PostgreSQL 引号风格差异
         String[] parts = identifier.split("\\.");
         for (String part : parts) {
-            if (!SAFE_IDENTIFIER_PART_PATTERN.matcher(part).matches()) {
+            if (!IdentifierValidator.SAFE_IDENTIFIER_PATTERN.matcher(part).matches()) {
                 throw new IllegalArgumentException("Invalid SQL identifier: '" + identifier
                     + "'. Each part must contain only alphanumeric characters and underscores.");
             }
@@ -361,12 +362,6 @@ public final class SoftDeleteHelper {
     }
 
     /**
-     * 安全标识符验证模式，防止 SQL 注入。
-     */
-    private static final java.util.regex.Pattern SAFE_IDENTIFIER_PATTERN =
-        java.util.regex.Pattern.compile("^[a-zA-Z_][a-zA-Z0-9_]*$");
-
-    /**
      * 解析实体类对应的数据库表名。
      */
     private static String resolveTableName(Class<?> entityClass) {
@@ -376,13 +371,13 @@ public final class SoftDeleteHelper {
             String catalog = tableAnnotation.catalog();
             String schema = tableAnnotation.schema();
             String name = tableAnnotation.name();
-            if (!catalog.isEmpty() && !SAFE_IDENTIFIER_PATTERN.matcher(catalog).matches()) {
+            if (!catalog.isEmpty() && !IdentifierValidator.SAFE_IDENTIFIER_PATTERN.matcher(catalog).matches()) {
                 throw new IllegalArgumentException("Invalid @Table catalog: " + catalog);
             }
-            if (!schema.isEmpty() && !SAFE_IDENTIFIER_PATTERN.matcher(schema).matches()) {
+            if (!schema.isEmpty() && !IdentifierValidator.SAFE_IDENTIFIER_PATTERN.matcher(schema).matches()) {
                 throw new IllegalArgumentException("Invalid @Table schema: " + schema);
             }
-            if (!SAFE_IDENTIFIER_PATTERN.matcher(name).matches()) {
+            if (!IdentifierValidator.SAFE_IDENTIFIER_PATTERN.matcher(name).matches()) {
                 throw new IllegalArgumentException("Invalid @Table name: " + name);
             }
             StringBuilder tableName = new StringBuilder();
@@ -399,7 +394,7 @@ public final class SoftDeleteHelper {
         if (entityAnnotation != null && !entityAnnotation.name().isEmpty()) {
             String name = entityAnnotation.name();
             // 校验 @Entity name 以防止 SQL 注入
-            if (!SAFE_IDENTIFIER_PATTERN.matcher(name).matches()) {
+            if (!IdentifierValidator.SAFE_IDENTIFIER_PATTERN.matcher(name).matches()) {
                 throw new IllegalArgumentException(
                     "Invalid @Entity name: " + name + ". Must contain only alphanumeric characters and underscores.");
             }
@@ -417,7 +412,7 @@ public final class SoftDeleteHelper {
             jakarta.persistence.Column columnAnnotation = field.getAnnotation(jakarta.persistence.Column.class);
             if (columnAnnotation != null && !columnAnnotation.name().isEmpty()) {
                 String name = columnAnnotation.name();
-                if (!SAFE_IDENTIFIER_PATTERN.matcher(name).matches()) {
+                if (!IdentifierValidator.SAFE_IDENTIFIER_PATTERN.matcher(name).matches()) {
                     throw new IllegalArgumentException("Invalid @Column name: " + name
                         + ". Must contain only alphanumeric characters and underscores.");
                 }
@@ -437,7 +432,7 @@ public final class SoftDeleteHelper {
                     jakarta.persistence.Column columnAnnotation = f.getAnnotation(jakarta.persistence.Column.class);
                     if (columnAnnotation != null && !columnAnnotation.name().isEmpty()) {
                         String name = columnAnnotation.name();
-                        if (!SAFE_IDENTIFIER_PATTERN.matcher(name).matches()) {
+                        if (!IdentifierValidator.SAFE_IDENTIFIER_PATTERN.matcher(name).matches()) {
                             throw new IllegalArgumentException("Invalid @Column name for @Id field: " + name
                                 + ". Must contain only alphanumeric characters and underscores.");
                         }
@@ -548,58 +543,27 @@ public final class SoftDeleteHelper {
         Class<?> entityClass, boolean isNotDeleted) {
         Field field = getField(entityClass, fieldName);
         if (field == null) {
-            // 字段未找到时的默认行为
             if (isNotDeleted) {
                 return cb.or(cb.isNull(path.get(fieldName)), cb.equal(path.get(fieldName), false));
             }
             return cb.equal(path.get(fieldName), true);
         }
-        SoftDelete annotation = field.getAnnotation(SoftDelete.class);
-
-        // Boolean 类型
-        if (field.getType() == Boolean.class || field.getType() == boolean.class) {
+        SoftDelete annotation = ANNOTATION_CACHE.computeIfAbsent(entityClass, cls -> {
+            Field f = getField(cls, fieldName);
+            return f != null ? f.getAnnotation(SoftDelete.class) : null;
+        });
+        ResolvedDeletedValue resolved = resolveDeletedValue(entityClass, field, annotation);
+        if (resolved.booleanField()) {
             if (isNotDeleted) {
                 return cb.or(cb.isNull(path.get(fieldName)), cb.equal(path.get(fieldName), false));
             }
             return cb.equal(path.get(fieldName), true);
         }
-
-        // Integer 类型
-        if (field.getType() == Integer.class || field.getType() == int.class) {
-            int deletedValue = (annotation != null) ? annotation.deletedIntValue() : 1;
-            if (isNotDeleted) {
-                return cb.or(cb.isNull(path.get(fieldName)), cb.notEqual(path.get(fieldName), deletedValue));
-            }
-            return cb.equal(path.get(fieldName), deletedValue);
+        Object dbValue = resolved.dbValue();
+        if (isNotDeleted) {
+            return cb.or(cb.isNull(path.get(fieldName)), cb.notEqual(path.get(fieldName), dbValue));
         }
-
-        // 枚举类型
-        if (Enum.class.isAssignableFrom(field.getType())) {
-            if (annotation == null || annotation.deletedValue().isEmpty()) {
-                throw new MyJpaPlusException("@SoftDelete on enum field '" + fieldName + "' in " + entityClass.getName()
-                    + " must specify deletedValue");
-            }
-            Object deletedEnumValue = getEnumConstant(field.getType(), annotation.deletedValue());
-            if (isNotDeleted) {
-                return cb.or(cb.isNull(path.get(fieldName)), cb.notEqual(path.get(fieldName), deletedEnumValue));
-            }
-            return cb.equal(path.get(fieldName), deletedEnumValue);
-        }
-
-        // String 类型（支持 char(1) 等字符串软删除，如 '0'/'1'）
-        if (field.getType() == String.class) {
-            String deletedValue = (annotation != null && !annotation.deletedStringValue().isEmpty())
-                ? annotation.deletedStringValue() : "1";
-            if (isNotDeleted) {
-                return cb.or(cb.isNull(path.get(fieldName)), cb.notEqual(path.get(fieldName), deletedValue));
-            }
-            return cb.equal(path.get(fieldName), deletedValue);
-        }
-
-        // 不支持的类型：抛出异常而非静默回退
-        throw new MyJpaPlusException(
-            "@SoftDelete field '" + fieldName + "' in " + entityClass.getName() + " has unsupported type: "
-                + field.getType().getName() + ". Supported types: Boolean, Integer, Enum, String.");
+        return cb.equal(path.get(fieldName), dbValue);
     }
 
     private static Predicate buildNotDeleted(CriteriaBuilder cb, Path<?> path, String fieldName, Class<?> entityClass) {
@@ -791,6 +755,7 @@ public final class SoftDeleteHelper {
         NOT_DELETED_SPEC_CACHE.clear();
         DELETED_SPEC_CACHE.clear();
         FIELD_OBJECT_CACHE.clear();
+        ANNOTATION_CACHE.clear();
         FIELDS_CACHE.clear();
     }
 }

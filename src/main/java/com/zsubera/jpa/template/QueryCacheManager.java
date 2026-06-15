@@ -335,8 +335,8 @@ public class QueryCacheManager {
      * @param key 要驱逐的缓存键
      */
     public void evict(String key) {
-        store.remove(key);
-        if (insertionOrder.remove(key)) {
+        Object removed = store.remove(key);
+        if (removed != null && insertionOrder.remove(key)) {
             dequeSize.decrementAndGet();
         }
         log.debug("Cache evicted for key: {}", key);

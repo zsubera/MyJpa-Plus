@@ -375,6 +375,8 @@ public class MergeSpec<T> {
         }
         int total = 0;
         int count = 0;
+        int batchStartCount = 0;
+        int batchStartTotal = 0;
         String cachedDialect = DialectDetector.detectDialect(em);
         EntityTransaction tx = null;
         boolean txStarted = false;
@@ -398,6 +400,8 @@ public class MergeSpec<T> {
                 if (tx != null && !tx.isActive()) {
                     tx.begin();
                     txStarted = true;
+                    batchStartCount = count;
+                    batchStartTotal = total;
                 } else if (tx != null && tx.isActive()) {
                     throw new MyJpaPlusException("executeBatchInSeparateTransactions requires no active transaction. "
                         + "An active RESOURCE_LOCAL transaction was detected. "
@@ -427,6 +431,7 @@ public class MergeSpec<T> {
                         e.addSuppressed(rollbackEx);
                     }
                 }
+                total = batchStartTotal;
                 throw e;
             }
         }
@@ -441,6 +446,7 @@ public class MergeSpec<T> {
                     log.error("Transaction rollback failed after final batch commit failure", rollbackEx);
                     e.addSuppressed(rollbackEx);
                 }
+                total = batchStartTotal;
                 throw e;
             }
         }

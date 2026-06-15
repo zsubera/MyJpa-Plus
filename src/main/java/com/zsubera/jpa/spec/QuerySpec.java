@@ -311,7 +311,7 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
             appendCacheKey(sb, nn.inner());
             sb.append(")");
         } else if (node instanceof ConditionNode.RawNode rn) {
-            sb.append("RAW(").append(rn.fn.hashCode()).append(")");
+            sb.append("RAW(").append(System.identityHashCode(rn.fn)).append(")");
         } else {
             sb.append(node.getClass().getSimpleName()).append("@").append(node.hashCode());
         }

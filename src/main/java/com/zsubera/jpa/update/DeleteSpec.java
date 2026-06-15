@@ -118,6 +118,9 @@ public class DeleteSpec<T> extends AbstractBulkOperationSpec<T, DeleteSpec<T>> {
             probeQuery.where(cb.and(predicates));
         }
         jakarta.persistence.TypedQuery<Long> query = em.createQuery(probeQuery);
+        if (limit >= Integer.MAX_VALUE - 1) {
+            return;
+        }
         query.setMaxResults((int)limit + 1);
         int probeCount = query.getResultList().size();
         if (probeCount <= limit) {

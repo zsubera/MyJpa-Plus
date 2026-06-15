@@ -12,6 +12,7 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Set;
 import java.util.regex.Pattern;
+import com.zsubera.jpa.util.IdentifierValidator;
 import org.springframework.lang.Nullable;
 
 /**
@@ -41,7 +42,7 @@ public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> ext
      * <strong>注意：</strong>此正则不允许点号（{@code .}），因为嵌套属性应通过 {@link SFunction} 方法引用处理。 如需支持嵌套路径（如 "address.city"），请使用
      * {@link #SAFE_NESTED_FIELD_NAME_PATTERN}。
      */
-    Pattern SAFE_FIELD_NAME_PATTERN = Pattern.compile("^[a-zA-Z_][a-zA-Z0-9_]*$");
+    Pattern SAFE_FIELD_NAME_PATTERN = IdentifierValidator.SAFE_IDENTIFIER_PATTERN;
 
     /**
      * 安全嵌套字段名正则表达式：允许字母、数字、下划线和点号。
