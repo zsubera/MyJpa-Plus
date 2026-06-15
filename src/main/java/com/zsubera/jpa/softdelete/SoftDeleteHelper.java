@@ -97,23 +97,23 @@ public final class SoftDeleteHelper {
         new ConcurrentReferenceHashMap<>(16, ConcurrentReferenceHashMap.ReferenceType.WEAK);
 
     /**
-     * 转义 SQL 标识符，防止注入。
+     * 验证 SQL 标识符安全性，确保不含注入字符。
      *
      * <p>
-     * 使用双引号包裹标识符，并验证标识符仅包含安全字符。 支持 schema.table 格式（按点号分段校验每一段）。
+     * 验证标识符仅包含安全字符（字母、数字、下划线）。 支持 schema.table 格式（按点号分段校验每一段）。
+     * 不添加引号——标识符已通过正则校验确保安全，避免 MySQL/PostgreSQL 引号风格差异。
      *
      * @param identifier SQL 标识符
-     * @return 转义后的标识符
+     * @return 验证后的标识符（原样返回）
      * @throws IllegalArgumentException 如果标识符包含非法字符
      */
     @edu.umd.cs.findbugs.annotations.SuppressFBWarnings(value = "URF_UNREAD_PUBLIC_OR_PROTECTED_FIELD",
         justification = "Utility method used by softDeleteAll and softDeleteByIds")
-    static String escapeIdentifier(String identifier) {
+    static String validateIdentifier(String identifier) {
         if (identifier == null || identifier.isEmpty()) {
             throw new IllegalArgumentException("Identifier must not be null or empty");
         }
 
-        // 仅验证不转义——标识符已通过正则校验确保安全，避免 MySQL/PostgreSQL 引号风格差异
         String[] parts = identifier.split("\\.");
         for (String part : parts) {
             if (!IdentifierValidator.SAFE_IDENTIFIER_PATTERN.matcher(part).matches()) {
@@ -125,10 +125,10 @@ public final class SoftDeleteHelper {
     }
 
     /**
-     * 验证表名标识符但不添加双引号。用于原生 SQL 中不需要大小写敏感的场景。
+     * 验证表名标识符。用于原生 SQL 中不需要大小写敏感的场景。
      */
     static String validateTableName(String identifier) {
-        return escapeIdentifier(identifier);
+        return validateIdentifier(identifier);
     }
 
     private SoftDeleteHelper() {}
@@ -232,8 +232,8 @@ public final class SoftDeleteHelper {
             throw new IllegalArgumentException("Cannot resolve @SoftDelete field: " + fieldName);
         }
         SoftDelete annotation = field.getAnnotation(SoftDelete.class);
-        String escapedTable = escapeIdentifier(tableName);
-        String escapedColumn = escapeIdentifier(columnName);
+        String escapedTable = validateIdentifier(tableName);
+        String escapedColumn = validateIdentifier(columnName);
         ResolvedDeletedValue resolved = resolveDeletedValue(entityClass, field, annotation);
         int updated;
         if (resolved.booleanField()) {
@@ -311,9 +311,9 @@ public final class SoftDeleteHelper {
             throw new IllegalArgumentException("Cannot resolve @SoftDelete field: " + fieldName);
         }
         SoftDelete annotation = field.getAnnotation(SoftDelete.class);
-        String escapedTable = escapeIdentifier(tableName);
-        String escapedColumn = escapeIdentifier(columnName);
-        String escapedIdColumn = escapeIdentifier(idFieldName);
+        String escapedTable = validateIdentifier(tableName);
+        String escapedColumn = validateIdentifier(columnName);
+        String escapedIdColumn = validateIdentifier(idFieldName);
         ResolvedDeletedValue resolved = resolveDeletedValue(entityClass, field, annotation);
         // 使用命名参数替代位置参数以避免某些 JPA 实现中的索引冲突
         String setParamName = "deletedValue";
@@ -566,31 +566,22 @@ public final class SoftDeleteHelper {
         return cb.equal(path.get(fieldName), dbValue);
     }
 
-    private static Predicate buildNotDeleted(CriteriaBuilder cb, Path<?> path, String fieldName, Class<?> entityClass) {
+    /**
+     * 构建排除已删除记录的谓词。支持 Boolean/Integer/Enum/String 类型的 @SoftDelete 字段。
+     * 供 {@link com.zsubera.jpa.spec.NodeResolver} 等外部调用方在 JOIN 场景中使用。
+     *
+     * @param cb CriteriaBuilder
+     * @param path 字段路径
+     * @param fieldName 软删除字段名
+     * @param entityClass 实体类
+     * @return "未删除"谓词
+     */
+    public static Predicate buildNotDeleted(CriteriaBuilder cb, Path<?> path, String fieldName, Class<?> entityClass) {
         return resolveDeletedPredicate(cb, path, fieldName, entityClass, true);
     }
 
     private static Predicate buildDeleted(CriteriaBuilder cb, Path<?> path, String fieldName, Class<?> entityClass) {
         return resolveDeletedPredicate(cb, path, fieldName, entityClass, false);
-    }
-
-    /**
-     * 获取枚举类型的指定常量。
-     *
-     * @param enumType 枚举类型
-     * @param constantName 枚举常量名称
-     * @return 枚举常量
-     * @throws IllegalStateException 如果枚举常量不存在
-     */
-    @SuppressWarnings({"unchecked", "rawtypes"})
-    private static Object getEnumConstant(Class<?> enumType, String constantName) {
-        try {
-            return Enum.valueOf((Class<Enum>)enumType, constantName);
-        } catch (IllegalArgumentException e) {
-            throw new IllegalStateException(String.format(
-                "Enum constant '%s' not found in %s. " + "Please check the @SoftDelete(deletedValue) configuration.",
-                constantName, enumType.getName()), e);
-        }
     }
 
     /**

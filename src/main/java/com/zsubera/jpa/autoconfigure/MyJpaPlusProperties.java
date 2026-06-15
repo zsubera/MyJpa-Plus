@@ -57,6 +57,7 @@ public class MyJpaPlusProperties {
     @PostConstruct
     void validate() {
         query.validate();
+        monitoring.validate();
     }
 
     @SuppressFBWarnings("EI_EXPOSE_REP")
@@ -307,6 +308,13 @@ public class MyJpaPlusProperties {
 
         /** 是否启用 SQL 慢查询监控。启用后会通过 DataSource 代理拦截 JDBC 执行并记录慢查询。 默认值：{@code false} */
         private boolean enabled = false;
+
+        void validate() {
+            if (slowQueryThresholdMs <= 0) {
+                throw new IllegalArgumentException(
+                    "myjpa-plus.monitoring.slow-query-threshold-ms must be positive, got: " + slowQueryThresholdMs);
+            }
+        }
 
         public long getSlowQueryThresholdMs() {
             return slowQueryThresholdMs;

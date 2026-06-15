@@ -155,9 +155,19 @@ public class EncryptConverter implements AttributeConverter<String, String> {
     }
 
     /**
-     * 清除所有缓存的密钥和版本信息。用于测试环境和应用关闭时清理。
+     * 清除所有缓存的密钥和版本信息。用于应用关闭时清理和测试环境重置。
+     *
+     * @deprecated 使用 {@link #clearCaches()} 代替。此方法名称具有误导性（暗示仅限测试）。
      */
+    @Deprecated(since = "1.4.0")
     public static void clearCacheForTesting() {
+        clearCaches();
+    }
+
+    /**
+     * 清除所有缓存的密钥和版本信息。用于应用关闭时清理和测试环境重置。
+     */
+    public static void clearCaches() {
         KEY_CACHE.clear();
         cachedKeyVersion = null;
         lastKeyVersionRefresh = 0;

@@ -99,17 +99,23 @@ public class SqlSlowQueryInterceptor implements StatementInspector {
 
         private Object wrapPreparedStatement(Object stmt, String sql) {
             Class<?> stmtClass = stmt.getClass();
-            // 如果 Statement 实现类没有实现任何接口，无法创建 JDK 动态代理，
-            // 直接返回原始对象。正常 JDBC 驱动的 PreparedStatement 总会实现
-            // java.sql.PreparedStatement 等接口，此为防御性检查。
             if (stmtClass.getInterfaces().length == 0) {
                 log.debug("PreparedStatement class {} implements no interfaces, skipping proxy wrapping",
                     stmtClass.getName());
                 return stmt;
             }
 
-            Class<?> proxyClass = PROXY_CLASS_CACHE.computeIfAbsent(stmtClass,
-                clz -> Proxy.getProxyClass(clz.getClassLoader(), clz.getInterfaces()));
+            Class<?> proxyClass = PROXY_CLASS_CACHE.get(stmtClass);
+            if (proxyClass == null) {
+                if (PROXY_CLASS_CACHE.size() >= MAX_PROXY_CLASS_CACHE_SIZE) {
+                    log.warn("Proxy class cache full ({} entries), skipping cache for {}", MAX_PROXY_CLASS_CACHE_SIZE,
+                        stmtClass.getName());
+                    return Proxy.newProxyInstance(stmtClass.getClassLoader(), stmtClass.getInterfaces(),
+                        new PreparedStatementTimingHandler(stmt, sql, slowQueryThresholdMs));
+                }
+                proxyClass = PROXY_CLASS_CACHE.computeIfAbsent(stmtClass,
+                    clz -> Proxy.getProxyClass(clz.getClassLoader(), clz.getInterfaces()));
+            }
             try {
                 return proxyClass.getConstructor(InvocationHandler.class)
                     .newInstance(new PreparedStatementTimingHandler(stmt, sql, slowQueryThresholdMs));
@@ -128,19 +134,15 @@ public class SqlSlowQueryInterceptor implements StatementInspector {
         private final String sql;
         private final long slowQueryThresholdMs;
 
-        /** 可选的 Micrometer MeterRegistry，通过反射延迟加载以避免强依赖。 */
-        private static volatile Object meterRegistry;
-        private static volatile boolean micrometerAvailable;
-        private static volatile boolean micrometerChecked;
+        /**
+         * Micrometer 反射缓存，封装所有反射引用为不可变对象，通过单个 volatile 引用原子切换。
+         */
+        private record MicrometerReflectCache(Object meterRegistry, Class<?> meterRegistryClass,
+            Class<?> distributionSummaryClass, Class<?> tagsClass, Method tagsOfMethod, Method summaryBuilderMethod,
+            Method summaryDescMethod, Method summaryRegisterMethod, Method summaryRecordMethod) {
+        }
 
-        private static volatile Class<?> meterRegistryClass;
-        private static volatile Class<?> distributionSummaryClass;
-        private static volatile Class<?> tagsClass;
-        private static volatile Method tagsOfMethod;
-        private static volatile Method summaryBuilderMethod;
-        private static volatile Method summaryDescMethod;
-        private static volatile Method summaryRegisterMethod;
-        private static volatile Method summaryRecordMethod;
+        private static volatile MicrometerReflectCache micrometerCache;
 
         @SuppressFBWarnings("EI_EXPOSE_REP2")
         PreparedStatementTimingHandler(Object target, String sql, long slowQueryThresholdMs) {
@@ -174,46 +176,47 @@ public class SqlSlowQueryInterceptor implements StatementInspector {
          * 记录查询执行指标到 Micrometer（如果可用）。
          */
         private void recordMetrics(String operationType, long elapsedMs) {
-            if (!micrometerChecked) {
+            MicrometerReflectCache cache = micrometerCache;
+            if (cache == null) {
                 checkMicrometerAvailable();
+                cache = micrometerCache;
             }
-            if (!micrometerAvailable || meterRegistry == null) {
+            if (cache == null) {
                 return;
             }
             try {
-                Object tags = tagsOfMethod.invoke(null, "type", operationType);
+                Object tags = cache.tagsOfMethod().invoke(null, "type", operationType);
 
-                Object summary = summaryBuilderMethod.invoke(null, "myjpa.query.duration");
-                summary = summaryDescMethod.invoke(summary, "JPA query execution duration");
-                summary = summaryRegisterMethod.invoke(summary, meterRegistry);
+                Object summary = cache.summaryBuilderMethod().invoke(null, "myjpa.query.duration");
+                summary = cache.summaryDescMethod().invoke(summary, "JPA query execution duration");
+                summary = cache.summaryRegisterMethod().invoke(summary, cache.meterRegistry());
 
-                summaryRecordMethod.invoke(summary, tags, (double)elapsedMs);
+                cache.summaryRecordMethod().invoke(summary, tags, (double)elapsedMs);
             } catch (ReflectiveOperationException e) {
                 log.debug("Failed to record Micrometer metrics", e);
             }
         }
 
         private static synchronized void checkMicrometerAvailable() {
-            if (micrometerChecked) {
+            if (micrometerCache != null) {
                 return;
             }
-            micrometerChecked = true;
             try {
                 Class<?> registryClass = Class.forName("io.micrometer.core.instrument.MeterRegistry");
                 Class<?> globalRegistryClass = Class.forName("io.micrometer.core.instrument.Metrics");
-                meterRegistry = globalRegistryClass.getMethod("globalRegistry").invoke(null);
-                micrometerAvailable = meterRegistry != null;
-                if (micrometerAvailable) {
-                    meterRegistryClass = Class.forName("io.micrometer.core.instrument.MeterRegistry");
-                    distributionSummaryClass = Class.forName("io.micrometer.core.instrument.DistributionSummary");
-                    tagsClass = Class.forName("io.micrometer.core.instrument.Tags");
-                    tagsOfMethod = tagsClass.getMethod("of", String.class, String.class);
-                    summaryBuilderMethod = distributionSummaryClass.getMethod("builder", String.class);
-                    summaryDescMethod = distributionSummaryClass.getMethod("description", String.class);
-                    summaryRegisterMethod = distributionSummaryClass.getMethod("register", meterRegistryClass);
-                    summaryRecordMethod = distributionSummaryClass.getMethod("record", tagsClass, double.class);
-                    log.info("Micrometer detected — SQL query metrics will be recorded to myjpa.query.duration");
+                Object registry = globalRegistryClass.getMethod("globalRegistry").invoke(null);
+                if (registry == null) {
+                    return;
                 }
+                Class<?> tagsClass = Class.forName("io.micrometer.core.instrument.Tags");
+                Class<?> distSummaryClass = Class.forName("io.micrometer.core.instrument.DistributionSummary");
+                micrometerCache = new MicrometerReflectCache(registry, registryClass, distSummaryClass, tagsClass,
+                    tagsClass.getMethod("of", String.class, String.class),
+                    distSummaryClass.getMethod("builder", String.class),
+                    distSummaryClass.getMethod("description", String.class),
+                    distSummaryClass.getMethod("register", registryClass),
+                    distSummaryClass.getMethod("record", tagsClass, double.class));
+                log.info("Micrometer detected — SQL query metrics will be recorded to myjpa.query.duration");
             } catch (ReflectiveOperationException e) {
                 log.trace("Micrometer not available on classpath", e);
             }

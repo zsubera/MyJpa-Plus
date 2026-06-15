@@ -313,11 +313,12 @@ class SqlSlowQueryInterceptorTest {
     void timingHandler_checkMicrometerAlreadyChecked() throws Exception {
         SqlSlowQueryInterceptor interceptor = new SqlSlowQueryInterceptor(1000);
 
-        // Set micrometerChecked to true
-        java.lang.reflect.Field checkedField =
-            getInnerClass("PreparedStatementTimingHandler").getDeclaredField("micrometerChecked");
-        checkedField.setAccessible(true);
-        checkedField.setBoolean(null, true);
+        // Set micrometerCache to null (simulating not available) to skip re-checking
+        java.lang.reflect.Field cacheField =
+            getInnerClass("PreparedStatementTimingHandler").getDeclaredField("micrometerCache");
+        cacheField.setAccessible(true);
+        Object previousCache = cacheField.get(null);
+        cacheField.set(null, null);
 
         PreparedStatement mockStmt = createMockPreparedStatement("SELECT 1");
 
@@ -331,7 +332,7 @@ class SqlSlowQueryInterceptorTest {
         PreparedStatement wrapped = (PreparedStatement)wrapMethod.invoke(handler, mockStmt, "SELECT 1");
         wrapped.executeQuery();
 
-        checkedField.setBoolean(null, false);
+        cacheField.set(null, previousCache);
     }
 
     @Test

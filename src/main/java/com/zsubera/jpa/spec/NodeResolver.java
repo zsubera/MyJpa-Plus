@@ -225,13 +225,10 @@ final class NodeResolver {
                     com.zsubera.jpa.softdelete.SoftDeleteHelper.findSoftDeleteField(joinEntityType);
                 if (softDeleteFieldName != null) {
                     jakarta.persistence.criteria.Path<?> deletedPath = join.get(softDeleteFieldName);
-                    try {
-                        java.lang.reflect.Field field = joinEntityType.getDeclaredField(softDeleteFieldName);
-                        if (field.getType() == Boolean.class || field.getType() == boolean.class) {
-                            innerPredicates.add(cb.or(cb.isNull(deletedPath), cb.equal(deletedPath, false)));
-                        }
-                    } catch (NoSuchFieldException e) {
-                        // 字段不存在，忽略
+                    Predicate softDeleteFilter = com.zsubera.jpa.softdelete.SoftDeleteHelper.buildNotDeleted(cb,
+                        deletedPath, softDeleteFieldName, joinEntityType);
+                    if (softDeleteFilter != null) {
+                        innerPredicates.add(softDeleteFilter);
                     }
                 }
             }

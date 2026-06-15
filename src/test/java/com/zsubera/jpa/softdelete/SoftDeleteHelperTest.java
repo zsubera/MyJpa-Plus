@@ -207,30 +207,30 @@ class SoftDeleteHelperTest {
 
     @Test
     void testEscapeIdentifierWithValidInput() {
-        String result = SoftDeleteHelper.escapeIdentifier("test_table");
+        String result = SoftDeleteHelper.validateIdentifier("test_table");
         assertEquals("test_table", result);
     }
 
     @Test
     void testEscapeIdentifierWithSchemaTable() {
-        // escapeIdentifier validates each segment individually without quoting
-        String result = SoftDeleteHelper.escapeIdentifier("schema.table");
+        // validateIdentifier validates each segment individually without quoting
+        String result = SoftDeleteHelper.validateIdentifier("schema.table");
         assertEquals("schema.table", result);
     }
 
     @Test
     void testEscapeIdentifierWithNullThrowsException() {
-        assertThrows(IllegalArgumentException.class, () -> SoftDeleteHelper.escapeIdentifier(null));
+        assertThrows(IllegalArgumentException.class, () -> SoftDeleteHelper.validateIdentifier(null));
     }
 
     @Test
     void testEscapeIdentifierWithEmptyThrowsException() {
-        assertThrows(IllegalArgumentException.class, () -> SoftDeleteHelper.escapeIdentifier(""));
+        assertThrows(IllegalArgumentException.class, () -> SoftDeleteHelper.validateIdentifier(""));
     }
 
     @Test
     void testEscapeIdentifierWithInvalidCharsThrowsException() {
-        assertThrows(IllegalArgumentException.class, () -> SoftDeleteHelper.escapeIdentifier("table;DROP"));
+        assertThrows(IllegalArgumentException.class, () -> SoftDeleteHelper.validateIdentifier("table;DROP"));
     }
 
     @Test
@@ -327,30 +327,30 @@ class SoftDeleteHelperTest {
 
     @Test
     void testEscapeIdentifier_simpleIdentifier() {
-        assertEquals("my_column", SoftDeleteHelper.escapeIdentifier("my_column"));
+        assertEquals("my_column", SoftDeleteHelper.validateIdentifier("my_column"));
     }
 
     @Test
     void testEscapeIdentifier_schemaQualified() {
-        assertEquals("myschema.mytable", SoftDeleteHelper.escapeIdentifier("myschema.mytable"));
+        assertEquals("myschema.mytable", SoftDeleteHelper.validateIdentifier("myschema.mytable"));
     }
 
     @Test
     void testEscapeIdentifier_catalogSchemaQualified() {
-        assertEquals("mycatalog.myschema.mytable", SoftDeleteHelper.escapeIdentifier("mycatalog.myschema.mytable"));
+        assertEquals("mycatalog.myschema.mytable", SoftDeleteHelper.validateIdentifier("mycatalog.myschema.mytable"));
     }
 
     @Test
     void testEscapeIdentifier_invalidCharactersThrows() {
-        assertThrows(IllegalArgumentException.class, () -> SoftDeleteHelper.escapeIdentifier("my column"));
-        assertThrows(IllegalArgumentException.class, () -> SoftDeleteHelper.escapeIdentifier("my-table"));
-        assertThrows(IllegalArgumentException.class, () -> SoftDeleteHelper.escapeIdentifier("'; DROP TABLE --"));
+        assertThrows(IllegalArgumentException.class, () -> SoftDeleteHelper.validateIdentifier("my column"));
+        assertThrows(IllegalArgumentException.class, () -> SoftDeleteHelper.validateIdentifier("my-table"));
+        assertThrows(IllegalArgumentException.class, () -> SoftDeleteHelper.validateIdentifier("'; DROP TABLE --"));
     }
 
     @Test
     void testEscapeIdentifier_nullOrEmptyThrows() {
-        assertThrows(IllegalArgumentException.class, () -> SoftDeleteHelper.escapeIdentifier(null));
-        assertThrows(IllegalArgumentException.class, () -> SoftDeleteHelper.escapeIdentifier(""));
+        assertThrows(IllegalArgumentException.class, () -> SoftDeleteHelper.validateIdentifier(null));
+        assertThrows(IllegalArgumentException.class, () -> SoftDeleteHelper.validateIdentifier(""));
     }
 
     private TestEntity newEntity(String name, int status) {

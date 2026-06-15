@@ -90,7 +90,7 @@ public class MyJpaPlusAutoConfiguration {
         config.setBlockUnconditionalDelete(properties.getSoftDelete().isBlockUnconditionalDelete());
         config.setDefaultTimeoutSeconds(properties.getQuery().getDefaultTimeoutSeconds());
         config.setMaxResults(properties.getQuery().getMaxResults());
-        config.setMaxBulkOperationRows(10000);
+        config.setMaxBulkOperationRows(properties.getQuery().getMaxBulkOperationRows());
         config.setDeepPaginationOffsetThreshold(properties.getQuery().getDeepPaginationOffsetThreshold());
         config.setDeepPaginationOffsetLimit(properties.getQuery().getDeepPaginationOffsetLimit());
         return config;
@@ -322,7 +322,8 @@ public class MyJpaPlusAutoConfiguration {
     @EventListener(ContextClosedEvent.class)
     public void onContextClosed(ContextClosedEvent event) {
         LambdaUtils.shutdown();
-        com.zsubera.jpa.converter.EncryptConverter.clearCacheForTesting();
+        com.zsubera.jpa.converter.EncryptConverter.clearCaches();
+        com.zsubera.jpa.converter.EncryptConverter.removeCipher();
         com.zsubera.jpa.softdelete.SoftDeleteHelper.shutdown();
         DefaultMyJpaRepository.clearThreadLocal();
         com.zsubera.jpa.repository.SoftDeleteContext.reset();
