@@ -71,7 +71,7 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
      * @deprecated 请使用 {@link com.zsubera.jpa.autoconfigure.GlobalConfigHolder#setConfig(MyJpaPlusGlobalConfig)} 代替。
      * 此方法保留以兼容现有调用方，内部委托给 GlobalConfigHolder。
      */
-    @Deprecated(since = "2.1.0")
+    @Deprecated(since = "1.3.0")
     public static void setGlobalConfig(MyJpaPlusGlobalConfig config) {
         com.zsubera.jpa.autoconfigure.GlobalConfigHolder.setConfig(config);
     }
@@ -142,7 +142,9 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
     @SuppressWarnings("unchecked")
     public QuerySpec<T> copy() {
         QuerySpec<T> copy = new QuerySpec<>();
-        copy.conditions.addAll(this.conditions);
+        for (ConditionNode node : this.conditions) {
+            copy.conditions.add(deepCopyNode(node));
+        }
         // groupStack 是构建过程中的临时状态（or/not/join 的 Consumer 作用域），
         // 不属于查询定义的一部分。构建完成后应为空，拷贝时不复制。
         copy.distinct = this.distinct;
@@ -152,6 +154,45 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
         copy.queryTimeout = this.queryTimeout;
         copy.lockMode = this.lockMode;
         return copy;
+    }
+
+    /**
+     * 深拷贝条件节点树。对包含可变子节点列表的节点类型（JoinNode、OrNode、AndNode、NegateNode）
+     * 递归拷贝，确保修改副本不会影响原始实例。
+     *
+     * <p>
+     * SimpleNode、CollectionNode、MultiLikeNode、FuncNode 等不可变节点直接返回原引用。
+     * ExistsNode、InSubQueryNode、RawNode 包含 lambda 函数，无法深拷贝，直接返回原引用
+     * （这些 lambda 在构建后不应被修改）。
+     *
+     * @param node 要拷贝的条件节点
+     * @return 深拷贝后的节点
+     */
+    private static ConditionNode deepCopyNode(ConditionNode node) {
+        if (node instanceof ConditionNode.JoinNode jn) {
+            ConditionNode.JoinNode copy = new ConditionNode.JoinNode(jn.fieldName, jn.joinType);
+            for (ConditionNode inner : jn.innerConditions) {
+                copy.innerConditions.add(deepCopyNode(inner));
+            }
+            return copy;
+        } else if (node instanceof ConditionNode.OrNode on) {
+            ConditionNode.OrNode copy = new ConditionNode.OrNode();
+            for (ConditionNode inner : on.nodes) {
+                copy.nodes.add(deepCopyNode(inner));
+            }
+            return copy;
+        } else if (node instanceof ConditionNode.AndNode an) {
+            ConditionNode.AndNode copy = new ConditionNode.AndNode();
+            for (ConditionNode inner : an.nodes) {
+                copy.nodes.add(deepCopyNode(inner));
+            }
+            return copy;
+        } else if (node instanceof ConditionNode.NegateNode nn) {
+            return new ConditionNode.NegateNode(deepCopyNode(nn.inner()));
+        }
+        // SimpleNode, CollectionNode, MultiLikeNode, FuncNode, ExistsNode, InSubQueryNode, RawNode
+        // are either immutable or contain lambdas that should not be deep-copied.
+        return node;
     }
 
     /**

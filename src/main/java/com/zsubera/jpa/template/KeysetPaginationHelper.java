@@ -67,8 +67,8 @@ final class KeysetPaginationHelper {
      * @param <T> 实体类型
      * @return 分页结果
      */
-    <T> MyJpaTemplate.KeysetPage<T> findKeysetPage(Class<T> entityClass, Specification<T> spec, Sort sort, int pageSize,
-        @Nullable Object[] lastSortValues) {
+    <T> MyJpaTemplateOperations.KeysetPage<T> findKeysetPage(Class<T> entityClass, Specification<T> spec, Sort sort,
+        int pageSize, @Nullable Object[] lastSortValues) {
         List<Sort.Order> orders = sort.stream().toList();
 
         CriteriaBuilder cb = entityManager.getCriteriaBuilder();
@@ -117,7 +117,7 @@ final class KeysetPaginationHelper {
             nextLastSortValues = extractSortValues(lastRecord, orders);
         }
 
-        return new MyJpaTemplate.KeysetPage<>(results, hasNext, nextLastSortValues);
+        return new MyJpaTemplateOperations.KeysetPage<>(results, hasNext, nextLastSortValues);
     }
 
     /**

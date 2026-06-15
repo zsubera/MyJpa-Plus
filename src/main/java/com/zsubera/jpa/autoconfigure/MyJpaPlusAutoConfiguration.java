@@ -5,6 +5,7 @@ import com.zsubera.jpa.monitor.SqlSlowQueryInterceptor;
 import com.zsubera.jpa.repository.DefaultMyJpaRepository;
 import com.zsubera.jpa.repository.MyJpaRepositoryFactoryBean;
 import com.zsubera.jpa.template.MyJpaTemplate;
+import com.zsubera.jpa.template.MyJpaTemplateOperations;
 import com.zsubera.jpa.util.InClauseBuilder;
 import com.zsubera.jpa.util.LambdaUtils;
 import com.zsubera.jpa.util.QueryTimeoutHelper;
@@ -136,6 +137,18 @@ public class MyJpaPlusAutoConfiguration {
                 QueryTimeoutHelper.setDefaultTimeoutSeconds(timeout);
             }
 
+            // 应用额外函数白名单配置
+            java.util.List<String> extraSafe = properties.getQuery().getExtraSafeFunctions();
+            if (extraSafe != null && !extraSafe.isEmpty()) {
+                com.zsubera.jpa.spec.ConditionBuilder.addSafeFunctionNames(extraSafe);
+                log.info("Added {} extra safe functions to whitelist", extraSafe.size());
+            }
+            java.util.List<String> extraBool = properties.getQuery().getExtraBooleanFunctions();
+            if (extraBool != null && !extraBool.isEmpty()) {
+                com.zsubera.jpa.spec.ConditionBuilder.addBooleanFunctionNames(extraBool);
+                log.info("Added {} extra boolean functions to whitelist", extraBool.size());
+            }
+
             if (log.isDebugEnabled()) {
                 log.debug("  soft-delete.auto-filter = {}", properties.getSoftDelete().isAutoFilter());
                 log.debug("  soft-delete.block-unconditional-delete = {}",
@@ -145,6 +158,20 @@ public class MyJpaPlusAutoConfiguration {
                 log.debug("  query.in-clause-hard-limit = {}", properties.getQuery().getInClauseHardLimit());
                 log.debug("  query.lambda-cache-size = {}", properties.getQuery().getLambdaCacheSize());
                 log.debug("  query.default-timeout-seconds = {}", properties.getQuery().getDefaultTimeoutSeconds());
+            }
+
+            // 自动预热加密密钥缓存（仅在密钥已配置时）
+            String encryptKey = System.getenv("MYJPA_ENCRYPT_KEY");
+            if (encryptKey == null || encryptKey.isEmpty()) {
+                encryptKey = System.getProperty("myjpa.encrypt.key");
+            }
+            if (encryptKey != null && !encryptKey.isEmpty()) {
+                try {
+                    com.zsubera.jpa.converter.EncryptConverter.warmUpKeyCache();
+                    log.info("EncryptConverter key warmup started in background");
+                } catch (Exception e) {
+                    log.warn("Failed to warm up EncryptConverter key cache: {}", e.getMessage());
+                }
             }
         }
     }
@@ -195,13 +222,48 @@ public class MyJpaPlusAutoConfiguration {
     }
 
     /**
+     * 基于 Spring Security SecurityContextHolder 的默认 AuditUserProvider 实现。
+     *
+     * <p>
+     * 仅当 Spring Security 在类路径上且用户未提供自定义 AuditUserProvider 时激活。
+     * 使用反射访问 SecurityContextHolder，避免编译时依赖 Spring Security。
+     */
+    @org.springframework.context.annotation.Lazy(false)
+    @org.springframework.stereotype.Component
+    @ConditionalOnClass(name = "org.springframework.security.core.context.SecurityContextHolder")
+    @ConditionalOnMissingBean(com.zsubera.jpa.annotation.AuditUserProvider.class)
+    static class SecurityContextAuditUserProvider implements com.zsubera.jpa.annotation.AuditUserProvider {
+
+        private static final org.slf4j.Logger secLog =
+            org.slf4j.LoggerFactory.getLogger(SecurityContextAuditUserProvider.class);
+
+        @Override
+        public String getCurrentUser() {
+            try {
+                Class<?> shc = Class.forName("org.springframework.security.core.context.SecurityContextHolder");
+                Object context = shc.getMethod("getContext").invoke(null);
+                Object auth = context.getClass().getMethod("getAuthentication").invoke(context);
+                if (auth != null) {
+                    Boolean authenticated = (Boolean)auth.getClass().getMethod("isAuthenticated").invoke(auth);
+                    if (Boolean.TRUE.equals(authenticated)) {
+                        return (String)auth.getClass().getMethod("getName").invoke(auth);
+                    }
+                }
+            } catch (Exception e) {
+                secLog.debug("Could not get user from SecurityContext: {}", e.getMessage());
+            }
+            return "ANONYMOUS";
+        }
+    }
+
+    /**
      * 创建配置了自定义参数的 MyJpaTemplate Bean。
      *
      * @param properties 配置属性
      * @return MyJpaTemplate 实例
      */
     @Bean
-    @ConditionalOnMissingBean(MyJpaTemplate.class)
+    @ConditionalOnMissingBean(MyJpaTemplateOperations.class)
     public MyJpaTemplate myJpaTemplate(MyJpaPlusProperties properties) {
         MyJpaTemplate template = new MyJpaTemplate(properties.getQuery().getMaxResults(),
             properties.getQuery().getDeepPaginationOffsetThreshold());

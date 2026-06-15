@@ -85,7 +85,7 @@ import org.springframework.transaction.annotation.Transactional;
  *     deep-pagination-offset-threshold: 500000
  * }</pre>
  */
-public class MyJpaTemplate {
+public class MyJpaTemplate implements MyJpaTemplateOperations {
 
     private static final Logger log = LoggerFactory.getLogger(MyJpaTemplate.class);
 
@@ -105,7 +105,7 @@ public class MyJpaTemplate {
     public static final int DEFAULT_DEEP_PAGINATION_OFFSET_LIMIT = 1000000;
 
     /** 深度分页警告日志的最小间隔（毫秒），防止日志泛滥。 */
-    private static final long DEEP_PAGINATION_WARN_INTERVAL_MS = 60_000; // 1 分钟
+    private static final long DEEP_PAGINATION_WARN_INTERVAL_MS = 60_000;
 
     /** 上次记录深度分页警告的时间戳。 */
     private final java.util.concurrent.atomic.AtomicLong lastDeepPaginationWarnTime =
@@ -349,6 +349,7 @@ public class MyJpaTemplate {
      * @throws IllegalStateException 如果未配置 QueryCacheManager
      * @throws IllegalArgumentException 如果参数为 null 或 ttlSeconds 为负数
      */
+    @Override
     @Transactional(readOnly = true)
     public <T> List<T> findAllCached(Class<T> entityClass, QuerySpec<T> spec, long ttlSeconds) {
         if (cacheManager == null) {
@@ -395,6 +396,7 @@ public class MyJpaTemplate {
      * @param <T> 实体类型
      * @return 新的 UpdateSpec（尚未绑定 EntityManager）
      */
+    @Override
     public <T> UpdateSpec<T> update(Class<T> entityClass) {
         return new UpdateSpec<>(entityClass);
     }
@@ -406,6 +408,7 @@ public class MyJpaTemplate {
      * @param <T> 实体类型
      * @return 新的 DeleteSpec（尚未绑定 EntityManager）
      */
+    @Override
     public <T> DeleteSpec<T> delete(Class<T> entityClass) {
         return new DeleteSpec<>(entityClass);
     }
@@ -436,6 +439,7 @@ public class MyJpaTemplate {
      * @return 保存后的实体列表（detached 状态）
      * @throws IllegalArgumentException 如果 entities 为 null 或 batchSize 不是正数
      */
+    @Override
     @Transactional(rollbackFor = Exception.class)
     public <T> List<T> saveAllBatched(Iterable<T> entities, int batchSize) {
         if (entities == null) {
@@ -463,6 +467,7 @@ public class MyJpaTemplate {
      * @return 保存后的实体列表（detached 状态）
      * @throws IllegalArgumentException 如果 entities 为 null 或 batchSize 不是正数
      */
+    @Override
     @Transactional(rollbackFor = Exception.class)
     public <T> List<T> saveAllBatchedPure(Iterable<T> entities, int batchSize) {
         if (entities == null) {
@@ -494,6 +499,7 @@ public class MyJpaTemplate {
      * @return 保存后的实体列表
      * @throws IllegalArgumentException 如果 entities 为 null 或 batchSize 不是正数
      */
+    @Override
     public <T> List<T> saveAllBatchedInSeparateTransactions(Iterable<T> entities, int batchSize) {
         if (entities == null) {
             throw new IllegalArgumentException("entities must not be null");
@@ -518,6 +524,7 @@ public class MyJpaTemplate {
      * @param <ID> ID 类型
      * @return 匹配实体的 Optional 包装
      */
+    @Override
     @Transactional(readOnly = true)
     public <T, ID> Optional<T> findById(Class<T> entityClass, ID id) {
         if (entityClass == null) {
@@ -557,6 +564,7 @@ public class MyJpaTemplate {
      * @param <T> 实体类型
      * @return 匹配实体的 Optional 包装
      */
+    @Override
     @Transactional(readOnly = true)
     public <T> Optional<T> findOne(Class<T> entityClass, QuerySpec<T> spec) {
         if (entityClass == null) {
@@ -590,6 +598,7 @@ public class MyJpaTemplate {
      * @param <T> 实体类型
      * @return 匹配实体数量
      */
+    @Override
     @Transactional(readOnly = true)
     public <T> long count(Class<T> entityClass, QuerySpec<T> spec) {
         if (entityClass == null) {
@@ -609,6 +618,7 @@ public class MyJpaTemplate {
      * @param <T> 实体类型
      * @return 匹配实体数量
      */
+    @Override
     @Transactional(readOnly = true)
     public <T> long count(Class<T> entityClass, Specification<T> spec) {
         if (entityClass == null) {
@@ -635,6 +645,7 @@ public class MyJpaTemplate {
      * @param <T> 实体类型
      * @return 匹配实体列表（限制为最大行数）
      */
+    @Override
     @Transactional(readOnly = true)
     public <T> List<T> findAll(Class<T> entityClass, QuerySpec<T> spec) {
         if (entityClass == null) {
@@ -655,6 +666,7 @@ public class MyJpaTemplate {
      * @param <T> 实体类型
      * @return 匹配实体列表
      */
+    @Override
     @Transactional(readOnly = true)
     public <T> List<T> findAll(Class<T> entityClass, QuerySpec<T> spec, int maxResults) {
         if (entityClass == null) {
@@ -681,6 +693,7 @@ public class MyJpaTemplate {
      * @return 匹配实体列表（限制为最大行数）
      * @throws IllegalArgumentException 如果任何参数为 null
      */
+    @Override
     @Transactional(readOnly = true)
     public <T> List<T> findAll(Class<T> entityClass, QuerySpec<T> spec, org.springframework.data.domain.Sort sort) {
         if (entityClass == null) {
@@ -706,6 +719,7 @@ public class MyJpaTemplate {
      * @param <T> 实体类型
      * @return 匹配实体列表
      */
+    @Override
     @Transactional(readOnly = true)
     public <T> List<T> findAll(Class<T> entityClass, QuerySpec<T> spec, EntityGraphHelper<T> entityGraph) {
         return findAll(entityClass, spec, entityGraph, this.maxResults);
@@ -721,6 +735,7 @@ public class MyJpaTemplate {
      * @param <T> 实体类型
      * @return 匹配实体列表
      */
+    @Override
     @Transactional(readOnly = true)
     public <T> List<T> findAll(Class<T> entityClass, QuerySpec<T> spec, EntityGraphHelper<T> entityGraph,
         int maxResults) {
@@ -759,6 +774,7 @@ public class MyJpaTemplate {
      * @param <T> 实体类型
      * @throws IllegalArgumentException 如果任何参数为 null
      */
+    @Override
     @Transactional(readOnly = true)
     public <T> void findAllStream(Class<T> entityClass, QuerySpec<T> spec, Consumer<Stream<T>> consumer) {
         if (entityClass == null) {
@@ -795,6 +811,7 @@ public class MyJpaTemplate {
      * @param <T> 实体类型
      * @throws IllegalArgumentException 如果 entityClass、spec 或 consumer 为 null
      */
+    @Override
     @Transactional(readOnly = true)
     public <T> void findAllStream(Class<T> entityClass, QuerySpec<T> spec, EntityGraphHelper<T> entityGraph,
         Consumer<Stream<T>> consumer) {
@@ -852,6 +869,7 @@ public class MyJpaTemplate {
      * @param <T> 实体类型
      * @return 匹配实体的 Optional 包装
      */
+    @Override
     @Transactional(readOnly = true)
     public <T> Optional<T> findOne(Class<T> entityClass, Specification<T> spec) {
         if (entityClass == null) {
@@ -882,6 +900,7 @@ public class MyJpaTemplate {
      * @param <T> 实体类型
      * @return 匹配实体列表（限制为最大行数）
      */
+    @Override
     @Transactional(readOnly = true)
     public <T> List<T> find(Class<T> entityClass, Specification<T> spec) {
         if (entityClass == null) {
@@ -902,6 +921,7 @@ public class MyJpaTemplate {
      * @param <T> 实体类型
      * @return 匹配实体列表
      */
+    @Override
     @Transactional(readOnly = true)
     public <T> List<T> find(Class<T> entityClass, Specification<T> spec, int maxResults) {
         if (entityClass == null) {
@@ -971,6 +991,7 @@ public class MyJpaTemplate {
      * @param <T> 实体类型
      * @return 匹配实体的分页结果
      */
+    @Override
     @Transactional(readOnly = true)
     public <T> Page<T> findAll(Class<T> entityClass, QuerySpec<T> spec, Pageable pageable) {
         if (entityClass == null) {
@@ -1047,6 +1068,7 @@ public class MyJpaTemplate {
      * @param <T> 实体类型
      * @return 匹配实体的分页结果
      */
+    @Override
     @Transactional(readOnly = true)
     public <T> Page<T> findPage(Class<T> entityClass, Specification<T> spec, Pageable pageable) {
         if (entityClass == null) {
@@ -1116,6 +1138,7 @@ public class MyJpaTemplate {
      * @param <T> 实体类型
      * @return 受影响的行数
      */
+    @Override
     @Transactional(rollbackFor = Exception.class)
     public <T> int execute(UpdateSpec<T> spec) {
         if (spec == null) {
@@ -1133,6 +1156,7 @@ public class MyJpaTemplate {
      * @param <T> 实体类型
      * @return 受影响的行数
      */
+    @Override
     @Transactional(rollbackFor = Exception.class)
     public <T> int execute(DeleteSpec<T> spec) {
         if (spec == null) {
@@ -1151,6 +1175,7 @@ public class MyJpaTemplate {
      * @return 受影响的行数
      * @throws IllegalArgumentException 如果 spec 为 null
      */
+    @Override
     @Transactional(rollbackFor = Exception.class)
     public <T> int execute(com.zsubera.jpa.update.MergeSpec<T> spec) {
         if (spec == null) {
@@ -1174,6 +1199,7 @@ public class MyJpaTemplate {
      * @return 受影响的总行数
      * @throws IllegalArgumentException 如果任何参数为 null 或 batchSize 不是正数
      */
+    @Override
     @Transactional(rollbackFor = Exception.class)
     public <T> int executeBatch(com.zsubera.jpa.update.MergeSpec<T> mergeSpec, List<T> entities, int batchSize) {
         if (mergeSpec == null) {
@@ -1197,6 +1223,7 @@ public class MyJpaTemplate {
      * @return 受影响的行数
      * @throws IllegalArgumentException 如果 maxRows 不是正数且不等于 -1
      */
+    @Override
     @Transactional(rollbackFor = Exception.class)
     public <T> int executeWithMaxRows(UpdateSpec<T> spec, int maxRows) {
         if (spec == null) {
@@ -1217,6 +1244,7 @@ public class MyJpaTemplate {
      * @return 受影响的行数
      * @throws IllegalArgumentException 如果 maxRows 不是正数且不等于 -1
      */
+    @Override
     @Transactional(rollbackFor = Exception.class)
     public <T> int executeWithMaxRows(DeleteSpec<T> spec, int maxRows) {
         if (spec == null) {
@@ -1236,6 +1264,7 @@ public class MyJpaTemplate {
      * @param <T> 实体类型
      * @return 受影响的总行数
      */
+    @Override
     @Transactional(rollbackFor = Exception.class)
     public <T> int executeBatch(UpdateSpec<T> spec, int batchSize) {
         if (spec == null) {
@@ -1255,6 +1284,7 @@ public class MyJpaTemplate {
      * @param <T> 实体类型
      * @return 受影响的总行数
      */
+    @Override
     @Transactional(rollbackFor = Exception.class)
     public <T> int executeBatch(DeleteSpec<T> spec, int batchSize) {
         if (spec == null) {
@@ -1269,31 +1299,6 @@ public class MyJpaTemplate {
     // ---- 分批提交事务的批量操作 ----
 
     /**
-     * 批量操作的执行结果记录。
-     *
-     * @param totalRows 受影响的总行数
-     * @param batchCount 执行的批次数
-     * @param success 是否全部成功
-     * @param failedBatchIndex 失败的批次索引（从 0 开始），如果全部成功则为 -1
-     * @param failureCause 失败原因，如果全部成功则为 null
-     */
-    @edu.umd.cs.findbugs.annotations.SuppressFBWarnings(value = {"EI_EXPOSE_REP", "EI_EXPOSE_REP2"},
-        justification = "Record components are inherently exposed; failureCause is intentionally part of the result")
-    public record BatchResult(int totalRows, int batchCount, boolean success, int failedBatchIndex,
-        Throwable failureCause) {
-    }
-
-    /**
-     * 批次执行失败时的处理策略。
-     */
-    public enum BatchFailureStrategy {
-        /** 继续执行剩余批次（默认）。 */
-        CONTINUE,
-        /** 立即中止，已提交的批次不会回滚。 */
-        ABORT,
-    }
-
-    /**
      * 分批执行批量更新，每批在独立事务中提交，支持失败回调。
      *
      * @param spec 要执行的 UpdateSpec
@@ -1302,8 +1307,9 @@ public class MyJpaTemplate {
      * @param <T> 实体类型
      * @return 批量执行结果
      */
-    public <T> BatchResult executeBatchInSeparateTransactions(UpdateSpec<T> spec, int batchSize,
-        BatchFailureStrategy failureStrategy) {
+    @Override
+    public <T> MyJpaTemplateOperations.BatchResult executeBatchInSeparateTransactions(UpdateSpec<T> spec, int batchSize,
+        MyJpaTemplateOperations.BatchFailureStrategy failureStrategy) {
         if (spec == null) {
             throw new IllegalArgumentException("spec must not be null");
         }
@@ -1315,8 +1321,8 @@ public class MyJpaTemplate {
         }
         BulkOperationTemplate.BatchResult result = getBulkOperationTemplate().executeBatchInSeparateTransactions(spec,
             batchSize, convertFailureStrategy(failureStrategy));
-        return new BatchResult(result.totalRows(), result.batchCount(), result.success(), result.failedBatchIndex(),
-            result.failureCause());
+        return new MyJpaTemplateOperations.BatchResult(result.totalRows(), result.batchCount(), result.success(),
+            result.failedBatchIndex(), result.failureCause());
     }
 
     /**
@@ -1328,8 +1334,9 @@ public class MyJpaTemplate {
      * @param <T> 实体类型
      * @return 批量执行结果
      */
-    public <T> BatchResult executeBatchInSeparateTransactions(DeleteSpec<T> spec, int batchSize,
-        BatchFailureStrategy failureStrategy) {
+    @Override
+    public <T> MyJpaTemplateOperations.BatchResult executeBatchInSeparateTransactions(DeleteSpec<T> spec, int batchSize,
+        MyJpaTemplateOperations.BatchFailureStrategy failureStrategy) {
         if (spec == null) {
             throw new IllegalArgumentException("spec must not be null");
         }
@@ -1341,11 +1348,12 @@ public class MyJpaTemplate {
         }
         BulkOperationTemplate.BatchResult result = getBulkOperationTemplate().executeBatchInSeparateTransactions(spec,
             batchSize, convertFailureStrategy(failureStrategy));
-        return new BatchResult(result.totalRows(), result.batchCount(), result.success(), result.failedBatchIndex(),
-            result.failureCause());
+        return new MyJpaTemplateOperations.BatchResult(result.totalRows(), result.batchCount(), result.success(),
+            result.failedBatchIndex(), result.failureCause());
     }
 
-    private static BulkOperationTemplate.BatchFailureStrategy convertFailureStrategy(BatchFailureStrategy strategy) {
+    private static BulkOperationTemplate.BatchFailureStrategy
+        convertFailureStrategy(MyJpaTemplateOperations.BatchFailureStrategy strategy) {
         return switch (strategy) {
             case CONTINUE -> BulkOperationTemplate.BatchFailureStrategy.CONTINUE;
             case ABORT -> BulkOperationTemplate.BatchFailureStrategy.ABORT;
@@ -1360,6 +1368,7 @@ public class MyJpaTemplate {
      * @param <T> 实体类型
      * @return 受影响的总行数
      */
+    @Override
     public <T> int executeBatchInSeparateTransactions(UpdateSpec<T> spec, int batchSize) {
         if (spec == null) {
             throw new IllegalArgumentException("spec must not be null");
@@ -1378,6 +1387,7 @@ public class MyJpaTemplate {
      * @param <T> 实体类型
      * @return 受影响的总行数
      */
+    @Override
     public <T> int executeBatchInSeparateTransactions(DeleteSpec<T> spec, int batchSize) {
         if (spec == null) {
             throw new IllegalArgumentException("spec must not be null");
@@ -1398,6 +1408,7 @@ public class MyJpaTemplate {
      * @return 匹配实体的 Slice 结果（无 count 查询）
      * @throws IllegalArgumentException 如果任何参数为 null
      */
+    @Override
     @Transactional(readOnly = true)
     public <T> org.springframework.data.domain.Slice<T> findSlice(Class<T> entityClass, Specification<T> spec,
         Pageable pageable) {
@@ -1467,6 +1478,7 @@ public class MyJpaTemplate {
      * @return 匹配实体列表
      * @throws IllegalArgumentException 如果任何参数为 null 或 ids 为空
      */
+    @Override
     @Transactional(readOnly = true)
     public <T, ID> List<T> findAllById(Class<T> entityClass, Collection<ID> ids) {
         if (entityClass == null) {
@@ -1499,6 +1511,7 @@ public class MyJpaTemplate {
      * @return 匹配的未删除实体列表
      * @throws IllegalArgumentException 如果任何参数为 null 或 ids 为空
      */
+    @Override
     @Transactional(readOnly = true)
     public <T, ID> List<T> findNotDeletedAllById(Class<T> entityClass, Collection<ID> ids) {
         if (entityClass == null) {
@@ -1526,19 +1539,6 @@ public class MyJpaTemplate {
     }
 
     // ---- Keyset 分页 ----
-
-    /**
-     * 游标分页（Keyset Pagination）的结果记录。
-     *
-     * <p>
-     * 相比传统 offset 分页，游标分页在大数据量场景下性能更优（O(log n) vs O(n)）， 因为它使用 WHERE 条件而非 OFFSET 跳过已读记录。
-     *
-     * @param content 当前页数据
-     * @param hasNext 是否有下一页
-     * @param lastSortValues 最后一条记录的排序字段值，用于请求下一页（可为 null 表示无更多数据）
-     */
-    public record KeysetPage<T>(List<T> content, boolean hasNext, Object[] lastSortValues) {
-    }
 
     /**
      * 游标分页查询，避免大 offset 的性能退化。
@@ -1574,8 +1574,9 @@ public class MyJpaTemplate {
      * @return 游标分页结果
      * @throws IllegalArgumentException 如果参数不合法
      */
+    @Override
     @Transactional(readOnly = true)
-    public <T> KeysetPage<T> findKeysetPage(Class<T> entityClass, Specification<T> spec,
+    public <T> MyJpaTemplateOperations.KeysetPage<T> findKeysetPage(Class<T> entityClass, Specification<T> spec,
         org.springframework.data.domain.Sort sort, int pageSize, @Nullable Object[] lastSortValues) {
         if (entityClass == null) {
             throw new IllegalArgumentException("entityClass must not be null");

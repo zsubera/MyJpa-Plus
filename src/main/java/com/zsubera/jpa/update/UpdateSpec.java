@@ -14,7 +14,6 @@ import jakarta.persistence.criteria.Predicate;
 import jakarta.persistence.criteria.Root;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.ThreadLocalRandom;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.lang.Nullable;
@@ -59,17 +58,17 @@ public class UpdateSpec<T> extends AbstractBulkOperationSpec<T, UpdateSpec<T>> {
     private static final int MAX_CACHE_SIZE = 256;
 
     /**
-     * 缓存驱逐辅助方法：使用概率采样而非全局锁，避免多线程竞争。
+     * 缓存驱逐辅助方法：当缓存超过限制时确定性触发驱逐。
      *
      * <p>
-     * 当缓存超过 {@link #MAX_CACHE_SIZE} 时，每次检查有 10% 的概率触发驱逐，消除全局锁竞争。
-     * 驱逐操作使用 Iterator.remove() 保证并发安全。缓存可能暂时超过 MAX_CACHE_SIZE，
-     * 但不会无限增长。
+     * 使用 {@link java.util.concurrent.ConcurrentHashMap} 的弱一致性迭代器进行驱逐，
+     * 多线程并发驱逐是安全的（Iterator.remove() 是线程安全的）。
+     * 缓存可能暂时超过 {@link #MAX_CACHE_SIZE}，但不会无限增长。
      */
     private static void evictCacheIfNeeded(java.util.concurrent.ConcurrentMap<?, ?> cache) {
 
         int currentSize = cache.size();
-        if (currentSize > MAX_CACHE_SIZE && ThreadLocalRandom.current().nextInt(10) == 0) {
+        if (currentSize > MAX_CACHE_SIZE) {
             int toRemove = currentSize / 2;
             int removed = 0;
             java.util.Iterator<?> it = cache.keySet().iterator();

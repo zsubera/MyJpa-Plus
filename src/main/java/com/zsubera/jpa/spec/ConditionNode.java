@@ -402,14 +402,18 @@ public sealed interface ConditionNode permits ConditionNode.SimpleNode, Conditio
             }
             // 验证函数名是否在白名单中，防止 SQL 注入，同时确保是布尔函数
             String upperName = functionName.toUpperCase(java.util.Locale.ROOT);
-            if (!ConditionBuilder.SAFE_FUNCTION_NAMES.contains(upperName)) {
-                String msg = "Function not in whitelist: '" + functionName + "'. "
-                    + "Only whitelisted functions are allowed. Contact administrator to add new functions.";
+            if (!ConditionBuilder.SAFE_FUNCTION_NAMES.contains(upperName)
+                && !ConditionBuilder.EXTRA_SAFE_FUNCTION_NAMES.contains(upperName)) {
+                String msg =
+                    "Function not in whitelist: '" + functionName + "'. " + "Only whitelisted functions are allowed. "
+                        + "Use myjpa-plus.query.extra-safe-functions to add custom functions.";
                 throw new com.zsubera.jpa.exception.SecurityViolationException(msg);
             }
-            if (!ConditionBuilder.BOOLEAN_FUNCTION_NAMES.contains(upperName)) {
+            if (!ConditionBuilder.BOOLEAN_FUNCTION_NAMES.contains(upperName)
+                && !ConditionBuilder.EXTRA_BOOLEAN_FUNCTION_NAMES.contains(upperName)) {
                 String msg = "Function must be a boolean-returning function: '" + functionName + "'. "
-                    + "Only boolean functions like IF, DECODE, COALESCE, NULLIF, NVL, JSONB_EXISTS, ST_CONTAINS are allowed in func().";
+                    + "Only boolean functions like IF, DECODE, COALESCE, NULLIF, NVL, JSONB_EXISTS, ST_CONTAINS are allowed in func(). "
+                    + "Use myjpa-plus.query.extra-boolean-functions to add custom boolean functions.";
                 throw new com.zsubera.jpa.exception.SecurityViolationException(msg);
             }
             return new FuncNode(functionName, params);

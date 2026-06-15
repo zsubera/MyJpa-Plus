@@ -170,6 +170,37 @@ public class MyJpaPlusProperties {
         private int maxBulkOperationRows = 10000;
 
         /**
+         * 额外的安全函数名列表。添加后这些函数可在 {@code func()} 方法中使用。
+         * 函数名不区分大小写，会自动转换为大写。
+         *
+         * <p>
+         * 配置示例（application.yml）：
+         * <pre>{@code
+         * myjpa-plus:
+         *   query:
+         *     extra-safe-functions:
+         *       - ARRAY_TO_STRING
+         *       - REGEXP_REPLACE
+         * }</pre>
+         */
+        private java.util.List<String> extraSafeFunctions = new java.util.ArrayList<>();
+
+        /**
+         * 额外的布尔函数名列表。添加后这些函数可在 {@code func()} 方法中作为布尔返回函数使用。
+         * 函数名不区分大小写，会自动转换为大写。
+         *
+         * <p>
+         * 配置示例（application.yml）：
+         * <pre>{@code
+         * myjpa-plus:
+         *   query:
+         *     extra-boolean-functions:
+         *       - MY_CUSTOM_CHECK
+         * }</pre>
+         */
+        private java.util.List<String> extraBooleanFunctions = new java.util.ArrayList<>();
+
+        /**
          * 验证所有查询配置的跨字段关系。
          */
         void validate() {
@@ -299,6 +330,23 @@ public class MyJpaPlusProperties {
                 throw new IllegalArgumentException("maxBulkOperationRows must be >= 0");
             }
             this.maxBulkOperationRows = maxBulkOperationRows;
+        }
+
+        public java.util.List<String> getExtraSafeFunctions() {
+            return extraSafeFunctions;
+        }
+
+        public void setExtraSafeFunctions(java.util.List<String> extraSafeFunctions) {
+            this.extraSafeFunctions = extraSafeFunctions != null ? extraSafeFunctions : new java.util.ArrayList<>();
+        }
+
+        public java.util.List<String> getExtraBooleanFunctions() {
+            return extraBooleanFunctions;
+        }
+
+        public void setExtraBooleanFunctions(java.util.List<String> extraBooleanFunctions) {
+            this.extraBooleanFunctions =
+                extraBooleanFunctions != null ? extraBooleanFunctions : new java.util.ArrayList<>();
         }
     }
 

@@ -155,6 +155,7 @@ public class MergeSpec<T> {
         if (entity == null) {
             throw new IllegalStateException("Entity must be specified via withEntity() before executing");
         }
+        warnIdentityGeneration();
         // Snapshot entity to avoid race condition with concurrent withEntity() calls
         T entitySnapshot = this.entity;
         return executeWith(em, entitySnapshot);
@@ -191,6 +192,39 @@ public class MergeSpec<T> {
     }
 
     /**
+     * 验证实体类是否使用 IDENTITY 策略的自增 ID（仅当未指定显式冲突列时）。
+     * 当检测到 IDENTITY 策略时记录警告日志，但不阻止执行。
+     *
+     * <p>
+     * UPSERT 操作要求业务唯一键作为冲突检测列，自增 ID 实体建议显式指定冲突列。
+     */
+    private void warnIdentityGeneration() {
+        if (!conflictFields.isEmpty()) {
+            return;
+        }
+        Class<?> clazz = entityClass;
+        while (clazz != null && clazz != Object.class) {
+            for (java.lang.reflect.Field field : clazz.getDeclaredFields()) {
+                if (field.isAnnotationPresent(jakarta.persistence.Id.class)
+                    || field.isAnnotationPresent(jakarta.persistence.EmbeddedId.class)) {
+                    jakarta.persistence.GeneratedValue gva =
+                        field.getAnnotation(jakarta.persistence.GeneratedValue.class);
+                    if (gva != null && gva.strategy() == jakarta.persistence.GenerationType.IDENTITY) {
+                        log.warn(
+                            "MergeSpec: entity '{}' uses @GeneratedValue(strategy=IDENTITY) on field '{}' "
+                                + "without explicit onConflict(). UPSERT works best with a business unique key. "
+                                + "Consider using onConflict() with a non-auto-generated unique field, "
+                                + "or use @GeneratedValue(strategy=TABLE/SEQUENCE/UUID) instead.",
+                            entityClass.getSimpleName(), field.getName());
+                    }
+                    return;
+                }
+            }
+            clazz = clazz.getSuperclass();
+        }
+    }
+
+    /**
      * 在事务中执行 UPSERT 操作。如果没有活动事务，则自动创建新事务。
      *
      * @param em 实体管理器
@@ -205,6 +239,7 @@ public class MergeSpec<T> {
         if (entity == null) {
             throw new IllegalStateException("Entity must be specified via withEntity() before executing");
         }
+        warnIdentityGeneration();
         if (TransactionSynchronizationManager.isActualTransactionActive()) {
             return execute(em);
         }

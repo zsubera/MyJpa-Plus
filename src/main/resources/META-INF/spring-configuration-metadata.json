@@ -61,6 +61,18 @@
       "defaultValue": 10000
     },
     {
+      "name": "myjpa-plus.query.extra-safe-functions",
+      "type": "java.util.List<java.lang.String>",
+      "description": "Additional safe function names to add to the whitelist for func() method. Function names are case-insensitive.",
+      "defaultValue": []
+    },
+    {
+      "name": "myjpa-plus.query.extra-boolean-functions",
+      "type": "java.util.List<java.lang.String>",
+      "description": "Additional boolean-returning function names to add to the whitelist for func() method. Function names are case-insensitive.",
+      "defaultValue": []
+    },
+    {
       "name": "myjpa-plus.monitoring.enabled",
       "type": "java.lang.Boolean",
       "description": "Enable SQL slow query monitoring via DataSource proxy.",
@@ -76,6 +88,12 @@
       "name": "myjpa-plus.cache.auto-invalidation-enabled",
       "type": "java.lang.Boolean",
       "description": "Enable automatic cache invalidation when entities are modified.",
+      "defaultValue": true
+    },
+    {
+      "name": "myjpa-plus.auto-repository-base-class",
+      "type": "java.lang.Boolean",
+      "description": "Automatically register DefaultMyJpaRepository as the base class for all repositories.",
       "defaultValue": true
     }
   ]

@@ -59,16 +59,72 @@ public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> ext
      * 此集合为不可变集合，禁止调用危险函数如 {@code pg_sleep}、{@code SLEEP}、{code LOAD_FILE} 等。
      *
      * <p>
-     * 白名单强制执行由 {@link #WHITELIST_ENFORCED} 控制（硬编码为 true）。 如需扩展白名单，请通过系统属性 {@code myjpa-plus.func.extra-safe-functions}
-     * 在启动前配置。
+     * 白名单强制执行由 {@link #WHITELIST_ENFORCED} 控制（硬编码为 true）。 如需扩展白名单，请通过 {@link #addSafeFunctionNames(Collection)} 在启动时配置，
+     * 或在 application.yml 中设置 {@code myjpa-plus.query.extra-safe-functions}。
      */
     Set<String> SAFE_FUNCTION_NAMES = Set.copyOf(initDefaultFunctionNames());
+
+    /**
+     * 用户扩展的安全函数名集合。通过 {@link #addSafeFunctionNames(Collection)} 在启动时添加。
+     * 与 {@link #SAFE_FUNCTION_NAMES} 合并检查。
+     */
+    java.util.concurrent.ConcurrentHashMap.KeySetView<String, Boolean> EXTRA_SAFE_FUNCTION_NAMES =
+        new java.util.concurrent.ConcurrentHashMap<String, Boolean>().keySet(Boolean.TRUE);
+
+    /**
+     * 用户扩展的布尔函数名集合。通过 {@link #addBooleanFunctionNames(Collection)} 在启动时添加。
+     * 与 {@link #BOOLEAN_FUNCTION_NAMES} 合并检查。
+     */
+    java.util.concurrent.ConcurrentHashMap.KeySetView<String, Boolean> EXTRA_BOOLEAN_FUNCTION_NAMES =
+        new java.util.concurrent.ConcurrentHashMap<String, Boolean>().keySet(Boolean.TRUE);
+
+    /**
+     * 向安全函数白名单中添加额外的函数名。在应用启动时调用，运行期间不应修改。
+     *
+     * <p>
+     * 函数名会被自动转换为大写。添加后，这些函数可在 {@code func()} 方法中使用。
+     *
+     * @param functionNames 要添加的函数名集合
+     * @throws IllegalArgumentException 如果 functionNames 为 null
+     */
+    static void addSafeFunctionNames(java.util.Collection<String> functionNames) {
+        if (functionNames == null) {
+            throw new IllegalArgumentException("functionNames must not be null");
+        }
+        for (String name : functionNames) {
+            if (name != null && !name.isEmpty()) {
+                EXTRA_SAFE_FUNCTION_NAMES.add(name.toUpperCase(java.util.Locale.ROOT));
+            }
+        }
+    }
+
+    /**
+     * 向布尔函数白名单中添加额外的函数名。在应用启动时调用，运行期间不应修改。
+     *
+     * <p>
+     * 函数名会被自动转换为大写。添加后，这些函数可在 {@code func()} 方法中作为布尔函数使用。
+     *
+     * @param functionNames 要添加的函数名集合
+     * @throws IllegalArgumentException 如果 functionNames 为 null
+     */
+    static void addBooleanFunctionNames(java.util.Collection<String> functionNames) {
+        if (functionNames == null) {
+            throw new IllegalArgumentException("functionNames must not be null");
+        }
+        for (String name : functionNames) {
+            if (name != null && !name.isEmpty()) {
+                EXTRA_BOOLEAN_FUNCTION_NAMES.add(name.toUpperCase(java.util.Locale.ROOT));
+            }
+        }
+    }
 
     /**
      * 白名单强制执行开关。硬编码为 true，不可通过系统属性禁用。
      *
      * <p>
      * 此开关防止通过系统属性 {@code myjpa-plus.func.whitelist-enforced=false} 禁用白名单保护。 攻击者若能控制系统属性，可禁用白名单保护，因此移除了系统属性读取逻辑。
+     * 如需扩展白名单，请使用 {@link #addSafeFunctionNames(Collection)} 或配置
+     * {@code myjpa-plus.query.extra-safe-functions}。
      */
     boolean WHITELIST_ENFORCED = true;
 

@@ -82,6 +82,12 @@ public class QueryCacheManager {
     private final java.util.concurrent.atomic.AtomicInteger getCounter =
         new java.util.concurrent.atomic.AtomicInteger();
 
+    /** 缓存命中计数 */
+    private final java.util.concurrent.atomic.AtomicLong hitCount = new java.util.concurrent.atomic.AtomicLong(0);
+
+    /** 缓存未命中计数 */
+    private final java.util.concurrent.atomic.AtomicLong missCount = new java.util.concurrent.atomic.AtomicLong(0);
+
     /** LRU 缓存，使用 ConcurrentHashMap 实现线程安全的无锁读取。 */
     private final java.util.concurrent.ConcurrentMap<String, CachedQueryResult<?>> store;
 
@@ -160,13 +166,14 @@ public class QueryCacheManager {
         }
         CachedQueryResult<?> result = store.get(key);
         if (result == null) {
+            missCount.incrementAndGet();
             return null;
         }
         if (result.isExpired()) {
+            missCount.incrementAndGet();
             // 原子移除：仅当条目确实是当前过期条目时才移除，避免竞态条件误删新条目
             boolean removed = store.remove(key, result);
             if (removed) {
-
                 if (insertionOrder.remove(key)) {
                     dequeSize.decrementAndGet();
                 }
@@ -174,10 +181,10 @@ public class QueryCacheManager {
             }
             return null;
         }
+        hitCount.incrementAndGet();
         try {
             return (T)result.getValue();
         } catch (ClassCastException e) {
-
             throw new ClassCastException(String.format(
                 "Cache type mismatch for key '%s'. Cached type: %s. "
                     + "Ensure the same key is not used for different value types.",
@@ -227,21 +234,9 @@ public class QueryCacheManager {
         // 更新已有 key 时不需要修改 insertionOrder——旧条目会在 deque 漂移清理时被跳过
 
         // 清理 deque 中不在 store 中的陈旧条目
-        int driftTolerance = Math.max(10, maxEntries / 10);
-        int driftCleaned = 0;
-        int maxDriftCleanAttempts = Math.max(16, driftTolerance * 2);
-        while (dequeSize.get() > store.size() + driftTolerance && driftCleaned < maxDriftCleanAttempts) {
-            String oldest = insertionOrder.peekFirst();
-            if (oldest == null) {
-                break;
-            }
-            if (!store.containsKey(oldest)) {
-                insertionOrder.pollFirst();
-                dequeSize.decrementAndGet();
-                driftCleaned++;
-            } else {
-                break;
-            }
+        int drift = dequeSize.get() - store.size();
+        if (drift > Math.max(10, maxEntries / 10)) {
+            cleanupDrift(drift > maxEntries / 2);
         }
         // ConcurrentLinkedDeque.pollFirst() 和 ConcurrentHashMap.remove() 都是线程安全的，
         // 最多尝试 maxEntries 次以保证有界（避免 deque 中大量陈旧条目导致长时间循环）
@@ -305,6 +300,85 @@ public class QueryCacheManager {
     }
 
     /**
+     * 清理 deque 与 store 之间的漂移条目。
+     *
+     * <p>
+     * 当 drift 较小时，仅从 deque 头部清理（快速路径）。
+     * 当 drift 超过 maxEntries/2 时，执行全量遍历清理（慢路径，但仅在严重漂移时触发）。
+     *
+     * @param fullScan 是否执行全量遍历
+     */
+    private void cleanupDrift(boolean fullScan) {
+        if (fullScan) {
+            // 全量遍历：移除 deque 中所有不在 store 中的陈旧条目
+            java.util.Iterator<String> it = insertionOrder.iterator();
+            int cleaned = 0;
+            while (it.hasNext()) {
+                String k = it.next();
+                if (!store.containsKey(k)) {
+                    it.remove();
+                    dequeSize.decrementAndGet();
+                    cleaned++;
+                }
+            }
+            if (cleaned > 0) {
+                log.debug("Full drift cleanup removed {} stale deque entries", cleaned);
+            }
+        } else {
+            // 快速路径：仅从头部清理连续的陈旧条目
+            int cleaned = 0;
+            int maxAttempts = Math.max(16, maxEntries / 10);
+            while (cleaned < maxAttempts) {
+                String oldest = insertionOrder.peekFirst();
+                if (oldest == null || store.containsKey(oldest)) {
+                    break;
+                }
+                insertionOrder.pollFirst();
+                dequeSize.decrementAndGet();
+                cleaned++;
+            }
+        }
+    }
+
+    /**
+     * 返回缓存命中率。
+     *
+     * @return 命中率（0.0-1.0），如果没有 get 操作则返回 0.0
+     */
+    public double getHitRate() {
+        long hits = hitCount.get();
+        long misses = missCount.get();
+        long total = hits + misses;
+        return total == 0 ? 0.0 : (double)hits / total;
+    }
+
+    /**
+     * 返回缓存命中次数。
+     *
+     * @return 命中次数
+     */
+    public long getHitCount() {
+        return hitCount.get();
+    }
+
+    /**
+     * 返回缓存未命中次数。
+     *
+     * @return 未命中次数
+     */
+    public long getMissCount() {
+        return missCount.get();
+    }
+
+    /**
+     * 重置命中率统计计数器。
+     */
+    public void resetStats() {
+        hitCount.set(0);
+        missCount.set(0);
+    }
+
+    /**
      * 清除过期条目。采样部分条目进行检查，避免全量扫描带来的 CPU 热点。
      * 同时清理 insertionOrder 中对应的陈旧条目。
      */
@@ -355,6 +429,9 @@ public class QueryCacheManager {
         dequeSize.set(0);
         log.debug("Cache cleared");
     }
+
+    /**
+     * 返回当前存储中的条目数（包括尚未驱逐的可能已过期条目）。
 
     /**
      * 按键前缀批量驱逐缓存条目。适用于实体变更后清除相关查询缓存。
