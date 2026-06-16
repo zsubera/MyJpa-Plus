@@ -83,6 +83,11 @@ List<Customer> customers = customerRepository.findAll(s ->
 List<Product> products = productRepository.findAll(s ->
     s.multiLike("搜索词", "name", "description")
 );
+
+// 独立创建 QuerySpec 实例（需要多次使用同一查询条件时）
+QuerySpec<User> spec = QuerySpec.of(s -> s.eq(User::getStatus, "ACTIVE"));
+repository.findAll(spec);
+repository.count(spec);
 ```
 
 ### 批量操作

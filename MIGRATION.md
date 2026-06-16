@@ -8,6 +8,7 @@
   - `findAll(consumer)`, `findOne(consumer)`, `count(consumer)`, `exists(consumer)`
   - `findNotDeletedAll(consumer)`, `findNotDeletedOne(consumer)`, `countNotDeleted(consumer)`
   - **注意**：`Consumer<QuerySpec<T>>` 和 `Specification<T>` 都是函数式接口，传 `null` 时需显式转型避免歧义
+- **QuerySpec.of() 工厂方法**：`QuerySpec.of(consumer)` 创建并配置实例，替代 `new QuerySpec<>() + accept()` 两步
 - **虚拟线程支持**：`SoftDeleteContext.withIgnore()` 便捷方法，推荐替代手动 `pushIgnore()`/`popIgnore()`
 - **UPSERT 方言扩展**：新增 Oracle 和 SQL Server 方言支持
 - **聚合查询工具类**：`QueryAggregates` 提供独立的 `count`/`sum`/`avg`/`max`/`min`

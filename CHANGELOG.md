@@ -10,6 +10,7 @@
   - `findAll(consumer)`, `findOne(consumer)`, `count(consumer)`, `exists(consumer)`
   - `findNotDeletedAll(consumer)`, `findNotDeletedOne(consumer)`, `countNotDeleted(consumer)`
   - `MyJpaTemplate` 同步新增对应 Lambda 重载
+- **QuerySpec.of() 工厂方法** — 新增 `QuerySpec.of(consumer)` 静态工厂方法，将 3 行创建代码简化为 1 行
 - **虚拟线程兼容性** — `SoftDeleteContext` 和 `DefaultMyJpaRepository` 完全兼容 Java 21+ 虚拟线程
   - 新增 `withIgnore(Runnable)` 和 `withIgnore(Supplier)` 便捷方法，自动管理生命周期
   - 虚拟线程隔离性验证测试（`SoftDeleteContextVirtualThreadTest`）
