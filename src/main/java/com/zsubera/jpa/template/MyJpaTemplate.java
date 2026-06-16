@@ -1599,6 +1599,32 @@ public class MyJpaTemplate implements MyJpaTemplateOperations {
         return getKeysetPaginationHelper().findKeysetPage(entityClass, spec, sort, pageSize, lastSortValues);
     }
 
+    // ---- 内部辅助方法 ----
+
+    /**
+     * 验证查询参数非空。减少各查询方法中的重复验证代码。
+     */
+    private static void validateQueryParams(Class<?> entityClass, Object spec) {
+        if (entityClass == null) {
+            throw new IllegalArgumentException("entityClass must not be null");
+        }
+        if (spec == null) {
+            throw new IllegalArgumentException("spec must not be null");
+        }
+    }
+
+    /**
+     * 验证批量操作参数。减少各批量方法中的重复验证代码。
+     */
+    private static void validateBatchParams(Object entities, int batchSize) {
+        if (entities == null) {
+            throw new IllegalArgumentException("entities must not be null");
+        }
+        if (batchSize <= 0) {
+            throw new IllegalArgumentException("batchSize must be positive");
+        }
+    }
+
     /**
      * 发布实体变更事件，触发缓存自动失效。
      *

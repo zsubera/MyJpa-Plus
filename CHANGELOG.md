@@ -6,6 +6,36 @@
 ## [未发布]
 
 ### 新增
+- **虚拟线程兼容性** — `SoftDeleteContext` 和 `DefaultMyJpaRepository` 完全兼容 Java 21+ 虚拟线程
+  - 新增 `withIgnore(Runnable)` 和 `withIgnore(Supplier)` 便捷方法，自动管理生命周期
+  - 虚拟线程隔离性验证测试（`SoftDeleteContextVirtualThreadTest`）
+- **UPSERT 方言扩展** — `MergeSpec` 支持 4 种数据库方言
+  - 新增 `OracleDialect`（`MERGE INTO ... USING ... ON ... WHEN MATCHED/NOT MATCHED`）
+  - 新增 `SqlServerDialect`（`[方括号]` 转义 + `MERGE INTO`）
+  - `DialectDetector` 默认注册 postgresql、mysql、oracle、sqlserver 四种方言
+  - 新增 `removeDialect()` 运行时移除方言方法
+- **聚合查询工具类** — 新增 `QueryAggregates` 提供独立的 `count`/`sum`/`avg`/`max`/`min` 聚合表达式工厂方法
+- **UPSERT 方言测试** — 新增 `OracleDialectTest`、`SqlServerDialectTest`
+
+### 优化
+- **EntityManagerHelper 单数据源快速路径** — 新增 `allResolversUseDefault` 标志，单数据源场景跳过 ConcurrentHashMap 查询，直接返回默认 EMF
+- **QuerySpec.copy() 性能优化** — 空条件树使用快速路径，跳过深拷贝；减少不必要的集合拷贝
+- **EntityCodeGenerator 实验性标记** — 标记为 `@apiNote Experimental`，明确为独立脚手架工具，不属于核心 API
+- **QueryCacheManager 驱逐策略优化** — 驱逐循环添加有界重试限制（`max(16, maxEntries/10)`），避免高并发下长时间持锁
+- **InClauseBuilder 语义可见性** — `notIn()` 全 NULL 时添加警告日志，提醒用户行为与 SQL 语义不同
+- **@SuppressFBWarnings 审计** — 修复 `SoftDeleteHelper` 误用的注解，为 7 个缺失说明的注解添加 justification，改善 `QuerySpec` SE_BAD_FIELD 说明
+- **or(QuerySpec) 文档改进** — Javadoc 明确说明返回 `Specification<T>` 而非 `QuerySpec<T>` 的原因，引导用户使用 `or(Consumer<OrGroup>)` 模式
+
+### 新增测试
+- `QueryAggregatesTest` — 聚合工具类测试
+- `OracleDialectTest` — Oracle 方言 SQL 生成测试
+- `SqlServerDialectTest` — SQL Server 方言 SQL 生成测试
+- `SoftDeleteContextVirtualThreadTest` — 虚拟线程兼容性测试
+- `InClauseBuilderTest` — NOT IN 全 NULL 语义测试
+- `QuerySpecTest` — copy() 快速路径测试
+- `QueryCacheManagerTest` — 有界驱逐和高并发写入测试
+
+### 新增
 - **多数据源支持** — `EntityManagerHelper` 支持按实体类型解析不同的 `EntityManagerFactory`
   - 新增 `EntityManagerResolver` SPI 接口，支持自定义解析逻辑
   - 新增 `registerEntityManagerFactory(Class, EntityManagerFactory)` 按实体类型注册

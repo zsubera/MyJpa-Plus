@@ -41,7 +41,8 @@ public class SoftDeleteFilterBean implements InitializingBean {
 
     private final MyJpaPlusProperties properties;
 
-    @SuppressFBWarnings("EI_EXPOSE_REP2")
+    @SuppressFBWarnings(value = "EI_EXPOSE_REP2",
+        justification = "Stores Spring-managed configuration properties bean; lifecycle managed by container")
     public SoftDeleteFilterBean(MyJpaPlusProperties properties) {
         this.properties = properties;
     }

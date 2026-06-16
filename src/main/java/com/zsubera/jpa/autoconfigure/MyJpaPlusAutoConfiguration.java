@@ -333,7 +333,8 @@ public class MyJpaPlusAutoConfiguration {
 
         private final SqlSlowQueryInterceptor interceptor;
 
-        @SuppressFBWarnings("EI_EXPOSE_REP2")
+        @SuppressFBWarnings(value = "EI_EXPOSE_REP2",
+            justification = "Internal BeanPostProcessor stores Spring-managed interceptor reference")
         DataSourceSlowQueryProxyPostProcessor(SqlSlowQueryInterceptor interceptor) {
             this.interceptor = interceptor;
         }

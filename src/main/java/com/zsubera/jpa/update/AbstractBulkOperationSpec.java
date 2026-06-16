@@ -263,12 +263,14 @@ public abstract class AbstractBulkOperationSpec<T, SELF extends AbstractBulkOper
         }
 
         /** AND 子节点组。 */
-        @SuppressFBWarnings({"EI_EXPOSE_REP", "EI_EXPOSE_REP2"})
+        @SuppressFBWarnings(value = {"EI_EXPOSE_REP", "EI_EXPOSE_REP2"},
+            justification = "Record components are inherently exposed; immutable value object for condition tree")
         record AndNode(List<BulkConditionNode> children) implements BulkConditionNode {
         }
 
         /** OR 子节点组。 */
-        @SuppressFBWarnings({"EI_EXPOSE_REP", "EI_EXPOSE_REP2"})
+        @SuppressFBWarnings(value = {"EI_EXPOSE_REP", "EI_EXPOSE_REP2"},
+            justification = "Record components are inherently exposed; immutable value object for condition tree")
         record OrNode(List<BulkConditionNode> children) implements BulkConditionNode {
         }
 

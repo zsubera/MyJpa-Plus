@@ -107,8 +107,6 @@ public final class SoftDeleteHelper {
      * @return 验证后的标识符（原样返回）
      * @throws IllegalArgumentException 如果标识符包含非法字符
      */
-    @edu.umd.cs.findbugs.annotations.SuppressFBWarnings(value = "URF_UNREAD_PUBLIC_OR_PROTECTED_FIELD",
-        justification = "Utility method used by softDeleteAll and softDeleteByIds")
     static String validateIdentifier(String identifier) {
         if (identifier == null || identifier.isEmpty()) {
             throw new IllegalArgumentException("Identifier must not be null or empty");

@@ -13,31 +13,8 @@ import java.util.List;
  * <p>
  * 这是一个轻量级的代码生成辅助工具——不是 Maven 插件。它生成 Java 源码字符串，可以 写入文件或用于脚手架。
  *
- * <p>
- * 支持从外部文件或 classpath 加载自定义模板。模板支持以下占位符：
- * <ul>
- * <li>{@code ${package}} -- 目标包名</li>
- * <li>{@code ${className}} -- 类名</li>
- * <li>{@code ${tableName}} -- 表名</li>
- * <li>{@code ${fields}} -- 字段声明</li>
- * <li>{@code ${gettersSetters}} -- getter/setter 方法</li>
- * <li>{@code ${imports}} -- 额外的 import 语句</li>
- * </ul>
- *
- * <p>
- * 使用示例：
- *
- * <pre>{@code
- * List<EntityCodeGenerator.ColumnDef> columns = List.of(new EntityCodeGenerator.ColumnDef("name", "String", false),
- *     new EntityCodeGenerator.ColumnDef("price", "BigDecimal", true));
- * String entitySrc = EntityCodeGenerator.generateEntity("products", columns, "com.example.domain");
- * String repoSrc =
- *     EntityCodeGenerator.generateRepository("products", columns, "com.example.domain", "com.example.repo");
- *
- * // 使用自定义模板
- * String template = Files.readString(Path.of("templates/entity.java.tmpl"));
- * String entitySrc = EntityCodeGenerator.generateEntity("products", columns, "com.example.domain", template);
- * }</pre>
+ * @apiNote 此类为实验性 API，可能在未来版本中发生不兼容变更。
+ *          它是独立的脚手架工具，不属于 MyJpa-Plus 核心查询/批量操作功能。
  */
 public final class EntityCodeGenerator {
 

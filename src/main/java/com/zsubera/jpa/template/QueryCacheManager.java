@@ -239,9 +239,10 @@ public class QueryCacheManager {
             cleanupDrift(drift > maxEntries / 2);
         }
         // ConcurrentLinkedDeque.pollFirst() 和 ConcurrentHashMap.remove() 都是线程安全的，
-        // 最多尝试 maxEntries 次以保证有界（避免 deque 中大量陈旧条目导致长时间循环）
+        // 限制最大尝试次数为 maxEntries/10，避免高负载下长时间循环
+        int maxAttempts = Math.max(16, maxEntries / 10);
         int attempts = 0;
-        while (store.size() > maxEntries && attempts < maxEntries) {
+        while (store.size() > maxEntries && attempts < maxAttempts) {
             String oldest = insertionOrder.pollFirst();
             if (oldest == null) {
                 break;
@@ -271,8 +272,9 @@ public class QueryCacheManager {
         }
         try {
             evictExpiredEntries();
-            // 使用有界重试次数避免无限循环
-            for (int i = 0; i < maxEntries && store.size() >= maxEntries; i++) {
+            // 限制驱逐循环次数，避免在高并发写入场景下长时间持锁
+            int maxEvictions = Math.max(16, maxEntries / 10);
+            for (int i = 0; i < maxEvictions && store.size() >= maxEntries; i++) {
                 evictOldestEntry();
             }
         } finally {
@@ -284,7 +286,8 @@ public class QueryCacheManager {
      * 驱逐最早写入的缓存条目（使用 ConcurrentLinkedDeque 维护插入顺序）。 跳过 deque 中已不在 store 里的陈旧条目，防止 deque/store 漂移导致无效驱逐。
      */
     private void evictOldestEntry() {
-        for (int attempt = 0; attempt < 10; attempt++) {
+        int maxAttempts = Math.max(8, maxEntries / 20);
+        for (int attempt = 0; attempt < maxAttempts; attempt++) {
             String oldest = insertionOrder.pollFirst();
             if (oldest == null) {
                 return;

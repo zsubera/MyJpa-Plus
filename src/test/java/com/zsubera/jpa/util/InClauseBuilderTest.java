@@ -204,6 +204,44 @@ class InClauseBuilderTest {
         assertEquals(0, result.size());
     }
 
+    @Test
+    void notIn_array_allNullValues_returnsConjunction() {
+        persistEntity("a", 1);
+        CriteriaBuilder cb = em.getCriteriaBuilder();
+        CriteriaQuery<TestEntity> cq = cb.createQuery(TestEntity.class);
+        Root<TestEntity> root = cq.from(TestEntity.class);
+        // notIn with only NULL values returns conjunction (TRUE) — all rows match
+        Predicate predicate = InClauseBuilder.notIn(cb, root.get("status"), (Object[])null, null, null);
+        cq.where(predicate);
+        List<TestEntity> result = em.createQuery(cq).getResultList();
+        assertEquals(1, result.size());
+    }
+
+    @Test
+    void notIn_collection_allNullValues_returnsConjunction() {
+        persistEntity("a", 1);
+        CriteriaBuilder cb = em.getCriteriaBuilder();
+        CriteriaQuery<TestEntity> cq = cb.createQuery(TestEntity.class);
+        Root<TestEntity> root = cq.from(TestEntity.class);
+        Predicate predicate = InClauseBuilder.notIn(cb, root.get("status"), Arrays.asList(null, null));
+        cq.where(predicate);
+        List<TestEntity> result = em.createQuery(cq).getResultList();
+        assertEquals(1, result.size());
+    }
+
+    @Test
+    void in_array_allNullValues_returnsIsNull() {
+        persistEntity("a", 1);
+        CriteriaBuilder cb = em.getCriteriaBuilder();
+        CriteriaQuery<TestEntity> cq = cb.createQuery(TestEntity.class);
+        Root<TestEntity> root = cq.from(TestEntity.class);
+        Predicate predicate = InClauseBuilder.in(cb, root.get("status"), (Object[])null, null);
+        cq.where(predicate);
+        List<TestEntity> result = em.createQuery(cq).getResultList();
+        // Only null-status entities match IS NULL
+        assertEquals(0, result.size());
+    }
+
     private void persistEntity(String name, int status) {
         TestEntity entity = new TestEntity();
         entity.setName(name);

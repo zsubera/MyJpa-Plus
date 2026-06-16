@@ -1419,4 +1419,35 @@ public class QuerySpecTest {
             fail("Reflection failed: " + e.getMessage());
         }
     }
+
+    @Test
+    void testCopyEmptySpec_usesFastPath() {
+        // Empty spec should use fast path (no deep copy needed)
+        QuerySpec<TestEntity> qs = new QuerySpec<>();
+        QuerySpec<TestEntity> copy = qs.copy();
+
+        // Should be independent instances
+        assertNotSame(qs, copy);
+        // Both should return all entities
+        List<TestEntity> originalResult = repository.findAll(qs.toSpecification());
+        List<TestEntity> copyResult = repository.findAll(copy.toSpecification());
+        assertEquals(originalResult.size(), copyResult.size());
+    }
+
+    @Test
+    void testCopyEmptySpecWithDistinct_onlyDistinctCopied() {
+        QuerySpec<TestEntity> qs = new QuerySpec<>();
+        qs.distinct();
+        QuerySpec<TestEntity> copy = qs.copy();
+
+        // Copy should have distinct=true
+        java.lang.reflect.Field distinctField;
+        try {
+            distinctField = QuerySpec.class.getDeclaredField("distinct");
+            distinctField.setAccessible(true);
+            assertTrue((boolean)distinctField.get(copy), "Copy should have distinct=true");
+        } catch (Exception e) {
+            fail("Reflection failed: " + e.getMessage());
+        }
+    }
 }

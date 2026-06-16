@@ -236,4 +236,36 @@ class QueryCacheManagerTest {
             Integer result = cache.get("key1");
         });
     }
+
+    @Test
+    void put_overCapacity_evictsOldestEntries() {
+        cache = new QueryCacheManager(10);
+
+        // 写入超过容量的条目
+        for (int i = 0; i < 20; i++) {
+            cache.put("key-" + i, "value-" + i, 60);
+        }
+
+        // 缓存大小不应超过 maxEntries
+        assertTrue(cache.size() <= 10, "Cache size should not exceed maxEntries, got: " + cache.size());
+
+        // 最新的条目应该存在
+        assertNotNull(cache.get("key-19"), "Most recent entry should exist");
+    }
+
+    @Test
+    void put_highVolume_noInfiniteLoop() {
+        cache = new QueryCacheManager(50);
+
+        // 大量写入，验证驱逐不会导致无限循环或长时间阻塞
+        long start = System.currentTimeMillis();
+        for (int i = 0; i < 500; i++) {
+            cache.put("bulk-" + i, "val-" + i, 60);
+        }
+        long elapsed = System.currentTimeMillis() - start;
+
+        // 应在合理时间内完成（< 2秒）
+        assertTrue(elapsed < 2000, "High-volume put should complete quickly, took: " + elapsed + "ms");
+        assertTrue(cache.size() <= 50, "Cache should respect maxEntries after high-volume writes");
+    }
 }

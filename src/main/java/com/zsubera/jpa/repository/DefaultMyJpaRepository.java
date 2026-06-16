@@ -274,7 +274,8 @@ public class DefaultMyJpaRepository<T, ID> extends SimpleJpaRepository<T, ID> im
         AUTO_FILTER_OVERRIDE.remove();
     }
 
-    @SuppressFBWarnings("EI_EXPOSE_REP2")
+    @SuppressFBWarnings(value = "EI_EXPOSE_REP2",
+        justification = "Stores Spring-managed EntityManager and JpaEntityInformation; no defensive copy appropriate")
     public DefaultMyJpaRepository(JpaEntityInformation<T, ?> entityInformation, EntityManager entityManager) {
         super(entityInformation, entityManager);
         this.domainClass = entityInformation.getJavaType();

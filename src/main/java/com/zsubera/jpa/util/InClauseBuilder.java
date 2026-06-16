@@ -303,6 +303,9 @@ public final class InClauseBuilder {
             // SQL 语义: NOT IN (NULL) 对每行返回 UNKNOWN（永不匹配）。
             // Java 语义: list.contains(null) 返回 true → NOT IN 应返回 true（不排除任何行）。
             // 采用 Java 语义以避免使用者困惑: NOT IN 全为 NULL 时返回 TRUE（不排除任何行）。
+            log.warn("NOT IN clause has only NULL values. Returning TRUE (no rows filtered). "
+                + "This differs from SQL semantics where NOT IN (NULL) returns no rows. "
+                + "If you need SQL semantics, add an explicit IS NOT NULL condition.");
             return cb.conjunction();
         }
         Config config = cfg();
@@ -342,6 +345,9 @@ public final class InClauseBuilder {
             // SQL 语义: NOT IN (NULL) 对每行返回 UNKNOWN（永不匹配）。
             // Java 语义: list.contains(null) 返回 true → NOT IN 应返回 true（不排除任何行）。
             // 采用 Java 语义以避免使用者困惑: NOT IN 全为 NULL 时返回 TRUE（不排除任何行）。
+            log.warn("NOT IN clause has only NULL values. Returning TRUE (no rows filtered). "
+                + "This differs from SQL semantics where NOT IN (NULL) returns no rows. "
+                + "If you need SQL semantics, add an explicit IS NOT NULL condition.");
             return cb.conjunction();
         }
         Config config = cfg();

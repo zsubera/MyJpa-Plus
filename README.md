@@ -47,7 +47,8 @@
 - **类型安全 UPSERT** — `new MergeSpec<>(User.class).withEntity(user).onConflict(User::getEmail).execute(em)`
 - **冲突列指定** — `onConflict(User::getEmail)` 支持单列或多列唯一键
 - **选择性更新** — `updateOnConflict(User::getName, User::getAge)` 仅更新指定列
-- **多数据库方言** — 自动检测并生成对应 SQL：PostgreSQL (`ON CONFLICT DO UPDATE`)、MySQL (`ON DUPLICATE KEY UPDATE`)
+- **多数据库方言** — 自动检测并生成对应 SQL：PostgreSQL (`ON CONFLICT DO UPDATE`)、MySQL (`ON DUPLICATE KEY UPDATE`)、Oracle (`MERGE INTO`)、SQL Server (`MERGE INTO`)
+- **方言可扩展** — 通过 `DialectDetector.registerDialect()` 注册自定义方言
 - **事务支持** — `executeInTransaction(em)` 自动管理事务
 
 ### CTE 公共表表达式（CteSpec）
@@ -142,6 +143,24 @@
 - Java 17+
 - Spring Boot 3.x
 - Spring Data JPA
+- JPA 实现：Hibernate 6.x（推荐）；EclipseLink 未经过完整测试
+
+## 数据库兼容性
+
+| 数据库 | 查询构建 | UPSERT/MERGE | 备注 |
+|--------|---------|-------------|------|
+| MySQL 5.7+ | ✓ | ✓ | `ON DUPLICATE KEY UPDATE` |
+| PostgreSQL 9.5+ | ✓ | ✓ | `ON CONFLICT DO UPDATE` |
+| Oracle 12c+ | ✓ | ✓ | `MERGE INTO ... USING` |
+| SQL Server 2008+ | ✓ | ✓ | `MERGE INTO` |
+
+## 虚拟线程兼容性
+
+MyJpa-Plus 完全兼容 Java 21+ 虚拟线程（Virtual Threads）：
+
+- `SoftDeleteContext` 的 ThreadLocal 在虚拟线程中行为与平台线程一致
+- 推荐使用 `SoftDeleteContext.withIgnore()` 便捷方法自动管理生命周期
+- 跨虚拟线程的状态传递请使用 `captureAndResetForAsync()` / `restoreForAsync()`
 
 ## 安装
 
@@ -152,6 +171,8 @@
     <version>1.3.0</version>
 </dependency>
 ```
+
+> 从旧版本升级？请查看 [升级指南](./MIGRATION.md)。
 
 ## 快速开始
 
@@ -698,6 +719,17 @@ myjpa-plus:
 | 聚合 | `groupBy(field1, field2, ...)`, `having(predicate)` |
 | 函数 | `func(field, functionName, params...)` — 调用数据库函数 |
 | 输出 | `toSpecification()`, `toSpecification(external)` |
+
+### QueryAggregates（聚合查询工具）
+
+| 分类 | 方法 |
+|---|---|
+| 计数 | `count(root, cb)`, `count(root, field, cb)`, `countDistinct(root, field, cb)` |
+| 求和 | `sum(root, field, cb)` |
+| 平均 | `avg(root, field, cb)` |
+| 极值 | `max(root, field, cb)`, `min(root, field, cb)` |
+
+> 也可通过 `QuerySpec.count()` 等静态方法调用，内部委托给 `QueryAggregates`。
 
 ### ProjectionSpec（投影查询）
 

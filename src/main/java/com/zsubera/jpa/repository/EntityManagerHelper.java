@@ -33,6 +33,13 @@ public final class EntityManagerHelper {
      */
     private static final ConcurrentHashMap<Class<?>, EntityManagerResolver> resolvers = new ConcurrentHashMap<>();
 
+    /**
+     * 标记是否所有 resolver 都指向默认 EMF（单数据源场景）。
+     * 为 true 时 resolveEntityManagerFactory 可跳过 resolver 查询，直接返回默认 EMF。
+     * 在 register/remove 时更新。
+     */
+    private static volatile boolean allResolversUseDefault = true;
+
     private EntityManagerHelper() {}
 
     // ---- 初始化 ----
@@ -46,6 +53,10 @@ public final class EntityManagerHelper {
         justification = "EntityManagerFactory is thread-safe and stateless")
     public static void setEntityManagerFactory(EntityManagerFactory emf) {
         defaultEntityManagerFactory = emf;
+        // 设置默认 EMF 后，如果之前没有注册过自定义 resolver，保持快速路径
+        if (resolvers.isEmpty()) {
+            allResolversUseDefault = true;
+        }
     }
 
     // ---- 多数据源注册 ----
@@ -64,6 +75,7 @@ public final class EntityManagerHelper {
         Objects.requireNonNull(entityType, "entityType must not be null");
         Objects.requireNonNull(resolver, "resolver must not be null");
         resolvers.put(entityType, resolver);
+        allResolversUseDefault = false;
     }
 
     /**
@@ -80,6 +92,10 @@ public final class EntityManagerHelper {
         Objects.requireNonNull(entityType, "entityType must not be null");
         Objects.requireNonNull(emf, "entityManagerFactory must not be null");
         resolvers.put(entityType, type -> emf);
+        // 如果注册的 EMF 与默认 EMF 不同，标记为非单数据源
+        if (defaultEntityManagerFactory == null || emf != defaultEntityManagerFactory) {
+            allResolversUseDefault = false;
+        }
     }
 
     /**
@@ -96,6 +112,8 @@ public final class EntityManagerHelper {
         Objects.requireNonNull(entityType, "entityType must not be null");
         Objects.requireNonNull(emf, "entityManagerFactory must not be null");
         resolvers.putIfAbsent(entityType, type -> emf);
+        // 如果注册的 EMF 与默认 EMF 相同，保持 allResolversUseDefault 标志
+        // putIfAbsent 可能未实际插入（已存在），此时不修改标志
     }
 
     /**
@@ -106,6 +124,30 @@ public final class EntityManagerHelper {
     public static void removeResolver(Class<?> entityType) {
         Objects.requireNonNull(entityType, "entityType must not be null");
         resolvers.remove(entityType);
+        // 移除后重新检查是否所有 resolver 都指向默认 EMF
+        recheckAllResolversUseDefault();
+    }
+
+    /**
+     * 重新检查 allResolversUseDefault 标志。移除 resolver 后调用。
+     */
+    private static void recheckAllResolversUseDefault() {
+        if (resolvers.isEmpty()) {
+            allResolversUseDefault = true;
+            return;
+        }
+        EntityManagerFactory defaultEmf = defaultEntityManagerFactory;
+        if (defaultEmf == null) {
+            allResolversUseDefault = false;
+            return;
+        }
+        for (EntityManagerResolver resolver : resolvers.values()) {
+            if (resolver.resolve(null) != defaultEmf) {
+                allResolversUseDefault = false;
+                return;
+            }
+        }
+        allResolversUseDefault = true;
     }
 
     // ---- EM 获取 ----
@@ -173,6 +215,16 @@ public final class EntityManagerHelper {
      * @throws IllegalStateException 如果未找到 EMF
      */
     private static EntityManagerFactory resolveEntityManagerFactory(@Nullable Class<?> entityType) {
+        // 快速路径：单数据源场景，所有 resolver 都指向默认 EMF，跳过 ConcurrentHashMap 查询
+        if (allResolversUseDefault) {
+            EntityManagerFactory emf = defaultEntityManagerFactory;
+            if (emf == null) {
+                throw new IllegalStateException(
+                    "EntityManagerFactory not initialized. Ensure MyJpaPlusAutoConfiguration is registered.");
+            }
+            return emf;
+        }
+
         // 1. 优先：实体类型特定的 resolver
         if (entityType != null) {
             EntityManagerResolver resolver = resolvers.get(entityType);
@@ -198,5 +250,6 @@ public final class EntityManagerHelper {
     public static void reset() {
         defaultEntityManagerFactory = null;
         resolvers.clear();
+        allResolversUseDefault = true;
     }
 }

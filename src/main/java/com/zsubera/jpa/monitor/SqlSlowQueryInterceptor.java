@@ -99,7 +99,8 @@ public class SqlSlowQueryInterceptor implements StatementInspector {
         private final DataSource target;
         private final long slowQueryThresholdMs;
 
-        @SuppressFBWarnings("EI_EXPOSE_REP2")
+        @SuppressFBWarnings(value = "EI_EXPOSE_REP2",
+            justification = "Internal proxy handler stores target DataSource reference for delegation")
         DataSourceProxyHandler(DataSource target, long slowQueryThresholdMs) {
             this.target = target;
             this.slowQueryThresholdMs = slowQueryThresholdMs;
@@ -159,7 +160,8 @@ public class SqlSlowQueryInterceptor implements StatementInspector {
 
         private static volatile MicrometerReflectCache micrometerCache;
 
-        @SuppressFBWarnings("EI_EXPOSE_REP2")
+        @SuppressFBWarnings(value = "EI_EXPOSE_REP2",
+            justification = "Internal timing handler stores JDBC proxy target for delegation")
         PreparedStatementTimingHandler(Object target, String sql, long slowQueryThresholdMs) {
             this.target = target;
             this.sql = sql;

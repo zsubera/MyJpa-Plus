@@ -59,7 +59,11 @@ import org.springframework.lang.Nullable;
  * @see com.zsubera.jpa.template.MyJpaTemplate#findAll(Class, QuerySpec)
  * @see com.zsubera.jpa.template.MyJpaTemplate#findPage(Class, Specification, org.springframework.data.domain.Pageable)
  */
-@SuppressFBWarnings("SE_BAD_FIELD")
+@SuppressFBWarnings(value = "SE_BAD_FIELD",
+    justification = "QuerySpec intentionally blocks serialization via writeObject()/readObject() throwing "
+        + "NotSerializableException. The SE_BAD_FIELD warning is triggered because Specification<T> extends "
+        + "Serializable, but QuerySpec's internal state (lambdas, ConditionNode tree) is not serializable. "
+        + "This is by design - QuerySpec should not be serialized.")
 public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, QuerySpec<T>> {
 
     private static final Logger log = LoggerFactory.getLogger(QuerySpec.class);
@@ -141,16 +145,27 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
      */
     @SuppressWarnings("unchecked")
     public QuerySpec<T> copy() {
+        // 快速路径：空条件树无需深拷贝
+        if (conditions.isEmpty() && orderNodes.isEmpty() && groupByFields.isEmpty() && havingConditions.isEmpty()
+            && queryTimeout == null && lockMode == null) {
+            QuerySpec<T> copy = new QuerySpec<>();
+            copy.distinct = this.distinct;
+            return copy;
+        }
         QuerySpec<T> copy = new QuerySpec<>();
         for (ConditionNode node : this.conditions) {
             copy.conditions.add(deepCopyNode(node));
         }
-        // groupStack 是构建过程中的临时状态（or/not/join 的 Consumer 作用域），
-        // 不属于查询定义的一部分。构建完成后应为空，拷贝时不复制。
         copy.distinct = this.distinct;
-        copy.groupByFields.addAll(this.groupByFields);
-        copy.havingConditions.addAll(this.havingConditions);
-        copy.orderNodes.addAll(this.orderNodes);
+        if (!groupByFields.isEmpty()) {
+            copy.groupByFields.addAll(this.groupByFields);
+        }
+        if (!havingConditions.isEmpty()) {
+            copy.havingConditions.addAll(this.havingConditions);
+        }
+        if (!orderNodes.isEmpty()) {
+            copy.orderNodes.addAll(this.orderNodes);
+        }
         copy.queryTimeout = this.queryTimeout;
         copy.lockMode = this.lockMode;
         return copy;
@@ -943,14 +958,16 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
      * 将此 QuerySpec 与另一个 QuerySpec 使用 OR 组合，返回组合后的 {@link Specification}。
      *
      * <p>
-     * 如果需要在保持 {@link QuerySpec} 类型的同时构建 OR 条件，请使用
+     * <strong>返回类型说明：</strong>此方法返回 {@code Specification<T>} 而非 {@code QuerySpec<T>}，
+     * 因为 OR 组合本质上产生的是通用 {@link Specification}，无法用单个 QuerySpec 的条件树表示。
+     * 如需在保持 {@link QuerySpec} 类型的同时构建 OR 条件，请使用
      * {@link #or(java.util.function.Consumer)} 消费者模式：
      * <pre>{@code
      * qs.or(o -> o.eq(User::getStatus, "PENDING").eq(User::getStatus, "REVIEW"));
      * }</pre>
      *
      * @param other 另一个 QuerySpec 实例
-     * @return 组合后的 Specification 实例
+     * @return 组合后的 Specification 实例（类型为 Specification，非 QuerySpec）
      */
     public Specification<T> or(QuerySpec<T> other) {
         if (other == null) {
