@@ -472,8 +472,9 @@ public class MergeSpec<T> {
         String tableName = resolveTableName();
         DialectStrategy strategy = DialectDetector.DIALECT_STRATEGIES.get(dialect);
         if (strategy == null) {
-            throw new MyJpaPlusException(
-                "Unsupported database dialect: " + dialect + ". Supported dialects: postgresql, mysql");
+            throw new MyJpaPlusException("Unsupported database dialect: " + dialect
+                + ". Supported dialects: postgresql, mysql, oracle, sqlserver. "
+                + "Register a custom dialect via DialectDetector.registerDialect().");
         }
         return strategy.buildUpsertSql(tableName, insertColumns, insertFieldValues, effectiveConflictFields,
             effectiveUpdateFields);

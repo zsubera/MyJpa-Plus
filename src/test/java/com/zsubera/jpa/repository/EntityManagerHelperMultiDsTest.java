@@ -125,24 +125,22 @@ class EntityManagerHelperMultiDsTest {
         EntityManagerHelper.registerEntityManagerFactory(String.class, orderEmf);
         EntityManagerHelper.reset();
 
-        assertThatThrownBy(() -> resolveEmf(String.class))
-            .isInstanceOf(IllegalStateException.class)
+        assertThatThrownBy(() -> resolveEmf(String.class)).isInstanceOf(IllegalStateException.class)
             .hasMessageContaining("EntityManagerFactory not initialized");
     }
 
     @Test
     void noDefaultEmf_noResolver_throwsException() {
-        assertThatThrownBy(() -> resolveEmf(String.class))
-            .isInstanceOf(IllegalStateException.class)
+        assertThatThrownBy(() -> resolveEmf(String.class)).isInstanceOf(IllegalStateException.class)
             .hasMessageContaining("EntityManagerFactory not initialized");
     }
 
     private EntityManagerFactory resolveEmf(Class<?> entityType) {
         try {
-            java.lang.reflect.Method method = EntityManagerHelper.class.getDeclaredMethod(
-                "resolveEntityManagerFactory", Class.class);
+            java.lang.reflect.Method method =
+                EntityManagerHelper.class.getDeclaredMethod("resolveEntityManagerFactory", Class.class);
             method.setAccessible(true);
-            return (EntityManagerFactory) method.invoke(null, entityType);
+            return (EntityManagerFactory)method.invoke(null, entityType);
         } catch (java.lang.reflect.InvocationTargetException e) {
             // Unwrap the actual exception thrown by the method
             Throwable cause = e.getCause();

@@ -29,17 +29,20 @@ final class DialectDetector {
     private static final Logger log = LoggerFactory.getLogger(DialectDetector.class);
 
     /**
-     * 方言策略实例映射，支持运行时注册新方言。初始化后包含 PostgreSQL 和 MySQL。
+     * 方言策略实例映射，支持运行时注册新方言。初始化后包含 PostgreSQL、MySQL、Oracle 和 SQL Server。
      * 用户可通过 {@link #registerDialect(String, DialectStrategy)} 添加自定义方言。
      */
     static final java.util.concurrent.ConcurrentHashMap<String, DialectStrategy> DIALECT_STRATEGIES =
-        new java.util.concurrent.ConcurrentHashMap<>(
-            Map.of("postgresql", new PostgresDialect(), "mysql", new MysqlDialect()));
+        new java.util.concurrent.ConcurrentHashMap<>(Map.of("postgresql", new PostgresDialect(), "mysql",
+            new MysqlDialect(), "oracle", new OracleDialect(), "sqlserver", new SqlServerDialect()));
 
     /**
      * 注册自定义数据库方言。可在运行时调用以支持新的数据库类型。
      *
-     * @param dialectName 方言标识符（如 "oracle"、"sqlserver"）
+     * <p>
+     * 内置方言：postgresql、mysql、oracle、sqlserver。注册同名方言会覆盖内置实现。
+     *
+     * @param dialectName 方言标识符（如 "oracle"、"sqlserver"、"h2"）
      * @param strategy 方言策略实现
      */
     public static void registerDialect(String dialectName, DialectStrategy strategy) {
@@ -51,6 +54,19 @@ final class DialectDetector {
         }
         DIALECT_STRATEGIES.put(dialectName.toLowerCase(), strategy);
         log.info("Registered custom dialect: {}", dialectName);
+    }
+
+    /**
+     * 移除已注册的数据库方言。
+     *
+     * @param dialectName 方言标识符
+     * @return 如果成功移除返回 true，方言不存在返回 false
+     */
+    public static boolean removeDialect(String dialectName) {
+        if (dialectName == null || dialectName.isBlank()) {
+            return false;
+        }
+        return DIALECT_STRATEGIES.remove(dialectName.toLowerCase()) != null;
     }
 
     /** 每个 EntityManagerFactory 缓存的方言，避免重复检测。 */
@@ -156,7 +172,8 @@ final class DialectDetector {
 
         // 优先级 4：手动配置
         log.warn("Failed to detect database dialect automatically. "
-            + "Set system property 'myjpa-plus.dialect' to 'postgresql' or 'mysql' to specify manually.");
+            + "Set system property 'myjpa-plus.dialect' to 'postgresql', 'mysql', 'oracle', or 'sqlserver' "
+            + "to specify manually, or register a custom dialect via DialectDetector.registerDialect().");
         String manualDialect = System.getProperty("myjpa-plus.dialect");
         if (manualDialect != null && !manualDialect.isEmpty()) {
             String mapped = mapDialect(manualDialect.toLowerCase());
@@ -165,7 +182,7 @@ final class DialectDetector {
             return mapped;
         }
         throw new MyJpaPlusException("Failed to detect database dialect and no manual dialect configured. "
-            + "Set system property 'myjpa-plus.dialect' to 'postgresql' or 'mysql'.");
+            + "Set system property 'myjpa-plus.dialect' to 'postgresql', 'mysql', 'oracle', or 'sqlserver'.");
     }
 
     /**
@@ -184,8 +201,16 @@ final class DialectDetector {
         if (productName.contains("mysql")) {
             return "mysql";
         }
+        if (productName.contains("oracle")) {
+            return "oracle";
+        }
+        if (productName.contains("microsoft") || productName.contains("sqlserver")
+            || productName.contains("sql server")) {
+            return "sqlserver";
+        }
         log.warn("Unknown database product '{}'. "
-            + "Set system property 'myjpa-plus.dialect' to 'postgresql' or 'mysql' manually.", productName);
+            + "Set system property 'myjpa-plus.dialect' or register a custom dialect via "
+            + "DialectDetector.registerDialect().", productName);
         return productName;
     }
 

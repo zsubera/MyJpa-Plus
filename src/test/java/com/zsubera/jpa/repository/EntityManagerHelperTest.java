@@ -1,17 +1,13 @@
 package com.zsubera.jpa.repository;
 
-import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.when;
 
-import jakarta.persistence.EntityManager;
 import jakarta.persistence.EntityManagerFactory;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
-import org.springframework.orm.jpa.EntityManagerFactoryUtils;
 
 class EntityManagerHelperTest {
 
@@ -117,8 +113,7 @@ class EntityManagerHelperTest {
 
             // After removal, should fall back to default EMF (not set)
             assertThatThrownBy(() -> EntityManagerHelper.getTransactionalEntityManager(String.class))
-                .isInstanceOf(IllegalStateException.class)
-                .hasMessageContaining("EntityManagerFactory not initialized");
+                .isInstanceOf(IllegalStateException.class).hasMessageContaining("EntityManagerFactory not initialized");
         }
 
         @Test
@@ -182,8 +177,7 @@ class EntityManagerHelperTest {
 
             // After reset, default EMF is null
             assertThatThrownBy(() -> EntityManagerHelper.getTransactionalEntityManager())
-                .isInstanceOf(IllegalStateException.class)
-                .hasMessageContaining("EntityManagerFactory not initialized");
+                .isInstanceOf(IllegalStateException.class).hasMessageContaining("EntityManagerFactory not initialized");
         }
     }
 

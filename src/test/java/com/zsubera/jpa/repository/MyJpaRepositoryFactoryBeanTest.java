@@ -1,7 +1,6 @@
 package com.zsubera.jpa.repository;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -32,9 +31,8 @@ class MyJpaRepositoryFactoryBeanTest {
 
     @Test
     void createRepositoryFactory_returnsCorrectReturnType() throws Exception {
-        java.lang.reflect.Method method =
-            MyJpaRepositoryFactoryBean.class.getDeclaredMethod("createRepositoryFactory",
-                jakarta.persistence.EntityManager.class);
+        java.lang.reflect.Method method = MyJpaRepositoryFactoryBean.class.getDeclaredMethod("createRepositoryFactory",
+            jakarta.persistence.EntityManager.class);
         method.setAccessible(true);
 
         assertThat(method).isNotNull();
@@ -50,7 +48,7 @@ class MyJpaRepositoryFactoryBeanTest {
             MyJpaRepositoryFactoryBean.class.getDeclaredMethod("resolveEntityType", Class.class);
         method.setAccessible(true);
 
-        Class<?> result = (Class<?>) method.invoke(bean, TestRepository.class);
+        Class<?> result = (Class<?>)method.invoke(bean, TestRepository.class);
 
         // TestRepository doesn't extend JpaRepository, so entity type cannot be resolved
         assertThat(result).isNull();

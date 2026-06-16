@@ -41,8 +41,8 @@ public class MyJpaRepositoryFactoryBean<T extends Repository<S, ID>, S, ID> exte
 
         // 多数据源场景：按实体类型注册 EMF（仅在未手动注册时设置默认值）
         if (entityType != null) {
-            EntityManagerHelper.registerEntityManagerFactoryIfAbsent(
-                entityType, entityManager.getEntityManagerFactory());
+            EntityManagerHelper.registerEntityManagerFactoryIfAbsent(entityType,
+                entityManager.getEntityManagerFactory());
             if (log.isDebugEnabled()) {
                 log.debug("Registered EntityManagerFactory for entity type: {}", entityType.getSimpleName());
             }

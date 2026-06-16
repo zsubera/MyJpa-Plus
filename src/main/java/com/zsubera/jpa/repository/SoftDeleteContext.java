@@ -12,8 +12,28 @@ import org.slf4j.LoggerFactory;
  * <p>
  * 使用计数器而非布尔标志，以支持嵌套调用场景。当外层方法和内层方法都标注了 {@code @IgnoreSoftDelete} 时， 外层方法结束不会错误地清除内层的忽略状态。
  *
+ * <h3>虚拟线程（Virtual Threads）兼容性</h3>
  * <p>
- * 通常由 {@link IgnoreSoftDeleteAdvisor} 自动管理，不建议手动调用。
+ * 此类的 ThreadLocal 与 Java 21+ 虚拟线程完全兼容。每个虚拟线程拥有独立的 ThreadLocal 映射，
+ * 因此 {@link #pushIgnore()} / {@link #popIgnore()} 在虚拟线程中行为与平台线程一致。
+ * <p>
+ * 唯一需要注意的是跨虚拟线程的状态传递：如果需要在虚拟线程之间共享软删除忽略状态，
+ * 请使用 {@link #captureAndResetForAsync()} 和 {@link #restoreForAsync(int)} 进行显式传递，
+ * 或使用推荐的 {@link #withIgnore(Runnable)} 便捷方法自动管理生命周期。
+ *
+ * <h3>推荐用法</h3>
+ * <p>
+ * 对于手动管理软删除忽略状态的场景，推荐使用 {@link #withIgnore(Runnable)} 或
+ * {@link #withIgnore(java.util.function.Supplier)} 以确保异常安全的自动清理：
+ * <pre>{@code
+ * SoftDeleteContext.withIgnore(() -> {
+ *     // 在此范围内软删除过滤被跳过
+ *     repository.findAll(); // 返回包含已删除记录的结果
+ * }); // 自动恢复，即使发生异常
+ * }</pre>
+ *
+ * <p>
+ * 通常由 {@link IgnoreSoftDeleteAdvisor} 自动管理，不建议手动调用 push/pop。
  *
  * @see IgnoreSoftDeleteAdvisor
  * @see DefaultMyJpaRepository
@@ -64,6 +84,52 @@ public final class SoftDeleteContext {
     }
 
     private SoftDeleteContext() {}
+
+    /**
+     * 在软删除过滤被跳过的范围内执行操作。自动管理 push/pop 生命周期，异常安全。
+     *
+     * <p>
+     * 推荐替代直接调用 {@link #pushIgnore()} / {@link #popIgnore()}，尤其在虚拟线程和异常场景下更安全：
+     *
+     * <pre>{@code
+     * SoftDeleteContext.withIgnore(() -> {
+     *     repository.findAll(); // 返回包含已删除记录的结果
+     * }); // 自动恢复
+     * }</pre>
+     *
+     * @param action 要执行的操作
+     */
+    public static void withIgnore(Runnable action) {
+        pushIgnore();
+        try {
+            action.run();
+        } finally {
+            popIgnore();
+        }
+    }
+
+    /**
+     * 在软删除过滤被跳过的范围内执行 Supplier。自动管理 push/pop 生命周期，异常安全。
+     *
+     * <p>
+     * 推荐替代直接调用 {@link #pushIgnore()} / {@link #popIgnore()}，尤其在虚拟线程和异常场景下更安全：
+     *
+     * <pre>{@code
+     * List<T> result = SoftDeleteContext.withIgnore(() -> repository.findAll());
+     * }</pre>
+     *
+     * @param supplier 要执行的 Supplier
+     * @param <R> 返回类型
+     * @return Supplier 的返回结果
+     */
+    public static <R> R withIgnore(java.util.function.Supplier<R> supplier) {
+        pushIgnore();
+        try {
+            return supplier.get();
+        } finally {
+            popIgnore();
+        }
+    }
 
     /**
      * 检查当前线程是否应跳过软删除过滤。
@@ -201,7 +267,9 @@ public final class SoftDeleteContext {
      * 在异步边界处捕获并重置当前线程的忽略状态。
      *
      * @return 之前通过 {@link #captureAndResetForAsync()} 捕获的忽略计数
-     * @deprecated 此方法丢失嵌套 ignore count 信息。请使用 {@link #captureAndResetForAsync()} 保留计数。
+     * @deprecated 此方法丢失嵌套 ignore count 信息，且不适用于虚拟线程场景。
+     *             请使用 {@link #captureAndResetForAsync()} 保留计数，
+     *             或使用 {@link #withIgnore(Runnable)} 自动管理生命周期。
      */
     @Deprecated
     public static boolean captureAndReset() {

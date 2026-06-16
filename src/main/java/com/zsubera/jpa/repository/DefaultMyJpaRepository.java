@@ -55,6 +55,11 @@ public class DefaultMyJpaRepository<T, ID> extends SimpleJpaRepository<T, ID> im
 
     /**
      * autoFilter 的 ThreadLocal 覆盖值。设置后（非 null）会覆盖全局配置，支持按请求控制软删除过滤行为。
+     *
+     * <p>
+     * 与 Java 21+ 虚拟线程兼容：每个虚拟线程拥有独立的 ThreadLocal 映射，
+     * 因此状态不会在虚拟线程之间泄漏。推荐使用 {@link #withAutoFilterOverride(Boolean, Runnable)}
+     * 自动管理生命周期以确保异常安全。
      */
     private static final ThreadLocal<Boolean> AUTO_FILTER_OVERRIDE = new ThreadLocal<>();
 
@@ -205,6 +210,10 @@ public class DefaultMyJpaRepository<T, ID> extends SimpleJpaRepository<T, ID> im
     /**
      * 使用 AUTO_FILTER_OVERRIDE 执行操作，自动在 finally 块中清理。防止异常发生时 ThreadLocal 泄漏。
      *
+     * <p>
+     * 与 Java 21+ 虚拟线程兼容。每个虚拟线程拥有独立的 ThreadLocal 映射，
+     * 因此覆盖状态不会泄漏到其他虚拟线程或平台线程。
+     *
      * @param value 覆盖值（null 表示清除）
      * @param action 要执行的操作
      */
@@ -256,6 +265,10 @@ public class DefaultMyJpaRepository<T, ID> extends SimpleJpaRepository<T, ID> im
 
     /**
      * 清除当前线程的 AUTO_FILTER_OVERRIDE ThreadLocal 值。 在应用关闭或 ServletContext 销毁时调用以防止 ThreadLocal 泄漏。
+     *
+     * <p>
+     * 注意：在虚拟线程环境下，每个虚拟线程的 ThreadLocal 是独立的，
+     * 因此此方法仅清除当前虚拟线程/平台线程的状态。
      */
     public static void clearThreadLocal() {
         AUTO_FILTER_OVERRIDE.remove();
