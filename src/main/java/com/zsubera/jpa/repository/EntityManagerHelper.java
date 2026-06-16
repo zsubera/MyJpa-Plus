@@ -11,6 +11,11 @@ import org.springframework.orm.jpa.EntityManagerFactoryUtils;
  * <p>
  * 由 {@code MyJpaPlusAutoConfiguration} 初始化。用于 {@link MyJpaRepository} 默认方法中的批量操作，
  * 使它们无需 Spring Data 自定义工厂即可工作。
+ *
+ * <p>
+ * <strong>多数据源限制：</strong>此类存储单一 {@link EntityManagerFactory}，
+ * 在多数据源场景下所有仓库共享同一个 EMF。如需多数据源支持，请使用
+ * {@link com.zsubera.jpa.template.MyJpaTemplate} 进行批量操作。
  */
 public final class EntityManagerHelper {
 

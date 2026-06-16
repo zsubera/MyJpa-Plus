@@ -48,7 +48,6 @@ class MyJpaRepositoryTest {
         entity.setName("active");
         entity.setDeleted(false);
         MyJpaTestEntity saved = repository.save(entity);
-
         Optional<MyJpaTestEntity> result = repository.findNotDeletedById(saved.getId());
         assertTrue(result.isPresent());
         assertEquals("active", result.get().getName());

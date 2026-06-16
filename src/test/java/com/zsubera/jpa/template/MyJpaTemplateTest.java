@@ -77,7 +77,6 @@ class MyJpaTemplateTest {
         e.setName("hello");
         e.setStatus(1);
         repository.save(e);
-
         QuerySpec<TestEntity> qs = new QuerySpec<>();
         qs.eq(TestEntity::getName, "hello");
         List<TestEntity> result = template.findAll(TestEntity.class, qs);

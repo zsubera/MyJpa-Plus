@@ -235,6 +235,8 @@ public interface MyJpaRepository<T, ID> extends JpaRepository<T, ID>, JpaSpecifi
     }
 
     // ---- 批量操作方法 ----
+    // 这些 default 方法通过 EntityManagerHelper 获取事务性 EntityManager。
+    // 开发者可直接调用：repository.update(s -> s.set(...));
 
     /**
      * 批量更新实体。使用 Lambda 表达式配置更新条件和操作。

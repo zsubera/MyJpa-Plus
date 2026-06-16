@@ -21,15 +21,17 @@ import org.springframework.test.context.ContextConfiguration;
  * when using {@link MyJpaRepositoryFactoryBean}.
  *
  * <p>
- * The {@link MyJpaRepositoryFactory.SkipBatchMethodsQueryLookupStrategy} returns {@code null}
- * for batch methods ({@code update}, {@code delete}, {@code merge}, {@code execute}),
- * preventing Spring Data's query derivation from intercepting them. The method calls
- * fall through to {@code ImplementationMethodExecutionInterceptor} which routes them to
- * the base class {@link DefaultMyJpaRepository}.
+ * Batch operations ({@code update}, {@code delete}, {@code merge}, {@code execute}) are
+ * declared as {@code default} methods on {@link MyJpaRepository}, using
+ * {@link EntityManagerHelper} to obtain the transactional {@code EntityManager}.
+ * This design allows direct calling without casting:
+ * <pre>{@code
+ * repository.update(s -> s.set(User::getStatus, "INACTIVE"));
+ * }</pre>
  *
  * <p>
- * This test expects the methods declared on {@link MyJpaRepository} to be callable
- * directly without casting or using {@code MyJpaTemplate}.
+ * For multi-datasource scenarios, use {@code MyJpaTemplate} which accepts
+ * {@code EntityManager} as a parameter.
  */
 @DataJpaTest
 @org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabase(
