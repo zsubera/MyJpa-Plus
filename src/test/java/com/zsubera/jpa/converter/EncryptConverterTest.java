@@ -137,4 +137,18 @@ class EncryptConverterTest {
             assertEquals(original, decrypted);
         }
     }
+
+    @Test
+    @DisplayName("removeCipher clears ThreadLocal")
+    void shouldClearCipherThreadLocal() {
+        converter.convertToDatabaseColumn("test");
+        EncryptConverter.removeCipher();
+        assertDoesNotThrow(() -> converter.convertToDatabaseColumn("after-clear"));
+    }
+
+    @Test
+    @DisplayName("registerTransactionCleanupIfNeeded does not throw outside transaction")
+    void shouldNotThrowWhenNoTransaction() {
+        assertDoesNotThrow(EncryptConverter::registerTransactionCleanupIfNeeded);
+    }
 }

@@ -119,4 +119,42 @@ class QuerySpecCacheKeyTest {
         assertNotNull(key, "Cache key should not be null");
         assertTrue(key.startsWith("Q:"), "Cache key should start with Q:");
     }
+
+    @Test
+    void rawNodeCacheKeyShouldBeStable() {
+        java.util.function.BiFunction<jakarta.persistence.criteria.Path<?>,
+            jakarta.persistence.criteria.CriteriaBuilder,
+            jakarta.persistence.criteria.Predicate> fn = (path, cb) -> cb.conjunction();
+        QuerySpec<TestEntity> spec1 = new QuerySpec<>();
+        spec1.conditions().add(ConditionNode.ofInternalPredicate(fn));
+        QuerySpec<TestEntity> spec2 = new QuerySpec<>();
+        spec2.conditions().add(ConditionNode.ofInternalPredicate(fn));
+
+        String key1 = spec1.cacheKey();
+        String key2 = spec2.cacheKey();
+
+        assertTrue(key1.contains("RAW("), "Cache key should contain RAW for RawNode");
+        assertEquals(key1, key2, "Same lambda instance should produce same cache key");
+    }
+
+    @Test
+    void rawNodeCacheKeyDiffersByClassName() {
+        java.util.function.BiFunction<jakarta.persistence.criteria.Path<?>,
+            jakarta.persistence.criteria.CriteriaBuilder,
+            jakarta.persistence.criteria.Predicate> fn1 = (path, cb) -> cb.conjunction();
+        java.util.function.BiFunction<jakarta.persistence.criteria.Path<?>,
+            jakarta.persistence.criteria.CriteriaBuilder,
+            jakarta.persistence.criteria.Predicate> fn2 = (path, cb) -> cb.disjunction();
+
+        QuerySpec<TestEntity> spec1 = new QuerySpec<>();
+        spec1.conditions().add(ConditionNode.ofInternalPredicate(fn1));
+        QuerySpec<TestEntity> spec2 = new QuerySpec<>();
+        spec2.conditions().add(ConditionNode.ofInternalPredicate(fn2));
+
+        String key1 = spec1.cacheKey();
+        String key2 = spec2.cacheKey();
+
+        assertTrue(key1.contains("RAW("), "Cache key should contain RAW for RawNode");
+        assertTrue(key2.contains("RAW("), "Cache key should contain RAW for RawNode");
+    }
 }

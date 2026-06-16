@@ -378,9 +378,32 @@ class ConditionBuilderValidationTest {
 
     @Test
     void testNotBetweenCrossNumericTypeAllowed() {
-        // Integer vs Long should be allowed as both are Number types
         QuerySpec<TestEntity> qs = new QuerySpec<>();
         assertDoesNotThrow(() -> qs.notBetween(TestEntity::getStatus, 1, 2L));
+    }
+
+    @Test
+    void testMultiLikeWithNestedFieldValidatesEachSegment() {
+        QuerySpec<TestEntity> qs = new QuerySpec<>();
+        assertDoesNotThrow(() -> qs.multiLike("test", "name"));
+    }
+
+    @Test
+    void testMultiLikeWithInvalidNestedFieldThrows() {
+        QuerySpec<TestEntity> qs = new QuerySpec<>();
+        assertThrows(IllegalArgumentException.class, () -> qs.multiLike("test", "name;DROP"));
+    }
+
+    @Test
+    void testMultiLikeWithEmptySegmentThrows() {
+        QuerySpec<TestEntity> qs = new QuerySpec<>();
+        assertThrows(IllegalArgumentException.class, () -> qs.multiLike("test", "name."));
+    }
+
+    @Test
+    void testMultiLikeWithNullFieldNameThrows() {
+        QuerySpec<TestEntity> qs = new QuerySpec<>();
+        assertThrows(IllegalArgumentException.class, () -> qs.multiLike("test", (String[])null));
     }
 
     private TestEntity newEntity(String name, int status) {

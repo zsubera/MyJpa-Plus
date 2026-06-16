@@ -255,11 +255,9 @@ class MergeSpecTest {
 
     @Test
     void testUnicodeIdentifiersToggle() {
-        // B-08: Test that unicode identifiers can be toggled
         boolean original = false;
         try {
             com.zsubera.jpa.util.IdentifierValidator.setUnicodeIdentifiers(true);
-            // Should not throw for valid ASCII identifiers even with unicode mode enabled
             TestEntity entity = newEntity("unicode-test", 1);
             int count = new MergeSpec<>(TestEntity.class).withEntity(entity).execute(em);
             assertTrue(count >= 1);

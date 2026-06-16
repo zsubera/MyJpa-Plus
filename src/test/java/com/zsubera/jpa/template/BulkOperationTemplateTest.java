@@ -399,6 +399,27 @@ class BulkOperationTemplateTest {
         assertNull(result.failureCause());
     }
 
+    @Test
+    @org.springframework.transaction.annotation.Transactional(
+        propagation = org.springframework.transaction.annotation.Propagation.NOT_SUPPORTED)
+    void testExecuteBatchInSeparateTransactionsWithMaxIterations() {
+        insertTestData("iterTest", 10);
+
+        bulkOperationTemplate.setMaxBatchIterations(3);
+        UpdateSpec<TestEntity> spec =
+            template.update(TestEntity.class).set(TestEntity::getStatus, 1).eq(TestEntity::getStatus, 0);
+        BulkOperationTemplate.BatchResult result = bulkOperationTemplate.executeBatchInSeparateTransactions(spec, 2,
+            BulkOperationTemplate.BatchFailureStrategy.CONTINUE);
+        assertEquals(3, result.batchCount());
+        bulkOperationTemplate.setMaxBatchIterations(10000);
+    }
+
+    @Test
+    void testSetMaxBatchIterationsInvalidThrows() {
+        assertThrows(IllegalArgumentException.class, () -> bulkOperationTemplate.setMaxBatchIterations(0));
+        assertThrows(IllegalArgumentException.class, () -> bulkOperationTemplate.setMaxBatchIterations(-1));
+    }
+
     /**
 
      * @DataJpaTest

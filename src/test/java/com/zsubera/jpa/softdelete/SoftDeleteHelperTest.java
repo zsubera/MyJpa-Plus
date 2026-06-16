@@ -353,6 +353,68 @@ class SoftDeleteHelperTest {
         assertThrows(IllegalArgumentException.class, () -> SoftDeleteHelper.validateIdentifier(""));
     }
 
+    @Test
+    void testSoftDeleteAllWithMaxRowsLimit() {
+        SoftDeleteTestEntity e1 = new SoftDeleteTestEntity();
+        e1.setName("limit1");
+        e1.setDeleted(false);
+        repository.save(e1);
+        SoftDeleteTestEntity e2 = new SoftDeleteTestEntity();
+        e2.setName("limit2");
+        e2.setDeleted(false);
+        repository.save(e2);
+        repository.flush();
+
+        jakarta.persistence.EntityManager mockEm = org.mockito.Mockito.mock(jakarta.persistence.EntityManager.class);
+        jakarta.persistence.Query mockQuery = org.mockito.Mockito.mock(jakarta.persistence.Query.class);
+        org.mockito.Mockito.when(mockEm.createNativeQuery(org.mockito.ArgumentMatchers.contains("SELECT COUNT")))
+            .thenReturn(mockQuery);
+        org.mockito.Mockito.when(mockQuery.getSingleResult()).thenReturn(2L);
+
+        assertThrows(IllegalStateException.class,
+            () -> SoftDeleteHelper.softDeleteAll(mockEm, SoftDeleteTestEntity.class, true, 1));
+    }
+
+    @Test
+    void testSoftDeleteAllWithUnlimitedRows() {
+        jakarta.persistence.EntityManager mockEm = org.mockito.Mockito.mock(jakarta.persistence.EntityManager.class);
+        jakarta.persistence.Query mockUpdateQuery = org.mockito.Mockito.mock(jakarta.persistence.Query.class);
+        org.mockito.Mockito.when(mockEm.createNativeQuery(org.mockito.ArgumentMatchers.contains("UPDATE")))
+            .thenReturn(mockUpdateQuery);
+        org.mockito.Mockito
+            .when(
+                mockUpdateQuery.setParameter(org.mockito.ArgumentMatchers.anyInt(), org.mockito.ArgumentMatchers.any()))
+            .thenReturn(mockUpdateQuery);
+        org.mockito.Mockito.when(mockUpdateQuery.executeUpdate()).thenReturn(5);
+
+        int result = SoftDeleteHelper.softDeleteAll(mockEm, SoftDeleteTestEntity.class, true, -1);
+        assertEquals(5, result);
+    }
+
+    @Test
+    void testSoftDeleteAllWithDefaultMaxRows() {
+        jakarta.persistence.EntityManager mockEm = org.mockito.Mockito.mock(jakarta.persistence.EntityManager.class);
+        jakarta.persistence.Query mockCountQuery = org.mockito.Mockito.mock(jakarta.persistence.Query.class);
+        jakarta.persistence.Query mockUpdateQuery = org.mockito.Mockito.mock(jakarta.persistence.Query.class);
+        org.mockito.Mockito.when(mockEm.createNativeQuery(org.mockito.ArgumentMatchers.contains("SELECT COUNT")))
+            .thenReturn(mockCountQuery);
+        org.mockito.Mockito.when(mockCountQuery.getSingleResult()).thenReturn(3L);
+        org.mockito.Mockito.when(mockCountQuery.setFirstResult(org.mockito.ArgumentMatchers.anyInt()))
+            .thenReturn(mockCountQuery);
+        org.mockito.Mockito.when(mockCountQuery.setMaxResults(org.mockito.ArgumentMatchers.anyInt()))
+            .thenReturn(mockCountQuery);
+        org.mockito.Mockito.when(mockEm.createNativeQuery(org.mockito.ArgumentMatchers.contains("UPDATE")))
+            .thenReturn(mockUpdateQuery);
+        org.mockito.Mockito
+            .when(
+                mockUpdateQuery.setParameter(org.mockito.ArgumentMatchers.anyInt(), org.mockito.ArgumentMatchers.any()))
+            .thenReturn(mockUpdateQuery);
+        org.mockito.Mockito.when(mockUpdateQuery.executeUpdate()).thenReturn(3);
+
+        int result = SoftDeleteHelper.softDeleteAll(mockEm, SoftDeleteTestEntity.class, true);
+        assertEquals(3, result);
+    }
+
     private TestEntity newEntity(String name, int status) {
         TestEntity entity = new TestEntity();
         entity.setName(name);
