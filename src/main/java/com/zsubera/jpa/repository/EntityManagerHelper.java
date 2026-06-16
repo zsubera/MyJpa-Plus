@@ -3,6 +3,9 @@ package com.zsubera.jpa.repository;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.EntityManagerFactory;
+import java.util.Objects;
+import java.util.concurrent.ConcurrentHashMap;
+import org.springframework.lang.Nullable;
 import org.springframework.orm.jpa.EntityManagerFactoryUtils;
 
 /**
@@ -13,38 +16,187 @@ import org.springframework.orm.jpa.EntityManagerFactoryUtils;
  * 使它们无需 Spring Data 自定义工厂即可工作。
  *
  * <p>
- * <strong>多数据源限制：</strong>此类存储单一 {@link EntityManagerFactory}，
- * 在多数据源场景下所有仓库共享同一个 EMF。如需多数据源支持，请使用
- * {@link com.zsubera.jpa.template.MyJpaTemplate} 进行批量操作。
+ * <strong>多数据源支持：</strong>此类支持按实体类型解析不同的 {@link EntityManagerFactory}。
+ * 通过 {@link #registerResolver(Class, EntityManagerResolver)} 或
+ * {@link #registerEntityManagerFactory(Class, EntityManagerFactory)} 注册实体类型到 EMF 的映射。
+ * 未注册的实体类型将回退到默认 EMF（单数据源场景）。
+ *
+ * <p>
+ * <strong>向后兼容：</strong>单数据源场景无需任何额外配置，现有代码正常工作。
  */
 public final class EntityManagerHelper {
 
-    private static volatile EntityManagerFactory entityManagerFactory;
+    private static volatile EntityManagerFactory defaultEntityManagerFactory;
+
+    /**
+     * 实体类型到解析器的映射。优先级高于 defaultEntityManagerFactory。
+     */
+    private static final ConcurrentHashMap<Class<?>, EntityManagerResolver> resolvers = new ConcurrentHashMap<>();
 
     private EntityManagerHelper() {}
 
+    // ---- 初始化 ----
+
     /**
-     * 由自动配置调用以设置 {@link EntityManagerFactory} 引用。
+     * 由自动配置调用以设置默认 {@link EntityManagerFactory}（单数据源场景）。
+     *
+     * @param emf 默认的 EntityManagerFactory
      */
     @SuppressFBWarnings(value = "EI_EXPOSE_STATIC_REP2",
         justification = "EntityManagerFactory is thread-safe and stateless")
     public static void setEntityManagerFactory(EntityManagerFactory emf) {
-        entityManagerFactory = emf;
+        defaultEntityManagerFactory = emf;
+    }
+
+    // ---- 多数据源注册 ----
+
+    /**
+     * 按实体类型注册自定义解析器（多数据源场景）。
+     *
+     * <p>
+     * 注册后，调用 {@link #getTransactionalEntityManager(Class)} 时将使用此解析器解析对应的 EMF。
+     *
+     * @param entityType 实体类类型
+     * @param resolver 解析器
+     * @throws IllegalArgumentException 如果 entityType 或 resolver 为 null
+     */
+    public static void registerResolver(Class<?> entityType, EntityManagerResolver resolver) {
+        Objects.requireNonNull(entityType, "entityType must not be null");
+        Objects.requireNonNull(resolver, "resolver must not be null");
+        resolvers.put(entityType, resolver);
     }
 
     /**
-     * 返回绑定到当前 JPA 事务的 {@link EntityManager}（如果有），否则返回 {@code null}。
+     * 按实体类型直接注册 {@link EntityManagerFactory}（多数据源场景的便捷 API）。
+     *
+     * <p>
+     * 等价于 {@code registerResolver(entityType, type -> emf)}。
+     *
+     * @param entityType 实体类类型
+     * @param emf 对应的 EntityManagerFactory
+     * @throws IllegalArgumentException 如果 entityType 或 emf 为 null
+     */
+    public static void registerEntityManagerFactory(Class<?> entityType, EntityManagerFactory emf) {
+        Objects.requireNonNull(entityType, "entityType must not be null");
+        Objects.requireNonNull(emf, "entityManagerFactory must not be null");
+        resolvers.put(entityType, type -> emf);
+    }
+
+    /**
+     * 仅在尚未注册时，按实体类型注册 {@link EntityManagerFactory}。
+     *
+     * <p>
+     * 用于 {@link MyJpaRepositoryFactoryBean} 在启动时自动注册实体类型到 EMF 的映射，
+     * 不覆盖用户手动注册的解析器。
+     *
+     * @param entityType 实体类类型
+     * @param emf 对应的 EntityManagerFactory
+     */
+    public static void registerEntityManagerFactoryIfAbsent(Class<?> entityType, EntityManagerFactory emf) {
+        Objects.requireNonNull(entityType, "entityType must not be null");
+        Objects.requireNonNull(emf, "entityManagerFactory must not be null");
+        resolvers.putIfAbsent(entityType, type -> emf);
+    }
+
+    /**
+     * 移除指定实体类型的解析器注册。
+     *
+     * @param entityType 实体类类型
+     */
+    public static void removeResolver(Class<?> entityType) {
+        Objects.requireNonNull(entityType, "entityType must not be null");
+        resolvers.remove(entityType);
+    }
+
+    // ---- EM 获取 ----
+
+    /**
+     * 返回绑定到当前 JPA 事务的 {@link EntityManager}（使用默认 EMF）。
+     *
+     * <p>
+     * 向后兼容：单数据源场景无需修改。
+     *
+     * @return 当前事务的 EntityManager
+     * @throws IllegalStateException 如果 EMF 未初始化或无活动事务
      */
     public static EntityManager getTransactionalEntityManager() {
-        if (entityManagerFactory == null) {
-            throw new IllegalStateException(
-                "EntityManagerFactory not initialized. Ensure MyJpaPlusAutoConfiguration is registered.");
-        }
-        EntityManager em = EntityManagerFactoryUtils.getTransactionalEntityManager(entityManagerFactory);
+        return getTransactionalEntityManager((Class<?>)null);
+    }
+
+    /**
+     * 按实体类型返回绑定到当前 JPA 事务的 {@link EntityManager}（多数据源场景）。
+     *
+     * <p>
+     * 解析优先级：
+     * <ol>
+     * <li>实体类型特定的 resolver（通过 {@link #registerResolver} 注册）</li>
+     * <li>默认 EMF（通过 {@link #setEntityManagerFactory} 设置）</li>
+     * </ol>
+     *
+     * @param entityType 实体类类型，用于解析对应的 EMF。如果为 null，则使用默认 EMF。
+     * @return 当前事务的 EntityManager
+     * @throws IllegalStateException 如果 EMF 未初始化或无活动事务
+     */
+    public static EntityManager getTransactionalEntityManager(@Nullable Class<?> entityType) {
+        EntityManagerFactory emf = resolveEntityManagerFactory(entityType);
+        EntityManager em = EntityManagerFactoryUtils.getTransactionalEntityManager(emf);
         if (em == null) {
             throw new IllegalStateException(
                 "No transactional EntityManager available. Ensure the operation is running within a transaction.");
         }
         return em;
+    }
+
+    /**
+     * 按实体实例返回绑定到当前 JPA 事务的 {@link EntityManager}。
+     *
+     * <p>
+     * 通过 {@code entity.getClass()} 解析实体类型，然后调用
+     * {@link #getTransactionalEntityManager(Class)}。
+     *
+     * @param entity 实体实例
+     * @return 当前事务的 EntityManager
+     * @throws IllegalArgumentException 如果 entity 为 null
+     */
+    public static EntityManager getTransactionalEntityManager(Object entity) {
+        Objects.requireNonNull(entity, "entity must not be null");
+        return getTransactionalEntityManager(entity.getClass());
+    }
+
+    // ---- 内部解析逻辑 ----
+
+    /**
+     * 解析实体类型对应的 {@link EntityManagerFactory}。
+     *
+     * @param entityType 实体类类型
+     * @return 解析到的 EntityManagerFactory
+     * @throws IllegalStateException 如果未找到 EMF
+     */
+    private static EntityManagerFactory resolveEntityManagerFactory(@Nullable Class<?> entityType) {
+        // 1. 优先：实体类型特定的 resolver
+        if (entityType != null) {
+            EntityManagerResolver resolver = resolvers.get(entityType);
+            if (resolver != null) {
+                return resolver.resolve(entityType);
+            }
+        }
+
+        // 2. fallback：默认 EMF
+        EntityManagerFactory emf = defaultEntityManagerFactory;
+        if (emf == null) {
+            throw new IllegalStateException(
+                "EntityManagerFactory not initialized. Ensure MyJpaPlusAutoConfiguration is registered.");
+        }
+        return emf;
+    }
+
+    // ---- 清理 ----
+
+    /**
+     * 清理所有注册的 resolver 和默认 EMF。用于应用关闭时的资源清理。
+     */
+    public static void reset() {
+        defaultEntityManagerFactory = null;
+        resolvers.clear();
     }
 }

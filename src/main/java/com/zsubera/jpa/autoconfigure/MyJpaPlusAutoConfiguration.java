@@ -389,6 +389,7 @@ public class MyJpaPlusAutoConfiguration {
         com.zsubera.jpa.softdelete.SoftDeleteHelper.shutdown();
         DefaultMyJpaRepository.clearThreadLocal();
         com.zsubera.jpa.repository.SoftDeleteContext.reset();
+        com.zsubera.jpa.repository.EntityManagerHelper.reset();
         log.info("MyJpa-Plus context closed, caches cleaned");
     }
 

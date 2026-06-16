@@ -249,9 +249,10 @@ public interface MyJpaRepository<T, ID> extends JpaRepository<T, ID>, JpaSpecifi
      * @return 受影响的行数
      */
     default int update(Consumer<UpdateSpec<T>> config) {
-        UpdateSpec<T> spec = new UpdateSpec<>(getEntityClass());
+        Class<T> entityClass = getEntityClass();
+        UpdateSpec<T> spec = new UpdateSpec<>(entityClass);
         config.accept(spec);
-        return spec.executeInTransaction(EntityManagerHelper.getTransactionalEntityManager());
+        return spec.executeInTransaction(EntityManagerHelper.getTransactionalEntityManager(entityClass));
     }
 
     /**
@@ -265,9 +266,10 @@ public interface MyJpaRepository<T, ID> extends JpaRepository<T, ID>, JpaSpecifi
      * @return 受影响的行数
      */
     default int delete(Consumer<DeleteSpec<T>> config) {
-        DeleteSpec<T> spec = new DeleteSpec<>(getEntityClass());
+        Class<T> entityClass = getEntityClass();
+        DeleteSpec<T> spec = new DeleteSpec<>(entityClass);
         config.accept(spec);
-        return spec.executeInTransaction(EntityManagerHelper.getTransactionalEntityManager());
+        return spec.executeInTransaction(EntityManagerHelper.getTransactionalEntityManager(entityClass));
     }
 
     /**
@@ -281,9 +283,10 @@ public interface MyJpaRepository<T, ID> extends JpaRepository<T, ID>, JpaSpecifi
      * @return 受影响的行数
      */
     default int merge(Consumer<MergeSpec<T>> config) {
-        MergeSpec<T> spec = new MergeSpec<>(getEntityClass());
+        Class<T> entityClass = getEntityClass();
+        MergeSpec<T> spec = new MergeSpec<>(entityClass);
         config.accept(spec);
-        return spec.executeInTransaction(EntityManagerHelper.getTransactionalEntityManager());
+        return spec.executeInTransaction(EntityManagerHelper.getTransactionalEntityManager(entityClass));
     }
 
     /**
@@ -296,7 +299,7 @@ public interface MyJpaRepository<T, ID> extends JpaRepository<T, ID>, JpaSpecifi
         if (spec == null) {
             throw new IllegalArgumentException("spec must not be null");
         }
-        return spec.executeInTransaction(EntityManagerHelper.getTransactionalEntityManager());
+        return spec.executeInTransaction(EntityManagerHelper.getTransactionalEntityManager(getEntityClass()));
     }
 
     /**
@@ -309,7 +312,7 @@ public interface MyJpaRepository<T, ID> extends JpaRepository<T, ID>, JpaSpecifi
         if (spec == null) {
             throw new IllegalArgumentException("spec must not be null");
         }
-        return spec.executeInTransaction(EntityManagerHelper.getTransactionalEntityManager());
+        return spec.executeInTransaction(EntityManagerHelper.getTransactionalEntityManager(getEntityClass()));
     }
 
     /**
@@ -322,7 +325,7 @@ public interface MyJpaRepository<T, ID> extends JpaRepository<T, ID>, JpaSpecifi
         if (spec == null) {
             throw new IllegalArgumentException("spec must not be null");
         }
-        return spec.executeInTransaction(EntityManagerHelper.getTransactionalEntityManager());
+        return spec.executeInTransaction(EntityManagerHelper.getTransactionalEntityManager(getEntityClass()));
     }
 
     /**
