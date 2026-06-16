@@ -16,9 +16,19 @@
   - 新增 `removeDialect()` 运行时移除方言方法
 - **聚合查询工具类** — 新增 `QueryAggregates` 提供独立的 `count`/`sum`/`avg`/`max`/`min` 聚合表达式工厂方法
 - **UPSERT 方言测试** — 新增 `OracleDialectTest`、`SqlServerDialectTest`
+- **softDeleteAll 行数保护** — `SoftDeleteHelper.softDeleteAll()` 新增 `maxRows` 参数，默认最多更新 10000 行
+- **multiLike 嵌套字段校验** — `multiLike(keyword, "address.city")` 现在对每段调用 `IdentifierValidator.validateColumnName()` 进行安全校验
+- **EncryptConverter 事务清理** — 新增 `registerTransactionCleanupIfNeeded()`，在事务中自动注册 `afterCompletion` 回调清理 Cipher ThreadLocal，防止虚拟线程场景内存泄漏
 
 ### 优化
-- **EntityManagerHelper 单数据源快速路径** — 新增 `allResolversUseDefault` 标志，单数据源场景跳过 ConcurrentHashMap 查询，直接返回默认 EMF
+- **EntityManagerHelper 单数据源快速路径** — 移除 `setEntityManagerFactory()` 中不安全的 `allResolversUseDefault` 竞态赋值，由 `register/remove` 统一管理
+- **BulkOperationTemplate 迭代计数** — 修复 `executeBatchInSeparateTransactionsWithResult` 中失败批次 iteration 双重递增问题，统一到循环末尾递增
+- **MergeSpec 事务管理** — 提取 `safeRollback()` 方法消除重复的 rollback 逻辑，`executeInManagedTransaction` 和 `executeBatchInSeparateTransactions` 统一使用
+- **MergeSpec.executeBatch 事务检查** — 无活动事务时抛出 `MyJpaPlusException` 而非静默执行
+- **InClauseBuilder NullFilterResult** — 引入 `NullFilterResult` record 替代不安全的 `Object[]` 返回类型
+- **UpdateSpec 缓存驱逐** — 将 `NUMERIC_FIELD_CACHE` 驱逐移入 `computeIfAbsent` 内部，避免多线程并发驱逐
+- **UpdateSpec 行数检查** — `execute()` 在 limit 配置为 `Integer.MAX_VALUE` 时跳过 probe query
+- **QuerySpec RawNode 缓存键** — 使用 `className + hashCode` 替代 `System.identityHashCode`，提高缓存命中率
 - **QuerySpec.copy() 性能优化** — 空条件树使用快速路径，跳过深拷贝；减少不必要的集合拷贝
 - **EntityCodeGenerator 实验性标记** — 标记为 `@apiNote Experimental`，明确为独立脚手架工具，不属于核心 API
 - **QueryCacheManager 驱逐策略优化** — 驱逐循环添加有界重试限制（`max(16, maxEntries/10)`），避免高并发下长时间持锁
@@ -26,34 +36,12 @@
 - **@SuppressFBWarnings 审计** — 修复 `SoftDeleteHelper` 误用的注解，为 7 个缺失说明的注解添加 justification，改善 `QuerySpec` SE_BAD_FIELD 说明
 - **or(QuerySpec) 文档改进** — Javadoc 明确说明返回 `Specification<T>` 而非 `QuerySpec<T>` 的原因，引导用户使用 `or(Consumer<OrGroup>)` 模式
 
-### 新增测试
-- `QueryAggregatesTest` — 聚合工具类测试
-- `OracleDialectTest` — Oracle 方言 SQL 生成测试
-- `SqlServerDialectTest` — SQL Server 方言 SQL 生成测试
-- `SoftDeleteContextVirtualThreadTest` — 虚拟线程兼容性测试
-- `InClauseBuilderTest` — NOT IN 全 NULL 语义测试
-- `QuerySpecTest` — copy() 快速路径测试
-- `QueryCacheManagerTest` — 有界驱逐和高并发写入测试
-
-### 新增
-- **多数据源支持** — `EntityManagerHelper` 支持按实体类型解析不同的 `EntityManagerFactory`
-  - 新增 `EntityManagerResolver` SPI 接口，支持自定义解析逻辑
-  - 新增 `registerEntityManagerFactory(Class, EntityManagerFactory)` 按实体类型注册
-  - 新增 `registerResolver(Class, EntityManagerResolver)` 按实体类型注册解析器
-  - 新增 `getTransactionalEntityManager(Class<?>)` 按实体类型获取事务性 EM
-  - `MyJpaRepositoryFactoryBean` 自动注册实体类型到 EMF 的映射
-  - 单数据源场景零配置，完全向后兼容
-- **Specification 组合工具类** — 新增 `SpecificationCombiner` 支持多个 Specification 的 and/or 组合
-- **批量操作 Specification 支持** — `UpdateSpec`、`DeleteSpec` 支持通过 `where(Specification)` 复用查询条件
-- **全局配置重构** — `MyJpaPlusGlobalConfig` 集中管理所有跨组件共享的配置，替代分散的 `static volatile` 字段
-- **QueryCacheManager 命中率统计** — 新增 `getHitRate()`、`getHitCount()`、`getMissCount()`、`resetStats()` 方法
-- **MergeSpec 自增 ID 检测** — 对使用 `@GeneratedValue(strategy=IDENTITY)` 的实体提前抛出友好错误提示
-- **Spring Security 审计集成** — 自动配置中提供基于 `SecurityContextHolder` 的默认 `AuditUserProvider` 实现（`@ConditionalOnClass`）
-- **EncryptConverter 自动预热** — 检测到 `MYJPA_ENCRYPT_KEY` 环境变量时自动启动后台密钥预热
-- **函数白名单可扩展** — 新增 `myjpa-plus.query.extra-safe-functions` 和 `myjpa-plus.query.extra-boolean-functions` 配置项
-- **spring-configuration-metadata.json 补全** — 新增 `extra-safe-functions`、`extra-boolean-functions`、`auto-repository-base-class` 配置项元数据
-
 ### 修复
+- **BulkOperationTemplate 迭代计数** — 修复 `executeBatchInSeparateTransactionsWithResult` 中失败批次 iteration 双重递增导致 `maxBatchIterations` 提前触发的问题
+- **MergeSpec 事务状态追踪** — 修复 `executeBatchInSeparateTransactions` 中失败回滚时 `total` 回退不一致的问题，提取 `safeRollback()` 统一异常处理
+- **MergeSpec 事务异常处理** — 修复 `executeInManagedTransaction` 中 rollback 异常可能导致递归的风险
+- **EntityManagerHelper 竞态条件** — 移除 `setEntityManagerFactory()` 中检查 `resolvers.isEmpty()` 的竞态赋值
+- **EncryptConverter ThreadLocal 泄漏** — 在虚拟线程场景下自动注册事务完成后清理 Cipher ThreadLocal
 - **QuerySpec.copy() 深拷贝** — 修复浅拷贝导致 JoinNode/OrNode/AndNode 嵌套条件共享可变状态的问题
 - **QueryCacheManager deque 漂移** — 改进 drift 清理机制，drift 超过阈值时执行全量遍历清理
 - **UpdateSpec 缓存驱逐** — 将概率采样驱逐（10%）改为确定性驱逐，消除高并发下缓存无限增长风险

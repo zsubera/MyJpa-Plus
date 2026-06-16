@@ -41,6 +41,7 @@
 - **批量删除** — `new DeleteSpec<>(Log.class).lt(Log::getTimestamp, cutoff).execute(em)`
 - **安全限制** — 无条件操作需显式 `allowUnconditional(true)`
 - **行数限制** — `executeLimited(em, maxRows)` 限制最大影响行数
+- **事务检查** — `executeBatch` 需要活动事务，无事务时抛出明确异常
 
 ### UPSERT / 合并（MergeSpec）
 
@@ -68,6 +69,7 @@
 - **深度分页保护** — 可配置 offset 硬限制和警告日志阈值
 - **最大行数限制** — 查询默认限制返回行数（可配置）
 - **EntityGraph 支持** — 查询时指定急切加载策略
+- **事务安全** — 批量操作自动管理事务，`executeBatchInSeparateTransactions` 支持失败策略（CONTINUE/ABORT）
 
 ### 查询结果缓存（QueryCacheManager）
 
@@ -121,9 +123,10 @@
 
 ### 软删除
 
-- `@SoftDelete` — 支持 Boolean、Integer、Enum 类型
+- `@SoftDelete` — 支持 Boolean、Integer、Enum、String 类型
 - `@IgnoreSoftDelete` — 临时禁用软删除过滤（标注在方法或 Repository 接口上）
 - `DefaultMyJpaRepository` — 提供 `findNotDeletedAll` / `findNotDeletedById` / `countNotDeleted` 等便捷方法
+- `softDeleteAll` — 批量软删除，支持 `maxRows` 参数保护（默认 10000 行上限）
 
 ### 多数据源支持
 
@@ -699,6 +702,9 @@ myjpa-plus:
 # 环境变量: MYJPA_ENCRYPT_KEY=<密钥>  MYJPA_ENCRYPT_SALT=<盐值>
 # 系统属性: -Dmyjpa.encrypt.key=<密钥>  -Dmyjpa.encrypt.salt=<盐值>
 # 开发环境可选: -Dmyjpa-plus.encrypt.skip-salt-check=true（跳过盐值检查）
+
+# softDeleteAll 行数限制（默认 10000）
+# SoftDeleteHelper.softDeleteAll(em, Entity.class, true, maxRows)
 ```
 
 ## API 一览
