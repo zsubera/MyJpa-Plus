@@ -50,6 +50,17 @@ public class MyJpaPlusGlobalConfig {
         this.softDeleteAutoFilter = softDeleteAutoFilter;
     }
 
+    /**
+     * 设置软删除自动过滤开关。
+     *
+     * @param enabled 是否启用自动过滤
+     * @deprecated 请使用 {@link #setSoftDeleteAutoFilter(boolean)} 替代
+     */
+    @Deprecated
+    public void setAutoFilterEnabled(boolean enabled) {
+        this.softDeleteAutoFilter = enabled;
+    }
+
     public boolean isBlockUnconditionalDelete() {
         return blockUnconditionalDelete;
     }

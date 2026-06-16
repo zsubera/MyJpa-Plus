@@ -40,10 +40,28 @@ public class SqlSlowQueryInterceptor implements StatementInspector {
     private static final Logger log = LoggerFactory.getLogger(SqlSlowQueryInterceptor.class);
 
     /**
-     * 代理类缓存，避免每次 prepareStatement 创建新的代理类。 使用大小限制的 ConcurrentHashMap，超过限制时随机驱逐以防止内存泄漏。
+     * 代理类缓存，避免每次 prepareStatement 创建新的代理类。
+     * 使用大小限制的 ConcurrentHashMap，超过限制时随机移除旧条目以防止内存泄漏。
      */
     private static final int MAX_PROXY_CLASS_CACHE_SIZE = 512;
     private static final ConcurrentMap<Class<?>, Class<?>> PROXY_CLASS_CACHE = new ConcurrentHashMap<>();
+
+    /**
+     * 当缓存满时随机移除约 25% 的条目，释放空间。
+     */
+    private static void evictCacheIfNeeded() {
+        if (PROXY_CLASS_CACHE.size() <= MAX_PROXY_CLASS_CACHE_SIZE) {
+            return;
+        }
+        int toRemove = Math.max(1, PROXY_CLASS_CACHE.size() / 4);
+        int removed = 0;
+        java.util.Iterator<Class<?>> it = PROXY_CLASS_CACHE.keySet().iterator();
+        while (it.hasNext() && removed < toRemove) {
+            it.next();
+            it.remove();
+            removed++;
+        }
+    }
 
     private final long slowQueryThresholdMs;
 
@@ -108,10 +126,7 @@ public class SqlSlowQueryInterceptor implements StatementInspector {
             Class<?> proxyClass = PROXY_CLASS_CACHE.get(stmtClass);
             if (proxyClass == null) {
                 if (PROXY_CLASS_CACHE.size() >= MAX_PROXY_CLASS_CACHE_SIZE) {
-                    log.warn("Proxy class cache full ({} entries), skipping cache for {}", MAX_PROXY_CLASS_CACHE_SIZE,
-                        stmtClass.getName());
-                    return Proxy.newProxyInstance(stmtClass.getClassLoader(), stmtClass.getInterfaces(),
-                        new PreparedStatementTimingHandler(stmt, sql, slowQueryThresholdMs));
+                    evictCacheIfNeeded();
                 }
                 proxyClass = PROXY_CLASS_CACHE.computeIfAbsent(stmtClass,
                     clz -> Proxy.getProxyClass(clz.getClassLoader(), clz.getInterfaces()));

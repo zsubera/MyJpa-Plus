@@ -12,7 +12,6 @@ import jakarta.persistence.criteria.Root;
 import jakarta.persistence.criteria.Subquery;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import org.slf4j.Logger;
@@ -68,28 +67,23 @@ final class NodeResolver {
         Predicate resolve(ConditionNode node, NodeContext ctx);
     }
 
-    /** 节点类型到解析策略的映射表。 */
-    private static final Map<Class<? extends ConditionNode>, NodeStrategy> STRATEGIES = new HashMap<>();
-
-    static {
-        STRATEGIES.put(ConditionNode.SimpleNode.class,
-            (node, ctx) -> resolveSimple((ConditionNode.SimpleNode)node, ctx));
-        STRATEGIES.put(ConditionNode.JoinNode.class, (node, ctx) -> resolveJoin((ConditionNode.JoinNode)node, ctx));
-        STRATEGIES.put(ConditionNode.OrNode.class, (node, ctx) -> resolveOr((ConditionNode.OrNode)node, ctx));
-        STRATEGIES.put(ConditionNode.AndNode.class, (node, ctx) -> resolveAnd((ConditionNode.AndNode)node, ctx));
-        STRATEGIES.put(ConditionNode.MultiLikeNode.class,
-            (node, ctx) -> resolveMultiLike((ConditionNode.MultiLikeNode)node, ctx));
-        STRATEGIES.put(ConditionNode.CollectionNode.class,
-            (node, ctx) -> resolveCollection((ConditionNode.CollectionNode)node, ctx));
-        STRATEGIES.put(ConditionNode.ExistsNode.class,
-            (node, ctx) -> resolveExists((ConditionNode.ExistsNode<?>)node, ctx));
-        STRATEGIES.put(ConditionNode.InSubQueryNode.class,
-            (node, ctx) -> resolveInSubQuery((ConditionNode.InSubQueryNode<?>)node, ctx));
-        STRATEGIES.put(ConditionNode.RawNode.class, (node, ctx) -> resolveRaw((ConditionNode.RawNode)node, ctx));
-        STRATEGIES.put(ConditionNode.NegateNode.class,
-            (node, ctx) -> resolveNegate((ConditionNode.NegateNode)node, ctx));
-        STRATEGIES.put(ConditionNode.FuncNode.class, (node, ctx) -> resolveFuncNode((ConditionNode.FuncNode)node, ctx));
-    }
+    /** 节点类型到解析策略的不可变映射表。静态初始化后不再修改。 */
+    @SuppressWarnings("rawtypes")
+    private static final Map<Class<? extends ConditionNode>, NodeStrategy> STRATEGIES = Map.ofEntries(
+        Map.entry(ConditionNode.SimpleNode.class, (node, ctx) -> resolveSimple((ConditionNode.SimpleNode)node, ctx)),
+        Map.entry(ConditionNode.JoinNode.class, (node, ctx) -> resolveJoin((ConditionNode.JoinNode)node, ctx)),
+        Map.entry(ConditionNode.OrNode.class, (node, ctx) -> resolveOr((ConditionNode.OrNode)node, ctx)),
+        Map.entry(ConditionNode.AndNode.class, (node, ctx) -> resolveAnd((ConditionNode.AndNode)node, ctx)),
+        Map.entry(ConditionNode.MultiLikeNode.class,
+            (node, ctx) -> resolveMultiLike((ConditionNode.MultiLikeNode)node, ctx)),
+        Map.entry(ConditionNode.CollectionNode.class,
+            (node, ctx) -> resolveCollection((ConditionNode.CollectionNode)node, ctx)),
+        Map.entry(ConditionNode.ExistsNode.class, (node, ctx) -> resolveExists((ConditionNode.ExistsNode<?>)node, ctx)),
+        Map.entry(ConditionNode.InSubQueryNode.class,
+            (node, ctx) -> resolveInSubQuery((ConditionNode.InSubQueryNode<?>)node, ctx)),
+        Map.entry(ConditionNode.RawNode.class, (node, ctx) -> resolveRaw((ConditionNode.RawNode)node, ctx)),
+        Map.entry(ConditionNode.NegateNode.class, (node, ctx) -> resolveNegate((ConditionNode.NegateNode)node, ctx)),
+        Map.entry(ConditionNode.FuncNode.class, (node, ctx) -> resolveFuncNode((ConditionNode.FuncNode)node, ctx)));
 
     private NodeResolver() {}
 

@@ -240,23 +240,44 @@ public class MergeSpec<T> {
             throw new IllegalStateException("Entity must be specified via withEntity() before executing");
         }
         warnIdentityGeneration();
+        return executeInManagedTransaction(em, () -> execute(em));
+    }
+
+    /**
+     * 在事务中批量执行 UPSERT 操作。
+     *
+     * @param entities 要 upsert 的实体列表
+     * @param em 实体管理器
+     * @return 受影响的总行数
+     */
+    public int executeBatchInTransaction(List<T> entities, EntityManager em) {
+        if (entities == null || entities.isEmpty()) {
+            return 0;
+        }
+        return executeInManagedTransaction(em, () -> executeBatch(entities, em));
+    }
+
+    /**
+     * 在托管事务中执行操作。如果没有活动事务，自动创建新事务。
+     */
+    private int executeInManagedTransaction(EntityManager em, java.util.function.IntSupplier action) {
         if (TransactionSynchronizationManager.isActualTransactionActive()) {
-            return execute(em);
+            return action.getAsInt();
         }
         EntityTransaction tx = em.getTransaction();
         if (tx == null) {
             if (!isJtaTransactionActive(em)) {
                 throw new MyJpaPlusException("JTA environment detected but no active transaction. "
-                    + "Use @Transactional annotation or manually begin a transaction before calling executeInTransaction().");
+                    + "Use @Transactional annotation or manually begin a transaction.");
             }
-            return execute(em);
+            return action.getAsInt();
         }
         boolean isNewTransaction = !tx.isActive();
         if (isNewTransaction) {
             tx.begin();
         }
         try {
-            int result = execute(em);
+            int result = action.getAsInt();
             if (isNewTransaction) {
                 tx.commit();
             }
@@ -327,61 +348,6 @@ public class MergeSpec<T> {
             total += executeWith(em, entity, cachedDialect);
         }
         return total;
-    }
-
-    /**
-     * 在事务中批量执行 UPSERT 操作。
-     *
-     * @param entities 要 upsert 的实体列表
-     * @param em 实体管理器
-     * @return 受影响的总行数
-     */
-    public int executeBatchInTransaction(List<T> entities, EntityManager em) {
-        if (entities == null || entities.isEmpty()) {
-            return 0;
-        }
-        if (TransactionSynchronizationManager.isActualTransactionActive()) {
-            return executeBatch(entities, em);
-        }
-        EntityTransaction tx = em.getTransaction();
-        if (tx == null) {
-            if (!isJtaTransactionActive(em)) {
-                throw new MyJpaPlusException("JTA environment detected but no active transaction. "
-                    + "Use @Transactional annotation or manually begin a transaction.");
-            }
-            return executeBatch(entities, em);
-        }
-        boolean isNewTransaction = !tx.isActive();
-        if (isNewTransaction) {
-            tx.begin();
-        }
-        try {
-            int result = executeBatch(entities, em);
-            if (isNewTransaction) {
-                tx.commit();
-            }
-            return result;
-        } catch (RuntimeException e) {
-            if (isNewTransaction && tx.isActive()) {
-                try {
-                    tx.rollback();
-                } catch (Exception rollbackEx) {
-                    log.error("Transaction rollback failed after batch merge failure", rollbackEx);
-                    e.addSuppressed(rollbackEx);
-                }
-            }
-            throw e;
-        } catch (Exception e) {
-            if (isNewTransaction && tx.isActive()) {
-                try {
-                    tx.rollback();
-                } catch (Exception rollbackEx) {
-                    log.error("Transaction rollback failed after batch merge failure", rollbackEx);
-                    e.addSuppressed(rollbackEx);
-                }
-            }
-            throw new MyJpaPlusException("Batch merge operation failed: " + e.getClass().getSimpleName(), e);
-        }
     }
 
     /**

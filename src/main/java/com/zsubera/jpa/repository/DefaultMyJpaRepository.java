@@ -2,15 +2,11 @@ package com.zsubera.jpa.repository;
 
 import com.zsubera.jpa.softdelete.SoftDeleteHelper;
 import com.zsubera.jpa.update.AuditUtils;
-import com.zsubera.jpa.update.DeleteSpec;
-import com.zsubera.jpa.update.MergeSpec;
-import com.zsubera.jpa.update.UpdateSpec;
 import com.zsubera.jpa.util.EntityClassResolver;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import jakarta.persistence.EntityManager;
 import java.util.List;
 import java.util.Optional;
-import java.util.function.Consumer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.Page;
@@ -146,10 +142,16 @@ public class DefaultMyJpaRepository<T, ID> extends SimpleJpaRepository<T, ID> im
      * 设置全局自动过滤开关。
      *
      * @param enabled 是否启用自动过滤
-     * @deprecated 请使用 {@link #setGlobalConfigProvider(ConfigProvider)} 替代
+     * @deprecated 请使用 {@link com.zsubera.jpa.autoconfigure.MyJpaPlusGlobalConfig#setAutoFilterEnabled(boolean)} 替代
      */
     @Deprecated
     public static synchronized void setAutoFilterEnabled(boolean enabled) {
+        com.zsubera.jpa.autoconfigure.MyJpaPlusGlobalConfig config =
+            com.zsubera.jpa.autoconfigure.GlobalConfigHolder.getConfig();
+        if (config != null) {
+            config.setAutoFilterEnabled(enabled);
+        }
+        // 始终同步更新本地 ConfigProvider，确保兼容旧逻辑
         ConfigProvider existing = globalConfigProvider;
         if (existing instanceof MutableConfigProvider mutable) {
             mutable.setAutoFilterEnabled(enabled);
@@ -164,10 +166,16 @@ public class DefaultMyJpaRepository<T, ID> extends SimpleJpaRepository<T, ID> im
      * 设置全局无条件硬删除阻断开关。
      *
      * @param blocked 是否阻断无条件硬删除
-     * @deprecated 请使用 {@link #setGlobalConfigProvider(ConfigProvider)} 替代
+     * @deprecated 请使用 {@link com.zsubera.jpa.autoconfigure.MyJpaPlusGlobalConfig#setBlockUnconditionalDelete(boolean)} 替代
      */
     @Deprecated
     public static synchronized void setBlockUnconditionalDelete(boolean blocked) {
+        com.zsubera.jpa.autoconfigure.MyJpaPlusGlobalConfig config =
+            com.zsubera.jpa.autoconfigure.GlobalConfigHolder.getConfig();
+        if (config != null) {
+            config.setBlockUnconditionalDelete(blocked);
+        }
+        // 始终同步更新本地 ConfigProvider，确保兼容旧逻辑
         ConfigProvider existing = globalConfigProvider;
         if (existing instanceof MutableConfigProvider mutable) {
             mutable.setBlockUnconditionalDelete(blocked);
@@ -377,6 +385,23 @@ public class DefaultMyJpaRepository<T, ID> extends SimpleJpaRepository<T, ID> im
         return findOne(idSpec.and(softDeleteSpec));
     }
 
+    @Override
+    public boolean existsById(ID id) {
+        if (id == null) {
+            return false;
+        }
+        if (!shouldApplySoftDeleteFilter()) {
+            return super.existsById(id);
+        }
+        String idFieldName = EntityClassResolver.resolveIdFieldName(domainClass);
+        Specification<T> idSpec = Specification.where((root, query, cb) -> cb.equal(root.get(idFieldName), id));
+        Specification<T> softDeleteSpec = SoftDeleteHelper.isNotDeleted(domainClass);
+        if (softDeleteSpec == null) {
+            return exists(idSpec);
+        }
+        return exists(idSpec.and(softDeleteSpec));
+    }
+
     /**
      * 覆写 findAllById() 以支持软删除过滤。
      *
@@ -543,54 +568,5 @@ public class DefaultMyJpaRepository<T, ID> extends SimpleJpaRepository<T, ID> im
         } else {
             super.deleteAllInBatch();
         }
-    }
-
-    // ---- 批量操作 Lambda 方法 ----
-
-    @Override
-    public int update(Consumer<UpdateSpec<T>> config) {
-        UpdateSpec<T> spec = new UpdateSpec<>(domainClass);
-        config.accept(spec);
-        return spec.executeInTransaction(entityManager);
-    }
-
-    @Override
-    public int delete(Consumer<DeleteSpec<T>> config) {
-        DeleteSpec<T> spec = new DeleteSpec<>(domainClass);
-        config.accept(spec);
-        return spec.executeInTransaction(entityManager);
-    }
-
-    @Override
-    public int merge(Consumer<MergeSpec<T>> config) {
-        MergeSpec<T> spec = new MergeSpec<>(domainClass);
-        config.accept(spec);
-        return spec.executeInTransaction(entityManager);
-    }
-
-    // ---- 批量操作 execute 方法 ----
-
-    @Override
-    public int execute(UpdateSpec<T> spec) {
-        if (spec == null) {
-            throw new IllegalArgumentException("spec must not be null");
-        }
-        return spec.executeInTransaction(entityManager);
-    }
-
-    @Override
-    public int execute(DeleteSpec<T> spec) {
-        if (spec == null) {
-            throw new IllegalArgumentException("spec must not be null");
-        }
-        return spec.executeInTransaction(entityManager);
-    }
-
-    @Override
-    public int execute(MergeSpec<T> spec) {
-        if (spec == null) {
-            throw new IllegalArgumentException("spec must not be null");
-        }
-        return spec.executeInTransaction(entityManager);
     }
 }

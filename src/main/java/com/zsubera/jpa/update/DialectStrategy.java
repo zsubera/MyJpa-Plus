@@ -21,7 +21,7 @@ import com.zsubera.jpa.update.EntityFieldExtractor.EntityFieldValue;
  * @see MergeSpec
  * @see EntityFieldExtractor
  */
-interface DialectStrategy {
+public interface DialectStrategy {
 
     /**
      * 返回方言标识符（如 "postgresql"、"mysql"）。

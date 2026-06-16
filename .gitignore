@@ -48,3 +48,6 @@ credentials.json
 .playwright-cli/
 my-profile/
 .mimocode/
+
+# Local debugging sources
+spring-data-sources/

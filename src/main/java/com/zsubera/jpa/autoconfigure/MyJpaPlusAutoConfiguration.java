@@ -393,18 +393,21 @@ public class MyJpaPlusAutoConfiguration {
     }
 
     /**
-     * {@link BeanDefinitionRegistryPostProcessor}，自动为所有仓库 Bean 定义注入
-     * {@link MyJpaRepositoryFactoryBean} 作为 {@code repositoryFactoryBeanClass}。
+     * {@link BeanDefinitionRegistryPostProcessor}，自动将所有仓库的 FactoryBean 替换为
+     * {@link MyJpaRepositoryFactoryBean}。
      *
      * <p>
-     * 此处理器仅在用户未手动指定 {@code repositoryFactoryBeanClass} 时生效，
-     * 保留用户的自定义配置优先级。
+     * 此处理器仅在用户未手动指定 {@code repositoryFactoryBeanClass}（即 bean class 仍为默认的
+     * {@code JpaRepositoryFactoryBean}）时生效，保留用户的自定义配置优先级。
      *
      * @see MyJpaRepositoryFactoryBean
      */
     static class RepositoryBaseClassPostProcessor implements BeanDefinitionRegistryPostProcessor, Ordered {
 
         private static final Logger postProcessorLog = LoggerFactory.getLogger(RepositoryBaseClassPostProcessor.class);
+
+        private static final String DEFAULT_FACTORY_BEAN =
+            "org.springframework.data.jpa.repository.support.JpaRepositoryFactoryBean";
 
         @Override
         public int getOrder() {
@@ -416,10 +419,13 @@ public class MyJpaPlusAutoConfiguration {
             String factoryBeanClassName = MyJpaRepositoryFactoryBean.class.getName();
             for (String beanName : registry.getBeanDefinitionNames()) {
                 var bd = registry.getBeanDefinition(beanName);
-                // Repository Factory Bean 都有 "repositoryInterface" 属性
-                if (bd.getPropertyValues().contains("repositoryInterface")
-                    && !bd.getPropertyValues().contains("repositoryFactoryBeanClass")) {
-                    bd.getPropertyValues().add("repositoryFactoryBeanClass", factoryBeanClassName);
+                if (!bd.getPropertyValues().contains("repositoryInterface")) {
+                    continue;
+                }
+                // 仅当 bean class 仍为默认值（未通过 @EnableJpaRepositories 手动指定）时替换
+                String currentClass = bd.getBeanClassName();
+                if (DEFAULT_FACTORY_BEAN.equals(currentClass)) {
+                    bd.setBeanClassName(factoryBeanClassName);
                     if (postProcessorLog.isDebugEnabled()) {
                         postProcessorLog.debug("Auto-registered MyJpaRepositoryFactoryBean for repository: {}",
                             beanName);

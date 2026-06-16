@@ -234,103 +234,93 @@ public interface MyJpaRepository<T, ID> extends JpaRepository<T, ID>, JpaSpecifi
         return notDeleted == null ? count() : count(notDeleted);
     }
 
-    // ---- 批量操作 Lambda 方法 ----
+    // ---- 批量操作方法 ----
 
     /**
-     * 使用 Lambda 模式执行批量更新。
+     * 批量更新实体。使用 Lambda 表达式配置更新条件和操作。
      *
      * <pre>{@code
-     * repository.update(s -> s
-     *     .set(User::getStatus, "INACTIVE")
-     *     .eq(User::getStatus, "ACTIVE"));
+     * repository.update(s -> s.set(User::getStatus, "INACTIVE").eq(User::getStatus, "ACTIVE"));
      * }</pre>
      *
-     * @param config 配置 UpdateSpec 的 Consumer
+     * @param config 更新配置
      * @return 受影响的行数
      */
     default int update(Consumer<UpdateSpec<T>> config) {
-        throw new UnsupportedOperationException(
-            "update(Consumer) requires DefaultMyJpaRepository as repository base class. "
-                + "Ensure myjpa-plus auto-configuration is active or specify repositoryBaseClass manually.");
+        UpdateSpec<T> spec = new UpdateSpec<>(getEntityClass());
+        config.accept(spec);
+        return spec.executeInTransaction(EntityManagerHelper.getTransactionalEntityManager());
     }
 
     /**
-     * 使用 Lambda 模式执行批量删除。
+     * 批量删除实体。使用 Lambda 表达式配置删除条件。
      *
      * <pre>{@code
      * repository.delete(s -> s.lt(User::getCreatedAt, cutoffDate));
      * }</pre>
      *
-     * @param config 配置 DeleteSpec 的 Consumer
+     * @param config 删除配置
      * @return 受影响的行数
      */
     default int delete(Consumer<DeleteSpec<T>> config) {
-        throw new UnsupportedOperationException(
-            "delete(Consumer) requires DefaultMyJpaRepository as repository base class. "
-                + "Ensure myjpa-plus auto-configuration is active or specify repositoryBaseClass manually.");
+        DeleteSpec<T> spec = new DeleteSpec<>(getEntityClass());
+        config.accept(spec);
+        return spec.executeInTransaction(EntityManagerHelper.getTransactionalEntityManager());
     }
 
     /**
-     * 使用 Lambda 模式执行批量 merge（upsert）。
+     * 批量合并（upsert）实体。使用 Lambda 表达式配置合并策略。
      *
      * <pre>{@code
-     * repository.merge(s -> s
-     *     .withEntity(user)
-     *     .onConflict(User::getEmail)
-     *     .updateOnConflict(User::getName));
+     * repository.merge(s -> s.withEntity(user).onConflict(User::getEmail).updateOnConflict(User::getName));
      * }</pre>
      *
-     * @param config 配置 MergeSpec 的 Consumer
+     * @param config 合并配置
      * @return 受影响的行数
      */
     default int merge(Consumer<MergeSpec<T>> config) {
-        throw new UnsupportedOperationException(
-            "merge(Consumer) requires DefaultMyJpaRepository as repository base class. "
-                + "Ensure myjpa-plus auto-configuration is active or specify repositoryBaseClass manually.");
+        MergeSpec<T> spec = new MergeSpec<>(getEntityClass());
+        config.accept(spec);
+        return spec.executeInTransaction(EntityManagerHelper.getTransactionalEntityManager());
     }
 
-    // ---- 批量操作 execute 方法 ----
-
     /**
-     * 执行已构建的 UpdateSpec。
+     * 执行预构建的更新操作。
      *
-     * <pre>{@code
-     * repository.execute(new UpdateSpec<>(User.class)
-     *     .set(User::getStatus, "INACTIVE")
-     *     .eq(User::getStatus, "ACTIVE"));
-     * }</pre>
-     *
-     * @param spec 已构建的 UpdateSpec
+     * @param spec 预构建的更新规格
      * @return 受影响的行数
      */
     default int execute(UpdateSpec<T> spec) {
-        throw new UnsupportedOperationException(
-            "execute(UpdateSpec) requires DefaultMyJpaRepository as repository base class. "
-                + "Ensure myjpa-plus auto-configuration is active or specify repositoryBaseClass manually.");
+        if (spec == null) {
+            throw new IllegalArgumentException("spec must not be null");
+        }
+        return spec.executeInTransaction(EntityManagerHelper.getTransactionalEntityManager());
     }
 
     /**
-     * 执行已构建的 DeleteSpec。
+     * 执行预构建的删除操作。
      *
-     * @param spec 已构建的 DeleteSpec
+     * @param spec 预构建的删除规格
      * @return 受影响的行数
      */
     default int execute(DeleteSpec<T> spec) {
-        throw new UnsupportedOperationException(
-            "execute(DeleteSpec) requires DefaultMyJpaRepository as repository base class. "
-                + "Ensure myjpa-plus auto-configuration is active or specify repositoryBaseClass manually.");
+        if (spec == null) {
+            throw new IllegalArgumentException("spec must not be null");
+        }
+        return spec.executeInTransaction(EntityManagerHelper.getTransactionalEntityManager());
     }
 
     /**
-     * 执行已构建的 MergeSpec。
+     * 执行预构建的合并操作。
      *
-     * @param spec 已构建的 MergeSpec
+     * @param spec 预构建的合并规格
      * @return 受影响的行数
      */
     default int execute(MergeSpec<T> spec) {
-        throw new UnsupportedOperationException(
-            "execute(MergeSpec) requires DefaultMyJpaRepository as repository base class. "
-                + "Ensure myjpa-plus auto-configuration is active or specify repositoryBaseClass manually.");
+        if (spec == null) {
+            throw new IllegalArgumentException("spec must not be null");
+        }
+        return spec.executeInTransaction(EntityManagerHelper.getTransactionalEntityManager());
     }
 
     /**

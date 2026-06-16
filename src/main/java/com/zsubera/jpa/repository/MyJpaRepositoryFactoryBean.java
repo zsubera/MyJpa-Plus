@@ -23,6 +23,7 @@ public class MyJpaRepositoryFactoryBean<T extends Repository<S, ID>, S, ID> exte
 
     @Override
     protected RepositoryFactorySupport createRepositoryFactory(EntityManager entityManager) {
+        EntityManagerHelper.setEntityManagerFactory(entityManager.getEntityManagerFactory());
         return new MyJpaRepositoryFactory(entityManager);
     }
 }

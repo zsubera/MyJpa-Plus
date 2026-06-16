@@ -13,9 +13,6 @@ import org.springframework.data.repository.core.RepositoryMetadata;
  * {@code SimpleJpaRepository}。这使得用户无需在 {@code @EnableJpaRepositories} 中手动指定
  * {@code repositoryBaseClass}。
  *
- * <p>
- * 用户仍可通过 {@code @EnableJpaRepositories(repositoryBaseClass = ...)} 覆盖此默认值。
- *
  * @see MyJpaRepositoryFactoryBean
  * @see DefaultMyJpaRepository
  */

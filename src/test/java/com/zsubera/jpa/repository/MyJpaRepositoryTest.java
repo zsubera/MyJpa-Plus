@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.*;
 
 import java.util.List;
 import java.util.Optional;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -112,7 +113,6 @@ class MyJpaRepositoryTest {
         active.setName("active");
         active.setDeleted(false);
         repository.save(active);
-
         MyJpaTestEntity deleted = new MyJpaTestEntity();
         deleted.setName("deleted");
         deleted.setDeleted(true);

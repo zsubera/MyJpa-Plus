@@ -269,7 +269,7 @@ class BulkOperationTemplate {
     // ---- 独立事务分批执行 ----
 
     /**
-     * 批量操作的执行结果记录。
+     * 批量操作的执行结果记录。复用 {@link MyJpaTemplateOperations.BatchResult} 以避免类型重复。
      *
      * @param totalRows 受影响的总行数
      * @param batchCount 执行的批次数
@@ -281,10 +281,17 @@ class BulkOperationTemplate {
         justification = "Record components are inherently exposed; failureCause is intentionally part of the result")
     public record BatchResult(int totalRows, int batchCount, boolean success, int failedBatchIndex,
         Throwable failureCause) {
+        /**
+         * 转换为公开 API 的 {@link MyJpaTemplateOperations.BatchResult}。
+         */
+        public MyJpaTemplateOperations.BatchResult toPublicResult() {
+            return new MyJpaTemplateOperations.BatchResult(totalRows, batchCount, success, failedBatchIndex,
+                failureCause);
+        }
     }
 
     /**
-     * 批次执行失败时的处理策略。
+     * 批次执行失败时的处理策略。复用 {@link MyJpaTemplateOperations.BatchFailureStrategy} 以避免类型重复。
      */
     public enum BatchFailureStrategy {
         /** 继续执行剩余批次（默认）。 */

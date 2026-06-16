@@ -28,9 +28,30 @@ final class DialectDetector {
 
     private static final Logger log = LoggerFactory.getLogger(DialectDetector.class);
 
-    /** 方言策略实例映射，避免重复创建。 */
-    static final Map<String, DialectStrategy> DIALECT_STRATEGIES =
-        Map.of("postgresql", new PostgresDialect(), "mysql", new MysqlDialect());
+    /**
+     * 方言策略实例映射，支持运行时注册新方言。初始化后包含 PostgreSQL 和 MySQL。
+     * 用户可通过 {@link #registerDialect(String, DialectStrategy)} 添加自定义方言。
+     */
+    static final java.util.concurrent.ConcurrentHashMap<String, DialectStrategy> DIALECT_STRATEGIES =
+        new java.util.concurrent.ConcurrentHashMap<>(
+            Map.of("postgresql", new PostgresDialect(), "mysql", new MysqlDialect()));
+
+    /**
+     * 注册自定义数据库方言。可在运行时调用以支持新的数据库类型。
+     *
+     * @param dialectName 方言标识符（如 "oracle"、"sqlserver"）
+     * @param strategy 方言策略实现
+     */
+    public static void registerDialect(String dialectName, DialectStrategy strategy) {
+        if (dialectName == null || dialectName.isBlank()) {
+            throw new IllegalArgumentException("dialectName must not be null or blank");
+        }
+        if (strategy == null) {
+            throw new IllegalArgumentException("strategy must not be null");
+        }
+        DIALECT_STRATEGIES.put(dialectName.toLowerCase(), strategy);
+        log.info("Registered custom dialect: {}", dialectName);
+    }
 
     /** 每个 EntityManagerFactory 缓存的方言，避免重复检测。 */
     private static final ConcurrentHashMap<String, String> DIALECT_CACHE = new ConcurrentHashMap<>();

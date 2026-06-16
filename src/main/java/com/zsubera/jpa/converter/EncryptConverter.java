@@ -200,15 +200,19 @@ public class EncryptConverter implements AttributeConverter<String, String> {
      */
     public static void warmUpKeyCache() {
 
-        java.util.concurrent.CompletableFuture.runAsync(() -> {
-            try {
-                String version = getKeyVersion();
-                getKeySpec(version);
-                log.info("Encryption key cache warmed up for version: {}", version);
-            } catch (Exception e) {
-                log.warn("Failed to warm up encryption key cache: {}", e.getMessage());
-            }
-        }, WARM_UP_EXECUTOR);
+        try {
+            java.util.concurrent.CompletableFuture.runAsync(() -> {
+                try {
+                    String version = getKeyVersion();
+                    getKeySpec(version);
+                    log.info("Encryption key cache warmed up for version: {}", version);
+                } catch (Exception e) {
+                    log.warn("Failed to warm up encryption key cache: {}", e.getMessage());
+                }
+            }, WARM_UP_EXECUTOR);
+        } catch (java.util.concurrent.RejectedExecutionException e) {
+            log.warn("Encryption key warm-up executor rejected task (may be shutting down): {}", e.getMessage());
+        }
     }
 
     /**

@@ -92,6 +92,25 @@
         <Bug pattern="EI_EXPOSE_REP2"/>
     </Match>
 
+    <!-- Exclude EI_EXPOSE_REP for MyJpaTemplateOperations inner records -->
+    <!-- BatchResult and KeysetPage are immutable value objects; exposing their fields is acceptable -->
+    <Match>
+        <Class name="com.zsubera.jpa.template.MyJpaTemplateOperations$BatchResult"/>
+        <Bug pattern="EI_EXPOSE_REP"/>
+    </Match>
+    <Match>
+        <Class name="com.zsubera.jpa.template.MyJpaTemplateOperations$BatchResult"/>
+        <Bug pattern="EI_EXPOSE_REP2"/>
+    </Match>
+    <Match>
+        <Class name="com.zsubera.jpa.template.MyJpaTemplateOperations$KeysetPage"/>
+        <Bug pattern="EI_EXPOSE_REP"/>
+    </Match>
+    <Match>
+        <Class name="com.zsubera.jpa.template.MyJpaTemplateOperations$KeysetPage"/>
+        <Bug pattern="EI_EXPOSE_REP2"/>
+    </Match>
+
     <!-- Exclude ST_WRITE_TO_STATIC_FROM_INSTANCE_METHOD for EncryptConverter -->
     <!-- devSaltWarningLogged is a static volatile flag written from convertToDatabaseColumn()
          to ensure the one-time warning is logged exactly once across all instances. -->
