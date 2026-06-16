@@ -6,6 +6,13 @@
 ## [未发布]
 
 ### 新增
+- **多数据源支持** — `EntityManagerHelper` 支持按实体类型解析不同的 `EntityManagerFactory`
+  - 新增 `EntityManagerResolver` SPI 接口，支持自定义解析逻辑
+  - 新增 `registerEntityManagerFactory(Class, EntityManagerFactory)` 按实体类型注册
+  - 新增 `registerResolver(Class, EntityManagerResolver)` 按实体类型注册解析器
+  - 新增 `getTransactionalEntityManager(Class<?>)` 按实体类型获取事务性 EM
+  - `MyJpaRepositoryFactoryBean` 自动注册实体类型到 EMF 的映射
+  - 单数据源场景零配置，完全向后兼容
 - **Specification 组合工具类** — 新增 `SpecificationCombiner` 支持多个 Specification 的 and/or 组合
 - **批量操作 Specification 支持** — `UpdateSpec`、`DeleteSpec` 支持通过 `where(Specification)` 复用查询条件
 - **全局配置重构** — `MyJpaPlusGlobalConfig` 集中管理所有跨组件共享的配置，替代分散的 `static volatile` 字段

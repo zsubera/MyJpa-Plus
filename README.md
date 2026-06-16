@@ -124,6 +124,14 @@
 - `@IgnoreSoftDelete` — 临时禁用软删除过滤（标注在方法或 Repository 接口上）
 - `DefaultMyJpaRepository` — 提供 `findNotDeletedAll` / `findNotDeletedById` / `countNotDeleted` 等便捷方法
 
+### 多数据源支持
+
+- **EntityManagerResolver SPI** — 按实体类型解析不同的 `EntityManagerFactory`
+- **直接注册** — `EntityManagerHelper.registerEntityManagerFactory(Order.class, orderEmf)`
+- **自定义解析器** — `EntityManagerHelper.registerResolver(Order.class, type -> resolverEmf)`
+- **动态解析** — 支持租户切换等运行时动态 EMF 解析
+- **向后兼容** — 单数据源场景零配置，现有代码无需修改
+
 ### Spring Boot 自动配置
 
 - 自动注册 `MyJpaTemplate`、`AuditEntityListener`、`SoftDeleteFilterBean`、`SqlSlowQueryInterceptor`
@@ -625,6 +633,25 @@ long count = userRepository.countNotDeleted();
 Optional<User> findByIdIncludingDeleted(@Param("id") Long id);
 ```
 
+### 多数据源
+
+```java
+// 方式 1：直接注册 EMF（按实体类型）
+EntityManagerHelper.registerEntityManagerFactory(Order.class, orderEmf);
+EntityManagerHelper.registerEntityManagerFactory(User.class, userEmf);
+
+// 方式 2：自定义解析器（支持动态逻辑，如租户切换）
+EntityManagerHelper.registerResolver(Order.class, type -> {
+    return TenantContext.isTenantA() ? tenantAEmf : tenantBEmf;
+});
+
+// 获取对应实体类型的事务性 EntityManager
+EntityManager em = EntityManagerHelper.getTransactionalEntityManager(Order.class);
+
+// 批量操作自动使用正确的 EMF
+repository.update(s -> s.set(User::getStatus, "INACTIVE"));
+```
+
 ## 配置
 
 ```yaml
@@ -746,6 +773,20 @@ myjpa-plus:
 |---|---|
 | 实体 | `generateEntity(tableName, columns, packageName)` |
 | 仓库 | `generateRepository(tableName, columns, entityPackage, repoPackage)` |
+
+### EntityManagerHelper（多数据源）
+
+| 分类 | 方法 |
+|---|---|
+| 初始化 | `setEntityManagerFactory(emf)` — 设置默认 EMF |
+| 注册 | `registerEntityManagerFactory(entityType, emf)` — 按实体类型注册 |
+| 注册 | `registerResolver(entityType, resolver)` — 按实体类型注册解析器 |
+| 注册 | `registerEntityManagerFactoryIfAbsent(entityType, emf)` — 仅在未注册时注册 |
+| 移除 | `removeResolver(entityType)` — 移除实体类型注册 |
+| 获取 | `getTransactionalEntityManager()` — 获取默认 EM 的事务性 EM |
+| 获取 | `getTransactionalEntityManager(entityType)` — 按实体类型获取 |
+| 获取 | `getTransactionalEntityManager(entity)` — 按实体实例获取 |
+| 清理 | `reset()` — 清理所有注册 |
 
 ## 协议
 

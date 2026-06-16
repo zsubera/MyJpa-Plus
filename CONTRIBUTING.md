@@ -39,7 +39,7 @@ cd myjpa-plus
 |---|---|
 | `com.zsubera.jpa.spec` | 核心查询构建：QuerySpec、ConditionBuilder（含子接口）、ConditionNode、NodeResolver、CteSpec |
 | `com.zsubera.jpa.update` | 批量操作：UpdateSpec、DeleteSpec、MergeSpec |
-| `com.zsubera.jpa.repository` | 扩展 Repository：MyJpaRepository、DefaultMyJpaRepository |
+| `com.zsubera.jpa.repository` | 扩展 Repository：MyJpaRepository、DefaultMyJpaRepository、EntityManagerHelper、EntityManagerResolver |
 | `com.zsubera.jpa.projection` | 投影查询：ProjectionSpec |
 | `com.zsubera.jpa.template` | 模板与缓存：MyJpaTemplate、QueryCacheManager |
 | `com.zsubera.jpa.converter` | 枚举转换与序列化：@CodeEnum、@CodeEnumValue、CodeEnumType、EncryptConverter、MaskSerializer |
