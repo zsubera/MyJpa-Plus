@@ -1,6 +1,7 @@
 package com.zsubera.jpa.repository;
 
 import com.zsubera.jpa.softdelete.SoftDeleteHelper;
+import com.zsubera.jpa.spec.QuerySpec;
 import com.zsubera.jpa.update.DeleteSpec;
 import com.zsubera.jpa.update.MergeSpec;
 import com.zsubera.jpa.update.UpdateSpec;
@@ -20,11 +21,20 @@ import org.springframework.data.repository.NoRepositoryBean;
  * 基础仓库接口，结合了 {@link JpaRepository} 和 {@link JpaSpecificationExecutor}， 使消费者只需扩展单个接口即可使用。
  *
  * <p>
- * 查询用法：
+ * 查询用法（Lambda 模式，推荐）：
  *
  * <pre>{@code
  * public interface UserRepository extends MyJpaRepository<User, Long> {}
  *
+ * List<User> users = repository.findAll(s -> s.eq(User::getStatus, "ACTIVE"));
+ * Optional<User> user = repository.findOne(s -> s.eq(User::getEmail, "john@example.com"));
+ * long count = repository.count(s -> s.eq(User::getStatus, "ACTIVE"));
+ * }</pre>
+ *
+ * <p>
+ * 查询用法（QuerySpec 模式）：
+ *
+ * <pre>{@code
  * List<User> users = repository.findAll(new QuerySpec<User>().eq(User::getStatus, "ACTIVE"));
  * }</pre>
  *
@@ -51,6 +61,22 @@ import org.springframework.data.repository.NoRepositoryBean;
 public interface MyJpaRepository<T, ID> extends JpaRepository<T, ID>, JpaSpecificationExecutor<T> {
 
     /**
+     * 使用 Lambda 表达式查找所有匹配的实体。
+     *
+     * <pre>{@code
+     * repository.findAll(s -> s.eq(User::getStatus, "ACTIVE").orderByAsc(User::getName));
+     * }</pre>
+     *
+     * @param config 查询条件配置
+     * @return 匹配实体列表
+     */
+    default List<T> findAll(Consumer<QuerySpec<T>> config) {
+        QuerySpec<T> spec = new QuerySpec<>();
+        config.accept(spec);
+        return findAll(spec);
+    }
+
+    /**
      * 查找所有匹配给定 {@link Specification} 的实体。
      *
      * <p>
@@ -65,6 +91,19 @@ public interface MyJpaRepository<T, ID> extends JpaRepository<T, ID>, JpaSpecifi
     List<T> findAll(Specification<T> spec);
 
     /**
+     * 使用 Lambda 表达式分页查找所有匹配的实体。
+     *
+     * @param config 查询条件配置
+     * @param pageable 分页参数
+     * @return 包含匹配实体的分页结果
+     */
+    default Page<T> findAll(Consumer<QuerySpec<T>> config, Pageable pageable) {
+        QuerySpec<T> spec = new QuerySpec<>();
+        config.accept(spec);
+        return findAll(spec, pageable);
+    }
+
+    /**
      * 分页查找所有匹配给定 {@link Specification} 的实体。
      *
      * @param spec 查询规格说明
@@ -73,6 +112,19 @@ public interface MyJpaRepository<T, ID> extends JpaRepository<T, ID>, JpaSpecifi
      */
     @Override
     Page<T> findAll(Specification<T> spec, Pageable pageable);
+
+    /**
+     * 使用 Lambda 表达式排序查找所有匹配的实体。
+     *
+     * @param config 查询条件配置
+     * @param sort 排序参数
+     * @return 匹配实体列表
+     */
+    default List<T> findAll(Consumer<QuerySpec<T>> config, Sort sort) {
+        QuerySpec<T> spec = new QuerySpec<>();
+        config.accept(spec);
+        return findAll(spec, sort);
+    }
 
     /**
      * 排序查找所有匹配给定 {@link Specification} 的实体。
@@ -85,6 +137,18 @@ public interface MyJpaRepository<T, ID> extends JpaRepository<T, ID>, JpaSpecifi
     List<T> findAll(Specification<T> spec, Sort sort);
 
     /**
+     * 使用 Lambda 表达式查找单个匹配的实体。
+     *
+     * @param config 查询条件配置
+     * @return 匹配实体的 Optional 包装
+     */
+    default Optional<T> findOne(Consumer<QuerySpec<T>> config) {
+        QuerySpec<T> spec = new QuerySpec<>();
+        config.accept(spec);
+        return findOne(spec);
+    }
+
+    /**
      * 查找单个匹配给定 {@link Specification} 的实体。
      *
      * @param spec 查询规格说明
@@ -92,6 +156,18 @@ public interface MyJpaRepository<T, ID> extends JpaRepository<T, ID>, JpaSpecifi
      */
     @Override
     Optional<T> findOne(Specification<T> spec);
+
+    /**
+     * 使用 Lambda 表达式统计匹配的实体数量。
+     *
+     * @param config 查询条件配置
+     * @return 匹配实体数量
+     */
+    default long count(Consumer<QuerySpec<T>> config) {
+        QuerySpec<T> spec = new QuerySpec<>();
+        config.accept(spec);
+        return count(spec);
+    }
 
     /**
      * 统计匹配给定 {@link Specification} 的实体数量。
@@ -103,6 +179,18 @@ public interface MyJpaRepository<T, ID> extends JpaRepository<T, ID>, JpaSpecifi
     long count(Specification<T> spec);
 
     /**
+     * 使用 Lambda 表达式检查是否存在匹配的实体。
+     *
+     * @param config 查询条件配置
+     * @return 如果存在匹配实体返回 true，否则返回 false
+     */
+    default boolean exists(Consumer<QuerySpec<T>> config) {
+        QuerySpec<T> spec = new QuerySpec<>();
+        config.accept(spec);
+        return exists(spec);
+    }
+
+    /**
      * 检查是否存在匹配给定 {@link Specification} 的实体。
      *
      * @param spec 查询规格说明
@@ -112,7 +200,19 @@ public interface MyJpaRepository<T, ID> extends JpaRepository<T, ID>, JpaSpecifi
     boolean exists(Specification<T> spec);
 
     /**
-     * 查找所有匹配给定 {@link Specification} 且未被软删除的实体。 如果实体具有 {@link com.zsubera.jpa.annotation.SoftDelete @SoftDelete} 注解的字段，
+     * 使用 Lambda 表达式查找所有未被软删除的实体。
+     *
+     * @param config 查询条件配置
+     * @return 匹配规格说明的未删除实体列表
+     */
+    default List<T> findNotDeletedAll(Consumer<QuerySpec<T>> config) {
+        QuerySpec<T> spec = new QuerySpec<>();
+        config.accept(spec);
+        return findNotDeletedAll(spec);
+    }
+
+    /**
+     * 查找所有匹配给定规格说明且未被软删除的实体。 如果实体具有 {@link com.zsubera.jpa.annotation.SoftDelete @SoftDelete} 注解的字段，
      * 则自动应用软删除过滤器。
      *
      * @param spec 附加过滤规格说明（可以为 null）
@@ -144,6 +244,19 @@ public interface MyJpaRepository<T, ID> extends JpaRepository<T, ID>, JpaSpecifi
     }
 
     /**
+     * 使用 Lambda 表达式分页查找所有未被软删除的实体。
+     *
+     * @param config 查询条件配置
+     * @param pageable 分页参数
+     * @return 包含未删除实体的分页结果
+     */
+    default Page<T> findNotDeletedAll(Consumer<QuerySpec<T>> config, Pageable pageable) {
+        QuerySpec<T> spec = new QuerySpec<>();
+        config.accept(spec);
+        return findNotDeletedAll(spec, pageable);
+    }
+
+    /**
      * 分页查找所有匹配给定规格说明且未被软删除的实体。
      *
      * @param spec 附加过滤规格说明（可以为 null）
@@ -159,6 +272,18 @@ public interface MyJpaRepository<T, ID> extends JpaRepository<T, ID>, JpaSpecifi
             return findAll(notDeleted, pageable);
         }
         return findAll(spec.and(notDeleted), pageable);
+    }
+
+    /**
+     * 使用 Lambda 表达式查找单个未被软删除的实体。
+     *
+     * @param config 查询条件配置
+     * @return 匹配实体的 Optional 包装
+     */
+    default Optional<T> findNotDeletedOne(Consumer<QuerySpec<T>> config) {
+        QuerySpec<T> spec = new QuerySpec<>();
+        config.accept(spec);
+        return findNotDeletedOne(spec);
     }
 
     /**
@@ -205,6 +330,18 @@ public interface MyJpaRepository<T, ID> extends JpaRepository<T, ID>, JpaSpecifi
             return findOne(idSpec);
         }
         return findOne(notDeleted.and(idSpec));
+    }
+
+    /**
+     * 使用 Lambda 表达式统计未被软删除的实体数量。
+     *
+     * @param config 查询条件配置
+     * @return 未删除实体数量
+     */
+    default long countNotDeleted(Consumer<QuerySpec<T>> config) {
+        QuerySpec<T> spec = new QuerySpec<>();
+        config.accept(spec);
+        return countNotDeleted(spec);
     }
 
     /**

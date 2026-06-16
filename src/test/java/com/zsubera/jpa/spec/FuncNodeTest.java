@@ -3,9 +3,24 @@ package com.zsubera.jpa.spec;
 import static org.junit.jupiter.api.Assertions.*;
 
 import com.zsubera.jpa.exception.SecurityViolationException;
+import java.util.Set;
+import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.atomic.AtomicBoolean;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
 class FuncNodeTest {
+
+    @AfterEach
+    void cleanup() {
+        ConditionBuilder.EXTRA_SAFE_FUNCTION_NAMES.clear();
+        ConditionBuilder.EXTRA_BOOLEAN_FUNCTION_NAMES.clear();
+        ConditionBuilder.freezeExtraFunctionNames();
+    }
 
     @Test
     void of_validBooleanFunction_createsNode() {
@@ -100,5 +115,125 @@ class FuncNodeTest {
         ConditionNode.FuncNode node = ConditionNode.FuncNode.of("COALESCE", new Object[] {});
         String str = node.toString();
         assertEquals("FuncNode[COALESCE()]", str);
+    }
+
+    // ---- Snapshot pattern tests ----
+
+    @Test
+    void addSafeFunctionNames_makesFunctionAvailableViaFuncNode() {
+        // func() requires function in BOTH safe list AND boolean list
+        ConditionBuilder.addSafeFunctionNames(Set.of("MY_CUSTOM_FUNC"));
+        ConditionBuilder.addBooleanFunctionNames(Set.of("MY_CUSTOM_FUNC"));
+        ConditionNode.FuncNode node = ConditionNode.FuncNode.of("MY_CUSTOM_FUNC", new Object[] {"field"});
+        assertNotNull(node, "Function added via addSafeFunctionNames should be accepted");
+        assertEquals("MY_CUSTOM_FUNC", node.functionName);
+    }
+
+    @Test
+    void addSafeFunctionNames_caseInsensitive() {
+        ConditionBuilder.addSafeFunctionNames(Set.of("my_func"));
+        ConditionBuilder.addBooleanFunctionNames(Set.of("my_func"));
+        ConditionNode.FuncNode node = ConditionNode.FuncNode.of("MY_FUNC", new Object[] {"field"});
+        assertNotNull(node, "Function should be matched case-insensitively");
+    }
+
+    @Test
+    void addBooleanFunctionNames_makesFunctionAvailableViaFuncNode() {
+        // func() requires function in BOTH safe list AND boolean list
+        ConditionBuilder.addSafeFunctionNames(Set.of("MY_BOOL_FUNC"));
+        ConditionBuilder.addBooleanFunctionNames(Set.of("MY_BOOL_FUNC"));
+        ConditionNode.FuncNode node = ConditionNode.FuncNode.of("MY_BOOL_FUNC", new Object[] {"field"});
+        assertNotNull(node, "Boolean function added via addBooleanFunctionNames should be accepted");
+    }
+
+    @Test
+    void addBooleanFunctionNames_notInSafeList_throwsSecurityException() {
+        // Only add to boolean list, not safe list — should fail safe list check
+        ConditionBuilder.addBooleanFunctionNames(Set.of("UNSAFE_FUNC"));
+        assertThrows(SecurityViolationException.class,
+            () -> ConditionNode.FuncNode.of("UNSAFE_FUNC", new Object[] {"field"}),
+            "Function in boolean list but not in safe list should be rejected");
+    }
+
+    @Test
+    void addSafeFunctionNames_notInBooleanList_throwsSecurityException() {
+        // Only add to safe list, not boolean list — should fail boolean list check
+        ConditionBuilder.addSafeFunctionNames(Set.of("SAFE_ONLY_FUNC"));
+        assertThrows(SecurityViolationException.class,
+            () -> ConditionNode.FuncNode.of("SAFE_ONLY_FUNC", new Object[] {"field"}),
+            "Function in safe list but not in boolean list should be rejected");
+    }
+
+    @Test
+    void addSafeFunctionNames_emptyCollection_noEffect() {
+        ConditionBuilder.addSafeFunctionNames(Set.of());
+        assertThrows(SecurityViolationException.class,
+            () -> ConditionNode.FuncNode.of("STILL_NOT_LISTED", new Object[] {"field"}));
+    }
+
+    @Test
+    void addSafeFunctionNames_null_throwsException() {
+        assertThrows(IllegalArgumentException.class, () -> ConditionBuilder.addSafeFunctionNames(null));
+    }
+
+    @Test
+    void addBooleanFunctionNames_null_throwsException() {
+        assertThrows(IllegalArgumentException.class, () -> ConditionBuilder.addBooleanFunctionNames(null));
+    }
+
+    @Test
+    void freezeExtraFunctionNames_snapshotIsImmutable() {
+        ConditionBuilder.addSafeFunctionNames(Set.of("FROZEN_FUNC"));
+        ConditionBuilder.addBooleanFunctionNames(Set.of("FROZEN_FUNC"));
+        Set<String> snapshot = ConditionBuilder.FROZEN_EXTRA_SAFE_FUNCTION_NAMES.get();
+        assertNotNull(snapshot);
+        assertTrue(snapshot.contains("FROZEN_FUNC"));
+        assertThrows(UnsupportedOperationException.class, () -> snapshot.add("NEW_FUNC"));
+    }
+
+    @Test
+    void addSafeFunctionNames_afterFreeze_updatesSnapshot() {
+        ConditionBuilder.addSafeFunctionNames(Set.of("FUNC_A"));
+        ConditionBuilder.addBooleanFunctionNames(Set.of("FUNC_A"));
+        assertTrue(ConditionBuilder.FROZEN_EXTRA_SAFE_FUNCTION_NAMES.get().contains("FUNC_A"));
+
+        ConditionBuilder.addSafeFunctionNames(Set.of("FUNC_B"));
+        ConditionBuilder.addBooleanFunctionNames(Set.of("FUNC_B"));
+        assertTrue(ConditionBuilder.FROZEN_EXTRA_SAFE_FUNCTION_NAMES.get().contains("FUNC_B"),
+            "Snapshot should be updated after second add");
+    }
+
+    @Test
+    void concurrentReadsDuringAdd_noException() throws Exception {
+        int threadCount = 8;
+        int iterations = 100;
+        ExecutorService executor = Executors.newFixedThreadPool(threadCount);
+        CountDownLatch startLatch = new CountDownLatch(1);
+        AtomicBoolean hasError = new AtomicBoolean(false);
+        CopyOnWriteArrayList<Future<?>> futures = new CopyOnWriteArrayList<>();
+
+        for (int i = 0; i < threadCount; i++) {
+            final int threadIdx = i;
+            futures.add(executor.submit(() -> {
+                try {
+                    startLatch.await();
+                    for (int j = 0; j < iterations; j++) {
+                        String funcName = "FUNC_" + threadIdx + "_" + j;
+                        ConditionBuilder.addSafeFunctionNames(Set.of(funcName));
+                        ConditionBuilder.FROZEN_EXTRA_SAFE_FUNCTION_NAMES.get().contains(funcName);
+                    }
+                } catch (Exception e) {
+                    hasError.set(true);
+                }
+            }));
+        }
+
+        startLatch.countDown();
+        for (Future<?> f : futures) {
+            f.get();
+        }
+        executor.shutdown();
+
+        assertFalse(hasError.get(), "Concurrent reads and writes should not throw exceptions");
     }
 }

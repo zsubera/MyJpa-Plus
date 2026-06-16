@@ -830,7 +830,17 @@ public class MyJpaTemplate implements MyJpaTemplateOperations {
     }
 
     /**
-     * 此方法保留用于向后兼容。在 2.0 版本中将抛出 UnsupportedOperationException。
+     * 内部流式查询实现。通过 {@link #findAllStream(Class, QuerySpec, Consumer)} 和
+     * {@link #findAllStream(Class, QuerySpec, EntityGraphHelper, Consumer)} 调用。
+     *
+     * <p>
+     * 设置 {@code fetchSize} hint 以支持数据库游标的增量获取，避免一次性加载全部结果到内存。
+     *
+     * @param entityClass 实体类
+     * @param spec 查询规范
+     * @param entityGraph 用于急切加载的实体图（可为 null）
+     * @param <T> 实体类型
+     * @return 流式查询结果，调用方负责在 try-with-resources 中关闭
      */
     private <T> Stream<T> doFindStream(Class<T> entityClass, QuerySpec<T> spec, EntityGraphHelper<T> entityGraph) {
         TypedQuery<T> query = buildTypedQuery(entityClass, spec, entityGraph, null);

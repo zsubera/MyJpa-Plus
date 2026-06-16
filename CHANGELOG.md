@@ -6,6 +6,10 @@
 ## [未发布]
 
 ### 新增
+- **查询 Lambda 便捷重载** — `MyJpaRepository` 和 `MyJpaTemplate` 新增 `Consumer<QuerySpec<T>>` Lambda 重载，无需 `new QuerySpec<>()`
+  - `findAll(consumer)`, `findOne(consumer)`, `count(consumer)`, `exists(consumer)`
+  - `findNotDeletedAll(consumer)`, `findNotDeletedOne(consumer)`, `countNotDeleted(consumer)`
+  - `MyJpaTemplate` 同步新增对应 Lambda 重载
 - **虚拟线程兼容性** — `SoftDeleteContext` 和 `DefaultMyJpaRepository` 完全兼容 Java 21+ 虚拟线程
   - 新增 `withIgnore(Runnable)` 和 `withIgnore(Supplier)` 便捷方法，自动管理生命周期
   - 虚拟线程隔离性验证测试（`SoftDeleteContextVirtualThreadTest`）

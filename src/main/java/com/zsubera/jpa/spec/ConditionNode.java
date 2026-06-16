@@ -401,16 +401,17 @@ public sealed interface ConditionNode permits ConditionNode.SimpleNode, Conditio
                 throw new IllegalArgumentException("params must not be null");
             }
             // 验证函数名是否在白名单中，防止 SQL 注入，同时确保是布尔函数
+            // 使用冻结快照（AtomicReference）进行无锁线程安全检查
             String upperName = functionName.toUpperCase(java.util.Locale.ROOT);
             if (!ConditionBuilder.SAFE_FUNCTION_NAMES.contains(upperName)
-                && !ConditionBuilder.EXTRA_SAFE_FUNCTION_NAMES.contains(upperName)) {
+                && !ConditionBuilder.FROZEN_EXTRA_SAFE_FUNCTION_NAMES.get().contains(upperName)) {
                 String msg =
                     "Function not in whitelist: '" + functionName + "'. " + "Only whitelisted functions are allowed. "
                         + "Use myjpa-plus.query.extra-safe-functions to add custom functions.";
                 throw new com.zsubera.jpa.exception.SecurityViolationException(msg);
             }
             if (!ConditionBuilder.BOOLEAN_FUNCTION_NAMES.contains(upperName)
-                && !ConditionBuilder.EXTRA_BOOLEAN_FUNCTION_NAMES.contains(upperName)) {
+                && !ConditionBuilder.FROZEN_EXTRA_BOOLEAN_FUNCTION_NAMES.get().contains(upperName)) {
                 String msg = "Function must be a boolean-returning function: '" + functionName + "'. "
                     + "Only boolean functions like IF, DECODE, COALESCE, NULLIF, NVL, JSONB_EXISTS, ST_CONTAINS are allowed in func(). "
                     + "Use myjpa-plus.query.extra-boolean-functions to add custom boolean functions.";

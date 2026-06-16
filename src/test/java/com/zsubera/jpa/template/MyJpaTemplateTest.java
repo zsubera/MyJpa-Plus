@@ -493,7 +493,8 @@ class MyJpaTemplateTest {
 
     @Test
     void testFindOneWithNullSpec() {
-        assertThrows(IllegalArgumentException.class, () -> template.findOne(TestEntity.class, null));
+        assertThrows(IllegalArgumentException.class,
+            () -> template.findOne(TestEntity.class, (QuerySpec<TestEntity>)null));
     }
 
     // ---- count 测试 ----

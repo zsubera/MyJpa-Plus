@@ -1062,7 +1062,6 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
      */
     @Override
     public Predicate toPredicate(@NonNull Root<T> root, @Nullable CriteriaQuery<?> query, @NonNull CriteriaBuilder cb) {
-        validateCleanState();
         log.debug("QuerySpec: building predicate for {} with {} conditions, {} order nodes, distinct={}",
             root.getModel().getName(), conditions.size(), orderNodes.size(), distinct);
         if (query != null) {

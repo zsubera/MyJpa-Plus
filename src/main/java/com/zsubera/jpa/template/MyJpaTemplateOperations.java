@@ -86,7 +86,123 @@ public interface MyJpaTemplateOperations {
     record KeysetPage<T>(List<T> content, boolean hasNext, @Nullable Object[] lastSortValues) {
     }
 
-    // ---- 查询方法 ----
+    // ---- 查询方法（Lambda 便捷重载） ----
+
+    /**
+     * 使用 Lambda 表达式查找单个实体。
+     *
+     * @param entityClass 实体类
+     * @param config      查询条件配置
+     * @param <T>         实体类型
+     * @return 包含实体的 {@link Optional}，如果未找到则为空
+     */
+    default <T> Optional<T> findOne(Class<T> entityClass, Consumer<QuerySpec<T>> config) {
+        QuerySpec<T> spec = new QuerySpec<>();
+        config.accept(spec);
+        return findOne(entityClass, spec);
+    }
+
+    /**
+     * 使用 Lambda 表达式统计实体数量。
+     *
+     * @param entityClass 实体类
+     * @param config      查询条件配置
+     * @param <T>         实体类型
+     * @return 匹配的实体数量
+     */
+    default <T> long count(Class<T> entityClass, Consumer<QuerySpec<T>> config) {
+        QuerySpec<T> spec = new QuerySpec<>();
+        config.accept(spec);
+        return count(entityClass, spec);
+    }
+
+    /**
+     * 使用 Lambda 表达式查找所有实体。
+     *
+     * @param entityClass 实体类
+     * @param config      查询条件配置
+     * @param <T>         实体类型
+     * @return 匹配的实体列表
+     */
+    default <T> List<T> findAll(Class<T> entityClass, Consumer<QuerySpec<T>> config) {
+        QuerySpec<T> spec = new QuerySpec<>();
+        config.accept(spec);
+        return findAll(entityClass, spec);
+    }
+
+    /**
+     * 使用 Lambda 表达式查找所有实体，带自定义最大行数限制。
+     *
+     * @param entityClass 实体类
+     * @param config      查询条件配置
+     * @param maxResults  最大返回结果数，{@code -1} 表示无限制
+     * @param <T>         实体类型
+     * @return 匹配的实体列表
+     */
+    default <T> List<T> findAll(Class<T> entityClass, Consumer<QuerySpec<T>> config, int maxResults) {
+        QuerySpec<T> spec = new QuerySpec<>();
+        config.accept(spec);
+        return findAll(entityClass, spec, maxResults);
+    }
+
+    /**
+     * 使用 Lambda 表达式查找所有实体，带显式排序。
+     *
+     * @param entityClass 实体类
+     * @param config      查询条件配置
+     * @param sort        排序规则
+     * @param <T>         实体类型
+     * @return 匹配的实体列表
+     */
+    default <T> List<T> findAll(Class<T> entityClass, Consumer<QuerySpec<T>> config, Sort sort) {
+        QuerySpec<T> spec = new QuerySpec<>();
+        config.accept(spec);
+        return findAll(entityClass, spec, sort);
+    }
+
+    /**
+     * 使用 Lambda 表达式分页查找所有实体。
+     *
+     * @param entityClass 实体类
+     * @param config      查询条件配置
+     * @param pageable    分页参数
+     * @param <T>         实体类型
+     * @return 包含匹配实体和总数的 {@link Page}
+     */
+    default <T> Page<T> findAll(Class<T> entityClass, Consumer<QuerySpec<T>> config, Pageable pageable) {
+        QuerySpec<T> spec = new QuerySpec<>();
+        config.accept(spec);
+        return findAll(entityClass, spec, pageable);
+    }
+
+    /**
+     * 使用 Lambda 表达式流式处理所有实体。
+     *
+     * @param entityClass 实体类
+     * @param config      查询条件配置
+     * @param consumer    处理流的消费者
+     * @param <T>         实体类型
+     */
+    default <T> void findAllStream(Class<T> entityClass, Consumer<QuerySpec<T>> config, Consumer<Stream<T>> consumer) {
+        QuerySpec<T> spec = new QuerySpec<>();
+        config.accept(spec);
+        findAllStream(entityClass, spec, consumer);
+    }
+
+    /**
+     * 使用 Lambda 表达式查找所有实体，带查询级缓存。
+     *
+     * @param entityClass 实体类
+     * @param config      查询条件配置
+     * @param ttlSeconds  缓存生存时间（秒）
+     * @param <T>         实体类型
+     * @return 匹配的实体列表
+     */
+    default <T> List<T> findAllCached(Class<T> entityClass, Consumer<QuerySpec<T>> config, long ttlSeconds) {
+        QuerySpec<T> spec = new QuerySpec<>();
+        config.accept(spec);
+        return findAllCached(entityClass, spec, ttlSeconds);
+    }
 
     /**
      * 根据主键查找实体。

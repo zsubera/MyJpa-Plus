@@ -191,14 +191,14 @@ class MyJpaRepositoryTest {
         simpleRepository.save(e2);
 
         // findNotDeletedOne(null) 对无 @SoftDelete 的实体应返回第一个实体，而非加载全表
-        Optional<SimpleTestEntity> result = simpleRepository.findNotDeletedOne(null);
+        Optional<SimpleTestEntity> result = simpleRepository.findNotDeletedOne((Specification<SimpleTestEntity>)null);
         assertTrue(result.isPresent(), "Should find at least one entity");
         assertEquals("first", result.get().getName());
     }
 
     @Test
     void testFindNotDeletedOneNullSpecEmptyTable() {
-        Optional<SimpleTestEntity> result = simpleRepository.findNotDeletedOne(null);
+        Optional<SimpleTestEntity> result = simpleRepository.findNotDeletedOne((Specification<SimpleTestEntity>)null);
         assertFalse(result.isPresent(), "Should return empty for empty table");
     }
 

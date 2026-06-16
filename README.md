@@ -59,42 +59,41 @@
 ### 查询构建
 
 ```java
-// 简单等值查询
-List<User> users = repository.findAll(
-    new QuerySpec<User>()
-        .eq(User::getStatus, "ACTIVE")
-);
+// 简单等值查询（Lambda 模式，推荐）
+List<User> users = repository.findAll(s -> s.eq(User::getStatus, "ACTIVE"));
 
 // OR 多条件组合
-List<User> users = repository.findAll(
-    new QuerySpec<User>()
-        .like(User::getName, "John")
-        .or(g -> g.eq(User::getRole, "ADMIN").eq(User::getRole, "MODERATOR"))
+List<User> users = repository.findAll(s ->
+    s.like(User::getName, "John")
+     .or(g -> g.eq(User::getRole, "ADMIN").eq(User::getRole, "MODERATOR"))
 );
 
 // JOIN 关联查询
-List<Order> orders = orderRepository.findAll(
-    new QuerySpec<Order>()
-        .join(Order::getCustomer, j -> j.eq(Customer::getCountry, "CN"))
-        .gt(Order::getAmount, 1000)
+List<Order> orders = orderRepository.findAll(s ->
+    s.join(Order::getCustomer, j -> j.eq(Customer::getCountry, "CN"))
+     .gt(Order::getAmount, 1000)
 );
 
 // EXISTS 子查询
-List<Customer> customers = customerRepository.findAll(
-    new QuerySpec<Customer>()
-        .exists(Order.class, sub -> sub.gt(Order::getAmount, 1000))
+List<Customer> customers = customerRepository.findAll(s ->
+    s.exists(Order.class, sub -> sub.gt(Order::getAmount, 1000))
 );
 
 // 多字段模糊搜索
-List<Product> products = productRepository.findAll(
-    new QuerySpec<Product>()
-        .multiLike("搜索词", "name", "description")
+List<Product> products = productRepository.findAll(s ->
+    s.multiLike("搜索词", "name", "description")
 );
 ```
 
 ### 批量操作
 
 ```java
+// 方式 1：直接在 Repository 上调用（Lambda 模式，推荐）
+repository.update(s -> s.set(User::getStatus, "INACTIVE").eq(User::getStatus, "ACTIVE"));
+repository.delete(s -> s.lt(User::getCreatedAt, cutoffDate));
+repository.merge(s -> s.withEntity(user).onConflict(User::getEmail).updateOnConflict(User::getName));
+
+// 方式 2：通过 MyJpaTemplate
 @Autowired
 private MyJpaTemplate jpa;
 
@@ -212,8 +211,15 @@ myjpa-plus:
     in-clause-hard-limit: 5000            # IN 子句硬限制
     default-timeout-seconds: 30           # 查询超时（秒），-1 禁用
     max-bulk-operation-rows: 10000        # 批量操作最大影响行数（0 禁用）
+    lambda-cache-size: 4096               # Lambda 属性名缓存大小
+    extra-safe-functions:                 # 扩展安全函数白名单
+      - ARRAY_TO_STRING
+      - REGEXP_REPLACE
+    extra-boolean-functions:              # 扩展布尔函数白名单
+      - MY_CUSTOM_CHECK
   soft-delete:
     auto-filter: true                     # 自动应用软删除过滤器
+    block-unconditional-delete: true      # 阻断无条件硬删除
   monitoring:
     enabled: true                         # 启用 SQL 慢查询监控
     slow-query-threshold-ms: 1000         # 慢查询阈值（毫秒）
@@ -293,6 +299,7 @@ myjpa-plus:
 | 分类 | 方法 |
 |:---|:---|
 | 查询 | `findAll`, `findOne`, `findById`, `findPage`, `count` |
+| 查询（Lambda） | `findAll(entityClass, consumer)`, `findOne(entityClass, consumer)`, `count(entityClass, consumer)` |
 | 流式 | `findAllStream(entityClass, spec, consumer)` |
 | 创建 | `update(entityClass)`, `delete(entityClass)` |
 | 执行 | `execute(spec)`, `executeWithMaxRows(spec, maxRows)` |

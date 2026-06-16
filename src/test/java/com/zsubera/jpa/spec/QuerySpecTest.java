@@ -1450,4 +1450,77 @@ public class QuerySpecTest {
             fail("Reflection failed: " + e.getMessage());
         }
     }
+
+    // ---- toSpecification vs toPredicate validation tests ----
+
+    @Test
+    void toSpecification_validatesUnclosedOrGroup() {
+        QuerySpec<TestEntity> qs = new QuerySpec<>();
+        // Push an or group but don't close it via Consumer
+        OrGroup<TestEntity> orGroup = qs.pushOrGroup();
+        orGroup.eq(TestEntity::getName, "test");
+        // Don't call endOr() — group is unclosed
+
+        assertThrows(IllegalStateException.class, qs::toSpecification,
+            "toSpecification() should validate unclosed or() groups");
+    }
+
+    @Test
+    void toPredicate_doesNotValidateUnclosedOrGroup() {
+        QuerySpec<TestEntity> qs = new QuerySpec<>();
+        OrGroup<TestEntity> orGroup = qs.pushOrGroup();
+        orGroup.eq(TestEntity::getName, "test");
+        // Don't call endOr() — group is unclosed
+
+        // toPredicate() should NOT throw — this is the Spring Data internal path
+        // Use the real EntityManager from the test context
+        jakarta.persistence.criteria.CriteriaBuilder cb = em.getCriteriaBuilder();
+        jakarta.persistence.criteria.CriteriaQuery<TestEntity> cq = cb.createQuery(TestEntity.class);
+        jakarta.persistence.criteria.Root<TestEntity> root = cq.from(TestEntity.class);
+
+        // If toPredicate() throws IllegalStateException, this test will fail
+        jakarta.persistence.criteria.Predicate predicate = qs.toPredicate(root, cq, cb);
+        assertNotNull(predicate, "toPredicate() should return a valid predicate");
+    }
+
+    @Test
+    void toSpecification_validatesClosedOrGroup() {
+        QuerySpec<TestEntity> qs = new QuerySpec<>();
+        qs.or(o -> o.eq(TestEntity::getName, "test"));
+        // or() group is properly closed by Consumer
+
+        // toSpecification() should not throw for properly closed groups
+        Specification<TestEntity> spec = qs.toSpecification();
+        assertNotNull(spec, "toSpecification() should return a valid Specification");
+    }
+
+    @Test
+    void querySpec_usedAsSpecification_directlyWorks() {
+        repository.save(newEntity("direct", 1));
+        repository.save(newEntity("other", 2));
+        QuerySpec<TestEntity> qs = new QuerySpec<>();
+        qs.eq(TestEntity::getName, "direct");
+
+        // Use QuerySpec directly as Specification (without calling toSpecification())
+        List<TestEntity> result = repository.findAll((Specification<TestEntity>)qs);
+        assertEquals(1, result.size());
+        assertEquals("direct", result.get(0).getName());
+    }
+
+    @Test
+    void querySpec_andSpecification_compositionWorks() {
+        repository.save(newEntity("a", 1));
+        repository.save(newEntity("b", 2));
+        repository.save(newEntity("c", 3));
+
+        QuerySpec<TestEntity> qs1 = new QuerySpec<>();
+        qs1.ge(TestEntity::getStatus, 2);
+
+        Specification<TestEntity> extra = (root, query, cb) -> cb.lessThan(root.get("status"), 3);
+
+        // Compose QuerySpec with external Specification via toSpecification(external)
+        List<TestEntity> result = repository.findAll(qs1.toSpecification(extra));
+        assertEquals(1, result.size());
+        assertEquals("b", result.get(0).getName());
+    }
 }

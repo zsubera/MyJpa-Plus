@@ -314,6 +314,7 @@ public class MyJpaPlusAutoConfiguration {
     @Bean
     @ConditionalOnMissingBean(SqlSlowQueryInterceptor.class)
     @ConditionalOnProperty(prefix = "myjpa-plus.monitoring", name = "enabled", havingValue = "true")
+    @ConditionalOnClass(name = "org.hibernate.resource.jdbc.spi.StatementInspector")
     public SqlSlowQueryInterceptor sqlSlowQueryInterceptor(MyJpaPlusProperties properties) {
         long threshold = properties.getMonitoring().getSlowQueryThresholdMs();
         log.info("SqlSlowQueryInterceptor enabled (threshold={} ms)", threshold);
@@ -325,6 +326,7 @@ public class MyJpaPlusAutoConfiguration {
      */
     @Bean
     @ConditionalOnProperty(prefix = "myjpa-plus.monitoring", name = "enabled", havingValue = "true")
+    @ConditionalOnClass(name = "org.hibernate.resource.jdbc.spi.StatementInspector")
     public BeanPostProcessor dataSourceSlowQueryProxyPostProcessor(SqlSlowQueryInterceptor interceptor) {
         return new DataSourceSlowQueryProxyPostProcessor(interceptor);
     }
