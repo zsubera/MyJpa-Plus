@@ -187,6 +187,10 @@ public final class SoftDeleteHelper {
      * {@link IllegalStateException}。此机制防止误调用导致全表数据被意外标记为已删除。
      *
      * <p>
+     * <strong>行数保护：</strong>默认最多更新 10000 行。超过此限制将抛出 {@link IllegalStateException}。
+     * 可通过 {@code maxRows} 参数自定义限制，传入 -1 表示不限制。
+     *
+     * <p>
      * <strong>已知限制：</strong>此方法使用原生 SQL UPDATE 语句，会绕过以下 JPA 机制：
      * <ul>
      * <li>JPA 生命周期回调（{@code @PreUpdate}、{@code @PostUpdate}）不会被触发</li>
@@ -201,9 +205,28 @@ public final class SoftDeleteHelper {
      * @param allowUnconditional 必须为 true 才能允许无条件软删除
      * @param <T> 实体类型
      * @return 受影响的行数
-     * @throws IllegalStateException 如果 allowUnconditional 为 false
+     * @throws IllegalStateException 如果 allowUnconditional 为 false 或超过行数限制
      */
     public static <T> int softDeleteAll(EntityManager em, Class<T> entityClass, boolean allowUnconditional) {
+        return softDeleteAll(em, entityClass, allowUnconditional, DEFAULT_MAX_ROWS);
+    }
+
+    /** softDeleteAll 默认最大行数限制。 */
+    private static final int DEFAULT_MAX_ROWS = 10000;
+
+    /**
+     * 使用单条 UPDATE 语句批量软删除给定类的所有实体，支持自定义行数限制。
+     *
+     * @param em EntityManager 实例
+     * @param entityClass 实体类
+     * @param allowUnconditional 必须为 true 才能允许无条件软删除
+     * @param maxRows 最大允许更新行数，-1 表示不限制
+     * @param <T> 实体类型
+     * @return 受影响的行数
+     * @throws IllegalStateException 如果 allowUnconditional 为 false 或超过行数限制
+     */
+    public static <T> int softDeleteAll(EntityManager em, Class<T> entityClass, boolean allowUnconditional,
+        int maxRows) {
         if (em == null) {
             throw new IllegalArgumentException("em must not be null");
         }
@@ -233,10 +256,20 @@ public final class SoftDeleteHelper {
         String escapedTable = validateIdentifier(tableName);
         String escapedColumn = validateIdentifier(columnName);
         ResolvedDeletedValue resolved = resolveDeletedValue(entityClass, field, annotation);
+        // 行数保护：先 COUNT 再执行
+        if (maxRows > 0) {
+            String countSql = "SELECT COUNT(*) FROM " + escapedTable;
+            var countQuery = em.createNativeQuery(countSql);
+            QueryTimeoutHelper.applyTimeout(countQuery);
+            long rowCount = ((Number)countQuery.getSingleResult()).longValue();
+            if (rowCount > maxRows) {
+                throw new IllegalStateException(
+                    "softDeleteAll would affect " + rowCount + " rows, which exceeds the limit of " + maxRows
+                        + ". Use softDeleteByIds() with explicit ID lists, or increase the limit.");
+            }
+        }
         int updated;
         if (resolved.booleanField()) {
-            // Boolean 字段：使用参数绑定的 SQL 以确保跨数据库兼容性
-            // PostgreSQL 使用 true/false，MySQL 使用 1/0，参数绑定由 JDBC 驱动处理
             var q = em
                 .createNativeQuery("UPDATE " + escapedTable + " SET " + escapedColumn + " = ?1 WHERE " + escapedColumn
                     + " = ?2 OR " + escapedColumn + " IS NULL")
@@ -251,8 +284,6 @@ public final class SoftDeleteHelper {
             QueryTimeoutHelper.applyTimeout(q);
             updated = q.executeUpdate();
         }
-        // 原生 SQL 绕过 JPA 生命周期，需要清除 L1 缓存以确保后续查询一致性
-        // 仅在实际更新了行时才 clear，避免无谓地丢弃持久化上下文中的待持久化实体
         if (updated > 0) {
             em.clear();
         }

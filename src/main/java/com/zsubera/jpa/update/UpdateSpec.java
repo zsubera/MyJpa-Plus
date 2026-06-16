@@ -242,9 +242,9 @@ public class UpdateSpec<T> extends AbstractBulkOperationSpec<T, UpdateSpec<T>> {
      */
     @Override
     public int execute(EntityManager em) {
-        // 检查是否有最大行数保护配置（使用快速估算避免全表 COUNT）
         com.zsubera.jpa.autoconfigure.MyJpaPlusGlobalConfig config = getGlobalConfig();
-        if (config != null && config.getMaxBulkOperationRows() > 0) {
+        if (config != null && config.getMaxBulkOperationRows() > 0
+            && config.getMaxBulkOperationRows() < Integer.MAX_VALUE) {
             checkRowCountBeforeExecute(em, config.getMaxBulkOperationRows());
         }
         var query = em.createQuery(toUpdate(em));
@@ -596,7 +596,6 @@ public class UpdateSpec<T> extends AbstractBulkOperationSpec<T, UpdateSpec<T>> {
      * @throws IllegalArgumentException 如果字段不是数值类型
      */
     private void validateNumericField(String fieldName, String operation) {
-        // 使用缓存的校验结果，避免重复反射
         String cacheKey = entityClass.getName() + "#" + fieldName;
         Boolean cachedResult = NUMERIC_FIELD_CACHE.get(cacheKey);
         if (cachedResult != null) {
@@ -607,7 +606,6 @@ public class UpdateSpec<T> extends AbstractBulkOperationSpec<T, UpdateSpec<T>> {
             }
             return;
         }
-        // 使用 computeIfAbsent 原子操作避免缓存竞争
         Boolean isNumeric = NUMERIC_FIELD_CACHE.computeIfAbsent(cacheKey, k -> {
             for (Class<?> c = entityClass; c != null && c != Object.class; c = c.getSuperclass()) {
                 try {
@@ -619,9 +617,9 @@ public class UpdateSpec<T> extends AbstractBulkOperationSpec<T, UpdateSpec<T>> {
                     // 继续检查父类
                 }
             }
+            evictCacheIfNeeded(NUMERIC_FIELD_CACHE);
             return false;
         });
-        evictCacheIfNeeded(NUMERIC_FIELD_CACHE);
         if (!isNumeric) {
             // 尝试获取字段类型用于错误消息
             String fieldType = "unknown";

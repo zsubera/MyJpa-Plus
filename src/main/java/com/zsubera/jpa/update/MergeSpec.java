@@ -283,24 +283,10 @@ public class MergeSpec<T> {
             }
             return result;
         } catch (RuntimeException e) {
-            if (isNewTransaction && tx.isActive()) {
-                try {
-                    tx.rollback();
-                } catch (Exception rollbackEx) {
-                    log.error("Transaction rollback failed after merge failure", rollbackEx);
-                    e.addSuppressed(rollbackEx);
-                }
-            }
+            safeRollback(tx, e);
             throw e;
         } catch (Exception e) {
-            if (isNewTransaction && tx.isActive()) {
-                try {
-                    tx.rollback();
-                } catch (Exception rollbackEx) {
-                    log.error("Transaction rollback failed after merge failure", rollbackEx);
-                    e.addSuppressed(rollbackEx);
-                }
-            }
+            safeRollback(tx, e);
             throw new MyJpaPlusException("Merge operation failed: " + e.getClass().getSimpleName(), e);
         }
     }
@@ -333,6 +319,11 @@ public class MergeSpec<T> {
         }
         if (batchSize <= 0) {
             throw new IllegalArgumentException("batchSize must be positive");
+        }
+        if (!TransactionSynchronizationManager.isActualTransactionActive()) {
+            throw new MyJpaPlusException(
+                "executeBatch requires an active transaction. Use executeBatchInTransaction() for auto-managed transactions, "
+                    + "or executeBatchInSeparateTransactions() for per-batch isolation.");
         }
         String cachedDialect = DialectDetector.detectDialect(em);
         int total = 0;
@@ -376,8 +367,6 @@ public class MergeSpec<T> {
         }
         int total = 0;
         int count = 0;
-        int batchStartCount = 0;
-        int batchStartTotal = 0;
         String cachedDialect = DialectDetector.detectDialect(em);
         EntityTransaction tx = null;
         boolean txStarted = false;
@@ -388,12 +377,7 @@ public class MergeSpec<T> {
                         em.flush();
                         tx.commit();
                     } catch (RuntimeException commitEx) {
-                        try {
-                            tx.rollback();
-                        } catch (Exception rollbackEx) {
-                            log.error("Transaction rollback failed after batch commit failure", rollbackEx);
-                            commitEx.addSuppressed(rollbackEx);
-                        }
+                        safeRollback(tx, commitEx);
                         throw commitEx;
                     }
                 }
@@ -401,8 +385,6 @@ public class MergeSpec<T> {
                 if (tx != null && !tx.isActive()) {
                     tx.begin();
                     txStarted = true;
-                    batchStartCount = count;
-                    batchStartTotal = total;
                 } else if (tx != null && tx.isActive()) {
                     throw new MyJpaPlusException("executeBatchInSeparateTransactions requires no active transaction. "
                         + "An active RESOURCE_LOCAL transaction was detected. "
@@ -424,15 +406,7 @@ public class MergeSpec<T> {
                     }
                 }
             } catch (RuntimeException e) {
-                if (txStarted && tx != null && tx.isActive()) {
-                    try {
-                        tx.rollback();
-                    } catch (Exception rollbackEx) {
-                        log.error("Transaction rollback failed after batch UPSERT failure", rollbackEx);
-                        e.addSuppressed(rollbackEx);
-                    }
-                }
-                total = batchStartTotal;
+                safeRollback(tx, e);
                 throw e;
             }
         }
@@ -441,17 +415,22 @@ public class MergeSpec<T> {
                 em.flush();
                 tx.commit();
             } catch (RuntimeException e) {
-                try {
-                    tx.rollback();
-                } catch (Exception rollbackEx) {
-                    log.error("Transaction rollback failed after final batch commit failure", rollbackEx);
-                    e.addSuppressed(rollbackEx);
-                }
-                total = batchStartTotal;
+                safeRollback(tx, e);
                 throw e;
             }
         }
         return total;
+    }
+
+    private void safeRollback(EntityTransaction tx, Exception original) {
+        if (tx != null && tx.isActive()) {
+            try {
+                tx.rollback();
+            } catch (Exception rollbackEx) {
+                log.error("Transaction rollback failed", rollbackEx);
+                original.addSuppressed(rollbackEx);
+            }
+        }
     }
 
     private SqlWithParams buildSqlFor(EntityManager em, T entity, String dialect) {

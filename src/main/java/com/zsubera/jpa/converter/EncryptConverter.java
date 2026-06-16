@@ -155,6 +155,40 @@ public class EncryptConverter implements AttributeConverter<String, String> {
     }
 
     /**
+     * 跟踪当前线程是否已注册事务清理回调，避免重复注册。
+     */
+    private static final ThreadLocal<Boolean> CLEANUP_REGISTERED = ThreadLocal.withInitial(() -> Boolean.FALSE);
+
+    /**
+     * 如果当前线程在活动事务中且尚未注册清理回调，则注册一个 TransactionSynchronization
+     * 在事务完成后自动清理 Cipher ThreadLocal，防止内存泄漏。
+     *
+     * <p>
+     * 在虚拟线程（Java 21+）场景下尤其重要，因为虚拟线程数量可能非常大，
+     * 每个虚拟线程都会持有 Cipher 实例。
+     */
+    static void registerTransactionCleanupIfNeeded() {
+        if (Boolean.TRUE.equals(CLEANUP_REGISTERED.get())) {
+            return;
+        }
+        try {
+            if (org.springframework.transaction.support.TransactionSynchronizationManager.isActualTransactionActive()) {
+                CLEANUP_REGISTERED.set(Boolean.TRUE);
+                org.springframework.transaction.support.TransactionSynchronizationManager
+                    .registerSynchronization(new org.springframework.transaction.support.TransactionSynchronization() {
+                        @Override
+                        public void afterCompletion(int status) {
+                            removeCipher();
+                            CLEANUP_REGISTERED.remove();
+                        }
+                    });
+            }
+        } catch (NoClassDefFoundError e) {
+            // Spring not available — skip transaction cleanup registration
+        }
+    }
+
+    /**
      * 清除所有缓存的密钥和版本信息。用于应用关闭时清理和测试环境重置。
      *
      * @deprecated 使用 {@link #clearCaches()} 代替。此方法名称具有误导性（暗示仅限测试）。
@@ -368,6 +402,7 @@ public class EncryptConverter implements AttributeConverter<String, String> {
         }
         try {
             SecretKeySpec keySpec = getKeySpec();
+            registerTransactionCleanupIfNeeded();
             Cipher cipher = CIPHER_THREAD_LOCAL.get();
             byte[] iv = new byte[GCM_IV_LENGTH];
             SECURE_RANDOM.nextBytes(iv);
@@ -439,6 +474,7 @@ public class EncryptConverter implements AttributeConverter<String, String> {
             byte[] encrypted = new byte[combined.length - GCM_IV_LENGTH];
             System.arraycopy(combined, GCM_IV_LENGTH, encrypted, 0, encrypted.length);
             SecretKeySpec keySpec = getKeySpec(version);
+            registerTransactionCleanupIfNeeded();
             Cipher cipher = CIPHER_THREAD_LOCAL.get();
             cipher.init(Cipher.DECRYPT_MODE, keySpec, new GCMParameterSpec(GCM_TAG_LENGTH, iv));
             byte[] decrypted = cipher.doFinal(encrypted);

@@ -53,10 +53,6 @@ public final class EntityManagerHelper {
         justification = "EntityManagerFactory is thread-safe and stateless")
     public static void setEntityManagerFactory(EntityManagerFactory emf) {
         defaultEntityManagerFactory = emf;
-        // 设置默认 EMF 后，如果之前没有注册过自定义 resolver，保持快速路径
-        if (resolvers.isEmpty()) {
-            allResolversUseDefault = true;
-        }
     }
 
     // ---- 多数据源注册 ----

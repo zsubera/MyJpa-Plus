@@ -168,13 +168,10 @@ public final class InClauseBuilder {
         return CONFIG_REF.get();
     }
 
-    /**
-     * 从值集合中分离 null 和非 null 值。
-     *
-     * @param values 原始值数组
-     * @return 分离结果：[0]=非null值列表, [1]=是否包含null
-     */
-    private static Object[] filterNulls(Object[] values) {
+    private record NullFilterResult(List<Object> nonNullValues, boolean hasNull) {
+    }
+
+    private static NullFilterResult filterNulls(Object[] values) {
         List<Object> nonNullValues = new ArrayList<>(values.length);
         boolean hasNull = false;
         for (Object v : values) {
@@ -184,16 +181,10 @@ public final class InClauseBuilder {
                 nonNullValues.add(v);
             }
         }
-        return new Object[] {nonNullValues, hasNull};
+        return new NullFilterResult(nonNullValues, hasNull);
     }
 
-    /**
-     * 从值集合中分离 null 和非 null 值。
-     *
-     * @param values 原始值集合
-     * @return 分离结果：[0]=非null值列表, [1]=是否包含null
-     */
-    private static Object[] filterNulls(Collection<?> values) {
+    private static NullFilterResult filterNulls(Collection<?> values) {
         List<Object> nonNullValues = new ArrayList<>(values.size());
         boolean hasNull = false;
         for (Object v : values) {
@@ -203,7 +194,7 @@ public final class InClauseBuilder {
                 nonNullValues.add(v);
             }
         }
-        return new Object[] {nonNullValues, hasNull};
+        return new NullFilterResult(nonNullValues, hasNull);
     }
 
     /**
@@ -223,10 +214,9 @@ public final class InClauseBuilder {
         if (values == null || values.length == 0) {
             throw new IllegalArgumentException("values must not be empty");
         }
-        Object[] filtered = filterNulls(values);
-        @SuppressWarnings("unchecked")
-        List<Object> nonNullValues = (List<Object>)filtered[0];
-        boolean hasNull = (boolean)filtered[1];
+        NullFilterResult filtered = filterNulls(values);
+        List<Object> nonNullValues = filtered.nonNullValues();
+        boolean hasNull = filtered.hasNull();
         if (nonNullValues.isEmpty()) {
             return cb.isNull(path);
         }
@@ -259,10 +249,9 @@ public final class InClauseBuilder {
         if (values == null || values.isEmpty()) {
             throw new IllegalArgumentException("values must not be empty");
         }
-        Object[] filtered = filterNulls(values);
-        @SuppressWarnings("unchecked")
-        List<Object> nonNullValues = (List<Object>)filtered[0];
-        boolean hasNull = (boolean)filtered[1];
+        NullFilterResult filtered = filterNulls(values);
+        List<Object> nonNullValues = filtered.nonNullValues();
+        boolean hasNull = filtered.hasNull();
         if (nonNullValues.isEmpty()) {
             return cb.isNull(path);
         }
@@ -295,14 +284,10 @@ public final class InClauseBuilder {
         if (values == null || values.length == 0) {
             throw new IllegalArgumentException("values must not be empty");
         }
-        Object[] filtered = filterNulls(values);
-        @SuppressWarnings("unchecked")
-        List<Object> nonNullValues = (List<Object>)filtered[0];
-        boolean hasNull = (boolean)filtered[1];
+        NullFilterResult filtered = filterNulls(values);
+        List<Object> nonNullValues = filtered.nonNullValues();
+        boolean hasNull = filtered.hasNull();
         if (nonNullValues.isEmpty()) {
-            // SQL 语义: NOT IN (NULL) 对每行返回 UNKNOWN（永不匹配）。
-            // Java 语义: list.contains(null) 返回 true → NOT IN 应返回 true（不排除任何行）。
-            // 采用 Java 语义以避免使用者困惑: NOT IN 全为 NULL 时返回 TRUE（不排除任何行）。
             log.warn("NOT IN clause has only NULL values. Returning TRUE (no rows filtered). "
                 + "This differs from SQL semantics where NOT IN (NULL) returns no rows. "
                 + "If you need SQL semantics, add an explicit IS NOT NULL condition.");
@@ -337,14 +322,10 @@ public final class InClauseBuilder {
         if (values == null || values.isEmpty()) {
             throw new IllegalArgumentException("values must not be empty");
         }
-        Object[] filtered = filterNulls(values);
-        @SuppressWarnings("unchecked")
-        List<Object> nonNullValues = (List<Object>)filtered[0];
-        boolean hasNull = (boolean)filtered[1];
+        NullFilterResult filtered = filterNulls(values);
+        List<Object> nonNullValues = filtered.nonNullValues();
+        boolean hasNull = filtered.hasNull();
         if (nonNullValues.isEmpty()) {
-            // SQL 语义: NOT IN (NULL) 对每行返回 UNKNOWN（永不匹配）。
-            // Java 语义: list.contains(null) 返回 true → NOT IN 应返回 true（不排除任何行）。
-            // 采用 Java 语义以避免使用者困惑: NOT IN 全为 NULL 时返回 TRUE（不排除任何行）。
             log.warn("NOT IN clause has only NULL values. Returning TRUE (no rows filtered). "
                 + "This differs from SQL semantics where NOT IN (NULL) returns no rows. "
                 + "If you need SQL semantics, add an explicit IS NOT NULL condition.");

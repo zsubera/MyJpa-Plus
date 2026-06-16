@@ -717,11 +717,13 @@ public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> ext
                 if (fieldNames[i] == null) {
                     throw new IllegalArgumentException("fieldNames[" + i + "] must not be null");
                 }
-                // 使用 SAFE_NESTED_FIELD_NAME_PATTERN 支持点号分隔的字段名
-                // （例如嵌入对象的 "address.city"）
                 if (!SAFE_NESTED_FIELD_NAME_PATTERN.matcher(fieldNames[i]).matches()) {
                     throw new IllegalArgumentException(
                         "fieldNames[" + i + "] contains invalid characters: " + fieldNames[i]);
+                }
+                String[] segments = fieldNames[i].split("\\.");
+                for (String segment : segments) {
+                    IdentifierValidator.validateColumnName(segment);
                 }
             }
             conditions().add(new ConditionNode.MultiLikeNode(keyword, fieldNames));

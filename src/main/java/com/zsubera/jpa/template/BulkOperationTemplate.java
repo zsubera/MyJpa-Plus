@@ -369,6 +369,12 @@ class BulkOperationTemplate {
                     log.debug("Batch {} committed: {} rows {}ed in this batch (total: {})", operationName, batchResult,
                         operationName, total);
                 }
+                if (batchResult < batchSize) {
+                    shouldContinue = false;
+                }
+                if (maxBulkOperationRows > 0 && total >= maxBulkOperationRows) {
+                    shouldContinue = false;
+                }
             } catch (RuntimeException e) {
                 failedBatchIndex = batchCount;
                 failureCause = e;
@@ -377,20 +383,6 @@ class BulkOperationTemplate {
                 if (failureStrategy == BatchFailureStrategy.ABORT) {
                     shouldContinue = false;
                 }
-                // CONTINUE 模式：记录失败但不中断，继续下一批
-                iteration++;
-                if (iteration >= maxBatchIterations) {
-                    log.error("Batch {} reached maximum iterations ({}). Possible infinite loop. Total rows: {}",
-                        operationName, maxBatchIterations, total);
-                    break;
-                }
-                continue;
-            }
-            if (batchResult < batchSize) {
-                shouldContinue = false;
-            }
-            if (maxBulkOperationRows > 0 && total >= maxBulkOperationRows) {
-                shouldContinue = false;
             }
             iteration++;
             if (iteration >= maxBatchIterations) {

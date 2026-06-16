@@ -100,10 +100,6 @@ class TransactionHelper {
      * 使用 {@link TransactionTemplate} 创建独立事务，每次调用都会创建新的事务上下文。
      *
      * <p>
-
-     * 而非注释中错误描述的 REQUIRED（加入现有事务）。
-     *
-     * <p>
      * <strong>重要：</strong>当在已有活动事务中调用时，此方法使用 {@code PROPAGATION_REQUIRES_NEW}，
      * 挂起外部事务并创建独立事务。每个批次会独立提交。
      * 但注意：在某些数据库中，外层事务持有的表锁可能与新事务的锁冲突，
