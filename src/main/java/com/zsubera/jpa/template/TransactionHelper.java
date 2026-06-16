@@ -26,9 +26,6 @@ import java.util.function.Function;
  * </ul>
  *
  * <p>
-
- *
- * <p>
  * <strong>重要限制：</strong>
  * <p>
  * 当在已有活动事务中调用 {@code executeInNewTransaction} 时，操作会挂起外部事务并创建独立的新事务（REQUIRES_NEW）。
