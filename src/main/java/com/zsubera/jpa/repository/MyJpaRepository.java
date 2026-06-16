@@ -71,9 +71,7 @@ public interface MyJpaRepository<T, ID> extends JpaRepository<T, ID>, JpaSpecifi
      * @return 匹配实体列表
      */
     default List<T> findAll(Consumer<QuerySpec<T>> config) {
-        QuerySpec<T> spec = new QuerySpec<>();
-        config.accept(spec);
-        return findAll(spec);
+        return findAll(QuerySpec.of(config));
     }
 
     /**
@@ -98,9 +96,7 @@ public interface MyJpaRepository<T, ID> extends JpaRepository<T, ID>, JpaSpecifi
      * @return 包含匹配实体的分页结果
      */
     default Page<T> findAll(Consumer<QuerySpec<T>> config, Pageable pageable) {
-        QuerySpec<T> spec = new QuerySpec<>();
-        config.accept(spec);
-        return findAll(spec, pageable);
+        return findAll(QuerySpec.of(config), pageable);
     }
 
     /**
@@ -121,9 +117,7 @@ public interface MyJpaRepository<T, ID> extends JpaRepository<T, ID>, JpaSpecifi
      * @return 匹配实体列表
      */
     default List<T> findAll(Consumer<QuerySpec<T>> config, Sort sort) {
-        QuerySpec<T> spec = new QuerySpec<>();
-        config.accept(spec);
-        return findAll(spec, sort);
+        return findAll(QuerySpec.of(config), sort);
     }
 
     /**
@@ -143,9 +137,7 @@ public interface MyJpaRepository<T, ID> extends JpaRepository<T, ID>, JpaSpecifi
      * @return 匹配实体的 Optional 包装
      */
     default Optional<T> findOne(Consumer<QuerySpec<T>> config) {
-        QuerySpec<T> spec = new QuerySpec<>();
-        config.accept(spec);
-        return findOne(spec);
+        return findOne(QuerySpec.of(config));
     }
 
     /**
@@ -164,9 +156,7 @@ public interface MyJpaRepository<T, ID> extends JpaRepository<T, ID>, JpaSpecifi
      * @return 匹配实体数量
      */
     default long count(Consumer<QuerySpec<T>> config) {
-        QuerySpec<T> spec = new QuerySpec<>();
-        config.accept(spec);
-        return count(spec);
+        return count(QuerySpec.of(config));
     }
 
     /**
@@ -185,9 +175,7 @@ public interface MyJpaRepository<T, ID> extends JpaRepository<T, ID>, JpaSpecifi
      * @return 如果存在匹配实体返回 true，否则返回 false
      */
     default boolean exists(Consumer<QuerySpec<T>> config) {
-        QuerySpec<T> spec = new QuerySpec<>();
-        config.accept(spec);
-        return exists(spec);
+        return exists(QuerySpec.of(config));
     }
 
     /**
@@ -206,9 +194,7 @@ public interface MyJpaRepository<T, ID> extends JpaRepository<T, ID>, JpaSpecifi
      * @return 匹配规格说明的未删除实体列表
      */
     default List<T> findNotDeletedAll(Consumer<QuerySpec<T>> config) {
-        QuerySpec<T> spec = new QuerySpec<>();
-        config.accept(spec);
-        return findNotDeletedAll(spec);
+        return findNotDeletedAll(QuerySpec.of(config));
     }
 
     /**
@@ -251,9 +237,7 @@ public interface MyJpaRepository<T, ID> extends JpaRepository<T, ID>, JpaSpecifi
      * @return 包含未删除实体的分页结果
      */
     default Page<T> findNotDeletedAll(Consumer<QuerySpec<T>> config, Pageable pageable) {
-        QuerySpec<T> spec = new QuerySpec<>();
-        config.accept(spec);
-        return findNotDeletedAll(spec, pageable);
+        return findNotDeletedAll(QuerySpec.of(config), pageable);
     }
 
     /**
@@ -281,9 +265,7 @@ public interface MyJpaRepository<T, ID> extends JpaRepository<T, ID>, JpaSpecifi
      * @return 匹配实体的 Optional 包装
      */
     default Optional<T> findNotDeletedOne(Consumer<QuerySpec<T>> config) {
-        QuerySpec<T> spec = new QuerySpec<>();
-        config.accept(spec);
-        return findNotDeletedOne(spec);
+        return findNotDeletedOne(QuerySpec.of(config));
     }
 
     /**
@@ -339,9 +321,7 @@ public interface MyJpaRepository<T, ID> extends JpaRepository<T, ID>, JpaSpecifi
      * @return 未删除实体数量
      */
     default long countNotDeleted(Consumer<QuerySpec<T>> config) {
-        QuerySpec<T> spec = new QuerySpec<>();
-        config.accept(spec);
-        return countNotDeleted(spec);
+        return countNotDeleted(QuerySpec.of(config));
     }
 
     /**

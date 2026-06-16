@@ -97,9 +97,7 @@ public interface MyJpaTemplateOperations {
      * @return 包含实体的 {@link Optional}，如果未找到则为空
      */
     default <T> Optional<T> findOne(Class<T> entityClass, Consumer<QuerySpec<T>> config) {
-        QuerySpec<T> spec = new QuerySpec<>();
-        config.accept(spec);
-        return findOne(entityClass, spec);
+        return findOne(entityClass, QuerySpec.of(config));
     }
 
     /**
@@ -111,9 +109,7 @@ public interface MyJpaTemplateOperations {
      * @return 匹配的实体数量
      */
     default <T> long count(Class<T> entityClass, Consumer<QuerySpec<T>> config) {
-        QuerySpec<T> spec = new QuerySpec<>();
-        config.accept(spec);
-        return count(entityClass, spec);
+        return count(entityClass, QuerySpec.of(config));
     }
 
     /**
@@ -125,9 +121,7 @@ public interface MyJpaTemplateOperations {
      * @return 匹配的实体列表
      */
     default <T> List<T> findAll(Class<T> entityClass, Consumer<QuerySpec<T>> config) {
-        QuerySpec<T> spec = new QuerySpec<>();
-        config.accept(spec);
-        return findAll(entityClass, spec);
+        return findAll(entityClass, QuerySpec.of(config));
     }
 
     /**
@@ -140,9 +134,7 @@ public interface MyJpaTemplateOperations {
      * @return 匹配的实体列表
      */
     default <T> List<T> findAll(Class<T> entityClass, Consumer<QuerySpec<T>> config, int maxResults) {
-        QuerySpec<T> spec = new QuerySpec<>();
-        config.accept(spec);
-        return findAll(entityClass, spec, maxResults);
+        return findAll(entityClass, QuerySpec.of(config), maxResults);
     }
 
     /**
@@ -155,9 +147,7 @@ public interface MyJpaTemplateOperations {
      * @return 匹配的实体列表
      */
     default <T> List<T> findAll(Class<T> entityClass, Consumer<QuerySpec<T>> config, Sort sort) {
-        QuerySpec<T> spec = new QuerySpec<>();
-        config.accept(spec);
-        return findAll(entityClass, spec, sort);
+        return findAll(entityClass, QuerySpec.of(config), sort);
     }
 
     /**
@@ -170,9 +160,7 @@ public interface MyJpaTemplateOperations {
      * @return 包含匹配实体和总数的 {@link Page}
      */
     default <T> Page<T> findAll(Class<T> entityClass, Consumer<QuerySpec<T>> config, Pageable pageable) {
-        QuerySpec<T> spec = new QuerySpec<>();
-        config.accept(spec);
-        return findAll(entityClass, spec, pageable);
+        return findAll(entityClass, QuerySpec.of(config), pageable);
     }
 
     /**
@@ -184,9 +172,7 @@ public interface MyJpaTemplateOperations {
      * @param <T>         实体类型
      */
     default <T> void findAllStream(Class<T> entityClass, Consumer<QuerySpec<T>> config, Consumer<Stream<T>> consumer) {
-        QuerySpec<T> spec = new QuerySpec<>();
-        config.accept(spec);
-        findAllStream(entityClass, spec, consumer);
+        findAllStream(entityClass, QuerySpec.of(config), consumer);
     }
 
     /**
@@ -199,9 +185,7 @@ public interface MyJpaTemplateOperations {
      * @return 匹配的实体列表
      */
     default <T> List<T> findAllCached(Class<T> entityClass, Consumer<QuerySpec<T>> config, long ttlSeconds) {
-        QuerySpec<T> spec = new QuerySpec<>();
-        config.accept(spec);
-        return findAllCached(entityClass, spec, ttlSeconds);
+        return findAllCached(entityClass, QuerySpec.of(config), ttlSeconds);
     }
 
     /**

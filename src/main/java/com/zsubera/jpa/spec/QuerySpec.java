@@ -90,6 +90,34 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
     }
 
     /**
+     * 使用 Lambda 创建并配置 QuerySpec 的便捷工厂方法。
+     *
+     * <p>
+     * 等价于 {@code new QuerySpec<>()} + {@code config.accept(spec)}，将 3 行代码简化为 1 行：
+     *
+     * <pre>{@code
+     * // 之前
+     * QuerySpec<User> spec = new QuerySpec<>();
+     * spec.eq(User::getStatus, "ACTIVE");
+     * repository.findAll(spec);
+     *
+     * // 之后
+     * repository.findAll(QuerySpec.of(s -> s.eq(User::getStatus, "ACTIVE")));
+     * }</pre>
+     *
+     * @param config 查询条件配置消费者
+     * @param <T> 实体类型
+     * @return 配置完成的 QuerySpec 实例
+     */
+    public static <T> QuerySpec<T> of(Consumer<QuerySpec<T>> config) {
+        QuerySpec<T> spec = new QuerySpec<>();
+        if (config != null) {
+            config.accept(spec);
+        }
+        return spec;
+    }
+
+    /**
      * 阻止序列化。QuerySpec 包含不可序列化的内部状态（如 lambda、SFunction）， 不应被序列化。在分布式会话或缓存场景中，请使用可序列化的查询参数重新构建 QuerySpec。
      *
      * @param oos 对象输出流
