@@ -63,9 +63,10 @@ public final class SqlSanitizer {
         Pattern.compile("\\$\\$(?:(?!\\$\\$)[\\s\\S])*\\$\\$|\\$(\\w+)\\$(?:(?!\\$\\1\\$)[\\s\\S])*\\$\\1\\$",
             Pattern.CASE_INSENSITIVE);
 
-    /** Oracle Q 引用字符串模式（q'[...]', q'(...)', q'{...}', q'<...>'） */
+    /** Oracle Q 引用字符串模式（q'[...]', q'(...)', q'{...}', q'<...>'），支持转义定界符（如 '' 或 \\） */
     private static final Pattern Q_QUOTE_PATTERN =
-        Pattern.compile("q'\\[.*?\\]'|q'\\(.*?\\)'|q'\\{.*?\\}'|q'<.*?>'", Pattern.CASE_INSENSITIVE);
+        Pattern.compile("q'\\[(?:[^']|'')*\\]'|q'\\((?:[^']|'')*\\)'|q'\\{(?:[^']|'')*\\}'|q'<(?:[^']|'')*>'",
+            Pattern.CASE_INSENSITIVE);
 
     /**
      * 对 SQL 语句进行脱敏处理，移除可能包含敏感数据的字符串字面量和数字字面量。

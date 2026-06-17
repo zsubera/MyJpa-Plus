@@ -432,9 +432,14 @@ public class QueryCacheManager {
      * 可能导致 deque 与 store 之间的漂移。漂移是自愈的——后续 {@link #put} 调用中的 drift cleanup 会修复。
      */
     public void clear() {
-        store.clear();
-        insertionOrder.clear();
-        dequeSize.set(0);
+        evictionLock.lock();
+        try {
+            store.clear();
+            insertionOrder.clear();
+            dequeSize.set(0);
+        } finally {
+            evictionLock.unlock();
+        }
         log.debug("Cache cleared");
     }
 

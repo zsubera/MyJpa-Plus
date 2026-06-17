@@ -52,8 +52,16 @@ final class KeysetPaginationHelper {
 
     private final EntityManager entityManager;
 
+    /** 是否假设数据库使用 NULLS FIRST 语义（MySQL、PostgreSQL 默认）。 Oracle/SQL Server 默认 NULLS LAST。 */
+    private final boolean nullsFirst;
+
     KeysetPaginationHelper(EntityManager entityManager) {
+        this(entityManager, true);
+    }
+
+    KeysetPaginationHelper(EntityManager entityManager, boolean nullsFirst) {
         this.entityManager = entityManager;
+        this.nullsFirst = nullsFirst;
     }
 
     /**
@@ -84,7 +92,7 @@ final class KeysetPaginationHelper {
         // 应用 keyset 条件（游标定位）
         if (lastSortValues != null) {
             jakarta.persistence.criteria.Predicate keysetPredicate =
-                buildKeysetPredicate(root, cb, orders, lastSortValues);
+                buildKeysetPredicate(root, cb, orders, lastSortValues, nullsFirst);
             if (userPredicate != null) {
                 cq.where(cb.and(userPredicate, keysetPredicate));
             } else {
@@ -128,13 +136,13 @@ final class KeysetPaginationHelper {
      * {@code (a > lastA) OR (a = lastA AND b < lastB)}。
      *
      * <p>
-     * <strong>NULL 排序说明：</strong>此方法假设数据库使用 "NULLS FIRST" 语义（MySQL、PostgreSQL 默认）。
-     * 对于 Oracle/SQL Server（默认 NULLS LAST），需要在 ORDER BY 中显式指定 NULLS FIRST/LAST，
-     * 或在查询中使用 {@code COALESCE(column, default_value)} 替代 NULL 值。
+     * <strong>NULL 排序说明：</strong>此方法根据 {@code nullsFirst} 参数决定 NULL 排序语义。
+     * MySQL/PostgreSQL 默认 NULLS FIRST，Oracle/SQL Server 默认 NULLS LAST。
+     * 可通过构造函数 {@link #KeysetPaginationHelper(EntityManager, boolean)} 配置。
      */
     @SuppressWarnings({"unchecked", "rawtypes"})
     private static jakarta.persistence.criteria.Predicate buildKeysetPredicate(Root<?> root, CriteriaBuilder cb,
-        List<Sort.Order> orders, Object[] lastSortValues) {
+        List<Sort.Order> orders, Object[] lastSortValues, boolean nullsFirst) {
         if (orders.size() == 1) {
             Sort.Order order = orders.get(0);
             jakarta.persistence.criteria.Expression<Comparable> field =
@@ -142,12 +150,13 @@ final class KeysetPaginationHelper {
                     .get(order.getProperty());
             Object value = lastSortValues[0];
             if (value == null) {
-                if (order.isAscending()) {
-                    // ASC: nulls first, so "next page" = non-null values
+                // NULLS FIRST: nulls are at the start → after passing nulls, next page = non-null values
+                // NULLS LAST: nulls are at the end → after seeing null, we're at the end → match nothing
+                if (nullsFirst) {
                     return cb.isNotNull(field);
                 } else {
-                    // DESC: nulls first, so "next page" = non-null values (same as ASC case)
-                    return cb.isNotNull(field);
+                    // NULLS LAST + null cursor = at end of sort, no next page
+                    return cb.disjunction();
                 }
             }
             if (order.isAscending()) {
@@ -175,11 +184,12 @@ final class KeysetPaginationHelper {
                     .get(currentOrder.getProperty());
             Object currentValue = lastSortValues[i];
             if (currentValue == null) {
-                if (currentOrder.isAscending()) {
-                    andPredicates.add(cb.isNull(currentField));
-                } else {
-                    // DESC null: 后续页 = 非 null 值（数据库默认 nulls first 时）
+                if (nullsFirst) {
+                    // NULLS FIRST: nulls at start → after passing nulls, next page = non-null values
                     andPredicates.add(cb.isNotNull(currentField));
+                } else {
+                    // NULLS LAST: nulls at end → null cursor means at end of sort
+                    andPredicates.add(cb.disjunction());
                 }
             } else if (currentOrder.isAscending()) {
                 andPredicates.add(cb.greaterThan(currentField, (Comparable)currentValue));

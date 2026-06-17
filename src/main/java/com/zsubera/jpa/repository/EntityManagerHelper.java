@@ -138,7 +138,13 @@ public final class EntityManagerHelper {
             return;
         }
         for (EntityManagerResolver resolver : resolvers.values()) {
-            if (resolver.resolve(null) != defaultEmf) {
+            try {
+                if (resolver.resolve(null) != defaultEmf) {
+                    allResolversUseDefault = false;
+                    return;
+                }
+            } catch (Exception e) {
+                // resolver 不支持 null 参数，视为不指向默认 EMF
                 allResolversUseDefault = false;
                 return;
             }

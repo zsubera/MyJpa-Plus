@@ -5,8 +5,6 @@ import jakarta.persistence.AttributeConverter;
 
 import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
@@ -126,13 +124,24 @@ public class EncryptConverter implements AttributeConverter<String, String> {
 
     static {
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {
-            WARM_UP_EXECUTOR.shutdownNow();
+            WARM_UP_EXECUTOR.shutdown();
+            try {
+                if (!WARM_UP_EXECUTOR.awaitTermination(2, java.util.concurrent.TimeUnit.SECONDS)) {
+                    WARM_UP_EXECUTOR.shutdownNow();
+                }
+            } catch (InterruptedException e) {
+                WARM_UP_EXECUTOR.shutdownNow();
+                Thread.currentThread().interrupt();
+            }
         }, "encrypt-key-warmup-shutdown"));
     }
 
     /** 开发环境可选：显式设置为 true 时跳过盐值检查（仅限开发环境）。 */
     private static final String SKIP_SALT_PROPERTY = "myjpa-plus.encrypt.skip-salt-check";
     private static final String SKIP_SALT_ENV = "MYJPA_ENCRYPT_SKIP_SALT_CHECK";
+
+    /** 开发环境固定盐值。仅在 skip-salt-check=true 时使用，确保跨 JVM 重启的数据可恢复性。 */
+    private static final String DEV_SALT = "myjpa-plus-dev-salt-2024";
 
     /** 加密数据版本前缀匹配模式（如 "v1"、"v2"）。 */
     private static final java.util.regex.Pattern VERSION_PATTERN = java.util.regex.Pattern.compile("v\\d+");
@@ -152,40 +161,6 @@ public class EncryptConverter implements AttributeConverter<String, String> {
      */
     public static void removeCipher() {
         CIPHER_THREAD_LOCAL.remove();
-    }
-
-    /**
-     * 跟踪当前线程是否已注册事务清理回调，避免重复注册。
-     */
-    private static final ThreadLocal<Boolean> CLEANUP_REGISTERED = ThreadLocal.withInitial(() -> Boolean.FALSE);
-
-    /**
-     * 如果当前线程在活动事务中且尚未注册清理回调，则注册一个 TransactionSynchronization
-     * 在事务完成后自动清理 Cipher ThreadLocal，防止内存泄漏。
-     *
-     * <p>
-     * 在虚拟线程（Java 21+）场景下尤其重要，因为虚拟线程数量可能非常大，
-     * 每个虚拟线程都会持有 Cipher 实例。
-     */
-    static void registerTransactionCleanupIfNeeded() {
-        if (Boolean.TRUE.equals(CLEANUP_REGISTERED.get())) {
-            return;
-        }
-        try {
-            if (org.springframework.transaction.support.TransactionSynchronizationManager.isActualTransactionActive()) {
-                CLEANUP_REGISTERED.set(Boolean.TRUE);
-                org.springframework.transaction.support.TransactionSynchronizationManager
-                    .registerSynchronization(new org.springframework.transaction.support.TransactionSynchronization() {
-                        @Override
-                        public void afterCompletion(int status) {
-                            removeCipher();
-                            CLEANUP_REGISTERED.remove();
-                        }
-                    });
-            }
-        } catch (NoClassDefFoundError e) {
-            // Spring not available — skip transaction cleanup registration
-        }
     }
 
     /**
@@ -402,7 +377,6 @@ public class EncryptConverter implements AttributeConverter<String, String> {
         }
         try {
             SecretKeySpec keySpec = getKeySpec();
-            registerTransactionCleanupIfNeeded();
             Cipher cipher = CIPHER_THREAD_LOCAL.get();
             byte[] iv = new byte[GCM_IV_LENGTH];
             SECURE_RANDOM.nextBytes(iv);
@@ -476,7 +450,6 @@ public class EncryptConverter implements AttributeConverter<String, String> {
             byte[] encrypted = new byte[combined.length - GCM_IV_LENGTH];
             System.arraycopy(combined, GCM_IV_LENGTH, encrypted, 0, encrypted.length);
             SecretKeySpec keySpec = getKeySpec(version);
-            registerTransactionCleanupIfNeeded();
             Cipher cipher = CIPHER_THREAD_LOCAL.get();
             cipher.init(Cipher.DECRYPT_MODE, keySpec, new GCMParameterSpec(GCM_TAG_LENGTH, iv));
             byte[] decrypted = cipher.doFinal(encrypted);
@@ -679,40 +652,14 @@ public class EncryptConverter implements AttributeConverter<String, String> {
                     + "Set environment variable " + SALT_ENV + " or system property " + SALT_PROPERTY + ".");
             }
             log.warn("SECURITY: PBKDF2 salt check is skipped via configuration. "
-                + "Encrypted data will use a predictable default salt. "
+                + "Encrypted data will use a fixed development salt. "
                 + "Data encrypted with this salt WILL NOT BE RECOVERABLE if the key changes. "
                 + "Set environment variable {} or system property {} for production.", SALT_ENV, SALT_PROPERTY);
-            String keyEnv = System.getenv(KEY_ENV);
-            String keyProp = System.getProperty(KEY_PROPERTY);
-            String key = (keyEnv != null && !keyEnv.isEmpty()) ? keyEnv : keyProp;
-            if (key != null) {
-                String saltSeed = "myjpa-plus-dev-salt:" + sha256Hex(key);
-                return saltSeed.getBytes(StandardCharsets.UTF_8);
-            }
-            throw new IllegalStateException("PBKDF2 salt not configured and encryption key unavailable. " + "Set "
-                + SALT_ENV + " environment variable or " + SALT_PROPERTY + " system property.");
+            return DEV_SALT.getBytes(StandardCharsets.UTF_8);
         }
         throw new IllegalStateException("PBKDF2 salt must be configured. " + "Set environment variable " + SALT_ENV
             + " or system property " + SALT_PROPERTY + ". " + "Salt is required for PBKDF2 key derivation security. "
             + "To skip this check (development only), set " + SKIP_SALT_PROPERTY + "=true.");
-    }
-
-    /**
-     * 计算字符串的 SHA-256 哈希并返回十六进制表示。
-     * 用于开发环境盐值派生，替代 hashCode() 以提高安全性。
-     */
-    private static String sha256Hex(String input) {
-        try {
-            MessageDigest digest = MessageDigest.getInstance("SHA-256");
-            byte[] hash = digest.digest(input.getBytes(StandardCharsets.UTF_8));
-            StringBuilder hex = new StringBuilder(hash.length * 2);
-            for (byte b : hash) {
-                hex.append(String.format("%02x", b & 0xff));
-            }
-            return hex.toString();
-        } catch (NoSuchAlgorithmException e) {
-            throw new MyJpaPlusException("SHA-256 algorithm not available", e);
-        }
     }
 
     /**

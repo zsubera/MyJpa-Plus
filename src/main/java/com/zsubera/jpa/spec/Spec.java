@@ -54,6 +54,11 @@ public final class Spec {
         if (specs == null || specs.length == 0) {
             throw new IllegalArgumentException("specs must not be null or empty");
         }
+        for (int i = 0; i < specs.length; i++) {
+            if (specs[i] == null) {
+                throw new IllegalArgumentException("specs[" + i + "] must not be null");
+            }
+        }
         if (specs.length == 1) {
             return specs[0];
         }
@@ -79,6 +84,11 @@ public final class Spec {
     public static <T> Specification<T> any(Specification<T>... specs) {
         if (specs == null || specs.length == 0) {
             throw new IllegalArgumentException("specs must not be null or empty");
+        }
+        for (int i = 0; i < specs.length; i++) {
+            if (specs[i] == null) {
+                throw new IllegalArgumentException("specs[" + i + "] must not be null");
+            }
         }
         if (specs.length == 1) {
             return specs[0];

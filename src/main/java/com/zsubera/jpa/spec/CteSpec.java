@@ -508,9 +508,12 @@ public class CteSpec {
                     }
                 }
             }
-        } catch (Exception e) {
+        } catch (ClassNotFoundException | NoSuchMethodException | IllegalAccessException e) {
             log.warn("CteSpec: Cannot determine database product name for fetchSize, streaming may be inefficient: {}",
                 e.getMessage());
+        } catch (java.lang.reflect.InvocationTargetException e) {
+            log.warn("CteSpec: Failed to execute reflection call for fetchSize: {}",
+                e.getCause() != null ? e.getCause().getMessage() : e.getMessage());
         }
     }
 

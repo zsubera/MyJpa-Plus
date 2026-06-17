@@ -80,6 +80,8 @@ public final class SoftDeleteContext {
     public static void setMaxIgnoreCount(int count) {
         if (count > 0 && count <= 1024) {
             maxIgnoreCount = count;
+        } else {
+            log.warn("Invalid maxIgnoreCount value: {}. Must be between 1 and 1024. Value not set.", count);
         }
     }
 

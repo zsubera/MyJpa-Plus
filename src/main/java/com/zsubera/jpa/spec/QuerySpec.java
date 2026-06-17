@@ -173,6 +173,12 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
      */
     @SuppressWarnings("unchecked")
     public QuerySpec<T> copy() {
+        // 警告：如果在 OR 组内调用 copy()，副本的 groupStack 为空，后续条件将添加到根（AND）
+        if (!groupStack.isEmpty()) {
+            log.warn("QuerySpec.copy() called inside or() consumer. "
+                + "The copy's groupStack is empty, so subsequent conditions will be added to the root (AND), "
+                + "not to the or() group. This may not be the intended behavior.");
+        }
         // 快速路径：空条件树无需深拷贝
         if (conditions.isEmpty() && orderNodes.isEmpty() && groupByFields.isEmpty() && havingConditions.isEmpty()
             && queryTimeout == null && lockMode == null) {
@@ -422,14 +428,15 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
 
     /**
      * 将值的哈希码写入缓存键，而非原始值。防止密码、token 等敏感数据泄露到缓存键中。
-     * hashCode 碰撞概率极低（字段名+运算符+哈希的组合），对缓存键唯一性无实际影响。
+     * 包含类型信息以减少不同类型的值产生相同缓存键的碰撞概率。
      */
     private static void appendHashedValue(StringBuilder sb, Object value) {
         if (value instanceof String s) {
-            sb.append("H[").append(s.length()).append(":").append(s.hashCode()).append("]");
+            sb.append("S[").append(s.length()).append(":").append(s.hashCode()).append("]");
         } else {
             String s = String.valueOf(value);
-            sb.append("H[").append(s.length()).append(":").append(s.hashCode()).append("]");
+            sb.append("N[").append(value.getClass().getSimpleName()).append(":").append(s.length()).append(":")
+                .append(s.hashCode()).append("]");
         }
     }
 
@@ -1020,10 +1027,8 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
      * </ul>
      *
      * <p>
-     * <strong>所有权转移：</strong>调用 {@code then()} 后，{@code other} 的条件节点列表被追加到当前 spec。
-     * 虽然顶层列表是浅拷贝，但 {@link ConditionNode} 对象本身是共享引用。
-     * 因此，调用后不应再修改 {@code other} 的条件节点，否则会影响当前 spec。
-     * 推荐用法：创建新的 {@code other} 并在调用 {@code then()} 后不再使用它。
+     * <strong>所有权转移：</strong>调用 {@code then()} 后，{@code other} 的条件节点会被深拷贝到当前 spec。
+     * 修改 {@code other} 的条件节点不会影响当前 spec。{@code other} 可以安全地继续使用或丢弃。
      *
      * @param other 另一个 QuerySpec 实例
      * @return 当前 QuerySpec 实例，支持链式调用
@@ -1042,7 +1047,9 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
             throw new IllegalStateException(
                 "Cannot merge a QuerySpec with unclosed or() groups. Close all groups with endOr() before calling then().");
         }
-        this.conditions.addAll(new ArrayList<>(other.conditions));
+        for (ConditionNode node : other.conditions) {
+            this.conditions.add(deepCopyNode(node));
+        }
         if (other.distinct) {
             this.distinct = true;
         }

@@ -385,6 +385,9 @@ public final class InClauseBuilder {
             int end = Math.min(i + config.maxInClauseSize(), valueList.size());
             batchPredicates.add(buildSingleIn(cb, path, valueList.subList(i, end)));
         }
+        if (batchPredicates.size() == 1) {
+            return batchPredicates.get(0);
+        }
         return cb.or(batchPredicates.toArray(new Predicate[0]));
     }
 
@@ -414,6 +417,9 @@ public final class InClauseBuilder {
         for (int i = 0; i < valueList.size(); i += config.maxInClauseSize()) {
             int end = Math.min(i + config.maxInClauseSize(), valueList.size());
             batchPredicates.add(cb.not(buildSingleIn(cb, path, valueList.subList(i, end))));
+        }
+        if (batchPredicates.size() == 1) {
+            return batchPredicates.get(0);
         }
         return cb.and(batchPredicates.toArray(new Predicate[0]));
     }

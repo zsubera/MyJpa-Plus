@@ -165,8 +165,27 @@ public final class SoftDeleteHelper {
             @SuppressWarnings({"unchecked", "rawtypes"})
             Enum<?> deletedEnumValue = Enum.valueOf((Class<Enum>)field.getType(), annotation.deletedValue());
             Enumerated enumerated = field.getAnnotation(Enumerated.class);
-            Object dbValue = (enumerated != null && enumerated.value() == EnumType.STRING) ? deletedEnumValue.name()
-                : deletedEnumValue.ordinal();
+            com.zsubera.jpa.converter.CodeEnum codeEnumAnnotation =
+                field.getAnnotation(com.zsubera.jpa.converter.CodeEnum.class);
+            Object dbValue;
+            if (codeEnumAnnotation != null) {
+                // @CodeEnum 优先：使用 @CodeEnumValue 字段的值作为数据库值
+                java.lang.reflect.Field codeField =
+                    com.zsubera.jpa.converter.CodeEnumType.resolveCodeField(field.getType());
+                if (codeField != null) {
+                    try {
+                        dbValue = codeField.get(deletedEnumValue);
+                    } catch (IllegalAccessException e) {
+                        dbValue = deletedEnumValue.name();
+                    }
+                } else {
+                    dbValue = deletedEnumValue.name();
+                }
+            } else if (enumerated != null && enumerated.value() == EnumType.STRING) {
+                dbValue = deletedEnumValue.name();
+            } else {
+                dbValue = deletedEnumValue.ordinal();
+            }
             return new ResolvedDeletedValue(false, dbValue);
         }
         if (field.getType() == String.class) {
@@ -256,10 +275,17 @@ public final class SoftDeleteHelper {
         String escapedTable = validateIdentifier(tableName);
         String escapedColumn = validateIdentifier(columnName);
         ResolvedDeletedValue resolved = resolveDeletedValue(entityClass, field, annotation);
-        // 行数保护：先 COUNT 再执行
+        // 行数保护：先 COUNT 再执行（仅计数实际会被更新的行，即未软删除的行）
         if (maxRows > 0) {
-            String countSql = "SELECT COUNT(*) FROM " + escapedTable;
-            var countQuery = em.createNativeQuery(countSql);
+            String countSql;
+            var countQuery = em.createNativeQuery("SELECT COUNT(*) FROM " + escapedTable + " WHERE "
+                + (resolved.booleanField() ? "(" + escapedColumn + " = ?1 OR " + escapedColumn + " IS NULL)"
+                    : "(" + escapedColumn + " != ?2 OR " + escapedColumn + " IS NULL)"));
+            if (resolved.booleanField()) {
+                countQuery.setParameter(1, Boolean.FALSE);
+            } else {
+                countQuery.setParameter(2, resolved.dbValue());
+            }
             QueryTimeoutHelper.applyTimeout(countQuery);
             long rowCount = ((Number)countQuery.getSingleResult()).longValue();
             if (rowCount > maxRows) {

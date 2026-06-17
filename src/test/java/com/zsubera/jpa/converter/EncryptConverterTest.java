@@ -146,9 +146,4 @@ class EncryptConverterTest {
         assertDoesNotThrow(() -> converter.convertToDatabaseColumn("after-clear"));
     }
 
-    @Test
-    @DisplayName("registerTransactionCleanupIfNeeded does not throw outside transaction")
-    void shouldNotThrowWhenNoTransaction() {
-        assertDoesNotThrow(EncryptConverter::registerTransactionCleanupIfNeeded);
-    }
 }
