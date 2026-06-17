@@ -617,9 +617,11 @@ public class UpdateSpec<T> extends AbstractBulkOperationSpec<T, UpdateSpec<T>> {
                     // 继续检查父类
                 }
             }
-            evictCacheIfNeeded(NUMERIC_FIELD_CACHE);
             return false;
         });
+        if (NUMERIC_FIELD_CACHE.size() > MAX_CACHE_SIZE) {
+            evictCacheIfNeeded(NUMERIC_FIELD_CACHE);
+        }
         if (!isNumeric) {
             // 尝试获取字段类型用于错误消息
             String fieldType = "unknown";

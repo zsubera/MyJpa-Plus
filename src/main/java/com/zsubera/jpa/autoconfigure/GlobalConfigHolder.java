@@ -27,6 +27,8 @@ public final class GlobalConfigHolder {
      */
     private static volatile MyJpaPlusGlobalConfig config;
 
+    private static final MyJpaPlusGlobalConfig DEFAULT_CONFIG = new MyJpaPlusGlobalConfig();
+
     /**
      * 设置全局配置。应在应用启动阶段调用一次。
      *
@@ -46,7 +48,7 @@ public final class GlobalConfigHolder {
     public static MyJpaPlusGlobalConfig getConfig() {
         MyJpaPlusGlobalConfig c = config;
         if (c == null) {
-            c = new MyJpaPlusGlobalConfig();
+            return DEFAULT_CONFIG;
         }
         return c;
     }

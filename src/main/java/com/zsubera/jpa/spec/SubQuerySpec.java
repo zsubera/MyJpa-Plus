@@ -24,6 +24,10 @@ import org.springframework.lang.Nullable;
  * 外部查询构建之前完全构造完成。谓词构造委托给 {@link PredicateHelper} 以与其他组件共享逻辑。
  *
  * <p>
+ * 条件便捷方法（带 {@code boolean condition} 参数）通过实现 {@link ConditionalMethods} 接口统一提供，避免与
+ * {@link ConditionBuilder} 重复。
+ *
+ * <p>
  * 新增条件类型时，需同步更新以下位置：
  * <ol>
  * <li>{@link ConditionBuilder} — 查询构建器</li>
@@ -40,7 +44,7 @@ import org.springframework.lang.Nullable;
  *
  * @param <S> 子查询实体类型
  */
-public class SubQuerySpec<S> {
+public class SubQuerySpec<S> implements ConditionalMethods<S, SubQuerySpec<S>> {
 
     private final Subquery<S> subquery;
     private final Root<S> root;
@@ -51,12 +55,20 @@ public class SubQuerySpec<S> {
     private Class<?> selectType;
     /** 缓存的 SELECT 字段名，用于 inSubQuery 两阶段类型推断中的 select 重放。 */
     private String selectFieldName;
+    /** 标记是否为 or()/not() 创建的子实例（共享 subquery 引用）。 */
+    private final boolean isChild;
 
     private SubQuerySpec(Subquery<S> subquery, Root<S> root, Root<?> correlatedRoot, CriteriaBuilder cb) {
+        this(subquery, root, correlatedRoot, cb, false);
+    }
+
+    private SubQuerySpec(Subquery<S> subquery, Root<S> root, Root<?> correlatedRoot, CriteriaBuilder cb,
+        boolean isChild) {
         this.subquery = subquery;
         this.root = root;
         this.correlatedRoot = correlatedRoot;
         this.cb = cb;
+        this.isChild = isChild;
     }
 
     /**
@@ -84,6 +96,11 @@ public class SubQuerySpec<S> {
             throw new IllegalArgumentException("cb must not be null");
         }
         return new SubQuerySpec<>(subquery, root, correlatedRoot, cb);
+    }
+
+    @Override
+    public SubQuerySpec<S> self() {
+        return this;
     }
 
     /**
@@ -158,6 +175,42 @@ public class SubQuerySpec<S> {
     }
 
     // ---- 比较运算符 ----
+
+    /**
+     * 添加子查询实体的严格等值条件。value 为 null 时抛出异常。
+     *
+     * @param field 实体字段
+     * @param value 比较值，不能为 null
+     * @return 当前 SubQuerySpec 实例，支持链式调用
+     * @throws IllegalArgumentException 如果 field 或 value 为 null
+     */
+    public SubQuerySpec<S> eqStrict(SFunction<S, ?> field, Object value) {
+        if (field == null) {
+            throw new IllegalArgumentException("field must not be null");
+        }
+        if (value == null) {
+            throw new IllegalArgumentException("value must not be null. Use isNull() for null comparisons.");
+        }
+        return eq(field, value);
+    }
+
+    /**
+     * 添加子查询实体的严格不等条件。value 为 null 时抛出异常。
+     *
+     * @param field 实体字段
+     * @param value 比较值，不能为 null
+     * @return 当前 SubQuerySpec 实例，支持链式调用
+     * @throws IllegalArgumentException 如果 field 或 value 为 null
+     */
+    public SubQuerySpec<S> neStrict(SFunction<S, ?> field, Object value) {
+        if (field == null) {
+            throw new IllegalArgumentException("field must not be null");
+        }
+        if (value == null) {
+            throw new IllegalArgumentException("value must not be null. Use isNotNull() for null comparisons.");
+        }
+        return ne(field, value);
+    }
 
     /**
      * 添加子查询实体的等值条件。value 为 null 时自动转为 IS NULL。
@@ -348,6 +401,48 @@ public class SubQuerySpec<S> {
             throw new IllegalArgumentException("value must not be null");
         }
         predicates.add(PredicateHelper.endsWith(root, LambdaUtils.property(field), value, cb));
+        return this;
+    }
+
+    /**
+     * 添加子查询实体的不匹配前缀条件。
+     *
+     * @param field 实体字段
+     * @param value 前缀值
+     * @return 当前 SubQuerySpec 实例，支持链式调用
+     * @throws IllegalArgumentException 如果 value 为 null
+     */
+    public SubQuerySpec<S> notStartsWith(SFunction<S, ?> field, String value) {
+        if (field == null) {
+            throw new IllegalArgumentException("field must not be null");
+        }
+        if (value == null) {
+            throw new IllegalArgumentException("value must not be null");
+        }
+        String pattern = PredicateHelper.escapeLikeWildcards(value) + "%";
+        predicates.add(
+            PredicateHelper.notLike(root, LambdaUtils.property(field), pattern, cb, PredicateHelper.LIKE_ESCAPE_CHAR));
+        return this;
+    }
+
+    /**
+     * 添加子查询实体的不匹配后缀条件。
+     *
+     * @param field 实体字段
+     * @param value 后缀值
+     * @return 当前 SubQuerySpec 实例，支持链式调用
+     * @throws IllegalArgumentException 如果 value 为 null
+     */
+    public SubQuerySpec<S> notEndsWith(SFunction<S, ?> field, String value) {
+        if (field == null) {
+            throw new IllegalArgumentException("field must not be null");
+        }
+        if (value == null) {
+            throw new IllegalArgumentException("value must not be null");
+        }
+        String pattern = "%" + PredicateHelper.escapeLikeWildcards(value);
+        predicates.add(
+            PredicateHelper.notLike(root, LambdaUtils.property(field), pattern, cb, PredicateHelper.LIKE_ESCAPE_CHAR));
         return this;
     }
 
@@ -680,7 +775,7 @@ public class SubQuerySpec<S> {
         if (config == null) {
             throw new IllegalArgumentException("config must not be null");
         }
-        SubQuerySpec<S> child = new SubQuerySpec<>(subquery, root, correlatedRoot, cb);
+        SubQuerySpec<S> child = new SubQuerySpec<>(subquery, root, correlatedRoot, cb, true);
         config.accept(child);
         if (!child.predicates.isEmpty()) {
             predicates.add(child.predicates.size() == 1 ? child.predicates.get(0)
@@ -705,7 +800,7 @@ public class SubQuerySpec<S> {
         if (config == null) {
             throw new IllegalArgumentException("config must not be null");
         }
-        SubQuerySpec<S> child = new SubQuerySpec<>(subquery, root, correlatedRoot, cb);
+        SubQuerySpec<S> child = new SubQuerySpec<>(subquery, root, correlatedRoot, cb, true);
         config.accept(child);
         if (!child.predicates.isEmpty()) {
             Predicate combined = child.predicates.size() == 1 ? child.predicates.get(0)
@@ -737,237 +832,6 @@ public class SubQuerySpec<S> {
         return condition ? not(config) : this;
     }
 
-    // ---- 条件便捷方法 ----
-
-    /**
-     * 仅在 {@code condition} 为 true 时添加等值条件。
-     *
-     * @param condition 是否添加条件的标志
-     * @param field 实体属性的方法引用
-     * @param value 要比较的值
-     * @return 当前 SubQuerySpec 实例，支持链式调用
-     */
-    public SubQuerySpec<S> eq(boolean condition, SFunction<S, ?> field, @Nullable Object value) {
-        return condition ? eq(field, value) : this;
-    }
-
-    /**
-     * 仅在 {@code condition} 为 true 时添加不等条件。
-     *
-     * @param condition 是否添加条件的标志
-     * @param field 实体属性的方法引用
-     * @param value 要比较的值
-     * @return 当前 SubQuerySpec 实例，支持链式调用
-     */
-    public SubQuerySpec<S> ne(boolean condition, SFunction<S, ?> field, @Nullable Object value) {
-        return condition ? ne(field, value) : this;
-    }
-
-    /**
-     * 仅在 {@code condition} 为 true 时添加大于条件。
-     *
-     * @param condition 是否添加条件的标志
-     * @param field 实体属性的方法引用
-     * @param value 要比较的值
-     * @return 当前 SubQuerySpec 实例，支持链式调用
-     */
-    public SubQuerySpec<S> gt(boolean condition, SFunction<S, ?> field, Comparable<?> value) {
-        return condition ? gt(field, value) : this;
-    }
-
-    /**
-     * 仅在 {@code condition} 为 true 时添加大于等于条件。
-     *
-     * @param condition 是否添加条件的标志
-     * @param field 实体属性的方法引用
-     * @param value 要比较的值
-     * @return 当前 SubQuerySpec 实例，支持链式调用
-     */
-    public SubQuerySpec<S> ge(boolean condition, SFunction<S, ?> field, Comparable<?> value) {
-        return condition ? ge(field, value) : this;
-    }
-
-    /**
-     * 仅在 {@code condition} 为 true 时添加小于条件。
-     *
-     * @param condition 是否添加条件的标志
-     * @param field 实体属性的方法引用
-     * @param value 要比较的值
-     * @return 当前 SubQuerySpec 实例，支持链式调用
-     */
-    public SubQuerySpec<S> lt(boolean condition, SFunction<S, ?> field, Comparable<?> value) {
-        return condition ? lt(field, value) : this;
-    }
-
-    /**
-     * 仅在 {@code condition} 为 true 时添加小于等于条件。
-     *
-     * @param condition 是否添加条件的标志
-     * @param field 实体属性的方法引用
-     * @param value 要比较的值
-     * @return 当前 SubQuerySpec 实例，支持链式调用
-     */
-    public SubQuerySpec<S> le(boolean condition, SFunction<S, ?> field, Comparable<?> value) {
-        return condition ? le(field, value) : this;
-    }
-
-    /**
-     * 仅在 {@code condition} 为 true 时添加前缀匹配条件。
-     *
-     * @param condition 是否添加条件的标志
-     * @param field 实体属性的方法引用
-     * @param value 前缀字符串值
-     * @return 当前 SubQuerySpec 实例，支持链式调用
-     */
-    public SubQuerySpec<S> startsWith(boolean condition, SFunction<S, ?> field, String value) {
-        return condition ? startsWith(field, value) : this;
-    }
-
-    /**
-     * 仅在 {@code condition} 为 true 时添加后缀匹配条件。
-     *
-     * @param condition 是否添加条件的标志
-     * @param field 实体属性的方法引用
-     * @param value 后缀字符串值
-     * @return 当前 SubQuerySpec 实例，支持链式调用
-     */
-    public SubQuerySpec<S> endsWith(boolean condition, SFunction<S, ?> field, String value) {
-        return condition ? endsWith(field, value) : this;
-    }
-
-    /**
-     * 仅在 {@code condition} 为 true 时添加 LIKE 条件。
-     *
-     * @param condition 是否添加条件的标志
-     * @param field 实体属性的方法引用
-     * @param value 匹配值
-     * @return 当前 SubQuerySpec 实例，支持链式调用
-     */
-    public SubQuerySpec<S> like(boolean condition, SFunction<S, ?> field, String value) {
-        return condition ? like(field, value) : this;
-    }
-
-    /**
-     * 仅在 {@code condition} 为 true 时添加 NOT LIKE 条件。
-     *
-     * @param condition 是否添加条件的标志
-     * @param field 实体属性的方法引用
-     * @param value 匹配值
-     * @return 当前 SubQuerySpec 实例，支持链式调用
-     */
-    public SubQuerySpec<S> notLike(boolean condition, SFunction<S, ?> field, String value) {
-        return condition ? notLike(field, value) : this;
-    }
-
-    /**
-     * 仅在 {@code condition} 为 true 时添加 IN 条件。
-     *
-     * @param condition 是否添加条件的标志
-     * @param field 实体属性的方法引用
-     * @param values 值集合
-     * @return 当前 SubQuerySpec 实例，支持链式调用
-     */
-    public SubQuerySpec<S> in(boolean condition, SFunction<S, ?> field, Object... values) {
-        return condition ? in(field, values) : this;
-    }
-
-    /**
-     * 仅在 {@code condition} 为 true 时添加 NOT IN 条件。
-     *
-     * @param condition 是否添加条件的标志
-     * @param field 实体属性的方法引用
-     * @param values 值集合
-     * @return 当前 SubQuerySpec 实例，支持链式调用
-     */
-    public SubQuerySpec<S> notIn(boolean condition, SFunction<S, ?> field, Object... values) {
-        return condition ? notIn(field, values) : this;
-    }
-
-    /**
-     * 仅在 {@code condition} 为 true 时添加 IN 条件（集合形式）。
-     *
-     * @param condition 是否添加条件的标志
-     * @param field 实体属性的方法引用
-     * @param values 值的集合
-     * @return 当前 SubQuerySpec 实例，支持链式调用
-     */
-    public SubQuerySpec<S> in(boolean condition, SFunction<S, ?> field, Collection<?> values) {
-        return condition ? in(field, values) : this;
-    }
-
-    /**
-     * 仅在 {@code condition} 为 true 时添加 NOT IN 条件（集合形式）。
-     *
-     * @param condition 是否添加条件的标志
-     * @param field 实体属性的方法引用
-     * @param values 值的集合
-     * @return 当前 SubQuerySpec 实例，支持链式调用
-     */
-    public SubQuerySpec<S> notIn(boolean condition, SFunction<S, ?> field, Collection<?> values) {
-        return condition ? notIn(field, values) : this;
-    }
-
-    /**
-     * 仅在 {@code condition} 为 true 时添加 BETWEEN 条件。
-     *
-     * @param condition 是否添加条件的标志
-     * @param field 实体属性的方法引用
-     * @param start 范围起始值（包含）
-     * @param end 范围结束值（包含）
-     * @return 当前 SubQuerySpec 实例，支持链式调用
-     */
-    public SubQuerySpec<S> between(boolean condition, SFunction<S, ?> field, Comparable<?> start, Comparable<?> end) {
-        return condition ? between(field, start, end) : this;
-    }
-
-    /**
-     * 仅在 {@code condition} 为 true 时添加 NOT BETWEEN 条件。
-     *
-     * @param condition 是否添加条件的标志
-     * @param field 实体属性的方法引用
-     * @param start 范围起始值（包含）
-     * @param end 范围结束值（包含）
-     * @return 当前 SubQuerySpec 实例，支持链式调用
-     */
-    public SubQuerySpec<S> notBetween(boolean condition, SFunction<S, ?> field, Comparable<?> start,
-        Comparable<?> end) {
-        return condition ? notBetween(field, start, end) : this;
-    }
-
-    /**
-     * 仅在 {@code condition} 为 true 时添加多字段模糊搜索条件。
-     *
-     * @param condition 是否添加条件的标志
-     * @param keyword 搜索关键词
-     * @param fields 要搜索的实体字段列表
-     * @return 当前 SubQuerySpec 实例，支持链式调用
-     */
-    public SubQuerySpec<S> multiLike(boolean condition, String keyword, SFunction<S, ?>... fields) {
-        return condition ? multiLike(keyword, fields) : this;
-    }
-
-    /**
-     * 仅在 {@code condition} 为 true 时添加 IS EMPTY 条件。
-     *
-     * @param condition 是否添加条件的标志
-     * @param field 实体属性的方法引用
-     * @return 当前 SubQuerySpec 实例，支持链式调用
-     */
-    public SubQuerySpec<S> isEmpty(boolean condition, SFunction<S, ?> field) {
-        return condition ? isEmpty(field) : this;
-    }
-
-    /**
-     * 仅在 {@code condition} 为 true 时添加 IS NOT EMPTY 条件。
-     *
-     * @param condition 是否添加条件的标志
-     * @param field 实体属性的方法引用
-     * @return 当前 SubQuerySpec 实例，支持链式调用
-     */
-    public SubQuerySpec<S> isNotEmpty(boolean condition, SFunction<S, ?> field) {
-        return condition ? isNotEmpty(field) : this;
-    }
-
     /**
      * 设置此子查询的 SELECT 子句。如果未调用，子查询默认选择子查询根。
      *
@@ -982,6 +846,12 @@ public class SubQuerySpec<S> {
     public SubQuerySpec<S> select(SFunction<S, ?> field) {
         if (field == null) {
             throw new IllegalArgumentException("field must not be null");
+        }
+        if (isChild) {
+            throw new IllegalStateException("select() must not be called inside or()/not() consumer. "
+                + "The child SubQuerySpec shares the parent's subquery, "
+                + "and calling select() would corrupt the parent's SELECT clause. "
+                + "Set the SELECT on the parent SubQuerySpec before calling or()/not().");
         }
         if (selectSet) {
             // 已设置过 select（通过 presetSelectType），跳过重复设置

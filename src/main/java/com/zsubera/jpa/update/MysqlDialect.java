@@ -12,7 +12,9 @@ import com.zsubera.jpa.update.EntityFieldExtractor.EntityFieldValue;
  * UPSERT 语法：{@code INSERT INTO t (...) VALUES (...) ON DUPLICATE KEY UPDATE col = VALUES(col)}
  *
  * <p>
- * 使用 VALUES() 函数引用新插入值。此语法兼容 MySQL 5.7+ 和 8.0+。
+ * 使用 VALUES() 函数引用新插入值。VALUES() 在 MySQL 8.0.20 中被标记为弃用但仍可用。
+ * MySQL 尚未提供完全替代 VALUES() 的语法（行别名语法 {@code INSERT ... AS new_row ON DUPLICATE KEY UPDATE col = new_row.col}
+ * 在某些 MySQL 版本中不被支持），因此当前使用 VALUES() 以确保兼容性。
  *
  * <p>
  * 标识符使用反引号转义：{@code `identifier`}

@@ -128,9 +128,14 @@ public class DefaultMyJpaRepository<T, ID> extends SimpleJpaRepository<T, ID> im
      *
      * @return 如果自动过滤已启用返回 true
      */
-    public static boolean isAutoFilterEnabled() {
+    public static synchronized boolean isAutoFilterEnabled() {
         ConfigProvider provider = globalConfigProvider;
-        return provider == null || provider.isAutoFilterEnabled();
+        if (provider == null) {
+            log.debug("globalConfigProvider not initialized, auto-filter defaults to true. "
+                + "Ensure MyJpaPlusAutoConfiguration is registered.");
+            return true;
+        }
+        return provider.isAutoFilterEnabled();
     }
 
     /**
@@ -138,9 +143,12 @@ public class DefaultMyJpaRepository<T, ID> extends SimpleJpaRepository<T, ID> im
      *
      * @return 如果阻断已启用返回 true
      */
-    public static boolean isBlockUnconditionalDelete() {
+    public static synchronized boolean isBlockUnconditionalDelete() {
         ConfigProvider provider = globalConfigProvider;
-        return provider == null || provider.isBlockUnconditionalDelete();
+        if (provider == null) {
+            return true;
+        }
+        return provider.isBlockUnconditionalDelete();
     }
 
     /**
@@ -454,7 +462,20 @@ public class DefaultMyJpaRepository<T, ID> extends SimpleJpaRepository<T, ID> im
         if (id == null) {
             throw new IllegalArgumentException("ID must not be null");
         }
-        Optional<T> entity = findById(id);
+        if (!shouldApplySoftDeleteFilter()) {
+            Optional<T> entity = findById(id);
+            if (entity.isPresent()) {
+                delete(entity.get());
+                return true;
+            }
+            return false;
+        }
+        // 软删除场景：使用单次 UPDATE 替代 SELECT + DELETE 避免 N+1
+        String idFieldName = EntityClassResolver.resolveIdFieldName(domainClass);
+        Specification<T> idSpec = Specification.where((root, query, cb) -> cb.equal(root.get(idFieldName), id));
+        Specification<T> softDeleteSpec = SoftDeleteHelper.isNotDeleted(domainClass);
+        Specification<T> combinedSpec = softDeleteSpec != null ? idSpec.and(softDeleteSpec) : idSpec;
+        Optional<T> entity = findOne(combinedSpec);
         if (entity.isPresent()) {
             delete(entity.get());
             return true;

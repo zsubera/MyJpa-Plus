@@ -32,9 +32,19 @@ final class DialectDetector {
      * 方言策略实例映射，支持运行时注册新方言。初始化后包含 PostgreSQL、MySQL、Oracle 和 SQL Server。
      * 用户可通过 {@link #registerDialect(String, DialectStrategy)} 添加自定义方言。
      */
-    static final java.util.concurrent.ConcurrentHashMap<String, DialectStrategy> DIALECT_STRATEGIES =
+    private static final java.util.concurrent.ConcurrentHashMap<String, DialectStrategy> DIALECT_STRATEGIES =
         new java.util.concurrent.ConcurrentHashMap<>(Map.of("postgresql", new PostgresDialect(), "mysql",
             new MysqlDialect(), "oracle", new OracleDialect(), "sqlserver", new SqlServerDialect()));
+
+    /**
+     * 获取方言策略。包级访问，供 MergeSpec 使用。
+     *
+     * @param dialectName 方言名称
+     * @return 对应的方言策略，如果未注册则返回 null
+     */
+    static DialectStrategy getDialectStrategy(String dialectName) {
+        return DIALECT_STRATEGIES.get(dialectName);
+    }
 
     /**
      * 注册自定义数据库方言。可在运行时调用以支持新的数据库类型。

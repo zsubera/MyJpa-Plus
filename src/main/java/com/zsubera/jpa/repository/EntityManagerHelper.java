@@ -40,6 +40,12 @@ public final class EntityManagerHelper {
      */
     private static volatile boolean allResolversUseDefault = true;
 
+    /**
+     * 用于保护 allResolversUseDefault 标志的更新。
+     * 解决 recheckAllResolversUseDefault() 迭代中并发 registerResolver() 导致标志被错误覆盖的问题。
+     */
+    private static final Object resolverCheckLock = new Object();
+
     private EntityManagerHelper() {}
 
     // ---- 初始化 ----
@@ -71,7 +77,21 @@ public final class EntityManagerHelper {
         Objects.requireNonNull(entityType, "entityType must not be null");
         Objects.requireNonNull(resolver, "resolver must not be null");
         resolvers.put(entityType, resolver);
-        allResolversUseDefault = false;
+        synchronized (resolverCheckLock) {
+            // 仅当 resolver 返回非默认 EMF 时才禁用 fast-path
+            EntityManagerFactory defaultEmf = defaultEntityManagerFactory;
+            if (defaultEmf == null) {
+                allResolversUseDefault = false;
+            } else {
+                try {
+                    if (resolver.resolve(entityType) != defaultEmf) {
+                        allResolversUseDefault = false;
+                    }
+                } catch (Exception e) {
+                    allResolversUseDefault = false;
+                }
+            }
+        }
     }
 
     /**
@@ -88,9 +108,11 @@ public final class EntityManagerHelper {
         Objects.requireNonNull(entityType, "entityType must not be null");
         Objects.requireNonNull(emf, "entityManagerFactory must not be null");
         resolvers.put(entityType, type -> emf);
-        // 如果注册的 EMF 与默认 EMF 不同，标记为非单数据源
-        if (defaultEntityManagerFactory == null || emf != defaultEntityManagerFactory) {
-            allResolversUseDefault = false;
+        synchronized (resolverCheckLock) {
+            // 如果注册的 EMF 与默认 EMF 不同，标记为非单数据源
+            if (defaultEntityManagerFactory == null || emf != defaultEntityManagerFactory) {
+                allResolversUseDefault = false;
+            }
         }
     }
 
@@ -120,12 +142,16 @@ public final class EntityManagerHelper {
     public static void removeResolver(Class<?> entityType) {
         Objects.requireNonNull(entityType, "entityType must not be null");
         resolvers.remove(entityType);
-        // 移除后重新检查是否所有 resolver 都指向默认 EMF
-        recheckAllResolversUseDefault();
+        synchronized (resolverCheckLock) {
+            recheckAllResolversUseDefault();
+        }
     }
 
     /**
      * 重新检查 allResolversUseDefault 标志。移除 resolver 后调用。
+     */
+    /**
+     * 重新检查 allResolversUseDefault 标志。调用方必须持有 resolverCheckLock。
      */
     private static void recheckAllResolversUseDefault() {
         if (resolvers.isEmpty()) {
@@ -144,7 +170,6 @@ public final class EntityManagerHelper {
                     return;
                 }
             } catch (Exception e) {
-                // resolver 不支持 null 参数，视为不指向默认 EMF
                 allResolversUseDefault = false;
                 return;
             }

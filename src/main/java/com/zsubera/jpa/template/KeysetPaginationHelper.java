@@ -55,8 +55,20 @@ final class KeysetPaginationHelper {
     /** 是否假设数据库使用 NULLS FIRST 语义（MySQL、PostgreSQL 默认）。 Oracle/SQL Server 默认 NULLS LAST。 */
     private final boolean nullsFirst;
 
+    /**
+     * 创建使用默认 NULLS FIRST 语义的分页助手。
+     *
+     * <p>
+     * MySQL 和 PostgreSQL 默认使用 NULLS FIRST。对于 Oracle 和 SQL Server（默认 NULLS LAST），
+     * 请使用 {@link #KeysetPaginationHelper(EntityManager, boolean)} 并设置 {@code nullsFirst=false}。
+     */
     KeysetPaginationHelper(EntityManager entityManager) {
         this(entityManager, true);
+    }
+
+    private static boolean detectNullsFirst(EntityManager entityManager) {
+        // 无法可靠检测时默认 NULLS FIRST（MySQL/PostgreSQL 兼容）
+        return true;
     }
 
     KeysetPaginationHelper(EntityManager entityManager, boolean nullsFirst) {

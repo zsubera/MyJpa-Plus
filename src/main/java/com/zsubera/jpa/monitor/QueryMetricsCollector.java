@@ -201,10 +201,13 @@ public class QueryMetricsCollector {
      */
     private void evictRandomEntry() {
         String[] keys = metricsMap.keySet().toArray(new String[0]);
-        if (keys.length > 0) {
+        if (keys.length > 1) {
             String randomKey = keys[java.util.concurrent.ThreadLocalRandom.current().nextInt(keys.length)];
             metricsMap.remove(randomKey);
             log.debug("Evicted random metrics entry: '{}'", randomKey);
+        } else if (keys.length == 1) {
+            metricsMap.remove(keys[0]);
+            log.debug("Evicted last metrics entry: '{}'", keys[0]);
         }
     }
 

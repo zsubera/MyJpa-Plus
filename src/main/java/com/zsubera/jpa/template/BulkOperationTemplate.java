@@ -383,7 +383,6 @@ class BulkOperationTemplate {
             } catch (RuntimeException e) {
                 failedBatchIndex = batchCount;
                 failureCause = e;
-                batchCount++;
                 log.error("Batch {} failed at batch index {}: {}", operationName, failedBatchIndex, e.getMessage(), e);
                 if (failureStrategy == BatchFailureStrategy.ABORT) {
                     shouldContinue = false;

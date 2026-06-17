@@ -300,12 +300,14 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
                 appendCacheKey(sb, node);
             }
             sb.append(")#NESTED(");
-        }
-        for (ConditionNode node : currentGroup()) {
-            appendCacheKey(sb, node);
-        }
-        if (!groupStack.isEmpty()) {
+            for (ConditionNode node : currentGroup()) {
+                appendCacheKey(sb, node);
+            }
             sb.append(")");
+        } else {
+            for (ConditionNode node : currentGroup()) {
+                appendCacheKey(sb, node);
+            }
         }
         if (distinct) {
             sb.append("#DISTINCT");
@@ -1134,16 +1136,21 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
                 paths.add(root.get(field));
             }
             query.groupBy(paths.toArray(new Expression[0]));
-            if (!havingConditions.isEmpty()) {
-                List<Predicate> havingPredicates = new ArrayList<>();
-                for (BiFunction<Path<T>, CriteriaBuilder, Predicate> having : havingConditions) {
-                    havingPredicates.add(having.apply(root, cb));
-                }
-                if (havingPredicates.size() == 1) {
-                    query.having(havingPredicates.get(0));
-                } else {
-                    query.having(cb.and(havingPredicates.toArray(new Predicate[0])));
-                }
+        }
+        if (!havingConditions.isEmpty() && groupByFields.isEmpty()) {
+            throw new IllegalStateException("HAVING conditions specified without GROUP BY. "
+                + "HAVING without GROUP BY is not supported by most databases. "
+                + "Add a groupBy() call before having().");
+        }
+        if (!havingConditions.isEmpty()) {
+            List<Predicate> havingPredicates = new ArrayList<>();
+            for (BiFunction<Path<T>, CriteriaBuilder, Predicate> having : havingConditions) {
+                havingPredicates.add(having.apply(root, cb));
+            }
+            if (havingPredicates.size() == 1) {
+                query.having(havingPredicates.get(0));
+            } else {
+                query.having(cb.and(havingPredicates.toArray(new Predicate[0])));
             }
         }
     }

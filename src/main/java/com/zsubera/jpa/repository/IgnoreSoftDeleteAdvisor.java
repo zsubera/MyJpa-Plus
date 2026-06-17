@@ -27,7 +27,7 @@ import org.springframework.stereotype.Component;
  */
 @Aspect
 @Component
-@Order(Integer.MIN_VALUE + 100)
+@Order(Integer.MIN_VALUE + 200)
 public class IgnoreSoftDeleteAdvisor {
 
     private static final Logger log = LoggerFactory.getLogger(IgnoreSoftDeleteAdvisor.class);

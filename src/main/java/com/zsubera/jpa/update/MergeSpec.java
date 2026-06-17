@@ -58,7 +58,7 @@ public class MergeSpec<T> {
 
     private final Class<T> entityClass;
     private final EntityFieldExtractor<T> fieldExtractor;
-    private T entity;
+    private volatile T entity;
     private final List<String> conflictFields = new ArrayList<>();
     private final List<String> updateFields = new ArrayList<>();
     private boolean explicitUpdateFields = false;
@@ -195,7 +195,7 @@ public class MergeSpec<T> {
             return customDialect;
         }
         String dialect = DialectDetector.detectDialect(em);
-        DialectStrategy strategy = DialectDetector.DIALECT_STRATEGIES.get(dialect);
+        DialectStrategy strategy = DialectDetector.getDialectStrategy(dialect);
         if (strategy == null) {
             throw new MyJpaPlusException("Unsupported database dialect: " + dialect
                 + ". Supported dialects: postgresql, mysql, oracle, sqlserver. "
@@ -442,8 +442,9 @@ public class MergeSpec<T> {
             } catch (RuntimeException e) {
                 safeRollback(tx, e);
                 throw e;
+            } finally {
+                em.clear();
             }
-            em.clear();
             batchStart = batchEnd;
         }
         return total;

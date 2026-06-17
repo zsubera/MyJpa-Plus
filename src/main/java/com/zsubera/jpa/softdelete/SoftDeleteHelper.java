@@ -280,11 +280,11 @@ public final class SoftDeleteHelper {
             String countSql;
             var countQuery = em.createNativeQuery("SELECT COUNT(*) FROM " + escapedTable + " WHERE "
                 + (resolved.booleanField() ? "(" + escapedColumn + " = ?1 OR " + escapedColumn + " IS NULL)"
-                    : "(" + escapedColumn + " != ?2 OR " + escapedColumn + " IS NULL)"));
+                    : "(" + escapedColumn + " != ?1 OR " + escapedColumn + " IS NULL)"));
             if (resolved.booleanField()) {
                 countQuery.setParameter(1, Boolean.FALSE);
             } else {
-                countQuery.setParameter(2, resolved.dbValue());
+                countQuery.setParameter(1, resolved.dbValue());
             }
             QueryTimeoutHelper.applyTimeout(countQuery);
             long rowCount = ((Number)countQuery.getSingleResult()).longValue();

@@ -36,12 +36,15 @@ final class OracleDialect implements DialectStrategy {
 
         StringBuilder sql = new StringBuilder("MERGE INTO ").append(escapedTable).append(" target USING (SELECT ");
 
-        // SELECT clause for source
+        // SELECT clause: use parameter placeholders with column aliases for DUAL
         List<String> escapedInsertCols = new ArrayList<>();
+        List<String> selectClauses = new ArrayList<>();
         for (String col : insertColumns) {
-            escapedInsertCols.add(escapeIdentifier(col));
+            String escaped = escapeIdentifier(col);
+            escapedInsertCols.add(escaped);
+            selectClauses.add("? AS " + escaped);
         }
-        sql.append(String.join(", ", escapedInsertCols));
+        sql.append(String.join(", ", selectClauses));
         sql.append(" FROM DUAL) source ON (");
 
         // ON clause: match on conflict columns

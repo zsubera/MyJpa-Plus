@@ -109,7 +109,9 @@ public final class FunctionWhitelist {
      * 线程安全且无竞态条件。
      */
     public static void freezeExtraFunctionNames() {
-        FROZEN_EXTRA_SAFE_FUNCTION_NAMES.set(Set.copyOf(EXTRA_SAFE_FUNCTION_NAMES));
-        FROZEN_EXTRA_BOOLEAN_FUNCTION_NAMES.set(Set.copyOf(EXTRA_BOOLEAN_FUNCTION_NAMES));
+        Set<String> safeSnapshot = Set.copyOf(EXTRA_SAFE_FUNCTION_NAMES);
+        Set<String> boolSnapshot = Set.copyOf(EXTRA_BOOLEAN_FUNCTION_NAMES);
+        FROZEN_EXTRA_SAFE_FUNCTION_NAMES.set(safeSnapshot);
+        FROZEN_EXTRA_BOOLEAN_FUNCTION_NAMES.set(boolSnapshot);
     }
 }

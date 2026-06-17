@@ -52,7 +52,7 @@ final class SqlServerDialect implements DialectStrategy {
             sql.append("?");
             allParams.add(insertFieldValues.get(i).value());
         }
-        sql.append(")) AS source (");
+        sql.append(")) AS vals (");
         sql.append(String.join(", ", escapedInsertCols));
         sql.append(")) AS source ON (");
 

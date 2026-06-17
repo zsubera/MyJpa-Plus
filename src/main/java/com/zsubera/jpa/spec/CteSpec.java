@@ -89,6 +89,21 @@ public class CteSpec {
      */
     private static final Pattern UNBOUND_PARAM_PATTERN = Pattern.compile("(?<!:):([a-zA-Z_][a-zA-Z0-9_]*)");
 
+    private static final Class<?> HIBERNATE_SESSION_CLASS;
+    private static final Class<?> HIBERNATE_WORK_CLASS;
+    static {
+        Class<?> sessionCls;
+        Class<?> workCls;
+        try {
+            sessionCls = Class.forName("org.hibernate.Session");
+            workCls = Class.forName("org.hibernate.jdbc.Work");
+        } catch (ClassNotFoundException e) {
+            sessionCls = null;
+            workCls = null;
+        }
+        HIBERNATE_SESSION_CLASS = sessionCls;
+        HIBERNATE_WORK_CLASS = workCls;
+    }
     private final List<CteEntry> cteEntries = new ArrayList<>();
     private String mainSql;
     private final Map<String, Object> parameters = new LinkedHashMap<>();
@@ -479,9 +494,12 @@ public class CteSpec {
      */
     private void applyFetchSize(EntityManager em, Query query) {
         try {
+            if (HIBERNATE_SESSION_CLASS == null || HIBERNATE_WORK_CLASS == null) {
+                return;
+            }
             // 使用 Hibernate Session.doWork 获取数据库连接并检测类型
-            Class<?> sessionClass = Class.forName("org.hibernate.Session");
-            Class<?> workClass = Class.forName("org.hibernate.jdbc.Work");
+            Class<?> sessionClass = HIBERNATE_SESSION_CLASS;
+            Class<?> workClass = HIBERNATE_WORK_CLASS;
             Object session = em.unwrap(sessionClass);
             String[] productNameHolder = new String[1];
             Object workProxy = java.lang.reflect.Proxy.newProxyInstance(workClass.getClassLoader(),

@@ -381,7 +381,7 @@ public class MyJpaTemplate implements MyJpaTemplateOperations {
         List<T> cached = cacheManager.get(cacheKey);
         if (cached != null) {
             log.debug("Cache hit for key: {}", cacheKey);
-            return new ArrayList<>(cached);
+            return cached;
         }
         log.debug("Cache miss for key: {}", cacheKey);
         List<T> result = findAll(entityClass, spec);

@@ -115,25 +115,31 @@ public class EncryptConverter implements AttributeConverter<String, String> {
     /** 密钥版本缓存刷新间隔（毫秒），默认 5 分钟。 */
     private static final long KEY_VERSION_REFRESH_INTERVAL_MS = 300_000L;
 
-    private static final java.util.concurrent.ExecutorService WARM_UP_EXECUTOR =
+    private static volatile java.util.concurrent.ExecutorService WARM_UP_EXECUTOR =
         java.util.concurrent.Executors.newFixedThreadPool(1, r -> {
             Thread t = new Thread(r, "encrypt-key-warmup");
             t.setDaemon(true);
             return t;
         });
 
-    static {
-        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
-            WARM_UP_EXECUTOR.shutdown();
+    private static final Thread WARM_UP_SHUTDOWN_HOOK = new Thread(() -> {
+        java.util.concurrent.ExecutorService executor = WARM_UP_EXECUTOR;
+        if (executor != null) {
+            executor.shutdown();
             try {
-                if (!WARM_UP_EXECUTOR.awaitTermination(2, java.util.concurrent.TimeUnit.SECONDS)) {
-                    WARM_UP_EXECUTOR.shutdownNow();
+                if (!executor.awaitTermination(2, java.util.concurrent.TimeUnit.SECONDS)) {
+                    executor.shutdownNow();
                 }
             } catch (InterruptedException e) {
-                WARM_UP_EXECUTOR.shutdownNow();
+                executor.shutdownNow();
                 Thread.currentThread().interrupt();
             }
-        }, "encrypt-key-warmup-shutdown"));
+            WARM_UP_EXECUTOR = null;
+        }
+    }, "encrypt-key-warmup-shutdown");
+
+    static {
+        Runtime.getRuntime().addShutdownHook(WARM_UP_SHUTDOWN_HOOK);
     }
 
     /** 开发环境可选：显式设置为 true 时跳过盐值检查（仅限开发环境）。 */
@@ -325,14 +331,16 @@ public class EncryptConverter implements AttributeConverter<String, String> {
      * @return 密钥版本标识
      */
     private static String getKeyVersion() {
-        long now = System.currentTimeMillis();
+        // 使用单一 volatile 读取确保版本与时间戳的一致性
         String version = cachedKeyVersion;
-        if (version != null && (now - lastKeyVersionRefresh) < KEY_VERSION_REFRESH_INTERVAL_MS) {
+        long lastRefresh = lastKeyVersionRefresh;
+        long now = System.currentTimeMillis();
+        if (version != null && (now - lastRefresh) < KEY_VERSION_REFRESH_INTERVAL_MS) {
             return version;
         }
         // 定期刷新或首次加载
         synchronized (EncryptConverter.class) {
-            // 在同步块内重新读取时间戳以避免过期检查
+            // 在同步块内重新读取以避免过期检查
             now = System.currentTimeMillis();
             version = cachedKeyVersion;
             if (version != null && (now - lastKeyVersionRefresh) < KEY_VERSION_REFRESH_INTERVAL_MS) {

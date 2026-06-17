@@ -9,11 +9,12 @@ import org.springframework.lang.Nullable;
  *
  * <p>
  * 所有条件方法都是 {@code default} 方法，当 {@code condition} 为 true 时委托给对应的基础条件方法， 否则返回 {@link #self()}。此接口统一了
- * {@link ConditionBuilder} 和 {@link com.zsubera.jpa.update.AbstractBulkOperationSpec} 中重复的条件便捷方法。
+ * {@link ConditionBuilder}、{@link SubQuerySpec} 和 {@link com.zsubera.jpa.update.AbstractBulkOperationSpec} 中重复的条件便捷方法。
  *
  * @param <E> 条件操作的实体类型
  * @param <SELF> 用于流式链式调用的具体构建器类型
  * @see ConditionBuilder
+ * @see SubQuerySpec
  * @see com.zsubera.jpa.update.AbstractBulkOperationSpec
  */
 public interface ConditionalMethods<E, SELF extends ConditionalMethods<E, SELF>> {

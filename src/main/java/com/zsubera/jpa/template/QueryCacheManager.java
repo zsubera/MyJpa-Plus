@@ -239,7 +239,8 @@ public class QueryCacheManager {
         // 更新已有 key 时不需要修改 insertionOrder——旧条目会在 deque 漂移清理时被跳过
 
         // 清理 deque 中不在 store 中的陈旧条目
-        int drift = dequeSize.get() - store.size();
+        int dequeActualSize = insertionOrder.size();
+        int drift = dequeActualSize - store.size();
         if (drift > Math.max(10, maxEntries / 10)) {
             cleanupDrift(drift > maxEntries / 2);
         }
