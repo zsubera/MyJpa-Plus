@@ -99,7 +99,12 @@ public class QueryCacheManager {
     private final java.util.concurrent.atomic.AtomicInteger dequeSize =
         new java.util.concurrent.atomic.AtomicInteger(0);
 
-    /** 驱逐操作锁，确保只有一个线程执行驱逐，避免重复扫描和内存泄漏 */
+    /**
+     * ReentrantLock with tryLock() for eviction guard — non-blocking and optimal here because
+     * ConcurrentHashMap already provides lock-free reads; StampedLock optimistic reads would add
+     * complexity without benefit. This lock only guards the write-side eviction path, not reads.
+     * tryLock() ensures at most one thread evicts at a time; others skip (eviction is idempotent).
+     */
     private final ReentrantLock evictionLock = new ReentrantLock();
 
     private volatile int maxEntries;

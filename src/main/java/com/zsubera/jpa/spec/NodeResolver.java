@@ -15,6 +15,8 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import org.slf4j.Logger;
+import org.springframework.lang.NonNull;
+import org.springframework.lang.Nullable;
 import org.slf4j.LoggerFactory;
 
 /**
@@ -45,8 +47,9 @@ final class NodeResolver {
      * @param depth 当前递归深度
      * @param fetchPaths 已获取的路径集合
      */
-    record NodeContext(Path<?> path, Path<?> rootPath, CriteriaQuery<?> query, CriteriaBuilder cb,
-        Map<String, Join<?, ?>> joinCache, String pathPrefix, int depth, java.util.Set<String> fetchPaths) {
+    record NodeContext(@NonNull Path<?> path, @NonNull Path<?> rootPath, @NonNull CriteriaQuery<?> query,
+        @NonNull CriteriaBuilder cb, @NonNull Map<String, Join<?, ?>> joinCache, @Nullable String pathPrefix, int depth,
+        @NonNull java.util.Set<String> fetchPaths) {
     }
 
     /**

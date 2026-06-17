@@ -265,4 +265,52 @@ class MergeSpecTest {
             com.zsubera.jpa.util.IdentifierValidator.setUnicodeIdentifiers(original);
         }
     }
+
+    @Test
+    void testDialectOverrideWithCustomStrategy() {
+        DialectStrategy customStrategy = new MysqlDialect();
+        TestEntity entity = newEntity("dialect-override", 1);
+
+        int count = new MergeSpec<>(TestEntity.class).dialect(customStrategy).withEntity(entity)
+            .onConflict(TestEntity::getName).execute(em);
+        em.flush();
+        em.clear();
+
+        assertTrue(count >= 1);
+        assertEquals("dialect-override", repository.findAll().get(0).getName());
+    }
+
+    @Test
+    void testDialectOverrideWithNullThrows() {
+        assertThrows(IllegalArgumentException.class, () -> new MergeSpec<>(TestEntity.class).dialect(null));
+    }
+
+    @Test
+    void testDialectOverrideOnBatch() {
+        DialectStrategy customStrategy = new MysqlDialect();
+        List<TestEntity> entities = List.of(newEntity("batch-dialect-1", 1), newEntity("batch-dialect-2", 2));
+
+        MergeSpec<TestEntity> spec =
+            new MergeSpec<>(TestEntity.class).dialect(customStrategy).onConflict(TestEntity::getName);
+        int count = spec.executeBatch(entities, em);
+        em.flush();
+
+        assertEquals(2, count);
+        assertEquals(2, repository.count());
+    }
+
+    @Test
+    void testDialectOverrideChaining() {
+        DialectStrategy customStrategy = new MysqlDialect();
+        TestEntity entity = newEntity("chain-test", 1);
+
+        MergeSpec<TestEntity> spec = new MergeSpec<>(TestEntity.class).dialect(customStrategy).withEntity(entity)
+            .onConflict(TestEntity::getName).updateOnConflict(TestEntity::getStatus);
+
+        int count = spec.execute(em);
+        em.flush();
+        em.clear();
+
+        assertTrue(count >= 1);
+    }
 }

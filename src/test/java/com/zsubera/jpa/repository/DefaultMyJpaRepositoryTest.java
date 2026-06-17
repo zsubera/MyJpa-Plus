@@ -245,9 +245,62 @@ class DefaultMyJpaRepositoryTest {
     }
 
     // ---- deleteAll (soft delete) ----
-    // NOTE: softDeleteAll with Boolean @SoftDelete field has a pre-existing bug
-    // (WHERE clause uses ?1 but parameter not set for Boolean case).
-    // These tests are commented out until the bug is fixed in SoftDeleteHelper.
+
+    @Test
+    void deleteAll_softDeletesAllNonDeletedRecords() {
+        saveEntity("a1", false);
+        saveEntity("a2", false);
+        saveEntity("a3", false);
+
+        repository.deleteAll();
+
+        List<SoftDeleteRepoTestEntity> all = findAllIncludingDeleted();
+        assertEquals(3, all.size(), "All records should still exist");
+        assertTrue(all.stream().allMatch(e -> Boolean.TRUE.equals(e.getDeleted())),
+            "All records should be soft-deleted");
+    }
+
+    @Test
+    void deleteAll_alreadyDeletedRecordsAreNotDoubleProcessed() {
+        SoftDeleteRepoTestEntity active = saveEntity("active", false);
+        SoftDeleteRepoTestEntity alreadyDeleted = saveEntity("already-deleted", true);
+
+        repository.deleteAll();
+
+        // Re-fetch from DB since softDeleteAll uses native SQL + em.clear(), invalidating the persistence context
+        List<SoftDeleteRepoTestEntity> all = findAllIncludingDeleted();
+        assertEquals(2, all.size());
+        SoftDeleteRepoTestEntity refetchedActive = all.stream().filter(e -> "active".equals(e.getName())).findFirst()
+            .orElseThrow(() -> new AssertionError("Active entity should exist after soft delete"));
+        assertTrue(Boolean.TRUE.equals(refetchedActive.getDeleted()), "Active record should now be soft-deleted");
+        SoftDeleteRepoTestEntity refetchedDeleted = all.stream().filter(e -> "already-deleted".equals(e.getName()))
+            .findFirst().orElseThrow(() -> new AssertionError("Already-deleted entity should exist"));
+        assertTrue(Boolean.TRUE.equals(refetchedDeleted.getDeleted()),
+            "Already-deleted record should remain soft-deleted");
+    }
+
+    @Test
+    void deleteAllInBatch_softDeletesAllNonDeletedRecords() {
+        saveEntity("b1", false);
+        saveEntity("b2", false);
+        saveEntity("b3", false);
+
+        repository.deleteAllInBatch();
+
+        List<SoftDeleteRepoTestEntity> all = findAllIncludingDeleted();
+        assertEquals(3, all.size(), "All records should still exist");
+        assertTrue(all.stream().allMatch(e -> Boolean.TRUE.equals(e.getDeleted())),
+            "All records should be soft-deleted");
+    }
+
+    private List<SoftDeleteRepoTestEntity> findAllIncludingDeleted() {
+        SoftDeleteContext.pushIgnore();
+        try {
+            return repository.findAll();
+        } finally {
+            SoftDeleteContext.popIgnore();
+        }
+    }
 
     // ---- deleteAllById ----
 

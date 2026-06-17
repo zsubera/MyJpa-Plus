@@ -416,6 +416,8 @@ public class EncryptConverter implements AttributeConverter<String, String> {
         } catch (GeneralSecurityException e) {
             log.error("Encryption failed", e);
             throw new MyJpaPlusException("Failed to encrypt value. Check encryption key configuration.", e);
+        } finally {
+            removeCipher();
         }
     }
 
@@ -482,6 +484,8 @@ public class EncryptConverter implements AttributeConverter<String, String> {
         } catch (GeneralSecurityException e) {
             log.error("Decryption failed", e);
             throw new MyJpaPlusException("Failed to decrypt value. Check encryption key configuration.", e);
+        } finally {
+            removeCipher();
         }
     }
 

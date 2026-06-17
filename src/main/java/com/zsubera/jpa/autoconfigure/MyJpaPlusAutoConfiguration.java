@@ -140,12 +140,12 @@ public class MyJpaPlusAutoConfiguration {
             // 应用额外函数白名单配置
             java.util.List<String> extraSafe = properties.getQuery().getExtraSafeFunctions();
             if (extraSafe != null && !extraSafe.isEmpty()) {
-                com.zsubera.jpa.spec.ConditionBuilder.addSafeFunctionNames(extraSafe);
+                com.zsubera.jpa.spec.FunctionWhitelist.addSafeFunctionNames(extraSafe);
                 log.info("Added {} extra safe functions to whitelist", extraSafe.size());
             }
             java.util.List<String> extraBool = properties.getQuery().getExtraBooleanFunctions();
             if (extraBool != null && !extraBool.isEmpty()) {
-                com.zsubera.jpa.spec.ConditionBuilder.addBooleanFunctionNames(extraBool);
+                com.zsubera.jpa.spec.FunctionWhitelist.addBooleanFunctionNames(extraBool);
                 log.info("Added {} extra boolean functions to whitelist", extraBool.size());
             }
 

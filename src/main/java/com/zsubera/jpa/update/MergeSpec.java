@@ -39,11 +39,18 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
  * 示例：
  *
  * <pre>{@code
+ * // 自动检测方言
  * new MergeSpec<>(User.class).withEntity(user).onConflict(User::getEmail).updateOnConflict(User::getName, User::getAge)
  *     .execute(em);
+ *
+ * // 显式指定方言（适用于 Aurora、PolarDB 等兼容数据库）
+ * new MergeSpec<>(User.class).dialect(new MysqlDialect()).withEntity(user).onConflict(User::getEmail)
+ *     .updateOnConflict(User::getName).execute(em);
  * }</pre>
  *
  * @param <T> 实体类型
+ * @see DialectStrategy
+ * @see DialectDetector
  */
 public class MergeSpec<T> {
 
@@ -55,6 +62,7 @@ public class MergeSpec<T> {
     private final List<String> conflictFields = new ArrayList<>();
     private final List<String> updateFields = new ArrayList<>();
     private boolean explicitUpdateFields = false;
+    private DialectStrategy customDialect;
 
     /**
      * 创建指定实体类型的 MergeSpec 构建器。
@@ -138,6 +146,27 @@ public class MergeSpec<T> {
     }
 
     /**
+     * 显式指定数据库方言，绕过自动检测。
+     *
+     * <p>
+     * 调用此方法后，UPSERT 操作将使用指定的方言而非通过 {@link DialectDetector} 自动检测。 适用于自动检测无法识别的数据库（如 Aurora、PolarDB 等兼容数据库）。
+     *
+     * <p>
+     * <strong>必须在 {@link #execute(EntityManager)}、{@link #executeBatch(List, EntityManager)} 等执行方法之前调用。</strong>
+     *
+     * @param dialect 方言策略实例
+     * @return 当前构建器实例，支持链式调用
+     * @throws IllegalArgumentException 如果 dialect 为 null
+     */
+    public MergeSpec<T> dialect(DialectStrategy dialect) {
+        if (dialect == null) {
+            throw new IllegalArgumentException("dialect must not be null");
+        }
+        this.customDialect = dialect;
+        return this;
+    }
+
+    /**
      * 执行 UPSERT 操作并返回受影响的行数。
      *
      * <p>
@@ -161,21 +190,31 @@ public class MergeSpec<T> {
         return executeWith(em, entitySnapshot);
     }
 
+    private DialectStrategy resolveDialectStrategy(EntityManager em) {
+        if (customDialect != null) {
+            return customDialect;
+        }
+        String dialect = DialectDetector.detectDialect(em);
+        DialectStrategy strategy = DialectDetector.DIALECT_STRATEGIES.get(dialect);
+        if (strategy == null) {
+            throw new MyJpaPlusException("Unsupported database dialect: " + dialect
+                + ". Supported dialects: postgresql, mysql, oracle, sqlserver. "
+                + "Register a custom dialect via DialectDetector.registerDialect().");
+        }
+        return strategy;
+    }
+
     /**
      * 使用指定实体执行 UPSERT，不修改实例的 {@code entity} 字段。
      * 供 {@link #executeBatch} 内部使用，避免状态污染。
      */
     private int executeWith(EntityManager em, T entityToMerge) {
-        String dialect = DialectDetector.detectDialect(em);
-        return executeWith(em, entityToMerge, dialect);
+        DialectStrategy strategy = resolveDialectStrategy(em);
+        return executeWith(em, entityToMerge, strategy);
     }
 
-    /**
-     * 使用指定实体和缓存的方言执行 UPSERT。
-     * 供 {@link #executeBatch} 批量循环内部使用，避免重复检测方言。
-     */
-    private int executeWith(EntityManager em, T entityToMerge, String dialect) {
-        SqlWithParams sqlWithParams = buildSqlFor(em, entityToMerge, dialect);
+    private int executeWith(EntityManager em, T entityToMerge, DialectStrategy strategy) {
+        SqlWithParams sqlWithParams = buildSqlFor(em, entityToMerge, strategy);
         if (log.isTraceEnabled()) {
             log.trace("Executing UPSERT SQL: {}", sqlWithParams.sql());
         }
@@ -325,7 +364,7 @@ public class MergeSpec<T> {
                 "executeBatch requires an active transaction. Use executeBatchInTransaction() for auto-managed transactions, "
                     + "or executeBatchInSeparateTransactions() for per-batch isolation.");
         }
-        String cachedDialect = DialectDetector.detectDialect(em);
+        DialectStrategy cachedStrategy = resolveDialectStrategy(em);
         int total = 0;
         for (int i = 0; i < entities.size(); i++) {
             T entity = entities.get(i);
@@ -336,7 +375,7 @@ public class MergeSpec<T> {
                 em.flush();
                 em.clear();
             }
-            total += executeWith(em, entity, cachedDialect);
+            total += executeWith(em, entity, cachedStrategy);
         }
         return total;
     }
@@ -367,7 +406,7 @@ public class MergeSpec<T> {
         }
         int total = 0;
         int count = 0;
-        String cachedDialect = DialectDetector.detectDialect(em);
+        DialectStrategy cachedStrategy = resolveDialectStrategy(em);
         EntityTransaction tx = null;
         boolean txStarted = false;
         for (T ent : entities) {
@@ -395,7 +434,7 @@ public class MergeSpec<T> {
                 }
             }
             try {
-                SqlWithParams sqlWithParams = buildSqlFor(em, ent, cachedDialect);
+                SqlWithParams sqlWithParams = buildSqlFor(em, ent, cachedStrategy);
                 total += executeNativeQuery(em, sqlWithParams.sql(), sqlWithParams.params());
                 count++;
                 if (count % batchSize == 0) {
@@ -433,7 +472,7 @@ public class MergeSpec<T> {
         }
     }
 
-    private SqlWithParams buildSqlFor(EntityManager em, T entity, String dialect) {
+    private SqlWithParams buildSqlFor(EntityManager em, T entity, DialectStrategy strategy) {
         List<String> effectiveConflictFields =
             conflictFields.isEmpty() ? fieldExtractor.resolveIdColumnNames() : new ArrayList<>(conflictFields);
         Set<String> conflictSet = new LinkedHashSet<>(effectiveConflictFields);
@@ -449,12 +488,6 @@ public class MergeSpec<T> {
         List<String> effectiveUpdateFields =
             explicitUpdateFields ? updateFields : allNonConflictColumns(allFieldValues, conflictSet);
         String tableName = resolveTableName();
-        DialectStrategy strategy = DialectDetector.DIALECT_STRATEGIES.get(dialect);
-        if (strategy == null) {
-            throw new MyJpaPlusException("Unsupported database dialect: " + dialect
-                + ". Supported dialects: postgresql, mysql, oracle, sqlserver. "
-                + "Register a custom dialect via DialectDetector.registerDialect().");
-        }
         return strategy.buildUpsertSql(tableName, insertColumns, insertFieldValues, effectiveConflictFields,
             effectiveUpdateFields);
     }

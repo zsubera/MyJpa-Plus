@@ -12,13 +12,18 @@ import org.slf4j.LoggerFactory;
  * 批量操作执行模板，封装 {@link UpdateSpec}、{@link DeleteSpec} 和 {@link MergeSpec} 的批量执行逻辑。
  *
  * <p>
- * 从 {@link MyJpaTemplate} 中提取，将批量操作的执行、分批、事务管理等逻辑集中在此类中， 使 {@link MyJpaTemplate} 专注于查询操作。
+ * 从 {@link MyJpaTemplate} 中提取，将批量操作的执行、分批、事务管理等逻辑集中在此类中，
+ * 使 {@link MyJpaTemplate} 专注于查询操作。
  *
  * <p>
- * <strong>重要约束：</strong>此类不是 Spring Bean（由 {@link MyJpaTemplate} 手动实例化），
- * 因此此类方法上的 {@code @Transactional} 注解不会生效（无 AOP 代理介入）。
- * 事务由调用方（{@link MyJpaTemplate}）的 {@code @Transactional} 注解管理。
- * 如需独立事务管理，请使用 {@link TransactionHelper}。
+ * <strong>⚠️ 警告：此类不是 Spring Bean（由 {@link MyJpaTemplate} 手动实例化），
+ * 因此 {@code @Transactional} 注解在本类的任何方法上均不会生效 —— Spring AOP 代理无法介入非 Bean 对象。
+ * <strong>绝对不要</strong>在此类的方法上添加 {@code @Transactional} 注解，它不会起到任何作用。
+ *
+ * <p>
+ * 事务管理职责归属于调用方 {@link MyJpaTemplate}，其方法通过 {@code @Transactional} 注解由 Spring 管理事务。
+ * 如需在事务内开启独立的新事务（例如分批提交以避免大事务锁表），
+ * 请使用 {@link TransactionHelper}，它通过 {@code REQUIRES_NEW} 传播行为创建独立事务。
  *
  * <p>
  * <strong>功能：</strong>

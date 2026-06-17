@@ -161,6 +161,18 @@ public class MyJpaTemplate implements MyJpaTemplateOperations {
     }
 
     /**
+     * 创建指定 EntityManager 的 MyJpaTemplate 实例，用于单元测试。
+     *
+     * <p>
+     * 生产环境应使用默认构造函数，由 Spring 自动注入 {@link EntityManager}。
+     *
+     * @param entityManager 要使用的 EntityManager 实例
+     */
+    MyJpaTemplate(EntityManager entityManager) {
+        this.entityManager = entityManager;
+    }
+
+    /**
      * 设置最大返回行数。
      *
      * <p>

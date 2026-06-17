@@ -17,9 +17,9 @@ class FuncNodeTest {
 
     @AfterEach
     void cleanup() {
-        ConditionBuilder.EXTRA_SAFE_FUNCTION_NAMES.clear();
-        ConditionBuilder.EXTRA_BOOLEAN_FUNCTION_NAMES.clear();
-        ConditionBuilder.freezeExtraFunctionNames();
+        FunctionWhitelist.EXTRA_SAFE_FUNCTION_NAMES.clear();
+        FunctionWhitelist.EXTRA_BOOLEAN_FUNCTION_NAMES.clear();
+        FunctionWhitelist.freezeExtraFunctionNames();
     }
 
     @Test
@@ -122,8 +122,8 @@ class FuncNodeTest {
     @Test
     void addSafeFunctionNames_makesFunctionAvailableViaFuncNode() {
         // func() requires function in BOTH safe list AND boolean list
-        ConditionBuilder.addSafeFunctionNames(Set.of("MY_CUSTOM_FUNC"));
-        ConditionBuilder.addBooleanFunctionNames(Set.of("MY_CUSTOM_FUNC"));
+        FunctionWhitelist.addSafeFunctionNames(Set.of("MY_CUSTOM_FUNC"));
+        FunctionWhitelist.addBooleanFunctionNames(Set.of("MY_CUSTOM_FUNC"));
         ConditionNode.FuncNode node = ConditionNode.FuncNode.of("MY_CUSTOM_FUNC", new Object[] {"field"});
         assertNotNull(node, "Function added via addSafeFunctionNames should be accepted");
         assertEquals("MY_CUSTOM_FUNC", node.functionName);
@@ -131,8 +131,8 @@ class FuncNodeTest {
 
     @Test
     void addSafeFunctionNames_caseInsensitive() {
-        ConditionBuilder.addSafeFunctionNames(Set.of("my_func"));
-        ConditionBuilder.addBooleanFunctionNames(Set.of("my_func"));
+        FunctionWhitelist.addSafeFunctionNames(Set.of("my_func"));
+        FunctionWhitelist.addBooleanFunctionNames(Set.of("my_func"));
         ConditionNode.FuncNode node = ConditionNode.FuncNode.of("MY_FUNC", new Object[] {"field"});
         assertNotNull(node, "Function should be matched case-insensitively");
     }
@@ -140,8 +140,8 @@ class FuncNodeTest {
     @Test
     void addBooleanFunctionNames_makesFunctionAvailableViaFuncNode() {
         // func() requires function in BOTH safe list AND boolean list
-        ConditionBuilder.addSafeFunctionNames(Set.of("MY_BOOL_FUNC"));
-        ConditionBuilder.addBooleanFunctionNames(Set.of("MY_BOOL_FUNC"));
+        FunctionWhitelist.addSafeFunctionNames(Set.of("MY_BOOL_FUNC"));
+        FunctionWhitelist.addBooleanFunctionNames(Set.of("MY_BOOL_FUNC"));
         ConditionNode.FuncNode node = ConditionNode.FuncNode.of("MY_BOOL_FUNC", new Object[] {"field"});
         assertNotNull(node, "Boolean function added via addBooleanFunctionNames should be accepted");
     }
@@ -149,7 +149,7 @@ class FuncNodeTest {
     @Test
     void addBooleanFunctionNames_notInSafeList_throwsSecurityException() {
         // Only add to boolean list, not safe list — should fail safe list check
-        ConditionBuilder.addBooleanFunctionNames(Set.of("UNSAFE_FUNC"));
+        FunctionWhitelist.addBooleanFunctionNames(Set.of("UNSAFE_FUNC"));
         assertThrows(SecurityViolationException.class,
             () -> ConditionNode.FuncNode.of("UNSAFE_FUNC", new Object[] {"field"}),
             "Function in boolean list but not in safe list should be rejected");
@@ -158,7 +158,7 @@ class FuncNodeTest {
     @Test
     void addSafeFunctionNames_notInBooleanList_throwsSecurityException() {
         // Only add to safe list, not boolean list — should fail boolean list check
-        ConditionBuilder.addSafeFunctionNames(Set.of("SAFE_ONLY_FUNC"));
+        FunctionWhitelist.addSafeFunctionNames(Set.of("SAFE_ONLY_FUNC"));
         assertThrows(SecurityViolationException.class,
             () -> ConditionNode.FuncNode.of("SAFE_ONLY_FUNC", new Object[] {"field"}),
             "Function in safe list but not in boolean list should be rejected");
@@ -166,26 +166,26 @@ class FuncNodeTest {
 
     @Test
     void addSafeFunctionNames_emptyCollection_noEffect() {
-        ConditionBuilder.addSafeFunctionNames(Set.of());
+        FunctionWhitelist.addSafeFunctionNames(Set.of());
         assertThrows(SecurityViolationException.class,
             () -> ConditionNode.FuncNode.of("STILL_NOT_LISTED", new Object[] {"field"}));
     }
 
     @Test
     void addSafeFunctionNames_null_throwsException() {
-        assertThrows(IllegalArgumentException.class, () -> ConditionBuilder.addSafeFunctionNames(null));
+        assertThrows(IllegalArgumentException.class, () -> FunctionWhitelist.addSafeFunctionNames(null));
     }
 
     @Test
     void addBooleanFunctionNames_null_throwsException() {
-        assertThrows(IllegalArgumentException.class, () -> ConditionBuilder.addBooleanFunctionNames(null));
+        assertThrows(IllegalArgumentException.class, () -> FunctionWhitelist.addBooleanFunctionNames(null));
     }
 
     @Test
     void freezeExtraFunctionNames_snapshotIsImmutable() {
-        ConditionBuilder.addSafeFunctionNames(Set.of("FROZEN_FUNC"));
-        ConditionBuilder.addBooleanFunctionNames(Set.of("FROZEN_FUNC"));
-        Set<String> snapshot = ConditionBuilder.FROZEN_EXTRA_SAFE_FUNCTION_NAMES.get();
+        FunctionWhitelist.addSafeFunctionNames(Set.of("FROZEN_FUNC"));
+        FunctionWhitelist.addBooleanFunctionNames(Set.of("FROZEN_FUNC"));
+        Set<String> snapshot = FunctionWhitelist.FROZEN_EXTRA_SAFE_FUNCTION_NAMES.get();
         assertNotNull(snapshot);
         assertTrue(snapshot.contains("FROZEN_FUNC"));
         assertThrows(UnsupportedOperationException.class, () -> snapshot.add("NEW_FUNC"));
@@ -193,13 +193,13 @@ class FuncNodeTest {
 
     @Test
     void addSafeFunctionNames_afterFreeze_updatesSnapshot() {
-        ConditionBuilder.addSafeFunctionNames(Set.of("FUNC_A"));
-        ConditionBuilder.addBooleanFunctionNames(Set.of("FUNC_A"));
-        assertTrue(ConditionBuilder.FROZEN_EXTRA_SAFE_FUNCTION_NAMES.get().contains("FUNC_A"));
+        FunctionWhitelist.addSafeFunctionNames(Set.of("FUNC_A"));
+        FunctionWhitelist.addBooleanFunctionNames(Set.of("FUNC_A"));
+        assertTrue(FunctionWhitelist.FROZEN_EXTRA_SAFE_FUNCTION_NAMES.get().contains("FUNC_A"));
 
-        ConditionBuilder.addSafeFunctionNames(Set.of("FUNC_B"));
-        ConditionBuilder.addBooleanFunctionNames(Set.of("FUNC_B"));
-        assertTrue(ConditionBuilder.FROZEN_EXTRA_SAFE_FUNCTION_NAMES.get().contains("FUNC_B"),
+        FunctionWhitelist.addSafeFunctionNames(Set.of("FUNC_B"));
+        FunctionWhitelist.addBooleanFunctionNames(Set.of("FUNC_B"));
+        assertTrue(FunctionWhitelist.FROZEN_EXTRA_SAFE_FUNCTION_NAMES.get().contains("FUNC_B"),
             "Snapshot should be updated after second add");
     }
 
@@ -219,8 +219,8 @@ class FuncNodeTest {
                     startLatch.await();
                     for (int j = 0; j < iterations; j++) {
                         String funcName = "FUNC_" + threadIdx + "_" + j;
-                        ConditionBuilder.addSafeFunctionNames(Set.of(funcName));
-                        ConditionBuilder.FROZEN_EXTRA_SAFE_FUNCTION_NAMES.get().contains(funcName);
+                        FunctionWhitelist.addSafeFunctionNames(Set.of(funcName));
+                        FunctionWhitelist.FROZEN_EXTRA_SAFE_FUNCTION_NAMES.get().contains(funcName);
                     }
                 } catch (Exception e) {
                     hasError.set(true);
