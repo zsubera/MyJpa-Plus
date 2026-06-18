@@ -990,4 +990,300 @@ class MyJpaTemplateTest {
         assertThrows(IllegalArgumentException.class, () -> template.findKeysetPage(TestEntity.class,
             (root, query, cb) -> cb.conjunction(), Sort.by("id"), 10, new Object[] {1, 2}));
     }
+
+    @Test
+    void testFindAllWithSort() {
+        for (int i = 0; i < 3; i++) {
+            TestEntity e = new TestEntity();
+            e.setName("sort" + i);
+            e.setStatus(i);
+            repository.save(e);
+        }
+        repository.flush();
+
+        QuerySpec<TestEntity> qs = new QuerySpec<>();
+        List<TestEntity> result = template.findAll(TestEntity.class, qs, Sort.by("name"));
+        assertEquals(3, result.size());
+    }
+
+    @Test
+    void testFindAllWithSortNullClass() {
+        assertThrows(IllegalArgumentException.class, () -> template.findAll(null, new QuerySpec<>(), Sort.by("name")));
+    }
+
+    @Test
+    void testFindAllWithSortNullSpec() {
+        assertThrows(IllegalArgumentException.class,
+            () -> template.findAll(TestEntity.class, (QuerySpec<TestEntity>)null, Sort.by("name")));
+    }
+
+    @Test
+    void testFindAllWithSortNullSort() {
+        assertThrows(IllegalArgumentException.class,
+            () -> template.findAll(TestEntity.class, new QuerySpec<>(), (Sort)null));
+    }
+
+    @Test
+    void testFindOneWithQuerySpec() {
+        TestEntity e = new TestEntity();
+        e.setName("findOne");
+        e.setStatus(1);
+        repository.save(e);
+        repository.flush();
+
+        QuerySpec<TestEntity> qs = new QuerySpec<>();
+        qs.eq(TestEntity::getName, "findOne");
+        java.util.Optional<TestEntity> result = template.findOne(TestEntity.class, qs);
+        assertTrue(result.isPresent());
+        assertEquals("findOne", result.get().getName());
+    }
+
+    @Test
+    void testFindOneWithQuerySpecNotFound() {
+        TestEntity e = new TestEntity();
+        e.setName("exists");
+        e.setStatus(1);
+        repository.save(e);
+        repository.flush();
+
+        QuerySpec<TestEntity> qs = new QuerySpec<>();
+        qs.eq(TestEntity::getName, "nonexistent");
+        java.util.Optional<TestEntity> result = template.findOne(TestEntity.class, qs);
+        assertFalse(result.isPresent());
+    }
+
+    @Test
+    void testFindOneWithQuerySpecNullClass() {
+        assertThrows(IllegalArgumentException.class, () -> template.findOne(null, new QuerySpec<>()));
+    }
+
+    @Test
+    void testFindOneWithQuerySpecNullSpec() {
+        assertThrows(IllegalArgumentException.class,
+            () -> template.findOne(TestEntity.class, (QuerySpec<TestEntity>)null));
+    }
+
+    @Test
+    void testFindOneWithSpecification() {
+        TestEntity e = new TestEntity();
+        e.setName("findOneSpec");
+        e.setStatus(1);
+        repository.save(e);
+        repository.flush();
+
+        Specification<TestEntity> spec = (root, query, cb) -> cb.equal(root.get("name"), "findOneSpec");
+        java.util.Optional<TestEntity> result = template.findOne(TestEntity.class, spec);
+        assertTrue(result.isPresent());
+    }
+
+    @Test
+    void testFindOneWithSpecificationNotFound() {
+        TestEntity e = new TestEntity();
+        e.setName("exists");
+        e.setStatus(1);
+        repository.save(e);
+        repository.flush();
+
+        Specification<TestEntity> spec = (root, query, cb) -> cb.equal(root.get("name"), "nonexistent");
+        java.util.Optional<TestEntity> result = template.findOne(TestEntity.class, spec);
+        assertFalse(result.isPresent());
+    }
+
+    @Test
+    void testFindWithSpecificationAndMaxResults() {
+        for (int i = 0; i < 5; i++) {
+            TestEntity e = new TestEntity();
+            e.setName("findSpecLimit" + i);
+            e.setStatus(i);
+            repository.save(e);
+        }
+        repository.flush();
+
+        Specification<TestEntity> spec = (root, query, cb) -> cb.conjunction();
+        List<TestEntity> result = template.find(TestEntity.class, spec, 3);
+        assertEquals(3, result.size());
+    }
+
+    @Test
+    void testFindWithSpecificationMaxResultsDisabled() {
+        for (int i = 0; i < 5; i++) {
+            TestEntity e = new TestEntity();
+            e.setName("findSpecNoLimit" + i);
+            e.setStatus(i);
+            repository.save(e);
+        }
+        repository.flush();
+
+        Specification<TestEntity> spec = (root, query, cb) -> cb.conjunction();
+        // find() requires positive maxResults; use find with default maxResults
+        List<TestEntity> result = template.find(TestEntity.class, spec);
+        assertEquals(5, result.size());
+    }
+
+    @Test
+    void testFindWithSpecificationAndMaxResultsInvalidMaxRows() {
+        assertThrows(IllegalArgumentException.class,
+            () -> template.find(TestEntity.class, (root, query, cb) -> cb.conjunction(), 0));
+    }
+
+    @Test
+    void testFindAllWithQuerySpecNullClass() {
+        assertThrows(IllegalArgumentException.class, () -> template.findAll(null, new QuerySpec<>()));
+    }
+
+    @Test
+    void testFindAllWithQuerySpecNullSpec() {
+        assertThrows(IllegalArgumentException.class,
+            () -> template.findAll(TestEntity.class, (QuerySpec<TestEntity>)null));
+    }
+
+    @Test
+    void testFindAllWithQuerySpecAndMaxResultsNullClass() {
+        assertThrows(IllegalArgumentException.class, () -> template.findAll(null, new QuerySpec<>(), 10));
+    }
+
+    @Test
+    void testFindAllWithQuerySpecAndMaxResultsNullSpec() {
+        assertThrows(IllegalArgumentException.class,
+            () -> template.findAll(TestEntity.class, (QuerySpec<TestEntity>)null, 10));
+    }
+
+    @Test
+    void testFindAllWithQuerySpecAndMaxResultsInvalidMaxRows() {
+        assertThrows(IllegalArgumentException.class, () -> template.findAll(TestEntity.class, new QuerySpec<>(), 0));
+    }
+
+    @Test
+    void testFindAllWithQuerySpecAndSortNullClass() {
+        assertThrows(IllegalArgumentException.class, () -> template.findAll(null, new QuerySpec<>(), Sort.by("name")));
+    }
+
+    @Test
+    void testFindAllWithQuerySpecAndSortNullSpec() {
+        assertThrows(IllegalArgumentException.class,
+            () -> template.findAll(TestEntity.class, (QuerySpec<TestEntity>)null, Sort.by("name")));
+    }
+
+    @Test
+    void testFindAllWithQuerySpecAndSortNullSort() {
+        assertThrows(IllegalArgumentException.class,
+            () -> template.findAll(TestEntity.class, new QuerySpec<>(), (Sort)null));
+    }
+
+    @Test
+    void testFindAllWithQuerySpecAndEntityGraphNullClass() {
+        assertThrows(IllegalArgumentException.class, () -> template.findAll(null, new QuerySpec<>(),
+            com.zsubera.jpa.util.EntityGraphHelper.forEntity(TestEntity.class)));
+    }
+
+    @Test
+    void testFindAllWithQuerySpecAndEntityGraphNullSpec() {
+        assertThrows(IllegalArgumentException.class, () -> template.findAll(TestEntity.class,
+            (QuerySpec<TestEntity>)null, com.zsubera.jpa.util.EntityGraphHelper.forEntity(TestEntity.class)));
+    }
+
+    @Test
+    void testFindAllWithQuerySpecAndEntityGraphAndMaxResultsNullClass() {
+        assertThrows(IllegalArgumentException.class, () -> template.findAll(null, new QuerySpec<>(),
+            com.zsubera.jpa.util.EntityGraphHelper.forEntity(TestEntity.class), 10));
+    }
+
+    @Test
+    void testFindAllWithQuerySpecAndEntityGraphAndMaxResultsNullSpec() {
+        assertThrows(IllegalArgumentException.class, () -> template.findAll(TestEntity.class,
+            (QuerySpec<TestEntity>)null, com.zsubera.jpa.util.EntityGraphHelper.forEntity(TestEntity.class), 10));
+    }
+
+    @Test
+    void testFindAllWithQuerySpecAndEntityGraphAndMaxResultsInvalidMaxRows() {
+        assertThrows(IllegalArgumentException.class, () -> template.findAll(TestEntity.class, new QuerySpec<>(),
+            com.zsubera.jpa.util.EntityGraphHelper.forEntity(TestEntity.class), 0));
+    }
+
+    @Test
+    void testFindPageNullClass() {
+        assertThrows(IllegalArgumentException.class,
+            () -> template.findPage(null, (root, query, cb) -> cb.conjunction(), PageRequest.of(0, 10)));
+    }
+
+    @Test
+    void testFindPageNullSpec() {
+        assertThrows(IllegalArgumentException.class,
+            () -> template.findPage(TestEntity.class, (Specification<TestEntity>)null, PageRequest.of(0, 10)));
+    }
+
+    @Test
+    void testFindPageNullPageable() {
+        assertThrows(IllegalArgumentException.class,
+            () -> template.findPage(TestEntity.class, (root, query, cb) -> cb.conjunction(), null));
+    }
+
+    @Test
+    void testFindAllWithQuerySpecAndPageableNullClass() {
+        assertThrows(IllegalArgumentException.class,
+            () -> template.findAll(null, new QuerySpec<>(), PageRequest.of(0, 10)));
+    }
+
+    @Test
+    void testFindAllWithQuerySpecAndPageableNullSpec() {
+        assertThrows(IllegalArgumentException.class,
+            () -> template.findAll(TestEntity.class, (QuerySpec<TestEntity>)null, PageRequest.of(0, 10)));
+    }
+
+    @Test
+    void testFindAllWithQuerySpecAndPageableNullPageable() {
+        assertThrows(IllegalArgumentException.class,
+            () -> template.findAll(TestEntity.class, new QuerySpec<>(), (Pageable)null));
+    }
+
+    @Test
+    void testFindAllStreamNullClass() {
+        assertThrows(IllegalArgumentException.class, () -> template.findAllStream(null, new QuerySpec<>(), stream -> {
+        }));
+    }
+
+    @Test
+    void testFindAllStreamNullSpec() {
+        assertThrows(IllegalArgumentException.class,
+            () -> template.findAllStream(TestEntity.class, (QuerySpec<TestEntity>)null, stream -> {
+            }));
+    }
+
+    @Test
+    void testFindAllStreamNullConsumer() {
+        assertThrows(IllegalArgumentException.class,
+            () -> template.findAllStream(TestEntity.class, new QuerySpec<>(), null));
+    }
+
+    @Test
+    void testFindAllStreamWithEntityGraphNullClass() {
+        assertThrows(IllegalArgumentException.class, () -> template.findAllStream(null, new QuerySpec<>(),
+            com.zsubera.jpa.util.EntityGraphHelper.forEntity(TestEntity.class), stream -> {
+            }));
+    }
+
+    @Test
+    void testFindAllStreamWithEntityGraphNullSpec() {
+        assertThrows(IllegalArgumentException.class, () -> template.findAllStream(TestEntity.class,
+            (QuerySpec<TestEntity>)null, com.zsubera.jpa.util.EntityGraphHelper.forEntity(TestEntity.class), stream -> {
+            }));
+    }
+
+    @Test
+    void testFindAllStreamWithEntityGraphNullConsumer() {
+        assertThrows(IllegalArgumentException.class, () -> template.findAllStream(TestEntity.class, new QuerySpec<>(),
+            com.zsubera.jpa.util.EntityGraphHelper.forEntity(TestEntity.class), null));
+    }
+
+    @Test
+    void testFindAllStreamWithEntityGraphNullEntityGraph() {
+        // findAllStream with null entityGraph should not throw (entityGraph is optional)
+        TestEntity e = new TestEntity();
+        e.setName("stream");
+        e.setStatus(1);
+        repository.save(e);
+        repository.flush();
+        assertDoesNotThrow(() -> template.findAllStream(TestEntity.class, new QuerySpec<>(), null, stream -> {
+        }));
+    }
 }
