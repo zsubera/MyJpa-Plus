@@ -168,6 +168,43 @@ class NotGroupTest {
         assertEquals(3, notGroup.conditions().size());
     }
 
+    @Test
+    void join_addsJoinNode() {
+        QuerySpec<TestEntity> qs = new QuerySpec<>();
+        NotGroup<TestEntity> notGroup = NotGroup.create(qs);
+        notGroup.<TestEntity>join(TestEntity::getParent, j -> j.eq(TestEntity::getName, "test"));
+        assertFalse(notGroup.conditions().isEmpty());
+    }
+
+    @Test
+    void join_nullConfig_throws() {
+        QuerySpec<TestEntity> qs = new QuerySpec<>();
+        NotGroup<TestEntity> notGroup = NotGroup.create(qs);
+        assertThrows(IllegalArgumentException.class, () -> notGroup.<TestEntity>join(TestEntity::getParent, null));
+    }
+
+    @Test
+    void leftJoin_addsJoinNode() {
+        QuerySpec<TestEntity> qs = new QuerySpec<>();
+        NotGroup<TestEntity> notGroup = NotGroup.create(qs);
+        notGroup.<TestEntity>leftJoin(TestEntity::getParent, j -> j.eq(TestEntity::getName, "test"));
+        assertFalse(notGroup.conditions().isEmpty());
+    }
+
+    @Test
+    void leftJoin_nullConfig_throws() {
+        QuerySpec<TestEntity> qs = new QuerySpec<>();
+        NotGroup<TestEntity> notGroup = NotGroup.create(qs);
+        assertThrows(IllegalArgumentException.class, () -> notGroup.<TestEntity>leftJoin(TestEntity::getParent, null));
+    }
+
+    @Test
+    void notGroup_withQuerySpec_notMethod() {
+        QuerySpec<TestEntity> qs = new QuerySpec<>();
+        qs.not(n -> n.eq(TestEntity::getName, "test"));
+        assertFalse(qs.conditions().isEmpty());
+    }
+
     @jakarta.persistence.Entity
     @jakarta.persistence.Table(name = "not_group_test_entity")
     static class TestEntity {
