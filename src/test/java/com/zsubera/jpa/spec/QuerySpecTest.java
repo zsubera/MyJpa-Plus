@@ -1905,4 +1905,193 @@ public class QuerySpecTest {
         Specification<TestEntity> result = qs.toSpecification((Specification<TestEntity>)null);
         assertNotNull(result);
     }
+
+    @Test
+    void testCopyWithGroupByAndHaving() {
+        QuerySpec<TestEntity> qs = new QuerySpec<>();
+        qs.groupBy(TestEntity::getStatus).havingCount(TestEntity::getId, ConditionNode.Op.GT, 1L)
+            .eq(TestEntity::getName, "test");
+
+        QuerySpec<TestEntity> copy = qs.copy();
+        assertNotNull(copy);
+    }
+
+    @Test
+    void testCopyWithOrderBy() {
+        QuerySpec<TestEntity> qs = new QuerySpec<>();
+        qs.orderByAsc(TestEntity::getName).orderByDesc(TestEntity::getStatus);
+
+        QuerySpec<TestEntity> copy = qs.copy();
+        assertNotNull(copy);
+    }
+
+    @Test
+    void testCopyWithTimeoutAndLockMode() {
+        QuerySpec<TestEntity> qs = new QuerySpec<>();
+        qs.timeout(30).lockMode(jakarta.persistence.LockModeType.PESSIMISTIC_READ);
+
+        QuerySpec<TestEntity> copy = qs.copy();
+        assertNotNull(copy);
+        assertEquals(Integer.valueOf(30), copy.getQueryTimeout());
+        assertEquals(jakarta.persistence.LockModeType.PESSIMISTIC_READ, copy.getLockMode());
+    }
+
+    @Test
+    void testToStringEmpty() {
+        QuerySpec<TestEntity> qs = new QuerySpec<>();
+        String str = qs.toString();
+        assertNotNull(str);
+        assertTrue(str.contains("QuerySpec"));
+        assertTrue(str.contains("conditions=0"));
+    }
+
+    @Test
+    void testToStringWithConditions() {
+        QuerySpec<TestEntity> qs = new QuerySpec<>();
+        qs.eq(TestEntity::getName, "test").ne(TestEntity::getStatus, 1);
+        String str = qs.toString();
+        assertNotNull(str);
+        assertTrue(str.contains("conditions=2"));
+    }
+
+    @Test
+    void testToStringWithGroupBy() {
+        QuerySpec<TestEntity> qs = new QuerySpec<>();
+        qs.groupBy(TestEntity::getStatus);
+        String str = qs.toString();
+        assertNotNull(str);
+        assertTrue(str.contains("groupBy"));
+    }
+
+    @Test
+    void testToStringWithHaving() {
+        QuerySpec<TestEntity> qs = new QuerySpec<>();
+        qs.groupBy(TestEntity::getStatus).havingCount(TestEntity::getId, ConditionNode.Op.GT, 1L);
+        String str = qs.toString();
+        assertNotNull(str);
+        assertTrue(str.contains("having"));
+    }
+
+    @Test
+    void testToStringWithOrderBy() {
+        QuerySpec<TestEntity> qs = new QuerySpec<>();
+        qs.orderByAsc(TestEntity::getName);
+        String str = qs.toString();
+        assertNotNull(str);
+        assertTrue(str.contains("orderBy"));
+    }
+
+    @Test
+    void testToStringWithTimeout() {
+        QuerySpec<TestEntity> qs = new QuerySpec<>();
+        qs.timeout(30);
+        String str = qs.toString();
+        assertNotNull(str);
+        assertTrue(str.contains("timeout=30s"));
+    }
+
+    @Test
+    void testToStringWithLockMode() {
+        QuerySpec<TestEntity> qs = new QuerySpec<>();
+        qs.lockMode(jakarta.persistence.LockModeType.PESSIMISTIC_READ);
+        String str = qs.toString();
+        assertNotNull(str);
+        assertTrue(str.contains("lockMode"));
+    }
+
+    @Test
+    void testToStringWithDistinct() {
+        QuerySpec<TestEntity> qs = new QuerySpec<>();
+        qs.distinct();
+        String str = qs.toString();
+        assertNotNull(str);
+        assertTrue(str.contains("distinct"));
+    }
+
+    @Test
+    void testToDescriptionEmpty() {
+        QuerySpec<TestEntity> qs = new QuerySpec<>();
+        String desc = qs.toDescription();
+        assertNotNull(desc);
+        assertTrue(desc.contains("Query{"));
+    }
+
+    @Test
+    void testToDescriptionWithConditions() {
+        QuerySpec<TestEntity> qs = new QuerySpec<>();
+        qs.eq(TestEntity::getName, "test");
+        String desc = qs.toDescription();
+        assertNotNull(desc);
+        assertTrue(desc.contains("WHERE"));
+    }
+
+    @Test
+    void testToDescriptionWithGroupBy() {
+        QuerySpec<TestEntity> qs = new QuerySpec<>();
+        qs.groupBy(TestEntity::getStatus);
+        String desc = qs.toDescription();
+        assertNotNull(desc);
+        assertTrue(desc.contains("GROUP BY"));
+    }
+
+    @Test
+    void testToDescriptionWithOrderBy() {
+        QuerySpec<TestEntity> qs = new QuerySpec<>();
+        qs.orderByAsc(TestEntity::getName);
+        String desc = qs.toDescription();
+        assertNotNull(desc);
+        assertTrue(desc.contains("ORDER BY"));
+    }
+
+    @Test
+    void testApplyQuerySettingsWithTimeout() {
+        QuerySpec<TestEntity> qs = new QuerySpec<>();
+        qs.timeout(30);
+
+        jakarta.persistence.criteria.CriteriaBuilder cb = em.getCriteriaBuilder();
+        jakarta.persistence.criteria.CriteriaQuery<TestEntity> cq = cb.createQuery(TestEntity.class);
+        cq.from(TestEntity.class);
+        jakarta.persistence.TypedQuery<TestEntity> query = em.createQuery(cq);
+
+        qs.applyQuerySettings(query);
+    }
+
+    @Test
+    void testApplyQuerySettingsWithLockMode() {
+        QuerySpec<TestEntity> qs = new QuerySpec<>();
+        qs.lockMode(jakarta.persistence.LockModeType.PESSIMISTIC_READ);
+
+        jakarta.persistence.criteria.CriteriaBuilder cb = em.getCriteriaBuilder();
+        jakarta.persistence.criteria.CriteriaQuery<TestEntity> cq = cb.createQuery(TestEntity.class);
+        cq.from(TestEntity.class);
+        jakarta.persistence.TypedQuery<TestEntity> query = em.createQuery(cq);
+
+        qs.applyQuerySettings(query);
+    }
+
+    @Test
+    void testApplyQuerySettingsWithBoth() {
+        QuerySpec<TestEntity> qs = new QuerySpec<>();
+        qs.timeout(30).lockMode(jakarta.persistence.LockModeType.PESSIMISTIC_READ);
+
+        jakarta.persistence.criteria.CriteriaBuilder cb = em.getCriteriaBuilder();
+        jakarta.persistence.criteria.CriteriaQuery<TestEntity> cq = cb.createQuery(TestEntity.class);
+        cq.from(TestEntity.class);
+        jakarta.persistence.TypedQuery<TestEntity> query = em.createQuery(cq);
+
+        qs.applyQuerySettings(query);
+    }
+
+    @Test
+    void testApplyQuerySettingsWithoutSettings() {
+        QuerySpec<TestEntity> qs = new QuerySpec<>();
+
+        jakarta.persistence.criteria.CriteriaBuilder cb = em.getCriteriaBuilder();
+        jakarta.persistence.criteria.CriteriaQuery<TestEntity> cq = cb.createQuery(TestEntity.class);
+        cq.from(TestEntity.class);
+        jakarta.persistence.TypedQuery<TestEntity> query = em.createQuery(cq);
+
+        qs.applyQuerySettings(query);
+    }
+
 }
