@@ -299,6 +299,8 @@ final class NodeResolver {
     }
 
     @SuppressWarnings("unchecked")
+    @edu.umd.cs.findbugs.annotations.SuppressFBWarnings(value = "RCN_REDUNDANT_NULLCHECK_OF_NONNULL_VALUE",
+        justification = "Defensive null check for count query context where query may be null despite @NonNull annotation")
     private static <S> Predicate resolveExists(ConditionNode.ExistsNode<S> node, NodeContext ctx) {
         CriteriaQuery<?> query = ctx.query();
         if (query == null) {
@@ -332,6 +334,8 @@ final class NodeResolver {
             + path.getClass().getSimpleName() + ". Ensure EXISTS is used at the query root level.");
     }
 
+    @edu.umd.cs.findbugs.annotations.SuppressFBWarnings(value = "RCN_REDUNDANT_NULLCHECK_OF_NONNULL_VALUE",
+        justification = "Defensive null check for count query context where query may be null despite @NonNull annotation")
     private static <S> Predicate resolveInSubQuery(ConditionNode.InSubQueryNode<S> node, NodeContext ctx) {
         CriteriaQuery<?> query = ctx.query();
         if (query == null) {

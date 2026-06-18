@@ -45,6 +45,8 @@ public final class GlobalConfigHolder {
      *
      * @return 全局配置实例，永不为 null
      */
+    @SuppressFBWarnings(value = "MS_EXPOSE_REP",
+        justification = "Intentionally returns shared config singleton for global access")
     public static MyJpaPlusGlobalConfig getConfig() {
         MyJpaPlusGlobalConfig c = config;
         if (c == null) {

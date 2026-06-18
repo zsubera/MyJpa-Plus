@@ -355,7 +355,7 @@ final class EntityFieldExtractor<T> {
                     + "Call onConflict() to specify the conflict columns explicitly for MergeSpec.");
             }
             throw new IllegalStateException(
-                "No @Id field found in " + (entityClass != null ? entityClass.getName() : "null")
+                "No @Id field found in " + entityClass.getName()
                     + ". Ensure the entity has a field annotated with @jakarta.persistence.Id");
         }
         List<String> result = List.copyOf(idColumns);
