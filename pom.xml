@@ -214,12 +214,20 @@
                                         <include>com.zsubera.jpa.repository</include>
                                         <include>com.zsubera.jpa.projection</include>
                                         <include>com.zsubera.jpa.template</include>
+                                        <include>com.zsubera.jpa.annotation</include>
+                                        <include>com.zsubera.jpa.autoconfigure</include>
+                                        <include>com.zsubera.jpa.codegen</include>
+                                        <include>com.zsubera.jpa.converter</include>
+                                        <include>com.zsubera.jpa.exception</include>
+                                        <include>com.zsubera.jpa.monitor</include>
+                                        <include>com.zsubera.jpa.softdelete</include>
+                                        <include>com.zsubera.jpa.util</include>
                                     </includes>
                                     <limits>
                                         <limit>
                                             <counter>LINE</counter>
                                             <value>COVEREDRATIO</value>
-                                            <minimum>0.48</minimum>
+                                            <minimum>0.90</minimum>
                                         </limit>
                                     </limits>
                                 </rule>
