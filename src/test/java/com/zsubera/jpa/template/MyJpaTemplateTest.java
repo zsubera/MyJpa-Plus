@@ -842,4 +842,152 @@ class MyJpaTemplateTest {
         assertThrows(IllegalArgumentException.class,
             () -> template.find(TestEntity.class, (Specification<TestEntity>)null));
     }
+
+    @Test
+    void testFindSlice() {
+        for (int i = 0; i < 5; i++) {
+            TestEntity e = new TestEntity();
+            e.setName("slice" + i);
+            e.setStatus(i);
+            repository.save(e);
+        }
+        repository.flush();
+
+        Specification<TestEntity> spec = (root, query, cb) -> cb.conjunction();
+        org.springframework.data.domain.Slice<TestEntity> slice =
+            template.findSlice(TestEntity.class, spec, PageRequest.of(0, 3));
+        assertNotNull(slice);
+        assertEquals(3, slice.getContent().size());
+        assertTrue(slice.hasNext());
+    }
+
+    @Test
+    void testFindSliceNullClass() {
+        assertThrows(IllegalArgumentException.class,
+            () -> template.findSlice(null, (root, query, cb) -> cb.conjunction(), PageRequest.of(0, 10)));
+    }
+
+    @Test
+    void testFindSliceNullSpec() {
+        assertThrows(IllegalArgumentException.class,
+            () -> template.findSlice(TestEntity.class, null, PageRequest.of(0, 10)));
+    }
+
+    @Test
+    void testFindSliceNullPageable() {
+        assertThrows(IllegalArgumentException.class,
+            () -> template.findSlice(TestEntity.class, (root, query, cb) -> cb.conjunction(), null));
+    }
+
+    @Test
+    void testFindAllById() {
+        TestEntity e1 = new TestEntity();
+        e1.setName("byId1");
+        e1.setStatus(1);
+        repository.save(e1);
+
+        TestEntity e2 = new TestEntity();
+        e2.setName("byId2");
+        e2.setStatus(2);
+        repository.save(e2);
+        repository.flush();
+
+        List<TestEntity> result = template.findAllById(TestEntity.class, List.of(e1.getId(), e2.getId()));
+        assertEquals(2, result.size());
+    }
+
+    @Test
+    void testFindAllByIdNullClass() {
+        assertThrows(IllegalArgumentException.class, () -> template.findAllById(null, List.of(1L)));
+    }
+
+    @Test
+    void testFindAllByIdNullIds() {
+        assertThrows(IllegalArgumentException.class, () -> template.findAllById(TestEntity.class, null));
+    }
+
+    @Test
+    void testFindAllByIdEmptyIds() {
+        assertThrows(IllegalArgumentException.class, () -> template.findAllById(TestEntity.class, List.of()));
+    }
+
+    @Test
+    void testFindNotDeletedAllById() {
+        TestEntity e1 = new TestEntity();
+        e1.setName("ndById1");
+        e1.setStatus(1);
+        repository.save(e1);
+        repository.flush();
+
+        List<TestEntity> result = template.findNotDeletedAllById(TestEntity.class, List.of(e1.getId()));
+        assertEquals(1, result.size());
+    }
+
+    @Test
+    void testFindNotDeletedAllByIdNullClass() {
+        assertThrows(IllegalArgumentException.class, () -> template.findNotDeletedAllById(null, List.of(1L)));
+    }
+
+    @Test
+    void testFindNotDeletedAllByIdNullIds() {
+        assertThrows(IllegalArgumentException.class, () -> template.findNotDeletedAllById(TestEntity.class, null));
+    }
+
+    @Test
+    void testFindNotDeletedAllByIdEmptyIds() {
+        assertThrows(IllegalArgumentException.class, () -> template.findNotDeletedAllById(TestEntity.class, List.of()));
+    }
+
+    @Test
+    void testFindKeysetPage() {
+        for (int i = 0; i < 5; i++) {
+            TestEntity e = new TestEntity();
+            e.setName("ks" + i);
+            e.setStatus(i);
+            repository.save(e);
+        }
+        repository.flush();
+
+        Specification<TestEntity> spec = (root, query, cb) -> cb.conjunction();
+        MyJpaTemplate.KeysetPage<TestEntity> page =
+            template.findKeysetPage(TestEntity.class, spec, Sort.by("id"), 3, null);
+        assertNotNull(page);
+        assertEquals(3, page.content().size());
+    }
+
+    @Test
+    void testFindKeysetPageNullClass() {
+        assertThrows(IllegalArgumentException.class,
+            () -> template.findKeysetPage(null, (root, query, cb) -> cb.conjunction(), Sort.by("id"), 10, null));
+    }
+
+    @Test
+    void testFindKeysetPageNullSpec() {
+        assertThrows(IllegalArgumentException.class,
+            () -> template.findKeysetPage(TestEntity.class, null, Sort.by("id"), 10, null));
+    }
+
+    @Test
+    void testFindKeysetPageNullSort() {
+        assertThrows(IllegalArgumentException.class,
+            () -> template.findKeysetPage(TestEntity.class, (root, query, cb) -> cb.conjunction(), null, 10, null));
+    }
+
+    @Test
+    void testFindKeysetPageUnsortedSort() {
+        assertThrows(IllegalArgumentException.class, () -> template.findKeysetPage(TestEntity.class,
+            (root, query, cb) -> cb.conjunction(), Sort.unsorted(), 10, null));
+    }
+
+    @Test
+    void testFindKeysetPageInvalidPageSize() {
+        assertThrows(IllegalArgumentException.class, () -> template.findKeysetPage(TestEntity.class,
+            (root, query, cb) -> cb.conjunction(), Sort.by("id"), 0, null));
+    }
+
+    @Test
+    void testFindKeysetPageInvalidLastSortValues() {
+        assertThrows(IllegalArgumentException.class, () -> template.findKeysetPage(TestEntity.class,
+            (root, query, cb) -> cb.conjunction(), Sort.by("id"), 10, new Object[] {1, 2}));
+    }
 }
