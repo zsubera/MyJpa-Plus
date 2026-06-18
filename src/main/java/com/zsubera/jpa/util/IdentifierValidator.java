@@ -144,6 +144,46 @@ public final class IdentifierValidator {
     }
 
     /**
+     * 从实体类解析数据库表名。优先使用 {@code @Table(name)} 注解，
+     * 其次使用 {@code @Entity(name)} 注解，最后使用驼峰转下划线策略。
+     *
+     * <p>
+     * 解析后的表名会通过 {@link #validateTableName(String)} 验证安全性。
+     *
+     * @param entityClass 实体类
+     * @return 解析后的数据库表名
+     * @throws IllegalArgumentException 如果表名注解包含非法字符
+     */
+    public static String resolveTableName(Class<?> entityClass) {
+        jakarta.persistence.Table tableAnnotation = entityClass.getAnnotation(jakarta.persistence.Table.class);
+        if (tableAnnotation != null && !tableAnnotation.name().isEmpty()) {
+            StringBuilder tableName = new StringBuilder();
+            String catalog = tableAnnotation.catalog();
+            String schema = tableAnnotation.schema();
+            String name = tableAnnotation.name();
+            if (!catalog.isEmpty()) {
+                tableName.append(catalog).append('.');
+            }
+            if (!schema.isEmpty()) {
+                tableName.append(schema).append('.');
+            }
+            tableName.append(name);
+            String fullName = tableName.toString();
+            validateTableName(fullName);
+            return fullName;
+        }
+        jakarta.persistence.Entity entityAnnotation = entityClass.getAnnotation(jakarta.persistence.Entity.class);
+        if (entityAnnotation != null && !entityAnnotation.name().isEmpty()) {
+            String name = entityAnnotation.name();
+            validateTableName(name);
+            return name;
+        }
+        String name = com.zsubera.jpa.util.StringHelper.camelToSnake(entityClass.getSimpleName());
+        validateTableName(name);
+        return name;
+    }
+
+    /**
      * 验证标识符段是否安全。
      *
      * @param part 标识符段

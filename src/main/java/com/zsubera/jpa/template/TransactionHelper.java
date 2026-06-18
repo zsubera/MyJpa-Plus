@@ -162,8 +162,6 @@ class TransactionHelper {
         return template;
     }
 
-    // 导致 executeInNewTransaction 在无活动事务时无法创建新事务。
-    // 改为正确的 PROPAGATION_REQUIRES_NEW（始终创建新事务）。
     private TransactionTemplate getOrCreateRequiresNewTemplate(PlatformTransactionManager txManager) {
         TransactionTemplate template = cachedRequiresNewTemplate;
         if (template == null) {

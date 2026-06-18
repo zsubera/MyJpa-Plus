@@ -164,6 +164,10 @@ public class EncryptConverter implements AttributeConverter<String, String> {
      * <p>
      * 在 Servlet 容器线程池中，线程会被复用。如果不清理 ThreadLocal，Cipher 实例会一直保留，
      * 阻止类加载器被垃圾回收。在热重载或 OSGi 环境中，这会导致整个类加载器泄漏。
+     *
+     * <p>
+     * <strong>注意：</strong>不要在每次加密/解密操作后调用此方法，否则会完全抵消 ThreadLocal 缓存的性能优势。
+     * 应在请求结束或会话结束时调用（例如 Servlet Filter 的 afterCompletion 中）。
      */
     public static void removeCipher() {
         CIPHER_THREAD_LOCAL.remove();
@@ -398,8 +402,6 @@ public class EncryptConverter implements AttributeConverter<String, String> {
         } catch (GeneralSecurityException e) {
             log.error("Encryption failed", e);
             throw new MyJpaPlusException("Failed to encrypt value. Check encryption key configuration.", e);
-        } finally {
-            removeCipher();
         }
     }
 
@@ -465,8 +467,6 @@ public class EncryptConverter implements AttributeConverter<String, String> {
         } catch (GeneralSecurityException e) {
             log.error("Decryption failed", e);
             throw new MyJpaPlusException("Failed to decrypt value. Check encryption key configuration.", e);
-        } finally {
-            removeCipher();
         }
     }
 

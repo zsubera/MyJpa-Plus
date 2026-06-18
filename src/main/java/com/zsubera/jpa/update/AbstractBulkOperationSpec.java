@@ -553,6 +553,72 @@ public abstract class AbstractBulkOperationSpec<T, SELF extends AbstractBulkOper
         QueryTimeoutHelper.applyTimeout(query);
     }
 
+    /**
+     * 获取全局配置实例。
+     *
+     * @return 全局配置，如果未配置则返回默认配置
+     */
+    protected static com.zsubera.jpa.autoconfigure.MyJpaPlusGlobalConfig getGlobalConfig() {
+        return com.zsubera.jpa.autoconfigure.GlobalConfigHolder.getConfig();
+    }
+
+    /**
+     * 在执行前快速估算受影响的行数是否超过限制。
+     *
+     * <p>
+     * 使用 {@code SELECT 1 FROM table WHERE conditions LIMIT (limit+1)} 进行快速存在性检查，
+     * 避免昂贵的 {@code SELECT COUNT(*)} 全表扫描。当结果数量 {@code <= limit} 时，
+     * 可安全执行操作；当结果数量 {@code > limit} 时，执行精确 COUNT 验证。
+     *
+     * @param em 实体管理器
+     * @param limit 最大允许行数
+     * @param operationName 操作名称（UPDATE/DELETE），用于错误消息
+     * @throws IllegalStateException 如果受影响行数超过限制
+     */
+    protected void checkRowCountBeforeExecute(EntityManager em, long limit, String operationName) {
+        CriteriaBuilder cb = em.getCriteriaBuilder();
+        CriteriaQuery<Long> probeQuery = cb.createQuery(Long.class);
+        Root<T> root = probeQuery.from(entityClass);
+        probeQuery.select(cb.literal(1L));
+        Predicate[] predicates = buildPredicates(root, cb);
+        if (predicates.length > 0) {
+            probeQuery.where(cb.and(predicates));
+        }
+        jakarta.persistence.TypedQuery<Long> query = em.createQuery(probeQuery);
+        if (limit >= Integer.MAX_VALUE - 1) {
+            return;
+        }
+        query.setMaxResults((int)limit + 1);
+        int probeCount = query.getResultList().size();
+        if (probeCount <= limit) {
+            return;
+        }
+        long exactCount = countBeforeExecute(em);
+        if (exactCount > limit) {
+            throw new IllegalStateException("Bulk " + operationName + " would affect " + exactCount
+                + " rows, which exceeds the configured limit of " + limit + " rows. "
+                + "Use executeLimited() with an explicit limit, or adjust myjpa-plus.query.max-bulk-operation-rows.");
+        }
+    }
+
+    /**
+     * 在执行前精确计数受影响的行数（仅在快速估算超限时调用）。
+     *
+     * @param em 实体管理器
+     * @return 精确受影响的行数
+     */
+    protected long countBeforeExecute(EntityManager em) {
+        CriteriaBuilder cb = em.getCriteriaBuilder();
+        CriteriaQuery<Long> countQuery = cb.createQuery(Long.class);
+        Root<T> root = countQuery.from(entityClass);
+        countQuery.select(cb.count(root));
+        Predicate[] predicates = buildPredicates(root, cb);
+        if (predicates.length > 0) {
+            countQuery.where(cb.and(predicates));
+        }
+        return em.createQuery(countQuery).getSingleResult();
+    }
+
     /** 批量操作条件节点递归深度限制，防止 StackOverflowError。 */
     private static final int MAX_BULK_RECURSION_DEPTH = 50;
 

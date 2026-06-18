@@ -354,9 +354,8 @@ final class EntityFieldExtractor<T> {
                 throw new IllegalStateException("Entity " + entityClass.getName() + " uses @EmbeddedId. "
                     + "Call onConflict() to specify the conflict columns explicitly for MergeSpec.");
             }
-            throw new IllegalStateException(
-                "No @Id field found in " + entityClass.getName()
-                    + ". Ensure the entity has a field annotated with @jakarta.persistence.Id");
+            throw new IllegalStateException("No @Id field found in " + entityClass.getName()
+                + ". Ensure the entity has a field annotated with @jakarta.persistence.Id");
         }
         List<String> result = List.copyOf(idColumns);
         ID_COLUMN_CACHE.put(cacheKey, result);

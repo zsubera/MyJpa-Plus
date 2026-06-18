@@ -5,7 +5,6 @@ import com.zsubera.jpa.spec.SFunction;
 import com.zsubera.jpa.util.IdentifierValidator;
 import com.zsubera.jpa.util.LambdaUtils;
 import com.zsubera.jpa.util.QueryTimeoutHelper;
-import com.zsubera.jpa.util.StringHelper;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.EntityTransaction;
 import java.util.ArrayList;
@@ -338,6 +337,9 @@ public class MergeSpec<T> {
      * @return 受影响的总行数
      */
     public int executeBatch(List<T> entities, EntityManager em) {
+        if (entities == null || entities.isEmpty()) {
+            return 0;
+        }
         return executeBatch(entities, em, 100);
     }
 
@@ -494,29 +496,7 @@ public class MergeSpec<T> {
      * @return 数据库表名
      */
     private String resolveTableName() {
-        jakarta.persistence.Table tableAnnotation = entityClass.getAnnotation(jakarta.persistence.Table.class);
-        if (tableAnnotation != null && !tableAnnotation.name().isEmpty()) {
-            StringBuilder tableName = new StringBuilder();
-            if (!tableAnnotation.catalog().isEmpty()) {
-                tableName.append(tableAnnotation.catalog()).append('.');
-            }
-            if (!tableAnnotation.schema().isEmpty()) {
-                tableName.append(tableAnnotation.schema()).append('.');
-            }
-            tableName.append(tableAnnotation.name());
-            String name = tableName.toString();
-            IdentifierValidator.validateTableName(name);
-            return name;
-        }
-        jakarta.persistence.Entity entityAnnotation = entityClass.getAnnotation(jakarta.persistence.Entity.class);
-        if (entityAnnotation != null && !entityAnnotation.name().isEmpty()) {
-            String name = entityAnnotation.name();
-            IdentifierValidator.validateTableName(name);
-            return name;
-        }
-        String name = StringHelper.camelToSnake(entityClass.getSimpleName());
-        IdentifierValidator.validateTableName(name);
-        return name;
+        return IdentifierValidator.resolveTableName(entityClass);
     }
 
     private List<String> allNonConflictColumns(List<EntityFieldExtractor.EntityFieldValue> allFieldValues,

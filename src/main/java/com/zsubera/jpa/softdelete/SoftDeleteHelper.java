@@ -420,42 +420,7 @@ public final class SoftDeleteHelper {
      * 解析实体类对应的数据库表名。
      */
     private static String resolveTableName(Class<?> entityClass) {
-        jakarta.persistence.Table tableAnnotation = entityClass.getAnnotation(jakarta.persistence.Table.class);
-        if (tableAnnotation != null && !tableAnnotation.name().isEmpty()) {
-            // 逐段校验以防止 SQL 注入
-            String catalog = tableAnnotation.catalog();
-            String schema = tableAnnotation.schema();
-            String name = tableAnnotation.name();
-            if (!catalog.isEmpty() && !IdentifierValidator.SAFE_IDENTIFIER_PATTERN.matcher(catalog).matches()) {
-                throw new IllegalArgumentException("Invalid @Table catalog: " + catalog);
-            }
-            if (!schema.isEmpty() && !IdentifierValidator.SAFE_IDENTIFIER_PATTERN.matcher(schema).matches()) {
-                throw new IllegalArgumentException("Invalid @Table schema: " + schema);
-            }
-            if (!IdentifierValidator.SAFE_IDENTIFIER_PATTERN.matcher(name).matches()) {
-                throw new IllegalArgumentException("Invalid @Table name: " + name);
-            }
-            StringBuilder tableName = new StringBuilder();
-            if (!catalog.isEmpty()) {
-                tableName.append(catalog).append('.');
-            }
-            if (!schema.isEmpty()) {
-                tableName.append(schema).append('.');
-            }
-            tableName.append(name);
-            return tableName.toString();
-        }
-        jakarta.persistence.Entity entityAnnotation = entityClass.getAnnotation(jakarta.persistence.Entity.class);
-        if (entityAnnotation != null && !entityAnnotation.name().isEmpty()) {
-            String name = entityAnnotation.name();
-            // 校验 @Entity name 以防止 SQL 注入
-            if (!IdentifierValidator.SAFE_IDENTIFIER_PATTERN.matcher(name).matches()) {
-                throw new IllegalArgumentException(
-                    "Invalid @Entity name: " + name + ". Must contain only alphanumeric characters and underscores.");
-            }
-            return name;
-        }
-        return StringHelper.camelToSnake(entityClass.getSimpleName());
+        return IdentifierValidator.resolveTableName(entityClass);
     }
 
     /**

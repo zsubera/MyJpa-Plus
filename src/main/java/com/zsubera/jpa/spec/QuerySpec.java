@@ -430,14 +430,28 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
 
     /**
      * 将值的哈希码写入缓存键，而非原始值。防止密码、token 等敏感数据泄露到缓存键中。
-     * 包含类型信息以减少不同类型的值产生相同缓存键的碰撞概率。
+     * 包含类型信息和内容哈希以减少碰撞概率。
+     *
+     * <p>对数组使用 {@link java.util.Arrays#deepHashCode} 基于内容哈希，
+     * 而非 Object.hashCode()（基于对象地址），确保不同内容的数组产生不同的缓存键。</p>
      */
     private static void appendHashedValue(StringBuilder sb, Object value) {
         if (value instanceof String s) {
             sb.append("S[").append(s.length()).append(":").append(s.hashCode()).append("]");
+        } else if (value instanceof Object[] arr) {
+            sb.append("A[").append(arr.length).append(":").append(java.util.Arrays.deepHashCode(arr)).append("]");
+        } else if (value instanceof int[] arr) {
+            sb.append("AI[").append(arr.length).append(":").append(java.util.Arrays.hashCode(arr)).append("]");
+        } else if (value instanceof long[] arr) {
+            sb.append("AL[").append(arr.length).append(":").append(java.util.Arrays.hashCode(arr)).append("]");
+        } else if (value instanceof double[] arr) {
+            sb.append("AD[").append(arr.length).append(":").append(java.util.Arrays.hashCode(arr)).append("]");
+        } else if (value.getClass().isArray()) {
+            sb.append("AX[").append(value.getClass().getSimpleName()).append(":")
+                .append(java.util.Arrays.deepHashCode(new Object[] {value})).append("]");
         } else {
             String s = String.valueOf(value);
-            sb.append("N[").append(value.getClass().getSimpleName()).append(":").append(s.length()).append(":")
+            sb.append("N[").append(value.getClass().getName()).append(":").append(s.length()).append(":")
                 .append(s.hashCode()).append("]");
         }
     }

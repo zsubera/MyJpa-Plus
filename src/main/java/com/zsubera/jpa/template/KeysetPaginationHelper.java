@@ -66,11 +66,6 @@ final class KeysetPaginationHelper {
         this(entityManager, true);
     }
 
-    private static boolean detectNullsFirst(EntityManager entityManager) {
-        // 无法可靠检测时默认 NULLS FIRST（MySQL/PostgreSQL 兼容）
-        return true;
-    }
-
     KeysetPaginationHelper(EntityManager entityManager, boolean nullsFirst) {
         this.entityManager = entityManager;
         this.nullsFirst = nullsFirst;
