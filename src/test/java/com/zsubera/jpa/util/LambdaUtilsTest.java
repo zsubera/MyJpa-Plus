@@ -56,4 +56,61 @@ class LambdaUtilsTest {
             return id;
         }
     }
+
+    @Test
+    void shouldExtractPropertyFromProperty() {
+        assertEquals("name", LambdaUtils.property(TestBean::getName));
+    }
+
+    @Test
+    void shouldThrowOnNullProperty() {
+        assertThrows(IllegalArgumentException.class, () -> LambdaUtils.property(null));
+    }
+
+    @Test
+    void shouldSetAndGetMaxCacheSize() {
+        int old = LambdaUtils.getMaxCacheSize();
+        try {
+            LambdaUtils.setMaxCacheSize(8192);
+            assertEquals(8192, LambdaUtils.getMaxCacheSize());
+        } finally {
+            LambdaUtils.setMaxCacheSize(old);
+        }
+    }
+
+    @Test
+    void shouldIgnoreMaxCacheSizeExceedingLimit() {
+        int old = LambdaUtils.getMaxCacheSize();
+        try {
+            LambdaUtils.setMaxCacheSize(999999);
+            assertNotEquals(999999, LambdaUtils.getMaxCacheSize());
+        } finally {
+            LambdaUtils.setMaxCacheSize(old);
+        }
+    }
+
+    @Test
+    void shouldCallShutdown() {
+        assertDoesNotThrow(LambdaUtils::shutdown);
+    }
+
+    @Test
+    void shouldGetCacheSize() {
+        assertDoesNotThrow(LambdaUtils::cacheSize);
+    }
+
+    @Test
+    void shouldClearCache() {
+        LambdaUtils.getPropertyName(TestBean::getName);
+        LambdaUtils.clearCache();
+        assertEquals(0, LambdaUtils.cacheSize());
+    }
+
+    @Test
+    void shouldWorkWithCaching() {
+        String name1 = LambdaUtils.getPropertyName(TestBean::getName);
+        String name2 = LambdaUtils.getPropertyName(TestBean::getName);
+        assertEquals("name", name1);
+        assertEquals(name1, name2);
+    }
 }
