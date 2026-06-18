@@ -3,6 +3,7 @@ package com.zsubera.jpa.converter;
 import static org.junit.jupiter.api.Assertions.*;
 
 import java.sql.Types;
+import org.hibernate.usertype.DynamicParameterizedType;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -330,5 +331,240 @@ class CodeEnumTypeTest {
         java.lang.reflect.Field statusField = CodeEnumType.resolveCodeField(StatusEnum.class);
         java.lang.reflect.Field genderField = CodeEnumType.resolveCodeField(GenderEnum.class);
         assertNotEquals(statusField, genderField);
+    }
+
+    // ===== setParameterValues 测试 =====
+
+    @Test
+    @DisplayName("setParameterValues 应正确初始化枚举类")
+    void shouldInitializeEnumClass() {
+        CodeEnumType type = new CodeEnumType();
+        java.util.Properties props = new java.util.Properties();
+        props.setProperty(DynamicParameterizedType.RETURNED_CLASS, StatusEnum.class.getName());
+        type.setParameterValues(props);
+        assertEquals(StatusEnum.class, type.returnedClass());
+    }
+
+    @Test
+    @DisplayName("setParameterValues 无 RETURNED_CLASS 应抛出异常")
+    void shouldThrowWhenNoReturnedClass() {
+        CodeEnumType type = new CodeEnumType();
+        java.util.Properties props = new java.util.Properties();
+        assertThrows(org.hibernate.HibernateException.class, () -> type.setParameterValues(props));
+    }
+
+    @Test
+    @DisplayName("setParameterValues 非枚举类型应抛出异常")
+    void shouldThrowForNonEnumType() {
+        CodeEnumType type = new CodeEnumType();
+        java.util.Properties props = new java.util.Properties();
+        props.setProperty(DynamicParameterizedType.RETURNED_CLASS, String.class.getName());
+        assertThrows(org.hibernate.HibernateException.class, () -> type.setParameterValues(props));
+    }
+
+    @Test
+    @DisplayName("setParameterValues 不存在的类应抛出异常")
+    void shouldThrowForNonExistentClass() {
+        CodeEnumType type = new CodeEnumType();
+        java.util.Properties props = new java.util.Properties();
+        props.setProperty(DynamicParameterizedType.RETURNED_CLASS, "com.nonexistent.FakeEnum");
+        assertThrows(org.hibernate.HibernateException.class, () -> type.setParameterValues(props));
+    }
+
+    @Test
+    @DisplayName("setParameterValues String code 应设置正确的 SQL 类型")
+    void shouldSetVarcharForStringCode() {
+        CodeEnumType type = new CodeEnumType();
+        java.util.Properties props = new java.util.Properties();
+        props.setProperty(DynamicParameterizedType.RETURNED_CLASS, GenderEnum.class.getName());
+        type.setParameterValues(props);
+        assertEquals(java.sql.Types.VARCHAR, type.getSqlType());
+    }
+
+    @Test
+    @DisplayName("returnedClass 应返回正确的枚举类")
+    void shouldReturnCorrectClass() {
+        CodeEnumType type = new CodeEnumType();
+        java.util.Properties props = new java.util.Properties();
+        props.setProperty(DynamicParameterizedType.RETURNED_CLASS, StatusEnum.class.getName());
+        type.setParameterValues(props);
+        assertEquals(StatusEnum.class, type.returnedClass());
+    }
+
+    // ===== nullSafeSet 测试 =====
+
+    @Test
+    @DisplayName("nullSafeSet null 值应设置 NULL")
+    void shouldSetNull() throws Exception {
+        CodeEnumType type = initType(StatusEnum.class);
+        java.sql.PreparedStatement ps = org.mockito.Mockito.mock(java.sql.PreparedStatement.class);
+        type.nullSafeSet(ps, null, 1, null);
+        org.mockito.Mockito.verify(ps).setNull(1, type.getSqlType());
+    }
+
+    @Test
+    @DisplayName("nullSafeSet enum 值应设置 code")
+    void shouldSetEnumValue() throws Exception {
+        CodeEnumType type = initType(StatusEnum.class);
+        java.sql.PreparedStatement ps = org.mockito.Mockito.mock(java.sql.PreparedStatement.class);
+        type.nullSafeSet(ps, StatusEnum.ACTIVE, 1, null);
+        org.mockito.Mockito.verify(ps).setInt(1, 0);
+    }
+
+    @Test
+    @DisplayName("nullSafeSet String code enum 应设置 String 值")
+    void shouldSetStringCodeValue() throws Exception {
+        CodeEnumType type = initType(GenderEnum.class);
+        java.sql.PreparedStatement ps = org.mockito.Mockito.mock(java.sql.PreparedStatement.class);
+        type.nullSafeSet(ps, GenderEnum.MALE, 1, null);
+        org.mockito.Mockito.verify(ps).setString(1, "M");
+    }
+
+    // ===== nullSafeGet 测试 =====
+
+    @Test
+    @DisplayName("nullSafeGet 返回 null 时应返回 null")
+    void shouldReturnNullForNullValue() throws Exception {
+        CodeEnumType type = initType(StatusEnum.class);
+        java.sql.ResultSet rs = org.mockito.Mockito.mock(java.sql.ResultSet.class);
+        org.mockito.Mockito.when(rs.getInt(1)).thenReturn(0);
+        org.mockito.Mockito.when(rs.wasNull()).thenReturn(true);
+        Object result = type.nullSafeGet(rs, 1, null, null);
+        assertNull(result);
+    }
+
+    @Test
+    @DisplayName("nullSafeGet 应根据 code 查找枚举")
+    void shouldGetEnumByCode() throws Exception {
+        CodeEnumType type = initType(StatusEnum.class);
+        java.sql.ResultSet rs = org.mockito.Mockito.mock(java.sql.ResultSet.class);
+        org.mockito.Mockito.when(rs.getInt(1)).thenReturn(0);
+        org.mockito.Mockito.when(rs.wasNull()).thenReturn(false);
+        Object result = type.nullSafeGet(rs, 1, null, null);
+        assertEquals(StatusEnum.ACTIVE, result);
+    }
+
+    @Test
+    @DisplayName("nullSafeGet 无效 code 应抛出异常")
+    void shouldThrowForInvalidCode() throws Exception {
+        CodeEnumType type = initType(StatusEnum.class);
+        java.sql.ResultSet rs = org.mockito.Mockito.mock(java.sql.ResultSet.class);
+        org.mockito.Mockito.when(rs.getInt(1)).thenReturn(999);
+        org.mockito.Mockito.when(rs.wasNull()).thenReturn(false);
+        assertThrows(org.hibernate.HibernateException.class, () -> type.nullSafeGet(rs, 1, null, null));
+    }
+
+    @Test
+    @DisplayName("nullSafeGet String code enum 应正确查找")
+    void shouldGetStringCodeEnum() throws Exception {
+        CodeEnumType type = initType(GenderEnum.class);
+        java.sql.ResultSet rs = org.mockito.Mockito.mock(java.sql.ResultSet.class);
+        org.mockito.Mockito.when(rs.getString(1)).thenReturn("F");
+        Object result = type.nullSafeGet(rs, 1, null, null);
+        assertEquals(GenderEnum.FEMALE, result);
+    }
+
+    // ===== Long code 字段测试 =====
+
+    enum LongCodeEnum {
+        BIG(100L), SMALL(200L);
+
+        @CodeEnumValue
+        private final Long code;
+
+        LongCodeEnum(Long code) {
+            this.code = code;
+        }
+    }
+
+    @Test
+    @DisplayName("Long code 字段应返回 BIGINT SQL 类型")
+    void shouldReturnBigintForLongCode() throws Exception {
+        CodeEnumType type = initType(LongCodeEnum.class);
+        assertEquals(java.sql.Types.BIGINT, type.getSqlType());
+    }
+
+    @Test
+    @DisplayName("Long code nullSafeSet 应设置 long 值")
+    void shouldSetLongValue() throws Exception {
+        CodeEnumType type = initType(LongCodeEnum.class);
+        java.sql.PreparedStatement ps = org.mockito.Mockito.mock(java.sql.PreparedStatement.class);
+        type.nullSafeSet(ps, LongCodeEnum.BIG, 1, null);
+        org.mockito.Mockito.verify(ps).setLong(1, 100L);
+    }
+
+    @Test
+    @DisplayName("Long code nullSafeGet 应从 BIGINT 读取")
+    void shouldGetLongCode() throws Exception {
+        CodeEnumType type = initType(LongCodeEnum.class);
+        java.sql.ResultSet rs = org.mockito.Mockito.mock(java.sql.ResultSet.class);
+        org.mockito.Mockito.when(rs.getLong(1)).thenReturn(200L);
+        Object result = type.nullSafeGet(rs, 1, null, null);
+        assertEquals(LongCodeEnum.SMALL, result);
+    }
+
+    @Test
+    @DisplayName("Long code nullSafeGet null 值应返回 null")
+    void shouldReturnNullForNullLong() throws Exception {
+        CodeEnumType type = initType(LongCodeEnum.class);
+        java.sql.ResultSet rs = org.mockito.Mockito.mock(java.sql.ResultSet.class);
+        org.mockito.Mockito.when(rs.getLong(1)).thenReturn(0L);
+        org.mockito.Mockito.when(rs.wasNull()).thenReturn(true);
+        Object result = type.nullSafeGet(rs, 1, null, null);
+        assertNull(result);
+    }
+
+    // ===== disassemble/assemble 错误路径 =====
+
+    @Test
+    @DisplayName("assemble 无效 ordinal 应抛出异常")
+    void shouldThrowForInvalidOrdinalOnAssemble() throws Exception {
+        CodeEnumType type = initType(StatusEnum.class);
+        setUseOrdinal(type, true);
+        assertThrows(org.hibernate.HibernateException.class, () -> type.assemble("999", null));
+    }
+
+    @Test
+    @DisplayName("assemble 非数字 ordinal 应抛出异常")
+    void shouldThrowForNonNumericOrdinalOnAssemble() throws Exception {
+        CodeEnumType type = initType(StatusEnum.class);
+        setUseOrdinal(type, true);
+        assertThrows(org.hibernate.HibernateException.class, () -> type.assemble("abc", null));
+    }
+
+    @Test
+    @DisplayName("disassemble ordinal 模式应返回 ordinal 字符串")
+    void shouldDisassembleOrdinalMode() throws Exception {
+        CodeEnumType type = initType(StatusEnum.class);
+        setUseOrdinal(type, true);
+        java.io.Serializable result = type.disassemble(StatusEnum.ACTIVE);
+        assertEquals("0", result.toString());
+    }
+
+    @Test
+    @DisplayName("returnedClass 应返回正确类型")
+    void shouldReturnCorrectType() throws Exception {
+        CodeEnumType type = initType(GenderEnum.class);
+        assertEquals(GenderEnum.class, type.returnedClass());
+    }
+
+    // ===== 辅助方法 =====
+
+    private CodeEnumType initType(Class<?> enumClass) throws Exception {
+        CodeEnumType type = new CodeEnumType();
+        java.util.Properties props = new java.util.Properties();
+        props.setProperty(DynamicParameterizedType.RETURNED_CLASS, enumClass.getName());
+        type.setParameterValues(props);
+        return type;
+    }
+
+    private void setUseOrdinal(CodeEnumType type, boolean value) {
+        try {
+            java.lang.reflect.Field f = CodeEnumType.class.getDeclaredField("useOrdinal");
+            f.setAccessible(true);
+            f.set(type, value);
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
     }
 }
