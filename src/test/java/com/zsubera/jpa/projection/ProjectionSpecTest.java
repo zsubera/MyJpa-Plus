@@ -663,4 +663,128 @@ class ProjectionSpecTest {
             new ProjectionSpec<>(TestEntity.class).select(TestEntity::getName).getResultStream(null);
         });
     }
+
+    @Test
+    void testWithDefaultsReturnsSpec() {
+        ProjectionSpec<TestEntity> spec = ProjectionSpec.withDefaults(TestEntity.class);
+        assertNotNull(spec);
+    }
+
+    @Test
+    void testWithSoftDeleteFilter() {
+        ProjectionSpec<TestEntity> spec =
+            new ProjectionSpec<>(TestEntity.class).select(TestEntity::getName).withSoftDeleteFilter();
+        assertNotNull(spec);
+    }
+
+    @Test
+    void testSelectCountDistinct() {
+        for (int i = 0; i < 3; i++) {
+            TestEntity e = new TestEntity();
+            e.setName("cd" + i);
+            e.setStatus(i % 2);
+            testEntityManager.persistAndFlush(e);
+        }
+
+        List<Tuple> results = new ProjectionSpec<>(TestEntity.class).selectCountDistinct()
+            .groupBy(TestEntity::getStatus).toTupleQuery(em).getResultList();
+        assertFalse(results.isEmpty());
+    }
+
+    @Test
+    void testGroupByWithHaving() {
+        for (int i = 0; i < 5; i++) {
+            TestEntity e = new TestEntity();
+            e.setName("having" + i);
+            e.setStatus(1);
+            testEntityManager.persistAndFlush(e);
+        }
+        TestEntity e = new TestEntity();
+        e.setName("having_single");
+        e.setStatus(2);
+        testEntityManager.persistAndFlush(e);
+
+        List<Tuple> results = new ProjectionSpec<>(TestEntity.class).select(TestEntity::getStatus).selectCount()
+            .groupBy(TestEntity::getStatus).having((root, cb) -> cb.greaterThan(cb.count(root), 1L)).toTupleQuery(em)
+            .getResultList();
+        assertEquals(1, results.size());
+    }
+
+    @Test
+    void testFindPageWithGroupBy() {
+        for (int i = 0; i < 3; i++) {
+            TestEntity e = new TestEntity();
+            e.setName("gp" + i);
+            e.setStatus(i);
+            testEntityManager.persistAndFlush(e);
+        }
+
+        Page<Tuple> page = new ProjectionSpec<>(TestEntity.class).select(TestEntity::getStatus).selectCount()
+            .groupBy(TestEntity::getStatus).findPage(em, PageRequest.of(0, 10));
+        assertNotNull(page);
+        assertTrue(page.getTotalElements() > 0);
+    }
+
+    @Test
+    void testFindPageDeepPaginationLimitExceeded() {
+        ProjectionSpec<TestEntity> spec =
+            new ProjectionSpec<>(TestEntity.class).select(TestEntity::getName).withDeepPaginationLimit(10);
+
+        assertThrows(IllegalArgumentException.class, () -> spec.findPage(em, PageRequest.of(2, 10)));
+    }
+
+    @Test
+    void testToTupleQueryWithMaxResults() {
+        for (int i = 0; i < 5; i++) {
+            TestEntity e = new TestEntity();
+            e.setName("limit" + i);
+            e.setStatus(i);
+            testEntityManager.persistAndFlush(e);
+        }
+
+        List<Tuple> results =
+            new ProjectionSpec<>(TestEntity.class).select(TestEntity::getName).toTupleQuery(em, 2).getResultList();
+        assertEquals(2, results.size());
+    }
+
+    @Test
+    void testToDtoQueryWithMaxResults() {
+        for (int i = 0; i < 5; i++) {
+            TestEntity e = new TestEntity();
+            e.setName("limit" + i);
+            e.setStatus(i);
+            testEntityManager.persistAndFlush(e);
+        }
+
+        @SuppressWarnings("unchecked")
+        List<TestEntity> results =
+            (List<TestEntity>)(List<?>)new ProjectionSpec<>(TestEntity.class).select(TestEntity::getName)
+                .select(TestEntity::getStatus).asDto(TestEntity.class).toDtoQuery(em, 2).getResultList();
+        assertEquals(2, results.size());
+    }
+
+    @Test
+    void testJoinWithOrCondition() {
+        for (int i = 0; i < 3; i++) {
+            TestEntity e = new TestEntity();
+            e.setName("joinOr" + i);
+            e.setStatus(i);
+            testEntityManager.persistAndFlush(e);
+        }
+
+        List<Tuple> results =
+            new ProjectionSpec<>(TestEntity.class).select(TestEntity::getName).toTupleQuery(em).getResultList();
+        assertFalse(results.isEmpty());
+    }
+
+    @Test
+    void testEmptySelectionThrows() {
+        assertThrows(IllegalArgumentException.class, () -> new ProjectionSpec<>(TestEntity.class).toTupleQuery(em));
+    }
+
+    @Test
+    void testMixAggregateAndNonAggregateWithoutGroupByThrows() {
+        assertThrows(IllegalArgumentException.class,
+            () -> new ProjectionSpec<>(TestEntity.class).select(TestEntity::getName).selectCount().toTupleQuery(em));
+    }
 }
