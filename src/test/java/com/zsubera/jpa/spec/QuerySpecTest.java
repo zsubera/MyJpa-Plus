@@ -1523,4 +1523,258 @@ public class QuerySpecTest {
         assertEquals(1, result.size());
         assertEquals("b", result.get(0).getName());
     }
+
+    @Test
+    void testHavingCountWithDifferentOps() {
+        repository.save(newEntity("a", 1));
+        repository.save(newEntity("b", 2));
+        repository.flush();
+
+        QuerySpec<TestEntity> qs = new QuerySpec<>();
+        qs.groupBy(TestEntity::getStatus).havingCount(TestEntity::getId, ConditionNode.Op.GE, 1L);
+        assertNotNull(qs.toSpecification());
+    }
+
+    @Test
+    void testHavingSumWithDifferentOps() {
+        repository.save(newEntity("a", 10));
+        repository.save(newEntity("b", 20));
+        repository.flush();
+
+        QuerySpec<TestEntity> qs = new QuerySpec<>();
+        qs.groupBy(TestEntity::getStatus).havingSum(TestEntity::getStatus, ConditionNode.Op.GE, 10);
+        assertNotNull(qs.toSpecification());
+    }
+
+    @Test
+    void testHavingAvgWithDifferentOps() {
+        repository.save(newEntity("a", 10));
+        repository.flush();
+
+        QuerySpec<TestEntity> qs = new QuerySpec<>();
+        qs.groupBy(TestEntity::getStatus).havingAvg(TestEntity::getStatus, ConditionNode.Op.GE, 10.0);
+        assertNotNull(qs.toSpecification());
+    }
+
+    @Test
+    void testHavingMaxWithDifferentOps() {
+        repository.save(newEntity("a", 10));
+        repository.flush();
+
+        QuerySpec<TestEntity> qs = new QuerySpec<>();
+        qs.groupBy(TestEntity::getStatus).havingMax(TestEntity::getStatus, ConditionNode.Op.GE, 10);
+        assertNotNull(qs.toSpecification());
+    }
+
+    @Test
+    void testHavingMinWithDifferentOps() {
+        repository.save(newEntity("a", 10));
+        repository.flush();
+
+        QuerySpec<TestEntity> qs = new QuerySpec<>();
+        qs.groupBy(TestEntity::getStatus).havingMin(TestEntity::getStatus, ConditionNode.Op.GE, 10);
+        assertNotNull(qs.toSpecification());
+    }
+
+    @Test
+    void testGroupByMultipleFieldsNew() {
+        repository.save(newEntity("a", 1));
+        repository.save(newEntity("b", 2));
+        repository.flush();
+
+        QuerySpec<TestEntity> qs = new QuerySpec<>();
+        qs.groupBy(TestEntity::getName, TestEntity::getStatus);
+        assertNotNull(qs.toSpecification());
+    }
+
+    @Test
+    void testToString() {
+        QuerySpec<TestEntity> qs = new QuerySpec<>();
+        qs.eq(TestEntity::getName, "test");
+        String str = qs.toString();
+        assertNotNull(str);
+        assertTrue(str.contains("QuerySpec"));
+    }
+
+    @Test
+    void testCopy() {
+        QuerySpec<TestEntity> qs = new QuerySpec<>();
+        qs.eq(TestEntity::getName, "test").distinct();
+
+        QuerySpec<TestEntity> copy = qs.copy();
+        assertNotNull(copy);
+        assertTrue(copy.toString().contains("QuerySpec"));
+    }
+
+    @Test
+    void testThen() {
+        QuerySpec<TestEntity> qs1 = new QuerySpec<>();
+        qs1.eq(TestEntity::getName, "a");
+
+        QuerySpec<TestEntity> qs2 = new QuerySpec<>();
+        qs2.eq(TestEntity::getStatus, 1);
+
+        QuerySpec<TestEntity> result = qs1.then(qs2);
+        assertNotNull(result);
+    }
+
+    @Test
+    void testAndQuerySpec() {
+        QuerySpec<TestEntity> qs1 = new QuerySpec<>();
+        qs1.eq(TestEntity::getName, "a");
+
+        QuerySpec<TestEntity> qs2 = new QuerySpec<>();
+        qs2.eq(TestEntity::getStatus, 1);
+
+        QuerySpec<TestEntity> result = qs1.and(qs2);
+        assertNotNull(result);
+    }
+
+    @Test
+    void testHavingCountNullFieldThrows() {
+        assertThrows(IllegalArgumentException.class, () -> {
+            new QuerySpec<TestEntity>().havingCount(null, ConditionNode.Op.GT, 1L);
+        });
+    }
+
+    @Test
+    void testHavingSumNullValueThrows() {
+        assertThrows(IllegalArgumentException.class, () -> {
+            new QuerySpec<TestEntity>().havingSum(TestEntity::getStatus, ConditionNode.Op.GT, null);
+        });
+    }
+
+    @Test
+    void testHavingAvgNullValueThrows() {
+        assertThrows(IllegalArgumentException.class, () -> {
+            new QuerySpec<TestEntity>().havingAvg(TestEntity::getStatus, ConditionNode.Op.GT, null);
+        });
+    }
+
+    @Test
+    void testHavingMaxNullValueThrows() {
+        assertThrows(IllegalArgumentException.class, () -> {
+            new QuerySpec<TestEntity>().havingMax(TestEntity::getStatus, ConditionNode.Op.GT, null);
+        });
+    }
+
+    @Test
+    void testHavingMinNullValueThrows() {
+        assertThrows(IllegalArgumentException.class, () -> {
+            new QuerySpec<TestEntity>().havingMin(TestEntity::getStatus, ConditionNode.Op.GT, null);
+        });
+    }
+
+    @Test
+    void testTimeout() {
+        QuerySpec<TestEntity> qs = new QuerySpec<>();
+        qs.timeout(30);
+        assertEquals(Integer.valueOf(30), qs.getQueryTimeout());
+    }
+
+    @Test
+    void testLockMode() {
+        QuerySpec<TestEntity> qs = new QuerySpec<>();
+        qs.lockMode(jakarta.persistence.LockModeType.PESSIMISTIC_READ);
+        assertEquals(jakarta.persistence.LockModeType.PESSIMISTIC_READ, qs.getLockMode());
+    }
+
+    @Test
+    void testOrderByAscAndDesc() {
+        QuerySpec<TestEntity> qs = new QuerySpec<>();
+        qs.orderByAsc(TestEntity::getName).orderByDesc(TestEntity::getStatus);
+        assertNotNull(qs.toSpecification());
+    }
+
+    @Test
+    void testGetSortNew() {
+        QuerySpec<TestEntity> qs = new QuerySpec<>();
+        qs.orderByAsc(TestEntity::getName).orderByDesc(TestEntity::getStatus);
+        org.springframework.data.domain.Sort sort = qs.getSort();
+        assertNotNull(sort);
+        assertTrue(sort.isSorted());
+    }
+
+    @Test
+    void testOrWithQuerySpec() {
+        QuerySpec<TestEntity> qs1 = new QuerySpec<>();
+        qs1.eq(TestEntity::getName, "a");
+
+        QuerySpec<TestEntity> qs2 = new QuerySpec<>();
+        qs2.eq(TestEntity::getName, "b");
+
+        Specification<TestEntity> result = qs1.or(qs2);
+        assertNotNull(result);
+    }
+
+    @Test
+    void testNot() {
+        repository.save(newEntity("a", 1));
+        repository.save(newEntity("b", 2));
+        repository.flush();
+
+        QuerySpec<TestEntity> qs = new QuerySpec<>();
+        qs.not(n -> n.eq(TestEntity::getName, "a"));
+        List<TestEntity> result = repository.findAll(qs.toSpecification());
+        assertEquals(1, result.size());
+        assertEquals("b", result.get(0).getName());
+    }
+
+    @Test
+    void testNotWithEmptyGroup() {
+        repository.save(newEntity("a", 1));
+        repository.flush();
+
+        QuerySpec<TestEntity> qs = new QuerySpec<>();
+        qs.not(n -> {
+        });
+        List<TestEntity> result = repository.findAll(qs.toSpecification());
+        assertEquals(0, result.size());
+    }
+
+    @Test
+    void testOrWithEmptyGroup() {
+        repository.save(newEntity("a", 1));
+        repository.flush();
+
+        QuerySpec<TestEntity> qs = new QuerySpec<>();
+        qs.or(o -> {
+        });
+        // Empty OR group produces no predicate, so no results match
+        List<TestEntity> result = repository.findAll(qs.toSpecification());
+        assertEquals(0, result.size());
+    }
+
+    @Test
+    void testInSubQueryNew() {
+        repository.save(newEntity("a", 1));
+        repository.flush();
+
+        QuerySpec<TestEntity> qs = new QuerySpec<>();
+        qs.inSubQuery(TestEntity::getStatus, TestEntity.class,
+            sub -> sub.select(TestEntity::getStatus).eq(TestEntity::getStatus, 1));
+        assertNotNull(qs.toSpecification());
+    }
+
+    @Test
+    void testNotInSubQueryNew() {
+        repository.save(newEntity("a", 1));
+        repository.flush();
+
+        QuerySpec<TestEntity> qs = new QuerySpec<>();
+        qs.notInSubQuery(TestEntity::getStatus, TestEntity.class,
+            sub -> sub.select(TestEntity::getStatus).eq(TestEntity::getStatus, 1));
+        assertNotNull(qs.toSpecification());
+    }
+
+    @Test
+    void testMultiLikeStringFieldNames() {
+        repository.save(newEntity("hello", 0));
+        repository.flush();
+
+        QuerySpec<TestEntity> qs = new QuerySpec<>();
+        qs.multiLike("hello", "name");
+        List<TestEntity> result = repository.findAll(qs.toSpecification());
+        assertEquals(1, result.size());
+    }
 }
