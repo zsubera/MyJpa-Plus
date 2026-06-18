@@ -156,4 +156,46 @@ class QueryMetricsCollectorTest {
         assertEquals(10.0, stats.getAverageTimeMs(), 0.1);
         assertEquals(10.0, stats.getMaxTimeMs(), 0.1);
     }
+
+    @Test
+    void recordQuery_slowQuery_logsWarning() {
+        collector.setSlowQueryThresholdMs(1);
+        collector.recordQuery("slowQuery", 10_000_000L); // 10ms > 1ms threshold
+        QueryMetricsCollector.QueryStats stats = collector.getStats("slowQuery");
+        assertNotNull(stats);
+        assertEquals(1, stats.getExecutionCount());
+    }
+
+    @Test
+    void recordQuery_evictsWhenMapFull() {
+        // Fill the map to capacity
+        for (int i = 0; i < 4096; i++) {
+            collector.recordQuery("query_" + i, 1_000_000L);
+        }
+        // This should trigger eviction
+        collector.recordQuery("newQuery", 1_000_000L);
+        assertNotNull(collector.getStats("newQuery"));
+    }
+
+    @Test
+    void recordQuery_singleEntry_evictsIt() {
+        collector.recordQuery("onlyEntry", 1_000_000L);
+        // Fill to capacity with different entries
+        for (int i = 0; i < 4095; i++) {
+            collector.recordQuery("fill_" + i, 1_000_000L);
+        }
+        // Now the map is full with 4096 entries, adding one more should trigger eviction
+        collector.recordQuery("trigger", 1_000_000L);
+        assertNotNull(collector.getStats("trigger"));
+    }
+
+    @Test
+    void getStats_emptyMap_returnsNull() {
+        assertNull(collector.getStats("nonexistent"));
+    }
+
+    @Test
+    void getAllStats_emptyMap_returnsEmptyMap() {
+        assertTrue(collector.getAllStats().isEmpty());
+    }
 }
