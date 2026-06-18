@@ -267,4 +267,54 @@ class KeysetPaginationHelperTest {
         assertEquals(1, page3.content().size());
         assertFalse(page3.hasNext());
     }
+
+    @Test
+    void testMultiFieldSortWithDescendingCursor() {
+        for (int i = 0; i < 6; i++) {
+            TestEntity e = new TestEntity();
+            e.setName("mfs" + (i % 3));
+            e.setStatus(i);
+            repository.save(e);
+        }
+        repository.flush();
+
+        Specification<TestEntity> spec = (root, query, cb) -> cb.conjunction();
+        Sort sort = Sort.by(Sort.Order.asc("name"), Sort.Order.asc("status"));
+
+        MyJpaTemplate.KeysetPage<TestEntity> page1 =
+            keysetPaginationHelper.findKeysetPage(TestEntity.class, spec, sort, 2, null);
+        assertEquals(2, page1.content().size());
+        assertTrue(page1.hasNext());
+
+        MyJpaTemplate.KeysetPage<TestEntity> page2 =
+            keysetPaginationHelper.findKeysetPage(TestEntity.class, spec, sort, 2, page1.lastSortValues());
+        assertEquals(2, page2.content().size());
+    }
+
+    @Test
+    void testNullsFirstSort() {
+        TestEntity e1 = new TestEntity();
+        e1.setName(null);
+        e1.setStatus(1);
+        repository.save(e1);
+
+        TestEntity e2 = new TestEntity();
+        e2.setName("aaa");
+        e2.setStatus(2);
+        repository.save(e2);
+
+        TestEntity e3 = new TestEntity();
+        e3.setName("bbb");
+        e3.setStatus(3);
+        repository.save(e3);
+        repository.flush();
+
+        Specification<TestEntity> spec = (root, query, cb) -> cb.conjunction();
+        MyJpaTemplate.KeysetPage<TestEntity> page =
+            keysetPaginationHelper.findKeysetPage(TestEntity.class, spec, Sort.by("name"), 2, null);
+
+        assertEquals(2, page.content().size());
+        assertNull(page.content().get(0).getName());
+    }
+
 }
