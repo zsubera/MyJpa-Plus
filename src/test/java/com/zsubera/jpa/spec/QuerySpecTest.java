@@ -1777,4 +1777,132 @@ public class QuerySpecTest {
         List<TestEntity> result = repository.findAll(qs.toSpecification());
         assertEquals(1, result.size());
     }
+
+    @Test
+    void testToDescription() {
+        QuerySpec<TestEntity> qs = new QuerySpec<>();
+        qs.eq(TestEntity::getName, "test").groupBy(TestEntity::getStatus).orderByAsc(TestEntity::getName);
+        String desc = qs.toDescription();
+        assertNotNull(desc);
+        assertTrue(desc.contains("Query{"));
+    }
+
+    @Test
+    void testToDescriptionWithHaving() {
+        QuerySpec<TestEntity> qs = new QuerySpec<>();
+        qs.groupBy(TestEntity::getStatus).havingCount(TestEntity::getId, ConditionNode.Op.GT, 1L);
+        String desc = qs.toDescription();
+        assertNotNull(desc);
+        assertTrue(desc.contains("HAVING"));
+    }
+
+    @Test
+    void testToDescriptionWithTimeout() {
+        QuerySpec<TestEntity> qs = new QuerySpec<>();
+        qs.timeout(30);
+        String desc = qs.toDescription();
+        assertNotNull(desc);
+        assertTrue(desc.contains("timeout=30s"));
+    }
+
+    @Test
+    void testToDescriptionWithLockMode() {
+        QuerySpec<TestEntity> qs = new QuerySpec<>();
+        qs.lockMode(jakarta.persistence.LockModeType.PESSIMISTIC_READ);
+        String desc = qs.toDescription();
+        assertNotNull(desc);
+        assertTrue(desc.contains("lockMode"));
+    }
+
+    @Test
+    void testToDescriptionWithDistinct() {
+        QuerySpec<TestEntity> qs = new QuerySpec<>();
+        qs.distinct();
+        String desc = qs.toDescription();
+        assertNotNull(desc);
+        assertTrue(desc.contains("DISTINCT"));
+    }
+
+    @Test
+    void testToStringWithAllFields() {
+        QuerySpec<TestEntity> qs = new QuerySpec<>();
+        qs.eq(TestEntity::getName, "test").distinct().groupBy(TestEntity::getStatus)
+            .havingCount(TestEntity::getId, ConditionNode.Op.GT, 1L).orderByAsc(TestEntity::getName).timeout(30)
+            .lockMode(jakarta.persistence.LockModeType.PESSIMISTIC_READ);
+        String str = qs.toString();
+        assertNotNull(str);
+        assertTrue(str.contains("distinct"));
+        assertTrue(str.contains("groupBy"));
+        assertTrue(str.contains("having"));
+        assertTrue(str.contains("orderBy"));
+        assertTrue(str.contains("timeout=30s"));
+        assertTrue(str.contains("lockMode"));
+    }
+
+    @Test
+    void testCopyWithGroupStack() {
+        QuerySpec<TestEntity> qs = new QuerySpec<>();
+        qs.eq(TestEntity::getName, "a");
+        QuerySpec<TestEntity> copy = qs.copy();
+        assertNotNull(copy);
+    }
+
+    @Test
+    void testThenWithUnclosedGroup() {
+        QuerySpec<TestEntity> qs1 = new QuerySpec<>();
+        qs1.or(o -> o.eq(TestEntity::getName, "a"));
+        // or() group is closed by Consumer
+
+        QuerySpec<TestEntity> qs2 = new QuerySpec<>();
+        qs2.eq(TestEntity::getStatus, 1);
+
+        // This should work since both groups are closed
+        QuerySpec<TestEntity> result = qs1.then(qs2);
+        assertNotNull(result);
+    }
+
+    @Test
+    void testOrWithQuerySpecReturnsSpecification() {
+        QuerySpec<TestEntity> qs1 = new QuerySpec<>();
+        qs1.eq(TestEntity::getName, "a");
+
+        QuerySpec<TestEntity> qs2 = new QuerySpec<>();
+        qs2.eq(TestEntity::getName, "b");
+
+        Specification<TestEntity> result = qs1.or(qs2);
+        assertNotNull(result);
+    }
+
+    @Test
+    void testOrWithNullQuerySpec() {
+        QuerySpec<TestEntity> qs = new QuerySpec<>();
+        qs.eq(TestEntity::getName, "a");
+
+        Specification<TestEntity> result = qs.or((QuerySpec<TestEntity>)null);
+        assertNotNull(result);
+    }
+
+    @Test
+    void testToSpecificationWithExternalSpec() {
+        repository.save(newEntity("a", 1));
+        repository.save(newEntity("b", 2));
+        repository.flush();
+
+        QuerySpec<TestEntity> qs = new QuerySpec<>();
+        qs.eq(TestEntity::getName, "a");
+
+        Specification<TestEntity> external = (root, query, cb) -> cb.greaterThan(root.get("status"), 0);
+        Specification<TestEntity> combined = qs.toSpecification(external);
+        List<TestEntity> result = repository.findAll(combined);
+        assertEquals(1, result.size());
+    }
+
+    @Test
+    void testToSpecificationWithNullExternalSpec() {
+        QuerySpec<TestEntity> qs = new QuerySpec<>();
+        qs.eq(TestEntity::getName, "test");
+
+        Specification<TestEntity> result = qs.toSpecification((Specification<TestEntity>)null);
+        assertNotNull(result);
+    }
 }
