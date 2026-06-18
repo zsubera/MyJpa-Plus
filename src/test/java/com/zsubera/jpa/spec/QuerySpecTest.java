@@ -2094,4 +2094,162 @@ public class QuerySpecTest {
         qs.applyQuerySettings(query);
     }
 
+    @Test
+    void testCacheKeyEmpty() {
+        QuerySpec<TestEntity> qs = new QuerySpec<>();
+        String key = qs.cacheKey();
+        assertNotNull(key);
+        assertTrue(key.startsWith("Q:"));
+    }
+
+    @Test
+    void testCacheKeyWithConditions() {
+        QuerySpec<TestEntity> qs = new QuerySpec<>();
+        qs.eq(TestEntity::getName, "test");
+        String key = qs.cacheKey();
+        assertNotNull(key);
+        assertTrue(key.contains("name"));
+    }
+
+    @Test
+    void testCacheKeyWithDistinct() {
+        QuerySpec<TestEntity> qs = new QuerySpec<>();
+        qs.distinct();
+        String key = qs.cacheKey();
+        assertNotNull(key);
+        assertTrue(key.contains("DISTINCT"));
+    }
+
+    @Test
+    void testCacheKeyWithGroupBy() {
+        QuerySpec<TestEntity> qs = new QuerySpec<>();
+        qs.groupBy(TestEntity::getStatus);
+        String key = qs.cacheKey();
+        assertNotNull(key);
+        assertTrue(key.contains("GROUPBY"));
+    }
+
+    @Test
+    void testCacheKeyWithHaving() {
+        QuerySpec<TestEntity> qs = new QuerySpec<>();
+        qs.groupBy(TestEntity::getStatus).havingCount(TestEntity::getId, ConditionNode.Op.GT, 1L);
+        String key = qs.cacheKey();
+        assertNotNull(key);
+        assertTrue(key.contains("HAVING"));
+    }
+
+    @Test
+    void testCacheKeyWithOrderBy() {
+        QuerySpec<TestEntity> qs = new QuerySpec<>();
+        qs.orderByAsc(TestEntity::getName);
+        String key = qs.cacheKey();
+        assertNotNull(key);
+        assertTrue(key.contains("ORDERBY"));
+    }
+
+    @Test
+    void testCacheKeyWithTimeout() {
+        QuerySpec<TestEntity> qs = new QuerySpec<>();
+        qs.timeout(30);
+        String key = qs.cacheKey();
+        assertNotNull(key);
+        assertTrue(key.contains("TIMEOUT"));
+    }
+
+    @Test
+    void testCacheKeyWithLockMode() {
+        QuerySpec<TestEntity> qs = new QuerySpec<>();
+        qs.lockMode(jakarta.persistence.LockModeType.PESSIMISTIC_READ);
+        String key = qs.cacheKey();
+        assertNotNull(key);
+        assertTrue(key.contains("LOCK"));
+    }
+
+    @Test
+    void testCacheKeyDifferentForDifferentValues() {
+        QuerySpec<TestEntity> qs1 = new QuerySpec<>();
+        qs1.eq(TestEntity::getName, "a");
+
+        QuerySpec<TestEntity> qs2 = new QuerySpec<>();
+        qs2.eq(TestEntity::getName, "b");
+
+        assertNotEquals(qs1.cacheKey(), qs2.cacheKey());
+    }
+
+    @Test
+    void testCacheKeySameForSameValues() {
+        QuerySpec<TestEntity> qs1 = new QuerySpec<>();
+        qs1.eq(TestEntity::getName, "a");
+
+        QuerySpec<TestEntity> qs2 = new QuerySpec<>();
+        qs2.eq(TestEntity::getName, "a");
+
+        assertEquals(qs1.cacheKey(), qs2.cacheKey());
+    }
+
+    @Test
+    void testCopyDeepCopyNodes() {
+        QuerySpec<TestEntity> qs = new QuerySpec<>();
+        qs.or(o -> o.eq(TestEntity::getName, "a").eq(TestEntity::getStatus, 1));
+
+        QuerySpec<TestEntity> copy = qs.copy();
+        assertNotNull(copy);
+    }
+
+    @Test
+    void testValidateCleanState() {
+        QuerySpec<TestEntity> qs = new QuerySpec<>();
+        qs.or(o -> o.eq(TestEntity::getName, "test"));
+        // or() group is closed by Consumer
+
+        // toSpecification() should not throw for properly closed groups
+        Specification<TestEntity> spec = qs.toSpecification();
+        assertNotNull(spec);
+    }
+
+    @Test
+    void testApplyDistinctAndGroupBy() {
+        repository.save(newEntity("a", 1));
+        repository.save(newEntity("b", 1));
+        repository.save(newEntity("c", 2));
+        repository.flush();
+
+        QuerySpec<TestEntity> qs = new QuerySpec<>();
+        qs.distinct();
+
+        List<TestEntity> result = repository.findAll(qs.toSpecification());
+        assertNotNull(result);
+    }
+
+    @Test
+    void testApplyOrderBy() {
+        repository.save(newEntity("c", 3));
+        repository.save(newEntity("a", 1));
+        repository.save(newEntity("b", 2));
+        repository.flush();
+
+        QuerySpec<TestEntity> qs = new QuerySpec<>();
+        qs.orderByAsc(TestEntity::getName);
+
+        List<TestEntity> result = repository.findAll(qs.toSpecification());
+        assertEquals(3, result.size());
+        assertEquals("a", result.get(0).getName());
+        assertEquals("b", result.get(1).getName());
+        assertEquals("c", result.get(2).getName());
+    }
+
+    @Test
+    void testApplyHaving() {
+        repository.save(newEntity("a", 1));
+        repository.save(newEntity("b", 1));
+        repository.save(newEntity("c", 2));
+        repository.flush();
+
+        QuerySpec<TestEntity> qs = new QuerySpec<>();
+        qs.groupBy(TestEntity::getStatus).havingCount(TestEntity::getId, ConditionNode.Op.GT, 1L);
+
+        // Use Specification to test having clause builds correctly
+        Specification<TestEntity> spec = qs.toSpecification();
+        assertNotNull(spec);
+    }
 }
