@@ -787,4 +787,18 @@ class ProjectionSpecTest {
         assertThrows(IllegalArgumentException.class,
             () -> new ProjectionSpec<>(TestEntity.class).select(TestEntity::getName).selectCount().toTupleQuery(em));
     }
+
+    @Test
+    void testJoinWithRuntimeExceptionInConfig() {
+        TestEntity e = new TestEntity();
+        e.setName("joinError");
+        e.setStatus(1);
+        testEntityManager.persistAndFlush(e);
+
+        assertThrows(com.zsubera.jpa.exception.MyJpaPlusException.class, () -> {
+            new ProjectionSpec<>(TestEntity.class).select(TestEntity::getName).join(TestEntity::getParent, j -> {
+                throw new RuntimeException("test error");
+            }).toTupleQuery(em);
+        });
+    }
 }
