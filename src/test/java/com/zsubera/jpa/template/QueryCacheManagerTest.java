@@ -268,4 +268,131 @@ class QueryCacheManagerTest {
         assertTrue(elapsed < 2000, "High-volume put should complete quickly, took: " + elapsed + "ms");
         assertTrue(cache.size() <= 50, "Cache should respect maxEntries after high-volume writes");
     }
+
+    @Test
+    void evictByPrefix_removesMatchingEntries() {
+        cache.put("User:q1", "v1", 60);
+        cache.put("User:q2", "v2", 60);
+        cache.put("Order:q1", "v3", 60);
+
+        int evicted = cache.evictByPrefix("User:");
+
+        assertEquals(2, evicted);
+        assertNull(cache.get("User:q1"));
+        assertNull(cache.get("User:q2"));
+        assertNotNull(cache.get("Order:q1"));
+    }
+
+    @Test
+    void evictByPrefix_noMatch_returnsZero() {
+        cache.put("User:q1", "v1", 60);
+
+        int evicted = cache.evictByPrefix("Order:");
+
+        assertEquals(0, evicted);
+        assertNotNull(cache.get("User:q1"));
+    }
+
+    @Test
+    void evictByPrefix_nullPrefix_returnsZero() {
+        assertEquals(0, cache.evictByPrefix(null));
+    }
+
+    @Test
+    void evictByPrefix_emptyPrefix_returnsZero() {
+        assertEquals(0, cache.evictByPrefix(""));
+    }
+
+    @Test
+    void getHitRate_returnsCorrectRate() {
+        cache.put("key1", "value1", 60);
+
+        cache.get("key1"); // hit
+        cache.get("key1"); // hit
+        cache.get("nonexistent"); // miss
+
+        double hitRate = cache.getHitRate();
+        assertTrue(hitRate > 0.5 && hitRate <= 1.0);
+    }
+
+    @Test
+    void getHitRate_emptyCache_returnsZero() {
+        assertEquals(0.0, cache.getHitRate(), 0.001);
+    }
+
+    @Test
+    void getHitCount_returnsCorrectCount() {
+        cache.put("key1", "value1", 60);
+
+        cache.get("key1");
+        cache.get("key1");
+
+        assertTrue(cache.getHitCount() >= 2);
+    }
+
+    @Test
+    void getMissCount_returnsCorrectCount() {
+        cache.get("nonexistent");
+
+        assertTrue(cache.getMissCount() >= 1);
+    }
+
+    @Test
+    void resetStats_clearsCounters() {
+        cache.put("key1", "value1", 60);
+        cache.get("key1");
+        cache.get("nonexistent");
+
+        cache.resetStats();
+
+        assertEquals(0, cache.getHitCount());
+        assertEquals(0, cache.getMissCount());
+        assertEquals(0.0, cache.getHitRate(), 0.001);
+    }
+
+    @Test
+    void evictByPrefixAfterTransactionCommit_evictsImmediately() {
+        cache.put("User:q1", "v1", 60);
+        cache.put("Order:q1", "v2", 60);
+
+        cache.evictByPrefixAfterTransactionCommit("User:");
+
+        assertNull(cache.get("User:q1"));
+        assertNotNull(cache.get("Order:q1"));
+    }
+
+    @Test
+    void evictByPrefixAfterTransactionCommit_nullPrefix_noop() {
+        cache.put("key1", "v1", 60);
+        cache.evictByPrefixAfterTransactionCommit(null);
+        assertNotNull(cache.get("key1"));
+    }
+
+    @Test
+    void clearAfterTransactionCommit_clearsAll() {
+        cache.put("key1", "v1", 60);
+        cache.put("key2", "v2", 60);
+
+        cache.clearAfterTransactionCommit();
+
+        assertEquals(0, cache.size());
+    }
+
+    @Test
+    void setMaxEntries_updatesMaxEntries() {
+        cache.setMaxEntries(50);
+        assertEquals(50, cache.getMaxEntries());
+    }
+
+    @Test
+    void setMaxEntries_invalid_throws() {
+        assertThrows(IllegalArgumentException.class, () -> cache.setMaxEntries(0));
+        assertThrows(IllegalArgumentException.class, () -> cache.setMaxEntries(-1));
+    }
+
+    @Test
+    void constructor_invalidMaxEntries_throws() {
+        assertThrows(IllegalArgumentException.class, () -> new QueryCacheManager(0));
+        assertThrows(IllegalArgumentException.class, () -> new QueryCacheManager(-1));
+    }
 }
