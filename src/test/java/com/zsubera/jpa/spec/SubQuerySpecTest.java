@@ -650,4 +650,160 @@ class SubQuerySpecTest {
         entity.setStatus(status);
         return entity;
     }
+
+    // ===== or()/not() 业务逻辑路径测试 =====
+
+    @Test
+    void testExistsOrConditionGroupMultiItem() {
+        ParentEntity p = new ParentEntity();
+        p.setCategory("cat");
+        p.setLevel(10);
+        em.persist(p);
+        TestEntity c1 = newEntity("c1", 1);
+        c1.setParent(p);
+        repository.save(c1);
+        TestEntity c2 = newEntity("c2", 2);
+        c2.setParent(p);
+        repository.save(c2);
+        repository.flush();
+
+        QuerySpec<ParentEntity> qs = new QuerySpec<>();
+        qs.exists(TestEntity.class, sub -> sub.or(o -> o.eq(TestEntity::getStatus, 1).eq(TestEntity::getStatus, 2)));
+        List<ParentEntity> result = parentRepository.findAll(qs.toSpecification());
+        assertEquals(1, result.size());
+    }
+
+    @Test
+    void testExistsNotConditionGroupMultiItem() {
+        ParentEntity p = new ParentEntity();
+        p.setCategory("cat");
+        p.setLevel(10);
+        em.persist(p);
+        TestEntity c1 = newEntity("c1", 1);
+        c1.setParent(p);
+        repository.save(c1);
+        TestEntity c2 = newEntity("c2", 2);
+        c2.setParent(p);
+        repository.save(c2);
+        repository.flush();
+
+        QuerySpec<ParentEntity> qs = new QuerySpec<>();
+        qs.exists(TestEntity.class, sub -> sub.not(n -> n.eq(TestEntity::getStatus, 1).eq(TestEntity::getStatus, 2)));
+        // NOT(status=1 AND status=2) matches records where NOT both are true
+        List<ParentEntity> result = parentRepository.findAll(qs.toSpecification());
+        assertEquals(1, result.size());
+    }
+
+    @Test
+    void testExistsOrConditionSingleItem() {
+        ParentEntity p = new ParentEntity();
+        p.setCategory("cat");
+        p.setLevel(10);
+        em.persist(p);
+        TestEntity c1 = newEntity("c1", 1);
+        c1.setParent(p);
+        repository.save(c1);
+        repository.flush();
+
+        QuerySpec<ParentEntity> qs = new QuerySpec<>();
+        qs.exists(TestEntity.class, sub -> sub.or(o -> o.eq(TestEntity::getStatus, 1)));
+        List<ParentEntity> result = parentRepository.findAll(qs.toSpecification());
+        assertEquals(1, result.size());
+    }
+
+    @Test
+    void testExistsNotConditionSingleItem() {
+        ParentEntity p = new ParentEntity();
+        p.setCategory("cat");
+        p.setLevel(10);
+        em.persist(p);
+        TestEntity c1 = newEntity("c1", 1);
+        c1.setParent(p);
+        repository.save(c1);
+        repository.flush();
+
+        QuerySpec<ParentEntity> qs = new QuerySpec<>();
+        qs.exists(TestEntity.class, sub -> sub.not(n -> n.eq(TestEntity::getStatus, 99)));
+        List<ParentEntity> result = parentRepository.findAll(qs.toSpecification());
+        assertEquals(1, result.size());
+    }
+
+    // ===== multiLike SFunction 版本测试 =====
+
+    @Test
+    void testExistsMultiLikeSFunction() {
+        ParentEntity p = new ParentEntity();
+        p.setCategory("cat");
+        p.setLevel(10);
+        em.persist(p);
+        TestEntity c1 = newEntity("hello", 0);
+        c1.setParent(p);
+        repository.save(c1);
+        TestEntity c2 = newEntity("world", 0);
+        c2.setParent(p);
+        repository.save(c2);
+        repository.flush();
+
+        QuerySpec<ParentEntity> qs = new QuerySpec<>();
+        qs.exists(TestEntity.class, sub -> sub.multiLike("hello", TestEntity::getName));
+        List<ParentEntity> result = parentRepository.findAll(qs.toSpecification());
+        assertEquals(1, result.size());
+    }
+
+    @Test
+    void testExistsMultiLikeSFunctionMultipleFields() {
+        ParentEntity p = new ParentEntity();
+        p.setCategory("cat");
+        p.setLevel(10);
+        em.persist(p);
+        TestEntity c1 = newEntity("hello", 0);
+        c1.setParent(p);
+        repository.save(c1);
+        TestEntity c2 = newEntity("world", 0);
+        c2.setParent(p);
+        repository.save(c2);
+        repository.flush();
+
+        QuerySpec<ParentEntity> qs = new QuerySpec<>();
+        qs.exists(TestEntity.class, sub -> sub.multiLike("hello", TestEntity::getName, TestEntity::getName));
+        List<ParentEntity> result = parentRepository.findAll(qs.toSpecification());
+        assertEquals(1, result.size());
+    }
+
+    @Test
+    void testExistsMultiLikeStringFieldNames() {
+        ParentEntity p = new ParentEntity();
+        p.setCategory("cat");
+        p.setLevel(10);
+        em.persist(p);
+        TestEntity c1 = newEntity("hello", 0);
+        c1.setParent(p);
+        repository.save(c1);
+        repository.flush();
+
+        QuerySpec<ParentEntity> qs = new QuerySpec<>();
+        qs.exists(TestEntity.class, sub -> sub.multiLike("hello", "name"));
+        List<ParentEntity> result = parentRepository.findAll(qs.toSpecification());
+        assertEquals(1, result.size());
+    }
+
+    // ===== correlatedEq 测试 =====
+
+    @Test
+    void testExistsCorrelatedEq() {
+        ParentEntity p = new ParentEntity();
+        p.setCategory("cat");
+        p.setLevel(10);
+        em.persist(p);
+        TestEntity c1 = newEntity("c1", 10);
+        c1.setParent(p);
+        repository.save(c1);
+        repository.flush();
+
+        QuerySpec<ParentEntity> qs = new QuerySpec<>();
+        qs.exists(TestEntity.class, sub -> sub.correlatedEq(ParentEntity::getLevel, TestEntity::getStatus));
+        List<ParentEntity> result = parentRepository.findAll(qs.toSpecification());
+        assertEquals(1, result.size());
+    }
+
 }
