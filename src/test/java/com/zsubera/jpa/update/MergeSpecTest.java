@@ -313,4 +313,111 @@ class MergeSpecTest {
 
         assertTrue(count >= 1);
     }
+
+    // ===== executeBatch 边界路径 =====
+
+    @Test
+    void testExecuteBatchNullEntitiesReturnsZero() {
+        assertEquals(0, new MergeSpec<>(TestEntity.class).onConflict(TestEntity::getName).executeBatch(null, em));
+    }
+
+    @Test
+    void testExecuteBatchEmptyEntitiesReturnsZero() {
+        assertEquals(0, new MergeSpec<>(TestEntity.class).onConflict(TestEntity::getName).executeBatch(List.of(), em));
+    }
+
+    @Test
+    void testExecuteBatchNullEntityManagerThrows() {
+        List<TestEntity> entities = List.of(newEntity("a", 1));
+        assertThrows(IllegalArgumentException.class,
+            () -> new MergeSpec<>(TestEntity.class).onConflict(TestEntity::getName).executeBatch(entities, null));
+    }
+
+    @Test
+    void testExecuteBatchInvalidBatchSizeThrows() {
+        List<TestEntity> entities = List.of(newEntity("a", 1));
+        assertThrows(IllegalArgumentException.class,
+            () -> new MergeSpec<>(TestEntity.class).onConflict(TestEntity::getName).executeBatch(entities, em, 0));
+    }
+
+    @Test
+    void testExecuteBatchNullEntityInListThrows() {
+        List<TestEntity> entities = new java.util.ArrayList<>();
+        entities.add(newEntity("a", 1));
+        entities.add(null);
+        assertThrows(IllegalArgumentException.class,
+            () -> new MergeSpec<>(TestEntity.class).onConflict(TestEntity::getName).executeBatch(entities, em));
+    }
+
+    // ===== executeBatchInSeparateTransactions =====
+
+    @Test
+    void testExecuteBatchInSeparateTransactionsNullEntitiesThrows() {
+        assertThrows(IllegalArgumentException.class, () -> new MergeSpec<>(TestEntity.class)
+            .onConflict(TestEntity::getName).executeBatchInSeparateTransactions(null, em, 10));
+    }
+
+    @Test
+    void testExecuteBatchInSeparateTransactionsEmptyEntitiesThrows() {
+        assertThrows(IllegalArgumentException.class, () -> new MergeSpec<>(TestEntity.class)
+            .onConflict(TestEntity::getName).executeBatchInSeparateTransactions(List.of(), em, 10));
+    }
+
+    @Test
+    void testExecuteBatchInSeparateTransactionsNullEmThrows() {
+        List<TestEntity> entities = List.of(newEntity("a", 1));
+        assertThrows(IllegalArgumentException.class, () -> new MergeSpec<>(TestEntity.class)
+            .onConflict(TestEntity::getName).executeBatchInSeparateTransactions(entities, null, 10));
+    }
+
+    @Test
+    void testExecuteBatchInSeparateTransactionsInvalidBatchSize() {
+        List<TestEntity> entities = List.of(newEntity("a", 1));
+        assertThrows(IllegalArgumentException.class, () -> new MergeSpec<>(TestEntity.class)
+            .onConflict(TestEntity::getName).executeBatchInSeparateTransactions(entities, em, 0));
+    }
+
+    // ===== executeBatchInTransaction =====
+
+    @Test
+    void testExecuteBatchInTransactionNullReturnsZero() {
+        assertEquals(0,
+            new MergeSpec<>(TestEntity.class).onConflict(TestEntity::getName).executeBatchInTransaction(null, em));
+    }
+
+    @Test
+    void testExecuteBatchInTransactionEmptyReturnsZero() {
+        assertEquals(0,
+            new MergeSpec<>(TestEntity.class).onConflict(TestEntity::getName).executeBatchInTransaction(List.of(), em));
+    }
+
+    // ===== null entity class =====
+
+    @Test
+    void testConstructorNullEntityClassThrows() {
+        assertThrows(IllegalArgumentException.class, () -> new MergeSpec<>(null));
+    }
+
+    // ===== executeBatch 3-arg 校验路径 =====
+
+    @Test
+    void testExecuteBatchThreeArgNullEmThrows() {
+        List<TestEntity> entities = List.of(newEntity("a", 1));
+        assertThrows(IllegalArgumentException.class,
+            () -> new MergeSpec<>(TestEntity.class).onConflict(TestEntity::getName).executeBatch(entities, null, 10));
+    }
+
+    @Test
+    void testExecuteBatchThreeArgInvalidBatchSize() {
+        List<TestEntity> entities = List.of(newEntity("a", 1));
+        assertThrows(IllegalArgumentException.class,
+            () -> new MergeSpec<>(TestEntity.class).onConflict(TestEntity::getName).executeBatch(entities, em, -1));
+    }
+
+    // ===== withEntity null =====
+
+    @Test
+    void testWithEntityNullThrows() {
+        assertThrows(IllegalArgumentException.class, () -> new MergeSpec<>(TestEntity.class).withEntity(null));
+    }
 }
