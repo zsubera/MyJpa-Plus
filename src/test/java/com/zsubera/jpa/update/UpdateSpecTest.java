@@ -1124,4 +1124,195 @@ class UpdateSpecTest {
             () -> new UpdateSpec<>(TestEntity.class).set(TestEntity::getName, "x").not(n -> {
             }));
     }
+
+    // ===== eqStrict/neStrict 成功路径 =====
+
+    @Test
+    void testUpdateEqStrictWithNonNullValue() {
+        repository.save(newEntity("target", 1));
+        repository.save(newEntity("other", 2));
+        em.flush();
+        em.clear();
+
+        int count = new UpdateSpec<>(TestEntity.class).set(TestEntity::getName, "hit")
+            .eqStrict(TestEntity::getName, "target").execute(em);
+        em.flush();
+        em.clear();
+
+        assertEquals(1, count);
+    }
+
+    @Test
+    void testUpdateNeStrictWithNonNullValue() {
+        repository.save(newEntity("target", 1));
+        repository.save(newEntity("other", 2));
+        em.flush();
+        em.clear();
+
+        int count = new UpdateSpec<>(TestEntity.class).set(TestEntity::getName, "hit")
+            .neStrict(TestEntity::getName, "target").execute(em);
+        em.flush();
+        em.clear();
+
+        assertEquals(1, count);
+    }
+
+    // ===== resolveNodeWithDepth 单子节点路径 =====
+
+    @Test
+    void testUpdateWithSingleAndCondition() {
+        repository.save(newEntity("a", 1));
+        em.flush();
+        em.clear();
+
+        // 单个 AND 条件 → childPredicates.size() == 1 分支
+        int count = new UpdateSpec<>(TestEntity.class).set(TestEntity::getName, "updated").eq(TestEntity::getStatus, 1)
+            .execute(em);
+        em.flush();
+        em.clear();
+
+        assertEquals(1, count);
+    }
+
+    @Test
+    void testUpdateWithSingleOrCondition() {
+        repository.save(newEntity("a", 1));
+        repository.save(newEntity("b", 2));
+        em.flush();
+        em.clear();
+
+        // 单个 OR 条件 → childPredicates.size() == 1 分支
+        int count = new UpdateSpec<>(TestEntity.class).set(TestEntity::getName, "updated")
+            .or(o -> o.eq(TestEntity::getStatus, 1)).execute(em);
+        em.flush();
+        em.clear();
+
+        assertEquals(1, count);
+    }
+
+    @Test
+    void testUpdateWithMultiAndConditions() {
+        repository.save(newEntity("a", 1));
+        repository.save(newEntity("b", 1));
+        repository.save(newEntity("c", 2));
+        em.flush();
+        em.clear();
+
+        // 多个 AND 条件 → cb.and 路径
+        int count = new UpdateSpec<>(TestEntity.class).set(TestEntity::getName, "updated").eq(TestEntity::getName, "a")
+            .eq(TestEntity::getStatus, 1).execute(em);
+        em.flush();
+        em.clear();
+
+        assertEquals(1, count);
+    }
+
+    @Test
+    void testUpdateWithMultiOrConditions() {
+        repository.save(newEntity("a", 1));
+        repository.save(newEntity("b", 2));
+        repository.save(newEntity("c", 3));
+        em.flush();
+        em.clear();
+
+        // 多个 OR 条件 → cb.or 路径
+        int count = new UpdateSpec<>(TestEntity.class).set(TestEntity::getName, "updated")
+            .or(o -> o.eq(TestEntity::getStatus, 1).eq(TestEntity::getStatus, 2)).execute(em);
+        em.flush();
+        em.clear();
+
+        assertEquals(2, count);
+    }
+
+    @Test
+    void testUpdateWithNotCondition() {
+        repository.save(newEntity("a", 1));
+        repository.save(newEntity("b", 2));
+        em.flush();
+        em.clear();
+
+        // NOT 条件 → NotNode 路径
+        int count = new UpdateSpec<>(TestEntity.class).set(TestEntity::getName, "updated")
+            .not(n -> n.eq(TestEntity::getStatus, 1)).execute(em);
+        em.flush();
+        em.clear();
+
+        assertEquals(1, count);
+    }
+
+    // ===== checkRowCountBeforeExecute 行数限制 =====
+
+    @Test
+    void testCheckRowCountBeforeExecuteExceedsLimit() {
+        com.zsubera.jpa.autoconfigure.MyJpaPlusGlobalConfig config =
+            com.zsubera.jpa.autoconfigure.GlobalConfigHolder.getConfig();
+        int oldLimit = config.getMaxBulkOperationRows();
+        try {
+            config.setMaxBulkOperationRows(1);
+
+            repository.save(newEntity("a", 1));
+            repository.save(newEntity("b", 1));
+            em.flush();
+            em.clear();
+
+            // 2 rows match but limit is 1 → should throw
+            assertThrows(IllegalStateException.class, () -> new UpdateSpec<>(TestEntity.class)
+                .set(TestEntity::getName, "x").eq(TestEntity::getStatus, 1).execute(em));
+        } finally {
+            config.setMaxBulkOperationRows(oldLimit);
+        }
+    }
+
+    @Test
+    void testCheckRowCountBeforeExecuteWithinLimit() {
+        com.zsubera.jpa.autoconfigure.MyJpaPlusGlobalConfig config =
+            com.zsubera.jpa.autoconfigure.GlobalConfigHolder.getConfig();
+        int oldLimit = config.getMaxBulkOperationRows();
+        try {
+            config.setMaxBulkOperationRows(10);
+
+            repository.save(newEntity("a", 1));
+            em.flush();
+            em.clear();
+
+            int count = new UpdateSpec<>(TestEntity.class).set(TestEntity::getName, "x").eq(TestEntity::getStatus, 1)
+                .execute(em);
+            assertEquals(1, count);
+        } finally {
+            config.setMaxBulkOperationRows(oldLimit);
+        }
+    }
+
+    // ===== multiLike 成功路径 =====
+
+    @Test
+    void testUpdateMultiLikeSuccess() {
+        repository.save(newEntity("alice", 1));
+        repository.save(newEntity("bob", 2));
+        em.flush();
+        em.clear();
+
+        int count = new UpdateSpec<>(TestEntity.class).set(TestEntity::getName, "found")
+            .multiLike("ali", TestEntity::getName).execute(em);
+        em.flush();
+        em.clear();
+
+        assertEquals(1, count);
+    }
+
+    // ===== executeInTransaction 路径 =====
+
+    @Test
+    void testExecuteInTransactionPath() {
+        repository.save(newEntity("a", 1));
+        em.flush();
+        em.clear();
+
+        int count = new UpdateSpec<>(TestEntity.class).set(TestEntity::getName, "updated").eq(TestEntity::getStatus, 1)
+            .executeInTransaction(em);
+        em.flush();
+        em.clear();
+
+        assertEquals(1, count);
+    }
 }
