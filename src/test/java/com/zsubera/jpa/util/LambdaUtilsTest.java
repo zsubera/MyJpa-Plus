@@ -221,4 +221,54 @@ class LambdaUtilsTest {
             LambdaUtils.setMaxCacheSize(old);
         }
     }
+
+    @Test
+    void shouldEvictMethodCacheWhenSizeExceedsMax() throws Exception {
+        java.lang.reflect.Field methodCacheField = LambdaUtils.class.getDeclaredField("METHOD_CACHE");
+        methodCacheField.setAccessible(true);
+        @SuppressWarnings("unchecked")
+        java.util.concurrent.ConcurrentHashMap<Class<?>, java.lang.reflect.Method> methodCache =
+            (java.util.concurrent.ConcurrentHashMap<Class<?>, java.lang.reflect.Method>)methodCacheField.get(null);
+
+        int originalSize = methodCache.size();
+
+        try {
+            // Fill METHOD_CACHE beyond METHOD_CACHE_MAX_SIZE (4096) using dynamic proxy classes
+            ClassLoader cl = LambdaUtilsTest.class.getClassLoader();
+            java.lang.reflect.Method runMethod = Runnable.class.getMethod("run");
+
+            int added = 0;
+            for (int i = 0; i < 4200; i++) {
+                java.net.URLClassLoader ucl = new java.net.URLClassLoader(new java.net.URL[0], cl);
+                Class<?> proxyClass = java.lang.reflect.Proxy.getProxyClass(ucl, Runnable.class);
+                if (methodCache.putIfAbsent(proxyClass, runMethod) == null) {
+                    added++;
+                }
+            }
+            assertTrue(methodCache.size() > 4096,
+                "METHOD_CACHE should have > 4096 entries, got " + methodCache.size() + " (added " + added + ")");
+
+            // Reset call counter so next getPropertyName triggers eviction check
+            java.lang.reflect.Field counterField = LambdaUtils.class.getDeclaredField("CALL_COUNTER");
+            counterField.setAccessible(true);
+            java.util.concurrent.atomic.AtomicInteger counter =
+                (java.util.concurrent.atomic.AtomicInteger)counterField.get(null);
+            counter.set(99);
+
+            // Trigger eviction via getPropertyName
+            LambdaUtils.getPropertyName(TestBean::getName);
+
+            assertTrue(methodCache.size() < 4200,
+                "METHOD_CACHE should have been evicted, but size is " + methodCache.size());
+        } finally {
+            // Restore original cache size
+            while (methodCache.size() > originalSize) {
+                var it = methodCache.keySet().iterator();
+                while (it.hasNext() && methodCache.size() > originalSize) {
+                    it.next();
+                    it.remove();
+                }
+            }
+        }
+    }
 }
