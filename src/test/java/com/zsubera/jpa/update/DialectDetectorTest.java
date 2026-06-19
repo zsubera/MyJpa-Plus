@@ -1,7 +1,14 @@
 package com.zsubera.jpa.update;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.Mockito.*;
 
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.EntityManagerFactory;
+import java.sql.Connection;
+import java.sql.DatabaseMetaData;
+import java.util.HashMap;
+import java.util.Map;
 import org.junit.jupiter.api.Test;
 
 class DialectDetectorTest {
@@ -104,5 +111,156 @@ class DialectDetectorTest {
     @Test
     void mapDialect_nullInput_returnsUnknown() {
         assertEquals("unknown", DialectDetector.mapDialect(null));
+    }
+
+    // ===== detectDialect 多优先级路径测试 =====
+
+    @Test
+    void detectDialect_fromJdbcUrlPostgresql() {
+        EntityManager em = mock(EntityManager.class);
+        EntityManagerFactory emf = mock(EntityManagerFactory.class);
+        Map<String, Object> props = new HashMap<>();
+        props.put("jakarta.persistence.jdbc.url", "jdbc:postgresql://localhost:5432/test");
+        when(emf.getProperties()).thenReturn(props);
+        when(em.getEntityManagerFactory()).thenReturn(emf);
+
+        String dialect = DialectDetector.detectDialect(em);
+        assertEquals("postgresql", dialect);
+    }
+
+    @Test
+    void detectDialect_fromJdbcUrlMysql() {
+        EntityManager em = mock(EntityManager.class);
+        EntityManagerFactory emf = mock(EntityManagerFactory.class);
+        Map<String, Object> props = new HashMap<>();
+        props.put("jakarta.persistence.jdbc.url", "jdbc:mysql://localhost:3306/test");
+        when(emf.getProperties()).thenReturn(props);
+        when(em.getEntityManagerFactory()).thenReturn(emf);
+
+        String dialect = DialectDetector.detectDialect(em);
+        assertEquals("mysql", dialect);
+    }
+
+    @Test
+    void detectDialect_fromHibernateUrl() {
+        EntityManager em = mock(EntityManager.class);
+        EntityManagerFactory emf = mock(EntityManagerFactory.class);
+        Map<String, Object> props = new HashMap<>();
+        props.put("hibernate.connection.url", "jdbc:postgresql://localhost/db");
+        when(emf.getProperties()).thenReturn(props);
+        when(em.getEntityManagerFactory()).thenReturn(emf);
+
+        String dialect = DialectDetector.detectDialect(em);
+        assertEquals("postgresql", dialect);
+    }
+
+    @Test
+    void detectDialect_fromJdbcConnectionPostgresql() throws Exception {
+        EntityManager em = mock(EntityManager.class);
+        EntityManagerFactory emf = mock(EntityManagerFactory.class);
+        when(emf.getProperties()).thenReturn(new HashMap<>());
+        when(em.getEntityManagerFactory()).thenReturn(emf);
+
+        Connection conn = mock(Connection.class);
+        DatabaseMetaData meta = mock(DatabaseMetaData.class);
+        when(meta.getDatabaseProductName()).thenReturn("PostgreSQL");
+        when(conn.getMetaData()).thenReturn(meta);
+        when(em.unwrap(Connection.class)).thenReturn(conn);
+
+        String dialect = DialectDetector.detectDialect(em);
+        assertEquals("postgresql", dialect);
+    }
+
+    @Test
+    void detectDialect_fromJdbcConnectionMysql() throws Exception {
+        EntityManager em = mock(EntityManager.class);
+        EntityManagerFactory emf = mock(EntityManagerFactory.class);
+        when(emf.getProperties()).thenReturn(new HashMap<>());
+        when(em.getEntityManagerFactory()).thenReturn(emf);
+
+        Connection conn = mock(Connection.class);
+        DatabaseMetaData meta = mock(DatabaseMetaData.class);
+        when(meta.getDatabaseProductName()).thenReturn("MySQL");
+        when(conn.getMetaData()).thenReturn(meta);
+        when(em.unwrap(Connection.class)).thenReturn(conn);
+
+        String dialect = DialectDetector.detectDialect(em);
+        assertEquals("mysql", dialect);
+    }
+
+    @Test
+    void detectDialect_fallbackToManualSystemProperty() {
+        EntityManager em = mock(EntityManager.class);
+        EntityManagerFactory emf = mock(EntityManagerFactory.class);
+        when(emf.getProperties()).thenReturn(new HashMap<>());
+        when(em.getEntityManagerFactory()).thenReturn(emf);
+
+        String oldProp = System.getProperty("myjpa-plus.dialect");
+        try {
+            System.setProperty("myjpa-plus.dialect", "postgresql");
+            String dialect = DialectDetector.detectDialect(em);
+            assertEquals("postgresql", dialect);
+        } finally {
+            if (oldProp != null) {
+                System.setProperty("myjpa-plus.dialect", oldProp);
+            } else {
+                System.clearProperty("myjpa-plus.dialect");
+            }
+        }
+    }
+
+    @Test
+    void detectDialect_throwsWhenNothingConfigured() {
+        EntityManager em = mock(EntityManager.class);
+        EntityManagerFactory emf = mock(EntityManagerFactory.class);
+        when(emf.getProperties()).thenReturn(new HashMap<>());
+        when(em.getEntityManagerFactory()).thenReturn(emf);
+
+        String oldProp = System.getProperty("myjpa-plus.dialect");
+        try {
+            System.clearProperty("myjpa-plus.dialect");
+            assertThrows(com.zsubera.jpa.exception.MyJpaPlusException.class, () -> DialectDetector.detectDialect(em));
+        } finally {
+            if (oldProp != null) {
+                System.setProperty("myjpa-plus.dialect", oldProp);
+            }
+        }
+    }
+
+    @Test
+    void detectDialect_cachesResult() {
+        EntityManager em = mock(EntityManager.class);
+        EntityManagerFactory emf = mock(EntityManagerFactory.class);
+        Map<String, Object> props = new HashMap<>();
+        props.put("jakarta.persistence.jdbc.url", "jdbc:mysql://localhost/db");
+        when(emf.getProperties()).thenReturn(props);
+        when(em.getEntityManagerFactory()).thenReturn(emf);
+
+        String d1 = DialectDetector.detectDialect(em);
+        String d2 = DialectDetector.detectDialect(em);
+        assertEquals("mysql", d1);
+        assertSame(d1, d2);
+    }
+
+    @Test
+    void detectDialect_connectionReturnsNull() throws Exception {
+        EntityManager em = mock(EntityManager.class);
+        EntityManagerFactory emf = mock(EntityManagerFactory.class);
+        when(emf.getProperties()).thenReturn(new HashMap<>());
+        when(em.getEntityManagerFactory()).thenReturn(emf);
+        when(em.unwrap(Connection.class)).thenReturn(null);
+
+        String oldProp = System.getProperty("myjpa-plus.dialect");
+        try {
+            System.setProperty("myjpa-plus.dialect", "mysql");
+            String dialect = DialectDetector.detectDialect(em);
+            assertEquals("mysql", dialect);
+        } finally {
+            if (oldProp != null) {
+                System.setProperty("myjpa-plus.dialect", oldProp);
+            } else {
+                System.clearProperty("myjpa-plus.dialect");
+            }
+        }
     }
 }
