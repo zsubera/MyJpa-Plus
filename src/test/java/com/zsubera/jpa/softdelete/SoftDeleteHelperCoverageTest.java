@@ -452,4 +452,91 @@ class SoftDeleteHelperCoverageTest {
     void testSoftDeleteAllEnumNullClass() {
         assertThrows(IllegalArgumentException.class, () -> SoftDeleteHelper.softDeleteAll(em, null, true));
     }
+
+    @Test
+    void testSoftDeleteByIdsIntEmptyList() {
+        int count = SoftDeleteHelper.softDeleteByIds(em, SoftDeleteIntTestEntity.class, List.of());
+        assertEquals(0, count);
+    }
+
+    @Test
+    void testSoftDeleteByIdsIntNullList() {
+        int count = SoftDeleteHelper.softDeleteByIds(em, SoftDeleteIntTestEntity.class, null);
+        assertEquals(0, count);
+    }
+
+    @Test
+    void testSoftDeleteByIdsStringEmptyList() {
+        int count = SoftDeleteHelper.softDeleteByIds(em, SoftDeleteStringTestEntity.class, List.of());
+        assertEquals(0, count);
+    }
+
+    @Test
+    void testSoftDeleteByIdsStringNullList() {
+        int count = SoftDeleteHelper.softDeleteByIds(em, SoftDeleteStringTestEntity.class, null);
+        assertEquals(0, count);
+    }
+
+    @Test
+    void testSoftDeleteByIdsEnumEmptyList() {
+        int count = SoftDeleteHelper.softDeleteByIds(em, SoftDeleteEnumTestEntity.class, List.of());
+        assertEquals(0, count);
+    }
+
+    @Test
+    void testSoftDeleteByIdsEnumNullList() {
+        int count = SoftDeleteHelper.softDeleteByIds(em, SoftDeleteEnumTestEntity.class, null);
+        assertEquals(0, count);
+    }
+
+    @Test
+    void testSoftDeleteByIdsIntAlreadyDeleted() {
+        var e1 = intRepo.save(buildInt("a", 1));
+        intRepo.flush();
+
+        int count = SoftDeleteHelper.softDeleteByIds(em, SoftDeleteIntTestEntity.class, List.of(e1.getId()));
+        assertEquals(1, count);
+    }
+
+    @Test
+    void testSoftDeleteByIdsStringAlreadyDeleted() {
+        var e1 = strRepo.save(buildStr("a", "Y"));
+        strRepo.flush();
+
+        int count = SoftDeleteHelper.softDeleteByIds(em, SoftDeleteStringTestEntity.class, List.of(e1.getId()));
+        assertEquals(1, count);
+    }
+
+    @Test
+    void testSoftDeleteByIdsEnumAlreadyDeleted() {
+        var e1 = enumRepo.save(buildEnum("a", Status.ARCHIVED));
+        enumRepo.flush();
+
+        int count = SoftDeleteHelper.softDeleteByIds(em, SoftDeleteEnumTestEntity.class, List.of(e1.getId()));
+        assertEquals(1, count);
+    }
+
+    @Test
+    void testSoftDeleteAllBooleanNoUnconditional() {
+        assertThrows(IllegalStateException.class,
+            () -> SoftDeleteHelper.softDeleteAll(em, SoftDeleteTestEntity.class, false));
+    }
+
+    @Test
+    void testSoftDeleteAllIntNoUnconditional() {
+        assertThrows(IllegalStateException.class,
+            () -> SoftDeleteHelper.softDeleteAll(em, SoftDeleteIntTestEntity.class, false));
+    }
+
+    @Test
+    void testSoftDeleteAllStringNoUnconditional() {
+        assertThrows(IllegalStateException.class,
+            () -> SoftDeleteHelper.softDeleteAll(em, SoftDeleteStringTestEntity.class, false));
+    }
+
+    @Test
+    void testSoftDeleteAllEnumNoUnconditional() {
+        assertThrows(IllegalStateException.class,
+            () -> SoftDeleteHelper.softDeleteAll(em, SoftDeleteEnumTestEntity.class, false));
+    }
 }
