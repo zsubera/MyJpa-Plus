@@ -2252,4 +2252,96 @@ public class QuerySpecTest {
         Specification<TestEntity> spec = qs.toSpecification();
         assertNotNull(spec);
     }
+
+    @Test
+    void testGetSortEmpty() {
+        QuerySpec<TestEntity> qs = new QuerySpec<>();
+        org.springframework.data.domain.Sort sort = qs.getSort();
+        assertNotNull(sort);
+        assertFalse(sort.isSorted());
+    }
+
+    @Test
+    void testGetSortWithOrders() {
+        QuerySpec<TestEntity> qs = new QuerySpec<>();
+        qs.orderByAsc(TestEntity::getName).orderByDesc(TestEntity::getStatus);
+        org.springframework.data.domain.Sort sort = qs.getSort();
+        assertNotNull(sort);
+        assertTrue(sort.isSorted());
+    }
+
+    @Test
+    void testOf() {
+        QuerySpec<TestEntity> qs = QuerySpec.of(s -> s.eq(TestEntity::getName, "test"));
+        assertNotNull(qs);
+    }
+
+    @Test
+    void testOfNull() {
+        QuerySpec<TestEntity> qs = QuerySpec.of(null);
+        assertNotNull(qs);
+    }
+
+    @Test
+    void testCopyEmpty() {
+        QuerySpec<TestEntity> qs = new QuerySpec<>();
+        QuerySpec<TestEntity> copy = qs.copy();
+        assertNotNull(copy);
+    }
+
+    @Test
+    void testCopyWithConditions() {
+        QuerySpec<TestEntity> qs = new QuerySpec<>();
+        qs.eq(TestEntity::getName, "test").eq(TestEntity::getStatus, 1);
+        QuerySpec<TestEntity> copy = qs.copy();
+        assertNotNull(copy);
+    }
+
+    @Test
+    void testCopyWithOrGroup() {
+        QuerySpec<TestEntity> qs = new QuerySpec<>();
+        qs.or(o -> o.eq(TestEntity::getName, "a").eq(TestEntity::getName, "b"));
+        QuerySpec<TestEntity> copy = qs.copy();
+        assertNotNull(copy);
+    }
+
+    @Test
+    void testCopyWithJoin() {
+        QuerySpec<TestEntity> qs = new QuerySpec<>();
+        qs.eq(TestEntity::getName, "test");
+        QuerySpec<TestEntity> copy = qs.copy();
+        assertNotNull(copy);
+    }
+
+    @Test
+    void testThenNull() {
+        QuerySpec<TestEntity> qs = new QuerySpec<>();
+        qs.eq(TestEntity::getName, "test");
+        QuerySpec<TestEntity> result = qs.then(null);
+        assertNotNull(result);
+    }
+
+    @Test
+    void testAndNull() {
+        QuerySpec<TestEntity> qs = new QuerySpec<>();
+        qs.eq(TestEntity::getName, "test");
+        QuerySpec<TestEntity> result = qs.and(null);
+        assertNotNull(result);
+    }
+
+    @Test
+    void testOrNull() {
+        QuerySpec<TestEntity> qs = new QuerySpec<>();
+        qs.eq(TestEntity::getName, "test");
+        Specification<TestEntity> result = qs.or((QuerySpec<TestEntity>)null);
+        assertNotNull(result);
+    }
+
+    @Test
+    void testToSpecificationNull() {
+        QuerySpec<TestEntity> qs = new QuerySpec<>();
+        qs.eq(TestEntity::getName, "test");
+        Specification<TestEntity> result = qs.toSpecification((Specification<TestEntity>)null);
+        assertNotNull(result);
+    }
 }
