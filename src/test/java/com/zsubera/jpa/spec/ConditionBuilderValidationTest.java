@@ -406,6 +406,262 @@ class ConditionBuilderValidationTest {
         assertThrows(IllegalArgumentException.class, () -> qs.multiLike("test", (String[])null));
     }
 
+    // ===== deprecated 委托方法 =====
+
+    @Test
+    void testDeprecatedAddSafeFunctionNames() {
+        ConditionBuilder.addSafeFunctionNames(List.of("custom_func"));
+    }
+
+    @Test
+    void testDeprecatedAddBooleanFunctionNames() {
+        ConditionBuilder.addBooleanFunctionNames(List.of("custom_bool"));
+    }
+
+    @Test
+    void testDeprecatedFreezeExtraFunctionNames() {
+        ConditionBuilder.freezeExtraFunctionNames();
+    }
+
+    // ===== eqStrict/neStrict 成功路径 =====
+
+    @Test
+    void testEqStrictSuccess() {
+        repository.save(newEntity("a", 1));
+        em.flush();
+        em.clear();
+
+        QuerySpec<TestEntity> qs = new QuerySpec<>();
+        qs.eqStrict(TestEntity::getName, "a");
+        assertEquals(1, repository.findAll(qs.toSpecification()).size());
+    }
+
+    @Test
+    void testNeStrictSuccess() {
+        repository.save(newEntity("a", 1));
+        repository.save(newEntity("b", 2));
+        em.flush();
+        em.clear();
+
+        QuerySpec<TestEntity> qs = new QuerySpec<>();
+        qs.neStrict(TestEntity::getName, "a");
+        assertEquals(1, repository.findAll(qs.toSpecification()).size());
+    }
+
+    // ===== notStartsWith/notEndsWith =====
+
+    @Test
+    void testNotStartsWith() {
+        repository.save(newEntity("abc", 1));
+        repository.save(newEntity("xyz", 2));
+        em.flush();
+        em.clear();
+
+        QuerySpec<TestEntity> qs = new QuerySpec<>();
+        qs.notStartsWith(TestEntity::getName, "ab");
+        List<TestEntity> result = repository.findAll(qs.toSpecification());
+        assertEquals(1, result.size());
+        assertEquals("xyz", result.get(0).getName());
+    }
+
+    @Test
+    void testNotEndsWith() {
+        repository.save(newEntity("abc", 1));
+        repository.save(newEntity("xyz", 2));
+        em.flush();
+        em.clear();
+
+        QuerySpec<TestEntity> qs = new QuerySpec<>();
+        qs.notEndsWith(TestEntity::getName, "bc");
+        List<TestEntity> result = repository.findAll(qs.toSpecification());
+        assertEquals(1, result.size());
+        assertEquals("xyz", result.get(0).getName());
+    }
+
+    // ===== eqIgnoreCase/neIgnoreCase null 值 → IS NULL / IS NOT NULL =====
+
+    @Test
+    void testEqIgnoreCaseNullValueBecomesIsNull() {
+        TestEntity e1 = newEntity("a", 1);
+        e1.setName(null);
+        repository.save(e1);
+        repository.save(newEntity("b", 2));
+        em.flush();
+        em.clear();
+
+        QuerySpec<TestEntity> qs = new QuerySpec<>();
+        qs.eqIgnoreCase(TestEntity::getName, null);
+        List<TestEntity> result = repository.findAll(qs.toSpecification());
+        assertEquals(1, result.size());
+    }
+
+    @Test
+    void testNeIgnoreCaseNullValueBecomesIsNotNull() {
+        TestEntity e1 = newEntity("a", 1);
+        e1.setName(null);
+        repository.save(e1);
+        repository.save(newEntity("b", 2));
+        em.flush();
+        em.clear();
+
+        QuerySpec<TestEntity> qs = new QuerySpec<>();
+        qs.neIgnoreCase(TestEntity::getName, null);
+        List<TestEntity> result = repository.findAll(qs.toSpecification());
+        assertEquals(1, result.size());
+    }
+
+    // ===== multiLike(String... null element) =====
+
+    @Test
+    void testMultiLikeStringNullElementThrows() {
+        QuerySpec<TestEntity> qs = new QuerySpec<>();
+        assertThrows(IllegalArgumentException.class, () -> qs.multiLike("test", (String)null));
+    }
+
+    // ===== inSubQuery null 检查 =====
+
+    @Test
+    void testInSubQueryNullOuterFieldThrows() {
+        QuerySpec<TestEntity> qs = new QuerySpec<>();
+        assertThrows(IllegalArgumentException.class, () -> qs.inSubQuery(null, TestEntity.class, sub -> {
+        }));
+    }
+
+    @Test
+    void testInSubQueryNullSubEntityThrows() {
+        QuerySpec<TestEntity> qs = new QuerySpec<>();
+        assertThrows(IllegalArgumentException.class, () -> qs.inSubQuery(TestEntity::getStatus, null, sub -> {
+        }));
+    }
+
+    @Test
+    void testInSubQueryNullConfigThrows() {
+        QuerySpec<TestEntity> qs = new QuerySpec<>();
+        assertThrows(IllegalArgumentException.class,
+            () -> qs.inSubQuery(TestEntity::getStatus, TestEntity.class, null));
+    }
+
+    // ===== notInSubQuery null 检查 =====
+
+    @Test
+    void testNotInSubQueryNullOuterFieldThrows() {
+        QuerySpec<TestEntity> qs = new QuerySpec<>();
+        assertThrows(IllegalArgumentException.class, () -> qs.notInSubQuery(null, TestEntity.class, sub -> {
+        }));
+    }
+
+    @Test
+    void testNotInSubQueryNullSubEntityThrows() {
+        QuerySpec<TestEntity> qs = new QuerySpec<>();
+        assertThrows(IllegalArgumentException.class, () -> qs.notInSubQuery(TestEntity::getStatus, null, sub -> {
+        }));
+    }
+
+    @Test
+    void testNotInSubQueryNullConfigThrows() {
+        QuerySpec<TestEntity> qs = new QuerySpec<>();
+        assertThrows(IllegalArgumentException.class,
+            () -> qs.notInSubQuery(TestEntity::getStatus, TestEntity.class, null));
+    }
+
+    // ===== conditional boolean 方法 =====
+
+    @Test
+    void testEqStrictBooleanTrue() {
+        repository.save(newEntity("target", 1));
+        em.flush();
+        em.clear();
+
+        QuerySpec<TestEntity> qs = new QuerySpec<>();
+        qs.eqStrict(true, TestEntity::getName, "target");
+        assertEquals(1, repository.findAll(qs.toSpecification()).size());
+    }
+
+    @Test
+    void testEqStrictBooleanFalse() {
+        repository.save(newEntity("target", 1));
+        em.flush();
+        em.clear();
+
+        QuerySpec<TestEntity> qs = new QuerySpec<>();
+        qs.eqStrict(false, TestEntity::getName, "target");
+        assertEquals(1, repository.findAll(qs.toSpecification()).size());
+    }
+
+    @Test
+    void testNeStrictBooleanTrue() {
+        repository.save(newEntity("target", 1));
+        repository.save(newEntity("other", 2));
+        em.flush();
+        em.clear();
+
+        QuerySpec<TestEntity> qs = new QuerySpec<>();
+        qs.neStrict(true, TestEntity::getName, "target");
+        assertEquals(1, repository.findAll(qs.toSpecification()).size());
+    }
+
+    @Test
+    void testNeStrictBooleanFalse() {
+        repository.save(newEntity("target", 1));
+        repository.save(newEntity("other", 2));
+        em.flush();
+        em.clear();
+
+        QuerySpec<TestEntity> qs = new QuerySpec<>();
+        qs.neStrict(false, TestEntity::getName, "target");
+        assertEquals(2, repository.findAll(qs.toSpecification()).size());
+    }
+
+    @Test
+    void testMultiLikeStringBooleanTrue() {
+        repository.save(newEntity("abc", 1));
+        repository.save(newEntity("xyz", 2));
+        em.flush();
+        em.clear();
+
+        QuerySpec<TestEntity> qs = new QuerySpec<>();
+        qs.multiLike(true, "ab", "name");
+        assertEquals(1, repository.findAll(qs.toSpecification()).size());
+    }
+
+    @Test
+    void testMultiLikeStringBooleanFalse() {
+        repository.save(newEntity("abc", 1));
+        repository.save(newEntity("xyz", 2));
+        em.flush();
+        em.clear();
+
+        QuerySpec<TestEntity> qs = new QuerySpec<>();
+        qs.multiLike(false, "ab", "name");
+        assertEquals(2, repository.findAll(qs.toSpecification()).size());
+    }
+
+    // ===== func() 方法 =====
+
+    @Test
+    void testFuncNullFieldThrows() {
+        QuerySpec<TestEntity> qs = new QuerySpec<>();
+        assertThrows(IllegalArgumentException.class, () -> qs.func(null, "UPPER"));
+    }
+
+    @Test
+    void testFuncNullFunctionNameThrows() {
+        QuerySpec<TestEntity> qs = new QuerySpec<>();
+        assertThrows(IllegalArgumentException.class, () -> qs.func(TestEntity::getName, null));
+    }
+
+    @Test
+    void testFuncEmptyFunctionNameThrows() {
+        QuerySpec<TestEntity> qs = new QuerySpec<>();
+        assertThrows(IllegalArgumentException.class, () -> qs.func(TestEntity::getName, ""));
+    }
+
+    @Test
+    void testFuncInvalidFunctionNameThrows() {
+        QuerySpec<TestEntity> qs = new QuerySpec<>();
+        assertThrows(IllegalArgumentException.class, () -> qs.func(TestEntity::getName, "DROP TABLE"));
+    }
+
     private TestEntity newEntity(String name, int status) {
         TestEntity entity = new TestEntity();
         entity.setName(name);
