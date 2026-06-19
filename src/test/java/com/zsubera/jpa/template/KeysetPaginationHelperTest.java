@@ -217,25 +217,53 @@ class KeysetPaginationHelperTest {
         assertEquals(2, page.content().size());
     }
 
-    // ---- 边界：恰好等于 pageSize ----
+    // ---- 多字段排序游标翻页 ----
 
     @Test
-    void testExactPageSizeMatch() {
-        for (int i = 0; i < 3; i++) {
+    void testMultiFieldSortCursorPagination() {
+        String[] names = {"alice", "alice", "bob", "bob"};
+        Integer[] statuses = {1, 2, 1, 2};
+        for (int i = 0; i < 4; i++) {
             TestEntity e = new TestEntity();
-            e.setName("ksExact" + i);
-            e.setStatus(i);
+            e.setName(names[i]);
+            e.setStatus(statuses[i]);
             repository.save(e);
         }
         repository.flush();
 
         Specification<TestEntity> spec = (root, query, cb) -> cb.conjunction();
-        MyJpaTemplate.KeysetPage<TestEntity> page =
-            keysetPaginationHelper.findKeysetPage(TestEntity.class, spec, Sort.by("id"), 3, null);
+        Sort sort = Sort.by(Sort.Order.asc("name"), Sort.Order.asc("status"));
 
-        assertEquals(3, page.content().size());
-        assertFalse(page.hasNext(), "Exact match should not have next page");
-        assertNull(page.lastSortValues());
+        MyJpaTemplate.KeysetPage<TestEntity> page1 =
+            keysetPaginationHelper.findKeysetPage(TestEntity.class, spec, sort, 2, null);
+        assertEquals(2, page1.content().size());
+        assertTrue(page1.hasNext());
+
+        MyJpaTemplate.KeysetPage<TestEntity> page2 =
+            keysetPaginationHelper.findKeysetPage(TestEntity.class, spec, sort, 2, page1.lastSortValues());
+        assertEquals(2, page2.content().size());
+        assertFalse(page2.hasNext());
+    }
+
+    @Test
+    void testNullSortValuesInMultiField() {
+        TestEntity e1 = new TestEntity();
+        e1.setName(null);
+        e1.setStatus(1);
+        repository.save(e1);
+
+        TestEntity e2 = new TestEntity();
+        e2.setName("aaa");
+        e2.setStatus(2);
+        repository.save(e2);
+        repository.flush();
+
+        Specification<TestEntity> spec = (root, query, cb) -> cb.conjunction();
+        Sort sort = Sort.by(Sort.Order.asc("name"), Sort.Order.asc("status"));
+
+        MyJpaTemplate.KeysetPage<TestEntity> page =
+            keysetPaginationHelper.findKeysetPage(TestEntity.class, spec, sort, 10, null);
+        assertEquals(2, page.content().size());
     }
 
     // ---- 边界：pageSize=1 逐条翻页 ----
