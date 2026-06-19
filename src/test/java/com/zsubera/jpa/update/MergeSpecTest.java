@@ -420,4 +420,95 @@ class MergeSpecTest {
     void testWithEntityNullThrows() {
         assertThrows(IllegalArgumentException.class, () -> new MergeSpec<>(TestEntity.class).withEntity(null));
     }
+
+    // ===== getEntityClass =====
+
+    @Test
+    void testGetEntityClass() {
+        assertEquals(TestEntity.class, new MergeSpec<>(TestEntity.class).getEntityClass());
+    }
+
+    // ===== execute without entity =====
+
+    @Test
+    void testExecuteWithoutEntityThrows() {
+        assertThrows(IllegalStateException.class,
+            () -> new MergeSpec<>(TestEntity.class).onConflict(TestEntity::getName).execute(em));
+    }
+
+    // ===== executeInTransaction without entity =====
+
+    @Test
+    void testExecuteInTransactionWithoutEntityThrows() {
+        assertThrows(IllegalStateException.class,
+            () -> new MergeSpec<>(TestEntity.class).onConflict(TestEntity::getName).executeInTransaction(em));
+    }
+
+    // ===== executeBatch with batchSize triggers flush/clear boundary =====
+
+    @Test
+    void testExecuteBatchWithSmallBatchSize() {
+        List<TestEntity> entities = List.of(newEntity("b1", 1), newEntity("b2", 2), newEntity("b3", 3));
+        MergeSpec<TestEntity> spec = new MergeSpec<>(TestEntity.class).onConflict(TestEntity::getName);
+
+        int count = spec.executeBatch(entities, em, 1);
+        em.flush();
+        em.clear();
+
+        assertEquals(3, count);
+        assertEquals(3, repository.count());
+    }
+
+    // ===== executeBatchInSeparateTransactions empty =====
+
+    @Test
+    void testExecuteBatchInSeparateTransactionsEmptyThrows() {
+        assertThrows(IllegalArgumentException.class, () -> new MergeSpec<>(TestEntity.class)
+            .onConflict(TestEntity::getName).executeBatchInSeparateTransactions(List.of(), em, 10));
+    }
+
+    @Test
+    void testExecuteBatchInSeparateTransactionsNullThrows() {
+        assertThrows(IllegalArgumentException.class, () -> new MergeSpec<>(TestEntity.class)
+            .onConflict(TestEntity::getName).executeBatchInSeparateTransactions(null, em, 10));
+    }
+
+    // ===== warnIdentityGeneration 路径 =====
+
+    @Test
+    void testWarnIdentityGenerationWithoutConflictFields() {
+        TestEntity entity = newEntity("warn", 1);
+        MergeSpec<TestEntity> spec = new MergeSpec<>(TestEntity.class).withEntity(entity);
+        // execute without onConflict → triggers warnIdentityGeneration
+        spec.execute(em);
+        em.flush();
+    }
+
+    // ===== execute with explicit update fields =====
+
+    @Test
+    void testExecuteWithExplicitUpdateFields() {
+        repository.save(newEntity("existing", 1));
+        em.flush();
+        em.clear();
+
+        TestEntity updated = newEntity("existing", 2);
+        int count = new MergeSpec<>(TestEntity.class).withEntity(updated).onConflict(TestEntity::getName)
+            .updateOnConflict(TestEntity::getStatus).execute(em);
+        em.flush();
+        em.clear();
+
+        assertTrue(count >= 1);
+    }
+
+    // ===== executeBatch with dialect strategy =====
+
+    @Test
+    void testExecuteBatchWithNullEntityInListThrows() {
+        List<TestEntity> entities = new java.util.ArrayList<>();
+        entities.add(newEntity("a", 1));
+        entities.add(null);
+        assertThrows(IllegalArgumentException.class,
+            () -> new MergeSpec<>(TestEntity.class).onConflict(TestEntity::getName).executeBatch(entities, em));
+    }
 }
