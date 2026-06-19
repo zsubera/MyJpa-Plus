@@ -2,6 +2,7 @@ package com.zsubera.jpa.update;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+import com.zsubera.jpa.spec.ParentEntity;
 import com.zsubera.jpa.spec.QuerySpec;
 import com.zsubera.jpa.spec.TestApplication;
 import com.zsubera.jpa.spec.TestEntity;
@@ -934,5 +935,193 @@ class UpdateSpecTest {
             all.stream().noneMatch(e -> Integer.valueOf(10).equals(e.getStatus()) && "high".equals(e.getName())));
         assertTrue(all.stream().anyMatch(e -> Integer.valueOf(20).equals(e.getStatus()) && "high".equals(e.getName())));
         assertTrue(all.stream().anyMatch(e -> Integer.valueOf(30).equals(e.getStatus()) && "high".equals(e.getName())));
+    }
+
+    // ===== AbstractBulkOperationSpec exists/notExists/multiLike 测试 =====
+
+    @Test
+    void testUpdateWithExistsSubquery() {
+        ParentEntity p = new ParentEntity();
+        p.setCategory("vip");
+        p.setLevel(10);
+        em.persist(p);
+
+        TestEntity child = newEntity("child1", 1);
+        child.setParent(p);
+        repository.save(child);
+        repository.save(newEntity("orphan", 2));
+        em.flush();
+        em.clear();
+
+        // EXISTS ParentEntity with category=vip — non-correlated, returns true for all rows
+        int count = new UpdateSpec<>(TestEntity.class).set(TestEntity::getName, "has_parent")
+            .exists(ParentEntity.class, sub -> sub.eq(ParentEntity::getCategory, "vip")).execute(em);
+        em.flush();
+        em.clear();
+
+        assertEquals(2, count);
+    }
+
+    @Test
+    void testUpdateWithNotExistsSubquery() {
+        ParentEntity p = new ParentEntity();
+        p.setCategory("vip");
+        p.setLevel(10);
+        em.persist(p);
+
+        TestEntity child = newEntity("child1", 1);
+        child.setParent(p);
+        repository.save(child);
+        repository.save(newEntity("orphan", 2));
+        em.flush();
+        em.clear();
+
+        // Use a non-self-referencing NOT EXISTS
+        int count = new UpdateSpec<>(TestEntity.class).set(TestEntity::getName, "no_match")
+            .notExists(ParentEntity.class, sub -> sub.eq(ParentEntity::getCategory, "nonexistent")).execute(em);
+        em.flush();
+        em.clear();
+
+        assertEquals(2, count);
+    }
+
+    @Test
+    void testUpdateExistsNullSubEntityThrows() {
+        assertThrows(IllegalArgumentException.class,
+            () -> new UpdateSpec<>(TestEntity.class).set(TestEntity::getName, "x").exists(null, sub -> {
+            }));
+    }
+
+    @Test
+    void testUpdateExistsNullConfigThrows() {
+        assertThrows(IllegalArgumentException.class,
+            () -> new UpdateSpec<>(TestEntity.class).set(TestEntity::getName, "x").exists(TestEntity.class, null));
+    }
+
+    @Test
+    void testUpdateNotExistsNullSubEntityThrows() {
+        assertThrows(IllegalArgumentException.class,
+            () -> new UpdateSpec<>(TestEntity.class).set(TestEntity::getName, "x").notExists(null, sub -> {
+            }));
+    }
+
+    @Test
+    void testUpdateNotExistsNullConfigThrows() {
+        assertThrows(IllegalArgumentException.class,
+            () -> new UpdateSpec<>(TestEntity.class).set(TestEntity::getName, "x").notExists(TestEntity.class, null));
+    }
+
+    @Test
+    void testUpdateMultiLike() {
+        repository.save(newEntity("alice", 1));
+        repository.save(newEntity("bob", 2));
+        repository.save(newEntity("alicia", 3));
+        em.flush();
+        em.clear();
+
+        int count = new UpdateSpec<>(TestEntity.class).set(TestEntity::getName, "found")
+            .multiLike("ali", TestEntity::getName).execute(em);
+        em.flush();
+        em.clear();
+
+        assertEquals(2, count);
+    }
+
+    @Test
+    void testUpdateMultiLikeNullKeywordThrows() {
+        assertThrows(IllegalArgumentException.class, () -> new UpdateSpec<>(TestEntity.class)
+            .set(TestEntity::getName, "x").multiLike(null, TestEntity::getName));
+    }
+
+    @Test
+    void testUpdateMultiLikeNullFieldsThrows() {
+        assertThrows(IllegalArgumentException.class, () -> new UpdateSpec<>(TestEntity.class)
+            .set(TestEntity::getName, "x").multiLike("ali", (com.zsubera.jpa.spec.SFunction<TestEntity, ?>[])null));
+    }
+
+    @Test
+    void testUpdateMultiLikeNullFieldElementThrows() {
+        assertThrows(IllegalArgumentException.class, () -> new UpdateSpec<>(TestEntity.class)
+            .set(TestEntity::getName, "x").multiLike("ali", (com.zsubera.jpa.spec.SFunction<TestEntity, ?>)null));
+    }
+
+    @Test
+    void testUpdateEqStrictNullValueThrows() {
+        assertThrows(IllegalArgumentException.class,
+            () -> new UpdateSpec<>(TestEntity.class).set(TestEntity::getName, "x").eqStrict(TestEntity::getName, null));
+    }
+
+    @Test
+    void testUpdateNeStrictNullValueThrows() {
+        assertThrows(IllegalArgumentException.class,
+            () -> new UpdateSpec<>(TestEntity.class).set(TestEntity::getName, "x").neStrict(TestEntity::getName, null));
+    }
+
+    @Test
+    void testUpdateEqStrictWithConditionFalse() {
+        repository.save(newEntity("a", 1));
+        em.flush();
+        em.clear();
+
+        int count = new UpdateSpec<>(TestEntity.class).set(TestEntity::getName, "updated")
+            .eqStrict(false, TestEntity::getName, "a").allowUnconditional(true).updateAll(em);
+        em.flush();
+        em.clear();
+
+        assertEquals(1, count);
+    }
+
+    @Test
+    void testUpdateNeStrictWithConditionFalse() {
+        repository.save(newEntity("a", 1));
+        em.flush();
+        em.clear();
+
+        int count = new UpdateSpec<>(TestEntity.class).set(TestEntity::getName, "updated")
+            .neStrict(false, TestEntity::getName, "b").allowUnconditional(true).updateAll(em);
+        em.flush();
+        em.clear();
+
+        assertEquals(1, count);
+    }
+
+    @Test
+    void testUpdateMultiLikeWithConditionFalse() {
+        repository.save(newEntity("alice", 1));
+        em.flush();
+        em.clear();
+
+        int count = new UpdateSpec<>(TestEntity.class).set(TestEntity::getName, "found")
+            .multiLike(false, "ali", TestEntity::getName).allowUnconditional(true).updateAll(em);
+        em.flush();
+        em.clear();
+
+        assertEquals(1, count);
+    }
+
+    @Test
+    void testUpdateOrGroupNullConfigThrows() {
+        assertThrows(IllegalArgumentException.class,
+            () -> new UpdateSpec<>(TestEntity.class).set(TestEntity::getName, "x").or(null));
+    }
+
+    @Test
+    void testUpdateNotGroupNullConfigThrows() {
+        assertThrows(IllegalArgumentException.class,
+            () -> new UpdateSpec<>(TestEntity.class).set(TestEntity::getName, "x").not(null));
+    }
+
+    @Test
+    void testUpdateOrGroupEmptyThrows() {
+        assertThrows(IllegalArgumentException.class,
+            () -> new UpdateSpec<>(TestEntity.class).set(TestEntity::getName, "x").or(o -> {
+            }));
+    }
+
+    @Test
+    void testUpdateNotGroupEmptyThrows() {
+        assertThrows(IllegalArgumentException.class,
+            () -> new UpdateSpec<>(TestEntity.class).set(TestEntity::getName, "x").not(n -> {
+            }));
     }
 }
