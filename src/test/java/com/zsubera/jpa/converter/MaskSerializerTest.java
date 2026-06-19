@@ -138,4 +138,132 @@ class MaskSerializerTest {
 
         public String normal;
     }
+
+    @Test
+    @DisplayName("PHONE mask: very short phone (<3 chars)")
+    void shouldMaskVeryShortPhone() {
+        assertEquals("*", MaskSerializer.mask("1", MaskType.PHONE));
+        assertEquals("**", MaskSerializer.mask("12", MaskType.PHONE));
+    }
+
+    @Test
+    @DisplayName("PHONE mask: medium phone (3-6 chars)")
+    void shouldMaskMediumPhone() {
+        assertEquals("13****", MaskSerializer.mask("138123", MaskType.PHONE));
+        assertEquals("12****", MaskSerializer.mask("123456", MaskType.PHONE));
+    }
+
+    @Test
+    @DisplayName("ID_CARD mask: very short ID (<4 chars)")
+    void shouldMaskVeryShortIdCard() {
+        assertEquals("*", MaskSerializer.mask("1", MaskType.ID_CARD));
+        assertEquals("**", MaskSerializer.mask("12", MaskType.ID_CARD));
+        assertEquals("***", MaskSerializer.mask("123", MaskType.ID_CARD));
+    }
+
+    @Test
+    @DisplayName("ID_CARD mask: medium ID (4-7 chars)")
+    void shouldMaskMediumIdCard() {
+        assertEquals("1**4", MaskSerializer.mask("1234", MaskType.ID_CARD));
+        assertEquals("1*****7", MaskSerializer.mask("1234567", MaskType.ID_CARD));
+    }
+
+    @Test
+    @DisplayName("BANK_CARD mask: short card (<4 chars)")
+    void shouldMaskShortBankCard() {
+        assertEquals("*", MaskSerializer.mask("1", MaskType.BANK_CARD));
+        assertEquals("**", MaskSerializer.mask("12", MaskType.BANK_CARD));
+        assertEquals("***", MaskSerializer.mask("123", MaskType.BANK_CARD));
+    }
+
+    @Test
+    @DisplayName("BANK_CARD mask: medium card (4-7 chars)")
+    void shouldMaskMediumBankCard() {
+        assertEquals("****56", MaskSerializer.mask("123456", MaskType.BANK_CARD));
+        assertEquals("****5678", MaskSerializer.mask("12345678", MaskType.BANK_CARD));
+    }
+
+    @Test
+    @DisplayName("BANK_CARD mask: long card (>=8 chars)")
+    void shouldMaskLongBankCard() {
+        assertEquals("****5678", MaskSerializer.mask("12345678", MaskType.BANK_CARD));
+    }
+
+    @Test
+    @DisplayName("ADDRESS mask: short address (<=2 chars)")
+    void shouldNotMaskShortAddress() {
+        assertEquals("AB", MaskSerializer.mask("AB", MaskType.ADDRESS));
+    }
+
+    @Test
+    @DisplayName("ADDRESS mask: medium address (3-6 chars)")
+    void shouldMaskMediumAddress() {
+        assertEquals("AB***", MaskSerializer.mask("ABCDE", MaskType.ADDRESS));
+    }
+
+    @Test
+    @DisplayName("ADDRESS mask: long address (>6 chars)")
+    void shouldMaskLongAddress() {
+        assertEquals("ABCDEF*****", MaskSerializer.mask("ABCDEFGHIJK", MaskType.ADDRESS));
+    }
+
+    @Test
+    @DisplayName("LICENSE_PLATE mask: single char")
+    void shouldNotMaskSingleCharPlate() {
+        assertEquals("A", MaskSerializer.mask("A", MaskType.LICENSE_PLATE));
+    }
+
+    @Test
+    @DisplayName("LICENSE_PLATE mask: two chars")
+    void shouldMaskTwoCharPlate() {
+        assertEquals("A*", MaskSerializer.mask("AB", MaskType.LICENSE_PLATE));
+    }
+
+    @Test
+    @DisplayName("LICENSE_PLATE mask: three chars")
+    void shouldMaskThreeCharPlate() {
+        assertEquals("A*C", MaskSerializer.mask("ABC", MaskType.LICENSE_PLATE));
+    }
+
+    @Test
+    @DisplayName("LICENSE_PLATE mask: long plate (>=4 chars)")
+    void shouldMaskLongPlate() {
+        assertEquals("AB**E", MaskSerializer.mask("ABCDE", MaskType.LICENSE_PLATE));
+    }
+
+    @Test
+    @DisplayName("Constructor with default mask type")
+    void shouldCreateDefaultMaskSerializer() {
+        MaskSerializer serializer = new MaskSerializer();
+        assertNotNull(serializer);
+    }
+
+    @Test
+    @DisplayName("Constructor with specific mask type")
+    void shouldCreateSpecificMaskSerializer() {
+        MaskSerializer serializer = new MaskSerializer(MaskType.PHONE);
+        assertNotNull(serializer);
+    }
+
+    @Test
+    @DisplayName("serialize method writes masked value")
+    void shouldSerializeMaskedValue() throws Exception {
+        MaskSerializer serializer = new MaskSerializer(MaskType.PHONE);
+        java.io.StringWriter sw = new java.io.StringWriter();
+        com.fasterxml.jackson.core.JsonGenerator gen = new com.fasterxml.jackson.core.JsonFactory().createGenerator(sw);
+        serializer.serialize("13812345678", gen, null);
+        gen.flush();
+        assertTrue(sw.toString().contains("138****5678"));
+    }
+
+    @Test
+    @DisplayName("serialize method writes null for null value")
+    void shouldSerializeNullValue() throws Exception {
+        MaskSerializer serializer = new MaskSerializer(MaskType.PHONE);
+        java.io.StringWriter sw = new java.io.StringWriter();
+        com.fasterxml.jackson.core.JsonGenerator gen = new com.fasterxml.jackson.core.JsonFactory().createGenerator(sw);
+        serializer.serialize(null, gen, null);
+        gen.flush();
+        assertTrue(sw.toString().contains("null"));
+    }
 }
