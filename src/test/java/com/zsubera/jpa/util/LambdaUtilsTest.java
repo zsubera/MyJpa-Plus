@@ -113,4 +113,112 @@ class LambdaUtilsTest {
         assertEquals("name", name1);
         assertEquals(name1, name2);
     }
+
+    @Test
+    void shouldEvictCacheWhenSizeExceedsMax() throws Exception {
+        int oldMax = LambdaUtils.getMaxCacheSize();
+        try {
+            LambdaUtils.setMaxCacheSize(10);
+            LambdaUtils.clearCache();
+
+            // Fill cache beyond maxCacheSize
+            java.lang.reflect.Field cacheField = LambdaUtils.class.getDeclaredField("CACHE");
+            cacheField.setAccessible(true);
+            @SuppressWarnings("unchecked")
+            java.util.concurrent.ConcurrentHashMap<String, String> cache =
+                (java.util.concurrent.ConcurrentHashMap<String, String>)cacheField.get(null);
+
+            for (int i = 0; i < 20; i++) {
+                cache.put("class" + i + "#method" + i, "prop" + i);
+            }
+            assertTrue(cache.size() > 10);
+
+            // Reset call counter to trigger eviction check on next call
+            java.lang.reflect.Field counterField = LambdaUtils.class.getDeclaredField("CALL_COUNTER");
+            counterField.setAccessible(true);
+            java.util.concurrent.atomic.AtomicInteger counter =
+                (java.util.concurrent.atomic.AtomicInteger)counterField.get(null);
+            // Set counter so next increment hits multiple of 100
+            counter.set(99);
+
+            // This call triggers evictCacheIfNeeded via getPropertyName
+            LambdaUtils.getPropertyName(TestBean::getName);
+
+            // Cache should have been evicted
+            assertTrue(cache.size() <= 10, "Cache should be evicted, but size is " + cache.size());
+        } finally {
+            LambdaUtils.setMaxCacheSize(oldMax);
+            LambdaUtils.clearCache();
+        }
+    }
+
+    @Test
+    void shouldRejectObjectMethodsInMethodToProperty() throws Exception {
+        java.lang.reflect.Method m = LambdaUtils.class.getDeclaredMethod("methodToProperty", String.class);
+        m.setAccessible(true);
+
+        assertThrows(java.lang.reflect.InvocationTargetException.class, () -> m.invoke(null, "hashCode"));
+        assertThrows(java.lang.reflect.InvocationTargetException.class, () -> m.invoke(null, "toString"));
+        assertThrows(java.lang.reflect.InvocationTargetException.class, () -> m.invoke(null, "notify"));
+        assertThrows(java.lang.reflect.InvocationTargetException.class, () -> m.invoke(null, "notifyAll"));
+        assertThrows(java.lang.reflect.InvocationTargetException.class, () -> m.invoke(null, "wait"));
+    }
+
+    @Test
+    void shouldHandleMethodToPropertyEdgeCases() throws Exception {
+        java.lang.reflect.Method m = LambdaUtils.class.getDeclaredMethod("methodToProperty", String.class);
+        m.setAccessible(true);
+
+        assertEquals("name", m.invoke(null, "getName"));
+        assertEquals("active", m.invoke(null, "isActive"));
+        assertEquals("status", m.invoke(null, "getStatus"));
+        assertEquals("class", m.invoke(null, "getClass"));
+        assertEquals("count", m.invoke(null, "count"));
+    }
+
+    @Test
+    void shouldNotEvictWhenCacheBelowThreshold() throws Exception {
+        LambdaUtils.clearCache();
+        int oldMax = LambdaUtils.getMaxCacheSize();
+        try {
+            LambdaUtils.setMaxCacheSize(10000);
+            LambdaUtils.getPropertyName(TestBean::getName);
+            int sizeBefore = LambdaUtils.cacheSize();
+
+            // Reset counter to trigger check
+            java.lang.reflect.Field counterField = LambdaUtils.class.getDeclaredField("CALL_COUNTER");
+            counterField.setAccessible(true);
+            java.util.concurrent.atomic.AtomicInteger counter =
+                (java.util.concurrent.atomic.AtomicInteger)counterField.get(null);
+            counter.set(99);
+
+            LambdaUtils.getPropertyName(TestBean::getName);
+            assertEquals(sizeBefore, LambdaUtils.cacheSize());
+        } finally {
+            LambdaUtils.setMaxCacheSize(oldMax);
+            LambdaUtils.clearCache();
+        }
+    }
+
+    @Test
+    void shouldIgnoreCacheSizeSetToZero() {
+        int old = LambdaUtils.getMaxCacheSize();
+        try {
+            LambdaUtils.setMaxCacheSize(0);
+            assertEquals(old, LambdaUtils.getMaxCacheSize());
+        } finally {
+            LambdaUtils.setMaxCacheSize(old);
+        }
+    }
+
+    @Test
+    void shouldIgnoreCacheSizeSetToNegative() {
+        int old = LambdaUtils.getMaxCacheSize();
+        try {
+            LambdaUtils.setMaxCacheSize(-1);
+            assertEquals(old, LambdaUtils.getMaxCacheSize());
+        } finally {
+            LambdaUtils.setMaxCacheSize(old);
+        }
+    }
 }
