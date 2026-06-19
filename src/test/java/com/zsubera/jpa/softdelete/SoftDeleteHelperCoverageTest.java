@@ -539,4 +539,40 @@ class SoftDeleteHelperCoverageTest {
         assertThrows(IllegalStateException.class,
             () -> SoftDeleteHelper.softDeleteAll(em, SoftDeleteEnumTestEntity.class, false));
     }
+
+    @Test
+    void testSoftDeleteAllBooleanNotDeleted() {
+        boolRepo.save(buildBool("a", true));
+        boolRepo.flush();
+
+        int count = SoftDeleteHelper.softDeleteAll(em, SoftDeleteTestEntity.class, true, -1);
+        assertEquals(0, count);
+    }
+
+    @Test
+    void testSoftDeleteAllIntNotDeleted() {
+        intRepo.save(buildInt("a", 1));
+        intRepo.flush();
+
+        int count = SoftDeleteHelper.softDeleteAll(em, SoftDeleteIntTestEntity.class, true, -1);
+        assertEquals(0, count);
+    }
+
+    @Test
+    void testSoftDeleteAllStringNotDeleted() {
+        strRepo.save(buildStr("a", "Y"));
+        strRepo.flush();
+
+        int count = SoftDeleteHelper.softDeleteAll(em, SoftDeleteStringTestEntity.class, true, -1);
+        assertEquals(0, count);
+    }
+
+    @Test
+    void testSoftDeleteAllEnumNotDeleted() {
+        enumRepo.save(buildEnum("a", Status.ARCHIVED));
+        enumRepo.flush();
+
+        int count = SoftDeleteHelper.softDeleteAll(em, SoftDeleteEnumTestEntity.class, true, -1);
+        assertEquals(0, count);
+    }
 }
