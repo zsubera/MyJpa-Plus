@@ -37,6 +37,9 @@ class BatchSaveTemplateTest {
     @Autowired
     private TestEntityRepository repository;
 
+    @Autowired
+    private jakarta.persistence.EntityManager entityManager;
+
     @BeforeEach
     void cleanUp() {
         repository.deleteAll();
@@ -202,5 +205,118 @@ class BatchSaveTemplateTest {
         // But executeBatchSave will call persist for each, and empty list means no-op
         List<TestEntity> saved = batchSaveTemplate.saveAllBatchedInSeparateTransactions(entities, 0);
         assertEquals(1, saved.size());
+    }
+
+    @Test
+    void testSaveAllBatchedWithFlushedExisting() {
+        // Save and flush to ensure entity is managed, then merge path
+        TestEntity existing = new TestEntity();
+        existing.setName("flushed");
+        existing.setStatus(0);
+        TestEntity saved = repository.saveAndFlush(existing);
+
+        // Now clear and re-save - this should trigger merge
+        entityManager.clear();
+        TestEntity detached = new TestEntity();
+        detached.setId(saved.getId());
+        detached.setName("updated");
+        detached.setStatus(1);
+
+        List<TestEntity> result = batchSaveTemplate.saveAllBatched(List.of(detached), 10);
+        assertEquals(1, result.size());
+    }
+
+    @Test
+    void testSaveAllBatchedInSeparateTransactionsWithExisting() {
+        TestEntity existing = new TestEntity();
+        existing.setName("sepExisting");
+        existing.setStatus(0);
+        TestEntity saved = repository.saveAndFlush(existing);
+
+        entityManager.clear();
+        TestEntity detached = new TestEntity();
+        detached.setId(saved.getId());
+        detached.setName("sepUpdated");
+        detached.setStatus(1);
+
+        List<TestEntity> result = batchSaveTemplate.saveAllBatchedInSeparateTransactions(List.of(detached), 10);
+        assertEquals(1, result.size());
+    }
+
+    @Test
+    void testSaveAllBatchedEvictionTriggered() {
+        // Fill cache to trigger eviction
+        for (int i = 0; i < 1100; i++) {
+            TestEntity e = new TestEntity();
+            e.setName("evict" + i);
+            e.setStatus(i);
+            // Use reflection to add to ID_METHOD_CACHE
+            try {
+                java.lang.reflect.Field cacheField = BatchSaveTemplate.class.getDeclaredField("ID_METHOD_CACHE");
+                cacheField.setAccessible(true);
+                @SuppressWarnings("unchecked")
+                java.util.concurrent.ConcurrentMap<java.lang.Class<?>, java.lang.reflect.Method> cache =
+                    (java.util.concurrent.ConcurrentMap<java.lang.Class<?>, java.lang.reflect.Method>)cacheField
+                        .get(null);
+                cache.put(e.getClass(), e.getClass().getMethod("getId"));
+            } catch (Exception ignored) {
+            }
+        }
+
+        // Now save entities to trigger eviction
+        List<TestEntity> entities = new ArrayList<>();
+        for (int i = 0; i < 3; i++) {
+            TestEntity e = new TestEntity();
+            e.setName("afterEvict" + i);
+            e.setStatus(i);
+            entities.add(e);
+        }
+        List<TestEntity> saved = batchSaveTemplate.saveAllBatched(entities, 2);
+        assertEquals(3, saved.size());
+    }
+
+    @Test
+    void testSaveAllBatchedPureWithBatchSizeOne() {
+        List<TestEntity> entities = new ArrayList<>();
+        for (int i = 0; i < 3; i++) {
+            TestEntity e = new TestEntity();
+            e.setName("bs1" + i);
+            e.setStatus(i);
+            entities.add(e);
+        }
+
+        List<TestEntity> saved = batchSaveTemplate.saveAllBatchedPure(entities, 1);
+        assertEquals(3, saved.size());
+        assertEquals(3, repository.count());
+    }
+
+    @Test
+    void testSaveAllBatchedWithBatchSizeLargerThanList() {
+        List<TestEntity> entities = new ArrayList<>();
+        for (int i = 0; i < 2; i++) {
+            TestEntity e = new TestEntity();
+            e.setName("large" + i);
+            e.setStatus(i);
+            entities.add(e);
+        }
+
+        List<TestEntity> saved = batchSaveTemplate.saveAllBatched(entities, 100);
+        assertEquals(2, saved.size());
+        assertEquals(2, repository.count());
+    }
+
+    @Test
+    void testSaveAllBatchedPureWithBatchSizeLargerThanList() {
+        List<TestEntity> entities = new ArrayList<>();
+        for (int i = 0; i < 2; i++) {
+            TestEntity e = new TestEntity();
+            e.setName("pureLarge" + i);
+            e.setStatus(i);
+            entities.add(e);
+        }
+
+        List<TestEntity> saved = batchSaveTemplate.saveAllBatchedPure(entities, 100);
+        assertEquals(2, saved.size());
+        assertEquals(2, repository.count());
     }
 }
