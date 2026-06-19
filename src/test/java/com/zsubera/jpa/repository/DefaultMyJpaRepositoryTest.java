@@ -438,4 +438,108 @@ class DefaultMyJpaRepositoryTest {
         entity.setDeleted(deleted);
         return repository.save(entity);
     }
+
+    // ---- deleteAll hard delete audit path ----
+
+    @Test
+    void deleteAll_hardDeleteWhenAutoFilterDisabled() {
+        DefaultMyJpaRepository.setAutoFilterEnabled(false);
+        DefaultMyJpaRepository.setBlockUnconditionalDelete(false);
+        try {
+            saveEntity("a", false);
+            saveEntity("b", false);
+            repository.deleteAll();
+            assertEquals(0, repository.count());
+        } finally {
+            DefaultMyJpaRepository.setAutoFilterEnabled(true);
+            DefaultMyJpaRepository.setBlockUnconditionalDelete(true);
+        }
+    }
+
+    // ---- deleteAllById blocked + hard delete paths ----
+
+    @Test
+    void deleteAllById_blockedWhenAutoFilterDisabled() {
+        DefaultMyJpaRepository.setAutoFilterEnabled(false);
+        DefaultMyJpaRepository.setBlockUnconditionalDelete(true);
+        try {
+            SoftDeleteRepoTestEntity e1 = saveEntity("blocked", false);
+            assertThrows(Exception.class, () -> repository.deleteAllById(List.of(e1.getId())));
+        } finally {
+            DefaultMyJpaRepository.setAutoFilterEnabled(true);
+        }
+    }
+
+    @Test
+    void deleteInBatch_hardDeleteWhenAutoFilterDisabled() {
+        DefaultMyJpaRepository.setAutoFilterEnabled(false);
+        DefaultMyJpaRepository.setBlockUnconditionalDelete(false);
+        try {
+            SoftDeleteRepoTestEntity e1 = saveEntity("batchHard", false);
+            repository.deleteInBatch(List.of(e1));
+            assertEquals(0, repository.count());
+        } finally {
+            DefaultMyJpaRepository.setAutoFilterEnabled(true);
+            DefaultMyJpaRepository.setBlockUnconditionalDelete(true);
+        }
+    }
+
+    // ---- deleteAllInBatch blocked + hard delete ----
+
+    @Test
+    void deleteAllInBatch_hardDeleteWhenAutoFilterDisabled() {
+        DefaultMyJpaRepository.setAutoFilterEnabled(false);
+        DefaultMyJpaRepository.setBlockUnconditionalDelete(false);
+        try {
+            saveEntity("aibHard", false);
+            repository.deleteAllInBatch();
+            assertEquals(0, repository.count());
+        } finally {
+            DefaultMyJpaRepository.setAutoFilterEnabled(true);
+            DefaultMyJpaRepository.setBlockUnconditionalDelete(true);
+        }
+    }
+
+    // ---- ConfigProvider fallback paths ----
+
+    @Test
+    void setAutoFilterEnabled_globalConfigProviderNull() throws Exception {
+        java.lang.reflect.Field f = DefaultMyJpaRepository.class.getDeclaredField("globalConfigProvider");
+        f.setAccessible(true);
+        Object old = f.get(null);
+        try {
+            f.set(null, null);
+            DefaultMyJpaRepository.setAutoFilterEnabled(false);
+            assertFalse(DefaultMyJpaRepository.isAutoFilterEnabled());
+        } finally {
+            f.set(null, old);
+        }
+    }
+
+    @Test
+    void setBlockUnconditionalDelete_globalConfigProviderNull() throws Exception {
+        java.lang.reflect.Field f = DefaultMyJpaRepository.class.getDeclaredField("globalConfigProvider");
+        f.setAccessible(true);
+        Object old = f.get(null);
+        try {
+            f.set(null, null);
+            DefaultMyJpaRepository.setBlockUnconditionalDelete(false);
+            assertFalse(DefaultMyJpaRepository.isBlockUnconditionalDelete());
+        } finally {
+            f.set(null, old);
+        }
+    }
+
+    @Test
+    void isBlockUnconditionalDelete_configProviderNull() throws Exception {
+        java.lang.reflect.Field f = DefaultMyJpaRepository.class.getDeclaredField("globalConfigProvider");
+        f.setAccessible(true);
+        Object old = f.get(null);
+        try {
+            f.set(null, null);
+            assertTrue(DefaultMyJpaRepository.isBlockUnconditionalDelete());
+        } finally {
+            f.set(null, old);
+        }
+    }
 }
