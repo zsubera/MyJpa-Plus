@@ -294,4 +294,162 @@ class SoftDeleteHelperCoverageTest {
         e.setStatus(status);
         return e;
     }
+
+    @Test
+    void testSoftDeleteAllBooleanWithMaxRowsExceeded() {
+        boolRepo.save(buildBool("a", false));
+        boolRepo.save(buildBool("b", false));
+        boolRepo.flush();
+
+        assertThrows(IllegalStateException.class,
+            () -> SoftDeleteHelper.softDeleteAll(em, SoftDeleteTestEntity.class, true, 1));
+    }
+
+    @Test
+    void testSoftDeleteAllBooleanWithMaxRowsWithinLimit() {
+        boolRepo.save(buildBool("a", false));
+        boolRepo.flush();
+
+        int count = SoftDeleteHelper.softDeleteAll(em, SoftDeleteTestEntity.class, true, 1);
+        assertEquals(1, count);
+    }
+
+    @Test
+    void testSoftDeleteAllIntWithMaxRowsExceeded() {
+        intRepo.save(buildInt("a", 0));
+        intRepo.save(buildInt("b", 0));
+        intRepo.flush();
+
+        assertThrows(IllegalStateException.class,
+            () -> SoftDeleteHelper.softDeleteAll(em, SoftDeleteIntTestEntity.class, true, 1));
+    }
+
+    @Test
+    void testSoftDeleteAllStringWithMaxRowsExceeded() {
+        strRepo.save(buildStr("a", "N"));
+        strRepo.save(buildStr("b", "N"));
+        strRepo.flush();
+
+        assertThrows(IllegalStateException.class,
+            () -> SoftDeleteHelper.softDeleteAll(em, SoftDeleteStringTestEntity.class, true, 1));
+    }
+
+    @Test
+    void testSoftDeleteAllEnumWithMaxRowsExceeded() {
+        enumRepo.save(buildEnum("a", Status.ACTIVE));
+        enumRepo.save(buildEnum("b", Status.ACTIVE));
+        enumRepo.flush();
+
+        assertThrows(IllegalStateException.class,
+            () -> SoftDeleteHelper.softDeleteAll(em, SoftDeleteEnumTestEntity.class, true, 1));
+    }
+
+    @Test
+    void testSoftDeleteByIdsBooleanWithBatch() {
+        var e1 = boolRepo.save(buildBool("a", false));
+        var e2 = boolRepo.save(buildBool("b", false));
+        boolRepo.flush();
+
+        int count = SoftDeleteHelper.softDeleteByIds(em, SoftDeleteTestEntity.class, List.of(e1.getId(), e2.getId()));
+        assertEquals(2, count);
+    }
+
+    @Test
+    void testSoftDeleteByIdsIntWithBatch() {
+        var e1 = intRepo.save(buildInt("a", 0));
+        var e2 = intRepo.save(buildInt("b", 0));
+        intRepo.flush();
+
+        int count =
+            SoftDeleteHelper.softDeleteByIds(em, SoftDeleteIntTestEntity.class, List.of(e1.getId(), e2.getId()));
+        assertEquals(2, count);
+    }
+
+    @Test
+    void testSoftDeleteByIdsStringWithBatch() {
+        var e1 = strRepo.save(buildStr("a", "N"));
+        var e2 = strRepo.save(buildStr("b", "N"));
+        strRepo.flush();
+
+        int count =
+            SoftDeleteHelper.softDeleteByIds(em, SoftDeleteStringTestEntity.class, List.of(e1.getId(), e2.getId()));
+        assertEquals(2, count);
+    }
+
+    @Test
+    void testSoftDeleteByIdsEnumWithBatch() {
+        var e1 = enumRepo.save(buildEnum("a", Status.ACTIVE));
+        var e2 = enumRepo.save(buildEnum("b", Status.ACTIVE));
+        enumRepo.flush();
+
+        int count =
+            SoftDeleteHelper.softDeleteByIds(em, SoftDeleteEnumTestEntity.class, List.of(e1.getId(), e2.getId()));
+        assertEquals(2, count);
+    }
+
+    @Test
+    void testSoftDeleteByIdsIntNullEm() {
+        assertThrows(IllegalArgumentException.class,
+            () -> SoftDeleteHelper.softDeleteByIds(null, SoftDeleteIntTestEntity.class, List.of(1L)));
+    }
+
+    @Test
+    void testSoftDeleteByIdsIntNullClass() {
+        assertThrows(IllegalArgumentException.class, () -> SoftDeleteHelper.softDeleteByIds(em, null, List.of(1L)));
+    }
+
+    @Test
+    void testSoftDeleteByIdsStringNullEm() {
+        assertThrows(IllegalArgumentException.class,
+            () -> SoftDeleteHelper.softDeleteByIds(null, SoftDeleteStringTestEntity.class, List.of(1L)));
+    }
+
+    @Test
+    void testSoftDeleteByIdsStringNullClass() {
+        assertThrows(IllegalArgumentException.class, () -> SoftDeleteHelper.softDeleteByIds(em, null, List.of(1L)));
+    }
+
+    @Test
+    void testSoftDeleteByIdsEnumNullEm() {
+        assertThrows(IllegalArgumentException.class,
+            () -> SoftDeleteHelper.softDeleteByIds(null, SoftDeleteEnumTestEntity.class, List.of(1L)));
+    }
+
+    @Test
+    void testSoftDeleteByIdsEnumNullClass() {
+        assertThrows(IllegalArgumentException.class, () -> SoftDeleteHelper.softDeleteByIds(em, null, List.of(1L)));
+    }
+
+    @Test
+    void testSoftDeleteAllIntNullEm() {
+        assertThrows(IllegalArgumentException.class,
+            () -> SoftDeleteHelper.softDeleteAll(null, SoftDeleteIntTestEntity.class, true));
+    }
+
+    @Test
+    void testSoftDeleteAllIntNullClass() {
+        assertThrows(IllegalArgumentException.class, () -> SoftDeleteHelper.softDeleteAll(em, null, true));
+    }
+
+    @Test
+    void testSoftDeleteAllStringNullEm() {
+        assertThrows(IllegalArgumentException.class,
+            () -> SoftDeleteHelper.softDeleteAll(null, SoftDeleteStringTestEntity.class, true));
+    }
+
+    @Test
+    void testSoftDeleteAllStringNullClass() {
+        assertThrows(IllegalArgumentException.class, () -> SoftDeleteHelper.softDeleteAll(em, null, true));
+    }
+
+    @Test
+    void testSoftDeleteAllEnumNullEm() {
+        assertThrows(IllegalArgumentException.class,
+            () -> SoftDeleteHelper.softDeleteAll(null, SoftDeleteEnumTestEntity.class, true));
+    }
+
+    @Test
+    void testSoftDeleteAllEnumNullClass() {
+        assertThrows(IllegalArgumentException.class, () -> SoftDeleteHelper.softDeleteAll(em, null, true));
+    }
 }
