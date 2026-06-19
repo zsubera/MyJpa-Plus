@@ -1283,6 +1283,26 @@ class UpdateSpecTest {
         }
     }
 
+    @Test
+    void testCheckRowCountSkipsWhenLimitIsMaxValue() {
+        com.zsubera.jpa.autoconfigure.MyJpaPlusGlobalConfig config =
+            com.zsubera.jpa.autoconfigure.GlobalConfigHolder.getConfig();
+        int oldLimit = config.getMaxBulkOperationRows();
+        try {
+            config.setMaxBulkOperationRows(Integer.MAX_VALUE);
+
+            repository.save(newEntity("a", 1));
+            em.flush();
+            em.clear();
+
+            int count = new UpdateSpec<>(TestEntity.class).set(TestEntity::getName, "x").eq(TestEntity::getStatus, 1)
+                .execute(em);
+            assertEquals(1, count);
+        } finally {
+            config.setMaxBulkOperationRows(oldLimit);
+        }
+    }
+
     // ===== multiLike 成功路径 =====
 
     @Test
