@@ -511,4 +511,241 @@ class PredicateHelperTest {
         entity.setStatus(status);
         em.persist(entity);
     }
+
+    // ===== LIKE/NOT_LIKE/startsWith/endsWith null 值路径 =====
+
+    @Test
+    void like_nullValue_returnsConjunction() {
+        CriteriaBuilder cb = em.getCriteriaBuilder();
+        CriteriaQuery<TestEntity> cq = cb.createQuery(TestEntity.class);
+        Root<TestEntity> root = cq.from(TestEntity.class);
+        Predicate p = PredicateHelper.like(root, "name", null, cb);
+        assertNotNull(p);
+        cq.where(p);
+        em.createQuery(cq).getResultList();
+    }
+
+    @Test
+    void notLike_nullValue_returnsDisjunction() {
+        CriteriaBuilder cb = em.getCriteriaBuilder();
+        CriteriaQuery<TestEntity> cq = cb.createQuery(TestEntity.class);
+        Root<TestEntity> root = cq.from(TestEntity.class);
+        Predicate p = PredicateHelper.notLike(root, "name", null, cb);
+        assertNotNull(p);
+    }
+
+    @Test
+    void notLike_withEscapeChar_nullValue_returnsDisjunction() {
+        CriteriaBuilder cb = em.getCriteriaBuilder();
+        CriteriaQuery<TestEntity> cq = cb.createQuery(TestEntity.class);
+        Root<TestEntity> root = cq.from(TestEntity.class);
+        Predicate p = PredicateHelper.notLike(root, "name", null, cb, '\\');
+        assertNotNull(p);
+    }
+
+    @Test
+    void startsWith_nullValue_returnsConjunction() {
+        CriteriaBuilder cb = em.getCriteriaBuilder();
+        CriteriaQuery<TestEntity> cq = cb.createQuery(TestEntity.class);
+        Root<TestEntity> root = cq.from(TestEntity.class);
+        Predicate p = PredicateHelper.startsWith(root, "name", null, cb);
+        assertNotNull(p);
+    }
+
+    @Test
+    void endsWith_nullValue_returnsConjunction() {
+        CriteriaBuilder cb = em.getCriteriaBuilder();
+        CriteriaQuery<TestEntity> cq = cb.createQuery(TestEntity.class);
+        Root<TestEntity> root = cq.from(TestEntity.class);
+        Predicate p = PredicateHelper.endsWith(root, "name", null, cb);
+        assertNotNull(p);
+    }
+
+    @Test
+    void contains_nullValue_returnsConjunction() {
+        CriteriaBuilder cb = em.getCriteriaBuilder();
+        CriteriaQuery<TestEntity> cq = cb.createQuery(TestEntity.class);
+        Root<TestEntity> root = cq.from(TestEntity.class);
+        Predicate p = PredicateHelper.contains(root, "name", null, cb);
+        assertNotNull(p);
+    }
+
+    @Test
+    void likeIgnoreCase_nullValue_returnsConjunction() {
+        CriteriaBuilder cb = em.getCriteriaBuilder();
+        CriteriaQuery<TestEntity> cq = cb.createQuery(TestEntity.class);
+        Root<TestEntity> root = cq.from(TestEntity.class);
+        Predicate p = PredicateHelper.likeIgnoreCase(root, "name", null, cb);
+        assertNotNull(p);
+    }
+
+    @Test
+    void likeIgnoreCase_withEscapeChar_nullValue_returnsConjunction() {
+        CriteriaBuilder cb = em.getCriteriaBuilder();
+        CriteriaQuery<TestEntity> cq = cb.createQuery(TestEntity.class);
+        Root<TestEntity> root = cq.from(TestEntity.class);
+        Predicate p = PredicateHelper.likeIgnoreCase(root, "name", null, cb, '\\');
+        assertNotNull(p);
+    }
+
+    // ===== validateRange 边界路径 =====
+
+    @Test
+    void validateRange_startGreaterThanEnd_throws() {
+        assertThrows(IllegalArgumentException.class, () -> PredicateHelper.validateRange(10, 5));
+    }
+
+    @Test
+    void validateRange_startEqualsEnd_noThrow() {
+        assertDoesNotThrow(() -> PredicateHelper.validateRange(5, 5));
+    }
+
+    @Test
+    void validateRange_doubles_startGreaterThanEnd_throws() {
+        assertThrows(IllegalArgumentException.class, () -> PredicateHelper.validateRange(10.5, 5.5));
+    }
+
+    @Test
+    void validateRange_doubles_startEqualsEnd_noThrow() {
+        assertDoesNotThrow(() -> PredicateHelper.validateRange(5.5, 5.5));
+    }
+
+    // ===== resolveSimplePredicate null 参数校验 =====
+
+    @Test
+    void resolveSimplePredicate_nullPath_throws() {
+        CriteriaBuilder cb = em.getCriteriaBuilder();
+        ConditionNode.SimpleNode node = new ConditionNode.SimpleNode("name", "test", ConditionNode.Op.EQ);
+        assertThrows(IllegalArgumentException.class, () -> PredicateHelper.resolveSimplePredicate(null, node, cb));
+    }
+
+    @Test
+    void resolveSimplePredicate_nullNode_throws() {
+        CriteriaBuilder cb = em.getCriteriaBuilder();
+        CriteriaQuery<TestEntity> cq = cb.createQuery(TestEntity.class);
+        Root<TestEntity> root = cq.from(TestEntity.class);
+        assertThrows(IllegalArgumentException.class, () -> PredicateHelper.resolveSimplePredicate(root, null, cb));
+    }
+
+    @Test
+    void resolveSimplePredicate_nullCb_throws() {
+        CriteriaQuery<TestEntity> cq = em.getCriteriaBuilder().createQuery(TestEntity.class);
+        Root<TestEntity> root = cq.from(TestEntity.class);
+        ConditionNode.SimpleNode node = new ConditionNode.SimpleNode("name", "test", ConditionNode.Op.EQ);
+        assertThrows(IllegalArgumentException.class, () -> PredicateHelper.resolveSimplePredicate(root, node, null));
+    }
+
+    // ===== resolveSimplePredicate 各 Op null 值路径 =====
+
+    @Test
+    void resolveSimplePredicate_like_nullValue() {
+        CriteriaBuilder cb = em.getCriteriaBuilder();
+        CriteriaQuery<TestEntity> cq = cb.createQuery(TestEntity.class);
+        Root<TestEntity> root = cq.from(TestEntity.class);
+        ConditionNode.SimpleNode node = new ConditionNode.SimpleNode("name", null, ConditionNode.Op.LIKE);
+        Predicate p = PredicateHelper.resolveSimplePredicate(root, node, cb);
+        assertNotNull(p);
+    }
+
+    @Test
+    void resolveSimplePredicate_notLike_nullValue() {
+        CriteriaBuilder cb = em.getCriteriaBuilder();
+        CriteriaQuery<TestEntity> cq = cb.createQuery(TestEntity.class);
+        Root<TestEntity> root = cq.from(TestEntity.class);
+        ConditionNode.SimpleNode node = new ConditionNode.SimpleNode("name", null, ConditionNode.Op.NOT_LIKE);
+        Predicate p = PredicateHelper.resolveSimplePredicate(root, node, cb);
+        assertNotNull(p);
+    }
+
+    @Test
+    void resolveSimplePredicate_eqIgnoreCase_nullValue() {
+        CriteriaBuilder cb = em.getCriteriaBuilder();
+        CriteriaQuery<TestEntity> cq = cb.createQuery(TestEntity.class);
+        Root<TestEntity> root = cq.from(TestEntity.class);
+        ConditionNode.SimpleNode node = new ConditionNode.SimpleNode("name", null, ConditionNode.Op.EQ_IGNORE_CASE);
+        Predicate p = PredicateHelper.resolveSimplePredicate(root, node, cb);
+        assertNotNull(p);
+    }
+
+    @Test
+    void resolveSimplePredicate_neIgnoreCase_nullValue() {
+        CriteriaBuilder cb = em.getCriteriaBuilder();
+        CriteriaQuery<TestEntity> cq = cb.createQuery(TestEntity.class);
+        Root<TestEntity> root = cq.from(TestEntity.class);
+        ConditionNode.SimpleNode node = new ConditionNode.SimpleNode("name", null, ConditionNode.Op.NE_IGNORE_CASE);
+        Predicate p = PredicateHelper.resolveSimplePredicate(root, node, cb);
+        assertNotNull(p);
+    }
+
+    @Test
+    void resolveSimplePredicate_likeIgnoreCase_nullValue() {
+        CriteriaBuilder cb = em.getCriteriaBuilder();
+        CriteriaQuery<TestEntity> cq = cb.createQuery(TestEntity.class);
+        Root<TestEntity> root = cq.from(TestEntity.class);
+        ConditionNode.SimpleNode node = new ConditionNode.SimpleNode("name", null, ConditionNode.Op.LIKE_IGNORE_CASE);
+        Predicate p = PredicateHelper.resolveSimplePredicate(root, node, cb);
+        assertNotNull(p);
+    }
+
+    // ===== resolveSimplePredicate IN/NOT_IN 边界 =====
+
+    @Test
+    void resolveSimplePredicate_in_nullValue_throws() {
+        CriteriaBuilder cb = em.getCriteriaBuilder();
+        CriteriaQuery<TestEntity> cq = cb.createQuery(TestEntity.class);
+        Root<TestEntity> root = cq.from(TestEntity.class);
+        ConditionNode.SimpleNode node = new ConditionNode.SimpleNode("status", null, ConditionNode.Op.IN);
+        assertThrows(IllegalArgumentException.class, () -> PredicateHelper.resolveSimplePredicate(root, node, cb));
+    }
+
+    @Test
+    void resolveSimplePredicate_in_emptyCollection_returnsDisjunction() {
+        CriteriaBuilder cb = em.getCriteriaBuilder();
+        CriteriaQuery<TestEntity> cq = cb.createQuery(TestEntity.class);
+        Root<TestEntity> root = cq.from(TestEntity.class);
+        ConditionNode.SimpleNode node = new ConditionNode.SimpleNode("status", List.of(), ConditionNode.Op.IN);
+        Predicate p = PredicateHelper.resolveSimplePredicate(root, node, cb);
+        assertNotNull(p);
+    }
+
+    @Test
+    void resolveSimplePredicate_notIn_nullValue_throws() {
+        CriteriaBuilder cb = em.getCriteriaBuilder();
+        CriteriaQuery<TestEntity> cq = cb.createQuery(TestEntity.class);
+        Root<TestEntity> root = cq.from(TestEntity.class);
+        ConditionNode.SimpleNode node = new ConditionNode.SimpleNode("status", null, ConditionNode.Op.NOT_IN);
+        assertThrows(IllegalArgumentException.class, () -> PredicateHelper.resolveSimplePredicate(root, node, cb));
+    }
+
+    @Test
+    void resolveSimplePredicate_notIn_emptyCollection_returnsConjunction() {
+        CriteriaBuilder cb = em.getCriteriaBuilder();
+        CriteriaQuery<TestEntity> cq = cb.createQuery(TestEntity.class);
+        Root<TestEntity> root = cq.from(TestEntity.class);
+        ConditionNode.SimpleNode node = new ConditionNode.SimpleNode("status", List.of(), ConditionNode.Op.NOT_IN);
+        Predicate p = PredicateHelper.resolveSimplePredicate(root, node, cb);
+        assertNotNull(p);
+    }
+
+    // ===== resolveSimplePredicate BETWEEN/NOT_BETWEEN 异常 =====
+
+    @Test
+    void resolveSimplePredicate_between_invalidLength_throws() {
+        CriteriaBuilder cb = em.getCriteriaBuilder();
+        CriteriaQuery<TestEntity> cq = cb.createQuery(TestEntity.class);
+        Root<TestEntity> root = cq.from(TestEntity.class);
+        ConditionNode.SimpleNode node =
+            new ConditionNode.SimpleNode("status", new Comparable[] {1}, ConditionNode.Op.BETWEEN);
+        assertThrows(IllegalArgumentException.class, () -> PredicateHelper.resolveSimplePredicate(root, node, cb));
+    }
+
+    @Test
+    void resolveSimplePredicate_notBetween_invalidLength_throws() {
+        CriteriaBuilder cb = em.getCriteriaBuilder();
+        CriteriaQuery<TestEntity> cq = cb.createQuery(TestEntity.class);
+        Root<TestEntity> root = cq.from(TestEntity.class);
+        ConditionNode.SimpleNode node =
+            new ConditionNode.SimpleNode("status", new Comparable[] {1}, ConditionNode.Op.NOT_BETWEEN);
+        assertThrows(IllegalArgumentException.class, () -> PredicateHelper.resolveSimplePredicate(root, node, cb));
+    }
 }
