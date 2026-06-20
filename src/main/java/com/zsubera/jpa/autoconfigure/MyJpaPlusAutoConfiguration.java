@@ -181,6 +181,8 @@ public class MyJpaPlusAutoConfiguration {
     @org.springframework.stereotype.Component
     static class ModuleCompatibilityChecker {
 
+        private static final String ADD_OPENS_ARG = "--add-opens java.base/java.lang.invoke=ALL-UNNAMED";
+
         @jakarta.annotation.PostConstruct
         public void check() {
             checkModuleCompatibility();
@@ -194,12 +196,43 @@ public class MyJpaPlusAutoConfiguration {
             } catch (NoSuchMethodException e) {
                 log.warn("Unexpected: SerializedLambda.writeReplace() not found. LambdaUtils may not work correctly.");
             } catch (java.lang.reflect.InaccessibleObjectException | SecurityException e) {
-                log.warn(
-                    "Java module system restriction detected. LambdaUtils uses reflection on SerializedLambda.writeReplace(). "
-                        + "All lambda-based property name resolution will fail at runtime. "
-                        + "Fix: add this JVM argument: --add-opens java.base/java.lang.invoke=ALL-UNNAMED");
-                log.warn("Without the --add-opens argument, any code using SFunction method references "
-                    + "(e.g., QuerySpec, UpdateSpec, ProjectionSpec) will throw MyJpaPlusException with the fix suggestion.");
+                log.error("=".repeat(80));
+                log.error("MyJpa-Plus: Java module system restriction detected!");
+                log.error("=".repeat(80));
+                log.error("");
+                log.error("LambdaUtils uses reflection on SerializedLambda.writeReplace() to extract");
+                log.error("property names from method references (e.g., User::getName). Without the");
+                log.error("required JVM argument, ALL lambda-based queries will fail at runtime.");
+                log.error("");
+                log.error("Fix: Add this JVM argument to your application:");
+                log.error("");
+                log.error("  {}", ADD_OPENS_ARG);
+                log.error("");
+                log.error("How to apply the fix:");
+                log.error("");
+                log.error("  [Maven - spring-boot-maven-plugin]");
+                log.error("  <plugin>");
+                log.error("      <groupId>org.springframework.boot</groupId>");
+                log.error("      <artifactId>spring-boot-maven-plugin</artifactId>");
+                log.error("      <configuration>");
+                log.error("          <jvmArguments>");
+                log.error("              {}", ADD_OPENS_ARG);
+                log.error("          </jvmArguments>");
+                log.error("      </configuration>");
+                log.error("  </plugin>");
+                log.error("");
+                log.error("  [Gradle]");
+                log.error("  bootRun {");
+                log.error("      jvmArgs '{}'", ADD_OPENS_ARG);
+                log.error("  }");
+                log.error("");
+                log.error("  [Command Line]");
+                log.error("  java {} -jar your-app.jar", ADD_OPENS_ARG);
+                log.error("");
+                log.error("  [Environment Variable]");
+                log.error("  JAVA_TOOL_OPTIONS=\"{}\"", ADD_OPENS_ARG);
+                log.error("");
+                log.error("=".repeat(80));
             }
         }
     }
@@ -288,6 +321,26 @@ public class MyJpaPlusAutoConfiguration {
     }
 
     /**
+     * 创建缓存适配器 Bean。默认使用 {@link com.zsubera.jpa.template.QueryCacheManager}。
+     *
+     * <p>
+     * 用户可通过提供自定义 {@link com.zsubera.jpa.template.CacheAdapter} Bean 来替换为
+     * Redis、Caffeine 等分布式或近端缓存实现。
+     *
+     * @param cacheManager 查询缓存管理器（可能为 null，如果用户提供了自定义 CacheAdapter）
+     * @return CacheAdapter 实例
+     */
+    @Bean
+    @ConditionalOnMissingBean(com.zsubera.jpa.template.CacheAdapter.class)
+    public com.zsubera.jpa.template.CacheAdapter cacheAdapter(@org.springframework.beans.factory.annotation.Autowired(
+        required = false) com.zsubera.jpa.template.QueryCacheManager cacheManager) {
+        if (cacheManager != null) {
+            return cacheManager;
+        }
+        return com.zsubera.jpa.template.CacheAdapter.disabled();
+    }
+
+    /**
      * 创建缓存失效监听器 Bean，监听实体变更事件并自动清除相关查询缓存。
      *
      * @param cacheManager 查询缓存管理器
@@ -298,9 +351,9 @@ public class MyJpaPlusAutoConfiguration {
     @ConditionalOnProperty(prefix = "myjpa-plus.cache", name = "auto-invalidation-enabled", havingValue = "true",
         matchIfMissing = true)
     public com.zsubera.jpa.template.CacheInvalidationListener
-        cacheInvalidationListener(com.zsubera.jpa.template.QueryCacheManager cacheManager) {
+        cacheInvalidationListener(com.zsubera.jpa.template.CacheAdapter cacheAdapter) {
         log.info("CacheInvalidationListener enabled — query cache will auto-invalidate on entity modification");
-        return new com.zsubera.jpa.template.CacheInvalidationListener(cacheManager);
+        return new com.zsubera.jpa.template.CacheInvalidationListener(cacheAdapter);
     }
 
     /**

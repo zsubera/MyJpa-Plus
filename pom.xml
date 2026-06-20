@@ -149,6 +149,7 @@
                     <forkCount>1</forkCount>
                     <reuseForks>true</reuseForks>
                     <parallel>none</parallel>
+                    <argLine>--add-opens java.base/java.lang.invoke=ALL-UNNAMED</argLine>
                 </configuration>
             </plugin>
             <plugin>

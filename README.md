@@ -185,6 +185,54 @@ Optional<User> findByIdIncludingDeleted(@Param("id") Long id);
 
 ---
 
+## ⚠️ Java 17+ 模块系统兼容性（重要）
+
+MyJpa-Plus 使用反射访问 `SerializedLambda.writeReplace()` 来提取 Lambda 方法引用的属性名。在 Java 17+ 的模块系统下，需要添加 JVM 参数才能正常工作。
+
+**如果未配置，所有 Lambda 查询（如 `User::getName`）将在运行时抛出异常。**
+
+### 快速修复
+
+在启动命令中添加：
+
+```bash
+java --add-opens java.base/java.lang.invoke=ALL-UNNAMED -jar your-app.jar
+```
+
+### 构建工具配置
+
+**Maven**（`spring-boot-maven-plugin`）：
+
+```xml
+<plugin>
+    <groupId>org.springframework.boot</groupId>
+    <artifactId>spring-boot-maven-plugin</artifactId>
+    <configuration>
+        <jvmArguments>
+            --add-opens java.base/java.lang.invoke=ALL-UNNAMED
+        </jvmArguments>
+    </configuration>
+</plugin>
+```
+
+**Gradle**：
+
+```groovy
+bootRun {
+    jvmArgs '--add-opens java.base/java.lang.invoke=ALL-UNNAMED'
+}
+```
+
+**环境变量**（适用于所有启动方式）：
+
+```bash
+export JAVA_TOOL_OPTIONS="--add-opens java.base/java.lang.invoke=ALL-UNNAMED"
+```
+
+> **提示：** 应用启动时如果缺少此参数，MyJpa-Plus 会在日志中输出完整的修复命令。
+
+---
+
 ## 虚拟线程兼容性
 
 MyJpa-Plus 完全兼容 Java 21+ 虚拟线程（Virtual Threads）：

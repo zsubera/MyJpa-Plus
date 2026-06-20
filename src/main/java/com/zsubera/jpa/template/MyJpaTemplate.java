@@ -130,9 +130,9 @@ public class MyJpaTemplate implements MyJpaTemplateOperations {
     /** 查询默认超时时间（秒）。设置后所有查询将自动应用此超时。默认 -1 表示不设置。 */
     private volatile int defaultTimeoutSeconds = -1;
 
-    /** 可选的查询缓存管理器。注入后可使用 findAllCached() 方法。 */
+    /** 缓存适配器，支持可插拔的缓存后端（本地、Redis 等）。 */
     @Autowired(required = false)
-    private QueryCacheManager cacheManager;
+    private CacheAdapter cacheAdapter;
 
     /** 批量操作执行模板，封装 UpdateSpec/DeleteSpec/MergeSpec 的批量执行逻辑。 */
     private volatile BulkOperationTemplate bulkOperationTemplate;
@@ -270,19 +270,45 @@ public class MyJpaTemplate implements MyJpaTemplateOperations {
     /**
      * 设置查询缓存管理器。注入后可使用 {@link #findAllCached} 方法。
      *
+     * <p>
+     * 此方法保持向后兼容。内部将 {@link QueryCacheManager} 包装为 {@link CacheAdapter}。
+     * 新代码应优先使用 {@link #setCacheAdapter(CacheAdapter)}。
+     *
      * @param cacheManager 缓存管理器实例
      */
     public void setCacheManager(QueryCacheManager cacheManager) {
-        this.cacheManager = cacheManager;
+        this.cacheAdapter = cacheManager;
     }
 
     /**
-     * 获取查询缓存管理器。
+     * 获取查询缓存管理器（向后兼容）。
      *
      * @return 缓存管理器实例，可能为 null
      */
     public QueryCacheManager getCacheManager() {
-        return cacheManager;
+        return cacheAdapter instanceof QueryCacheManager qcm ? qcm : null;
+    }
+
+    /**
+     * 设置缓存适配器。注入后可使用 {@link #findAllCached} 方法。
+     *
+     * <p>
+     * 可注入任何 {@link CacheAdapter} 实现，包括 Redis、Caffeine 等分布式或近端缓存。
+     * 默认实现为 {@link QueryCacheManager}（本地 ConcurrentHashMap 缓存）。
+     *
+     * @param cacheAdapter 缓存适配器实例
+     */
+    public void setCacheAdapter(CacheAdapter cacheAdapter) {
+        this.cacheAdapter = cacheAdapter;
+    }
+
+    /**
+     * 获取缓存适配器。
+     *
+     * @return 缓存适配器实例，可能为 null
+     */
+    public CacheAdapter getCacheAdapter() {
+        return cacheAdapter;
     }
 
     /**
@@ -306,13 +332,7 @@ public class MyJpaTemplate implements MyJpaTemplateOperations {
      * @throws IllegalStateException 如果 MyJpaTemplate 未完全初始化
      */
     private BulkOperationTemplate getBulkOperationTemplate() {
-        if (bulkOperationTemplate == null) {
-            throw new IllegalStateException(
-                "MyJpaTemplate not fully initialized. This can happen if methods are called before "
-                    + "Spring context refresh completes. Ensure all dependencies are injected and "
-                    + "@PostConstruct has been invoked.");
-        }
-        return bulkOperationTemplate;
+        return requireInitialized(bulkOperationTemplate, "BulkOperationTemplate");
     }
 
     /**
@@ -322,13 +342,7 @@ public class MyJpaTemplate implements MyJpaTemplateOperations {
      * @throws IllegalStateException 如果 MyJpaTemplate 未完全初始化
      */
     private BatchSaveTemplate getBatchSaveTemplate() {
-        if (batchSaveTemplate == null) {
-            throw new IllegalStateException(
-                "MyJpaTemplate not fully initialized. This can happen if methods are called before "
-                    + "Spring context refresh completes. Ensure all dependencies are injected and "
-                    + "@PostConstruct has been invoked.");
-        }
-        return batchSaveTemplate;
+        return requireInitialized(batchSaveTemplate, "BatchSaveTemplate");
     }
 
     /**
@@ -338,13 +352,7 @@ public class MyJpaTemplate implements MyJpaTemplateOperations {
      * @throws IllegalStateException 如果 MyJpaTemplate 未完全初始化
      */
     private KeysetPaginationHelper getKeysetPaginationHelper() {
-        if (keysetPaginationHelper == null) {
-            throw new IllegalStateException(
-                "MyJpaTemplate not fully initialized. This can happen if methods are called before "
-                    + "Spring context refresh completes. Ensure all dependencies are injected and "
-                    + "@PostConstruct has been invoked.");
-        }
-        return keysetPaginationHelper;
+        return requireInitialized(keysetPaginationHelper, "KeysetPaginationHelper");
     }
 
     /**
@@ -358,15 +366,17 @@ public class MyJpaTemplate implements MyJpaTemplateOperations {
      * @param ttlSeconds 缓存过期时间（秒）
      * @param <T> 实体类型
      * @return 匹配实体列表
-     * @throws IllegalStateException 如果未配置 QueryCacheManager
+     * @throws IllegalStateException 如果未配置 CacheAdapter
      * @throws IllegalArgumentException 如果参数为 null 或 ttlSeconds 为负数
      */
     @Override
     @Transactional(readOnly = true)
     public <T> List<T> findAllCached(Class<T> entityClass, QuerySpec<T> spec, long ttlSeconds) {
-        if (cacheManager == null) {
-            throw new IllegalStateException("QueryCacheManager not configured. Call setCacheManager() first.");
+        if (cacheAdapter == null) {
+            throw new IllegalStateException(
+                "CacheAdapter not available. " + "Inject a CacheAdapter bean or use MyJpaTemplate.setCacheAdapter().");
         }
+        validateQueryParams(entityClass, spec);
         if (entityClass == null) {
             throw new IllegalArgumentException("entityClass must not be null");
         }
@@ -378,7 +388,7 @@ public class MyJpaTemplate implements MyJpaTemplateOperations {
         }
         // 使用 cacheKey() 包含实际参数值，避免不同参数值的查询产生相同的缓存键
         String cacheKey = entityClass.getSimpleName() + "@" + spec.cacheKey() + "@" + spec.getSort();
-        List<T> cached = cacheManager.get(cacheKey);
+        List<T> cached = cacheAdapter.get(cacheKey);
         if (cached != null) {
             log.debug("Cache hit for key: {}", cacheKey);
             return cached;
@@ -391,12 +401,12 @@ public class MyJpaTemplate implements MyJpaTemplateOperations {
                 .registerSynchronization(new org.springframework.transaction.support.TransactionSynchronization() {
                     @Override
                     public void afterCommit() {
-                        cacheManager.put(cacheKey, immutableResult, ttlSeconds);
+                        cacheAdapter.put(cacheKey, immutableResult, ttlSeconds);
                         log.debug("Cache populated after transaction commit for key: {}", cacheKey);
                     }
                 });
         } else {
-            cacheManager.put(cacheKey, immutableResult, ttlSeconds);
+            cacheAdapter.put(cacheKey, immutableResult, ttlSeconds);
         }
         return new ArrayList<>(result);
     }
@@ -454,12 +464,7 @@ public class MyJpaTemplate implements MyJpaTemplateOperations {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public <T> List<T> saveAllBatched(Iterable<T> entities, int batchSize) {
-        if (entities == null) {
-            throw new IllegalArgumentException("entities must not be null");
-        }
-        if (batchSize <= 0) {
-            throw new IllegalArgumentException("batchSize must be positive");
-        }
+        validateBatchParams(entities, "entities", batchSize);
         return getBatchSaveTemplate().saveAllBatched(entities, batchSize);
     }
 
@@ -482,12 +487,7 @@ public class MyJpaTemplate implements MyJpaTemplateOperations {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public <T> List<T> saveAllBatchedPure(Iterable<T> entities, int batchSize) {
-        if (entities == null) {
-            throw new IllegalArgumentException("entities must not be null");
-        }
-        if (batchSize <= 0) {
-            throw new IllegalArgumentException("batchSize must be positive");
-        }
+        validateBatchParams(entities, "entities", batchSize);
         return getBatchSaveTemplate().saveAllBatchedPure(entities, batchSize);
     }
 
@@ -513,12 +513,7 @@ public class MyJpaTemplate implements MyJpaTemplateOperations {
      */
     @Override
     public <T> List<T> saveAllBatchedInSeparateTransactions(Iterable<T> entities, int batchSize) {
-        if (entities == null) {
-            throw new IllegalArgumentException("entities must not be null");
-        }
-        if (batchSize <= 0) {
-            throw new IllegalArgumentException("batchSize must be positive");
-        }
+        validateBatchParams(entities, "entities", batchSize);
         return getBatchSaveTemplate().saveAllBatchedInSeparateTransactions(entities, batchSize);
     }
 
@@ -579,12 +574,7 @@ public class MyJpaTemplate implements MyJpaTemplateOperations {
     @Override
     @Transactional(readOnly = true)
     public <T> Optional<T> findOne(Class<T> entityClass, QuerySpec<T> spec) {
-        if (entityClass == null) {
-            throw new IllegalArgumentException("entityClass must not be null");
-        }
-        if (spec == null) {
-            throw new IllegalArgumentException("spec must not be null");
-        }
+        validateQueryParams(entityClass, spec);
         CriteriaBuilder cb = entityManager.getCriteriaBuilder();
         CriteriaQuery<T> cq = cb.createQuery(entityClass);
         Root<T> root = cq.from(entityClass);
@@ -613,12 +603,7 @@ public class MyJpaTemplate implements MyJpaTemplateOperations {
     @Override
     @Transactional(readOnly = true)
     public <T> long count(Class<T> entityClass, QuerySpec<T> spec) {
-        if (entityClass == null) {
-            throw new IllegalArgumentException("entityClass must not be null");
-        }
-        if (spec == null) {
-            throw new IllegalArgumentException("spec must not be null");
-        }
+        validateQueryParams(entityClass, spec);
         return count(entityClass, spec.toSpecification());
     }
 
@@ -633,12 +618,7 @@ public class MyJpaTemplate implements MyJpaTemplateOperations {
     @Override
     @Transactional(readOnly = true)
     public <T> long count(Class<T> entityClass, Specification<T> spec) {
-        if (entityClass == null) {
-            throw new IllegalArgumentException("entityClass must not be null");
-        }
-        if (spec == null) {
-            throw new IllegalArgumentException("spec must not be null");
-        }
+        validateQueryParams(entityClass, spec);
         CriteriaBuilder cb = entityManager.getCriteriaBuilder();
         return executeCountQuery(entityClass, spec, cb);
     }
@@ -660,12 +640,7 @@ public class MyJpaTemplate implements MyJpaTemplateOperations {
     @Override
     @Transactional(readOnly = true)
     public <T> List<T> findAll(Class<T> entityClass, QuerySpec<T> spec) {
-        if (entityClass == null) {
-            throw new IllegalArgumentException("entityClass must not be null");
-        }
-        if (spec == null) {
-            throw new IllegalArgumentException("spec must not be null");
-        }
+        validateQueryParams(entityClass, spec);
         return findAll(entityClass, spec, this.maxResults);
     }
 
@@ -681,12 +656,7 @@ public class MyJpaTemplate implements MyJpaTemplateOperations {
     @Override
     @Transactional(readOnly = true)
     public <T> List<T> findAll(Class<T> entityClass, QuerySpec<T> spec, int maxResults) {
-        if (entityClass == null) {
-            throw new IllegalArgumentException("entityClass must not be null");
-        }
-        if (spec == null) {
-            throw new IllegalArgumentException("spec must not be null");
-        }
+        validateQueryParams(entityClass, spec);
         if (maxResults <= 0 && maxResults != -1) {
             throw new IllegalArgumentException("maxResults must be positive or -1 (disabled)");
         }
@@ -708,12 +678,7 @@ public class MyJpaTemplate implements MyJpaTemplateOperations {
     @Override
     @Transactional(readOnly = true)
     public <T> List<T> findAll(Class<T> entityClass, QuerySpec<T> spec, org.springframework.data.domain.Sort sort) {
-        if (entityClass == null) {
-            throw new IllegalArgumentException("entityClass must not be null");
-        }
-        if (spec == null) {
-            throw new IllegalArgumentException("spec must not be null");
-        }
+        validateQueryParams(entityClass, spec);
         if (sort == null) {
             throw new IllegalArgumentException("sort must not be null");
         }
@@ -751,12 +716,7 @@ public class MyJpaTemplate implements MyJpaTemplateOperations {
     @Transactional(readOnly = true)
     public <T> List<T> findAll(Class<T> entityClass, QuerySpec<T> spec, EntityGraphHelper<T> entityGraph,
         int maxResults) {
-        if (entityClass == null) {
-            throw new IllegalArgumentException("entityClass must not be null");
-        }
-        if (spec == null) {
-            throw new IllegalArgumentException("spec must not be null");
-        }
+        validateQueryParams(entityClass, spec);
         if (maxResults <= 0 && maxResults != -1) {
             throw new IllegalArgumentException("maxResults must be positive or -1 (disabled)");
         }
@@ -789,12 +749,7 @@ public class MyJpaTemplate implements MyJpaTemplateOperations {
     @Override
     @Transactional(readOnly = true)
     public <T> void findAllStream(Class<T> entityClass, QuerySpec<T> spec, Consumer<Stream<T>> consumer) {
-        if (entityClass == null) {
-            throw new IllegalArgumentException("entityClass must not be null");
-        }
-        if (spec == null) {
-            throw new IllegalArgumentException("spec must not be null");
-        }
+        validateQueryParams(entityClass, spec);
         if (consumer == null) {
             throw new IllegalArgumentException("consumer must not be null");
         }
@@ -827,12 +782,7 @@ public class MyJpaTemplate implements MyJpaTemplateOperations {
     @Transactional(readOnly = true)
     public <T> void findAllStream(Class<T> entityClass, QuerySpec<T> spec, EntityGraphHelper<T> entityGraph,
         Consumer<Stream<T>> consumer) {
-        if (entityClass == null) {
-            throw new IllegalArgumentException("entityClass must not be null");
-        }
-        if (spec == null) {
-            throw new IllegalArgumentException("spec must not be null");
-        }
+        validateQueryParams(entityClass, spec);
         if (consumer == null) {
             throw new IllegalArgumentException("consumer must not be null");
         }
@@ -894,12 +844,7 @@ public class MyJpaTemplate implements MyJpaTemplateOperations {
     @Override
     @Transactional(readOnly = true)
     public <T> Optional<T> findOne(Class<T> entityClass, Specification<T> spec) {
-        if (entityClass == null) {
-            throw new IllegalArgumentException("entityClass must not be null");
-        }
-        if (spec == null) {
-            throw new IllegalArgumentException("spec must not be null");
-        }
+        validateQueryParams(entityClass, spec);
         CriteriaBuilder cb = entityManager.getCriteriaBuilder();
         CriteriaQuery<T> cq = cb.createQuery(entityClass);
         Root<T> root = cq.from(entityClass);
@@ -925,12 +870,7 @@ public class MyJpaTemplate implements MyJpaTemplateOperations {
     @Override
     @Transactional(readOnly = true)
     public <T> List<T> find(Class<T> entityClass, Specification<T> spec) {
-        if (entityClass == null) {
-            throw new IllegalArgumentException("entityClass must not be null");
-        }
-        if (spec == null) {
-            throw new IllegalArgumentException("spec must not be null");
-        }
+        validateQueryParams(entityClass, spec);
         return find(entityClass, spec, this.maxResults);
     }
 
@@ -946,12 +886,7 @@ public class MyJpaTemplate implements MyJpaTemplateOperations {
     @Override
     @Transactional(readOnly = true)
     public <T> List<T> find(Class<T> entityClass, Specification<T> spec, int maxResults) {
-        if (entityClass == null) {
-            throw new IllegalArgumentException("entityClass must not be null");
-        }
-        if (spec == null) {
-            throw new IllegalArgumentException("spec must not be null");
-        }
+        validateQueryParams(entityClass, spec);
         if (maxResults <= 0) {
             throw new IllegalArgumentException("maxResults must be positive");
         }
@@ -1016,12 +951,7 @@ public class MyJpaTemplate implements MyJpaTemplateOperations {
     @Override
     @Transactional(readOnly = true)
     public <T> Page<T> findAll(Class<T> entityClass, QuerySpec<T> spec, Pageable pageable) {
-        if (entityClass == null) {
-            throw new IllegalArgumentException("entityClass must not be null");
-        }
-        if (spec == null) {
-            throw new IllegalArgumentException("spec must not be null");
-        }
+        validateQueryParams(entityClass, spec);
         if (pageable == null) {
             throw new IllegalArgumentException("pageable must not be null");
         }
@@ -1093,12 +1023,7 @@ public class MyJpaTemplate implements MyJpaTemplateOperations {
     @Override
     @Transactional(readOnly = true)
     public <T> Page<T> findPage(Class<T> entityClass, Specification<T> spec, Pageable pageable) {
-        if (entityClass == null) {
-            throw new IllegalArgumentException("entityClass must not be null");
-        }
-        if (spec == null) {
-            throw new IllegalArgumentException("spec must not be null");
-        }
+        validateQueryParams(entityClass, spec);
         if (pageable == null) {
             throw new IllegalArgumentException("pageable must not be null");
         }
@@ -1289,12 +1214,7 @@ public class MyJpaTemplate implements MyJpaTemplateOperations {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public <T> int executeBatch(UpdateSpec<T> spec, int batchSize) {
-        if (spec == null) {
-            throw new IllegalArgumentException("spec must not be null");
-        }
-        if (batchSize <= 0) {
-            throw new IllegalArgumentException("batchSize must be positive");
-        }
+        validateBatchParams(spec, "spec", batchSize);
         return getBulkOperationTemplate().executeBatch(spec, batchSize);
     }
 
@@ -1309,12 +1229,7 @@ public class MyJpaTemplate implements MyJpaTemplateOperations {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public <T> int executeBatch(DeleteSpec<T> spec, int batchSize) {
-        if (spec == null) {
-            throw new IllegalArgumentException("spec must not be null");
-        }
-        if (batchSize <= 0) {
-            throw new IllegalArgumentException("batchSize must be positive");
-        }
+        validateBatchParams(spec, "spec", batchSize);
         return getBulkOperationTemplate().executeBatch(spec, batchSize);
     }
 
@@ -1332,12 +1247,7 @@ public class MyJpaTemplate implements MyJpaTemplateOperations {
     @Override
     public <T> MyJpaTemplateOperations.BatchResult executeBatchInSeparateTransactions(UpdateSpec<T> spec, int batchSize,
         MyJpaTemplateOperations.BatchFailureStrategy failureStrategy) {
-        if (spec == null) {
-            throw new IllegalArgumentException("spec must not be null");
-        }
-        if (batchSize <= 0) {
-            throw new IllegalArgumentException("batchSize must be positive");
-        }
+        validateBatchParams(spec, "spec", batchSize);
         if (failureStrategy == null) {
             throw new IllegalArgumentException("failureStrategy must not be null");
         }
@@ -1359,12 +1269,7 @@ public class MyJpaTemplate implements MyJpaTemplateOperations {
     @Override
     public <T> MyJpaTemplateOperations.BatchResult executeBatchInSeparateTransactions(DeleteSpec<T> spec, int batchSize,
         MyJpaTemplateOperations.BatchFailureStrategy failureStrategy) {
-        if (spec == null) {
-            throw new IllegalArgumentException("spec must not be null");
-        }
-        if (batchSize <= 0) {
-            throw new IllegalArgumentException("batchSize must be positive");
-        }
+        validateBatchParams(spec, "spec", batchSize);
         if (failureStrategy == null) {
             throw new IllegalArgumentException("failureStrategy must not be null");
         }
@@ -1392,12 +1297,7 @@ public class MyJpaTemplate implements MyJpaTemplateOperations {
      */
     @Override
     public <T> int executeBatchInSeparateTransactions(UpdateSpec<T> spec, int batchSize) {
-        if (spec == null) {
-            throw new IllegalArgumentException("spec must not be null");
-        }
-        if (batchSize <= 0) {
-            throw new IllegalArgumentException("batchSize must be positive");
-        }
+        validateBatchParams(spec, "spec", batchSize);
         return getBulkOperationTemplate().executeBatchInSeparateTransactions(spec, batchSize);
     }
 
@@ -1411,12 +1311,7 @@ public class MyJpaTemplate implements MyJpaTemplateOperations {
      */
     @Override
     public <T> int executeBatchInSeparateTransactions(DeleteSpec<T> spec, int batchSize) {
-        if (spec == null) {
-            throw new IllegalArgumentException("spec must not be null");
-        }
-        if (batchSize <= 0) {
-            throw new IllegalArgumentException("batchSize must be positive");
-        }
+        validateBatchParams(spec, "spec", batchSize);
         return getBulkOperationTemplate().executeBatchInSeparateTransactions(spec, batchSize);
     }
 
@@ -1434,12 +1329,7 @@ public class MyJpaTemplate implements MyJpaTemplateOperations {
     @Transactional(readOnly = true)
     public <T> org.springframework.data.domain.Slice<T> findSlice(Class<T> entityClass, Specification<T> spec,
         Pageable pageable) {
-        if (entityClass == null) {
-            throw new IllegalArgumentException("entityClass must not be null");
-        }
-        if (spec == null) {
-            throw new IllegalArgumentException("spec must not be null");
-        }
+        validateQueryParams(entityClass, spec);
         if (pageable == null) {
             throw new IllegalArgumentException("pageable must not be null");
         }
@@ -1599,13 +1489,8 @@ public class MyJpaTemplate implements MyJpaTemplateOperations {
     @Override
     @Transactional(readOnly = true)
     public <T> MyJpaTemplateOperations.KeysetPage<T> findKeysetPage(Class<T> entityClass, Specification<T> spec,
-        org.springframework.data.domain.Sort sort, int pageSize, @Nullable Object[] lastSortValues) {
-        if (entityClass == null) {
-            throw new IllegalArgumentException("entityClass must not be null");
-        }
-        if (spec == null) {
-            throw new IllegalArgumentException("spec must not be null");
-        }
+        org.springframework.data.domain.Sort sort, int pageSize, Object... lastSortValues) {
+        validateQueryParams(entityClass, spec);
         if (sort == null || sort.isUnsorted()) {
             throw new IllegalArgumentException("sort must not be null or unsorted for keyset pagination");
         }
@@ -1638,13 +1523,24 @@ public class MyJpaTemplate implements MyJpaTemplateOperations {
     /**
      * 验证批量操作参数。减少各批量方法中的重复验证代码。
      */
-    private static void validateBatchParams(Object entities, int batchSize) {
-        if (entities == null) {
-            throw new IllegalArgumentException("entities must not be null");
+    private static void validateBatchParams(Object param, String paramName, int batchSize) {
+        if (param == null) {
+            throw new IllegalArgumentException(paramName + " must not be null");
         }
         if (batchSize <= 0) {
             throw new IllegalArgumentException("batchSize must be positive");
         }
+    }
+
+    /**
+     * 统一的初始化检查 getter，减少 getter 方法中的重复 null 检查。
+     */
+    private static <T> T requireInitialized(T field, String name) {
+        if (field == null) {
+            throw new IllegalStateException("MyJpaTemplate not fully initialized. " + name + " is null. "
+                + "This can happen if methods are called before Spring context refresh completes.");
+        }
+        return field;
     }
 
     /**

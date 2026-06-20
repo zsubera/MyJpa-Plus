@@ -61,7 +61,7 @@ import org.slf4j.LoggerFactory;
  */
 @SuppressFBWarnings(value = "CT_CONSTRUCTOR_THROW",
     justification = "Constructor validates parameters via IllegalArgumentException which is standard Java practice")
-public class QueryCacheManager {
+public class QueryCacheManager implements CacheAdapter {
 
     private static final Logger log = LoggerFactory.getLogger(QueryCacheManager.class);
 
@@ -163,6 +163,7 @@ public class QueryCacheManager {
      * @param <T> 期望的值类型
      * @return 缓存值，如果不存在/已过期则返回 null
      */
+    @Override
     @SuppressWarnings("unchecked")
     public <T> T get(String key) {
         // 读取时采样触发过期清理，防止高读低写场景下过期条目长期占用内存
@@ -209,6 +210,7 @@ public class QueryCacheManager {
      * @param <T> 值类型
      * @return 如果成功写入返回 true，如果 key 为 null 或空返回 false
      */
+    @Override
     public <T> boolean put(String key, T value, long ttlSeconds) {
         if (key == null || key.isEmpty()) {
             return false;
@@ -354,6 +356,7 @@ public class QueryCacheManager {
      *
      * @return 命中率（0.0-1.0），如果没有 get 操作则返回 0.0
      */
+    @Override
     public double getHitRate() {
         long hits = hitCount.get();
         long misses = missCount.get();
@@ -366,6 +369,7 @@ public class QueryCacheManager {
      *
      * @return 命中次数
      */
+    @Override
     public long getHitCount() {
         return hitCount.get();
     }
@@ -375,6 +379,7 @@ public class QueryCacheManager {
      *
      * @return 未命中次数
      */
+    @Override
     public long getMissCount() {
         return missCount.get();
     }
@@ -382,6 +387,7 @@ public class QueryCacheManager {
     /**
      * 重置命中率统计计数器。
      */
+    @Override
     public void resetStats() {
         hitCount.set(0);
         missCount.set(0);
@@ -417,6 +423,7 @@ public class QueryCacheManager {
      *
      * @param key 要驱逐的缓存键
      */
+    @Override
     public void evict(String key) {
         Object removed = store.remove(key);
         if (removed != null && insertionOrder.remove(key)) {
@@ -432,6 +439,7 @@ public class QueryCacheManager {
      * <strong>并发说明：</strong>此方法非原子操作。与并发 {@link #put(String, Object, long)} 之间存在窗口期，
      * 可能导致 deque 与 store 之间的漂移。漂移是自愈的——后续 {@link #put} 调用中的 drift cleanup 会修复。
      */
+    @Override
     public void clear() {
         evictionLock.lock();
         try {
@@ -458,6 +466,7 @@ public class QueryCacheManager {
      * @param keyPrefix 缓存键前缀
      * @return 被驱逐的条目数
      */
+    @Override
     public int evictByPrefix(String keyPrefix) {
         if (keyPrefix == null || keyPrefix.isEmpty()) {
             return 0;
@@ -485,6 +494,7 @@ public class QueryCacheManager {
      *
      * @return 条目数
      */
+    @Override
     public int size() {
         return store.size();
     }

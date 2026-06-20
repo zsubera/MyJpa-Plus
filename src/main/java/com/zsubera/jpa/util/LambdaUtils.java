@@ -189,14 +189,18 @@ public final class LambdaUtils {
                 } catch (InaccessibleObjectException e) {
                     throw new MyJpaPlusException(
                         "Failed to access SerializedLambda.writeReplace() due to Java module system restrictions. "
-                            + "Add JVM argument: --add-opens java.base/java.lang.invoke=ALL-UNNAMED",
+                            + "Add JVM argument: --add-opens java.base/java.lang.invoke=ALL-UNNAMED\n"
+                            + "Maven: <jvmArguments>--add-opens java.base/java.lang.invoke=ALL-UNNAMED</jvmArguments>\n"
+                            + "Gradle: bootRun { jvmArgs '--add-opens java.base/java.lang.invoke=ALL-UNNAMED' }",
                         e);
                 } catch (ReflectiveOperationException e) {
                     throw new MyJpaPlusException("Failed to extract property name from method reference. "
                         + "Ensure you are using a method reference directly (e.g., Entity::getField). "
                         + "Lambda expressions like e -> e.getField() are not supported. "
                         + "If using Java 17+ module system, add JVM argument: "
-                        + "--add-opens java.base/java.lang.invoke=ALL-UNNAMED", e);
+                        + "--add-opens java.base/java.lang.invoke=ALL-UNNAMED\n"
+                        + "Maven: <jvmArguments>--add-opens java.base/java.lang.invoke=ALL-UNNAMED</jvmArguments>\n"
+                        + "Gradle: bootRun { jvmArgs '--add-opens java.base/java.lang.invoke=ALL-UNNAMED' }", e);
                 }
             });
             SerializedLambda lambda = (SerializedLambda)writeReplace.invoke(fn);
@@ -215,11 +219,15 @@ public final class LambdaUtils {
                 + "Ensure you are using a method reference directly (e.g., Entity::getField). "
                 + "Lambda expressions like e -> e.getField() are not supported. "
                 + "If using Java 17+ module system, add JVM argument: "
-                + "--add-opens java.base/java.lang.invoke=ALL-UNNAMED", e);
+                + "--add-opens java.base/java.lang.invoke=ALL-UNNAMED\n"
+                + "Maven: <jvmArguments>--add-opens java.base/java.lang.invoke=ALL-UNNAMED</jvmArguments>\n"
+                + "Gradle: bootRun { jvmArgs '--add-opens java.base/java.lang.invoke=ALL-UNNAMED' }", e);
         } catch (SecurityException e) {
             throw new MyJpaPlusException("Failed to extract property name due to security restriction. "
                 + "If using Java 17+ module system, add JVM argument: "
-                + "--add-opens java.base/java.lang.invoke=ALL-UNNAMED", e);
+                + "--add-opens java.base/java.lang.invoke=ALL-UNNAMED\n"
+                + "Maven: <jvmArguments>--add-opens java.base/java.lang.invoke=ALL-UNNAMED</jvmArguments>\n"
+                + "Gradle: bootRun { jvmArgs '--add-opens java.base/java.lang.invoke=ALL-UNNAMED' }", e);
         }
     }
 

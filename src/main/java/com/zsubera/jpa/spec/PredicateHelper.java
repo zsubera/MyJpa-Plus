@@ -532,7 +532,9 @@ public final class PredicateHelper {
      * 根据 {@link ConditionNode.SimpleNode} 的运算符解析为对应的 JPA {@link Predicate}。
      *
      * <p>
-     * 此方法集中处理简单条件的解析逻辑，避免重复代码。新增 {@link ConditionNode.Op} 枚举值时，只需在此方法中添加对应的 case。
+     * 委托给 {@link ConditionNode.Op#resolve} 实现，统一所有条件构建路径的谓词解析逻辑。
+     * 新增 {@link ConditionNode.Op} 枚举值时，只需在 {@code Op.resolve()} 中添加对应的 case，
+     * 此方法自动支持新运算符，无需修改。
      *
      * @param path 实体路径（可以是 Root 或 Join）
      * @param node 简单条件节点
@@ -540,7 +542,6 @@ public final class PredicateHelper {
      * @return 解析后的 Predicate
      * @throws IllegalArgumentException 如果遇到未处理的 Op 枚举值（编程错误）
      */
-    @SuppressWarnings({"unchecked", "rawtypes"})
     public static Predicate resolveSimplePredicate(Path<?> path, ConditionNode.SimpleNode node, CriteriaBuilder cb) {
         if (path == null) {
             throw new IllegalArgumentException("path must not be null");
@@ -551,117 +552,7 @@ public final class PredicateHelper {
         if (cb == null) {
             throw new IllegalArgumentException("cb must not be null");
         }
-        Path<?> fieldPath = path.get(node.fieldName);
-        switch (node.op) {
-            case EQ:
-                return node.value == null ? cb.isNull(fieldPath) : cb.equal(fieldPath, node.value);
-            case NE:
-                return node.value == null ? cb.isNotNull(fieldPath) : cb.notEqual(fieldPath, node.value);
-            case GT:
-                return cb.greaterThan((Expression<Comparable>)fieldPath, (Comparable)node.value);
-            case GE:
-                return cb.greaterThanOrEqualTo((Expression<Comparable>)fieldPath, (Comparable)node.value);
-            case LT:
-                return cb.lessThan((Expression<Comparable>)fieldPath, (Comparable)node.value);
-            case LE:
-                return cb.lessThanOrEqualTo((Expression<Comparable>)fieldPath, (Comparable)node.value);
-            case LIKE:
-                if (node.value == null) {
-                    return cb.conjunction();
-                }
-                if (node.escapeChar != '\0') {
-                    return cb.like(fieldPath.as(String.class), (String)node.value, node.escapeChar);
-                }
-                return cb.like(fieldPath.as(String.class), (String)node.value);
-            case NOT_LIKE:
-                if (node.value == null) {
-                    return cb.disjunction();
-                }
-                if (node.escapeChar != '\0') {
-                    return cb.notLike(fieldPath.as(String.class), (String)node.value, node.escapeChar);
-                }
-                return cb.notLike(fieldPath.as(String.class), (String)node.value);
-            case EQ_IGNORE_CASE:
-                if (node.value == null) {
-                    return cb.isNull(fieldPath);
-                }
-                return cb.equal(cb.upper(fieldPath.as(String.class)),
-                    ((String)node.value).toUpperCase(java.util.Locale.ROOT));
-            case NE_IGNORE_CASE:
-                if (node.value == null) {
-                    return cb.isNotNull(fieldPath);
-                }
-                return cb.notEqual(cb.upper(fieldPath.as(String.class)),
-                    ((String)node.value).toUpperCase(java.util.Locale.ROOT));
-            case LIKE_IGNORE_CASE:
-                if (node.value == null) {
-                    return cb.conjunction();
-                }
-                char escape = node.escapeChar != '\0' ? node.escapeChar : LIKE_ESCAPE_CHAR;
-                return cb.like(cb.upper(fieldPath.as(String.class)),
-                    ((String)node.value).toUpperCase(java.util.Locale.ROOT), escape);
-            case IS_NULL:
-                return cb.isNull(fieldPath);
-            case IS_NOT_NULL:
-                return cb.isNotNull(fieldPath);
-            case IN: {
-                if (node.value == null) {
-                    throw new IllegalArgumentException("IN operator requires non-null value, got null");
-                }
-                if (node.value instanceof Collection<?> col) {
-                    if (col.isEmpty()) {
-                        return cb.disjunction();
-                    }
-                    return InClauseBuilder.in(cb, fieldPath, col);
-                }
-                if (node.value.getClass().isArray()) {
-                    Object[] arr = (Object[])node.value;
-                    if (arr.length == 0) {
-                        return cb.disjunction();
-                    }
-                    return InClauseBuilder.in(cb, fieldPath, arr);
-                }
-                throw new IllegalArgumentException(
-                    "IN operator requires Collection or array, got: " + node.value.getClass().getName());
-            }
-            case NOT_IN: {
-                if (node.value == null) {
-                    throw new IllegalArgumentException("NOT_IN operator requires non-null value, got null");
-                }
-                if (node.value instanceof Collection<?> col) {
-                    if (col.isEmpty()) {
-                        return cb.conjunction();
-                    }
-                    return InClauseBuilder.notIn(cb, fieldPath, col);
-                }
-                if (node.value.getClass().isArray()) {
-                    Object[] arr = (Object[])node.value;
-                    if (arr.length == 0) {
-                        return cb.conjunction();
-                    }
-                    return InClauseBuilder.notIn(cb, fieldPath, arr);
-                }
-                throw new IllegalArgumentException(
-                    "NOT_IN operator requires Collection or array, got: " + node.value.getClass().getName());
-            }
-            case BETWEEN: {
-                Comparable<?>[] range = (Comparable<?>[])node.value;
-                if (range.length != 2) {
-                    throw new IllegalArgumentException("BETWEEN requires exactly 2 values, got " + range.length);
-                }
-                return cb.between((Expression<Comparable>)fieldPath, (Comparable)range[0], (Comparable)range[1]);
-            }
-            case NOT_BETWEEN: {
-                Comparable<?>[] range = (Comparable<?>[])node.value;
-                if (range.length != 2) {
-                    throw new IllegalArgumentException("NOT_BETWEEN requires exactly 2 values, got " + range.length);
-                }
-                return cb
-                    .not(cb.between((Expression<Comparable>)fieldPath, (Comparable)range[0], (Comparable)range[1]));
-            }
-            default:
-                throw new IllegalArgumentException("Unhandled Op: " + node.op);
-        }
+        return node.op.resolve(path, node.fieldName, node.value, node.escapeChar, cb);
     }
 
     /**

@@ -51,16 +51,28 @@ public class CacheInvalidationListener {
 
     private static final Logger log = LoggerFactory.getLogger(CacheInvalidationListener.class);
 
-    private final QueryCacheManager cacheManager;
+    private final CacheAdapter cacheAdapter;
 
     /**
-     * 创建缓存失效监听器。
+     * 创建缓存失效监听器（使用 CacheAdapter）。
      *
-     * @param cacheManager 查询缓存管理器
+     * @param cacheAdapter 缓存适配器
      */
     @SuppressFBWarnings(value = "EI_EXPOSE_REP2", justification = "Spring-managed singleton intentionally stored")
+    public CacheInvalidationListener(CacheAdapter cacheAdapter) {
+        this.cacheAdapter = cacheAdapter;
+    }
+
+    /**
+     * 创建缓存失效监听器（向后兼容，使用 QueryCacheManager）。
+     *
+     * @param cacheManager 查询缓存管理器
+     * @deprecated 请使用 {@link #CacheInvalidationListener(CacheAdapter)} 代替
+     */
+    @Deprecated
+    @SuppressFBWarnings(value = "EI_EXPOSE_REP2", justification = "Spring-managed singleton intentionally stored")
     public CacheInvalidationListener(QueryCacheManager cacheManager) {
-        this.cacheManager = cacheManager;
+        this.cacheAdapter = cacheManager;
     }
 
     /**
@@ -71,7 +83,7 @@ public class CacheInvalidationListener {
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onTransactionCommit(EntityModifiedEvent event) {
         String prefix = event.getEntityName() + ":";
-        int evicted = cacheManager.evictByPrefix(prefix);
+        int evicted = cacheAdapter.evictByPrefix(prefix);
         if (evicted > 0) {
             log.debug("Cache invalidated after transaction commit: {} entries evicted for entity '{}'", evicted,
                 event.getEntityName());
@@ -87,7 +99,7 @@ public class CacheInvalidationListener {
     public void onEntityModified(EntityModifiedEvent event) {
         if (!org.springframework.transaction.support.TransactionSynchronizationManager.isActualTransactionActive()) {
             String prefix = event.getEntityName() + ":";
-            int evicted = cacheManager.evictByPrefix(prefix);
+            int evicted = cacheAdapter.evictByPrefix(prefix);
             if (evicted > 0) {
                 log.debug("Cache invalidated immediately (no active transaction): {} entries evicted for entity '{}'",
                     evicted, event.getEntityName());

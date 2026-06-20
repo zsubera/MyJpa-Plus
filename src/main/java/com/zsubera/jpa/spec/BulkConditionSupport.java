@@ -21,7 +21,8 @@ import org.springframework.lang.Nullable;
  * 实现类只需提供条件存储和字段名解析即可获得所有条件方法。
  *
  * <p>
- * 此接口消除了批量操作路径中两个类之间的条件方法重复。
+ * 谓词构建统一委托给 {@link ConditionNode.Op#resolve}，与查询构建路径共享同一份运算符逻辑，
+ * 新增运算符时无需修改此类。
  *
  * @param <T> 实体类型
  * @param <SELF> 用于流式链式调用的具体构建器类型
@@ -49,36 +50,36 @@ public interface BulkConditionSupport<T, SELF extends BulkConditionSupport<T, SE
 
     default SELF eq(SFunction<T, ?> field, @Nullable Object value) {
         requireField(field);
-        return addCondition((root, cb) -> PredicateHelper.eq(root, property(field), value, cb));
+        return addCondition((root, cb) -> ConditionNode.Op.EQ.resolve(root, property(field), value, '\0', cb));
     }
 
     default SELF ne(SFunction<T, ?> field, @Nullable Object value) {
         requireField(field);
-        return addCondition((root, cb) -> PredicateHelper.ne(root, property(field), value, cb));
+        return addCondition((root, cb) -> ConditionNode.Op.NE.resolve(root, property(field), value, '\0', cb));
     }
 
     default SELF gt(SFunction<T, ?> field, Comparable<?> value) {
         requireField(field);
         requireValue(value, "gt");
-        return addCondition((root, cb) -> PredicateHelper.gt(root, property(field), value, cb));
+        return addCondition((root, cb) -> ConditionNode.Op.GT.resolve(root, property(field), value, '\0', cb));
     }
 
     default SELF ge(SFunction<T, ?> field, Comparable<?> value) {
         requireField(field);
         requireValue(value, "ge");
-        return addCondition((root, cb) -> PredicateHelper.ge(root, property(field), value, cb));
+        return addCondition((root, cb) -> ConditionNode.Op.GE.resolve(root, property(field), value, '\0', cb));
     }
 
     default SELF lt(SFunction<T, ?> field, Comparable<?> value) {
         requireField(field);
         requireValue(value, "lt");
-        return addCondition((root, cb) -> PredicateHelper.lt(root, property(field), value, cb));
+        return addCondition((root, cb) -> ConditionNode.Op.LT.resolve(root, property(field), value, '\0', cb));
     }
 
     default SELF le(SFunction<T, ?> field, Comparable<?> value) {
         requireField(field);
         requireValue(value, "le");
-        return addCondition((root, cb) -> PredicateHelper.le(root, property(field), value, cb));
+        return addCondition((root, cb) -> ConditionNode.Op.LE.resolve(root, property(field), value, '\0', cb));
     }
 
     // ---- 字符串运算符 ----
@@ -87,40 +88,44 @@ public interface BulkConditionSupport<T, SELF extends BulkConditionSupport<T, SE
         requireField(field);
         requireValue(value, "like");
         String pattern = wrapLikePattern(value);
-        return addCondition(
-            (root, cb) -> PredicateHelper.like(root, property(field), pattern, cb, PredicateHelper.LIKE_ESCAPE_CHAR));
+        return addCondition((root, cb) -> ConditionNode.Op.LIKE.resolve(root, property(field), pattern,
+            PredicateHelper.LIKE_ESCAPE_CHAR, cb));
     }
 
     default SELF notLike(SFunction<T, ?> field, String value) {
         requireField(field);
         requireValue(value, "notLike");
         String pattern = wrapLikePattern(value);
-        return addCondition((root, cb) -> PredicateHelper.notLike(root, property(field), pattern, cb,
-            PredicateHelper.LIKE_ESCAPE_CHAR));
+        return addCondition((root, cb) -> ConditionNode.Op.NOT_LIKE.resolve(root, property(field), pattern,
+            PredicateHelper.LIKE_ESCAPE_CHAR, cb));
     }
 
     default SELF startsWith(SFunction<T, ?> field, String value) {
         requireField(field);
         requireValue(value, "startsWith");
-        return addCondition((root, cb) -> PredicateHelper.startsWith(root, property(field), value, cb));
+        return addCondition((root, cb) -> ConditionNode.Op.LIKE.resolve(root, property(field),
+            PredicateHelper.escapeLikeWildcards(value) + "%", PredicateHelper.LIKE_ESCAPE_CHAR, cb));
     }
 
     default SELF endsWith(SFunction<T, ?> field, String value) {
         requireField(field);
         requireValue(value, "endsWith");
-        return addCondition((root, cb) -> PredicateHelper.endsWith(root, property(field), value, cb));
+        return addCondition((root, cb) -> ConditionNode.Op.LIKE.resolve(root, property(field),
+            "%" + PredicateHelper.escapeLikeWildcards(value), PredicateHelper.LIKE_ESCAPE_CHAR, cb));
     }
 
     default SELF notStartsWith(SFunction<T, ?> field, String value) {
         requireField(field);
         requireValue(value, "notStartsWith");
-        return addCondition((root, cb) -> cb.not(PredicateHelper.startsWith(root, property(field), value, cb)));
+        return addCondition((root, cb) -> ConditionNode.Op.NOT_LIKE.resolve(root, property(field),
+            PredicateHelper.escapeLikeWildcards(value) + "%", PredicateHelper.LIKE_ESCAPE_CHAR, cb));
     }
 
     default SELF notEndsWith(SFunction<T, ?> field, String value) {
         requireField(field);
         requireValue(value, "notEndsWith");
-        return addCondition((root, cb) -> cb.not(PredicateHelper.endsWith(root, property(field), value, cb)));
+        return addCondition((root, cb) -> ConditionNode.Op.NOT_LIKE.resolve(root, property(field),
+            "%" + PredicateHelper.escapeLikeWildcards(value), PredicateHelper.LIKE_ESCAPE_CHAR, cb));
     }
 
     // ---- 忽略大小写运算符 ----
@@ -130,7 +135,8 @@ public interface BulkConditionSupport<T, SELF extends BulkConditionSupport<T, SE
         if (value == null) {
             return isNull(field);
         }
-        return addCondition((root, cb) -> PredicateHelper.eqIgnoreCase(root, property(field), value, cb));
+        return addCondition(
+            (root, cb) -> ConditionNode.Op.EQ_IGNORE_CASE.resolve(root, property(field), value, '\0', cb));
     }
 
     default SELF neIgnoreCase(SFunction<T, ?> field, @Nullable String value) {
@@ -138,15 +144,16 @@ public interface BulkConditionSupport<T, SELF extends BulkConditionSupport<T, SE
         if (value == null) {
             return isNotNull(field);
         }
-        return addCondition((root, cb) -> PredicateHelper.neIgnoreCase(root, property(field), value, cb));
+        return addCondition(
+            (root, cb) -> ConditionNode.Op.NE_IGNORE_CASE.resolve(root, property(field), value, '\0', cb));
     }
 
     default SELF likeIgnoreCase(SFunction<T, ?> field, String value) {
         requireField(field);
         requireValue(value, "likeIgnoreCase");
         String pattern = wrapLikePattern(value);
-        return addCondition((root, cb) -> PredicateHelper.likeIgnoreCase(root, property(field), pattern, cb,
-            PredicateHelper.LIKE_ESCAPE_CHAR));
+        return addCondition((root, cb) -> ConditionNode.Op.LIKE_IGNORE_CASE.resolve(root, property(field), pattern,
+            PredicateHelper.LIKE_ESCAPE_CHAR, cb));
     }
 
     // ---- 集合运算符 ----
@@ -154,25 +161,25 @@ public interface BulkConditionSupport<T, SELF extends BulkConditionSupport<T, SE
     default SELF in(SFunction<T, ?> field, Object... values) {
         requireField(field);
         requireNonEmpty(values);
-        return addCondition((root, cb) -> PredicateHelper.in(root, property(field), values, cb));
+        return addCondition((root, cb) -> ConditionNode.Op.IN.resolve(root, property(field), values, '\0', cb));
     }
 
     default SELF notIn(SFunction<T, ?> field, Object... values) {
         requireField(field);
         requireNonEmpty(values);
-        return addCondition((root, cb) -> PredicateHelper.notIn(root, property(field), values, cb));
+        return addCondition((root, cb) -> ConditionNode.Op.NOT_IN.resolve(root, property(field), values, '\0', cb));
     }
 
     default SELF in(SFunction<T, ?> field, Collection<?> values) {
         requireField(field);
         requireNonEmpty(values);
-        return addCondition((root, cb) -> PredicateHelper.in(root, property(field), values, cb));
+        return addCondition((root, cb) -> ConditionNode.Op.IN.resolve(root, property(field), values, '\0', cb));
     }
 
     default SELF notIn(SFunction<T, ?> field, Collection<?> values) {
         requireField(field);
         requireNonEmpty(values);
-        return addCondition((root, cb) -> PredicateHelper.notIn(root, property(field), values, cb));
+        return addCondition((root, cb) -> ConditionNode.Op.NOT_IN.resolve(root, property(field), values, '\0', cb));
     }
 
     // ---- 范围运算符 ----
@@ -180,25 +187,27 @@ public interface BulkConditionSupport<T, SELF extends BulkConditionSupport<T, SE
     default SELF between(SFunction<T, ?> field, Comparable<?> start, Comparable<?> end) {
         requireField(field);
         PredicateHelper.validateRange(start, end);
-        return addCondition((root, cb) -> PredicateHelper.between(root, property(field), start, end, cb));
+        return addCondition((root, cb) -> ConditionNode.Op.BETWEEN.resolve(root, property(field),
+            new Comparable<?>[] {start, end}, '\0', cb));
     }
 
     default SELF notBetween(SFunction<T, ?> field, Comparable<?> start, Comparable<?> end) {
         requireField(field);
         PredicateHelper.validateRange(start, end);
-        return addCondition((root, cb) -> PredicateHelper.notBetween(root, property(field), start, end, cb));
+        return addCondition((root, cb) -> ConditionNode.Op.NOT_BETWEEN.resolve(root, property(field),
+            new Comparable<?>[] {start, end}, '\0', cb));
     }
 
     // ---- 空值运算符 ----
 
     default SELF isNull(SFunction<T, ?> field) {
         requireField(field);
-        return addCondition((root, cb) -> PredicateHelper.isNull(root, property(field), cb));
+        return addCondition((root, cb) -> ConditionNode.Op.IS_NULL.resolve(root, property(field), null, '\0', cb));
     }
 
     default SELF isNotNull(SFunction<T, ?> field) {
         requireField(field);
-        return addCondition((root, cb) -> PredicateHelper.isNotNull(root, property(field), cb));
+        return addCondition((root, cb) -> ConditionNode.Op.IS_NOT_NULL.resolve(root, property(field), null, '\0', cb));
     }
 
     // ---- 集合空值检查 ----

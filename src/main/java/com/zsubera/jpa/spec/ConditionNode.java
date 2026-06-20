@@ -1,6 +1,9 @@
 package com.zsubera.jpa.spec;
 
+import com.zsubera.jpa.util.InClauseBuilder;
 import jakarta.persistence.criteria.CriteriaBuilder;
+import jakarta.persistence.criteria.Expression;
+import jakarta.persistence.criteria.Path;
 import jakarta.persistence.criteria.Predicate;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -26,10 +29,156 @@ public sealed interface ConditionNode permits ConditionNode.SimpleNode, Conditio
 
     // ---- 操作枚举 ----
 
-    /** 字段-值条件的比较运算符。 */
+    /**
+     * 字段-值条件的比较运算符。
+     *
+     * <p>
+     * 每个枚举值通过 {@link #resolve(Path, String, Object, char, CriteriaBuilder)} 提供统一的谓词构建逻辑。
+     * 新增运算符时，只需：
+     * <ol>
+     * <li>在此枚举中添加新值</li>
+     * <li>在此枚举的 {@code resolve()} 方法中添加对应的 case</li>
+     * <li>在 {@link ConditionBuilder} 中添加 default 方法</li>
+     * <li>在 {@link ConditionalMethods} 中添加抽象方法声明</li>
+     * </ol>
+     * 无需修改 {@link PredicateHelper}、{@link NodeResolver} 或 {@link com.zsubera.jpa.spec.BulkConditionSupport}。
+     */
     enum Op {
         EQ, NE, GT, GE, LT, LE, LIKE, NOT_LIKE, IN, NOT_IN, BETWEEN, NOT_BETWEEN, IS_NULL, IS_NOT_NULL, EQ_IGNORE_CASE,
-        NE_IGNORE_CASE, LIKE_IGNORE_CASE
+        NE_IGNORE_CASE, LIKE_IGNORE_CASE;
+
+        private static final char LIKE_ESCAPE = PredicateHelper.LIKE_ESCAPE_CHAR;
+
+        /**
+         * 将此运算符解析为 JPA {@link Predicate}。
+         *
+         * <p>
+         * 此方法是所有条件构建路径（查询构建、批量操作、投影查询）的统一谓词构建入口。
+         * 新增 {@link Op} 枚举值时，只需在此方法中添加对应的 case 即可。
+         *
+         * @param path 实体路径（Root 或 Join）
+         * @param fieldName 字段名
+         * @param value 比较值（可以为 null，由具体 Op 决定 null 处理策略）
+         * @param escapeChar LIKE 转义字符（非 LIKE 类操作忽略此参数）
+         * @param cb CriteriaBuilder 实例
+         * @return 构建的 Predicate
+         * @throws IllegalArgumentException 如果值类型不匹配或参数非法
+         */
+        @SuppressWarnings({"unchecked", "rawtypes"})
+        public Predicate resolve(Path<?> path, String fieldName, Object value, char escapeChar, CriteriaBuilder cb) {
+            Path<?> fieldPath = path.get(fieldName);
+            switch (this) {
+                case EQ:
+                    return value == null ? cb.isNull(fieldPath) : cb.equal(fieldPath, value);
+                case NE:
+                    return value == null ? cb.isNotNull(fieldPath) : cb.notEqual(fieldPath, value);
+                case GT:
+                    return cb.greaterThan((Expression<Comparable>)fieldPath, (Comparable)value);
+                case GE:
+                    return cb.greaterThanOrEqualTo((Expression<Comparable>)fieldPath, (Comparable)value);
+                case LT:
+                    return cb.lessThan((Expression<Comparable>)fieldPath, (Comparable)value);
+                case LE:
+                    return cb.lessThanOrEqualTo((Expression<Comparable>)fieldPath, (Comparable)value);
+                case LIKE:
+                    if (value == null) {
+                        return cb.conjunction();
+                    }
+                    if (escapeChar != '\0') {
+                        return cb.like(fieldPath.as(String.class), (String)value, escapeChar);
+                    }
+                    return cb.like(fieldPath.as(String.class), (String)value);
+                case NOT_LIKE:
+                    if (value == null) {
+                        return cb.disjunction();
+                    }
+                    if (escapeChar != '\0') {
+                        return cb.notLike(fieldPath.as(String.class), (String)value, escapeChar);
+                    }
+                    return cb.notLike(fieldPath.as(String.class), (String)value);
+                case EQ_IGNORE_CASE:
+                    if (value == null) {
+                        return cb.isNull(fieldPath);
+                    }
+                    return cb.equal(cb.upper(fieldPath.as(String.class)),
+                        ((String)value).toUpperCase(java.util.Locale.ROOT));
+                case NE_IGNORE_CASE:
+                    if (value == null) {
+                        return cb.isNotNull(fieldPath);
+                    }
+                    return cb.notEqual(cb.upper(fieldPath.as(String.class)),
+                        ((String)value).toUpperCase(java.util.Locale.ROOT));
+                case LIKE_IGNORE_CASE:
+                    if (value == null) {
+                        return cb.conjunction();
+                    }
+                    char esc = escapeChar != '\0' ? escapeChar : LIKE_ESCAPE;
+                    return cb.like(cb.upper(fieldPath.as(String.class)),
+                        ((String)value).toUpperCase(java.util.Locale.ROOT), esc);
+                case IS_NULL:
+                    return cb.isNull(fieldPath);
+                case IS_NOT_NULL:
+                    return cb.isNotNull(fieldPath);
+                case IN: {
+                    if (value == null) {
+                        throw new IllegalArgumentException("IN operator requires non-null value, got null");
+                    }
+                    if (value instanceof Collection<?> col) {
+                        if (col.isEmpty()) {
+                            return cb.disjunction();
+                        }
+                        return InClauseBuilder.in(cb, fieldPath, col);
+                    }
+                    if (value.getClass().isArray()) {
+                        Object[] arr = (Object[])value;
+                        if (arr.length == 0) {
+                            return cb.disjunction();
+                        }
+                        return InClauseBuilder.in(cb, fieldPath, arr);
+                    }
+                    throw new IllegalArgumentException(
+                        "IN operator requires Collection or array, got: " + value.getClass().getName());
+                }
+                case NOT_IN: {
+                    if (value == null) {
+                        throw new IllegalArgumentException("NOT_IN operator requires non-null value, got null");
+                    }
+                    if (value instanceof Collection<?> col) {
+                        if (col.isEmpty()) {
+                            return cb.conjunction();
+                        }
+                        return InClauseBuilder.notIn(cb, fieldPath, col);
+                    }
+                    if (value.getClass().isArray()) {
+                        Object[] arr = (Object[])value;
+                        if (arr.length == 0) {
+                            return cb.conjunction();
+                        }
+                        return InClauseBuilder.notIn(cb, fieldPath, arr);
+                    }
+                    throw new IllegalArgumentException(
+                        "NOT_IN operator requires Collection or array, got: " + value.getClass().getName());
+                }
+                case BETWEEN: {
+                    Comparable<?>[] range = (Comparable<?>[])value;
+                    if (range.length != 2) {
+                        throw new IllegalArgumentException("BETWEEN requires exactly 2 values, got " + range.length);
+                    }
+                    return cb.between((Expression<Comparable>)fieldPath, (Comparable)range[0], (Comparable)range[1]);
+                }
+                case NOT_BETWEEN: {
+                    Comparable<?>[] range = (Comparable<?>[])value;
+                    if (range.length != 2) {
+                        throw new IllegalArgumentException(
+                            "NOT_BETWEEN requires exactly 2 values, got " + range.length);
+                    }
+                    return cb
+                        .not(cb.between((Expression<Comparable>)fieldPath, (Comparable)range[0], (Comparable)range[1]));
+                }
+                default:
+                    throw new IllegalArgumentException("Unhandled Op: " + this);
+            }
+        }
     }
 
     /** JOIN 节点中使用的连接类型。 */
