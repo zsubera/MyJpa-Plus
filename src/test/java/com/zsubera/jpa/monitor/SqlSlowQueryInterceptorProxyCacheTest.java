@@ -32,7 +32,7 @@ class SqlSlowQueryInterceptorProxyCacheTest {
         // 通过反射访问缓存大小限制
         try {
             java.lang.reflect.Field maxCacheSizeField =
-                SqlSlowQueryInterceptor.class.getDeclaredField("MAX_PROXY_CLASS_CACHE_SIZE");
+                SlowQueryDataSourceProxy.class.getDeclaredField("MAX_PROXY_CLASS_CACHE_SIZE");
             maxCacheSizeField.setAccessible(true);
             int maxCacheSize = maxCacheSizeField.getInt(null);
 
@@ -49,7 +49,7 @@ class SqlSlowQueryInterceptorProxyCacheTest {
     @Test
     void proxyClassCacheShouldBeConcurrent() {
         try {
-            java.lang.reflect.Field cacheField = SqlSlowQueryInterceptor.class.getDeclaredField("PROXY_CLASS_CACHE");
+            java.lang.reflect.Field cacheField = SlowQueryDataSourceProxy.class.getDeclaredField("PROXY_CLASS_CACHE");
             cacheField.setAccessible(true);
             Object cache = cacheField.get(null);
 
@@ -68,7 +68,7 @@ class SqlSlowQueryInterceptorProxyCacheTest {
         try {
             // 验证驱逐逻辑使用 synchronized 块而非 ReentrantLock
             // 通过检查 wrapPreparedStatement 方法源码确认使用 synchronized(PROXY_CLASS_CACHE)
-            java.lang.reflect.Method method = SqlSlowQueryInterceptor.DataSourceProxyHandler.class
+            java.lang.reflect.Method method = SlowQueryDataSourceProxy.DataSourceProxyHandler.class
                 .getDeclaredMethod("wrapPreparedStatement", Object.class, String.class);
             assertNotNull(method, "wrapPreparedStatement method should exist");
         } catch (Exception e) {
@@ -82,7 +82,7 @@ class SqlSlowQueryInterceptorProxyCacheTest {
     @Test
     void wrapDataSourceShouldReturnProxy() throws SQLException {
         DataSource mockDataSource = createMockDataSource();
-        DataSource wrapped = interceptor.wrapDataSource(mockDataSource);
+        DataSource wrapped = SlowQueryDataSourceProxy.wrap(mockDataSource, 1000L);
 
         assertNotNull(wrapped);
         assertNotSame(mockDataSource, wrapped);
@@ -96,7 +96,7 @@ class SqlSlowQueryInterceptorProxyCacheTest {
     @Test
     void wrappedDataSourceShouldImplementDataSource() throws SQLException {
         DataSource mockDataSource = createMockDataSource();
-        DataSource wrapped = interceptor.wrapDataSource(mockDataSource);
+        DataSource wrapped = SlowQueryDataSourceProxy.wrap(mockDataSource, 1000L);
 
         assertInstanceOf(DataSource.class, wrapped);
     }

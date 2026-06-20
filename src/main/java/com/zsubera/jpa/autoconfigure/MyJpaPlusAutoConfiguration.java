@@ -1,6 +1,7 @@
 package com.zsubera.jpa.autoconfigure;
 
 import com.zsubera.jpa.annotation.AuditEntityListener;
+import com.zsubera.jpa.monitor.SlowQueryDataSourceProxyPostProcessor;
 import com.zsubera.jpa.monitor.SqlSlowQueryInterceptor;
 import com.zsubera.jpa.repository.DefaultMyJpaRepository;
 import com.zsubera.jpa.repository.MyJpaRepositoryFactoryBean;
@@ -11,11 +12,9 @@ import com.zsubera.jpa.util.LambdaUtils;
 import com.zsubera.jpa.util.QueryTimeoutHelper;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import jakarta.persistence.EntityManager;
-import javax.sql.DataSource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.BeansException;
-import org.springframework.beans.factory.config.BeanPostProcessor;
 import org.springframework.beans.factory.config.ConfigurableListableBeanFactory;
 import org.springframework.beans.factory.support.BeanDefinitionRegistry;
 import org.springframework.beans.factory.support.BeanDefinitionRegistryPostProcessor;
@@ -28,7 +27,6 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
 import org.springframework.context.event.ContextClosedEvent;
 import org.springframework.context.event.EventListener;
-import org.springframework.lang.NonNull;
 import org.springframework.core.Ordered;
 
 /**
@@ -306,7 +304,11 @@ public class MyJpaPlusAutoConfiguration {
     }
 
     /**
-     * 创建 SQL 慢查询拦截器 Bean。
+     * 创建 SQL 慢查询拦截器 Bean（仅 Hibernate 环境）。
+     *
+     * <p>
+     * 此 Bean 仅在 Hibernate 环境中注册，用于通过 {@code StatementInspector} 接口拦截 SQL 日志。
+     * 实际的 DataSource 代理计时由 {@link SlowQueryDataSourceProxyPostProcessor} 提供，不依赖 Hibernate。
      *
      * @param properties 配置属性
      * @return SqlSlowQueryInterceptor 实例
@@ -317,49 +319,24 @@ public class MyJpaPlusAutoConfiguration {
     @ConditionalOnClass(name = "org.hibernate.resource.jdbc.spi.StatementInspector")
     public SqlSlowQueryInterceptor sqlSlowQueryInterceptor(MyJpaPlusProperties properties) {
         long threshold = properties.getMonitoring().getSlowQueryThresholdMs();
-        log.info("SqlSlowQueryInterceptor enabled (threshold={} ms)", threshold);
+        log.info("SqlSlowQueryInterceptor enabled for Hibernate (threshold={} ms)", threshold);
         return new SqlSlowQueryInterceptor(threshold);
     }
 
     /**
      * 用于在监控启用时将 DataSource 包装为慢查询代理的 BeanPostProcessor。
+     *
+     * <p>
+     * 此处理器不依赖 Hibernate，可与任何 JPA 实现配合使用。
+     * 使用 {@link com.zsubera.jpa.monitor.SlowQueryDataSourceProxy} 进行 DataSource 包装。
      */
     @Bean
+    @ConditionalOnMissingBean(SlowQueryDataSourceProxyPostProcessor.class)
     @ConditionalOnProperty(prefix = "myjpa-plus.monitoring", name = "enabled", havingValue = "true")
-    @ConditionalOnClass(name = "org.hibernate.resource.jdbc.spi.StatementInspector")
-    public BeanPostProcessor dataSourceSlowQueryProxyPostProcessor(SqlSlowQueryInterceptor interceptor) {
-        return new DataSourceSlowQueryProxyPostProcessor(interceptor);
-    }
-
-    static class DataSourceSlowQueryProxyPostProcessor implements BeanPostProcessor {
-
-        private final SqlSlowQueryInterceptor interceptor;
-
-        @SuppressFBWarnings(value = "EI_EXPOSE_REP2",
-            justification = "Internal BeanPostProcessor stores Spring-managed interceptor reference")
-        DataSourceSlowQueryProxyPostProcessor(SqlSlowQueryInterceptor interceptor) {
-            this.interceptor = interceptor;
-        }
-
-        @Override
-        public Object postProcessAfterInitialization(@NonNull Object bean, @NonNull String beanName) {
-            if (bean instanceof DataSource ds && !java.lang.reflect.Proxy.isProxyClass(ds.getClass())
-                && !isAlreadyWrapped(ds)) {
-                return interceptor.wrapDataSource(ds);
-            }
-            return bean;
-        }
-
-        /**
-         * 检查 DataSource 是否已被 SqlSlowQueryInterceptor 包装。 通过检查 InvocationHandler 类型来避免双重包装。
-         */
-        private static boolean isAlreadyWrapped(DataSource ds) {
-            if (java.lang.reflect.Proxy.isProxyClass(ds.getClass())) {
-                java.lang.reflect.InvocationHandler handler = java.lang.reflect.Proxy.getInvocationHandler(ds);
-                return handler instanceof com.zsubera.jpa.monitor.SqlSlowQueryInterceptor.DataSourceProxyHandler;
-            }
-            return false;
-        }
+    public SlowQueryDataSourceProxyPostProcessor slowQueryDataSourceProxyPostProcessor(MyJpaPlusProperties properties) {
+        long threshold = properties.getMonitoring().getSlowQueryThresholdMs();
+        log.info("SlowQueryDataSourceProxyPostProcessor enabled (threshold={} ms)", threshold);
+        return new SlowQueryDataSourceProxyPostProcessor(threshold);
     }
 
     /**

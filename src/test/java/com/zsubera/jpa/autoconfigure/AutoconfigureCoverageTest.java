@@ -1,9 +1,10 @@
 package com.zsubera.jpa.autoconfigure;
 
+import com.zsubera.jpa.monitor.SlowQueryDataSourceProxyPostProcessor;
+
 import static org.junit.jupiter.api.Assertions.*;
 
 import com.zsubera.jpa.repository.DefaultMyJpaRepository;
-import com.zsubera.jpa.repository.SimpleTestEntity;
 import java.util.List;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -53,8 +54,7 @@ class AutoconfigureCoverageTest {
         try {
             System.setProperty("myjpa.encrypt.key", "test-key-12345678");
             MyJpaPlusProperties props = new MyJpaPlusProperties();
-            assertDoesNotThrow(
-                () -> new MyJpaPlusAutoConfiguration.MyJpaPlusConfigInitializer(props, null));
+            assertDoesNotThrow(() -> new MyJpaPlusAutoConfiguration.MyJpaPlusConfigInitializer(props, null));
         } finally {
             if (oldProp != null) {
                 System.setProperty("myjpa.encrypt.key", oldProp);
@@ -70,8 +70,7 @@ class AutoconfigureCoverageTest {
         try {
             System.clearProperty("myjpa.encrypt.key");
             MyJpaPlusProperties props = new MyJpaPlusProperties();
-            assertDoesNotThrow(
-                () -> new MyJpaPlusAutoConfiguration.MyJpaPlusConfigInitializer(props, null));
+            assertDoesNotThrow(() -> new MyJpaPlusAutoConfiguration.MyJpaPlusConfigInitializer(props, null));
         } finally {
             if (oldProp != null) {
                 System.setProperty("myjpa.encrypt.key", oldProp);
@@ -96,13 +95,11 @@ class AutoconfigureCoverageTest {
     void dataSourceProxy_isAlreadyWrapped_proxyHandler() {
         com.zsubera.jpa.monitor.SqlSlowQueryInterceptor interceptor =
             new com.zsubera.jpa.monitor.SqlSlowQueryInterceptor(1000);
-        MyJpaPlusAutoConfiguration.DataSourceSlowQueryProxyPostProcessor processor =
-            new MyJpaPlusAutoConfiguration.DataSourceSlowQueryProxyPostProcessor(interceptor);
+        SlowQueryDataSourceProxyPostProcessor processor = new SlowQueryDataSourceProxyPostProcessor(1000L);
 
-        javax.sql.DataSource proxy = (javax.sql.DataSource) java.lang.reflect.Proxy.newProxyInstance(
-            getClass().getClassLoader(),
-            new Class<?>[]{javax.sql.DataSource.class},
-            (p, m, args) -> null);
+        javax.sql.DataSource proxy =
+            (javax.sql.DataSource)java.lang.reflect.Proxy.newProxyInstance(getClass().getClassLoader(),
+                new Class<?>[] {javax.sql.DataSource.class}, (p, m, args) -> null);
 
         Object result = processor.postProcessAfterInitialization(proxy, "ds");
         assertSame(proxy, result);
@@ -112,8 +109,7 @@ class AutoconfigureCoverageTest {
     void dataSourceProxy_nonProxyDataSource() {
         com.zsubera.jpa.monitor.SqlSlowQueryInterceptor interceptor =
             new com.zsubera.jpa.monitor.SqlSlowQueryInterceptor(1000);
-        MyJpaPlusAutoConfiguration.DataSourceSlowQueryProxyPostProcessor processor =
-            new MyJpaPlusAutoConfiguration.DataSourceSlowQueryProxyPostProcessor(interceptor);
+        SlowQueryDataSourceProxyPostProcessor processor = new SlowQueryDataSourceProxyPostProcessor(1000L);
 
         javax.sql.DataSource nonProxy = new TestDataSource();
         Object result = processor.postProcessAfterInitialization(nonProxy, "ds");
@@ -228,16 +224,18 @@ class AutoconfigureCoverageTest {
         var nullResult = bean.apply(null, com.zsubera.jpa.spec.SoftDeleteTestEntity.class);
         assertNotNull(nullResult);
 
-        var spec = (org.springframework.data.jpa.domain.Specification<com.zsubera.jpa.spec.SoftDeleteTestEntity>)
-            (root, query, cb) -> cb.conjunction();
+        var spec = (org.springframework.data.jpa.domain.Specification<
+            com.zsubera.jpa.spec.SoftDeleteTestEntity>)(root, query, cb) -> cb.conjunction();
         var specResult = bean.apply(spec, com.zsubera.jpa.spec.SoftDeleteTestEntity.class);
         assertNotNull(specResult);
 
         var noResult = bean.apply(null, com.zsubera.jpa.spec.TestEntity.class);
         assertNull(noResult);
 
-        var noSpecResult = bean.apply((org.springframework.data.jpa.domain.Specification<com.zsubera.jpa.spec.TestEntity>)
-            (root, query, cb) -> cb.conjunction(), com.zsubera.jpa.spec.TestEntity.class);
+        var noSpecResult = bean.apply(
+            (org.springframework.data.jpa.domain.Specification<
+                com.zsubera.jpa.spec.TestEntity>)(root, query, cb) -> cb.conjunction(),
+            com.zsubera.jpa.spec.TestEntity.class);
         assertSame(noSpecResult, noSpecResult);
     }
 
@@ -269,14 +267,45 @@ class AutoconfigureCoverageTest {
     // ---- Inner class for DataSource proxy test ----
 
     static class TestDataSource implements javax.sql.DataSource {
-        @Override public java.io.PrintWriter getLogWriter() { return null; }
-        @Override public void setLogWriter(java.io.PrintWriter out) {}
-        @Override public void setLoginTimeout(int seconds) {}
-        @Override public int getLoginTimeout() { return 0; }
-        @Override public java.util.logging.Logger getParentLogger() { return java.util.logging.Logger.getLogger("test"); }
-        @Override public <T> T unwrap(java.lang.Class<T> iface) { return null; }
-        @Override public boolean isWrapperFor(java.lang.Class<?> iface) { return false; }
-        @Override public java.sql.Connection getConnection() { return null; }
-        @Override public java.sql.Connection getConnection(String username, String password) { return null; }
+        @Override
+        public java.io.PrintWriter getLogWriter() {
+            return null;
+        }
+
+        @Override
+        public void setLogWriter(java.io.PrintWriter out) {}
+
+        @Override
+        public void setLoginTimeout(int seconds) {}
+
+        @Override
+        public int getLoginTimeout() {
+            return 0;
+        }
+
+        @Override
+        public java.util.logging.Logger getParentLogger() {
+            return java.util.logging.Logger.getLogger("test");
+        }
+
+        @Override
+        public <T> T unwrap(java.lang.Class<T> iface) {
+            return null;
+        }
+
+        @Override
+        public boolean isWrapperFor(java.lang.Class<?> iface) {
+            return false;
+        }
+
+        @Override
+        public java.sql.Connection getConnection() {
+            return null;
+        }
+
+        @Override
+        public java.sql.Connection getConnection(String username, String password) {
+            return null;
+        }
     }
 }

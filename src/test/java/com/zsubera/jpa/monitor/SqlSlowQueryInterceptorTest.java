@@ -44,7 +44,7 @@ class SqlSlowQueryInterceptorTest {
     @Test
     void wrapDataSource_returnsProxy() {
         SqlSlowQueryInterceptor i = new SqlSlowQueryInterceptor(1000);
-        DataSource wrapped = i.wrapDataSource(new MockDataSource());
+        DataSource wrapped = SlowQueryDataSourceProxy.wrap(new MockDataSource(), 1000);
         assertTrue(Proxy.isProxyClass(wrapped.getClass()));
     }
 
@@ -52,7 +52,7 @@ class SqlSlowQueryInterceptorTest {
     void wrappedDataSource_getConnection_delegates() throws SQLException {
         SqlSlowQueryInterceptor i = new SqlSlowQueryInterceptor(1000);
         MockDataSource mockDs = new MockDataSource();
-        DataSource wrapped = i.wrapDataSource(mockDs);
+        DataSource wrapped = SlowQueryDataSourceProxy.wrap(mockDs, 1000);
         assertNotNull(wrapped.getConnection());
         assertTrue(mockDs.getConnectionCalled);
     }
@@ -60,14 +60,14 @@ class SqlSlowQueryInterceptorTest {
     @Test
     void wrappedDataSource_getConnectionWithAuth() throws SQLException {
         SqlSlowQueryInterceptor i = new SqlSlowQueryInterceptor(1000);
-        DataSource wrapped = i.wrapDataSource(new MockDataSource());
+        DataSource wrapped = SlowQueryDataSourceProxy.wrap(new MockDataSource(), 1000);
         assertNotNull(wrapped.getConnection("u", "p"));
     }
 
     @Test
     void wrappedDataSource_otherMethods_delegate() throws Exception {
         SqlSlowQueryInterceptor i = new SqlSlowQueryInterceptor(1000);
-        DataSource wrapped = i.wrapDataSource(new MockDataSource());
+        DataSource wrapped = SlowQueryDataSourceProxy.wrap(new MockDataSource(), 1000);
         wrapped.setLogWriter(null);
         assertEquals(0, wrapped.getLoginTimeout());
         wrapped.setLoginTimeout(5);
@@ -79,8 +79,8 @@ class SqlSlowQueryInterceptorTest {
     @Test
     void dsProxyHandler_getConnection_delegates() throws Throwable {
         MockDataSource mockDs = new MockDataSource();
-        SqlSlowQueryInterceptor.DataSourceProxyHandler handler =
-            new SqlSlowQueryInterceptor.DataSourceProxyHandler(mockDs, 1000);
+        SlowQueryDataSourceProxy.DataSourceProxyHandler handler =
+            new SlowQueryDataSourceProxy.DataSourceProxyHandler(mockDs, 1000);
 
         DataSource proxy = (DataSource)Proxy.newProxyInstance(DataSource.class.getClassLoader(),
             new Class<?>[] {DataSource.class}, handler);
@@ -94,8 +94,8 @@ class SqlSlowQueryInterceptorTest {
     @Test
     void dsProxyHandler_toString_delegates() throws Throwable {
         MockDataSource mockDs = new MockDataSource();
-        SqlSlowQueryInterceptor.DataSourceProxyHandler handler =
-            new SqlSlowQueryInterceptor.DataSourceProxyHandler(mockDs, 1000);
+        SlowQueryDataSourceProxy.DataSourceProxyHandler handler =
+            new SlowQueryDataSourceProxy.DataSourceProxyHandler(mockDs, 1000);
 
         DataSource proxy = (DataSource)Proxy.newProxyInstance(DataSource.class.getClassLoader(),
             new Class<?>[] {DataSource.class}, handler);
@@ -108,8 +108,8 @@ class SqlSlowQueryInterceptorTest {
     @Test
     void dsProxyHandler_hashCode_delegates() throws Throwable {
         MockDataSource mockDs = new MockDataSource();
-        SqlSlowQueryInterceptor.DataSourceProxyHandler handler =
-            new SqlSlowQueryInterceptor.DataSourceProxyHandler(mockDs, 1000);
+        SlowQueryDataSourceProxy.DataSourceProxyHandler handler =
+            new SlowQueryDataSourceProxy.DataSourceProxyHandler(mockDs, 1000);
 
         DataSource proxy = (DataSource)Proxy.newProxyInstance(DataSource.class.getClassLoader(),
             new Class<?>[] {DataSource.class}, handler);
@@ -122,8 +122,8 @@ class SqlSlowQueryInterceptorTest {
     @Test
     void dsProxyHandler_equals_delegates() throws Throwable {
         MockDataSource mockDs = new MockDataSource();
-        SqlSlowQueryInterceptor.DataSourceProxyHandler handler =
-            new SqlSlowQueryInterceptor.DataSourceProxyHandler(mockDs, 1000);
+        SlowQueryDataSourceProxy.DataSourceProxyHandler handler =
+            new SlowQueryDataSourceProxy.DataSourceProxyHandler(mockDs, 1000);
 
         DataSource proxy = (DataSource)Proxy.newProxyInstance(DataSource.class.getClassLoader(),
             new Class<?>[] {DataSource.class}, handler);
@@ -147,8 +147,8 @@ class SqlSlowQueryInterceptorTest {
             .getDeclaredMethod("wrapPreparedStatement", Object.class, String.class);
         wrapMethod.setAccessible(true);
 
-        SqlSlowQueryInterceptor.DataSourceProxyHandler handler =
-            new SqlSlowQueryInterceptor.DataSourceProxyHandler(new MockDataSource(), 1000);
+        SlowQueryDataSourceProxy.DataSourceProxyHandler handler =
+            new SlowQueryDataSourceProxy.DataSourceProxyHandler(new MockDataSource(), 1000);
 
         Object wrapped = wrapMethod.invoke(handler, mockStmt, "SELECT 1");
         assertNotNull(wrapped);
@@ -164,8 +164,8 @@ class SqlSlowQueryInterceptorTest {
             .getDeclaredMethod("wrapPreparedStatement", Object.class, String.class);
         wrapMethod.setAccessible(true);
 
-        SqlSlowQueryInterceptor.DataSourceProxyHandler handler =
-            new SqlSlowQueryInterceptor.DataSourceProxyHandler(new MockDataSource(), 1000);
+        SlowQueryDataSourceProxy.DataSourceProxyHandler handler =
+            new SlowQueryDataSourceProxy.DataSourceProxyHandler(new MockDataSource(), 1000);
 
         PreparedStatement wrapped = (PreparedStatement)wrapMethod.invoke(handler, mockStmt, "SELECT 1");
         ResultSet rs = wrapped.executeQuery();
@@ -181,8 +181,8 @@ class SqlSlowQueryInterceptorTest {
             .getDeclaredMethod("wrapPreparedStatement", Object.class, String.class);
         wrapMethod.setAccessible(true);
 
-        SqlSlowQueryInterceptor.DataSourceProxyHandler handler =
-            new SqlSlowQueryInterceptor.DataSourceProxyHandler(new MockDataSource(), 1000);
+        SlowQueryDataSourceProxy.DataSourceProxyHandler handler =
+            new SlowQueryDataSourceProxy.DataSourceProxyHandler(new MockDataSource(), 1000);
 
         PreparedStatement wrapped =
             (PreparedStatement)wrapMethod.invoke(handler, mockStmt, "UPDATE users SET name='test'");
@@ -199,8 +199,8 @@ class SqlSlowQueryInterceptorTest {
             .getDeclaredMethod("wrapPreparedStatement", Object.class, String.class);
         wrapMethod.setAccessible(true);
 
-        SqlSlowQueryInterceptor.DataSourceProxyHandler handler =
-            new SqlSlowQueryInterceptor.DataSourceProxyHandler(new MockDataSource(), 1000);
+        SlowQueryDataSourceProxy.DataSourceProxyHandler handler =
+            new SlowQueryDataSourceProxy.DataSourceProxyHandler(new MockDataSource(), 1000);
 
         PreparedStatement wrapped = (PreparedStatement)wrapMethod.invoke(handler, mockStmt, "DELETE FROM users");
         boolean result = wrapped.execute();
@@ -216,8 +216,8 @@ class SqlSlowQueryInterceptorTest {
             .getDeclaredMethod("wrapPreparedStatement", Object.class, String.class);
         wrapMethod.setAccessible(true);
 
-        SqlSlowQueryInterceptor.DataSourceProxyHandler handler =
-            new SqlSlowQueryInterceptor.DataSourceProxyHandler(new MockDataSource(), 1000);
+        SlowQueryDataSourceProxy.DataSourceProxyHandler handler =
+            new SlowQueryDataSourceProxy.DataSourceProxyHandler(new MockDataSource(), 1000);
 
         PreparedStatement wrapped =
             (PreparedStatement)wrapMethod.invoke(handler, mockStmt, "SELECT * FROM users WHERE name=?");
@@ -233,8 +233,8 @@ class SqlSlowQueryInterceptorTest {
             .getDeclaredMethod("wrapPreparedStatement", Object.class, String.class);
         wrapMethod.setAccessible(true);
 
-        SqlSlowQueryInterceptor.DataSourceProxyHandler handler =
-            new SqlSlowQueryInterceptor.DataSourceProxyHandler(new MockDataSource(), 1000);
+        SlowQueryDataSourceProxy.DataSourceProxyHandler handler =
+            new SlowQueryDataSourceProxy.DataSourceProxyHandler(new MockDataSource(), 1000);
 
         PreparedStatement wrapped = (PreparedStatement)wrapMethod.invoke(handler, mockStmt, "SELECT 1");
         wrapped.close();
@@ -249,8 +249,8 @@ class SqlSlowQueryInterceptorTest {
             .getDeclaredMethod("wrapPreparedStatement", Object.class, String.class);
         wrapMethod.setAccessible(true);
 
-        SqlSlowQueryInterceptor.DataSourceProxyHandler handler =
-            new SqlSlowQueryInterceptor.DataSourceProxyHandler(new MockDataSource(), 1000);
+        SlowQueryDataSourceProxy.DataSourceProxyHandler handler =
+            new SlowQueryDataSourceProxy.DataSourceProxyHandler(new MockDataSource(), 1000);
 
         PreparedStatement wrapped = (PreparedStatement)wrapMethod.invoke(handler, mockStmt, "SELECT 1");
         Connection conn = wrapped.getConnection();
@@ -266,8 +266,8 @@ class SqlSlowQueryInterceptorTest {
             .getDeclaredMethod("wrapPreparedStatement", Object.class, String.class);
         wrapMethod.setAccessible(true);
 
-        SqlSlowQueryInterceptor.DataSourceProxyHandler handler =
-            new SqlSlowQueryInterceptor.DataSourceProxyHandler(new MockDataSource(), 1000);
+        SlowQueryDataSourceProxy.DataSourceProxyHandler handler =
+            new SlowQueryDataSourceProxy.DataSourceProxyHandler(new MockDataSource(), 1000);
 
         PreparedStatement wrapped = (PreparedStatement)wrapMethod.invoke(handler, mockStmt, "SELECT 1");
         wrapped.getMetaData();
@@ -284,8 +284,8 @@ class SqlSlowQueryInterceptorTest {
             .getDeclaredMethod("wrapPreparedStatement", Object.class, String.class);
         wrapMethod.setAccessible(true);
 
-        SqlSlowQueryInterceptor.DataSourceProxyHandler handler =
-            new SqlSlowQueryInterceptor.DataSourceProxyHandler(new MockDataSource(), 1);
+        SlowQueryDataSourceProxy.DataSourceProxyHandler handler =
+            new SlowQueryDataSourceProxy.DataSourceProxyHandler(new MockDataSource(), 1);
 
         PreparedStatement wrapped = (PreparedStatement)wrapMethod.invoke(handler, mockStmt, "SELECT 1");
         wrapped.executeQuery();
@@ -302,8 +302,8 @@ class SqlSlowQueryInterceptorTest {
             .getDeclaredMethod("wrapPreparedStatement", Object.class, String.class);
         wrapMethod.setAccessible(true);
 
-        SqlSlowQueryInterceptor.DataSourceProxyHandler handler =
-            new SqlSlowQueryInterceptor.DataSourceProxyHandler(new MockDataSource(), 1000);
+        SlowQueryDataSourceProxy.DataSourceProxyHandler handler =
+            new SlowQueryDataSourceProxy.DataSourceProxyHandler(new MockDataSource(), 1000);
 
         PreparedStatement wrapped = (PreparedStatement)wrapMethod.invoke(handler, mockStmt, "SELECT 1");
         wrapped.executeQuery();
@@ -326,8 +326,8 @@ class SqlSlowQueryInterceptorTest {
             .getDeclaredMethod("wrapPreparedStatement", Object.class, String.class);
         wrapMethod.setAccessible(true);
 
-        SqlSlowQueryInterceptor.DataSourceProxyHandler handler =
-            new SqlSlowQueryInterceptor.DataSourceProxyHandler(new MockDataSource(), 1000);
+        SlowQueryDataSourceProxy.DataSourceProxyHandler handler =
+            new SlowQueryDataSourceProxy.DataSourceProxyHandler(new MockDataSource(), 1000);
 
         PreparedStatement wrapped = (PreparedStatement)wrapMethod.invoke(handler, mockStmt, "SELECT 1");
         wrapped.executeQuery();
@@ -346,8 +346,8 @@ class SqlSlowQueryInterceptorTest {
             .getDeclaredMethod("wrapPreparedStatement", Object.class, String.class);
         wrapMethod.setAccessible(true);
 
-        SqlSlowQueryInterceptor.DataSourceProxyHandler handler =
-            new SqlSlowQueryInterceptor.DataSourceProxyHandler(new MockDataSource(), 1000);
+        SlowQueryDataSourceProxy.DataSourceProxyHandler handler =
+            new SlowQueryDataSourceProxy.DataSourceProxyHandler(new MockDataSource(), 1000);
 
         Object result = wrapMethod.invoke(handler, noInterfaceObj, "SELECT 1");
         assertSame(noInterfaceObj, result);
@@ -365,8 +365,8 @@ class SqlSlowQueryInterceptorTest {
             .getDeclaredMethod("wrapPreparedStatement", Object.class, String.class);
         wrapMethod.setAccessible(true);
 
-        SqlSlowQueryInterceptor.DataSourceProxyHandler handler =
-            new SqlSlowQueryInterceptor.DataSourceProxyHandler(new MockDataSource(), 1000);
+        SlowQueryDataSourceProxy.DataSourceProxyHandler handler =
+            new SlowQueryDataSourceProxy.DataSourceProxyHandler(new MockDataSource(), 1000);
 
         Object wrapped = wrapMethod.invoke(handler, mockStmt, "SELECT 1");
         assertNotNull(wrapped);
@@ -375,7 +375,7 @@ class SqlSlowQueryInterceptorTest {
     // ==================== Helpers ====================
 
     private Class<?> getInnerClass(String name) {
-        for (Class<?> inner : SqlSlowQueryInterceptor.class.getDeclaredClasses()) {
+        for (Class<?> inner : SlowQueryDataSourceProxy.class.getDeclaredClasses()) {
             if (inner.getSimpleName().equals(name)) {
                 return inner;
             }
@@ -386,13 +386,7 @@ class SqlSlowQueryInterceptorTest {
     private void resetMicrometerState() {
         try {
             Class<?> handlerClass = getInnerClass("PreparedStatementTimingHandler");
-            java.lang.reflect.Field f = handlerClass.getDeclaredField("micrometerChecked");
-            f.setAccessible(true);
-            f.setBoolean(null, false);
-            f = handlerClass.getDeclaredField("micrometerAvailable");
-            f.setAccessible(true);
-            f.setBoolean(null, false);
-            f = handlerClass.getDeclaredField("meterRegistry");
+            java.lang.reflect.Field f = handlerClass.getDeclaredField("micrometerCache");
             f.setAccessible(true);
             f.set(null, null);
         } catch (Exception ignored) {

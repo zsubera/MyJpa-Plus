@@ -1,9 +1,10 @@
 package com.zsubera.jpa.autoconfigure;
 
+import com.zsubera.jpa.monitor.SlowQueryDataSourceProxyPostProcessor;
+
 import static org.junit.jupiter.api.Assertions.*;
 
 import com.zsubera.jpa.template.MyJpaTemplate;
-import java.lang.reflect.Field;
 import java.util.List;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -163,8 +164,7 @@ class MyJpaPlusAutoConfigurationExtendedTest {
 
         processor.postProcessBeanDefinitionRegistry(beanFactory);
 
-        assertEquals("com.example.CustomFactoryBean",
-            beanFactory.getBeanDefinition("testRepo").getBeanClassName());
+        assertEquals("com.example.CustomFactoryBean", beanFactory.getBeanDefinition("testRepo").getBeanClassName());
     }
 
     @Test
@@ -204,8 +204,7 @@ class MyJpaPlusAutoConfigurationExtendedTest {
     void dataSourceSlowQueryProxyPostProcessor_postProcessAfterInitialization_nonDataSource() {
         com.zsubera.jpa.monitor.SqlSlowQueryInterceptor interceptor =
             new com.zsubera.jpa.monitor.SqlSlowQueryInterceptor(1000);
-        MyJpaPlusAutoConfiguration.DataSourceSlowQueryProxyPostProcessor processor =
-            new MyJpaPlusAutoConfiguration.DataSourceSlowQueryProxyPostProcessor(interceptor);
+        SlowQueryDataSourceProxyPostProcessor processor = new SlowQueryDataSourceProxyPostProcessor(1000L);
 
         String notDataSource = "not a datasource";
         assertSame(notDataSource, processor.postProcessAfterInitialization(notDataSource, "test"));
@@ -215,13 +214,11 @@ class MyJpaPlusAutoConfigurationExtendedTest {
     void dataSourceSlowQueryProxyPostProcessor_postProcessAfterInitialization_proxy() {
         com.zsubera.jpa.monitor.SqlSlowQueryInterceptor interceptor =
             new com.zsubera.jpa.monitor.SqlSlowQueryInterceptor(1000);
-        MyJpaPlusAutoConfiguration.DataSourceSlowQueryProxyPostProcessor processor =
-            new MyJpaPlusAutoConfiguration.DataSourceSlowQueryProxyPostProcessor(interceptor);
+        SlowQueryDataSourceProxyPostProcessor processor = new SlowQueryDataSourceProxyPostProcessor(1000L);
 
-        javax.sql.DataSource proxy = (javax.sql.DataSource)java.lang.reflect.Proxy.newProxyInstance(
-            getClass().getClassLoader(),
-            new Class<?>[]{javax.sql.DataSource.class},
-            (p, m, args) -> null);
+        javax.sql.DataSource proxy =
+            (javax.sql.DataSource)java.lang.reflect.Proxy.newProxyInstance(getClass().getClassLoader(),
+                new Class<?>[] {javax.sql.DataSource.class}, (p, m, args) -> null);
 
         Object result = processor.postProcessAfterInitialization(proxy, "ds");
         assertSame(proxy, result);
@@ -266,8 +263,7 @@ class MyJpaPlusAutoConfigurationExtendedTest {
         props.getQuery().setExtraSafeFunctions(List.of("FUNC1", "FUNC2"));
         props.getQuery().setExtraBooleanFunctions(List.of("BOOL1"));
 
-        assertDoesNotThrow(
-            () -> new MyJpaPlusAutoConfiguration.MyJpaPlusConfigInitializer(props, null));
+        assertDoesNotThrow(() -> new MyJpaPlusAutoConfiguration.MyJpaPlusConfigInitializer(props, null));
     }
 
     @Test
@@ -276,8 +272,7 @@ class MyJpaPlusAutoConfigurationExtendedTest {
         try {
             System.setProperty("myjpa.encrypt.key", "test-key-12345678");
             MyJpaPlusProperties props = new MyJpaPlusProperties();
-            assertDoesNotThrow(
-                () -> new MyJpaPlusAutoConfiguration.MyJpaPlusConfigInitializer(props, null));
+            assertDoesNotThrow(() -> new MyJpaPlusAutoConfiguration.MyJpaPlusConfigInitializer(props, null));
         } finally {
             if (oldProp != null) {
                 System.setProperty("myjpa.encrypt.key", oldProp);
@@ -292,8 +287,7 @@ class MyJpaPlusAutoConfigurationExtendedTest {
         MyJpaPlusProperties props = new MyJpaPlusProperties();
         props.getQuery().setDefaultTimeoutSeconds(-1);
 
-        assertDoesNotThrow(
-            () -> new MyJpaPlusAutoConfiguration.MyJpaPlusConfigInitializer(props, null));
+        assertDoesNotThrow(() -> new MyJpaPlusAutoConfiguration.MyJpaPlusConfigInitializer(props, null));
     }
 
     @Test
@@ -319,8 +313,7 @@ class MyJpaPlusAutoConfigurationExtendedTest {
         globalConfig.setSoftDeleteAutoFilter(true);
         globalConfig.setBlockUnconditionalDelete(true);
 
-        assertDoesNotThrow(
-            () -> new MyJpaPlusAutoConfiguration.MyJpaPlusConfigInitializer(props, globalConfig));
+        assertDoesNotThrow(() -> new MyJpaPlusAutoConfiguration.MyJpaPlusConfigInitializer(props, globalConfig));
     }
 
     @Test
@@ -330,15 +323,13 @@ class MyJpaPlusAutoConfigurationExtendedTest {
         props.getQuery().setExtraBooleanFunctions(List.of("BFUNC1"));
         MyJpaPlusGlobalConfig globalConfig = new MyJpaPlusGlobalConfig();
 
-        assertDoesNotThrow(
-            () -> new MyJpaPlusAutoConfiguration.MyJpaPlusConfigInitializer(props, globalConfig));
+        assertDoesNotThrow(() -> new MyJpaPlusAutoConfiguration.MyJpaPlusConfigInitializer(props, globalConfig));
     }
 
     @Test
     void myJpaPlusConfigInitializer_debugLogging() {
         MyJpaPlusProperties props = new MyJpaPlusProperties();
-        assertDoesNotThrow(
-            () -> new MyJpaPlusAutoConfiguration.MyJpaPlusConfigInitializer(props, null));
+        assertDoesNotThrow(() -> new MyJpaPlusAutoConfiguration.MyJpaPlusConfigInitializer(props, null));
     }
 
     @Test
@@ -360,8 +351,8 @@ class MyJpaPlusAutoConfigurationExtendedTest {
     void softDeleteFilterBean_apply_spec_withSoftDelete() {
         MyJpaPlusProperties props = new MyJpaPlusProperties();
         SoftDeleteFilterBean bean = new SoftDeleteFilterBean(props);
-        var spec = (org.springframework.data.jpa.domain.Specification<com.zsubera.jpa.spec.SoftDeleteTestEntity>)
-            (root, query, cb) -> cb.conjunction();
+        var spec = (org.springframework.data.jpa.domain.Specification<
+            com.zsubera.jpa.spec.SoftDeleteTestEntity>)(root, query, cb) -> cb.conjunction();
         var result = bean.apply(spec, com.zsubera.jpa.spec.SoftDeleteTestEntity.class);
         assertNotNull(result);
     }
@@ -378,8 +369,8 @@ class MyJpaPlusAutoConfigurationExtendedTest {
     void softDeleteFilterBean_apply_spec_withoutSoftDelete() {
         MyJpaPlusProperties props = new MyJpaPlusProperties();
         SoftDeleteFilterBean bean = new SoftDeleteFilterBean(props);
-        var spec = (org.springframework.data.jpa.domain.Specification<com.zsubera.jpa.spec.TestEntity>)
-            (root, query, cb) -> cb.conjunction();
+        var spec = (org.springframework.data.jpa.domain.Specification<
+            com.zsubera.jpa.spec.TestEntity>)(root, query, cb) -> cb.conjunction();
         var result = bean.apply(spec, com.zsubera.jpa.spec.TestEntity.class);
         assertSame(spec, result);
     }

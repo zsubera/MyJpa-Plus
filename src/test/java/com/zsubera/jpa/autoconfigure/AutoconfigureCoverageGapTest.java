@@ -1,5 +1,7 @@
 package com.zsubera.jpa.autoconfigure;
 
+import com.zsubera.jpa.monitor.SlowQueryDataSourceProxyPostProcessor;
+
 import static org.junit.jupiter.api.Assertions.*;
 
 import java.util.List;
@@ -44,17 +46,13 @@ class AutoconfigureCoverageGapTest {
         var r1 = bean.apply(null, com.zsubera.jpa.spec.SoftDeleteTestEntity.class);
         assertNotNull(r1);
         // hasSoftDeleteField = true, spec != null
-        var r2 = bean.apply(
-            (root, query, cb) -> cb.conjunction(),
-            com.zsubera.jpa.spec.SoftDeleteTestEntity.class);
+        var r2 = bean.apply((root, query, cb) -> cb.conjunction(), com.zsubera.jpa.spec.SoftDeleteTestEntity.class);
         assertNotNull(r2);
         // hasSoftDeleteField = false, spec = null
         var r3 = bean.apply(null, com.zsubera.jpa.spec.TestEntity.class);
         assertNull(r3);
         // hasSoftDeleteField = false, spec != null
-        var r4 = bean.apply(
-            (root, query, cb) -> cb.conjunction(),
-            com.zsubera.jpa.spec.TestEntity.class);
+        var r4 = bean.apply((root, query, cb) -> cb.conjunction(), com.zsubera.jpa.spec.TestEntity.class);
         assertNotNull(r4);
     }
 
@@ -64,8 +62,7 @@ class AutoconfigureCoverageGapTest {
         // Default extra functions are empty lists — both null-check and isEmpty branches
         props.getQuery().setExtraSafeFunctions(null);
         props.getQuery().setExtraBooleanFunctions(null);
-        assertDoesNotThrow(
-            () -> new MyJpaPlusAutoConfiguration.MyJpaPlusConfigInitializer(props, null));
+        assertDoesNotThrow(() -> new MyJpaPlusAutoConfiguration.MyJpaPlusConfigInitializer(props, null));
     }
 
     @Test
@@ -73,16 +70,14 @@ class AutoconfigureCoverageGapTest {
         MyJpaPlusProperties props = new MyJpaPlusProperties();
         props.getQuery().setExtraSafeFunctions(List.of());
         props.getQuery().setExtraBooleanFunctions(List.of());
-        assertDoesNotThrow(
-            () -> new MyJpaPlusAutoConfiguration.MyJpaPlusConfigInitializer(props, null));
+        assertDoesNotThrow(() -> new MyJpaPlusAutoConfiguration.MyJpaPlusConfigInitializer(props, null));
     }
 
     @Test
     void myJpaPlusConfigInitializer_timeoutZero() {
         MyJpaPlusProperties props = new MyJpaPlusProperties();
         props.getQuery().setDefaultTimeoutSeconds(-1);
-        assertDoesNotThrow(
-            () -> new MyJpaPlusAutoConfiguration.MyJpaPlusConfigInitializer(props, null));
+        assertDoesNotThrow(() -> new MyJpaPlusAutoConfiguration.MyJpaPlusConfigInitializer(props, null));
     }
 
     @Test
@@ -93,8 +88,7 @@ class AutoconfigureCoverageGapTest {
             // Clear both to test the null/empty branch
             System.clearProperty("myjpa.encrypt.key");
             MyJpaPlusProperties props = new MyJpaPlusProperties();
-            assertDoesNotThrow(
-                () -> new MyJpaPlusAutoConfiguration.MyJpaPlusConfigInitializer(props, null));
+            assertDoesNotThrow(() -> new MyJpaPlusAutoConfiguration.MyJpaPlusConfigInitializer(props, null));
         } finally {
             if (oldProp != null) {
                 System.setProperty("myjpa.encrypt.key", oldProp);
@@ -108,8 +102,7 @@ class AutoconfigureCoverageGapTest {
         MyJpaPlusGlobalConfig globalConfig = new MyJpaPlusGlobalConfig();
         globalConfig.setSoftDeleteAutoFilter(true);
         globalConfig.setBlockUnconditionalDelete(false);
-        assertDoesNotThrow(
-            () -> new MyJpaPlusAutoConfiguration.MyJpaPlusConfigInitializer(props, globalConfig));
+        assertDoesNotThrow(() -> new MyJpaPlusAutoConfiguration.MyJpaPlusConfigInitializer(props, globalConfig));
     }
 
     @Test
@@ -156,14 +149,12 @@ class AutoconfigureCoverageGapTest {
     void dataSourceSlowQueryProxyPostProcessor_isAlreadyWrapped_truePath() {
         com.zsubera.jpa.monitor.SqlSlowQueryInterceptor interceptor =
             new com.zsubera.jpa.monitor.SqlSlowQueryInterceptor(1000);
-        MyJpaPlusAutoConfiguration.DataSourceSlowQueryProxyPostProcessor processor =
-            new MyJpaPlusAutoConfiguration.DataSourceSlowQueryProxyPostProcessor(interceptor);
+        SlowQueryDataSourceProxyPostProcessor processor = new SlowQueryDataSourceProxyPostProcessor(1000L);
 
         // Create a proxy DataSource that is already wrapped
-        javax.sql.DataSource wrappedProxy = (javax.sql.DataSource) java.lang.reflect.Proxy.newProxyInstance(
-            getClass().getClassLoader(),
-            new Class<?>[]{javax.sql.DataSource.class},
-            (proxy, method, args) -> null);
+        javax.sql.DataSource wrappedProxy =
+            (javax.sql.DataSource)java.lang.reflect.Proxy.newProxyInstance(getClass().getClassLoader(),
+                new Class<?>[] {javax.sql.DataSource.class}, (proxy, method, args) -> null);
 
         // When InvocationHandler is a DataSourceProxyHandler, isAlreadyWrapped returns true
         // But we can't easily create a DataSourceProxyHandler, so test the non-wrapped proxy path
@@ -176,8 +167,7 @@ class AutoconfigureCoverageGapTest {
     void dataSourceSlowQueryProxyPostProcessor_notDataSource_returnsSame() {
         com.zsubera.jpa.monitor.SqlSlowQueryInterceptor interceptor =
             new com.zsubera.jpa.monitor.SqlSlowQueryInterceptor(1000);
-        MyJpaPlusAutoConfiguration.DataSourceSlowQueryProxyPostProcessor processor =
-            new MyJpaPlusAutoConfiguration.DataSourceSlowQueryProxyPostProcessor(interceptor);
+        SlowQueryDataSourceProxyPostProcessor processor = new SlowQueryDataSourceProxyPostProcessor(1000L);
 
         String notDataSource = "not a datasource";
         assertSame(notDataSource, processor.postProcessAfterInitialization(notDataSource, "test"));

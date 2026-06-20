@@ -6,6 +6,8 @@ import ch.qos.logback.classic.Level;
 import ch.qos.logback.classic.Logger;
 import com.zsubera.jpa.repository.DefaultMyJpaRepository;
 import com.zsubera.jpa.monitor.SqlSlowQueryInterceptor;
+import com.zsubera.jpa.monitor.SlowQueryDataSourceProxyPostProcessor;
+import com.zsubera.jpa.monitor.SlowQueryDataSourceProxy;
 import com.zsubera.jpa.template.MyJpaTemplateOperations;
 import com.zsubera.jpa.template.QueryCacheManager;
 import com.zsubera.jpa.template.CacheInvalidationListener;
@@ -103,7 +105,7 @@ class AutoconfigureIntegrationTest {
 
     @Test
     void configInitializer_debugLogging() {
-        Logger logger = (Logger) LoggerFactory.getLogger("com.zsubera.jpa.autoconfigure.MyJpaPlusAutoConfiguration");
+        Logger logger = (Logger)LoggerFactory.getLogger("com.zsubera.jpa.autoconfigure.MyJpaPlusAutoConfiguration");
         Level oldLevel = logger.getLevel();
         try {
             logger.setLevel(Level.DEBUG);
@@ -119,7 +121,7 @@ class AutoconfigureIntegrationTest {
 
     @Test
     void configInitializer_debugLogging_noGlobalConfig() {
-        Logger logger = (Logger) LoggerFactory.getLogger("com.zsubera.jpa.autoconfigure.MyJpaPlusAutoConfiguration");
+        Logger logger = (Logger)LoggerFactory.getLogger("com.zsubera.jpa.autoconfigure.MyJpaPlusAutoConfiguration");
         Level oldLevel = logger.getLevel();
         try {
             logger.setLevel(Level.DEBUG);
@@ -146,8 +148,7 @@ class AutoconfigureIntegrationTest {
     @Test
     void dataSourceProxy_nonDataSource_returnsSame() {
         SqlSlowQueryInterceptor interceptor = new SqlSlowQueryInterceptor(1000);
-        MyJpaPlusAutoConfiguration.DataSourceSlowQueryProxyPostProcessor processor =
-            new MyJpaPlusAutoConfiguration.DataSourceSlowQueryProxyPostProcessor(interceptor);
+        SlowQueryDataSourceProxyPostProcessor processor = new SlowQueryDataSourceProxyPostProcessor(1000L);
         String notDataSource = "not a datasource";
         assertSame(notDataSource, processor.postProcessAfterInitialization(notDataSource, "test"));
     }
@@ -155,11 +156,10 @@ class AutoconfigureIntegrationTest {
     @Test
     void dataSourceProxy_alreadyWrapped_skipsDoubleWrap() {
         SqlSlowQueryInterceptor interceptor = new SqlSlowQueryInterceptor(1000);
-        MyJpaPlusAutoConfiguration.DataSourceSlowQueryProxyPostProcessor processor =
-            new MyJpaPlusAutoConfiguration.DataSourceSlowQueryProxyPostProcessor(interceptor);
+        SlowQueryDataSourceProxyPostProcessor processor = new SlowQueryDataSourceProxyPostProcessor(1000L);
 
         DataSource realDataSource = context.getBean(DataSource.class);
-        DataSource wrapped = interceptor.wrapDataSource(realDataSource);
+        DataSource wrapped = SlowQueryDataSourceProxy.wrap(realDataSource, 1000L);
         Object result = processor.postProcessAfterInitialization(wrapped, "ds");
         assertSame(wrapped, result, "Should not double-wrap already wrapped DataSource");
     }
@@ -167,8 +167,7 @@ class AutoconfigureIntegrationTest {
     @Test
     void dataSourceProxy_realDataSource_wrapsIt() {
         SqlSlowQueryInterceptor interceptor = new SqlSlowQueryInterceptor(1000);
-        MyJpaPlusAutoConfiguration.DataSourceSlowQueryProxyPostProcessor processor =
-            new MyJpaPlusAutoConfiguration.DataSourceSlowQueryProxyPostProcessor(interceptor);
+        SlowQueryDataSourceProxyPostProcessor processor = new SlowQueryDataSourceProxyPostProcessor(1000L);
 
         DataSource realDataSource = context.getBean(DataSource.class);
         Object result = processor.postProcessAfterInitialization(realDataSource, "ds");
@@ -178,13 +177,10 @@ class AutoconfigureIntegrationTest {
     @Test
     void dataSourceProxy_jdkProxy_skipsWrap() {
         SqlSlowQueryInterceptor interceptor = new SqlSlowQueryInterceptor(1000);
-        MyJpaPlusAutoConfiguration.DataSourceSlowQueryProxyPostProcessor processor =
-            new MyJpaPlusAutoConfiguration.DataSourceSlowQueryProxyPostProcessor(interceptor);
+        SlowQueryDataSourceProxyPostProcessor processor = new SlowQueryDataSourceProxyPostProcessor(1000L);
 
-        DataSource proxy = (DataSource) java.lang.reflect.Proxy.newProxyInstance(
-            getClass().getClassLoader(),
-            new Class<?>[]{DataSource.class},
-            (p, m, args) -> null);
+        DataSource proxy = (DataSource)java.lang.reflect.Proxy.newProxyInstance(getClass().getClassLoader(),
+            new Class<?>[] {DataSource.class}, (p, m, args) -> null);
         Object result = processor.postProcessAfterInitialization(proxy, "ds");
         assertSame(proxy, result, "Should not wrap JDK proxy DataSource");
     }
@@ -193,7 +189,7 @@ class AutoconfigureIntegrationTest {
 
     @Test
     void softDeleteFilterBean_afterPropertiesSet_debugLogging() {
-        Logger logger = (Logger) LoggerFactory.getLogger(SoftDeleteFilterBean.class);
+        Logger logger = (Logger)LoggerFactory.getLogger(SoftDeleteFilterBean.class);
         Level oldLevel = logger.getLevel();
         try {
             logger.setLevel(Level.DEBUG);
@@ -207,7 +203,7 @@ class AutoconfigureIntegrationTest {
 
     @Test
     void softDeleteFilterBean_registerEntity_debugLogging() {
-        Logger logger = (Logger) LoggerFactory.getLogger(SoftDeleteFilterBean.class);
+        Logger logger = (Logger)LoggerFactory.getLogger(SoftDeleteFilterBean.class);
         Level oldLevel = logger.getLevel();
         try {
             logger.setLevel(Level.DEBUG);
@@ -223,8 +219,8 @@ class AutoconfigureIntegrationTest {
 
     @Test
     void repositoryBaseClassPostProcessor_debugLogging() {
-        Logger logger = (Logger) LoggerFactory.getLogger(
-            "com.zsubera.jpa.autoconfigure.MyJpaPlusAutoConfiguration$RepositoryBaseClassPostProcessor");
+        Logger logger = (Logger)LoggerFactory
+            .getLogger("com.zsubera.jpa.autoconfigure.MyJpaPlusAutoConfiguration$RepositoryBaseClassPostProcessor");
         Level oldLevel = logger.getLevel();
         try {
             logger.setLevel(Level.DEBUG);
@@ -256,8 +252,7 @@ class AutoconfigureIntegrationTest {
 
     @Test
     void onContextClosed_cleansUp() {
-        MyJpaPlusAutoConfiguration config = new MyJpaPlusAutoConfiguration(
-            context.getBean(MyJpaPlusProperties.class));
+        MyJpaPlusAutoConfiguration config = new MyJpaPlusAutoConfiguration(context.getBean(MyJpaPlusProperties.class));
         assertDoesNotThrow(() -> config.onContextClosed(null));
     }
 
@@ -353,7 +348,7 @@ class AutoconfigureIntegrationTest {
     void sqlSlowQueryInterceptor_wrapDataSource() {
         SqlSlowQueryInterceptor interceptor = new SqlSlowQueryInterceptor(1000);
         DataSource realDataSource = context.getBean(DataSource.class);
-        DataSource wrapped = interceptor.wrapDataSource(realDataSource);
+        DataSource wrapped = SlowQueryDataSourceProxy.wrap(realDataSource, 1000L);
         assertNotNull(wrapped);
         assertNotSame(realDataSource, wrapped);
     }

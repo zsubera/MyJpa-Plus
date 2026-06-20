@@ -1,5 +1,7 @@
 package com.zsubera.jpa.autoconfigure;
 
+import com.zsubera.jpa.monitor.SlowQueryDataSourceProxyPostProcessor;
+
 import static org.junit.jupiter.api.Assertions.*;
 
 import com.zsubera.jpa.repository.DefaultMyJpaRepository;
@@ -70,8 +72,7 @@ class MyJpaPlusAutoConfigurationBranchTest {
         MyJpaPlusProperties props = new MyJpaPlusProperties();
         props.getQuery().setExtraSafeFunctions(List.of("CUSTOM_FUNC"));
 
-        assertDoesNotThrow(
-            () -> new MyJpaPlusAutoConfiguration.MyJpaPlusConfigInitializer(props, null));
+        assertDoesNotThrow(() -> new MyJpaPlusAutoConfiguration.MyJpaPlusConfigInitializer(props, null));
     }
 
     @Test
@@ -79,8 +80,7 @@ class MyJpaPlusAutoConfigurationBranchTest {
         MyJpaPlusProperties props = new MyJpaPlusProperties();
         props.getQuery().setExtraBooleanFunctions(List.of("CUSTOM_BOOL"));
 
-        assertDoesNotThrow(
-            () -> new MyJpaPlusAutoConfiguration.MyJpaPlusConfigInitializer(props, null));
+        assertDoesNotThrow(() -> new MyJpaPlusAutoConfiguration.MyJpaPlusConfigInitializer(props, null));
     }
 
     @Test
@@ -88,8 +88,7 @@ class MyJpaPlusAutoConfigurationBranchTest {
         MyJpaPlusProperties props = new MyJpaPlusProperties();
         props.getQuery().setExtraSafeFunctions(List.of());
 
-        assertDoesNotThrow(
-            () -> new MyJpaPlusAutoConfiguration.MyJpaPlusConfigInitializer(props, null));
+        assertDoesNotThrow(() -> new MyJpaPlusAutoConfiguration.MyJpaPlusConfigInitializer(props, null));
     }
 
     @Test
@@ -97,8 +96,7 @@ class MyJpaPlusAutoConfigurationBranchTest {
         MyJpaPlusProperties props = new MyJpaPlusProperties();
         props.getQuery().setExtraBooleanFunctions(List.of());
 
-        assertDoesNotThrow(
-            () -> new MyJpaPlusAutoConfiguration.MyJpaPlusConfigInitializer(props, null));
+        assertDoesNotThrow(() -> new MyJpaPlusAutoConfiguration.MyJpaPlusConfigInitializer(props, null));
     }
 
     @Test
@@ -109,8 +107,7 @@ class MyJpaPlusAutoConfigurationBranchTest {
             // We can't set env vars directly, but we can set the system property
             System.setProperty("myjpa.encrypt.key", "test-encrypt-key-12345");
             MyJpaPlusProperties props = new MyJpaPlusProperties();
-            assertDoesNotThrow(
-                () -> new MyJpaPlusAutoConfiguration.MyJpaPlusConfigInitializer(props, null));
+            assertDoesNotThrow(() -> new MyJpaPlusAutoConfiguration.MyJpaPlusConfigInitializer(props, null));
         } finally {
             if (oldProp != null) {
                 System.setProperty("myjpa.encrypt.key", oldProp);
@@ -126,8 +123,7 @@ class MyJpaPlusAutoConfigurationBranchTest {
         try {
             System.clearProperty("myjpa.encrypt.key");
             MyJpaPlusProperties props = new MyJpaPlusProperties();
-            assertDoesNotThrow(
-                () -> new MyJpaPlusAutoConfiguration.MyJpaPlusConfigInitializer(props, null));
+            assertDoesNotThrow(() -> new MyJpaPlusAutoConfiguration.MyJpaPlusConfigInitializer(props, null));
         } finally {
             if (oldProp != null) {
                 System.setProperty("myjpa.encrypt.key", oldProp);
@@ -140,8 +136,7 @@ class MyJpaPlusAutoConfigurationBranchTest {
         MyJpaPlusProperties props = new MyJpaPlusProperties();
         props.getQuery().setDefaultTimeoutSeconds(60);
 
-        assertDoesNotThrow(
-            () -> new MyJpaPlusAutoConfiguration.MyJpaPlusConfigInitializer(props, null));
+        assertDoesNotThrow(() -> new MyJpaPlusAutoConfiguration.MyJpaPlusConfigInitializer(props, null));
     }
 
     @Test
@@ -149,8 +144,7 @@ class MyJpaPlusAutoConfigurationBranchTest {
         MyJpaPlusProperties props = new MyJpaPlusProperties();
         props.getQuery().setDefaultTimeoutSeconds(-1);
 
-        assertDoesNotThrow(
-            () -> new MyJpaPlusAutoConfiguration.MyJpaPlusConfigInitializer(props, null));
+        assertDoesNotThrow(() -> new MyJpaPlusAutoConfiguration.MyJpaPlusConfigInitializer(props, null));
     }
 
     @Test
@@ -160,8 +154,7 @@ class MyJpaPlusAutoConfigurationBranchTest {
         // The setter throws, so we need to test with a valid value that hits the branch
         props.getQuery().setDefaultTimeoutSeconds(-1);
 
-        assertDoesNotThrow(
-            () -> new MyJpaPlusAutoConfiguration.MyJpaPlusConfigInitializer(props, null));
+        assertDoesNotThrow(() -> new MyJpaPlusAutoConfiguration.MyJpaPlusConfigInitializer(props, null));
     }
 
     @Test
@@ -177,8 +170,7 @@ class MyJpaPlusAutoConfigurationBranchTest {
     void dataSourceSlowQueryProxyPostProcessor_nonDataSource_returnsSame() {
         com.zsubera.jpa.monitor.SqlSlowQueryInterceptor interceptor =
             new com.zsubera.jpa.monitor.SqlSlowQueryInterceptor(1000);
-        MyJpaPlusAutoConfiguration.DataSourceSlowQueryProxyPostProcessor processor =
-            new MyJpaPlusAutoConfiguration.DataSourceSlowQueryProxyPostProcessor(interceptor);
+        SlowQueryDataSourceProxyPostProcessor processor = new SlowQueryDataSourceProxyPostProcessor(1000L);
 
         String notDataSource = "not a datasource";
         assertSame(notDataSource, processor.postProcessAfterInitialization(notDataSource, "test"));
@@ -188,13 +180,11 @@ class MyJpaPlusAutoConfigurationBranchTest {
     void dataSourceSlowQueryProxyPostProcessor_proxyDataSource_returnsSame() {
         com.zsubera.jpa.monitor.SqlSlowQueryInterceptor interceptor =
             new com.zsubera.jpa.monitor.SqlSlowQueryInterceptor(1000);
-        MyJpaPlusAutoConfiguration.DataSourceSlowQueryProxyPostProcessor processor =
-            new MyJpaPlusAutoConfiguration.DataSourceSlowQueryProxyPostProcessor(interceptor);
+        SlowQueryDataSourceProxyPostProcessor processor = new SlowQueryDataSourceProxyPostProcessor(1000L);
 
-        javax.sql.DataSource proxy = (javax.sql.DataSource) java.lang.reflect.Proxy.newProxyInstance(
-            getClass().getClassLoader(),
-            new Class<?>[]{javax.sql.DataSource.class},
-            (p, m, args) -> null);
+        javax.sql.DataSource proxy =
+            (javax.sql.DataSource)java.lang.reflect.Proxy.newProxyInstance(getClass().getClassLoader(),
+                new Class<?>[] {javax.sql.DataSource.class}, (p, m, args) -> null);
 
         Object result = processor.postProcessAfterInitialization(proxy, "ds");
         assertSame(proxy, result);
@@ -234,8 +224,7 @@ class MyJpaPlusAutoConfigurationBranchTest {
 
         processor.postProcessBeanDefinitionRegistry(beanFactory);
 
-        assertEquals("com.example.CustomFactoryBean",
-            beanFactory.getBeanDefinition("testRepo").getBeanClassName());
+        assertEquals("com.example.CustomFactoryBean", beanFactory.getBeanDefinition("testRepo").getBeanClassName());
     }
 
     @Test
@@ -348,8 +337,8 @@ class MyJpaPlusAutoConfigurationBranchTest {
     void softDeleteFilterBean_apply_spec_withSoftDelete() {
         MyJpaPlusProperties props = new MyJpaPlusProperties();
         SoftDeleteFilterBean bean = new SoftDeleteFilterBean(props);
-        var spec = (org.springframework.data.jpa.domain.Specification<com.zsubera.jpa.spec.SoftDeleteTestEntity>)
-            (root, query, cb) -> cb.conjunction();
+        var spec = (org.springframework.data.jpa.domain.Specification<
+            com.zsubera.jpa.spec.SoftDeleteTestEntity>)(root, query, cb) -> cb.conjunction();
         var result = bean.apply(spec, com.zsubera.jpa.spec.SoftDeleteTestEntity.class);
         assertNotNull(result);
     }
@@ -366,8 +355,8 @@ class MyJpaPlusAutoConfigurationBranchTest {
     void softDeleteFilterBean_apply_spec_withoutSoftDelete() {
         MyJpaPlusProperties props = new MyJpaPlusProperties();
         SoftDeleteFilterBean bean = new SoftDeleteFilterBean(props);
-        var spec = (org.springframework.data.jpa.domain.Specification<com.zsubera.jpa.spec.TestEntity>)
-            (root, query, cb) -> cb.conjunction();
+        var spec = (org.springframework.data.jpa.domain.Specification<
+            com.zsubera.jpa.spec.TestEntity>)(root, query, cb) -> cb.conjunction();
         var result = bean.apply(spec, com.zsubera.jpa.spec.TestEntity.class);
         assertSame(spec, result);
     }

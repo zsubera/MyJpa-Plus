@@ -6,11 +6,11 @@ import ch.qos.logback.classic.Level;
 import ch.qos.logback.classic.Logger;
 import com.zsubera.jpa.converter.EncryptConverter;
 import com.zsubera.jpa.monitor.SqlSlowQueryInterceptor;
+import com.zsubera.jpa.monitor.SlowQueryDataSourceProxyPostProcessor;
+import com.zsubera.jpa.monitor.SlowQueryDataSourceProxy;
 import java.lang.reflect.Field;
 import java.lang.reflect.Proxy;
 import java.util.List;
-import java.util.concurrent.Executors;
-import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import javax.sql.DataSource;
@@ -25,10 +25,8 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.test.context.TestPropertySource;
 
 @SpringBootTest(classes = AutoconfigureIntegrationTest.TestConfig.class)
-@TestPropertySource(properties = {
-    "myjpa-plus.monitoring.enabled=true",
-    "myjpa-plus.monitoring.slow-query-threshold-ms=500"
-})
+@TestPropertySource(
+    properties = {"myjpa-plus.monitoring.enabled=true", "myjpa-plus.monitoring.slow-query-threshold-ms=500"})
 class AutoconfigureSecurityTest {
 
     @Autowired
@@ -108,7 +106,7 @@ class AutoconfigureSecurityTest {
         // Get the WARM_UP_EXECUTOR field from EncryptConverter
         Field executorField = EncryptConverter.class.getDeclaredField("WARM_UP_EXECUTOR");
         executorField.setAccessible(true);
-        ThreadPoolExecutor originalExecutor = (ThreadPoolExecutor) executorField.get(null);
+        ThreadPoolExecutor originalExecutor = (ThreadPoolExecutor)executorField.get(null);
 
         try {
             // Shut down the executor to cause RejectedExecutionException
@@ -121,8 +119,7 @@ class AutoconfigureSecurityTest {
                 System.setProperty("myjpa.encrypt.key", "test-key-12345678");
                 MyJpaPlusProperties props = new MyJpaPlusProperties();
                 // This should trigger RejectedExecutionException in warmUpKeyCache
-                assertDoesNotThrow(
-                    () -> new MyJpaPlusAutoConfiguration.MyJpaPlusConfigInitializer(props, null));
+                assertDoesNotThrow(() -> new MyJpaPlusAutoConfiguration.MyJpaPlusConfigInitializer(props, null));
             } finally {
                 if (oldProp != null) {
                     System.setProperty("myjpa.encrypt.key", oldProp);
@@ -140,8 +137,8 @@ class AutoconfigureSecurityTest {
 
     @Test
     void moduleCompatibilityChecker_debugLogging() {
-        Logger logger = (Logger) LoggerFactory.getLogger(
-            "com.zsubera.jpa.autoconfigure.MyJpaPlusAutoConfiguration$ModuleCompatibilityChecker");
+        Logger logger = (Logger)LoggerFactory
+            .getLogger("com.zsubera.jpa.autoconfigure.MyJpaPlusAutoConfiguration$ModuleCompatibilityChecker");
         Level oldLevel = logger.getLevel();
         try {
             logger.setLevel(Level.DEBUG);
@@ -153,42 +150,65 @@ class AutoconfigureSecurityTest {
         }
     }
 
-    // ---- DataSourceSlowQueryProxyPostProcessor: isAlreadyWrapped ----
+    // ---- SlowQueryDataSourceProxy: isWrapped ----
 
     @Test
     void dataSourceProxy_isAlreadyWrapped_reflection() throws Exception {
         SqlSlowQueryInterceptor interceptor = context.getBean(SqlSlowQueryInterceptor.class);
-        MyJpaPlusAutoConfiguration.DataSourceSlowQueryProxyPostProcessor processor =
-            new MyJpaPlusAutoConfiguration.DataSourceSlowQueryProxyPostProcessor(interceptor);
-
-        java.lang.reflect.Method isAlreadyWrappedMethod =
-            MyJpaPlusAutoConfiguration.DataSourceSlowQueryProxyPostProcessor.class
-                .getDeclaredMethod("isAlreadyWrapped", DataSource.class);
-        isAlreadyWrappedMethod.setAccessible(true);
+        SlowQueryDataSourceProxyPostProcessor processor = new SlowQueryDataSourceProxyPostProcessor(1000L);
 
         // Test with non-proxy DataSource
         DataSource rawDs = new javax.sql.DataSource() {
-            @Override public java.io.PrintWriter getLogWriter() { return null; }
-            @Override public void setLogWriter(java.io.PrintWriter out) {}
-            @Override public void setLoginTimeout(int seconds) {}
-            @Override public int getLoginTimeout() { return 0; }
-            @Override public java.util.logging.Logger getParentLogger() { return null; }
-            @Override public <T> T unwrap(java.lang.Class<T> iface) { return null; }
-            @Override public boolean isWrapperFor(java.lang.Class<?> iface) { return false; }
-            @Override public java.sql.Connection getConnection() { return null; }
-            @Override public java.sql.Connection getConnection(String u, String p) { return null; }
+            @Override
+            public java.io.PrintWriter getLogWriter() {
+                return null;
+            }
+
+            @Override
+            public void setLogWriter(java.io.PrintWriter out) {}
+
+            @Override
+            public void setLoginTimeout(int seconds) {}
+
+            @Override
+            public int getLoginTimeout() {
+                return 0;
+            }
+
+            @Override
+            public java.util.logging.Logger getParentLogger() {
+                return null;
+            }
+
+            @Override
+            public <T> T unwrap(java.lang.Class<T> iface) {
+                return null;
+            }
+
+            @Override
+            public boolean isWrapperFor(java.lang.Class<?> iface) {
+                return false;
+            }
+
+            @Override
+            public java.sql.Connection getConnection() {
+                return null;
+            }
+
+            @Override
+            public java.sql.Connection getConnection(String u, String p) {
+                return null;
+            }
         };
-        assertFalse((boolean) isAlreadyWrappedMethod.invoke(null, rawDs));
+        assertFalse(SlowQueryDataSourceProxy.isWrapped(rawDs));
 
         // Test with JDK proxy (not DataSourceProxyHandler)
-        DataSource jdkProxy = (DataSource) Proxy.newProxyInstance(
-            getClass().getClassLoader(),
-            new Class<?>[]{DataSource.class},
-            (p, m, args) -> null);
-        assertFalse((boolean) isAlreadyWrappedMethod.invoke(null, jdkProxy));
+        DataSource jdkProxy = (DataSource)Proxy.newProxyInstance(getClass().getClassLoader(),
+            new Class<?>[] {DataSource.class}, (p, m, args) -> null);
+        assertFalse(SlowQueryDataSourceProxy.isWrapped(jdkProxy));
 
         // Test with wrapped DataSource (has DataSourceProxyHandler)
-        DataSource wrapped = interceptor.wrapDataSource(rawDs);
-        assertTrue((boolean) isAlreadyWrappedMethod.invoke(null, wrapped));
+        DataSource wrapped = SlowQueryDataSourceProxy.wrap(rawDs, 1000L);
+        assertTrue(SlowQueryDataSourceProxy.isWrapped(wrapped));
     }
 }
