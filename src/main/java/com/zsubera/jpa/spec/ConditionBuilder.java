@@ -59,8 +59,9 @@ public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> ext
      * 此集合为不可变集合，禁止调用危险函数如 {@code pg_sleep}、{@code SLEEP}、{code LOAD_FILE} 等。
      *
      * <p>
-     * 白名单强制执行由 {@link #WHITELIST_ENFORCED} 控制（硬编码为 true）。 如需扩展白名单，请通过 {@link #addSafeFunctionNames(Collection)} 在启动时配置，
-     * 或在 application.yml 中设置 {@code myjpa-plus.query.extra-safe-functions}。
+     * 白名单强制执行由 {@link #WHITELIST_ENFORCED} 控制（硬编码为 true）。 如需扩展白名单，请使用
+     * {@link FunctionWhitelist#addSafeFunctionNames(Collection)} 或配置
+     * {@code myjpa-plus.query.extra-safe-functions}。
      */
     Set<String> SAFE_FUNCTION_NAMES = Set.copyOf(initDefaultFunctionNames());
 
@@ -69,7 +70,7 @@ public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> ext
      *
      * <p>
      * 此开关防止通过系统属性 {@code myjpa-plus.func.whitelist-enforced=false} 禁用白名单保护。 攻击者若能控制系统属性，可禁用白名单保护，因此移除了系统属性读取逻辑。
-     * 如需扩展白名单，请使用 {@link #addSafeFunctionNames(Collection)} 或配置
+     * 如需扩展白名单，请使用 {@link FunctionWhitelist#addSafeFunctionNames(Collection)} 或配置
      * {@code myjpa-plus.query.extra-safe-functions}。
      */
     boolean WHITELIST_ENFORCED = true;
@@ -83,40 +84,6 @@ public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> ext
      */
     Set<String> BOOLEAN_FUNCTION_NAMES = Set.of("COALESCE", "NULLIF", "IF", "DECODE", "IFNULL", "NVL", "NVL2",
         "JSONB_EXISTS", "ST_CONTAINS", "ST_WITHIN", "ST_INTERSECTS");
-
-    /**
-     * 向安全函数白名单中添加额外的函数名。委托给 {@link FunctionWhitelist}。
-     *
-     * @param functionNames 要添加的函数名集合
-     * @throws IllegalArgumentException 如果 functionNames 为 null
-     * @deprecated 使用 {@link FunctionWhitelist#addSafeFunctionNames(Collection)} 代替
-     */
-    @Deprecated
-    static void addSafeFunctionNames(java.util.Collection<String> functionNames) {
-        FunctionWhitelist.addSafeFunctionNames(functionNames);
-    }
-
-    /**
-     * 向布尔函数白名单中添加额外的函数名。委托给 {@link FunctionWhitelist}。
-     *
-     * @param functionNames 要添加的函数名集合
-     * @throws IllegalArgumentException 如果 functionNames 为 null
-     * @deprecated 使用 {@link FunctionWhitelist#addBooleanFunctionNames(Collection)} 代替
-     */
-    @Deprecated
-    static void addBooleanFunctionNames(java.util.Collection<String> functionNames) {
-        FunctionWhitelist.addBooleanFunctionNames(functionNames);
-    }
-
-    /**
-     * 冻结扩展函数名快照。委托给 {@link FunctionWhitelist}。
-     *
-     * @deprecated 使用 {@link FunctionWhitelist#freezeExtraFunctionNames()} 代替
-     */
-    @Deprecated
-    static void freezeExtraFunctionNames() {
-        FunctionWhitelist.freezeExtraFunctionNames();
-    }
 
     /**
      * 初始化默认安全函数名白名单。
@@ -134,17 +101,12 @@ public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> ext
             "SPACE", "YEAR", "MONTH", "DAY", "HOUR", "MINUTE", "SECOND", "ADD_MONTHS", "ADD_DAYS", "DATE_DIFF",
             "DATEDIFF", "IFNULL", "IF", "NVL", "NVL2", "DECODE", "JSON_OBJECT", "JSON_ARRAY", "JSON_EXTRACT",
             "JSON_UNQUOTE", "UUID", "UUID_GENERATE_V4", "HEX", "UNHEX"));
-        // 日期/时间截断函数
         names.addAll(Set.of("TRUNCATE", "DATE_TRUNC", "DATE_TRUNCATE", "DATETRUNC"));
-        // 窗口函数（用于 ORDER BY 或子查询中的表达式）
         names.addAll(Set.of("ROW_NUMBER", "RANK", "DENSE_RANK", "NTILE", "LAG", "LEAD", "FIRST_VALUE", "LAST_VALUE",
             "NTH_VALUE"));
-        // 聚合函数
         names.addAll(Set.of("COUNT", "SUM", "AVG", "MIN", "MAX", "GROUP_CONCAT", "LISTAGG", "ARRAY_AGG"));
-        // 数学函数
         names.addAll(Set.of("PI", "RADIANS", "DEGREES", "SIN", "COS", "TAN", "ASIN", "ACOS", "ATAN", "ATAN2", "CBRT",
             "FACTORIAL", "RANDOM", "RAND"));
-        // 字符串函数
         names.addAll(Set.of("INITCAP", "LPAD", "RPAD", "ASCII", "CHR", "CONCAT_WS", "FORMAT", "INSERT", "LOCATE"));
         return names;
     }

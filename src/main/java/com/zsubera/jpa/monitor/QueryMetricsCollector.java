@@ -44,7 +44,7 @@ import org.slf4j.LoggerFactory;
  * <p>
  * <strong>线程安全：</strong>此类是线程安全的，可以在多线程环境中使用。
  *
- * @since 1.2.0
+
  */
 public class QueryMetricsCollector {
 

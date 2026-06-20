@@ -37,16 +37,16 @@ class RepositoryFinalPushTest {
         simpleRepository.flush();
         repository.deleteAll();
         repository.flush();
-        DefaultMyJpaRepository.setAutoFilterEnabled(true);
-        DefaultMyJpaRepository.setBlockUnconditionalDelete(true);
+        com.zsubera.jpa.autoconfigure.GlobalConfigHolder.getConfig().setSoftDeleteAutoFilter(true);
+        com.zsubera.jpa.autoconfigure.GlobalConfigHolder.getConfig().setBlockUnconditionalDelete(true);
         SoftDeleteContext.reset();
     }
 
     @AfterEach
     void tearDown() {
         SoftDeleteContext.reset();
-        DefaultMyJpaRepository.setAutoFilterEnabled(true);
-        DefaultMyJpaRepository.setBlockUnconditionalDelete(true);
+        com.zsubera.jpa.autoconfigure.GlobalConfigHolder.getConfig().setSoftDeleteAutoFilter(true);
+        com.zsubera.jpa.autoconfigure.GlobalConfigHolder.getConfig().setBlockUnconditionalDelete(true);
     }
 
     // ---- SimpleTestEntity: all mergeSoftDeleteFilter paths (non-@SoftDelete entity) ----
@@ -234,8 +234,8 @@ class RepositoryFinalPushTest {
 
     @Test
     void deleteAll_hardDelete() {
-        DefaultMyJpaRepository.setAutoFilterEnabled(false);
-        DefaultMyJpaRepository.setBlockUnconditionalDelete(false);
+        com.zsubera.jpa.autoconfigure.GlobalConfigHolder.getConfig().setSoftDeleteAutoFilter(false);
+        com.zsubera.jpa.autoconfigure.GlobalConfigHolder.getConfig().setBlockUnconditionalDelete(false);
         saveSoftDelete("a");
         repository.deleteAll();
         assertEquals(0, repository.count());
@@ -243,8 +243,8 @@ class RepositoryFinalPushTest {
 
     @Test
     void deleteAllInBatch_hardDelete() {
-        DefaultMyJpaRepository.setAutoFilterEnabled(false);
-        DefaultMyJpaRepository.setBlockUnconditionalDelete(false);
+        com.zsubera.jpa.autoconfigure.GlobalConfigHolder.getConfig().setSoftDeleteAutoFilter(false);
+        com.zsubera.jpa.autoconfigure.GlobalConfigHolder.getConfig().setBlockUnconditionalDelete(false);
         saveSoftDelete("a");
         repository.deleteAllInBatch();
         assertEquals(0, repository.count());
@@ -252,8 +252,8 @@ class RepositoryFinalPushTest {
 
     @Test
     void deleteAllById_hardDelete() {
-        DefaultMyJpaRepository.setAutoFilterEnabled(false);
-        DefaultMyJpaRepository.setBlockUnconditionalDelete(false);
+        com.zsubera.jpa.autoconfigure.GlobalConfigHolder.getConfig().setSoftDeleteAutoFilter(false);
+        com.zsubera.jpa.autoconfigure.GlobalConfigHolder.getConfig().setBlockUnconditionalDelete(false);
         SoftDeleteRepoTestEntity e = saveSoftDelete("a");
         repository.deleteAllById(java.util.List.of(e.getId()));
         repository.flush();
@@ -264,24 +264,24 @@ class RepositoryFinalPushTest {
 
     @Test
     void deleteAll_blocked() {
-        DefaultMyJpaRepository.setAutoFilterEnabled(false);
-        DefaultMyJpaRepository.setBlockUnconditionalDelete(true);
+        com.zsubera.jpa.autoconfigure.GlobalConfigHolder.getConfig().setSoftDeleteAutoFilter(false);
+        com.zsubera.jpa.autoconfigure.GlobalConfigHolder.getConfig().setBlockUnconditionalDelete(true);
         saveSoftDelete("a");
         assertThrows(Exception.class, () -> repository.deleteAll());
     }
 
     @Test
     void deleteAllInBatch_blocked() {
-        DefaultMyJpaRepository.setAutoFilterEnabled(false);
-        DefaultMyJpaRepository.setBlockUnconditionalDelete(true);
+        com.zsubera.jpa.autoconfigure.GlobalConfigHolder.getConfig().setSoftDeleteAutoFilter(false);
+        com.zsubera.jpa.autoconfigure.GlobalConfigHolder.getConfig().setBlockUnconditionalDelete(true);
         saveSoftDelete("a");
         assertThrows(Exception.class, () -> repository.deleteAllInBatch());
     }
 
     @Test
     void deleteAllById_blocked() {
-        DefaultMyJpaRepository.setAutoFilterEnabled(false);
-        DefaultMyJpaRepository.setBlockUnconditionalDelete(true);
+        com.zsubera.jpa.autoconfigure.GlobalConfigHolder.getConfig().setSoftDeleteAutoFilter(false);
+        com.zsubera.jpa.autoconfigure.GlobalConfigHolder.getConfig().setBlockUnconditionalDelete(true);
         SoftDeleteRepoTestEntity e = saveSoftDelete("a");
         assertThrows(Exception.class, () -> repository.deleteAllById(java.util.List.of(e.getId())));
     }

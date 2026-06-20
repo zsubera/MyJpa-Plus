@@ -25,7 +25,7 @@ import java.lang.annotation.Target;
  * <strong>注意：</strong>需要配置 {@link AuditUserProvider} 实现以提供当前用户信息。
  *
  * @author myjpa-plus
- * @since 1.2.0
+
  * @see AuditEntityListener
  * @see AuditUserProvider
  */

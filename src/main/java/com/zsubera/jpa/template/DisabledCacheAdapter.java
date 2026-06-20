@@ -6,7 +6,7 @@ package com.zsubera.jpa.template;
  * <p>
  * 通过 {@link CacheAdapterdisabled()} 获取单例实例。适用于不需要查询缓存的场景。
  *
- * @since 1.3.0
+
  */
 final class DisabledCacheAdapter implements CacheAdapter {
 

@@ -16,7 +16,7 @@ class EncryptConverterTest {
     void setUp() {
         System.setProperty("myjpa.encrypt.key", TEST_KEY);
         System.setProperty("myjpa-plus.encrypt.skip-salt-check", "true");
-        EncryptConverter.clearCacheForTesting();
+        EncryptConverter.clearCaches();
         converter = new EncryptConverter();
     }
 
@@ -24,7 +24,7 @@ class EncryptConverterTest {
     void tearDown() {
         System.clearProperty("myjpa.encrypt.key");
         System.clearProperty("myjpa-plus.encrypt.skip-salt-check");
-        EncryptConverter.clearCacheForTesting();
+        EncryptConverter.clearCaches();
     }
 
     @Test
@@ -95,7 +95,7 @@ class EncryptConverterTest {
     @DisplayName("missing key throws IllegalStateException at validation time")
     void shouldThrowWhenKeyNotSet() {
         System.clearProperty("myjpa.encrypt.key");
-        EncryptConverter.clearCacheForTesting();
+        EncryptConverter.clearCaches();
         EncryptConverter noKeyConverter = new EncryptConverter();
         assertThrows(IllegalStateException.class, () -> noKeyConverter.convertToDatabaseColumn("test"));
     }
@@ -104,7 +104,7 @@ class EncryptConverterTest {
     @DisplayName("short key is rejected with minimum length validation")
     void shouldRejectShortKey() {
         System.setProperty("myjpa.encrypt.key", "short");
-        EncryptConverter.clearCacheForTesting();
+        EncryptConverter.clearCaches();
         EncryptConverter shortKeyConverter = new EncryptConverter();
 
         assertThrows(com.zsubera.jpa.exception.MyJpaPlusException.class,
@@ -115,7 +115,7 @@ class EncryptConverterTest {
     @DisplayName("256-bit key supported")
     void shouldSupport256BitKey() {
         System.setProperty("myjpa.encrypt.key", "12345678901234561234567890123456");
-        EncryptConverter.clearCacheForTesting();
+        EncryptConverter.clearCaches();
         EncryptConverter aes256 = new EncryptConverter();
         String original = "test-data";
         String encrypted = aes256.convertToDatabaseColumn(original);
@@ -127,7 +127,7 @@ class EncryptConverterTest {
     @DisplayName("env variable key supported")
     void shouldSupportEnvVariableKey() {
         System.clearProperty("myjpa.encrypt.key");
-        EncryptConverter.clearCacheForTesting();
+        EncryptConverter.clearCaches();
         EncryptConverter envConverter = new EncryptConverter();
         String envKey = System.getenv("MYJPA_ENCRYPT_KEY");
         if (envKey != null && (envKey.length() == 16 || envKey.length() == 24 || envKey.length() == 32)) {

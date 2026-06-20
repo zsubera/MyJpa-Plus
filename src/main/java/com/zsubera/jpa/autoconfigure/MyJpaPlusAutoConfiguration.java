@@ -108,13 +108,6 @@ public class MyJpaPlusAutoConfiguration {
                     globalConfig.isSoftDeleteAutoFilter(), globalConfig.isBlockUnconditionalDelete()));
                 // 通过 GlobalConfigHolder 集中管理全局配置访问
                 GlobalConfigHolder.setConfig(globalConfig);
-                // 向后兼容：设置 QuerySpec 的全局配置（委托给 GlobalConfigHolder）
-                com.zsubera.jpa.spec.QuerySpec.setGlobalConfig(globalConfig);
-            } else {
-                // 向后兼容：使用旧的静态方法
-                DefaultMyJpaRepository.setAutoFilterEnabled(properties.getSoftDelete().isAutoFilter());
-                DefaultMyJpaRepository
-                    .setBlockUnconditionalDelete(properties.getSoftDelete().isBlockUnconditionalDelete());
             }
 
             // 应用 IN 子句配置

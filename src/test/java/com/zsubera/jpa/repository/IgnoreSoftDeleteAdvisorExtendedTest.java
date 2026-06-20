@@ -30,14 +30,14 @@ class IgnoreSoftDeleteAdvisorExtendedTest {
 
     @BeforeEach
     void setup() {
-        DefaultMyJpaRepository.setAutoFilterEnabled(true);
+        com.zsubera.jpa.autoconfigure.GlobalConfigHolder.getConfig().setSoftDeleteAutoFilter(true);
         SoftDeleteContext.reset();
     }
 
     @AfterEach
     void cleanup() {
         SoftDeleteContext.reset();
-        DefaultMyJpaRepository.setAutoFilterEnabled(true);
+        com.zsubera.jpa.autoconfigure.GlobalConfigHolder.getConfig().setSoftDeleteAutoFilter(true);
     }
 
     @Test

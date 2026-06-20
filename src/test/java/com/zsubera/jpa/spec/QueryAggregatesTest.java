@@ -84,9 +84,7 @@ class QueryAggregatesTest {
         CriteriaQuery<TestEntity> cq = cb.createQuery(TestEntity.class);
         Root<TestEntity> root = cq.from(TestEntity.class);
 
-        Expression<Long> qExpr = QuerySpec.count(root, cb);
         Expression<Long> qaExpr = QueryAggregates.count(root, cb);
-        assertNotNull(qExpr);
         assertNotNull(qaExpr);
     }
 }

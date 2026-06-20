@@ -4,7 +4,6 @@ import static org.junit.jupiter.api.Assertions.*;
 
 import ch.qos.logback.classic.Level;
 import ch.qos.logback.classic.Logger;
-import com.zsubera.jpa.repository.DefaultMyJpaRepository;
 import com.zsubera.jpa.monitor.SqlSlowQueryInterceptor;
 import com.zsubera.jpa.monitor.SlowQueryDataSourceProxyPostProcessor;
 import com.zsubera.jpa.monitor.SlowQueryDataSourceProxy;
@@ -35,15 +34,15 @@ class AutoconfigureIntegrationTest {
     @BeforeEach
     void setUp() {
         GlobalConfigHolder.setConfig(null);
-        DefaultMyJpaRepository.setAutoFilterEnabled(true);
-        DefaultMyJpaRepository.setBlockUnconditionalDelete(true);
+        com.zsubera.jpa.autoconfigure.GlobalConfigHolder.getConfig().setSoftDeleteAutoFilter(true);
+        com.zsubera.jpa.autoconfigure.GlobalConfigHolder.getConfig().setBlockUnconditionalDelete(true);
     }
 
     @AfterEach
     void tearDown() {
         GlobalConfigHolder.setConfig(null);
-        DefaultMyJpaRepository.setAutoFilterEnabled(true);
-        DefaultMyJpaRepository.setBlockUnconditionalDelete(true);
+        com.zsubera.jpa.autoconfigure.GlobalConfigHolder.getConfig().setSoftDeleteAutoFilter(true);
+        com.zsubera.jpa.autoconfigure.GlobalConfigHolder.getConfig().setBlockUnconditionalDelete(true);
     }
 
     // ---- Context loads ----
@@ -338,7 +337,7 @@ class AutoconfigureIntegrationTest {
     @Test
     void globalConfig_deprecated_setAutoFilterEnabled() {
         MyJpaPlusGlobalConfig config = new MyJpaPlusGlobalConfig();
-        config.setAutoFilterEnabled(false);
+        config.setSoftDeleteAutoFilter(false);
         assertFalse(config.isSoftDeleteAutoFilter());
     }
 

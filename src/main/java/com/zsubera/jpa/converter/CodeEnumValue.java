@@ -45,7 +45,7 @@ import java.lang.annotation.Target;
  * <strong>支持的字段类型：</strong>{@code int}、{@code long}、{@code Integer}、{@code Long}、{@code String}
  *
  * @author myjpa-plus
- * @since 1.1.0
+
  * @see CodeEnum
  * @see CodeEnumType
  */

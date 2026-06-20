@@ -4,7 +4,6 @@ import com.zsubera.jpa.monitor.SlowQueryDataSourceProxyPostProcessor;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-import com.zsubera.jpa.repository.DefaultMyJpaRepository;
 import java.util.List;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -15,15 +14,15 @@ class AutoconfigureCoverageTest {
     @BeforeEach
     void setUp() {
         GlobalConfigHolder.setConfig(null);
-        DefaultMyJpaRepository.setAutoFilterEnabled(true);
-        DefaultMyJpaRepository.setBlockUnconditionalDelete(true);
+        com.zsubera.jpa.autoconfigure.GlobalConfigHolder.getConfig().setSoftDeleteAutoFilter(true);
+        com.zsubera.jpa.autoconfigure.GlobalConfigHolder.getConfig().setBlockUnconditionalDelete(true);
     }
 
     @AfterEach
     void tearDown() {
         GlobalConfigHolder.setConfig(null);
-        DefaultMyJpaRepository.setAutoFilterEnabled(true);
-        DefaultMyJpaRepository.setBlockUnconditionalDelete(true);
+        com.zsubera.jpa.autoconfigure.GlobalConfigHolder.getConfig().setSoftDeleteAutoFilter(true);
+        com.zsubera.jpa.autoconfigure.GlobalConfigHolder.getConfig().setBlockUnconditionalDelete(true);
     }
 
     // ---- ConfigInitializer: debug logging path ----

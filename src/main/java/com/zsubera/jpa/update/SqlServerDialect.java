@@ -14,7 +14,7 @@ import com.zsubera.jpa.update.EntityFieldExtractor.EntityFieldValue;
  * <p>
  * SQL Server 使用方括号转义标识符：{@code [identifier]}。
  *
- * @since 1.3.0
+
  */
 final class SqlServerDialect implements DialectStrategy {
 

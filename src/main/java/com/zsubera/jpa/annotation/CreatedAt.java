@@ -25,7 +25,7 @@ import java.lang.annotation.Target;
  * <strong>注意：</strong>字段类型必须为 {@link java.time.Instant}、{@link java.time.LocalDateTime} 或 {@link java.util.Date}。
  *
  * @author myjpa-plus
- * @since 1.2.0
+
  * @see AuditEntityListener
  * @see UpdatedAt
  */

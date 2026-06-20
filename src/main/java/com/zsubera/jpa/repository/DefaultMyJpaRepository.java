@@ -152,54 +152,6 @@ public class DefaultMyJpaRepository<T, ID> extends SimpleJpaRepository<T, ID> im
     }
 
     /**
-     * 设置全局自动过滤开关。
-     *
-     * @param enabled 是否启用自动过滤
-     * @deprecated 请使用 {@link com.zsubera.jpa.autoconfigure.MyJpaPlusGlobalConfig#setAutoFilterEnabled(boolean)} 替代
-     */
-    @Deprecated
-    public static synchronized void setAutoFilterEnabled(boolean enabled) {
-        com.zsubera.jpa.autoconfigure.MyJpaPlusGlobalConfig config =
-            com.zsubera.jpa.autoconfigure.GlobalConfigHolder.getConfig();
-        if (config != null) {
-            config.setAutoFilterEnabled(enabled);
-        }
-        // 始终同步更新本地 ConfigProvider，确保兼容旧逻辑
-        ConfigProvider existing = globalConfigProvider;
-        if (existing instanceof MutableConfigProvider mutable) {
-            mutable.setAutoFilterEnabled(enabled);
-        } else if (existing == null) {
-            setGlobalConfigProvider(new MutableConfigProvider(enabled, true));
-        } else {
-            setGlobalConfigProvider(new MutableConfigProvider(enabled, existing.isBlockUnconditionalDelete()));
-        }
-    }
-
-    /**
-     * 设置全局无条件硬删除阻断开关。
-     *
-     * @param blocked 是否阻断无条件硬删除
-     * @deprecated 请使用 {@link com.zsubera.jpa.autoconfigure.MyJpaPlusGlobalConfig#setBlockUnconditionalDelete(boolean)} 替代
-     */
-    @Deprecated
-    public static synchronized void setBlockUnconditionalDelete(boolean blocked) {
-        com.zsubera.jpa.autoconfigure.MyJpaPlusGlobalConfig config =
-            com.zsubera.jpa.autoconfigure.GlobalConfigHolder.getConfig();
-        if (config != null) {
-            config.setBlockUnconditionalDelete(blocked);
-        }
-        // 始终同步更新本地 ConfigProvider，确保兼容旧逻辑
-        ConfigProvider existing = globalConfigProvider;
-        if (existing instanceof MutableConfigProvider mutable) {
-            mutable.setBlockUnconditionalDelete(blocked);
-        } else if (existing == null) {
-            setGlobalConfigProvider(new MutableConfigProvider(true, blocked));
-        } else {
-            setGlobalConfigProvider(new MutableConfigProvider(existing.isAutoFilterEnabled(), blocked));
-        }
-    }
-
-    /**
      * 检查是否应该阻断无条件硬删除操作。
      *
      * <p>
@@ -388,6 +340,19 @@ public class DefaultMyJpaRepository<T, ID> extends SimpleJpaRepository<T, ID> im
      * @param id 实体 ID，不能为 {@code null}
      * @return 包含实体的 {@link Optional}，如果实体不存在或已软删除则返回 {@link Optional#empty()}
      */
+    /**
+     * 构建按单个 ID 匹配并合并软删除过滤器的 Specification。
+     *
+     * @param id 实体 ID
+     * @return 合并后的 Specification
+     */
+    private Specification<T> withIdAndSoftDelete(ID id) {
+        String idFieldName = EntityClassResolver.resolveIdFieldName(domainClass);
+        Specification<T> idSpec = Specification.where((root, query, cb) -> cb.equal(root.get(idFieldName), id));
+        Specification<T> softDeleteSpec = SoftDeleteHelper.isNotDeleted(domainClass);
+        return softDeleteSpec != null ? idSpec.and(softDeleteSpec) : idSpec;
+    }
+
     @Override
     public Optional<T> findById(ID id) {
         if (id == null) {
@@ -396,15 +361,7 @@ public class DefaultMyJpaRepository<T, ID> extends SimpleJpaRepository<T, ID> im
         if (!shouldApplySoftDeleteFilter()) {
             return Optional.ofNullable(entityManager.find(domainClass, id));
         }
-        // 软删除场景：始终使用 Specification 查询，避免将已删除实体加载到持久化上下文。
-        // 直接使用 entityManager.find() 会将已删除实体加载到 PC，导致 PC 污染。
-        String idFieldName = EntityClassResolver.resolveIdFieldName(domainClass);
-        Specification<T> idSpec = Specification.where((root, query, cb) -> cb.equal(root.get(idFieldName), id));
-        Specification<T> softDeleteSpec = SoftDeleteHelper.isNotDeleted(domainClass);
-        if (softDeleteSpec == null) {
-            return findOne(idSpec);
-        }
-        return findOne(idSpec.and(softDeleteSpec));
+        return findOne(withIdAndSoftDelete(id));
     }
 
     @Override
@@ -415,13 +372,7 @@ public class DefaultMyJpaRepository<T, ID> extends SimpleJpaRepository<T, ID> im
         if (!shouldApplySoftDeleteFilter()) {
             return super.existsById(id);
         }
-        String idFieldName = EntityClassResolver.resolveIdFieldName(domainClass);
-        Specification<T> idSpec = Specification.where((root, query, cb) -> cb.equal(root.get(idFieldName), id));
-        Specification<T> softDeleteSpec = SoftDeleteHelper.isNotDeleted(domainClass);
-        if (softDeleteSpec == null) {
-            return exists(idSpec);
-        }
-        return exists(idSpec.and(softDeleteSpec));
+        return exists(withIdAndSoftDelete(id));
     }
 
     /**
@@ -484,17 +435,33 @@ public class DefaultMyJpaRepository<T, ID> extends SimpleJpaRepository<T, ID> im
     }
 
     /**
-     * 根据 ID 删除实体，如果实体不存在则抛出异常。
+     * 执行删除操作的统一入口：软删除 → 硬删除阻断 → 硬删除回退。
      *
-     * @deprecated 此方法与 {@link #deleteById(Object)} 行为完全相同（均在实体不存在时抛出
-     *             {@link org.springframework.dao.EmptyResultDataAccessException}）。请直接使用 {@link #deleteById(Object)}。
+     * <p>
+     * 三路分支逻辑：
+     * <ol>
+     * <li>软删除过滤启用 → 执行 {@code softAction}（如批量 UPDATE deleted=true）</li>
+     * <li>实体有 @SoftDelete 且阻断开关启用 → 抛出 IllegalStateException</li>
+     * <li>其他情况 → 执行 {@code hardAction}（如标准 DELETE）</li>
+     * </ol>
      *
-     * @param id 实体 ID，不能为 {@code null}
-     * @throws org.springframework.dao.EmptyResultDataAccessException 如果实体不存在
+     * @param softAction 软删除操作（在 shouldApplySoftDeleteFilter() 为 true 时执行）
+     * @param hardAction 硬删除回退操作（在不满足软删除和阻断条件时执行）
      */
-    @Deprecated
-    public void deleteByIdOrThrow(ID id) {
-        deleteById(id);
+    private void executeDeleteOrBlock(Runnable softAction, Runnable hardAction) {
+        if (shouldApplySoftDeleteFilter()) {
+            softAction.run();
+        } else if (shouldBlockHardDelete()) {
+            throw new IllegalStateException("Unconditional hard DELETE on " + domainClass.getSimpleName()
+                + " is blocked because the entity has a @SoftDelete field. "
+                + "Set DefaultMyJpaRepository.setBlockUnconditionalDelete(false) to allow this operation.");
+        } else {
+            if (SoftDeleteHelper.findSoftDeleteField(domainClass) != null && log.isWarnEnabled()) {
+                log.warn("AUDIT: Executing unconditional hard DELETE on {} with @SoftDelete field "
+                    + "(autoFilter=false). Call stack: {}", domainClass.getSimpleName(), AuditUtils.getCallStack());
+            }
+            hardAction.run();
+        }
     }
 
     /**
@@ -505,23 +472,13 @@ public class DefaultMyJpaRepository<T, ID> extends SimpleJpaRepository<T, ID> im
      */
     @Override
     public void deleteAll() {
-        if (shouldApplySoftDeleteFilter()) {
+        executeDeleteOrBlock(() -> {
             if (log.isWarnEnabled()) {
                 log.warn("AUDIT: Executing soft DELETE ALL on {} (autoFilter enabled). Call stack: {}",
                     domainClass.getSimpleName(), AuditUtils.getCallStack());
             }
             SoftDeleteHelper.softDeleteAll(entityManager, domainClass, true);
-        } else if (shouldBlockHardDelete()) {
-            throw new IllegalStateException("Unconditional hard DELETE ALL on " + domainClass.getSimpleName()
-                + " is blocked because the entity has a @SoftDelete field. "
-                + "Set DefaultMyJpaRepository.setBlockUnconditionalDelete(false) to allow this operation.");
-        } else {
-            if (SoftDeleteHelper.findSoftDeleteField(domainClass) != null && log.isWarnEnabled()) {
-                log.warn("AUDIT: Executing unconditional hard DELETE ALL on {} with @SoftDelete field "
-                    + "(autoFilter=false). Call stack: {}", domainClass.getSimpleName(), AuditUtils.getCallStack());
-            }
-            super.deleteAll();
-        }
+        }, super::deleteAll);
     }
 
     /**
@@ -539,15 +496,8 @@ public class DefaultMyJpaRepository<T, ID> extends SimpleJpaRepository<T, ID> im
         if (idList.isEmpty()) {
             return;
         }
-        if (shouldApplySoftDeleteFilter()) {
-            SoftDeleteHelper.softDeleteByIds(entityManager, domainClass, idList);
-        } else if (shouldBlockHardDelete()) {
-            throw new IllegalStateException("Hard DELETE ALL BY ID on " + domainClass.getSimpleName()
-                + " is blocked because the entity has a @SoftDelete field. "
-                + "Set DefaultMyJpaRepository.setBlockUnconditionalDelete(false) to allow this operation.");
-        } else {
-            super.deleteAllById(idList);
-        }
+        executeDeleteOrBlock(() -> SoftDeleteHelper.softDeleteByIds(entityManager, domainClass, idList),
+            () -> super.deleteAllById(idList));
     }
 
     /**
@@ -560,9 +510,7 @@ public class DefaultMyJpaRepository<T, ID> extends SimpleJpaRepository<T, ID> im
         if (entities == null) {
             throw new IllegalArgumentException("entities must not be null");
         }
-        if (shouldApplySoftDeleteFilter()) {
-            // 使用批量 UPDATE 替代 N+1 次单独删除
-            // 使用 PersistenceUnitUtil 替代反射，兼容 Java 17+
+        executeDeleteOrBlock(() -> {
             java.util.List<ID> idList = new java.util.ArrayList<>();
             jakarta.persistence.PersistenceUnitUtil util =
                 entityManager.getEntityManagerFactory().getPersistenceUnitUtil();
@@ -576,13 +524,7 @@ public class DefaultMyJpaRepository<T, ID> extends SimpleJpaRepository<T, ID> im
             if (!idList.isEmpty()) {
                 SoftDeleteHelper.softDeleteByIds(entityManager, domainClass, idList);
             }
-        } else if (shouldBlockHardDelete()) {
-            throw new IllegalStateException("Hard DELETE IN BATCH on " + domainClass.getSimpleName()
-                + " is blocked because the entity has a @SoftDelete field. "
-                + "Set DefaultMyJpaRepository.setBlockUnconditionalDelete(false) to allow this operation.");
-        } else {
-            super.deleteInBatch(entities);
-        }
+        }, () -> super.deleteInBatch(entities));
     }
 
     /**
@@ -590,18 +532,12 @@ public class DefaultMyJpaRepository<T, ID> extends SimpleJpaRepository<T, ID> im
      */
     @Override
     public void deleteAllInBatch() {
-        if (shouldApplySoftDeleteFilter()) {
+        executeDeleteOrBlock(() -> {
             if (log.isWarnEnabled()) {
                 log.warn("AUDIT: Executing soft DELETE ALL IN BATCH on {} (autoFilter enabled). Call stack: {}",
                     domainClass.getSimpleName(), AuditUtils.getCallStack());
             }
             SoftDeleteHelper.softDeleteAll(entityManager, domainClass, true);
-        } else if (shouldBlockHardDelete()) {
-            throw new IllegalStateException("Unconditional hard DELETE ALL IN BATCH on " + domainClass.getSimpleName()
-                + " is blocked because the entity has a @SoftDelete field. "
-                + "Set DefaultMyJpaRepository.setBlockUnconditionalDelete(false) to allow this operation.");
-        } else {
-            super.deleteAllInBatch();
-        }
+        }, super::deleteAllInBatch);
     }
 }

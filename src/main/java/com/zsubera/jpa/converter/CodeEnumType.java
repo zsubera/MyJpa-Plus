@@ -46,7 +46,7 @@ import org.slf4j.LoggerFactory;
  * <strong>何时可加可不加：</strong>当枚举的 {@code code} 值与 {@code ordinal()} 相同时，建议加上保持一致性。
  *
  * @author myjpa-plus
- * @since 1.1.0
+
  * @see CodeEnumValue
  * @see CodeEnum
  */

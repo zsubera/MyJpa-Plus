@@ -18,7 +18,7 @@ import jakarta.persistence.criteria.Path;
  * Expression<Long> countExpr = QueryAggregates.count(root, User::getDepartment, cb);
  * }</pre>
  *
- * @since 1.3.0
+
  * @see QuerySpec#havingCount(SFunction, ConditionNode.Op, long)
  * @see QuerySpec#havingSum(SFunction, ConditionNode.Op, Number)
  */

@@ -51,7 +51,7 @@ import org.hibernate.annotations.Type;
  * 时，需要同时使用两个注解。
  *
  * @author myjpa-plus
- * @since 1.1.0
+
  * @see CodeEnumValue
  * @see CodeEnumType
  * @see com.zsubera.jpa.annotation.SoftDelete

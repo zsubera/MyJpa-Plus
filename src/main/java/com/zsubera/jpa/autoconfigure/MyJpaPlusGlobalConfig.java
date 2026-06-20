@@ -12,7 +12,7 @@ package com.zsubera.jpa.autoconfigure;
  * setter 方法在 Spring 启动阶段调用，运行时为只读访问。
  *
  * @author myjpa-plus
- * @since 2.0.0
+
  */
 public class MyJpaPlusGlobalConfig {
 
@@ -48,17 +48,6 @@ public class MyJpaPlusGlobalConfig {
 
     public void setSoftDeleteAutoFilter(boolean softDeleteAutoFilter) {
         this.softDeleteAutoFilter = softDeleteAutoFilter;
-    }
-
-    /**
-     * 设置软删除自动过滤开关。
-     *
-     * @param enabled 是否启用自动过滤
-     * @deprecated 请使用 {@link #setSoftDeleteAutoFilter(boolean)} 替代
-     */
-    @Deprecated
-    public void setAutoFilterEnabled(boolean enabled) {
-        this.softDeleteAutoFilter = enabled;
     }
 
     public boolean isBlockUnconditionalDelete() {

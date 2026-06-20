@@ -42,7 +42,7 @@ package com.zsubera.jpa.template;
  *
  * @see QueryCacheManager
  * @see MyJpaTemplate#setCacheManager(QueryCacheManager)
- * @since 1.3.0
+
  */
 public interface CacheAdapter {
 

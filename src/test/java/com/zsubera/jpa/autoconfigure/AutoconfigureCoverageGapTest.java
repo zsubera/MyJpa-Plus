@@ -176,9 +176,9 @@ class AutoconfigureCoverageGapTest {
     @Test
     void myJpaPlusGlobalConfig_deprecatedSetAutoFilterEnabled() {
         MyJpaPlusGlobalConfig config = new MyJpaPlusGlobalConfig();
-        config.setAutoFilterEnabled(false);
+        config.setSoftDeleteAutoFilter(false);
         assertFalse(config.isSoftDeleteAutoFilter());
-        config.setAutoFilterEnabled(true);
+        config.setSoftDeleteAutoFilter(true);
         assertTrue(config.isSoftDeleteAutoFilter());
     }
 

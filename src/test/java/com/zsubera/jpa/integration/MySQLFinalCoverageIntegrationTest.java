@@ -58,8 +58,8 @@ class MySQLFinalCoverageIntegrationTest {
         QuerySpec<MySQLTestEntity> qs = new QuerySpec<>();
         qs.groupBy(MySQLTestEntity::getStatus);
         qs.havingCount(MySQLTestEntity::getStatus, ConditionNode.Op.GT, 1L);
-        assertNotNull(qs.toSql());
-        assertTrue(qs.toSql().contains("HAVING"));
+        assertNotNull(qs.toDescription());
+        assertTrue(qs.toDescription().contains("HAVING"));
     }
 
     @Test
@@ -79,8 +79,8 @@ class MySQLFinalCoverageIntegrationTest {
         QuerySpec<MySQLTestEntity> qs = new QuerySpec<>();
         qs.groupBy(MySQLTestEntity::getStatus);
         qs.havingSum(MySQLTestEntity::getStatus, ConditionNode.Op.GT, 10);
-        assertNotNull(qs.toSql());
-        assertTrue(qs.toSql().contains("HAVING"));
+        assertNotNull(qs.toDescription());
+        assertTrue(qs.toDescription().contains("HAVING"));
     }
 
     @Test
@@ -95,8 +95,8 @@ class MySQLFinalCoverageIntegrationTest {
         QuerySpec<MySQLTestEntity> qs = new QuerySpec<>();
         qs.groupBy(MySQLTestEntity::getStatus);
         qs.havingAvg(MySQLTestEntity::getStatus, ConditionNode.Op.GT, 15.0);
-        assertNotNull(qs.toSql());
-        assertTrue(qs.toSql().contains("HAVING"));
+        assertNotNull(qs.toDescription());
+        assertTrue(qs.toDescription().contains("HAVING"));
     }
 
     @Test
@@ -104,8 +104,8 @@ class MySQLFinalCoverageIntegrationTest {
         QuerySpec<MySQLTestEntity> qs = new QuerySpec<>();
         qs.groupBy(MySQLTestEntity::getStatus);
         qs.havingMax(MySQLTestEntity::getStatus, ConditionNode.Op.GE, 20);
-        assertNotNull(qs.toSql());
-        assertTrue(qs.toSql().contains("HAVING"));
+        assertNotNull(qs.toDescription());
+        assertTrue(qs.toDescription().contains("HAVING"));
     }
 
     @Test
@@ -113,8 +113,8 @@ class MySQLFinalCoverageIntegrationTest {
         QuerySpec<MySQLTestEntity> qs = new QuerySpec<>();
         qs.groupBy(MySQLTestEntity::getStatus);
         qs.havingMin(MySQLTestEntity::getStatus, ConditionNode.Op.LE, 10);
-        assertNotNull(qs.toSql());
-        assertTrue(qs.toSql().contains("HAVING"));
+        assertNotNull(qs.toDescription());
+        assertTrue(qs.toDescription().contains("HAVING"));
     }
 
     // ==================== QuerySpec.groupBy null validation ====================
@@ -137,16 +137,10 @@ class MySQLFinalCoverageIntegrationTest {
 
     @Test
     void querySpec_setMaxTimeoutSeconds() {
-        QuerySpec.setMaxTimeoutSeconds(60);
+        com.zsubera.jpa.autoconfigure.GlobalConfigHolder.getConfig().setMaxTimeoutSeconds(60);
         QuerySpec<MySQLTestEntity> qs = new QuerySpec<>();
         qs.timeout(50);
         assertEquals(50, qs.getQueryTimeout().intValue());
-    }
-
-    @Test
-    void querySpec_setMaxTimeoutSeconds_invalid() {
-        assertThrows(IllegalArgumentException.class, () -> QuerySpec.setMaxTimeoutSeconds(0));
-        assertThrows(IllegalArgumentException.class, () -> QuerySpec.setMaxTimeoutSeconds(-1));
     }
 
     // ==================== QuerySpec.copy deep verification ====================

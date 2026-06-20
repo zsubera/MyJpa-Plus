@@ -20,7 +20,7 @@ import org.springframework.lang.NonNull;
  * 在 {@code myjpa-plus.monitoring.enabled=true} 时自动注册。
  *
  * @see SlowQueryDataSourceProxy
- * @since 1.3.1
+
  */
 public class SlowQueryDataSourceProxyPostProcessor implements BeanPostProcessor {
 

@@ -14,7 +14,7 @@ import com.zsubera.jpa.update.EntityFieldExtractor.EntityFieldValue;
  * <p>
  * 标识符使用双引号转义：{@code "identifier"}（Oracle 标准 SQL 标识符规则）。
  *
- * @since 1.3.0
+
  */
 final class OracleDialect implements DialectStrategy {
 

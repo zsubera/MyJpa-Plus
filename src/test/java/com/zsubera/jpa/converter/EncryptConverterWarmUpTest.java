@@ -23,7 +23,7 @@ class EncryptConverterWarmUpTest {
 
     @AfterEach
     void cleanup() {
-        EncryptConverter.clearCacheForTesting();
+        EncryptConverter.clearCaches();
         System.clearProperty("myjpa.encrypt.key");
         System.clearProperty("myjpa-plus.encrypt.skip-salt-check");
     }
@@ -35,7 +35,7 @@ class EncryptConverterWarmUpTest {
      */
     @Test
     void warmUpKeyCacheShouldNotBlockMainThread() {
-        EncryptConverter.clearCacheForTesting();
+        EncryptConverter.clearCaches();
 
         long start = System.currentTimeMillis();
         EncryptConverter.warmUpKeyCache();
@@ -50,7 +50,7 @@ class EncryptConverterWarmUpTest {
      */
     @Test
     void warmUpKeyCacheSyncShouldBlockUntilComplete() {
-        EncryptConverter.clearCacheForTesting();
+        EncryptConverter.clearCaches();
 
         long start = System.currentTimeMillis();
         EncryptConverter.warmUpKeyCacheSync();
@@ -65,7 +65,7 @@ class EncryptConverterWarmUpTest {
      */
     @Test
     void warmUpShouldReduceFirstRequestLatency() throws Exception {
-        EncryptConverter.clearCacheForTesting();
+        EncryptConverter.clearCaches();
 
         // 预热前：首次加密
         long start1 = System.nanoTime();
@@ -73,7 +73,7 @@ class EncryptConverterWarmUpTest {
         converter.convertToDatabaseColumn("test");
         long preWarmup = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - start1);
 
-        EncryptConverter.clearCacheForTesting();
+        EncryptConverter.clearCaches();
 
         // 预热后
         EncryptConverter.warmUpKeyCacheSync();
@@ -92,12 +92,12 @@ class EncryptConverterWarmUpTest {
      */
     @Test
     void warmUpShouldReduceDecryptLatency() throws Exception {
-        EncryptConverter.clearCacheForTesting();
+        EncryptConverter.clearCaches();
 
         EncryptConverter converter = new EncryptConverter();
         String encrypted = converter.convertToDatabaseColumn("test-value");
 
-        EncryptConverter.clearCacheForTesting();
+        EncryptConverter.clearCaches();
 
         // 预热
         EncryptConverter.warmUpKeyCacheSync();
@@ -130,7 +130,7 @@ class EncryptConverterWarmUpTest {
     @Test
     void warmUpWithMissingKeyShouldNotThrow() {
         System.clearProperty("myjpa.encrypt.key");
-        EncryptConverter.clearCacheForTesting();
+        EncryptConverter.clearCaches();
 
         // 应该记录警告但不抛出异常
         assertDoesNotThrow(EncryptConverter::warmUpKeyCache);

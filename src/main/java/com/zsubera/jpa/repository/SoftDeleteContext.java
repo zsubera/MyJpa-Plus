@@ -265,21 +265,4 @@ public final class SoftDeleteContext {
         }
     }
 
-    /**
-     * 在异步边界处捕获并重置当前线程的忽略状态。
-     *
-     * @return 之前通过 {@link #captureAndResetForAsync()} 捕获的忽略计数
-     * @deprecated 此方法丢失嵌套 ignore count 信息，且不适用于虚拟线程场景。
-     *             请使用 {@link #captureAndResetForAsync()} 保留计数，
-     *             或使用 {@link #withIgnore(Runnable)} 自动管理生命周期。
-     */
-    @Deprecated
-    public static boolean captureAndReset() {
-        boolean ignoring = isIgnoreSoftDelete();
-        if (ignoring) {
-            reset();
-        }
-        return ignoring;
-    }
-
 }

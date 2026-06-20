@@ -41,8 +41,8 @@ class DefaultMyJpaRepositoryIntegrationTest {
         repository.flush();
         simpleRepository.deleteAll();
         simpleRepository.flush();
-        DefaultMyJpaRepository.setAutoFilterEnabled(true);
-        DefaultMyJpaRepository.setBlockUnconditionalDelete(true);
+        com.zsubera.jpa.autoconfigure.GlobalConfigHolder.getConfig().setSoftDeleteAutoFilter(true);
+        com.zsubera.jpa.autoconfigure.GlobalConfigHolder.getConfig().setBlockUnconditionalDelete(true);
         SoftDeleteContext.reset();
         proxy = org.springframework.test.util.AopTestUtils.getTargetObject(repository);
     }
@@ -50,8 +50,8 @@ class DefaultMyJpaRepositoryIntegrationTest {
     @AfterEach
     void tearDown() {
         SoftDeleteContext.reset();
-        DefaultMyJpaRepository.setAutoFilterEnabled(true);
-        DefaultMyJpaRepository.setBlockUnconditionalDelete(true);
+        com.zsubera.jpa.autoconfigure.GlobalConfigHolder.getConfig().setSoftDeleteAutoFilter(true);
+        com.zsubera.jpa.autoconfigure.GlobalConfigHolder.getConfig().setBlockUnconditionalDelete(true);
         DefaultMyJpaRepository.clearThreadLocal();
     }
 
@@ -78,8 +78,8 @@ class DefaultMyJpaRepositoryIntegrationTest {
     @Test
     void deleteInBatch_hardDeletePath() throws Exception {
         SoftDeleteRepoTestEntity e1 = saveActive("a");
-        DefaultMyJpaRepository.setAutoFilterEnabled(false);
-        DefaultMyJpaRepository.setBlockUnconditionalDelete(false);
+        com.zsubera.jpa.autoconfigure.GlobalConfigHolder.getConfig().setSoftDeleteAutoFilter(false);
+        com.zsubera.jpa.autoconfigure.GlobalConfigHolder.getConfig().setBlockUnconditionalDelete(false);
         java.lang.reflect.Method method =
             DefaultMyJpaRepository.class.getMethod("deleteInBatch", java.lang.Iterable.class);
         method.invoke(proxy, java.util.List.of(e1));
@@ -111,8 +111,8 @@ class DefaultMyJpaRepositoryIntegrationTest {
     @Test
     void deleteInBatch_blockedPath() throws Exception {
         SoftDeleteRepoTestEntity e1 = saveActive("a");
-        DefaultMyJpaRepository.setAutoFilterEnabled(false);
-        DefaultMyJpaRepository.setBlockUnconditionalDelete(true);
+        com.zsubera.jpa.autoconfigure.GlobalConfigHolder.getConfig().setSoftDeleteAutoFilter(false);
+        com.zsubera.jpa.autoconfigure.GlobalConfigHolder.getConfig().setBlockUnconditionalDelete(true);
         java.lang.reflect.Method method =
             DefaultMyJpaRepository.class.getMethod("deleteInBatch", java.lang.Iterable.class);
         assertThrows(Exception.class, () -> method.invoke(proxy, java.util.List.of(e1)));
@@ -123,8 +123,8 @@ class DefaultMyJpaRepositoryIntegrationTest {
     @Test
     void deleteByIdIfExists_autoFilterDisabled_exists() throws Exception {
         SoftDeleteRepoTestEntity e1 = saveActive("a");
-        DefaultMyJpaRepository.setAutoFilterEnabled(false);
-        DefaultMyJpaRepository.setBlockUnconditionalDelete(false);
+        com.zsubera.jpa.autoconfigure.GlobalConfigHolder.getConfig().setSoftDeleteAutoFilter(false);
+        com.zsubera.jpa.autoconfigure.GlobalConfigHolder.getConfig().setBlockUnconditionalDelete(false);
         java.lang.reflect.Method method = DefaultMyJpaRepository.class.getMethod("deleteByIdIfExists", Object.class);
         boolean result = (boolean)method.invoke(proxy, e1.getId());
         assertTrue(result);
@@ -133,8 +133,8 @@ class DefaultMyJpaRepositoryIntegrationTest {
 
     @Test
     void deleteByIdIfExists_autoFilterDisabled_notExists() throws Exception {
-        DefaultMyJpaRepository.setAutoFilterEnabled(false);
-        DefaultMyJpaRepository.setBlockUnconditionalDelete(false);
+        com.zsubera.jpa.autoconfigure.GlobalConfigHolder.getConfig().setSoftDeleteAutoFilter(false);
+        com.zsubera.jpa.autoconfigure.GlobalConfigHolder.getConfig().setBlockUnconditionalDelete(false);
         java.lang.reflect.Method method = DefaultMyJpaRepository.class.getMethod("deleteByIdIfExists", Object.class);
         boolean result = (boolean)method.invoke(proxy, 999999L);
         assertFalse(result);
@@ -153,8 +153,8 @@ class DefaultMyJpaRepositoryIntegrationTest {
     @Test
     void deleteByIdOrThrow_deprecatedMethod() throws Exception {
         SoftDeleteRepoTestEntity e1 = saveActive("a");
-        DefaultMyJpaRepository.setAutoFilterEnabled(false);
-        DefaultMyJpaRepository.setBlockUnconditionalDelete(false);
+        com.zsubera.jpa.autoconfigure.GlobalConfigHolder.getConfig().setSoftDeleteAutoFilter(false);
+        com.zsubera.jpa.autoconfigure.GlobalConfigHolder.getConfig().setBlockUnconditionalDelete(false);
         java.lang.reflect.Method method = DefaultMyJpaRepository.class.getMethod("deleteByIdOrThrow", Object.class);
         method.invoke(proxy, e1.getId());
         assertEquals(0, repository.count());
@@ -232,7 +232,7 @@ class DefaultMyJpaRepositoryIntegrationTest {
     void findAllById_autoFilterDisabled() {
         SoftDeleteRepoTestEntity e1 = saveActive("a");
         SoftDeleteRepoTestEntity e2 = saveDeleted("d");
-        DefaultMyJpaRepository.setAutoFilterEnabled(false);
+        com.zsubera.jpa.autoconfigure.GlobalConfigHolder.getConfig().setSoftDeleteAutoFilter(false);
         List<SoftDeleteRepoTestEntity> result = repository.findAllById(List.of(e1.getId(), e2.getId()));
         assertEquals(2, result.size(), "Should return both active and deleted when autoFilter is disabled");
     }
@@ -242,7 +242,7 @@ class DefaultMyJpaRepositoryIntegrationTest {
     @Test
     void existsById_autoFilterDisabled() {
         SoftDeleteRepoTestEntity e1 = saveActive("a");
-        DefaultMyJpaRepository.setAutoFilterEnabled(false);
+        com.zsubera.jpa.autoconfigure.GlobalConfigHolder.getConfig().setSoftDeleteAutoFilter(false);
         assertTrue(repository.existsById(e1.getId()));
     }
 
@@ -261,7 +261,7 @@ class DefaultMyJpaRepositoryIntegrationTest {
     @Test
     void findById_autoFilterDisabled() {
         SoftDeleteRepoTestEntity e1 = saveDeleted("d");
-        DefaultMyJpaRepository.setAutoFilterEnabled(false);
+        com.zsubera.jpa.autoconfigure.GlobalConfigHolder.getConfig().setSoftDeleteAutoFilter(false);
         Optional<SoftDeleteRepoTestEntity> result = repository.findById(e1.getId());
         assertTrue(result.isPresent(), "Should find deleted entity when autoFilter is disabled");
     }

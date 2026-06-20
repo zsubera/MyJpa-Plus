@@ -271,8 +271,8 @@ class MySQLRemainingGapsIntegrationTest {
             return cb.greaterThan(cb.count(root.get("status")), 1L);
         });
         assertNotNull(qs);
-        assertNotNull(qs.toSql());
-        assertTrue(qs.toSql().contains("HAVING"));
+        assertNotNull(qs.toDescription());
+        assertTrue(qs.toDescription().contains("HAVING"));
     }
 
     // ==================== QuerySpec: toString + toSql ====================
@@ -295,7 +295,7 @@ class MySQLRemainingGapsIntegrationTest {
         QuerySpec<MySQLTestEntity> qs = new QuerySpec<>();
         qs.eq(MySQLTestEntity::getName, "test");
         qs.orderByAsc(MySQLTestEntity::getName);
-        String sql = qs.toSql();
+        String sql = qs.toDescription();
         assertTrue(sql.startsWith("Query{"));
         assertTrue(sql.contains("WHERE:"));
         assertTrue(sql.contains("ORDER BY:"));
@@ -304,7 +304,7 @@ class MySQLRemainingGapsIntegrationTest {
     @Test
     void querySpec_toSql_empty() {
         QuerySpec<MySQLTestEntity> qs = new QuerySpec<>();
-        String sql = qs.toSql();
+        String sql = qs.toDescription();
         assertEquals("Query{}", sql);
     }
 

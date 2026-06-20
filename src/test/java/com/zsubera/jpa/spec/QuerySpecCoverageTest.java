@@ -255,7 +255,7 @@ class QuerySpecCoverageTest {
     void testToSqlDeprecated() {
         QuerySpec<TestEntity> qs = new QuerySpec<>();
         qs.eq(TestEntity::getName, "test");
-        assertEquals(qs.toDescription(), qs.toSql());
+        assertEquals(qs.toDescription(), qs.toDescription());
     }
 
     @Test
@@ -403,7 +403,8 @@ class QuerySpecCoverageTest {
 
     @Test
     void testSetGlobalConfig() {
-        QuerySpec.setGlobalConfig(new com.zsubera.jpa.autoconfigure.MyJpaPlusGlobalConfig());
+        com.zsubera.jpa.autoconfigure.GlobalConfigHolder
+            .setConfig(new com.zsubera.jpa.autoconfigure.MyJpaPlusGlobalConfig());
     }
 
     @jakarta.persistence.PersistenceContext

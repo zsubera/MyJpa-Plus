@@ -391,7 +391,7 @@ public class CteSpec {
      * @return 单个查询结果（Object[]），如果无结果则返回 {@link Optional#empty()}
      * @throws IllegalStateException 如果 CTE 或主查询未完整配置
      * @throws IllegalArgumentException 如果 em 为 null
-     * @since 1.2.0
+
      */
     public Optional<Object[]> getSingleResult(EntityManager em) {
         if (em == null) {

@@ -4,7 +4,7 @@ package com.zsubera.jpa.util;
  * 字符串工具类，提供常用的字符串转换方法。
  *
  * @author myjpa-plus
- * @since 1.2.0
+
  */
 public final class StringHelper {
 
@@ -25,7 +25,7 @@ public final class StringHelper {
      *
      * @param name 驼峰命名字符串
      * @return 蛇形命名字符串，如果输入为 null 或空字符串则原样返回
-     * @since 1.2.0
+
      */
     public static String camelToSnake(String name) {
         if (name == null || name.isEmpty()) {

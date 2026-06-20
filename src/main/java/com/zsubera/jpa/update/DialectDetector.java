@@ -22,7 +22,7 @@ import org.slf4j.LoggerFactory;
  * <p>
  * 检测结果按 EntityManagerFactory 缓存，避免重复检测开销。
  *
- * @since 1.2.0
+
  */
 final class DialectDetector {
 

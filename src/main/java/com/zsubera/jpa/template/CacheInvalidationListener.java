@@ -45,7 +45,7 @@ import org.springframework.transaction.event.TransactionalEventListener;
  * }</pre>
  *
  * @author myjpa-plus
- * @since 2.1.0
+
  */
 public class CacheInvalidationListener {
 
@@ -61,18 +61,6 @@ public class CacheInvalidationListener {
     @SuppressFBWarnings(value = "EI_EXPOSE_REP2", justification = "Spring-managed singleton intentionally stored")
     public CacheInvalidationListener(CacheAdapter cacheAdapter) {
         this.cacheAdapter = cacheAdapter;
-    }
-
-    /**
-     * 创建缓存失效监听器（向后兼容，使用 QueryCacheManager）。
-     *
-     * @param cacheManager 查询缓存管理器
-     * @deprecated 请使用 {@link #CacheInvalidationListener(CacheAdapter)} 代替
-     */
-    @Deprecated
-    @SuppressFBWarnings(value = "EI_EXPOSE_REP2", justification = "Spring-managed singleton intentionally stored")
-    public CacheInvalidationListener(QueryCacheManager cacheManager) {
-        this.cacheAdapter = cacheManager;
     }
 
     /**

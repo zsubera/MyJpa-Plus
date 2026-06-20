@@ -42,7 +42,7 @@ import org.slf4j.LoggerFactory;
  *     slow-query-threshold-ms: 1000
  * }</pre>
  *
- * @since 1.3.1
+
  */
 public final class SlowQueryDataSourceProxy {
 

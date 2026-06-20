@@ -20,7 +20,7 @@ class EncryptConverterExtendedTest {
     void setUp() throws Exception {
         System.setProperty("myjpa.encrypt.key", TEST_KEY);
         System.setProperty("myjpa-plus.encrypt.skip-salt-check", "true");
-        EncryptConverter.clearCacheForTesting();
+        EncryptConverter.clearCaches();
         Field f = EncryptConverter.class.getDeclaredField("keyValidated");
         f.setAccessible(true);
         f.set(null, false);
@@ -31,7 +31,7 @@ class EncryptConverterExtendedTest {
         System.clearProperty("myjpa.encrypt.key");
         System.clearProperty("myjpa-plus.encrypt.skip-salt-check");
         System.clearProperty("myjpa.encrypt.key.version");
-        EncryptConverter.clearCacheForTesting();
+        EncryptConverter.clearCaches();
         Field f = EncryptConverter.class.getDeclaredField("keyValidated");
         f.setAccessible(true);
         f.set(null, false);
@@ -49,7 +49,7 @@ class EncryptConverterExtendedTest {
     @Test
     void validateKeyConfiguration_noKey_throws() {
         System.clearProperty("myjpa.encrypt.key");
-        EncryptConverter.clearCacheForTesting();
+        EncryptConverter.clearCaches();
         try {
             Field f = EncryptConverter.class.getDeclaredField("keyValidated");
             f.setAccessible(true);
@@ -63,7 +63,7 @@ class EncryptConverterExtendedTest {
     @Test
     void validateKeyConfiguration_shortKey_throws() {
         System.setProperty("myjpa.encrypt.key", "short");
-        EncryptConverter.clearCacheForTesting();
+        EncryptConverter.clearCaches();
         try {
             Field f = EncryptConverter.class.getDeclaredField("keyValidated");
             f.setAccessible(true);
@@ -117,7 +117,7 @@ class EncryptConverterExtendedTest {
         EncryptConverter converter1 = new EncryptConverter();
         String encrypted = converter1.convertToDatabaseColumn("secret");
         System.setProperty("myjpa.encrypt.key", "9999999999999999");
-        EncryptConverter.clearCacheForTesting();
+        EncryptConverter.clearCaches();
         try {
             Field f = EncryptConverter.class.getDeclaredField("keyValidated");
             f.setAccessible(true);
@@ -128,7 +128,7 @@ class EncryptConverterExtendedTest {
             fail(e);
         } finally {
             System.setProperty("myjpa.encrypt.key", TEST_KEY);
-            EncryptConverter.clearCacheForTesting();
+            EncryptConverter.clearCaches();
         }
     }
 
@@ -240,7 +240,7 @@ class EncryptConverterExtendedTest {
     @Test
     void getKeyVersion_cachesValue() throws Exception {
         System.setProperty("myjpa.encrypt.key.version", "v2");
-        EncryptConverter.clearCacheForTesting();
+        EncryptConverter.clearCaches();
         Method m = EncryptConverter.class.getDeclaredMethod("getKeyVersion");
         m.setAccessible(true);
         String v1 = (String)m.invoke(null);
@@ -254,7 +254,7 @@ class EncryptConverterExtendedTest {
     void convertToDatabaseColumn_devSaltWarning() throws Exception {
         System.clearProperty("myjpa-plus.encrypt.salt");
         System.setProperty("myjpa-plus.encrypt.skip-salt-check", "true");
-        EncryptConverter.clearCacheForTesting();
+        EncryptConverter.clearCaches();
         Field f = EncryptConverter.class.getDeclaredField("devSaltWarningLogged");
         f.setAccessible(true);
         f.set(null, false);
@@ -267,7 +267,7 @@ class EncryptConverterExtendedTest {
     @Test
     void resolveRawKey_multiKeyFormat() {
         System.setProperty("myjpa.encrypt.key", "v1:key11111111111111,v2:key22222222222222");
-        EncryptConverter.clearCacheForTesting();
+        EncryptConverter.clearCaches();
         try {
             Field f = EncryptConverter.class.getDeclaredField("keyValidated");
             f.setAccessible(true);
@@ -282,14 +282,14 @@ class EncryptConverterExtendedTest {
         } finally {
             System.setProperty("myjpa.encrypt.key", TEST_KEY);
             System.clearProperty("myjpa.encrypt.key.version");
-            EncryptConverter.clearCacheForTesting();
+            EncryptConverter.clearCaches();
         }
     }
 
     @Test
     void resolveRawKey_multiKeyVersionNotFound() {
         System.setProperty("myjpa.encrypt.key", "v1:key11111111111111,v2:key22222222222222");
-        EncryptConverter.clearCacheForTesting();
+        EncryptConverter.clearCaches();
         try {
             Field f = EncryptConverter.class.getDeclaredField("keyValidated");
             f.setAccessible(true);
@@ -302,14 +302,14 @@ class EncryptConverterExtendedTest {
         } finally {
             System.setProperty("myjpa.encrypt.key", TEST_KEY);
             System.clearProperty("myjpa.encrypt.key.version");
-            EncryptConverter.clearCacheForTesting();
+            EncryptConverter.clearCaches();
         }
     }
 
     @Test
     void resolveRawKey_multiKeyInvalidEntries() {
         System.setProperty("myjpa.encrypt.key", "v1:key11111111111111,invalid-entry");
-        EncryptConverter.clearCacheForTesting();
+        EncryptConverter.clearCaches();
         try {
             Field f = EncryptConverter.class.getDeclaredField("keyValidated");
             f.setAccessible(true);
@@ -320,7 +320,7 @@ class EncryptConverterExtendedTest {
             fail(e);
         } finally {
             System.setProperty("myjpa.encrypt.key", TEST_KEY);
-            EncryptConverter.clearCacheForTesting();
+            EncryptConverter.clearCaches();
         }
     }
 

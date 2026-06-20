@@ -414,17 +414,17 @@ class ConditionBuilderValidationTest {
 
     @Test
     void testDeprecatedAddSafeFunctionNames() {
-        ConditionBuilder.addSafeFunctionNames(List.of("custom_func"));
+        com.zsubera.jpa.spec.FunctionWhitelist.addSafeFunctionNames(List.of("custom_func"));
     }
 
     @Test
     void testDeprecatedAddBooleanFunctionNames() {
-        ConditionBuilder.addBooleanFunctionNames(List.of("custom_bool"));
+        com.zsubera.jpa.spec.FunctionWhitelist.addBooleanFunctionNames(List.of("custom_bool"));
     }
 
     @Test
     void testDeprecatedFreezeExtraFunctionNames() {
-        ConditionBuilder.freezeExtraFunctionNames();
+        com.zsubera.jpa.spec.FunctionWhitelist.freezeExtraFunctionNames();
     }
 
     // ===== eqStrict/neStrict 成功路径 =====

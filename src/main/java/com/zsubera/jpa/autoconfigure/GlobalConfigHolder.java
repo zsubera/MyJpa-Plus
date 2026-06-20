@@ -16,7 +16,7 @@ import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
  * <strong>线程安全说明：</strong>所有字段均为 volatile，setter 在启动阶段调用，运行时为只读访问。
  *
  * @author myjpa-plus
- * @since 2.1.0
+
  */
 public final class GlobalConfigHolder {
 

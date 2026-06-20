@@ -32,7 +32,7 @@ import org.springframework.data.jpa.domain.Specification;
  * );
  * }</pre>
  *
- * @since 1.3.0
+
  */
 public final class Spec {
 

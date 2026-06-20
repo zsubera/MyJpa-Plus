@@ -24,7 +24,7 @@ import org.springframework.util.ConcurrentReferenceHashMap;
  * 所有解析结果均通过 {@link org.springframework.util.ConcurrentReferenceHashMap} 缓存， 使用弱引用键以支持热部署/OSGi 场景下的类加载器回收。
  *
  * @author myjpa-plus
- * @since 0.0.2
+
  */
 public final class EntityClassResolver {
 

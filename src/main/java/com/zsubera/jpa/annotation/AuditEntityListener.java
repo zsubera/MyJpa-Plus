@@ -52,7 +52,7 @@ import org.springframework.util.ConcurrentReferenceHashMap;
  * 注册为 Bean。 这是因为 JPA {@code @EntityListeners} 机制与 Spring {@code @Component} 的生命周期不同， 同时使用会导致两个身份混淆。
  *
  * @author myjpa-plus
- * @since 1.2.0
+
  */
 public class AuditEntityListener implements ApplicationContextAware {
 

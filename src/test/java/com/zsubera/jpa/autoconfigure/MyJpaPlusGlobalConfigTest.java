@@ -29,7 +29,7 @@ class MyJpaPlusGlobalConfigTest {
     @Test
     void setAutoFilterEnabled_deprecated() {
         MyJpaPlusGlobalConfig config = new MyJpaPlusGlobalConfig();
-        config.setAutoFilterEnabled(false);
+        config.setSoftDeleteAutoFilter(false);
         assertFalse(config.isSoftDeleteAutoFilter());
     }
 
