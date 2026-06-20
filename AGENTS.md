@@ -26,6 +26,9 @@ MyJpa-Plus is a type-safe JPA utility library built on Lambda expressions. Provi
 
 # Single test class
 ./mvnw test -Dtest=QuerySpecTest -DexcludedGroups=integration
+
+# Coverage report
+./mvnw jacoco:report
 ```
 
 **Windows**: PowerShell requires quoting for `-D` flags:
@@ -57,13 +60,13 @@ CI MySQL password is `ci_test_2024`. Local password is `1351.zhong`.
 |---|---|
 | `spec` | Query building: QuerySpec, ConditionBuilder, ConditionNode, NodeResolver, SubQuerySpec |
 | `update` | Bulk ops: UpdateSpec, DeleteSpec, MergeSpec, AbstractBulkOperationSpec, DialectDetector |
-| `repository` | Extended Repository: MyJpaRepository, SoftDeleteContext, OptimisticLockRetryAdvisor |
+| `repository` | Extended Repository: MyJpaRepository, DefaultMyJpaRepository, SoftDeleteContext, OptimisticLockRetryAdvisor, IgnoreSoftDeleteAdvisor |
 | `projection` | Projection queries |
-| `template` | Template & cache: MyJpaTemplate, BatchSaveTemplate, KeysetPaginationHelper |
-| `annotation` | @SoftDelete, @Encrypt, @Mask, @RetryOnOptimisticLock |
-| `autoconfigure` | Auto-configuration: GlobalConfigHolder, MyJpaPlusAutoConfiguration |
+| `template` | Template & cache: MyJpaTemplate, BatchSaveTemplate, KeysetPaginationHelper, QueryCacheManager |
+| `annotation` | @SoftDelete, @Encrypt, @Mask, @RetryOnOptimisticLock, @IgnoreSoftDelete, @CodeEnumValue |
+| `autoconfigure` | Auto-configuration: GlobalConfigHolder, MyJpaPlusAutoConfiguration, SoftDeleteFilterBean, MyJpaPlusProperties |
 | `converter` | CodeEnumType, EncryptConverter, MaskSerializer |
-| `util` | LambdaUtils, IdentifierValidator, InClauseBuilder |
+| `util` | LambdaUtils, IdentifierValidator, InClauseBuilder, EntityClassResolver |
 | `monitor` | SQL monitoring: SqlSlowQueryInterceptor, QueryMetricsCollector |
 | `softdelete` | SoftDeleteHelper |
 
@@ -74,6 +77,8 @@ CI MySQL password is `ci_test_2024`. Local password is `1351.zhong`.
 - **`GlobalConfigHolder`** is the central config access point — all config reads go through here.
 - **`IdentifierValidator`** manages SQL identifier validation and table name resolution (`resolveTableName`).
 - **`MergeSpec`** generates dialect-specific SQL via `DialectStrategy` interface (PostgreSQL/MySQL/Oracle/SQLServer).
+- **`DefaultMyJpaRepository`** overrides all `SimpleJpaRepository` query/delete methods to auto-inject soft-delete filters. `MyJpaRepository` adds Lambda-based query/bulk operation default methods on top.
+- **`MyJpaPlusAutoConfiguration`** inner classes (`MyJpaPlusConfigInitializer`, `SecurityContextAuditUserProvider`, `DataSourceSlowQueryProxyPostProcessor`, `RepositoryBaseClassPostProcessor`) wire everything together at Spring Boot startup.
 
 ## Testing
 
@@ -81,6 +86,7 @@ CI MySQL password is `ci_test_2024`. Local password is `1351.zhong`.
 - Local MySQL 8.0 running with `test` database created
 - Config: `jdbc:mysql://localhost:3306/test` (see `src/test/resources/application.properties`)
 - Credentials via env vars: `DB_USERNAME=root`, `DB_PASSWORD=1351.zhong`
+- `spring-boot-starter-security` is a test dependency (for `SecurityContextAuditUserProvider` tests)
 
 ### Test Patterns
 
@@ -88,11 +94,19 @@ CI MySQL password is `ci_test_2024`. Local password is `1351.zhong`.
 ```java
 @DataJpaTest
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
-@ContextConfiguration(classes = TestApplication.class)
-class MyTest { ... }
+@ContextConfiguration(classes = TestConfig.class)
+class MyTest {
+    @SpringBootApplication
+    @EntityScan(basePackageClasses = SoftDeleteRepoTestEntity.class)
+    @EnableJpaRepositories(basePackageClasses = {SoftDeleteRepoTestRepository.class},
+        repositoryBaseClass = DefaultMyJpaRepository.class)
+    static class TestConfig {}
+}
 ```
 
 **CRITICAL: `@DataJpaTest` does NOT activate `MyJpaPlusAutoConfiguration`**. Bulk ops (`update()/delete()/merge()`) throw `UnsupportedOperationException` without it. Add `@Import(MyJpaPlusAutoConfiguration.class)` or `@ContextConfiguration(classes = TestApplication.class)`.
+
+**CRITICAL: `@EnableJpaRepositories` must specify `repositoryBaseClass = DefaultMyJpaRepository.class`** for soft-delete to work in tests. Without it, the Spring proxy uses `SimpleJpaRepository` and soft-delete methods like `deleteByIdIfExists` won't be available.
 
 **MySQL data isolation**: MySQL persists data between methods. Every `@DataJpaTest` MUST have:
 ```java
@@ -107,14 +121,20 @@ void setUp() {
 
 ### Testing Gotchas
 
-- **Reflection to bypass Spring proxies**: Repository methods on `DefaultMyJpaRepository` (like `deleteByIdIfExists`) can't be called directly on the Spring proxy — they throw `ClassCastException`. Use `org.springframework.test.util.AopTestUtils` or avoid testing through the proxy.
+- **Reflection to bypass Spring proxies**: Repository methods on `DefaultMyJpaRepository` (like `deleteByIdIfExists`) can't be called directly on the Spring proxy — they throw `ClassCastException`. Use `org.springframework.test.util.AopTestUtils` or cast to the proxy directly if it extends the class.
+- **Spring proxy wrapping**: `deleteAllById(null)` and `deleteInBatch(null)` throw `InvalidDataAccessApiUsageException` (Spring-wrapped) not `IllegalArgumentException`. Use `assertThrows(Exception.class, ...)` or catch the specific Spring exception type.
 - **Mockito for transaction management**: `executeInTransaction` / `executeInManagedTransaction` paths require Mockito mocks since `@DataJpaTest` wraps in Spring transactions. Create separate non-`@DataJpaTest` classes with Mockito.
 - **SubQuerySpec lazy execution**: `qs.exists()` stores the consumer — it executes during `toSpecification()`. Test exceptions with: `assertThrows(X.class, () -> parentRepository.findAll(qs.toSpecification()))` NOT wrapping `qs.exists()`.
 - **Reflection `InvocationTargetException`**: When calling private methods via `Method.invoke()`, exceptions are wrapped in `InvocationTargetException`. Must unwrap via `.getCause()`.
 - **MySQL self-reference in UPDATE**: MySQL forbids `UPDATE ... WHERE EXISTS(SELECT ... FROM same_table)`. Use different entity types in EXISTS subqueries.
 - **`saveAllBatchedPure`** always calls `persist()` — detached/existing entities cause `EntityExistsException`. Use `saveAllBatched` for mixed lists.
-- **GlobalConfigHolder.getConfig()** returns a default instance when not configured via `setConfig()`. Tests must `setConfig()` first to control behavior.
+- **GlobalConfigHolder.getConfig()** returns a default instance when not configured via `setConfig()`. Tests must `setConfig(null)` in `@BeforeEach`/`@AfterEach` to control behavior.
 - **`condition=false` in ConditionalMethods**: When all conditions are skipped, QuerySpec has no WHERE → EXISTS subquery returns true for all rows (not 0).
+- **`deleteInBatch` soft-delete path**: Uses `PersistenceUnitUtil.getIdentifier(entity)` which needs managed entities. Call `repository.save()` then `repository.flush()` before `deleteInBatch(List.of(entity))`.
+- **`deleteByIdIfExists` / `deleteByIdOrThrow`**: These are on `DefaultMyJpaRepository`, not on the interface. To test through `@DataJpaTest`, use reflection: `Method m = DefaultMyJpaRepository.class.getMethod("deleteByIdIfExists", Object.class); m.invoke(proxy, id);`
+- **Pre-existing test errors**: ~291 tests in `KeysetPaginationHelperTest`, `BulkOperationTemplateTest`, `QueryCacheManagerTransactionTest` etc. have pre-existing errors unrelated to changes. These are NOT caused by new code.
+- **EncryptConverter test setup**: Always call `EncryptConverter.clearCacheForTesting()` in `@BeforeEach`/`@AfterEach` and reset `keyValidated` field via reflection. Set `myjpa-plus.encrypt.skip-salt-check=true` to skip PBKDF2 salt validation in tests.
+- **SecurityContextAuditUserProvider**: Uses `Class.forName("org.springframework.security.core.context.SecurityContextHolder")` via reflection. Returns `"ANONYMOUS"` when Spring Security is not on classpath. With Spring Security test dependency, mock `SecurityContextHolder` to test authenticated/unauthenticated paths.
 
 ### Test Files to Know
 
@@ -128,12 +148,22 @@ void setUp() {
 | `MergeSpecTest` | ~45 | UPSERT real DB tests |
 | `MergeSpecTransactionTest` | ~13 | Mockito transaction paths |
 | `DefaultMyJpaRepositoryTest` | ~41 | Soft delete repository |
+| `DefaultMyJpaRepositoryIntegrationTest` | ~20 | deleteInBatch/deleteByIdIfExists via reflection |
+| `MyJpaRepositoryTest` | ~30 | Lambda-based query/bulk operations |
+| `SoftDeleteContextTest` | ~27 | ThreadLocal counter behavior |
+| `IgnoreSoftDeleteAdvisorTest` | ~7 | AOP interception + SoftDeleteContext |
+| `OptimisticLockRetryAdvisorTest` | ~8 | Retry logic + exception handling |
 | `PredicateHelperTest` | ~63 | Static predicate helpers |
 | `LambdaUtilsTest` | ~20 | Lambda extraction + cache |
+| `EncryptConverterTest` | ~15 | Encrypt/decrypt round-trip |
+| `EncryptConverterCoverageTest` | ~30 | Multi-key, salt, isProdProfile paths |
+| `CodeEnumTypeTest` | ~30 | Enum type conversion |
+| `CodeEnumTypeCoverageTest` | ~25 | char/long/int types, ordinal, assemble |
 
 ## Key Conventions
 
-- JaCoCo minimum 90% coverage (all 13 packages, aspirational — current ~78.6%)
+- JaCoCo minimum 90% LINE coverage (enforced for: spec, update, repository, projection, template, annotation, autoconfigure, codegen, converter, exception, monitor, softdelete, util)
+- Current overall: ~84.9% INSTRUCTION, ~86.7% LINE
 - SpotBugs Medium threshold
 - PR checklist: spotless:check → verify → SpotBugs → JaCoCo → tests → CHANGELOG
 

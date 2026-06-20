@@ -18,11 +18,15 @@ class ConditionBuilderValidationTest {
     @BeforeEach
     void setUp() {
         repository.deleteAll();
+        parentRepository.deleteAll();
         repository.flush();
     }
 
     @Autowired
     private TestEntityRepository repository;
+
+    @Autowired
+    private ParentEntityRepository parentRepository;
 
     @PersistenceContext
     private EntityManager em;
@@ -660,6 +664,324 @@ class ConditionBuilderValidationTest {
     void testFuncInvalidFunctionNameThrows() {
         QuerySpec<TestEntity> qs = new QuerySpec<>();
         assertThrows(IllegalArgumentException.class, () -> qs.func(TestEntity::getName, "DROP TABLE"));
+    }
+
+    // ===== conditional boolean 方法（补充全覆盖） =====
+
+    @Test
+    void testConditionalGeTrueAddsCondition() {
+        repository.save(newEntity("a", 1));
+        repository.save(newEntity("b", 5));
+        QuerySpec<TestEntity> qs = new QuerySpec<>();
+        qs.ge(true, TestEntity::getStatus, 5);
+        List<TestEntity> result = repository.findAll(qs.toSpecification());
+        assertEquals(1, result.size());
+    }
+
+    @Test
+    void testConditionalLtFalseSkipsCondition() {
+        repository.save(newEntity("a", 1));
+        repository.save(newEntity("b", 10));
+        QuerySpec<TestEntity> qs = new QuerySpec<>();
+        qs.lt(false, TestEntity::getStatus, 5);
+        List<TestEntity> result = repository.findAll(qs.toSpecification());
+        assertEquals(2, result.size());
+    }
+
+    @Test
+    void testConditionalLeTrueAddsCondition() {
+        repository.save(newEntity("a", 1));
+        repository.save(newEntity("b", 5));
+        QuerySpec<TestEntity> qs = new QuerySpec<>();
+        qs.le(true, TestEntity::getStatus, 1);
+        List<TestEntity> result = repository.findAll(qs.toSpecification());
+        assertEquals(1, result.size());
+    }
+
+    @Test
+    void testConditionalNotLikeFalseSkipsCondition() {
+        repository.save(newEntity("hello", 0));
+        repository.save(newEntity("world", 0));
+        QuerySpec<TestEntity> qs = new QuerySpec<>();
+        qs.notLike(false, TestEntity::getName, "hello");
+        List<TestEntity> result = repository.findAll(qs.toSpecification());
+        assertEquals(2, result.size());
+    }
+
+    @Test
+    void testConditionalStartsWithFalseSkipsCondition() {
+        repository.save(newEntity("abc", 0));
+        repository.save(newEntity("xyz", 0));
+        QuerySpec<TestEntity> qs = new QuerySpec<>();
+        qs.startsWith(false, TestEntity::getName, "ab");
+        List<TestEntity> result = repository.findAll(qs.toSpecification());
+        assertEquals(2, result.size());
+    }
+
+    @Test
+    void testConditionalEndsWithTrueAddsCondition() {
+        repository.save(newEntity("abc", 0));
+        repository.save(newEntity("xyz", 0));
+        QuerySpec<TestEntity> qs = new QuerySpec<>();
+        qs.endsWith(true, TestEntity::getName, "bc");
+        List<TestEntity> result = repository.findAll(qs.toSpecification());
+        assertEquals(1, result.size());
+    }
+
+    @Test
+    void testConditionalNotStartsWithTrueAddsCondition() {
+        repository.save(newEntity("abc", 1));
+        repository.save(newEntity("xyz", 2));
+        QuerySpec<TestEntity> qs = new QuerySpec<>();
+        qs.notStartsWith(true, TestEntity::getName, "ab");
+        List<TestEntity> result = repository.findAll(qs.toSpecification());
+        assertEquals(1, result.size());
+        assertEquals("xyz", result.get(0).getName());
+    }
+
+    @Test
+    void testConditionalNotStartsWithFalseSkipsCondition() {
+        repository.save(newEntity("abc", 1));
+        repository.save(newEntity("xyz", 2));
+        QuerySpec<TestEntity> qs = new QuerySpec<>();
+        qs.notStartsWith(false, TestEntity::getName, "ab");
+        List<TestEntity> result = repository.findAll(qs.toSpecification());
+        assertEquals(2, result.size());
+    }
+
+    @Test
+    void testConditionalNotEndsWithTrueAddsCondition() {
+        repository.save(newEntity("abc", 1));
+        repository.save(newEntity("xyz", 2));
+        QuerySpec<TestEntity> qs = new QuerySpec<>();
+        qs.notEndsWith(true, TestEntity::getName, "bc");
+        List<TestEntity> result = repository.findAll(qs.toSpecification());
+        assertEquals(1, result.size());
+        assertEquals("xyz", result.get(0).getName());
+    }
+
+    @Test
+    void testConditionalNotEndsWithFalseSkipsCondition() {
+        repository.save(newEntity("abc", 1));
+        repository.save(newEntity("xyz", 2));
+        QuerySpec<TestEntity> qs = new QuerySpec<>();
+        qs.notEndsWith(false, TestEntity::getName, "bc");
+        List<TestEntity> result = repository.findAll(qs.toSpecification());
+        assertEquals(2, result.size());
+    }
+
+    @Test
+    void testConditionalInVarargsFalseSkipsCondition() {
+        repository.save(newEntity("a", 1));
+        repository.save(newEntity("b", 2));
+        QuerySpec<TestEntity> qs = new QuerySpec<>();
+        qs.in(false, TestEntity::getStatus, 1, 2);
+        List<TestEntity> result = repository.findAll(qs.toSpecification());
+        assertEquals(2, result.size());
+    }
+
+    @Test
+    void testConditionalNotInVarargsFalseSkipsCondition() {
+        repository.save(newEntity("a", 1));
+        QuerySpec<TestEntity> qs = new QuerySpec<>();
+        qs.notIn(false, TestEntity::getStatus, 1);
+        List<TestEntity> result = repository.findAll(qs.toSpecification());
+        assertEquals(1, result.size());
+    }
+
+    @Test
+    void testConditionalBetweenTrueAddsCondition() {
+        repository.save(newEntity("a", 1));
+        repository.save(newEntity("b", 5));
+        repository.save(newEntity("c", 10));
+        QuerySpec<TestEntity> qs = new QuerySpec<>();
+        qs.between(true, TestEntity::getStatus, 1, 5);
+        List<TestEntity> result = repository.findAll(qs.toSpecification());
+        assertEquals(2, result.size());
+    }
+
+    @Test
+    void testConditionalNotBetweenTrueAddsCondition() {
+        repository.save(newEntity("a", 1));
+        repository.save(newEntity("b", 5));
+        repository.save(newEntity("c", 10));
+        QuerySpec<TestEntity> qs = new QuerySpec<>();
+        qs.notBetween(true, TestEntity::getStatus, 1, 5);
+        List<TestEntity> result = repository.findAll(qs.toSpecification());
+        assertEquals(1, result.size());
+    }
+
+    @Test
+    void testConditionalNotBetweenFalseSkipsCondition() {
+        repository.save(newEntity("a", 1));
+        repository.save(newEntity("b", 5));
+        repository.save(newEntity("c", 10));
+        QuerySpec<TestEntity> qs = new QuerySpec<>();
+        qs.notBetween(false, TestEntity::getStatus, 1, 5);
+        List<TestEntity> result = repository.findAll(qs.toSpecification());
+        assertEquals(3, result.size());
+    }
+
+    @Test
+    void testConditionalEqIgnoreCaseTrueAddsCondition() {
+        repository.save(newEntity("hello", 0));
+        repository.save(newEntity("world", 0));
+        QuerySpec<TestEntity> qs = new QuerySpec<>();
+        qs.eqIgnoreCase(true, TestEntity::getName, "HELLO");
+        List<TestEntity> result = repository.findAll(qs.toSpecification());
+        assertEquals(1, result.size());
+    }
+
+    @Test
+    void testConditionalEqIgnoreCaseFalseSkipsCondition() {
+        repository.save(newEntity("hello", 0));
+        QuerySpec<TestEntity> qs = new QuerySpec<>();
+        qs.eqIgnoreCase(false, TestEntity::getName, "HELLO");
+        List<TestEntity> result = repository.findAll(qs.toSpecification());
+        assertEquals(1, result.size());
+    }
+
+    @Test
+    void testConditionalNeIgnoreCaseTrueAddsCondition() {
+        repository.save(newEntity("hello", 0));
+        repository.save(newEntity("world", 0));
+        QuerySpec<TestEntity> qs = new QuerySpec<>();
+        qs.neIgnoreCase(true, TestEntity::getName, "HELLO");
+        List<TestEntity> result = repository.findAll(qs.toSpecification());
+        assertEquals(1, result.size());
+    }
+
+    @Test
+    void testConditionalNeIgnoreCaseFalseSkipsCondition() {
+        repository.save(newEntity("hello", 0));
+        QuerySpec<TestEntity> qs = new QuerySpec<>();
+        qs.neIgnoreCase(false, TestEntity::getName, "HELLO");
+        List<TestEntity> result = repository.findAll(qs.toSpecification());
+        assertEquals(1, result.size());
+    }
+
+    @Test
+    void testConditionalLikeIgnoreCaseTrueAddsCondition() {
+        repository.save(newEntity("hello", 0));
+        repository.save(newEntity("world", 0));
+        QuerySpec<TestEntity> qs = new QuerySpec<>();
+        qs.likeIgnoreCase(true, TestEntity::getName, "ELL");
+        List<TestEntity> result = repository.findAll(qs.toSpecification());
+        assertEquals(1, result.size());
+    }
+
+    @Test
+    void testConditionalLikeIgnoreCaseFalseSkipsCondition() {
+        repository.save(newEntity("hello", 0));
+        QuerySpec<TestEntity> qs = new QuerySpec<>();
+        qs.likeIgnoreCase(false, TestEntity::getName, "ELL");
+        List<TestEntity> result = repository.findAll(qs.toSpecification());
+        assertEquals(1, result.size());
+    }
+
+    @Test
+    void testConditionalIsNullTrueAddsCondition() {
+        TestEntity e = newEntity("test", 0);
+        e.setName(null);
+        repository.save(e);
+        repository.save(newEntity("other", 0));
+        QuerySpec<TestEntity> qs = new QuerySpec<>();
+        qs.isNull(true, TestEntity::getName);
+        List<TestEntity> result = repository.findAll(qs.toSpecification());
+        assertEquals(1, result.size());
+    }
+
+    @Test
+    void testConditionalIsNullFalseSkipsCondition() {
+        TestEntity e = newEntity("test", 0);
+        e.setName(null);
+        repository.save(e);
+        QuerySpec<TestEntity> qs = new QuerySpec<>();
+        qs.isNull(false, TestEntity::getName);
+        List<TestEntity> result = repository.findAll(qs.toSpecification());
+        assertEquals(1, result.size());
+    }
+
+    @Test
+    void testConditionalIsNotNullTrueAddsCondition() {
+        repository.save(newEntity("a", 0));
+        TestEntity e = newEntity("b", 0);
+        e.setName(null);
+        repository.save(e);
+        QuerySpec<TestEntity> qs = new QuerySpec<>();
+        qs.isNotNull(true, TestEntity::getName);
+        List<TestEntity> result = repository.findAll(qs.toSpecification());
+        assertEquals(1, result.size());
+    }
+
+    @Test
+    void testConditionalIsNotNullFalseSkipsCondition() {
+        repository.save(newEntity("a", 0));
+        QuerySpec<TestEntity> qs = new QuerySpec<>();
+        qs.isNotNull(false, TestEntity::getName);
+        List<TestEntity> result = repository.findAll(qs.toSpecification());
+        assertEquals(1, result.size());
+    }
+
+    @Test
+    void testConditionalIsEmptyTrueAddsCondition() {
+        ParentEntity p = new ParentEntity();
+        p.setCategory("empty");
+        parentRepository.save(p);
+        ParentEntity p2 = new ParentEntity();
+        p2.setCategory("withChild");
+        parentRepository.save(p2);
+        TestEntity child = newEntity("child", 0);
+        child.setParent(p2);
+        repository.save(child);
+        em.flush();
+        em.clear();
+
+        QuerySpec<ParentEntity> qs = new QuerySpec<>();
+        qs.isEmpty(true, ParentEntity::getChildren);
+        List<ParentEntity> result = parentRepository.findAll(qs.toSpecification());
+        assertEquals(1, result.size());
+    }
+
+    @Test
+    void testConditionalIsEmptyFalseSkipsCondition() {
+        ParentEntity p = new ParentEntity();
+        p.setCategory("test");
+        parentRepository.save(p);
+
+        QuerySpec<ParentEntity> qs = new QuerySpec<>();
+        qs.isEmpty(false, ParentEntity::getChildren);
+        List<ParentEntity> result = parentRepository.findAll(qs.toSpecification());
+        assertEquals(1, result.size());
+    }
+
+    @Test
+    void testConditionalIsNotEmptyTrueAddsCondition() {
+        ParentEntity p = new ParentEntity();
+        p.setCategory("withChild");
+        parentRepository.save(p);
+        TestEntity child = newEntity("child", 0);
+        child.setParent(p);
+        repository.save(child);
+        em.flush();
+        em.clear();
+
+        QuerySpec<ParentEntity> qs = new QuerySpec<>();
+        qs.isNotEmpty(true, ParentEntity::getChildren);
+        List<ParentEntity> result = parentRepository.findAll(qs.toSpecification());
+        assertEquals(1, result.size());
+    }
+
+    @Test
+    void testConditionalIsNotEmptyFalseSkipsCondition() {
+        ParentEntity p = new ParentEntity();
+        p.setCategory("test");
+        parentRepository.save(p);
+
+        QuerySpec<ParentEntity> qs = new QuerySpec<>();
+        qs.isNotEmpty(false, ParentEntity::getChildren);
+        List<ParentEntity> result = parentRepository.findAll(qs.toSpecification());
+        assertEquals(1, result.size());
     }
 
     private TestEntity newEntity(String name, int status) {

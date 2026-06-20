@@ -67,6 +67,33 @@ class EntityClassResolverTest {
         assertSame(first, second);
     }
 
+    @Test
+    void testResolveIdFieldNameWithEmbeddedId() {
+        String fieldName = EntityClassResolver.resolveIdFieldName(EmbeddedIdEntity.class);
+        assertEquals("id", fieldName);
+    }
+
+    @Test
+    void testResolveIdFieldNameWithIdClass() {
+        String fieldName = EntityClassResolver.resolveIdFieldName(IdClassEntity.class);
+        assertEquals("id1", fieldName);
+    }
+
+    @Test
+    void testHasCompositeKeyWithEmbeddedId() {
+        assertTrue(EntityClassResolver.hasCompositeKey(EmbeddedIdEntity.class));
+    }
+
+    @Test
+    void testHasCompositeKeyWithIdClass() {
+        assertTrue(EntityClassResolver.hasCompositeKey(IdClassEntity.class));
+    }
+
+    @Test
+    void testHasCompositeKeyWithSingleId() {
+        assertFalse(EntityClassResolver.hasCompositeKey(MyJpaTestEntity.class));
+    }
+
     private interface NonMyJpaRepository {
         void dummy();
     }
@@ -90,4 +117,77 @@ class EntityClassResolverTest {
     interface BaseRepo<T, ID> extends MyJpaRepository<T, ID> {}
 
     interface IndirectRepo extends BaseRepo<IndirectEntity, Long> {}
+
+    @jakarta.persistence.Entity
+    static class EmbeddedIdEntity {
+        @jakarta.persistence.EmbeddedId
+        private CompositeKey id;
+
+        public CompositeKey getId() {
+            return id;
+        }
+
+        public void setId(CompositeKey id) {
+            this.id = id;
+        }
+    }
+
+    static class CompositeKey implements java.io.Serializable {
+        private Long id;
+
+        public Long getId() {
+            return id;
+        }
+
+        public void setId(Long id) {
+            this.id = id;
+        }
+    }
+
+    @jakarta.persistence.Entity
+    @jakarta.persistence.IdClass(IdClassKey.class)
+    static class IdClassEntity {
+        @jakarta.persistence.Id
+        private Long id1;
+
+        @jakarta.persistence.Id
+        private Long id2;
+
+        public Long getId1() {
+            return id1;
+        }
+
+        public void setId1(Long id1) {
+            this.id1 = id1;
+        }
+
+        public Long getId2() {
+            return id2;
+        }
+
+        public void setId2(Long id2) {
+            this.id2 = id2;
+        }
+    }
+
+    static class IdClassKey implements java.io.Serializable {
+        private Long id1;
+        private Long id2;
+
+        public Long getId1() {
+            return id1;
+        }
+
+        public void setId1(Long id1) {
+            this.id1 = id1;
+        }
+
+        public Long getId2() {
+            return id2;
+        }
+
+        public void setId2(Long id2) {
+            this.id2 = id2;
+        }
+    }
 }

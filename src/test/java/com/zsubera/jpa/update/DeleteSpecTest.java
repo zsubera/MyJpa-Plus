@@ -22,6 +22,67 @@ import org.springframework.test.context.ContextConfiguration;
 @ContextConfiguration(classes = TestApplication.class)
 class DeleteSpecTest {
 
+    @jakarta.persistence.Embeddable
+    static class DeleteSpecEmbeddedId implements java.io.Serializable {
+        private Long partOne;
+        private Long partTwo;
+
+        public Long getPartOne() {
+            return partOne;
+        }
+
+        public void setPartOne(Long partOne) {
+            this.partOne = partOne;
+        }
+
+        public Long getPartTwo() {
+            return partTwo;
+        }
+
+        public void setPartTwo(Long partTwo) {
+            this.partTwo = partTwo;
+        }
+
+        @Override
+        public boolean equals(Object o) {
+            if (this == o)
+                return true;
+            if (o == null || getClass() != o.getClass())
+                return false;
+            DeleteSpecEmbeddedId that = (DeleteSpecEmbeddedId)o;
+            return java.util.Objects.equals(partOne, that.partOne) && java.util.Objects.equals(partTwo, that.partTwo);
+        }
+
+        @Override
+        public int hashCode() {
+            return java.util.Objects.hash(partOne, partTwo);
+        }
+    }
+
+    @jakarta.persistence.Entity
+    @jakarta.persistence.Table(name = "delete_spec_composite")
+    static class DeleteSpecCompositeEntity {
+        @jakarta.persistence.EmbeddedId
+        private DeleteSpecEmbeddedId id;
+        private String name;
+
+        public DeleteSpecEmbeddedId getId() {
+            return id;
+        }
+
+        public void setId(DeleteSpecEmbeddedId id) {
+            this.id = id;
+        }
+
+        public String getName() {
+            return name;
+        }
+
+        public void setName(String name) {
+            this.name = name;
+        }
+    }
+
     @Autowired
     private TestEntityRepository repository;
 
@@ -818,5 +879,33 @@ class DeleteSpecTest {
         List<TestEntity> remaining = repository.findAll();
         assertEquals(1, remaining.size());
         assertEquals("a", remaining.get(0).getName());
+    }
+
+    @Test
+    void testDeleteExecuteLimitedWithCompositeKeyThrows() {
+        assertThrows(UnsupportedOperationException.class, () -> new DeleteSpec<>(DeleteSpecCompositeEntity.class)
+            .eq(DeleteSpecCompositeEntity::getName, "test").executeLimited(em, 10));
+    }
+
+    @Test
+    void testDeleteExecuteLimitedWithPessimisticLockFalse() {
+        for (int i = 0; i < 3; i++) {
+            repository.save(newEntity("pl" + i, i));
+        }
+        int count = new DeleteSpec<>(TestEntity.class).ge(TestEntity::getStatus, 1).executeLimited(em, 10, false);
+        assertEquals(2, count);
+        em.clear();
+        assertEquals(1, repository.count());
+    }
+
+    @Test
+    void testDeleteExecuteLimitedUnconditionalAllowed() {
+        for (int i = 0; i < 4; i++) {
+            repository.save(newEntity("uc" + i, i));
+        }
+        int count = new DeleteSpec<>(TestEntity.class).allowUnconditional(true).executeLimited(em, 10);
+        assertEquals(4, count);
+        em.clear();
+        assertEquals(0, repository.count());
     }
 }

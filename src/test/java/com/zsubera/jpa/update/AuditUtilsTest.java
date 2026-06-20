@@ -44,8 +44,9 @@ class AuditUtilsTest {
     void getCallStack_maxDepthRespected() {
         String stack = AuditUtils.getCallStack();
         String[] frames = stack.split(" <- ");
-        // Should not exceed default max depth (5)
-        assertTrue(frames.length <= 5, "Stack depth should not exceed 5, but got " + frames.length);
+        int maxDepth = AuditUtils.getMaxStackDepth();
+        assertTrue(frames.length <= maxDepth,
+            "Stack depth should not exceed " + maxDepth + ", but got " + frames.length);
     }
 
     @Test
@@ -95,5 +96,50 @@ class AuditUtilsTest {
         // The default value should be 5 (unless overridden by system property)
         int depth = AuditUtils.getMaxStackDepth();
         assertTrue(depth > 0 && depth <= 20, "Default depth should be between 1 and 20");
+    }
+
+    @Test
+    void initMaxStackDepth_withValidSystemProperty() throws Exception {
+        int original = AuditUtils.getMaxStackDepth();
+        System.setProperty("myjpa-plus.audit.stack-trace-depth", "10");
+        try {
+            java.lang.reflect.Method initMethod = AuditUtils.class.getDeclaredMethod("initMaxStackDepth");
+            initMethod.setAccessible(true);
+            int result = (int)initMethod.invoke(null);
+            assertEquals(10, result);
+        } finally {
+            System.clearProperty("myjpa-plus.audit.stack-trace-depth");
+            AuditUtils.setMaxStackDepth(original);
+        }
+    }
+
+    @Test
+    void initMaxStackDepth_withOutOfRangeProperty() throws Exception {
+        int original = AuditUtils.getMaxStackDepth();
+        System.setProperty("myjpa-plus.audit.stack-trace-depth", "0");
+        try {
+            java.lang.reflect.Method initMethod = AuditUtils.class.getDeclaredMethod("initMaxStackDepth");
+            initMethod.setAccessible(true);
+            int result = (int)initMethod.invoke(null);
+            assertEquals(5, result);
+        } finally {
+            System.clearProperty("myjpa-plus.audit.stack-trace-depth");
+            AuditUtils.setMaxStackDepth(original);
+        }
+    }
+
+    @Test
+    void initMaxStackDepth_withInvalidSystemProperty() throws Exception {
+        int original = AuditUtils.getMaxStackDepth();
+        System.setProperty("myjpa-plus.audit.stack-trace-depth", "not-a-number");
+        try {
+            java.lang.reflect.Method initMethod = AuditUtils.class.getDeclaredMethod("initMaxStackDepth");
+            initMethod.setAccessible(true);
+            int result = (int)initMethod.invoke(null);
+            assertEquals(5, result);
+        } finally {
+            System.clearProperty("myjpa-plus.audit.stack-trace-depth");
+            AuditUtils.setMaxStackDepth(original);
+        }
     }
 }

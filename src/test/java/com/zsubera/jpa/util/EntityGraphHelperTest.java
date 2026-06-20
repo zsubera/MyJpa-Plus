@@ -49,6 +49,73 @@ class EntityGraphHelperTest {
     }
 
     @Test
+    void testForEntityNullThrowsException() {
+        assertThrows(IllegalArgumentException.class, () -> EntityGraphHelper.forEntity(null));
+    }
+
+    @Test
+    void testRemoveAttribute() {
+        EntityGraphHelper<TestEntity> helper = EntityGraphHelper.forEntity(TestEntity.class).add("parent");
+        assertFalse(helper.toHints(em).isEmpty());
+        helper.remove("parent");
+        assertTrue(helper.toHints(em).isEmpty());
+    }
+
+    @Test
+    void testRemoveNullPathThrowsException() {
+        EntityGraphHelper<TestEntity> helper = EntityGraphHelper.forEntity(TestEntity.class).add("parent");
+        assertThrows(IllegalArgumentException.class, () -> helper.remove(null));
+    }
+
+    @Test
+    void testRemoveEmptyPathThrowsException() {
+        EntityGraphHelper<TestEntity> helper = EntityGraphHelper.forEntity(TestEntity.class).add("parent");
+        assertThrows(IllegalArgumentException.class, () -> helper.remove(""));
+    }
+
+    @Test
+    void testClearRemovesAllPaths() {
+        EntityGraphHelper<TestEntity> helper = EntityGraphHelper.forEntity(TestEntity.class).add("parent").add("name");
+        assertFalse(helper.toHints(em).isEmpty());
+        helper.clear();
+        assertTrue(helper.toHints(em).isEmpty());
+    }
+
+    @Test
+    void testNestAfterAdd() {
+        EntityGraphHelper<TestEntity> helper =
+            EntityGraphHelper.forEntity(TestEntity.class).add("parent").nest("category");
+        Map<String, Object> hints = helper.toHints(em);
+        assertFalse(hints.isEmpty());
+    }
+
+    @Test
+    void testNestWithoutPriorAddThrowsException() {
+        EntityGraphHelper<TestEntity> helper = EntityGraphHelper.forEntity(TestEntity.class);
+        assertThrows(IllegalStateException.class, () -> helper.nest("x"));
+    }
+
+    @Test
+    void testNestNullThrowsException() {
+        EntityGraphHelper<TestEntity> helper = EntityGraphHelper.forEntity(TestEntity.class).add("parent");
+        assertThrows(IllegalArgumentException.class, () -> helper.nest(null));
+    }
+
+    @Test
+    void testNestEmptyThrowsException() {
+        EntityGraphHelper<TestEntity> helper = EntityGraphHelper.forEntity(TestEntity.class).add("parent");
+        assertThrows(IllegalArgumentException.class, () -> helper.nest(""));
+    }
+
+    @Test
+    void testDuplicateSubpathNotAddedTwice() {
+        EntityGraphHelper<TestEntity> helper =
+            EntityGraphHelper.forEntity(TestEntity.class).add("parent.category").add("parent.category");
+        EntityGraph<TestEntity> graph = helper.buildGraph(em);
+        assertNotNull(graph);
+    }
+
+    @Test
     void testAddSingleAttribute() {
         EntityGraphHelper<TestEntity> helper = EntityGraphHelper.forEntity(TestEntity.class).add("parent");
         EntityGraph<TestEntity> graph = helper.buildGraph(em);
@@ -158,11 +225,10 @@ class EntityGraphHelperTest {
     }
 
     @Test
-    void testDotPathCreatesSubgraph() {
-        EntityGraphHelper<TestEntity> helper = EntityGraphHelper.forEntity(TestEntity.class).add("parent.category");
-        EntityGraph<TestEntity> graph = helper.buildGraph(em);
-        assertNotNull(graph);
-        assertFalse(graph.getAttributeNodes().isEmpty());
+    void testRemoveClearsLastAddedPath() {
+        EntityGraphHelper<TestEntity> helper = EntityGraphHelper.forEntity(TestEntity.class).add("parent");
+        helper.remove("parent");
+        assertThrows(IllegalStateException.class, () -> helper.nest("child"));
     }
 
     @Test

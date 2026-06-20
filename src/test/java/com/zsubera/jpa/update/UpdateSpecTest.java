@@ -1335,4 +1335,81 @@ class UpdateSpecTest {
 
         assertEquals(1, count);
     }
+
+    @Test
+    void testUpdateExecuteLimitedWithoutPessimisticLock() {
+        for (int i = 0; i < 3; i++) {
+            repository.save(newEntity("pess" + i, 0));
+        }
+        int count = new UpdateSpec<>(TestEntity.class).set(TestEntity::getStatus, 1).eq(TestEntity::getStatus, 0)
+            .executeLimited(em, 2, false);
+        assertEquals(2, count);
+        em.clear();
+        long updated = repository.findAll().stream().filter(e -> e.getStatus() == 1).count();
+        assertEquals(2, updated);
+    }
+
+    @Test
+    void testUpdateSetAddWithSetExprPath() {
+        repository.save(newEntity("expr", 10));
+        int count = new UpdateSpec<>(TestEntity.class).setAdd(TestEntity::getStatus, 5).eq(TestEntity::getName, "expr")
+            .execute(em);
+        em.flush();
+        em.clear();
+        assertEquals(1, count);
+        TestEntity found =
+            repository.findAll().stream().filter(e -> "expr".equals(e.getName())).findFirst().orElseThrow();
+        assertEquals(Integer.valueOf(15), found.getStatus());
+    }
+
+    @Test
+    void testUpdateSetSubtractExprPath() {
+        repository.save(newEntity("sub", 20));
+        int count = new UpdateSpec<>(TestEntity.class).setSubtract(TestEntity::getStatus, 3)
+            .eq(TestEntity::getName, "sub").execute(em);
+        em.flush();
+        em.clear();
+        assertEquals(1, count);
+        TestEntity found =
+            repository.findAll().stream().filter(e -> "sub".equals(e.getName())).findFirst().orElseThrow();
+        assertEquals(Integer.valueOf(17), found.getStatus());
+    }
+
+    @Test
+    void testUpdateNonNumericFieldSetAddTwice_usesCache() {
+        assertThrows(IllegalArgumentException.class,
+            () -> new UpdateSpec<>(TestEntity.class).setAdd(TestEntity::getName, 1));
+        assertThrows(IllegalArgumentException.class,
+            () -> new UpdateSpec<>(TestEntity.class).setAdd(TestEntity::getName, 2));
+    }
+
+    @Test
+    void testUpdateWhereWithNullSpec() {
+        assertThrows(IllegalArgumentException.class,
+            () -> new UpdateSpec<>(TestEntity.class).set(TestEntity::getName, "x").where(null));
+    }
+
+    @Test
+    void testUpdateWithEmptyOrGroupThrows() {
+        assertThrows(IllegalArgumentException.class,
+            () -> new UpdateSpec<>(TestEntity.class).set(TestEntity::getName, "x").or(o -> {
+            }));
+    }
+
+    @Test
+    void testUpdateWithEmptyNotGroupThrows() {
+        assertThrows(IllegalArgumentException.class,
+            () -> new UpdateSpec<>(TestEntity.class).set(TestEntity::getName, "x").not(n -> {
+            }));
+    }
+
+    @Test
+    void testUpdateOrMultiLike() {
+        repository.save(newEntity("alpha", 1));
+        repository.save(newEntity("beta", 2));
+        int count = new UpdateSpec<>(TestEntity.class).set(TestEntity::getName, "matched")
+            .or(o -> o.multiLike("alp", TestEntity::getName)).execute(em);
+        assertEquals(1, count);
+        assertEquals("beta", repository.findAll().stream().filter(e -> e.getStatus() == 2).findFirst().get().getName());
+    }
 }

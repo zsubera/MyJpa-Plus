@@ -78,6 +78,62 @@ class PageableHelperTest {
         assertFalse(result.getSort().isSorted());
     }
 
+    @Test
+    void testMergeNullQuerySpec() {
+        Pageable result = PageableHelper.merge(PageRequest.of(0, 10), null);
+        assertEquals(0, result.getPageNumber());
+        assertEquals(10, result.getPageSize());
+    }
+
+    @Test
+    void testDetermineFetchSizeSecurityException() {
+        jakarta.persistence.EntityManager em = org.mockito.Mockito.mock(jakarta.persistence.EntityManager.class);
+        org.mockito.Mockito.when(em.getEntityManagerFactory()).thenThrow(new SecurityException("Access denied"));
+        assertEquals(0, PageableHelper.determineFetchSize(em));
+    }
+
+    @Test
+    void testDetermineFetchSizeGenericException() {
+        jakarta.persistence.EntityManager em = org.mockito.Mockito.mock(jakarta.persistence.EntityManager.class);
+        org.mockito.Mockito.when(em.getEntityManagerFactory()).thenThrow(new RuntimeException("Unexpected error"));
+        assertEquals(0, PageableHelper.determineFetchSize(em));
+    }
+
+    @Test
+    void testDetermineFetchSizeFallbackToHibernateUrl() {
+        jakarta.persistence.EntityManager em = org.mockito.Mockito.mock(jakarta.persistence.EntityManager.class);
+        jakarta.persistence.EntityManagerFactory emf =
+            org.mockito.Mockito.mock(jakarta.persistence.EntityManagerFactory.class);
+        java.util.Map<String, Object> props = new java.util.HashMap<>();
+        props.put("hibernate.connection.url", "jdbc:postgresql://localhost/test");
+        org.mockito.Mockito.when(em.getEntityManagerFactory()).thenReturn(emf);
+        org.mockito.Mockito.when(emf.getProperties()).thenReturn(props);
+        assertEquals(100, PageableHelper.determineFetchSize(em));
+    }
+
+    @Test
+    void testDetermineFetchSizeBothUrlsNull() {
+        jakarta.persistence.EntityManager em = org.mockito.Mockito.mock(jakarta.persistence.EntityManager.class);
+        jakarta.persistence.EntityManagerFactory emf =
+            org.mockito.Mockito.mock(jakarta.persistence.EntityManagerFactory.class);
+        java.util.Map<String, Object> props = new java.util.HashMap<>();
+        org.mockito.Mockito.when(em.getEntityManagerFactory()).thenReturn(emf);
+        org.mockito.Mockito.when(emf.getProperties()).thenReturn(props);
+        assertEquals(0, PageableHelper.determineFetchSize(em));
+    }
+
+    @Test
+    void testDetermineFetchSizeUnknownDatabase() {
+        jakarta.persistence.EntityManager em = org.mockito.Mockito.mock(jakarta.persistence.EntityManager.class);
+        jakarta.persistence.EntityManagerFactory emf =
+            org.mockito.Mockito.mock(jakarta.persistence.EntityManagerFactory.class);
+        java.util.Map<String, Object> props = new java.util.HashMap<>();
+        props.put("jakarta.persistence.jdbc.url", "jdbc:h2:mem:test");
+        org.mockito.Mockito.when(em.getEntityManagerFactory()).thenReturn(emf);
+        org.mockito.Mockito.when(emf.getProperties()).thenReturn(props);
+        assertEquals(0, PageableHelper.determineFetchSize(em));
+    }
+
     // Minimal entity for LambdaUtils
     static class TestEntity {
         private String name;

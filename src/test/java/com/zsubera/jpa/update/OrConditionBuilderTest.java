@@ -112,6 +112,15 @@ class OrConditionBuilderTest {
     }
 
     @Test
+    void multiLike_withNullFieldElement_throws() {
+        UpdateSpec<TestEntity> updateSpec = new UpdateSpec<>(TestEntity.class);
+        OrConditionBuilder<TestEntity, UpdateSpec<TestEntity>> builder =
+            new OrConditionBuilder<>(updateSpec, new ArrayList<>());
+        assertThrows(IllegalArgumentException.class,
+            () -> builder.multiLike("test", TestEntity::getName, (SFunction<TestEntity, ?>)null));
+    }
+
+    @Test
     void multiLike_multipleFields_addsSingleNode() {
         ArrayList<com.zsubera.jpa.update.AbstractBulkOperationSpec.BulkConditionNode> nodes = new ArrayList<>();
         UpdateSpec<TestEntity> updateSpec = new UpdateSpec<>(TestEntity.class);

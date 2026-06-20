@@ -2,11 +2,19 @@ package com.zsubera.jpa.softdelete;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+import com.zsubera.jpa.spec.SoftDeleteEnumTestEntity;
+import com.zsubera.jpa.spec.SoftDeleteEnumTestEntityRepository;
+import com.zsubera.jpa.spec.SoftDeleteIntTestEntity;
+import com.zsubera.jpa.spec.SoftDeleteIntTestEntityRepository;
+import com.zsubera.jpa.spec.SoftDeleteStringTestEntity;
+import com.zsubera.jpa.spec.SoftDeleteStringTestEntityRepository;
 import com.zsubera.jpa.spec.SoftDeleteTestEntity;
 import com.zsubera.jpa.spec.SoftDeleteTestEntityRepository;
 import com.zsubera.jpa.spec.TestApplication;
 import com.zsubera.jpa.spec.TestEntity;
 import com.zsubera.jpa.spec.TestEntityRepository;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.PersistenceContext;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.BeforeEach;
@@ -24,6 +32,10 @@ class SoftDeleteHelperTest {
     @BeforeEach
     void setUp() {
         repository.deleteAll();
+        intRepository.deleteAll();
+        enumRepository.deleteAll();
+        stringRepository.deleteAll();
+        testEntityRepository.deleteAll();
         repository.flush();
     }
 
@@ -32,6 +44,18 @@ class SoftDeleteHelperTest {
 
     @Autowired
     private TestEntityRepository testEntityRepository;
+
+    @Autowired
+    private SoftDeleteIntTestEntityRepository intRepository;
+
+    @Autowired
+    private SoftDeleteEnumTestEntityRepository enumRepository;
+
+    @Autowired
+    private SoftDeleteStringTestEntityRepository stringRepository;
+
+    @PersistenceContext
+    private EntityManager em;
 
     @Test
     void testIsNotDeletedFiltersOutSoftDeletedRecords() {
@@ -413,6 +437,243 @@ class SoftDeleteHelperTest {
 
         int result = SoftDeleteHelper.softDeleteAll(mockEm, SoftDeleteTestEntity.class, true);
         assertEquals(3, result);
+    }
+
+    // ===== Integer soft delete type =====
+
+    @Test
+    void testIsSoftDeleted_integerType_deleted() {
+        SoftDeleteIntTestEntity entity = new SoftDeleteIntTestEntity();
+        entity.setName("deleted");
+        entity.setDeleted(1);
+        assertTrue(SoftDeleteHelper.isSoftDeleted(SoftDeleteIntTestEntity.class, entity));
+    }
+
+    @Test
+    void testIsSoftDeleted_integerType_active() {
+        SoftDeleteIntTestEntity entity = new SoftDeleteIntTestEntity();
+        entity.setName("active");
+        entity.setDeleted(0);
+        assertFalse(SoftDeleteHelper.isSoftDeleted(SoftDeleteIntTestEntity.class, entity));
+    }
+
+    @Test
+    void testIsNotDeleted_integerType_filtersCorrectly() {
+        SoftDeleteIntTestEntity active = new SoftDeleteIntTestEntity();
+        active.setName("active");
+        active.setDeleted(0);
+        intRepository.save(active);
+
+        SoftDeleteIntTestEntity deleted = new SoftDeleteIntTestEntity();
+        deleted.setName("deleted");
+        deleted.setDeleted(1);
+        intRepository.save(deleted);
+
+        List<SoftDeleteIntTestEntity> result =
+            intRepository.findAll(SoftDeleteHelper.isNotDeleted(SoftDeleteIntTestEntity.class));
+        assertEquals(1, result.size());
+        assertEquals("active", result.get(0).getName());
+    }
+
+    @Test
+    void testIsDeleted_integerType_returnsOnlyDeleted() {
+        SoftDeleteIntTestEntity active = new SoftDeleteIntTestEntity();
+        active.setName("active");
+        active.setDeleted(0);
+        intRepository.save(active);
+
+        SoftDeleteIntTestEntity deleted = new SoftDeleteIntTestEntity();
+        deleted.setName("deleted");
+        deleted.setDeleted(1);
+        intRepository.save(deleted);
+
+        List<SoftDeleteIntTestEntity> result =
+            intRepository.findAll(SoftDeleteHelper.isDeleted(SoftDeleteIntTestEntity.class));
+        assertEquals(1, result.size());
+        assertEquals("deleted", result.get(0).getName());
+    }
+
+    @Test
+    void testNotDeletedQuery_integerType() {
+        SoftDeleteIntTestEntity active = new SoftDeleteIntTestEntity();
+        active.setName("target");
+        active.setDeleted(0);
+        intRepository.save(active);
+
+        SoftDeleteIntTestEntity deleted = new SoftDeleteIntTestEntity();
+        deleted.setName("target");
+        deleted.setDeleted(1);
+        intRepository.save(deleted);
+
+        var qs = SoftDeleteHelper.notDeletedQuery(SoftDeleteIntTestEntity.class);
+        qs.eq(SoftDeleteIntTestEntity::getName, "target");
+        List<SoftDeleteIntTestEntity> result = intRepository.findAll(qs.toSpecification());
+        assertEquals(1, result.size());
+        assertEquals(0, result.get(0).getDeleted().intValue());
+    }
+
+    @Test
+    void testFindSoftDeleteField_integerType() {
+        String fieldName = SoftDeleteHelper.findSoftDeleteField(SoftDeleteIntTestEntity.class);
+        assertEquals("deleted", fieldName);
+    }
+
+    // ===== Enum soft delete type =====
+
+    @Test
+    void testIsSoftDeleted_enumType_deleted() {
+        SoftDeleteEnumTestEntity entity = new SoftDeleteEnumTestEntity();
+        entity.setName("deleted");
+        entity.setStatus(SoftDeleteEnumTestEntity.Status.ARCHIVED);
+        assertTrue(SoftDeleteHelper.isSoftDeleted(SoftDeleteEnumTestEntity.class, entity));
+    }
+
+    @Test
+    void testIsSoftDeleted_enumType_active() {
+        SoftDeleteEnumTestEntity entity = new SoftDeleteEnumTestEntity();
+        entity.setName("active");
+        entity.setStatus(SoftDeleteEnumTestEntity.Status.ACTIVE);
+        assertFalse(SoftDeleteHelper.isSoftDeleted(SoftDeleteEnumTestEntity.class, entity));
+    }
+
+    @Test
+    void testIsNotDeleted_enumType_filtersCorrectly() {
+        SoftDeleteEnumTestEntity active = new SoftDeleteEnumTestEntity();
+        active.setName("active");
+        active.setStatus(SoftDeleteEnumTestEntity.Status.ACTIVE);
+        enumRepository.save(active);
+
+        SoftDeleteEnumTestEntity deleted = new SoftDeleteEnumTestEntity();
+        deleted.setName("deleted");
+        deleted.setStatus(SoftDeleteEnumTestEntity.Status.ARCHIVED);
+        enumRepository.save(deleted);
+
+        List<SoftDeleteEnumTestEntity> result =
+            enumRepository.findAll(SoftDeleteHelper.isNotDeleted(SoftDeleteEnumTestEntity.class));
+        assertEquals(1, result.size());
+        assertEquals("active", result.get(0).getName());
+    }
+
+    @Test
+    void testIsDeleted_enumType_returnsOnlyDeleted() {
+        SoftDeleteEnumTestEntity active = new SoftDeleteEnumTestEntity();
+        active.setName("active");
+        active.setStatus(SoftDeleteEnumTestEntity.Status.ACTIVE);
+        enumRepository.save(active);
+
+        SoftDeleteEnumTestEntity deleted = new SoftDeleteEnumTestEntity();
+        deleted.setName("deleted");
+        deleted.setStatus(SoftDeleteEnumTestEntity.Status.ARCHIVED);
+        enumRepository.save(deleted);
+
+        List<SoftDeleteEnumTestEntity> result =
+            enumRepository.findAll(SoftDeleteHelper.isDeleted(SoftDeleteEnumTestEntity.class));
+        assertEquals(1, result.size());
+        assertEquals("deleted", result.get(0).getName());
+    }
+
+    @Test
+    void testNotDeletedQuery_enumType() {
+        SoftDeleteEnumTestEntity active = new SoftDeleteEnumTestEntity();
+        active.setName("target");
+        active.setStatus(SoftDeleteEnumTestEntity.Status.ACTIVE);
+        enumRepository.save(active);
+
+        SoftDeleteEnumTestEntity deleted = new SoftDeleteEnumTestEntity();
+        deleted.setName("target");
+        deleted.setStatus(SoftDeleteEnumTestEntity.Status.ARCHIVED);
+        enumRepository.save(deleted);
+
+        var qs = SoftDeleteHelper.notDeletedQuery(SoftDeleteEnumTestEntity.class);
+        qs.eq(SoftDeleteEnumTestEntity::getName, "target");
+        List<SoftDeleteEnumTestEntity> result = enumRepository.findAll(qs.toSpecification());
+        assertEquals(1, result.size());
+        assertEquals(SoftDeleteEnumTestEntity.Status.ACTIVE, result.get(0).getStatus());
+    }
+
+    @Test
+    void testFindSoftDeleteField_enumType() {
+        String fieldName = SoftDeleteHelper.findSoftDeleteField(SoftDeleteEnumTestEntity.class);
+        assertEquals("status", fieldName);
+    }
+
+    // ===== String soft delete type =====
+
+    @Test
+    void testIsSoftDeleted_stringType_deleted() {
+        SoftDeleteStringTestEntity entity = new SoftDeleteStringTestEntity();
+        entity.setName("deleted");
+        entity.setDeleted("Y");
+        assertTrue(SoftDeleteHelper.isSoftDeleted(SoftDeleteStringTestEntity.class, entity));
+    }
+
+    @Test
+    void testIsSoftDeleted_stringType_active() {
+        SoftDeleteStringTestEntity entity = new SoftDeleteStringTestEntity();
+        entity.setName("active");
+        entity.setDeleted("N");
+        assertFalse(SoftDeleteHelper.isSoftDeleted(SoftDeleteStringTestEntity.class, entity));
+    }
+
+    @Test
+    void testIsNotDeleted_stringType_filtersCorrectly() {
+        SoftDeleteStringTestEntity active = new SoftDeleteStringTestEntity();
+        active.setName("active");
+        active.setDeleted("N");
+        stringRepository.save(active);
+
+        SoftDeleteStringTestEntity deleted = new SoftDeleteStringTestEntity();
+        deleted.setName("deleted");
+        deleted.setDeleted("Y");
+        stringRepository.save(deleted);
+
+        List<SoftDeleteStringTestEntity> result =
+            stringRepository.findAll(SoftDeleteHelper.isNotDeleted(SoftDeleteStringTestEntity.class));
+        assertEquals(1, result.size());
+        assertEquals("active", result.get(0).getName());
+    }
+
+    @Test
+    void testIsDeleted_stringType_returnsOnlyDeleted() {
+        SoftDeleteStringTestEntity active = new SoftDeleteStringTestEntity();
+        active.setName("active");
+        active.setDeleted("N");
+        stringRepository.save(active);
+
+        SoftDeleteStringTestEntity deleted = new SoftDeleteStringTestEntity();
+        deleted.setName("deleted");
+        deleted.setDeleted("Y");
+        stringRepository.save(deleted);
+
+        List<SoftDeleteStringTestEntity> result =
+            stringRepository.findAll(SoftDeleteHelper.isDeleted(SoftDeleteStringTestEntity.class));
+        assertEquals(1, result.size());
+        assertEquals("deleted", result.get(0).getName());
+    }
+
+    @Test
+    void testNotDeletedQuery_stringType() {
+        SoftDeleteStringTestEntity active = new SoftDeleteStringTestEntity();
+        active.setName("target");
+        active.setDeleted("N");
+        stringRepository.save(active);
+
+        SoftDeleteStringTestEntity deleted = new SoftDeleteStringTestEntity();
+        deleted.setName("target");
+        deleted.setDeleted("Y");
+        stringRepository.save(deleted);
+
+        var qs = SoftDeleteHelper.notDeletedQuery(SoftDeleteStringTestEntity.class);
+        qs.eq(SoftDeleteStringTestEntity::getName, "target");
+        List<SoftDeleteStringTestEntity> result = stringRepository.findAll(qs.toSpecification());
+        assertEquals(1, result.size());
+        assertEquals("N", result.get(0).getDeleted());
+    }
+
+    @Test
+    void testFindSoftDeleteField_stringType() {
+        String fieldName = SoftDeleteHelper.findSoftDeleteField(SoftDeleteStringTestEntity.class);
+        assertEquals("deleted", fieldName);
     }
 
     private TestEntity newEntity(String name, int status) {

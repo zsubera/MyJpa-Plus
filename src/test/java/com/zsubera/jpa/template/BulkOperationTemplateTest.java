@@ -8,6 +8,7 @@ import com.zsubera.jpa.spec.TestEntityRepository;
 import com.zsubera.jpa.update.DeleteSpec;
 import com.zsubera.jpa.update.MergeSpec;
 import com.zsubera.jpa.update.UpdateSpec;
+import java.util.List;
 import jakarta.persistence.EntityManager;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
@@ -420,8 +421,119 @@ class BulkOperationTemplateTest {
         assertThrows(IllegalArgumentException.class, () -> bulkOperationTemplate.setMaxBatchIterations(-1));
     }
 
-    /**
+    @Test
+    void testExecuteBatchMergeSpecNull() {
+        assertThrows(IllegalArgumentException.class,
+            () -> bulkOperationTemplate.executeBatch((MergeSpec<TestEntity>)null, List.of(), 10));
+    }
 
+    @Test
+    void testExecuteBatchMergeSpecEmptyEntities() {
+        MergeSpec<TestEntity> spec = new MergeSpec<>(TestEntity.class);
+        assertThrows(IllegalArgumentException.class, () -> bulkOperationTemplate.executeBatch(spec, List.of(), 10));
+    }
+
+    @Test
+    void testExecuteBatchMergeSpecInvalidBatchSize() {
+        MergeSpec<TestEntity> spec = new MergeSpec<>(TestEntity.class);
+        assertThrows(IllegalArgumentException.class,
+            () -> bulkOperationTemplate.executeBatch(spec, List.of(new TestEntity()), 0));
+    }
+
+    @Test
+    void testExecuteBatchDeleteSpecInvalidBatchSize() {
+        DeleteSpec<TestEntity> spec = template.delete(TestEntity.class);
+        assertThrows(IllegalArgumentException.class, () -> bulkOperationTemplate.executeBatch(spec, 0));
+    }
+
+    @Test
+    @org.springframework.transaction.annotation.Transactional(
+        propagation = org.springframework.transaction.annotation.Propagation.NOT_SUPPORTED)
+    void testExecuteBatchInSeparateTransactionsWithResultDeleteNullSpec() {
+        assertThrows(IllegalArgumentException.class,
+            () -> bulkOperationTemplate.executeBatchInSeparateTransactions((DeleteSpec<TestEntity>)null, 10,
+                BulkOperationTemplate.BatchFailureStrategy.CONTINUE));
+    }
+
+    @Test
+    void testExecuteBatchInSeparateTransactionsWithResultDeleteInvalidBatchSize() {
+        DeleteSpec<TestEntity> spec = template.delete(TestEntity.class);
+        assertThrows(IllegalArgumentException.class, () -> bulkOperationTemplate
+            .executeBatchInSeparateTransactions(spec, 0, BulkOperationTemplate.BatchFailureStrategy.CONTINUE));
+        assertThrows(IllegalArgumentException.class, () -> bulkOperationTemplate
+            .executeBatchInSeparateTransactions(spec, -1, BulkOperationTemplate.BatchFailureStrategy.ABORT));
+    }
+
+    @Test
+    void testExecuteBatchInSeparateTransactionsWithResultDeleteNullStrategy() {
+        DeleteSpec<TestEntity> spec = template.delete(TestEntity.class);
+        assertThrows(IllegalArgumentException.class,
+            () -> bulkOperationTemplate.executeBatchInSeparateTransactions(spec, 10, null));
+    }
+
+    @Test
+    @org.springframework.transaction.annotation.Transactional(
+        propagation = org.springframework.transaction.annotation.Propagation.NOT_SUPPORTED)
+    void testExecuteBatchInSeparateTransactionsWithAbortStrategy() {
+        insertTestData("abortStrat", 5);
+
+        UpdateSpec<TestEntity> spec =
+            template.update(TestEntity.class).set(TestEntity::getStatus, 1).eq(TestEntity::getStatus, 0);
+        BulkOperationTemplate.BatchResult result = bulkOperationTemplate.executeBatchInSeparateTransactions(spec, 2,
+            BulkOperationTemplate.BatchFailureStrategy.ABORT);
+        assertTrue(result.success());
+        assertEquals(5, result.totalRows());
+    }
+
+    @Test
+    @org.springframework.transaction.annotation.Transactional(
+        propagation = org.springframework.transaction.annotation.Propagation.NOT_SUPPORTED)
+    void testExecuteBatchInSeparateTransactionsDeleteAbortStrategy() {
+        insertTestData("abortDel", 5);
+
+        DeleteSpec<TestEntity> spec = template.delete(TestEntity.class).eq(TestEntity::getStatus, 0);
+        BulkOperationTemplate.BatchResult result = bulkOperationTemplate.executeBatchInSeparateTransactions(spec, 2,
+            BulkOperationTemplate.BatchFailureStrategy.ABORT);
+        assertTrue(result.success());
+        assertEquals(5, result.totalRows());
+    }
+
+    @Test
+    void testBatchResultToPublicResult() {
+        BulkOperationTemplate.BatchResult internal = new BulkOperationTemplate.BatchResult(10, 5, true, -1, null);
+        MyJpaTemplateOperations.BatchResult publicResult = internal.toPublicResult();
+        assertEquals(10, publicResult.totalRows());
+        assertEquals(5, publicResult.batchCount());
+        assertTrue(publicResult.success());
+        assertEquals(-1, publicResult.failedBatchIndex());
+        assertNull(publicResult.failureCause());
+    }
+
+    @Test
+    void testBatchResultToPublicResultWithFailure() {
+        RuntimeException ex = new RuntimeException("test failure");
+        BulkOperationTemplate.BatchResult internal = new BulkOperationTemplate.BatchResult(5, 3, false, 2, ex);
+        MyJpaTemplateOperations.BatchResult publicResult = internal.toPublicResult();
+        assertEquals(5, publicResult.totalRows());
+        assertEquals(3, publicResult.batchCount());
+        assertFalse(publicResult.success());
+        assertEquals(2, publicResult.failedBatchIndex());
+        assertSame(ex, publicResult.failureCause());
+    }
+
+    @Test
+    void testExecuteWithMaxRowsDeleteSpecInvalid() {
+        assertThrows(IllegalArgumentException.class,
+            () -> bulkOperationTemplate.executeWithMaxRows((DeleteSpec<TestEntity>)null, 10));
+    }
+
+    @Test
+    void testExecuteBatchDeleteInvalidBatchSize() {
+        DeleteSpec<TestEntity> spec = template.delete(TestEntity.class);
+        assertThrows(IllegalArgumentException.class, () -> bulkOperationTemplate.executeBatch(spec, 0));
+    }
+
+    /**
      * @DataJpaTest
     @org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabase(replace = org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabase.Replace.NONE) 的 @Transactional 在测试方法结束前不会提交，
      * 而 REQUIRES_NEW 会挂起外层事务创建新 EM，新 EM 无法看到外层未提交的数据。

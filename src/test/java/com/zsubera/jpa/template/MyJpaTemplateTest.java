@@ -1286,4 +1286,462 @@ class MyJpaTemplateTest {
         assertDoesNotThrow(() -> template.findAllStream(TestEntity.class, new QuerySpec<>(), null, stream -> {
         }));
     }
+
+    @Test
+    void testFindAllCached() {
+        QueryCacheManager cacheManager = new QueryCacheManager();
+        template.setCacheManager(cacheManager);
+
+        TestEntity e = new TestEntity();
+        e.setName("cached");
+        e.setStatus(1);
+        repository.save(e);
+
+        QuerySpec<TestEntity> qs = new QuerySpec<>();
+        qs.eq(TestEntity::getName, "cached");
+        List<TestEntity> result = template.findAllCached(TestEntity.class, qs, 60);
+        assertEquals(1, result.size());
+        assertNull(cacheManager.get("nonexistent-key"));
+    }
+
+    @Test
+    void testFindAllCachedCacheHit() {
+        QueryCacheManager cacheManager = new QueryCacheManager();
+        template.setCacheManager(cacheManager);
+
+        TestEntity e = new TestEntity();
+        e.setName("cacheHit");
+        e.setStatus(1);
+        repository.save(e);
+
+        QuerySpec<TestEntity> qs = new QuerySpec<>();
+        qs.eq(TestEntity::getName, "cacheHit");
+        template.findAllCached(TestEntity.class, qs, 60);
+        List<TestEntity> result = template.findAllCached(TestEntity.class, qs, 60);
+        assertEquals(1, result.size());
+    }
+
+    @Test
+    void testFindAllCachedNullEntityClass() {
+        QueryCacheManager cacheManager = new QueryCacheManager();
+        template.setCacheManager(cacheManager);
+        assertThrows(IllegalArgumentException.class, () -> template.findAllCached(null, new QuerySpec<>(), 60));
+    }
+
+    @Test
+    void testFindAllCachedNullSpec() {
+        QueryCacheManager cacheManager = new QueryCacheManager();
+        template.setCacheManager(cacheManager);
+        assertThrows(IllegalArgumentException.class,
+            () -> template.findAllCached(TestEntity.class, (QuerySpec<TestEntity>)null, (long)60));
+    }
+
+    @Test
+    void testFindAllCachedNegativeTtl() {
+        QueryCacheManager cacheManager = new QueryCacheManager();
+        template.setCacheManager(cacheManager);
+        assertThrows(IllegalArgumentException.class,
+            () -> template.findAllCached(TestEntity.class, new QuerySpec<>(), -1));
+    }
+
+    @Test
+    void testFindAllCachedWithoutCacheManager() {
+        template.setCacheManager(null);
+        assertThrows(IllegalStateException.class,
+            () -> template.findAllCached(TestEntity.class, new QuerySpec<>(), 60));
+    }
+
+    @Test
+    void testGetSetCacheManager() {
+        QueryCacheManager cm = new QueryCacheManager();
+        template.setCacheManager(cm);
+        assertSame(cm, template.getCacheManager());
+    }
+
+    @Test
+    void testSetDefaultTimeoutSeconds() {
+        template.setDefaultTimeoutSeconds(30);
+        assertEquals(30, template.getDefaultTimeoutSeconds());
+    }
+
+    @Test
+    void testSetDefaultTimeoutSecondsDisabled() {
+        template.setDefaultTimeoutSeconds(-1);
+        assertEquals(-1, template.getDefaultTimeoutSeconds());
+    }
+
+    @Test
+    void testSetDefaultTimeoutSecondsInvalid() {
+        assertThrows(IllegalArgumentException.class, () -> template.setDefaultTimeoutSeconds(0));
+        assertThrows(IllegalArgumentException.class, () -> template.setDefaultTimeoutSeconds(-2));
+    }
+
+    @Test
+    void testSetDefaultTimeoutSecondsOverflow() {
+        assertThrows(IllegalArgumentException.class, () -> template.setDefaultTimeoutSeconds(Integer.MAX_VALUE));
+    }
+
+    @Test
+    void testSetMaxBulkOperationRowsAfterInit() {
+        assertDoesNotThrow(() -> template.setMaxBulkOperationRows(5000));
+    }
+
+    @Test
+    void testExecuteMergeSpecNull() {
+        assertThrows(IllegalArgumentException.class,
+            () -> template.execute((com.zsubera.jpa.update.MergeSpec<TestEntity>)null));
+    }
+
+    @Test
+    void testExecuteBatchMergeSpecNull() {
+        assertThrows(IllegalArgumentException.class,
+            () -> template.executeBatch((com.zsubera.jpa.update.MergeSpec<TestEntity>)null, List.of(), 10));
+    }
+
+    @Test
+    void testExecuteBatchMergeSpecEmptyEntities() {
+        com.zsubera.jpa.update.MergeSpec<TestEntity> spec = new com.zsubera.jpa.update.MergeSpec<>(TestEntity.class);
+        assertThrows(IllegalArgumentException.class, () -> template.executeBatch(spec, List.of(), 10));
+    }
+
+    @Test
+    void testExecuteBatchMergeSpecInvalidBatchSize() {
+        com.zsubera.jpa.update.MergeSpec<TestEntity> spec = new com.zsubera.jpa.update.MergeSpec<>(TestEntity.class);
+        assertThrows(IllegalArgumentException.class, () -> template.executeBatch(spec, List.of(new TestEntity()), 0));
+    }
+
+    @Test
+    void testExecuteWithMaxRowsDeleteSpecNull() {
+        assertThrows(IllegalArgumentException.class,
+            () -> template.executeWithMaxRows((DeleteSpec<TestEntity>)null, 10));
+    }
+
+    @Test
+    void testExecuteBatchInSeparateTransactionsUpdateWithStrategyNullSpec() {
+        assertThrows(IllegalArgumentException.class,
+            () -> template.executeBatchInSeparateTransactions((UpdateSpec<TestEntity>)null, 10,
+                MyJpaTemplateOperations.BatchFailureStrategy.CONTINUE));
+    }
+
+    @Test
+    void testExecuteBatchInSeparateTransactionsUpdateWithStrategyInvalidSize() {
+        UpdateSpec<TestEntity> spec = template.update(TestEntity.class).set(TestEntity::getStatus, 1);
+        assertThrows(IllegalArgumentException.class, () -> template.executeBatchInSeparateTransactions(spec, 0,
+            MyJpaTemplateOperations.BatchFailureStrategy.CONTINUE));
+    }
+
+    @Test
+    void testExecuteBatchInSeparateTransactionsUpdateWithStrategyNullStrategy() {
+        UpdateSpec<TestEntity> spec = template.update(TestEntity.class).set(TestEntity::getStatus, 1);
+        assertThrows(IllegalArgumentException.class, () -> template.executeBatchInSeparateTransactions(spec, 10, null));
+    }
+
+    @Test
+    void testExecuteBatchInSeparateTransactionsDeleteWithStrategyNullSpec() {
+        assertThrows(IllegalArgumentException.class,
+            () -> template.executeBatchInSeparateTransactions((DeleteSpec<TestEntity>)null, 10,
+                MyJpaTemplateOperations.BatchFailureStrategy.CONTINUE));
+    }
+
+    @Test
+    void testExecuteBatchInSeparateTransactionsDeleteWithStrategyInvalidSize() {
+        DeleteSpec<TestEntity> spec = template.delete(TestEntity.class);
+        assertThrows(IllegalArgumentException.class, () -> template.executeBatchInSeparateTransactions(spec, 0,
+            MyJpaTemplateOperations.BatchFailureStrategy.CONTINUE));
+    }
+
+    @Test
+    void testExecuteBatchInSeparateTransactionsDeleteWithStrategyNullStrategy() {
+        DeleteSpec<TestEntity> spec = template.delete(TestEntity.class);
+        assertThrows(IllegalArgumentException.class, () -> template.executeBatchInSeparateTransactions(spec, 10, null));
+    }
+
+    @Test
+    @org.springframework.transaction.annotation.Transactional(
+        propagation = org.springframework.transaction.annotation.Propagation.NOT_SUPPORTED)
+    void testExecuteBatchInSeparateTransactionsUpdateWithAbortStrategy() {
+        for (int i = 0; i < 5; i++) {
+            TestEntity e = new TestEntity();
+            e.setName("abortStrat" + i);
+            e.setStatus(0);
+            repository.save(e);
+        }
+        repository.flush();
+        entityManager.clear();
+
+        UpdateSpec<TestEntity> spec =
+            template.update(TestEntity.class).set(TestEntity::getStatus, 1).eq(TestEntity::getStatus, 0);
+        MyJpaTemplateOperations.BatchResult result =
+            template.executeBatchInSeparateTransactions(spec, 2, MyJpaTemplateOperations.BatchFailureStrategy.ABORT);
+        assertTrue(result.success());
+        assertEquals(5, result.totalRows());
+    }
+
+    @Test
+    @org.springframework.transaction.annotation.Transactional(
+        propagation = org.springframework.transaction.annotation.Propagation.NOT_SUPPORTED)
+    void testExecuteBatchInSeparateTransactionsDeleteWithAbortStrategy() {
+        for (int i = 0; i < 5; i++) {
+            TestEntity e = new TestEntity();
+            e.setName("abortDel" + i);
+            e.setStatus(0);
+            repository.save(e);
+        }
+        repository.flush();
+        entityManager.clear();
+
+        DeleteSpec<TestEntity> spec = template.delete(TestEntity.class).eq(TestEntity::getStatus, 0);
+        MyJpaTemplateOperations.BatchResult result =
+            template.executeBatchInSeparateTransactions(spec, 2, MyJpaTemplateOperations.BatchFailureStrategy.ABORT);
+        assertTrue(result.success());
+        assertEquals(5, result.totalRows());
+    }
+
+    @Test
+    void testFindSliceWithSmallMaxResults() {
+        for (int i = 0; i < 5; i++) {
+            TestEntity e = new TestEntity();
+            e.setName("sliceLim" + i);
+            e.setStatus(i);
+            repository.save(e);
+        }
+        repository.flush();
+
+        template.setMaxResults(3);
+        Specification<TestEntity> spec = (root, query, cb) -> cb.conjunction();
+        org.springframework.data.domain.Slice<TestEntity> slice =
+            template.findSlice(TestEntity.class, spec, PageRequest.of(0, 5));
+        assertNotNull(slice);
+        template.setMaxResults(MyJpaTemplate.DEFAULT_MAX_RESULTS);
+    }
+
+    @Test
+    void testFindOneSpecificationNullClass() {
+        assertThrows(IllegalArgumentException.class, () -> template.findOne(null, (Specification<TestEntity>)null));
+    }
+
+    @Test
+    void testFindOneSpecificationNullSpec() {
+        assertThrows(IllegalArgumentException.class,
+            () -> template.findOne(TestEntity.class, (Specification<TestEntity>)null));
+    }
+
+    @Test
+    void testCountSpecificationNullClass() {
+        assertThrows(IllegalArgumentException.class, () -> template.count(null, (Specification<TestEntity>)null));
+    }
+
+    @Test
+    void testCountSpecificationNullSpec() {
+        assertThrows(IllegalArgumentException.class,
+            () -> template.count(TestEntity.class, (Specification<TestEntity>)null));
+    }
+
+    @Test
+    void testFindSpecificationNullClass() {
+        assertThrows(IllegalArgumentException.class, () -> template.find(null, (root, query, cb) -> cb.conjunction()));
+    }
+
+    @Test
+    void testFindSpecificationNullSpec() {
+        assertThrows(IllegalArgumentException.class,
+            () -> template.find(TestEntity.class, (Specification<TestEntity>)null));
+    }
+
+    @Test
+    void testFindSpecificationInvalidMaxResults() {
+        assertThrows(IllegalArgumentException.class,
+            () -> template.find(TestEntity.class, (root, query, cb) -> cb.conjunction(), 0));
+    }
+
+    @Test
+    void testSaveAllBatchedPureNull() {
+        assertThrows(IllegalArgumentException.class, () -> template.saveAllBatchedPure(null, 10));
+    }
+
+    @Test
+    void testSaveAllBatchedPureInvalidBatchSize() {
+        List<TestEntity> entities = List.of(new TestEntity());
+        assertThrows(IllegalArgumentException.class, () -> template.saveAllBatchedPure(entities, 0));
+        assertThrows(IllegalArgumentException.class, () -> template.saveAllBatchedPure(entities, -1));
+    }
+
+    @Test
+    void testFindAllStreamConsumerOverload() {
+        TestEntity e = new TestEntity();
+        e.setName("consumerStream");
+        e.setStatus(1);
+        repository.save(e);
+        repository.flush();
+
+        final long[] count = {0};
+        template.findAllStream(TestEntity.class, qs -> qs.eq(TestEntity::getName, "consumerStream"), stream -> {
+            count[0] = stream.count();
+        });
+        assertEquals(1, count[0]);
+    }
+
+    @Test
+    void testFindAllCachedConsumerOverload() {
+        QueryCacheManager cacheManager = new QueryCacheManager();
+        template.setCacheManager(cacheManager);
+
+        TestEntity e = new TestEntity();
+        e.setName("cachedConsumer");
+        e.setStatus(1);
+        repository.save(e);
+
+        List<TestEntity> result =
+            template.findAllCached(TestEntity.class, qs -> qs.eq(TestEntity::getName, "cachedConsumer"), 60);
+        assertEquals(1, result.size());
+    }
+
+    @Test
+    void testFindOneConsumerOverload() {
+        TestEntity e = new TestEntity();
+        e.setName("findOneConsumer");
+        e.setStatus(1);
+        repository.save(e);
+
+        var result = template.findOne(TestEntity.class, qs -> qs.eq(TestEntity::getName, "findOneConsumer"));
+        assertTrue(result.isPresent());
+    }
+
+    @Test
+    void testCountConsumerOverload() {
+        for (int i = 0; i < 3; i++) {
+            TestEntity e = new TestEntity();
+            e.setName("countConsumer" + i);
+            e.setStatus(10);
+            repository.save(e);
+        }
+        long count = template.count(TestEntity.class, qs -> qs.eq(TestEntity::getStatus, 10));
+        assertEquals(3, count);
+    }
+
+    @Test
+    void testFindAllConsumerOverload() {
+        for (int i = 0; i < 3; i++) {
+            TestEntity e = new TestEntity();
+            e.setName("findAllConsumer" + i);
+            e.setStatus(1);
+            repository.save(e);
+        }
+        List<TestEntity> result = template.findAll(TestEntity.class, qs -> qs.eq(TestEntity::getStatus, 1));
+        assertEquals(3, result.size());
+    }
+
+    @Test
+    void testFindAllConsumerWithMaxResultsOverload() {
+        for (int i = 0; i < 5; i++) {
+            TestEntity e = new TestEntity();
+            e.setName("findAllConsumerMax" + i);
+            e.setStatus(1);
+            repository.save(e);
+        }
+        List<TestEntity> result = template.findAll(TestEntity.class, qs -> qs.eq(TestEntity::getStatus, 1), 3);
+        assertEquals(3, result.size());
+    }
+
+    @Test
+    void testFindAllConsumerWithSortOverload() {
+        for (int i = 0; i < 3; i++) {
+            TestEntity e = new TestEntity();
+            e.setName("findAllConsumerSort" + i);
+            e.setStatus(1);
+            repository.save(e);
+        }
+        List<TestEntity> result =
+            template.findAll(TestEntity.class, qs -> qs.eq(TestEntity::getStatus, 1), Sort.by("name"));
+        assertEquals(3, result.size());
+    }
+
+    @Test
+    void testFindAllConsumerWithPageableOverload() {
+        for (int i = 0; i < 5; i++) {
+            TestEntity e = new TestEntity();
+            e.setName("findAllConsumerPage" + i);
+            e.setStatus(1);
+            repository.save(e);
+        }
+        Page<TestEntity> page =
+            template.findAll(TestEntity.class, qs -> qs.eq(TestEntity::getStatus, 1), PageRequest.of(0, 2));
+        assertEquals(5, page.getTotalElements());
+    }
+
+    @Test
+    void testFindAllWithMaxResultsDisabled() {
+        for (int i = 0; i < 5; i++) {
+            TestEntity e = new TestEntity();
+            e.setName("noLimit" + i);
+            e.setStatus(0);
+            repository.save(e);
+        }
+
+        QuerySpec<TestEntity> qs = new QuerySpec<>();
+        List<TestEntity> result = template.findAll(TestEntity.class, qs, -1);
+        assertEquals(5, result.size());
+    }
+
+    @Test
+    void testFindAllWithEntityGraphAndMaxResultsDisabled() {
+        for (int i = 0; i < 3; i++) {
+            TestEntity e = new TestEntity();
+            e.setName("egNoLimit" + i);
+            e.setStatus(0);
+            repository.save(e);
+        }
+
+        QuerySpec<TestEntity> qs = new QuerySpec<>();
+        List<TestEntity> result = template.findAll(TestEntity.class, qs,
+            com.zsubera.jpa.util.EntityGraphHelper.forEntity(TestEntity.class), -1);
+        assertEquals(3, result.size());
+    }
+
+    @Test
+    void testFindAllWithEntityGraphAndMaxResultsInvalid() {
+        assertThrows(IllegalArgumentException.class, () -> template.findAll(TestEntity.class, new QuerySpec<>(),
+            com.zsubera.jpa.util.EntityGraphHelper.forEntity(TestEntity.class), 0));
+    }
+
+    @Test
+    void testFindKeysetPageWithMultiFieldSortNullValues() {
+        TestEntity e1 = new TestEntity();
+        e1.setName(null);
+        e1.setStatus(1);
+        repository.save(e1);
+
+        TestEntity e2 = new TestEntity();
+        e2.setName("aaa");
+        e2.setStatus(2);
+        repository.save(e2);
+        repository.flush();
+
+        Specification<TestEntity> spec = (root, query, cb) -> cb.conjunction();
+        org.springframework.data.domain.Sort sort =
+            org.springframework.data.domain.Sort.by(org.springframework.data.domain.Sort.Order.asc("name"),
+                org.springframework.data.domain.Sort.Order.asc("status"));
+        MyJpaTemplate.KeysetPage<TestEntity> page = template.findKeysetPage(TestEntity.class, spec, sort, 10, null);
+        assertEquals(2, page.content().size());
+    }
+
+    @Test
+    void testFindKeysetPageWithDescSortNullValues() {
+        TestEntity e1 = new TestEntity();
+        e1.setName(null);
+        e1.setStatus(1);
+        repository.save(e1);
+
+        TestEntity e2 = new TestEntity();
+        e2.setName("aaa");
+        e2.setStatus(2);
+        repository.save(e2);
+        repository.flush();
+
+        Specification<TestEntity> spec = (root, query, cb) -> cb.conjunction();
+        org.springframework.data.domain.Sort sort =
+            org.springframework.data.domain.Sort.by(org.springframework.data.domain.Sort.Order.desc("name"));
+        MyJpaTemplate.KeysetPage<TestEntity> page = template.findKeysetPage(TestEntity.class, spec, sort, 10, null);
+        assertEquals(2, page.content().size());
+    }
 }

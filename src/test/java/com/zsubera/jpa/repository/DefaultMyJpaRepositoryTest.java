@@ -542,4 +542,165 @@ class DefaultMyJpaRepositoryTest {
             f.set(null, old);
         }
     }
+
+    @Test
+    void setAutoFilterEnabled_withNonMutableConfigProvider_createsNewProvider() throws Exception {
+        java.lang.reflect.Field f = DefaultMyJpaRepository.class.getDeclaredField("globalConfigProvider");
+        f.setAccessible(true);
+        Object old = f.get(null);
+        try {
+            // Set a non-MutableConfigProvider (lambda implementing ConfigProvider)
+            DefaultMyJpaRepository.ConfigProvider nonMutable = new DefaultMyJpaRepository.ConfigProvider() {
+                @Override
+                public boolean isAutoFilterEnabled() {
+                    return true;
+                }
+
+                @Override
+                public boolean isBlockUnconditionalDelete() {
+                    return true;
+                }
+            };
+            f.set(null, nonMutable);
+            DefaultMyJpaRepository.setAutoFilterEnabled(false);
+            assertFalse(DefaultMyJpaRepository.isAutoFilterEnabled());
+        } finally {
+            f.set(null, old);
+        }
+    }
+
+    @Test
+    void setBlockUnconditionalDelete_withNonMutableConfigProvider_createsNewProvider() throws Exception {
+        java.lang.reflect.Field f = DefaultMyJpaRepository.class.getDeclaredField("globalConfigProvider");
+        f.setAccessible(true);
+        Object old = f.get(null);
+        try {
+            DefaultMyJpaRepository.ConfigProvider nonMutable = new DefaultMyJpaRepository.ConfigProvider() {
+                @Override
+                public boolean isAutoFilterEnabled() {
+                    return true;
+                }
+
+                @Override
+                public boolean isBlockUnconditionalDelete() {
+                    return true;
+                }
+            };
+            f.set(null, nonMutable);
+            DefaultMyJpaRepository.setBlockUnconditionalDelete(false);
+            assertFalse(DefaultMyJpaRepository.isBlockUnconditionalDelete());
+        } finally {
+            f.set(null, old);
+        }
+    }
+
+    @Test
+    void deleteAllById_hardDeleteWhenAutoFilterDisabled() {
+        DefaultMyJpaRepository.setAutoFilterEnabled(false);
+        DefaultMyJpaRepository.setBlockUnconditionalDelete(false);
+        try {
+            SoftDeleteRepoTestEntity e1 = saveEntity("hardDeleteById", false);
+            repository.deleteAllById(List.of(e1.getId()));
+            repository.flush();
+            assertEquals(0, repository.count());
+        } finally {
+            DefaultMyJpaRepository.setAutoFilterEnabled(true);
+            DefaultMyJpaRepository.setBlockUnconditionalDelete(true);
+        }
+    }
+
+    @Test
+    void deleteAllById_emptyList_doesNothing() {
+        saveEntity("keep", false);
+        repository.deleteAllById(List.of());
+        assertEquals(1, repository.count());
+    }
+
+    @Test
+    void deleteInBatch_blockedWhenAutoFilterDisabled() {
+        saveEntity("a", false);
+        DefaultMyJpaRepository.setAutoFilterEnabled(false);
+        DefaultMyJpaRepository.setBlockUnconditionalDelete(true);
+
+        assertThrows(Exception.class, () -> repository.deleteInBatch(null));
+    }
+
+    @Test
+    void deleteAllInBatch_hardDeleteWhenAutoFilterDisabled2() {
+        DefaultMyJpaRepository.setAutoFilterEnabled(false);
+        DefaultMyJpaRepository.setBlockUnconditionalDelete(false);
+        try {
+            saveEntity("aibHard2", false);
+            repository.deleteAllInBatch();
+            assertEquals(0, repository.count());
+        } finally {
+            DefaultMyJpaRepository.setAutoFilterEnabled(true);
+            DefaultMyJpaRepository.setBlockUnconditionalDelete(true);
+        }
+    }
+
+    @Test
+    void withAutoFilterOverride_supplierNestedRestoresPrevious() {
+        saveEntity("active", false);
+        saveEntity("deleted", true);
+
+        DefaultMyJpaRepository.withAutoFilterOverride(false, () -> {
+            List<SoftDeleteRepoTestEntity> outer = repository.findAll();
+            assertEquals(2, outer.size());
+
+            String result = DefaultMyJpaRepository.withAutoFilterOverride(true, () -> {
+                List<SoftDeleteRepoTestEntity> inner = repository.findAll();
+                assertEquals(1, inner.size());
+                return "inner-done";
+            });
+            assertEquals("inner-done", result);
+
+            List<SoftDeleteRepoTestEntity> afterInner = repository.findAll();
+            assertEquals(2, afterInner.size());
+        });
+
+        List<SoftDeleteRepoTestEntity> afterOuter = repository.findAll();
+        assertEquals(1, afterOuter.size());
+    }
+
+    @Test
+    void withAutoFilterOverride_nullValue_removesOverride() {
+        saveEntity("active", false);
+
+        DefaultMyJpaRepository.withAutoFilterOverride(false, () -> {
+            List<SoftDeleteRepoTestEntity> result = repository.findAll();
+            assertEquals(1, result.size());
+        });
+
+        List<SoftDeleteRepoTestEntity> after = repository.findAll();
+        assertEquals(1, after.size());
+    }
+
+    @Test
+    void isAutoFilterEnabled_configProviderReturnsValue() throws Exception {
+        java.lang.reflect.Field f = DefaultMyJpaRepository.class.getDeclaredField("globalConfigProvider");
+        f.setAccessible(true);
+        Object old = f.get(null);
+        try {
+            DefaultMyJpaRepository.ConfigProvider provider =
+                DefaultMyJpaRepository.createMutableConfigProvider(true, true);
+            f.set(null, provider);
+            assertTrue(DefaultMyJpaRepository.isAutoFilterEnabled());
+            java.lang.reflect.Method setMethod =
+                provider.getClass().getDeclaredMethod("setAutoFilterEnabled", boolean.class);
+            setMethod.setAccessible(true);
+            setMethod.invoke(provider, false);
+            assertFalse(DefaultMyJpaRepository.isAutoFilterEnabled());
+        } finally {
+            f.set(null, old);
+        }
+    }
+
+    @Test
+    void createMutableConfigProvider_returnsWorkingProvider() {
+        DefaultMyJpaRepository.ConfigProvider provider =
+            DefaultMyJpaRepository.createMutableConfigProvider(true, false);
+        assertTrue(provider.isAutoFilterEnabled());
+        assertFalse(provider.isBlockUnconditionalDelete());
+    }
 }

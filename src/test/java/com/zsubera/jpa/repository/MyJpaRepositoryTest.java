@@ -14,6 +14,7 @@ import org.springframework.boot.autoconfigure.EnableAutoConfiguration;
 import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
 import org.springframework.test.context.ContextConfiguration;
@@ -38,6 +39,8 @@ class MyJpaRepositoryTest {
 
     @BeforeEach
     void setUp() {
+        repository.deleteAll();
+        repository.flush();
         simpleRepository.deleteAll();
         simpleRepository.flush();
     }
@@ -357,5 +360,196 @@ class MyJpaRepositoryTest {
 
         long count = repository.countNotDeleted(s -> s.eq(MyJpaTestEntity::getDeleted, false));
         assertEquals(1, count);
+    }
+
+    @Test
+    void testFindNotDeletedById_nullId_returnsEmpty() {
+        Optional<MyJpaTestEntity> result = repository.findNotDeletedById(null);
+        assertFalse(result.isPresent());
+    }
+
+    @Test
+    void testFindNotDeletedById_deletedEntity_returnsEmpty() {
+        MyJpaTestEntity e1 = new MyJpaTestEntity();
+        e1.setName("deleted");
+        e1.setDeleted(true);
+        MyJpaTestEntity saved = repository.save(e1);
+
+        Optional<MyJpaTestEntity> result = repository.findNotDeletedById(saved.getId());
+        assertFalse(result.isPresent());
+    }
+
+    @Test
+    void testFindNotDeletedById_activeEntity_returnsPresent() {
+        MyJpaTestEntity e1 = new MyJpaTestEntity();
+        e1.setName("active");
+        e1.setDeleted(false);
+        MyJpaTestEntity saved = repository.save(e1);
+
+        Optional<MyJpaTestEntity> result = repository.findNotDeletedById(saved.getId());
+        assertTrue(result.isPresent());
+        assertEquals("active", result.get().getName());
+    }
+
+    @Test
+    void testFindNotDeletedAll_nullSpec() {
+        MyJpaTestEntity e1 = new MyJpaTestEntity();
+        e1.setName("a1");
+        e1.setDeleted(false);
+        repository.save(e1);
+
+        MyJpaTestEntity e2 = new MyJpaTestEntity();
+        e2.setName("a2");
+        e2.setDeleted(true);
+        repository.save(e2);
+
+        List<MyJpaTestEntity> result = repository.findNotDeletedAll((Specification<MyJpaTestEntity>)null);
+        assertEquals(1, result.size());
+        assertEquals("a1", result.get(0).getName());
+    }
+
+    @Test
+    void testFindNotDeletedAll_withSort() {
+        MyJpaTestEntity e1 = new MyJpaTestEntity();
+        e1.setName("b");
+        e1.setDeleted(false);
+        repository.save(e1);
+
+        MyJpaTestEntity e2 = new MyJpaTestEntity();
+        e2.setName("a");
+        e2.setDeleted(false);
+        repository.save(e2);
+
+        MyJpaTestEntity e3 = new MyJpaTestEntity();
+        e3.setName("c");
+        e3.setDeleted(true);
+        repository.save(e3);
+
+        List<MyJpaTestEntity> result = repository.findAll(Specification.where(null), Sort.by("name"));
+        assertEquals(3, result.size());
+        assertEquals("a", result.get(0).getName());
+    }
+
+    @Test
+    void testCountNotDeleted_nullSpec() {
+        MyJpaTestEntity e1 = new MyJpaTestEntity();
+        e1.setName("a1");
+        e1.setDeleted(false);
+        repository.save(e1);
+
+        MyJpaTestEntity e2 = new MyJpaTestEntity();
+        e2.setName("a2");
+        e2.setDeleted(true);
+        repository.save(e2);
+
+        long count = repository.countNotDeleted((Specification<MyJpaTestEntity>)null);
+        assertEquals(1, count);
+    }
+
+    @Test
+    void testFindNotDeletedOne_withConsumerLambda() {
+        MyJpaTestEntity e1 = new MyJpaTestEntity();
+        e1.setName("findOneNd");
+        e1.setDeleted(false);
+        repository.save(e1);
+
+        MyJpaTestEntity e2 = new MyJpaTestEntity();
+        e2.setName("findOneNd");
+        e2.setDeleted(true);
+        repository.save(e2);
+
+        Optional<MyJpaTestEntity> result =
+            repository.findNotDeletedOne(s -> s.eq(MyJpaTestEntity::getName, "findOneNd"));
+        assertTrue(result.isPresent());
+        assertFalse(result.get().getDeleted());
+    }
+
+    @Test
+    void testFindNotDeletedOne_withNullSpec() {
+        MyJpaTestEntity e1 = new MyJpaTestEntity();
+        e1.setName("first");
+        e1.setDeleted(false);
+        repository.save(e1);
+
+        Optional<MyJpaTestEntity> result = repository.findNotDeletedOne((Specification<MyJpaTestEntity>)null);
+        assertTrue(result.isPresent());
+        assertEquals("first", result.get().getName());
+    }
+
+    @Test
+    void testCountNotDeleted_withConsumerLambda() {
+        MyJpaTestEntity e1 = new MyJpaTestEntity();
+        e1.setName("countNdConsumer");
+        e1.setDeleted(false);
+        repository.save(e1);
+
+        MyJpaTestEntity e2 = new MyJpaTestEntity();
+        e2.setName("countNdConsumer");
+        e2.setDeleted(true);
+        repository.save(e2);
+
+        long count = repository.countNotDeleted(s -> s.eq(MyJpaTestEntity::getName, "countNdConsumer"));
+        assertEquals(1, count);
+    }
+
+    @Test
+    void testFindNotDeletedAll_withSortAndConsumer() {
+        MyJpaTestEntity e1 = new MyJpaTestEntity();
+        e1.setName("z");
+        e1.setDeleted(false);
+        repository.save(e1);
+
+        MyJpaTestEntity e2 = new MyJpaTestEntity();
+        e2.setName("a");
+        e2.setDeleted(false);
+        repository.save(e2);
+
+        List<MyJpaTestEntity> result =
+            repository.findAll((Specification<MyJpaTestEntity>)(root, query, cb) -> cb.conjunction(),
+                org.springframework.data.domain.Sort.by("name"));
+        assertEquals(2, result.size());
+        assertEquals("a", result.get(0).getName());
+    }
+
+    @Test
+    void testFindAll_withSortAndConsumer() {
+        MyJpaTestEntity e1 = new MyJpaTestEntity();
+        e1.setName("z");
+        e1.setDeleted(false);
+        repository.save(e1);
+
+        MyJpaTestEntity e2 = new MyJpaTestEntity();
+        e2.setName("a");
+        e2.setDeleted(false);
+        repository.save(e2);
+
+        List<MyJpaTestEntity> result = repository.findAll(s -> s.eq(MyJpaTestEntity::getDeleted, false),
+            org.springframework.data.domain.Sort.by("name"));
+        assertEquals(2, result.size());
+        assertEquals("a", result.get(0).getName());
+    }
+
+    @Test
+    void testFindNotDeletedAll_withConsumerAndPageable_emptyTable() {
+        Page<MyJpaTestEntity> page =
+            repository.findNotDeletedAll(s -> s.eq(MyJpaTestEntity::getDeleted, false), PageRequest.of(0, 10));
+        assertEquals(0, page.getTotalElements());
+    }
+
+    @Test
+    void testFindNotDeletedAll_withConsumerAndPageable() {
+        MyJpaTestEntity e1 = new MyJpaTestEntity();
+        e1.setName("ndPageSort1");
+        e1.setDeleted(false);
+        repository.save(e1);
+
+        MyJpaTestEntity e2 = new MyJpaTestEntity();
+        e2.setName("ndPageSort2");
+        e2.setDeleted(false);
+        repository.save(e2);
+
+        Page<MyJpaTestEntity> page = repository.findNotDeletedAll(s -> s.eq(MyJpaTestEntity::getDeleted, false),
+            org.springframework.data.domain.PageRequest.of(0, 10));
+        assertEquals(2, page.getTotalElements());
     }
 }

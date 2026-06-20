@@ -196,4 +196,164 @@ class EntityManagerHelperTest {
                 .hasMessageContaining("No transactional EntityManager available");
         }
     }
+
+    @Nested
+    class AdvancedPaths {
+
+        @Test
+        void getTransactionalEntityManager_noDefaultEmf_noResolver_throws() {
+            assertThatThrownBy(() -> EntityManagerHelper.getTransactionalEntityManager())
+                .isInstanceOf(IllegalStateException.class).hasMessageContaining("EntityManagerFactory not initialized");
+        }
+
+        @Test
+        void getTransactionalEntityManager_noDefaultEmf_withResolver_resolvesViaResolver() {
+            EntityManagerFactory customEmf = mock(EntityManagerFactory.class);
+            EntityManagerHelper.registerEntityManagerFactory(String.class, customEmf);
+
+            assertThatThrownBy(() -> EntityManagerHelper.getTransactionalEntityManager(String.class))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("No transactional EntityManager available");
+        }
+
+        @Test
+        void registerEntityManagerFactoryIfAbsent_insertsWhenAbsent() {
+            EntityManagerFactory emf = mock(EntityManagerFactory.class);
+
+            EntityManagerHelper.registerEntityManagerFactoryIfAbsent(String.class, emf);
+
+            assertThatThrownBy(() -> EntityManagerHelper.getTransactionalEntityManager(String.class))
+                .isInstanceOf(IllegalStateException.class);
+        }
+
+        @Test
+        void removeResolver_allResolversGone_resetsFlag() {
+            EntityManagerFactory emf1 = mock(EntityManagerFactory.class);
+            EntityManagerFactory emf2 = mock(EntityManagerFactory.class);
+
+            EntityManagerHelper.registerEntityManagerFactory(String.class, emf1);
+            EntityManagerHelper.registerEntityManagerFactory(Integer.class, emf2);
+            EntityManagerHelper.removeResolver(String.class);
+            EntityManagerHelper.removeResolver(Integer.class);
+
+            assertThatThrownBy(() -> EntityManagerHelper.getTransactionalEntityManager())
+                .isInstanceOf(IllegalStateException.class).hasMessageContaining("EntityManagerFactory not initialized");
+        }
+
+        @Test
+        void removeResolver_otherResolversRemain_fallbackToDefault() {
+            EntityManagerFactory defaultEmf = mock(EntityManagerFactory.class);
+            EntityManagerFactory customEmf = mock(EntityManagerFactory.class);
+
+            EntityManagerHelper.setEntityManagerFactory(defaultEmf);
+            EntityManagerHelper.registerEntityManagerFactory(String.class, customEmf);
+            EntityManagerHelper.removeResolver(String.class);
+
+            assertThatThrownBy(() -> EntityManagerHelper.getTransactionalEntityManager(String.class))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("No transactional EntityManager available");
+        }
+
+        @Test
+        void registerResolver_withDefaultEmf_sameAsDefault_keepsFastPath() {
+            EntityManagerFactory defaultEmf = mock(EntityManagerFactory.class);
+            EntityManagerHelper.setEntityManagerFactory(defaultEmf);
+            EntityManagerHelper.registerResolver(String.class, type -> defaultEmf);
+
+            assertThatThrownBy(() -> EntityManagerHelper.getTransactionalEntityManager(String.class))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("No transactional EntityManager available");
+        }
+
+        @Test
+        void registerResolver_withDefaultEmf_differentFromDefault_disablesFastPath() {
+            EntityManagerFactory defaultEmf = mock(EntityManagerFactory.class);
+            EntityManagerFactory customEmf = mock(EntityManagerFactory.class);
+            EntityManagerHelper.setEntityManagerFactory(defaultEmf);
+            EntityManagerHelper.registerResolver(String.class, type -> customEmf);
+
+            assertThatThrownBy(() -> EntityManagerHelper.getTransactionalEntityManager(String.class))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("No transactional EntityManager available");
+        }
+
+        @Test
+        void registerResolver_noDefaultEmf_disablesFastPath() {
+            EntityManagerFactory customEmf = mock(EntityManagerFactory.class);
+            EntityManagerHelper.registerResolver(String.class, type -> customEmf);
+
+            assertThatThrownBy(() -> EntityManagerHelper.getTransactionalEntityManager(String.class))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("No transactional EntityManager available");
+        }
+
+        @Test
+        void registerResolver_exceptionInResolve_disablesFastPath() {
+            EntityManagerFactory defaultEmf = mock(EntityManagerFactory.class);
+            EntityManagerHelper.setEntityManagerFactory(defaultEmf);
+            EntityManagerHelper.registerResolver(String.class, type -> {
+                throw new RuntimeException("resolve failed");
+            });
+
+            assertThatThrownBy(() -> EntityManagerHelper.getTransactionalEntityManager(String.class))
+                .isInstanceOf(RuntimeException.class);
+        }
+
+        @Test
+        void removeResolver_recheckWithExceptionInResolver_disablesFastPath() {
+            EntityManagerFactory defaultEmf = mock(EntityManagerFactory.class);
+            EntityManagerHelper.setEntityManagerFactory(defaultEmf);
+            EntityManagerHelper.registerResolver(String.class, type -> {
+                throw new RuntimeException("resolve failed");
+            });
+
+            EntityManagerHelper.removeResolver(String.class);
+
+            assertThatThrownBy(() -> EntityManagerHelper.getTransactionalEntityManager())
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("No transactional EntityManager available");
+        }
+
+        @Test
+        void registerEntityManagerFactoryWithSameAsDefault_keepsFastPath() {
+            EntityManagerFactory defaultEmf = mock(EntityManagerFactory.class);
+            EntityManagerHelper.setEntityManagerFactory(defaultEmf);
+            EntityManagerHelper.registerEntityManagerFactory(String.class, defaultEmf);
+
+            assertThatThrownBy(() -> EntityManagerHelper.getTransactionalEntityManager(String.class))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("No transactional EntityManager available");
+        }
+
+        @Test
+        void registerEntityManagerFactory_nullEntityType_throws() {
+            EntityManagerFactory emf = mock(EntityManagerFactory.class);
+            assertThatThrownBy(() -> EntityManagerHelper.registerEntityManagerFactory(null, emf))
+                .isInstanceOf(NullPointerException.class);
+        }
+
+        @Test
+        void registerEntityManagerFactory_nullEmf_throws() {
+            assertThatThrownBy(() -> EntityManagerHelper.registerEntityManagerFactory(String.class, null))
+                .isInstanceOf(NullPointerException.class);
+        }
+
+        @Test
+        void registerEntityManagerFactoryIfAbsent_nullEntityType_throws() {
+            EntityManagerFactory emf = mock(EntityManagerFactory.class);
+            assertThatThrownBy(() -> EntityManagerHelper.registerEntityManagerFactoryIfAbsent(null, emf))
+                .isInstanceOf(NullPointerException.class);
+        }
+
+        @Test
+        void registerEntityManagerFactoryIfAbsent_nullEmf_throws() {
+            assertThatThrownBy(() -> EntityManagerHelper.registerEntityManagerFactoryIfAbsent(String.class, null))
+                .isInstanceOf(NullPointerException.class);
+        }
+
+        @Test
+        void removeResolver_nullEntityType_throws() {
+            assertThatThrownBy(() -> EntityManagerHelper.removeResolver(null)).isInstanceOf(NullPointerException.class);
+        }
+    }
 }

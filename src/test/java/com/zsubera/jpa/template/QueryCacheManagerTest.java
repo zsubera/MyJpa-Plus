@@ -395,4 +395,112 @@ class QueryCacheManagerTest {
         assertThrows(IllegalArgumentException.class, () -> new QueryCacheManager(0));
         assertThrows(IllegalArgumentException.class, () -> new QueryCacheManager(-1));
     }
+
+    @Test
+    void put_nullKey_returnsFalse() {
+        assertFalse(cache.put(null, "value", 60));
+    }
+
+    @Test
+    void put_emptyKey_returnsFalse() {
+        assertFalse(cache.put("", "value", 60));
+    }
+
+    @Test
+    void put_negativeTtl_throws() {
+        assertThrows(IllegalArgumentException.class, () -> cache.put("key", "value", -1));
+    }
+
+    @Test
+    void put_keyTooLong_returnsFalse() {
+        String longKey = "a".repeat(1025);
+        assertFalse(cache.put(longKey, "value", 60));
+    }
+
+    @Test
+    void put_keyAtMaxLength_succeeds() {
+        String maxKey = "a".repeat(1024);
+        assertTrue(cache.put(maxKey, "value", 60));
+    }
+
+    @Test
+    void cachedQueryResult_nullValue_throws() {
+        assertThrows(IllegalArgumentException.class, () -> new CachedQueryResult<>(null, 60));
+    }
+
+    @Test
+    void cachedQueryResult_negativeTtl_throws() {
+        assertThrows(IllegalArgumentException.class, () -> new CachedQueryResult<>("val", -1));
+    }
+
+    @Test
+    void cachedQueryResult_exceedsOneYear_throws() {
+        long oneYearPlus = 365L * 24 * 3600 + 1;
+        assertThrows(IllegalArgumentException.class, () -> new CachedQueryResult<>("val", oneYearPlus));
+    }
+
+    @Test
+    void cachedQueryResult_maxOneYear_succeeds() {
+        long oneYear = 365L * 24 * 3600;
+        assertDoesNotThrow(() -> new CachedQueryResult<>("val", oneYear));
+    }
+
+    @Test
+    void evictByPrefixAfterTransactionCommit_emptyPrefix_noop() {
+        cache.put("key1", "v1", 60);
+        cache.evictByPrefixAfterTransactionCommit("");
+        assertNotNull(cache.get("key1"));
+    }
+
+    @Test
+    void clearAfterTransactionCommit_emptyPrefix() {
+        cache.put("key1", "v1", 60);
+        cache.clearAfterTransactionCommit();
+        assertEquals(0, cache.size());
+    }
+
+    @Test
+    void evictionSampling_triggersOnPutInterval() {
+        cache = new QueryCacheManager(10);
+        for (int i = 0; i < 25; i++) {
+            cache.put("evict-" + i, "val-" + i, 60);
+        }
+        assertTrue(cache.size() <= 20);
+    }
+
+    @Test
+    void evictionSampling_triggersOnGetInterval() {
+        cache = new QueryCacheManager(10);
+        for (int i = 0; i < 10; i++) {
+            cache.put("key-" + i, "val-" + i, 60);
+        }
+        for (int i = 0; i < 15; i++) {
+            cache.get("key-" + i);
+        }
+        assertTrue(cache.size() <= 10);
+    }
+
+    @Test
+    void evictByPrefix_removesAllMatchingAndDequeEntry() {
+        cache = new QueryCacheManager(100);
+        cache.put("User:a", "v1", 60);
+        cache.put("User:b", "v2", 60);
+        cache.put("Order:a", "v3", 60);
+        int evicted = cache.evictByPrefix("User:");
+        assertEquals(2, evicted);
+        assertEquals(1, cache.size());
+    }
+
+    @Test
+    void driftCleanup_fullScan() {
+        cache = new QueryCacheManager(10);
+        for (int i = 0; i < 30; i++) {
+            cache.put("k" + i, "v" + i, 60);
+        }
+        cache.clear();
+        for (int i = 0; i < 30; i++) {
+            cache.put("n" + i, "v" + i, 60);
+        }
+        assertTrue(cache.size() <= 10);
+    }
 }

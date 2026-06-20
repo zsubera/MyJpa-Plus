@@ -62,4 +62,50 @@ class MyJpaRepositoryFactoryBeanTest {
         // Verify the bean was created successfully
         assertThat(bean).isNotNull();
     }
+
+    @Test
+    void createRepositoryFactory_withEntityType_debugLogging() throws Exception {
+        ch.qos.logback.classic.Logger logger =
+            (ch.qos.logback.classic.Logger) org.slf4j.LoggerFactory.getLogger(MyJpaRepositoryFactoryBean.class);
+        ch.qos.logback.classic.Level oldLevel = logger.getLevel();
+        try {
+            logger.setLevel(ch.qos.logback.classic.Level.DEBUG);
+
+            MyJpaRepositoryFactoryBean<MyJpaTestRepository, MyJpaTestEntity, Long> bean =
+                new MyJpaRepositoryFactoryBean<>(MyJpaTestRepository.class);
+
+            jakarta.persistence.EntityManagerFactory emf =
+                org.mockito.Mockito.mock(jakarta.persistence.EntityManagerFactory.class);
+            jakarta.persistence.EntityManager em =
+                org.mockito.Mockito.mock(jakarta.persistence.EntityManager.class);
+            org.mockito.Mockito.when(em.getEntityManagerFactory()).thenReturn(emf);
+            org.mockito.Mockito.when(em.getDelegate()).thenReturn(new Object());
+
+            java.lang.reflect.Method method = MyJpaRepositoryFactoryBean.class.getDeclaredMethod(
+                "createRepositoryFactory", jakarta.persistence.EntityManager.class);
+            method.setAccessible(true);
+
+            Object result = method.invoke(bean, em);
+            assertThat(result).isNotNull();
+        } finally {
+            logger.setLevel(oldLevel);
+        }
+    }
+
+    @Test
+    void resolveEntityType_exceptionPath() throws Exception {
+        // Use a repository interface that will cause EntityClassResolver.resolve to fail
+        MyJpaRepositoryFactoryBean<MalformedRepository, Object, Long> bean =
+            new MyJpaRepositoryFactoryBean<>(MalformedRepository.class);
+
+        java.lang.reflect.Method method =
+            MyJpaRepositoryFactoryBean.class.getDeclaredMethod("resolveEntityType", Class.class);
+        method.setAccessible(true);
+
+        // Should return null when resolve throws exception
+        Class<?> result = (Class<?>)method.invoke(bean, MalformedRepository.class);
+        assertThat(result).isNull();
+    }
+
+    interface MalformedRepository extends Repository<Object, Long> {}
 }

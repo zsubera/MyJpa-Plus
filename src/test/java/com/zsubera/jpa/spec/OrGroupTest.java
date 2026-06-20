@@ -347,6 +347,48 @@ class OrGroupTest {
         assertEquals(2, result.size());
     }
 
+    @Test
+    void testConstructorThrowsExceptionForNullRoot() {
+        assertThrows(IllegalArgumentException.class, () -> new OrGroup<>(null));
+    }
+
+    @Test
+    void testOrGroupOrNullConfig() {
+        QuerySpec<TestEntity> qs = new QuerySpec<>();
+        OrGroup<TestEntity> og = new OrGroup<>(qs);
+        assertThrows(IllegalArgumentException.class, () -> og.or(null));
+    }
+
+    @Test
+    void testOrGroupJoinNullField() {
+        QuerySpec<TestEntity> qs = new QuerySpec<>();
+        OrGroup<TestEntity> og = new OrGroup<>(qs);
+        assertThrows(IllegalArgumentException.class, () -> og.join(null, jg -> {
+        }));
+    }
+
+    @Test
+    void testOrGroupJoinNullConfig() {
+        QuerySpec<TestEntity> qs = new QuerySpec<>();
+        OrGroup<TestEntity> og = new OrGroup<>(qs);
+        assertThrows(IllegalArgumentException.class, () -> og.join(TestEntity::getName, null));
+    }
+
+    @Test
+    void testOrGroupLeftJoinNullField() {
+        QuerySpec<TestEntity> qs = new QuerySpec<>();
+        OrGroup<TestEntity> og = new OrGroup<>(qs);
+        assertThrows(IllegalArgumentException.class, () -> og.leftJoin(null, jg -> {
+        }));
+    }
+
+    @Test
+    void testOrGroupLeftJoinNullConfig() {
+        QuerySpec<TestEntity> qs = new QuerySpec<>();
+        OrGroup<TestEntity> og = new OrGroup<>(qs);
+        assertThrows(IllegalArgumentException.class, () -> og.leftJoin(TestEntity::getName, null));
+    }
+
     private TestEntity newEntity(String name, int status) {
         TestEntity entity = new TestEntity();
         entity.setName(name);

@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.*;
 
 import com.zsubera.jpa.annotation.RetryOnOptimisticLock;
 import jakarta.persistence.OptimisticLockException;
+import jakarta.persistence.PersistenceException;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -70,6 +71,37 @@ class OptimisticLockRetryAdvisorTest {
             state.callCount.incrementAndGet();
             throw new OptimisticLockException("No annotation");
         }
+
+        @RetryOnOptimisticLock(maxRetries = 3, backoffMs = 10)
+        public String throwWrappedPersistenceException() {
+            int current = state.callCount.incrementAndGet();
+            if (current <= state.succeedAfter) {
+                throw new PersistenceException("wrapped", new OptimisticLockException("cause"));
+            }
+            return (String)state.result;
+        }
+
+        @RetryOnOptimisticLock(maxRetries = 3, backoffMs = 10)
+        public String throwNonOptimisticPersistenceException() {
+            state.callCount.incrementAndGet();
+            throw new PersistenceException("non-optimistic");
+        }
+
+        @RetryOnOptimisticLock(maxRetries = 3, backoffMs = 10)
+        public String throwInterruptedException() throws InterruptedException {
+            state.callCount.incrementAndGet();
+            if (state.callCount.get() == 1) {
+                throw new OptimisticLockException("trigger retry");
+            }
+            Thread.currentThread().interrupt();
+            throw new InterruptedException("interrupted during retry");
+        }
+
+        @RetryOnOptimisticLock(maxRetries = 0, backoffMs = 10)
+        public String zeroRetries() {
+            state.callCount.incrementAndGet();
+            throw new OptimisticLockException("fail with zero retries");
+        }
     }
 
     @Autowired
@@ -129,5 +161,37 @@ class OptimisticLockRetryAdvisorTest {
 
         assertEquals("custom-result", result);
         assertEquals(2, state.callCount.get());
+    }
+
+    @Test
+    void retry_wrappedPersistenceException_retries() {
+        state.reset();
+        state.succeedAfter = 1;
+
+        String result = service.throwWrappedPersistenceException();
+
+        assertEquals("success", result);
+        assertEquals(2, state.callCount.get());
+    }
+
+    @Test
+    void retry_nonOptimisticPersistenceException_doesNotRetry() {
+        state.reset();
+
+        PersistenceException ex =
+            assertThrows(PersistenceException.class, () -> service.throwNonOptimisticPersistenceException());
+
+        assertNotNull(ex);
+        assertEquals(1, state.callCount.get());
+    }
+
+    @Test
+    void retry_zeroMaxRetries_throwsImmediately() {
+        state.reset();
+
+        OptimisticLockException ex = assertThrows(OptimisticLockException.class, () -> service.zeroRetries());
+
+        assertNotNull(ex);
+        assertEquals(1, state.callCount.get());
     }
 }

@@ -49,8 +49,6 @@ class MergeSpecTransactionTest {
         }
     }
 
-    // ===== executeInManagedTransaction: new tx → begin/commit =====
-
     @Test
     void testExecuteInManagedTransactionNewTx() throws Exception {
         EntityManager em = mock(EntityManager.class);
@@ -63,8 +61,6 @@ class MergeSpecTransactionTest {
         verify(tx).begin();
         verify(tx).commit();
     }
-
-    // ===== executeInManagedTransaction: existing tx → no begin/commit =====
 
     @Test
     void testExecuteInManagedTransactionExistingTx() throws Exception {
@@ -79,8 +75,6 @@ class MergeSpecTransactionTest {
         verify(tx, never()).commit();
     }
 
-    // ===== executeInManagedTransaction: RuntimeException → rollback =====
-
     @Test
     void testExecuteInManagedTransactionRuntimeException() throws Exception {
         EntityManager em = mock(EntityManager.class);
@@ -93,8 +87,6 @@ class MergeSpecTransactionTest {
         }));
         verify(tx).rollback();
     }
-
-    // ===== executeInManagedTransaction: rollback fails → suppressed =====
 
     @Test
     void testExecuteInManagedTransactionRollbackFails() throws Exception {
@@ -109,8 +101,6 @@ class MergeSpecTransactionTest {
         }));
         assertEquals("boom", ex.getMessage());
     }
-
-    // ===== isJtaTransactionActive =====
 
     @Test
     void testIsJtaTransactionActiveTrue() throws Exception {
@@ -151,8 +141,6 @@ class MergeSpecTransactionTest {
         assertFalse(result);
     }
 
-    // ===== safeRollback =====
-
     @Test
     void testSafeRollbackTxActive() throws Exception {
         MergeSpec<TestEntity> spec = createSpec();
@@ -184,8 +172,6 @@ class MergeSpecTransactionTest {
         assertDoesNotThrow(() -> invokeSafeRollback(spec, tx, original));
         assertEquals(1, original.getSuppressed().length);
     }
-
-    // ===== executeBatchInSeparateTransactions =====
 
     @Test
     void testExecuteBatchInSeparateTransactionsHappyPath() throws Exception {
@@ -224,8 +210,6 @@ class MergeSpecTransactionTest {
         assertThrows(Exception.class, () -> spec.executeBatchInSeparateTransactions(entities, em, 1));
     }
 
-    // ===== executeBatchInSeparateTransactions with rollback =====
-
     @Test
     void testExecuteBatchInSeparateTransactionsRollbackOnException() throws Exception {
         EntityManager em = mock(EntityManager.class);
@@ -240,5 +224,54 @@ class MergeSpecTransactionTest {
 
         assertThrows(RuntimeException.class, () -> spec.executeBatchInSeparateTransactions(List.of(e1), em, 100));
         verify(tx).rollback();
+    }
+
+    @Test
+    void testExecuteBatchInSeparateTransactionsActiveTxThrows() throws Exception {
+        EntityManager em = mock(EntityManager.class);
+        EntityTransaction tx = mock(EntityTransaction.class);
+        when(em.getTransaction()).thenReturn(tx);
+        when(tx.isActive()).thenReturn(true);
+
+        MergeSpec<TestEntity> spec = createSpec().dialect(new MysqlDialect());
+        TestEntity e1 = new TestEntity();
+        e1.setName("a");
+
+        assertThrows(com.zsubera.jpa.exception.MyJpaPlusException.class,
+            () -> spec.executeBatchInSeparateTransactions(List.of(e1), em, 100));
+    }
+
+    @Test
+    void testExecuteBatchInSeparateTransactionsNullTxThrows() throws Exception {
+        EntityManager em = mock(EntityManager.class);
+        when(em.getTransaction()).thenReturn(null);
+
+        MergeSpec<TestEntity> spec = createSpec().dialect(new MysqlDialect());
+        TestEntity e1 = new TestEntity();
+        e1.setName("a");
+
+        assertThrows(com.zsubera.jpa.exception.MyJpaPlusException.class,
+            () -> spec.executeBatchInSeparateTransactions(List.of(e1), em, 100));
+    }
+
+    @Test
+    void testExecuteInManagedTransactionJtaNoTxThrows() throws Exception {
+        EntityManager em = mock(EntityManager.class);
+        when(em.getTransaction()).thenReturn(null);
+
+        assertThrows(com.zsubera.jpa.exception.MyJpaPlusException.class,
+            () -> invokeExecuteInManagedTransaction(em, () -> 42));
+    }
+
+    @Test
+    void testExecuteInManagedTransactionCheckedException() throws Exception {
+        EntityManager em = mock(EntityManager.class);
+        EntityTransaction tx = mock(EntityTransaction.class);
+        when(em.getTransaction()).thenReturn(tx);
+        when(tx.isActive()).thenReturn(false, true);
+
+        assertThrows(RuntimeException.class, () -> invokeExecuteInManagedTransaction(em, () -> {
+            throw new RuntimeException("runtime");
+        }));
     }
 }

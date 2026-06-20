@@ -32,6 +32,15 @@ public final class AuditUtils {
     private static final StackWalker STACK_WALKER = StackWalker.getInstance();
 
     static {
+        maxStackDepth = initMaxStackDepth();
+    }
+
+    /**
+     * 初始化最大调用栈深度。从系统属性读取，供静态初始化和测试使用。
+     *
+     * @return 配置的最大调用栈深度
+     */
+    static int initMaxStackDepth() {
         int configured = DEFAULT_STACK_DEPTH;
         String prop = System.getProperty("myjpa-plus.audit.stack-trace-depth");
         if (prop != null) {
@@ -44,7 +53,7 @@ public final class AuditUtils {
                 // 使用默认值
             }
         }
-        maxStackDepth = configured;
+        return configured;
     }
 
     private AuditUtils() {}

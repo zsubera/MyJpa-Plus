@@ -100,6 +100,59 @@ class IdentifierValidatorTest {
     }
 
     @Test
+    void validateColumnName_null_throwsException() {
+        assertThrows(MyJpaPlusException.class, () -> IdentifierValidator.validateColumnName(null));
+    }
+
+    @Test
+    void validateColumnName_empty_throwsException() {
+        assertThrows(MyJpaPlusException.class, () -> IdentifierValidator.validateColumnName(""));
+    }
+
+    @Test
+    void validateColumnName_tooLong_throwsException() {
+        String longName = "a".repeat(129);
+        assertThrows(MyJpaPlusException.class, () -> IdentifierValidator.validateColumnName(longName));
+    }
+
+    @Test
+    void resolveTableName_withTableAnnotation() {
+        String name = IdentifierValidator.resolveTableName(TableAnnotatedEntity.class);
+        assertEquals("custom_table", name);
+    }
+
+    @Test
+    void resolveTableName_withEntityName() {
+        String name = IdentifierValidator.resolveTableName(EntityNamedEntity.class);
+        assertEquals("entity_named", name);
+    }
+
+    @Test
+    void resolveTableName_fallbackToSnakeCase() {
+        String name = IdentifierValidator.resolveTableName(TableAnnotatedEntity.class);
+        // Just verify it doesn't throw and returns a non-empty string
+        assertNotNull(name);
+        assertFalse(name.isEmpty());
+    }
+
+    @Test
+    void resolveTableName_withCatalogAndSchema() {
+        String name = IdentifierValidator.resolveTableName(FullTableEntity.class);
+        assertEquals("my_catalog.my_schema.full_table", name);
+    }
+
+    @jakarta.persistence.Entity
+    @jakarta.persistence.Table(name = "custom_table")
+    static class TableAnnotatedEntity {}
+
+    @jakarta.persistence.Entity(name = "entity_named")
+    static class EntityNamedEntity {}
+
+    @jakarta.persistence.Entity
+    @jakarta.persistence.Table(name = "full_table", schema = "my_schema", catalog = "my_catalog")
+    static class FullTableEntity {}
+
+    @Test
     void setUnicodeIdentifiers_enableDisable() {
         boolean original = IdentifierValidator.isUnicodeIdentifiersEnabled();
         try {

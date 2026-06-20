@@ -109,4 +109,27 @@ class TransactionHelperTest {
         assertNotNull(method, "executeInNewTransaction method should exist");
         assertEquals(1, method.getTypeParameters().length, "Should have one type parameter");
     }
+
+    @Test
+    void shouldReturnNullWhenApplicationContextIsNull() throws Exception {
+        TransactionHelper helper = new TransactionHelper(null, null, null);
+        java.lang.reflect.Method method = TransactionHelper.class.getDeclaredMethod("getTransactionManager");
+        method.setAccessible(true);
+        Object result = method.invoke(helper);
+        assertNull(result);
+    }
+
+    @Test
+    void shouldReturnNullWhenBeanNotFound() throws Exception {
+        org.springframework.context.ApplicationContext mockCtx =
+            org.mockito.Mockito.mock(org.springframework.context.ApplicationContext.class);
+        org.mockito.Mockito.when(mockCtx.getBean(org.springframework.transaction.PlatformTransactionManager.class))
+            .thenThrow(new org.springframework.beans.factory.NoSuchBeanDefinitionException("no tx mgr"));
+
+        TransactionHelper helper = new TransactionHelper(null, null, mockCtx);
+        java.lang.reflect.Method method = TransactionHelper.class.getDeclaredMethod("getTransactionManager");
+        method.setAccessible(true);
+        Object result = method.invoke(helper);
+        assertNull(result);
+    }
 }
