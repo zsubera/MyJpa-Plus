@@ -79,8 +79,8 @@ class MyJpaRepositoryExtendedTest {
         e2.setName("other");
         e2.setDeleted(false);
         repository.save(e2);
-        List<MyJpaTestEntity> result =
-            repository.findAll((Specification<MyJpaTestEntity>)(root, query, cb) -> cb.equal(root.get("name"), "target"));
+        List<MyJpaTestEntity> result = repository
+            .findAll((Specification<MyJpaTestEntity>)(root, query, cb) -> cb.equal(root.get("name"), "target"));
         assertEquals(1, result.size());
     }
 
@@ -94,8 +94,8 @@ class MyJpaRepositoryExtendedTest {
         e2.setName("a");
         e2.setDeleted(false);
         repository.save(e2);
-        List<MyJpaTestEntity> result = repository.findAll(
-            (Specification<MyJpaTestEntity>)(root, query, cb) -> cb.conjunction(), Sort.by("name"));
+        List<MyJpaTestEntity> result =
+            repository.findAll((Specification<MyJpaTestEntity>)(root, query, cb) -> cb.conjunction(), Sort.by("name"));
         assertEquals(2, result.size());
         assertEquals("a", result.get(0).getName());
     }
@@ -106,8 +106,8 @@ class MyJpaRepositoryExtendedTest {
         e1.setName("a");
         e1.setDeleted(false);
         repository.save(e1);
-        var page = repository.findAll(
-            (Specification<MyJpaTestEntity>)(root, query, cb) -> cb.conjunction(), PageRequest.of(0, 10));
+        var page = repository.findAll((Specification<MyJpaTestEntity>)(root, query, cb) -> cb.conjunction(),
+            PageRequest.of(0, 10));
         assertTrue(page.getTotalElements() >= 1);
     }
 
@@ -117,8 +117,8 @@ class MyJpaRepositoryExtendedTest {
         e1.setName("findOneSpec");
         e1.setDeleted(false);
         repository.save(e1);
-        var result = repository.findOne(
-            (Specification<MyJpaTestEntity>)(root, query, cb) -> cb.equal(root.get("name"), "findOneSpec"));
+        var result = repository
+            .findOne((Specification<MyJpaTestEntity>)(root, query, cb) -> cb.equal(root.get("name"), "findOneSpec"));
         assertTrue(result.isPresent());
     }
 
@@ -128,8 +128,8 @@ class MyJpaRepositoryExtendedTest {
         e1.setName("countSpec");
         e1.setDeleted(false);
         repository.save(e1);
-        long count = repository.count(
-            (Specification<MyJpaTestEntity>)(root, query, cb) -> cb.equal(root.get("name"), "countSpec"));
+        long count = repository
+            .count((Specification<MyJpaTestEntity>)(root, query, cb) -> cb.equal(root.get("name"), "countSpec"));
         assertEquals(1, count);
     }
 
@@ -139,10 +139,10 @@ class MyJpaRepositoryExtendedTest {
         e1.setName("existsSpec");
         e1.setDeleted(false);
         repository.save(e1);
-        assertTrue(repository.exists(
-            (Specification<MyJpaTestEntity>)(root, query, cb) -> cb.equal(root.get("name"), "existsSpec")));
-        assertFalse(repository.exists(
-            (Specification<MyJpaTestEntity>)(root, query, cb) -> cb.equal(root.get("name"), "nonexistent")));
+        assertTrue(repository
+            .exists((Specification<MyJpaTestEntity>)(root, query, cb) -> cb.equal(root.get("name"), "existsSpec")));
+        assertFalse(repository
+            .exists((Specification<MyJpaTestEntity>)(root, query, cb) -> cb.equal(root.get("name"), "nonexistent")));
     }
 
     @Test
@@ -169,8 +169,8 @@ class MyJpaRepositoryExtendedTest {
         e2.setName("nd2");
         e2.setDeleted(true);
         repository.save(e2);
-        List<MyJpaTestEntity> result = repository.findNotDeletedAll(
-            (Specification<MyJpaTestEntity>)(root, query, cb) -> cb.conjunction());
+        List<MyJpaTestEntity> result =
+            repository.findNotDeletedAll((Specification<MyJpaTestEntity>)(root, query, cb) -> cb.conjunction());
         assertEquals(1, result.size());
     }
 
@@ -224,8 +224,8 @@ class MyJpaRepositoryExtendedTest {
         e2.setName("cntNd");
         e2.setDeleted(true);
         repository.save(e2);
-        long count = repository.countNotDeleted(
-            (Specification<MyJpaTestEntity>)(root, query, cb) -> cb.equal(root.get("name"), "cntNd"));
+        long count = repository
+            .countNotDeleted((Specification<MyJpaTestEntity>)(root, query, cb) -> cb.equal(root.get("name"), "cntNd"));
         assertEquals(1, count);
     }
 
@@ -271,17 +271,20 @@ class MyJpaRepositoryExtendedTest {
 
     @Test
     void testExecute_nullUpdateSpec_throws() {
-        assertThrows(Exception.class, () -> repository.execute((com.zsubera.jpa.update.UpdateSpec<MyJpaTestEntity>)null));
+        assertThrows(Exception.class,
+            () -> repository.execute((com.zsubera.jpa.update.UpdateSpec<MyJpaTestEntity>)null));
     }
 
     @Test
     void testExecute_nullDeleteSpec_throws() {
-        assertThrows(Exception.class, () -> repository.execute((com.zsubera.jpa.update.DeleteSpec<MyJpaTestEntity>)null));
+        assertThrows(Exception.class,
+            () -> repository.execute((com.zsubera.jpa.update.DeleteSpec<MyJpaTestEntity>)null));
     }
 
     @Test
     void testExecute_nullMergeSpec_throws() {
-        assertThrows(Exception.class, () -> repository.execute((com.zsubera.jpa.update.MergeSpec<MyJpaTestEntity>)null));
+        assertThrows(Exception.class,
+            () -> repository.execute((com.zsubera.jpa.update.MergeSpec<MyJpaTestEntity>)null));
     }
 
     @Test
@@ -359,7 +362,8 @@ class MyJpaRepositoryExtendedTest {
         e2.setName("a");
         e2.setDeleted(false);
         repository.save(e2);
-        List<MyJpaTestEntity> result = repository.findAll(s -> s.eq(MyJpaTestEntity::getDeleted, false), Sort.by("name"));
+        List<MyJpaTestEntity> result =
+            repository.findAll(s -> s.eq(MyJpaTestEntity::getDeleted, false), Sort.by("name"));
         assertEquals(2, result.size());
         assertEquals("a", result.get(0).getName());
     }

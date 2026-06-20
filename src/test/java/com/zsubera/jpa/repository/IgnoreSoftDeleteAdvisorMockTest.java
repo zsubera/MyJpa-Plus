@@ -9,7 +9,6 @@ import org.aspectj.lang.ProceedingJoinPoint;
 import org.aspectj.lang.reflect.MethodSignature;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.springframework.test.util.AopTestUtils;
 
 class IgnoreSoftDeleteAdvisorMockTest {
 
@@ -99,6 +98,7 @@ class IgnoreSoftDeleteAdvisorMockTest {
 
     interface NoAnnotationInterface {
         Object findByName(String name);
+
         Object findById(Long id);
     }
 

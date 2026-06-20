@@ -2,7 +2,6 @@ package com.zsubera.jpa.autoconfigure;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-import com.zsubera.jpa.template.MyJpaTemplate;
 import com.zsubera.jpa.template.MyJpaTemplateOperations;
 import com.zsubera.jpa.template.QueryCacheManager;
 import com.zsubera.jpa.template.CacheInvalidationListener;
@@ -12,7 +11,6 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.ApplicationContext;
-import org.springframework.context.event.ContextClosedEvent;
 
 @SpringBootTest(classes = MyJpaPlusAutoConfigurationIntegrationTest.TestConfig.class)
 class MyJpaPlusAutoConfigurationIntegrationTest {

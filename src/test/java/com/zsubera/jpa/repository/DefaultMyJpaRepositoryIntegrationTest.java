@@ -60,7 +60,8 @@ class DefaultMyJpaRepositoryIntegrationTest {
     @Test
     void deleteInBatch_softDeletePath() throws Exception {
         SoftDeleteRepoTestEntity e1 = saveActive("a");
-        java.lang.reflect.Method method = DefaultMyJpaRepository.class.getMethod("deleteInBatch", java.lang.Iterable.class);
+        java.lang.reflect.Method method =
+            DefaultMyJpaRepository.class.getMethod("deleteInBatch", java.lang.Iterable.class);
         method.invoke(proxy, java.util.List.of(e1));
         SoftDeleteContext.pushIgnore();
         try {
@@ -79,7 +80,8 @@ class DefaultMyJpaRepositoryIntegrationTest {
         SoftDeleteRepoTestEntity e1 = saveActive("a");
         DefaultMyJpaRepository.setAutoFilterEnabled(false);
         DefaultMyJpaRepository.setBlockUnconditionalDelete(false);
-        java.lang.reflect.Method method = DefaultMyJpaRepository.class.getMethod("deleteInBatch", java.lang.Iterable.class);
+        java.lang.reflect.Method method =
+            DefaultMyJpaRepository.class.getMethod("deleteInBatch", java.lang.Iterable.class);
         method.invoke(proxy, java.util.List.of(e1));
         assertEquals(0, repository.count());
     }
@@ -88,8 +90,9 @@ class DefaultMyJpaRepositoryIntegrationTest {
 
     @Test
     void deleteInBatch_nullEntities_throws() throws Exception {
-        java.lang.reflect.Method method = DefaultMyJpaRepository.class.getMethod("deleteInBatch", java.lang.Iterable.class);
-        assertThrows(Exception.class, () -> method.invoke(proxy, (Object) null));
+        java.lang.reflect.Method method =
+            DefaultMyJpaRepository.class.getMethod("deleteInBatch", java.lang.Iterable.class);
+        assertThrows(Exception.class, () -> method.invoke(proxy, (Object)null));
     }
 
     // ---- deleteInBatch: empty list ----
@@ -97,7 +100,8 @@ class DefaultMyJpaRepositoryIntegrationTest {
     @Test
     void deleteInBatch_emptyList_doesNothing() throws Exception {
         saveActive("a");
-        java.lang.reflect.Method method = DefaultMyJpaRepository.class.getMethod("deleteInBatch", java.lang.Iterable.class);
+        java.lang.reflect.Method method =
+            DefaultMyJpaRepository.class.getMethod("deleteInBatch", java.lang.Iterable.class);
         method.invoke(proxy, java.util.List.of());
         assertEquals(1, repository.count());
     }
@@ -109,7 +113,8 @@ class DefaultMyJpaRepositoryIntegrationTest {
         SoftDeleteRepoTestEntity e1 = saveActive("a");
         DefaultMyJpaRepository.setAutoFilterEnabled(false);
         DefaultMyJpaRepository.setBlockUnconditionalDelete(true);
-        java.lang.reflect.Method method = DefaultMyJpaRepository.class.getMethod("deleteInBatch", java.lang.Iterable.class);
+        java.lang.reflect.Method method =
+            DefaultMyJpaRepository.class.getMethod("deleteInBatch", java.lang.Iterable.class);
         assertThrows(Exception.class, () -> method.invoke(proxy, java.util.List.of(e1)));
     }
 
@@ -121,7 +126,7 @@ class DefaultMyJpaRepositoryIntegrationTest {
         DefaultMyJpaRepository.setAutoFilterEnabled(false);
         DefaultMyJpaRepository.setBlockUnconditionalDelete(false);
         java.lang.reflect.Method method = DefaultMyJpaRepository.class.getMethod("deleteByIdIfExists", Object.class);
-        boolean result = (boolean) method.invoke(proxy, e1.getId());
+        boolean result = (boolean)method.invoke(proxy, e1.getId());
         assertTrue(result);
         assertEquals(0, repository.count());
     }
@@ -131,7 +136,7 @@ class DefaultMyJpaRepositoryIntegrationTest {
         DefaultMyJpaRepository.setAutoFilterEnabled(false);
         DefaultMyJpaRepository.setBlockUnconditionalDelete(false);
         java.lang.reflect.Method method = DefaultMyJpaRepository.class.getMethod("deleteByIdIfExists", Object.class);
-        boolean result = (boolean) method.invoke(proxy, 999999L);
+        boolean result = (boolean)method.invoke(proxy, 999999L);
         assertFalse(result);
     }
 
@@ -140,7 +145,7 @@ class DefaultMyJpaRepositoryIntegrationTest {
     @Test
     void deleteByIdIfExists_nullId_throws() throws Exception {
         java.lang.reflect.Method method = DefaultMyJpaRepository.class.getMethod("deleteByIdIfExists", Object.class);
-        assertThrows(Exception.class, () -> method.invoke(proxy, (Object) null));
+        assertThrows(Exception.class, () -> method.invoke(proxy, (Object)null));
     }
 
     // ---- deleteByIdOrThrow: deprecated method ----
@@ -167,16 +172,15 @@ class DefaultMyJpaRepositoryIntegrationTest {
     @Test
     void mergeSoftDeleteFilter_nonSoftDeleteEntity_findAllWithSpec() {
         SimpleTestEntity e1 = saveSimple("s1");
-        List<SimpleTestEntity> result = simpleRepository.findAll(
-            (Specification<SimpleTestEntity>)(root, query, cb) -> cb.conjunction());
+        List<SimpleTestEntity> result =
+            simpleRepository.findAll((Specification<SimpleTestEntity>)(root, query, cb) -> cb.conjunction());
         assertEquals(1, result.size());
     }
 
     @Test
     void mergeSoftDeleteFilter_nonSoftDeleteEntity_findAllWithPageable() {
         SimpleTestEntity e1 = saveSimple("s1");
-        var page = simpleRepository.findAll(
-            (Specification<SimpleTestEntity>)(root, query, cb) -> cb.conjunction(),
+        var page = simpleRepository.findAll((Specification<SimpleTestEntity>)(root, query, cb) -> cb.conjunction(),
             org.springframework.data.domain.PageRequest.of(0, 10));
         assertEquals(1, page.getTotalElements());
     }
@@ -185,9 +189,9 @@ class DefaultMyJpaRepositoryIntegrationTest {
     void mergeSoftDeleteFilter_nonSoftDeleteEntity_findAllWithSort() {
         SimpleTestEntity e1 = saveSimple("b");
         SimpleTestEntity e2 = saveSimple("a");
-        List<SimpleTestEntity> result = simpleRepository.findAll(
-            (Specification<SimpleTestEntity>)(root, query, cb) -> cb.conjunction(),
-            org.springframework.data.domain.Sort.by("name"));
+        List<SimpleTestEntity> result =
+            simpleRepository.findAll((Specification<SimpleTestEntity>)(root, query, cb) -> cb.conjunction(),
+                org.springframework.data.domain.Sort.by("name"));
         assertEquals(2, result.size());
         assertEquals("a", result.get(0).getName());
     }
@@ -195,24 +199,23 @@ class DefaultMyJpaRepositoryIntegrationTest {
     @Test
     void mergeSoftDeleteFilter_nonSoftDeleteEntity_findOne() {
         SimpleTestEntity e1 = saveSimple("s1");
-        Optional<SimpleTestEntity> result = simpleRepository.findOne(
-            (Specification<SimpleTestEntity>)(root, query, cb) -> cb.equal(root.get("name"), "s1"));
+        Optional<SimpleTestEntity> result = simpleRepository
+            .findOne((Specification<SimpleTestEntity>)(root, query, cb) -> cb.equal(root.get("name"), "s1"));
         assertTrue(result.isPresent());
     }
 
     @Test
     void mergeSoftDeleteFilter_nonSoftDeleteEntity_count() {
         SimpleTestEntity e1 = saveSimple("s1");
-        long count = simpleRepository.count(
-            (Specification<SimpleTestEntity>)(root, query, cb) -> cb.conjunction());
+        long count = simpleRepository.count((Specification<SimpleTestEntity>)(root, query, cb) -> cb.conjunction());
         assertEquals(1, count);
     }
 
     @Test
     void mergeSoftDeleteFilter_nonSoftDeleteEntity_exists() {
         SimpleTestEntity e1 = saveSimple("s1");
-        boolean exists = simpleRepository.exists(
-            (Specification<SimpleTestEntity>)(root, query, cb) -> cb.conjunction());
+        boolean exists =
+            simpleRepository.exists((Specification<SimpleTestEntity>)(root, query, cb) -> cb.conjunction());
         assertTrue(exists);
     }
 

@@ -2,9 +2,7 @@ package com.zsubera.jpa.repository;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-import jakarta.persistence.EntityManager;
 import jakarta.persistence.EntityManagerFactory;
-import java.util.List;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -57,26 +55,22 @@ class EntityManagerHelperExtendedTest {
     @Test
     void getTransactionalEntityManager_withEntity_noEmf_throws() {
         SoftDeleteRepoTestEntity entity = new SoftDeleteRepoTestEntity();
-        assertThrows(IllegalStateException.class,
-            () -> EntityManagerHelper.getTransactionalEntityManager(entity));
+        assertThrows(IllegalStateException.class, () -> EntityManagerHelper.getTransactionalEntityManager(entity));
     }
 
     @Test
     void getTransactionalEntityManager_withNullEntity_throws() {
-        assertThrows(NullPointerException.class,
-            () -> EntityManagerHelper.getTransactionalEntityManager((Object)null));
+        assertThrows(NullPointerException.class, () -> EntityManagerHelper.getTransactionalEntityManager((Object)null));
     }
 
     @Test
     void registerResolver_nullEntityType_throws() {
-        assertThrows(NullPointerException.class,
-            () -> EntityManagerHelper.registerResolver(null, type -> null));
+        assertThrows(NullPointerException.class, () -> EntityManagerHelper.registerResolver(null, type -> null));
     }
 
     @Test
     void registerResolver_nullResolver_throws() {
-        assertThrows(NullPointerException.class,
-            () -> EntityManagerHelper.registerResolver(String.class, null));
+        assertThrows(NullPointerException.class, () -> EntityManagerHelper.registerResolver(String.class, null));
     }
 
     @Test
@@ -105,8 +99,7 @@ class EntityManagerHelperExtendedTest {
 
     @Test
     void removeResolver_nullEntityType_throws() {
-        assertThrows(NullPointerException.class,
-            () -> EntityManagerHelper.removeResolver(null));
+        assertThrows(NullPointerException.class, () -> EntityManagerHelper.removeResolver(null));
     }
 
     @Test

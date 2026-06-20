@@ -97,8 +97,7 @@ class OptimisticLockRetryAdvisorExtendedTest {
         public String objectOptimisticLockException() {
             int current = state.callCount.incrementAndGet();
             if (current <= state.succeedAfter) {
-                throw new org.springframework.orm.ObjectOptimisticLockingFailureException(
-                    "obj lock", new Object());
+                throw new org.springframework.orm.ObjectOptimisticLockingFailureException("obj lock", new Object());
             }
             return "success";
         }

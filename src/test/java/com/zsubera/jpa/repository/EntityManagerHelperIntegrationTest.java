@@ -63,8 +63,7 @@ class EntityManagerHelperIntegrationTest {
 
     @Test
     void getTransactionalEntityManager_entityInstance_noEmf_throws() {
-        assertThrows(NullPointerException.class,
-            () -> EntityManagerHelper.getTransactionalEntityManager((Object) null));
+        assertThrows(NullPointerException.class, () -> EntityManagerHelper.getTransactionalEntityManager((Object)null));
     }
 
     // ---- getTransactionalEntityManager: entityType ----
@@ -79,7 +78,7 @@ class EntityManagerHelperIntegrationTest {
     @Test
     void getTransactionalEntityManager_nullEntityType() {
         EntityManagerHelper.setEntityManagerFactory(entityManagerFactory);
-        var em = EntityManagerHelper.getTransactionalEntityManager((Class<?>) null);
+        var em = EntityManagerHelper.getTransactionalEntityManager((Class<?>)null);
         assertNotNull(em);
     }
 
@@ -106,7 +105,9 @@ class EntityManagerHelperIntegrationTest {
     @Test
     void removeResolver_recheckPath_resolverThrows() {
         EntityManagerHelper.setEntityManagerFactory(entityManagerFactory);
-        EntityManagerHelper.registerResolver(String.class, type -> { throw new RuntimeException("fail"); });
+        EntityManagerHelper.registerResolver(String.class, type -> {
+            throw new RuntimeException("fail");
+        });
         EntityManagerHelper.removeResolver(String.class);
     }
 
@@ -165,14 +166,12 @@ class EntityManagerHelperIntegrationTest {
 
     @Test
     void registerResolver_nullEntityType_throws() {
-        assertThrows(NullPointerException.class,
-            () -> EntityManagerHelper.registerResolver(null, type -> null));
+        assertThrows(NullPointerException.class, () -> EntityManagerHelper.registerResolver(null, type -> null));
     }
 
     @Test
     void registerResolver_nullResolver_throws() {
-        assertThrows(NullPointerException.class,
-            () -> EntityManagerHelper.registerResolver(String.class, null));
+        assertThrows(NullPointerException.class, () -> EntityManagerHelper.registerResolver(String.class, null));
     }
 
     @Test

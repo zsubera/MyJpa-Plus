@@ -21,8 +21,13 @@ class CodeEnumTypeExtendedTest {
         @CodeEnumValue
         private final Long code;
 
-        LongCodeEnum(Long code) { this.code = code; }
-        public Long getCode() { return code; }
+        LongCodeEnum(Long code) {
+            this.code = code;
+        }
+
+        public Long getCode() {
+            return code;
+        }
     }
 
     enum CharCodeEnum {
@@ -31,8 +36,13 @@ class CodeEnumTypeExtendedTest {
         @CodeEnumValue
         private final Character code;
 
-        CharCodeEnum(Character code) { this.code = code; }
-        public Character getCode() { return code; }
+        CharCodeEnum(Character code) {
+            this.code = code;
+        }
+
+        public Character getCode() {
+            return code;
+        }
     }
 
     enum StringCodeEnum {
@@ -41,8 +51,13 @@ class CodeEnumTypeExtendedTest {
         @CodeEnumValue
         private final String code;
 
-        StringCodeEnum(String code) { this.code = code; }
-        public String getCode() { return code; }
+        StringCodeEnum(String code) {
+            this.code = code;
+        }
+
+        public String getCode() {
+            return code;
+        }
     }
 
     enum IntCodeEnum {
@@ -51,8 +66,13 @@ class CodeEnumTypeExtendedTest {
         @CodeEnumValue
         private final int code;
 
-        IntCodeEnum(int code) { this.code = code; }
-        public int getCode() { return code; }
+        IntCodeEnum(int code) {
+            this.code = code;
+        }
+
+        public int getCode() {
+            return code;
+        }
     }
 
     enum NoAnnotationEnum {

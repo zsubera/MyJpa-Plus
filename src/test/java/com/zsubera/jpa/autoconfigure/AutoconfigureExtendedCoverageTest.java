@@ -3,7 +3,6 @@ package com.zsubera.jpa.autoconfigure;
 import static org.junit.jupiter.api.Assertions.*;
 
 import com.zsubera.jpa.repository.DefaultMyJpaRepository;
-import com.zsubera.jpa.repository.SimpleTestEntity;
 import java.util.List;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -30,7 +29,7 @@ class AutoconfigureExtendedCoverageTest {
 
     @Test
     void configInitializer_debugLogging_enabled() {
-        Logger logger = (Logger) LoggerFactory.getLogger("com.zsubera.jpa.autoconfigure.MyJpaPlusAutoConfiguration");
+        Logger logger = (Logger)LoggerFactory.getLogger("com.zsubera.jpa.autoconfigure.MyJpaPlusAutoConfiguration");
         Level oldLevel = logger.getLevel();
         try {
             logger.setLevel(Level.DEBUG);
@@ -46,7 +45,7 @@ class AutoconfigureExtendedCoverageTest {
 
     @Test
     void configInitializer_debugLogging_noGlobalConfig() {
-        Logger logger = (Logger) LoggerFactory.getLogger("com.zsubera.jpa.autoconfigure.MyJpaPlusAutoConfiguration");
+        Logger logger = (Logger)LoggerFactory.getLogger("com.zsubera.jpa.autoconfigure.MyJpaPlusAutoConfiguration");
         Level oldLevel = logger.getLevel();
         try {
             logger.setLevel(Level.DEBUG);
@@ -61,7 +60,7 @@ class AutoconfigureExtendedCoverageTest {
 
     @Test
     void softDeleteFilterBean_afterPropertiesSet_debugLogging() {
-        Logger logger = (Logger) LoggerFactory.getLogger(SoftDeleteFilterBean.class);
+        Logger logger = (Logger)LoggerFactory.getLogger(SoftDeleteFilterBean.class);
         Level oldLevel = logger.getLevel();
         try {
             logger.setLevel(Level.DEBUG);
@@ -75,7 +74,7 @@ class AutoconfigureExtendedCoverageTest {
 
     @Test
     void softDeleteFilterBean_registerEntity_debugLogging() {
-        Logger logger = (Logger) LoggerFactory.getLogger(SoftDeleteFilterBean.class);
+        Logger logger = (Logger)LoggerFactory.getLogger(SoftDeleteFilterBean.class);
         Level oldLevel = logger.getLevel();
         try {
             logger.setLevel(Level.DEBUG);
@@ -89,7 +88,8 @@ class AutoconfigureExtendedCoverageTest {
 
     @Test
     void repositoryBaseClassPostProcessor_debugLogging() {
-        Logger logger = (Logger) LoggerFactory.getLogger("com.zsubera.jpa.autoconfigure.MyJpaPlusAutoConfiguration$RepositoryBaseClassPostProcessor");
+        Logger logger = (Logger)LoggerFactory
+            .getLogger("com.zsubera.jpa.autoconfigure.MyJpaPlusAutoConfiguration$RepositoryBaseClassPostProcessor");
         Level oldLevel = logger.getLevel();
         try {
             logger.setLevel(Level.DEBUG);
@@ -153,8 +153,7 @@ class AutoconfigureExtendedCoverageTest {
         try {
             System.setProperty("myjpa.encrypt.key", "invalid-key");
             MyJpaPlusProperties props = new MyJpaPlusProperties();
-            assertDoesNotThrow(
-                () -> new MyJpaPlusAutoConfiguration.MyJpaPlusConfigInitializer(props, null));
+            assertDoesNotThrow(() -> new MyJpaPlusAutoConfiguration.MyJpaPlusConfigInitializer(props, null));
         } finally {
             if (oldProp != null) {
                 System.setProperty("myjpa.encrypt.key", oldProp);
@@ -168,8 +167,7 @@ class AutoconfigureExtendedCoverageTest {
     void configInitializer_timeoutZero() {
         MyJpaPlusProperties props = new MyJpaPlusProperties();
         props.getQuery().setDefaultTimeoutSeconds(-1);
-        assertDoesNotThrow(
-            () -> new MyJpaPlusAutoConfiguration.MyJpaPlusConfigInitializer(props, null));
+        assertDoesNotThrow(() -> new MyJpaPlusAutoConfiguration.MyJpaPlusConfigInitializer(props, null));
     }
 
     @Test

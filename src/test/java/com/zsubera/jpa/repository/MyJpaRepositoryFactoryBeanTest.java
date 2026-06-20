@@ -66,7 +66,7 @@ class MyJpaRepositoryFactoryBeanTest {
     @Test
     void createRepositoryFactory_withEntityType_debugLogging() throws Exception {
         ch.qos.logback.classic.Logger logger =
-            (ch.qos.logback.classic.Logger) org.slf4j.LoggerFactory.getLogger(MyJpaRepositoryFactoryBean.class);
+            (ch.qos.logback.classic.Logger)org.slf4j.LoggerFactory.getLogger(MyJpaRepositoryFactoryBean.class);
         ch.qos.logback.classic.Level oldLevel = logger.getLevel();
         try {
             logger.setLevel(ch.qos.logback.classic.Level.DEBUG);
@@ -76,13 +76,12 @@ class MyJpaRepositoryFactoryBeanTest {
 
             jakarta.persistence.EntityManagerFactory emf =
                 org.mockito.Mockito.mock(jakarta.persistence.EntityManagerFactory.class);
-            jakarta.persistence.EntityManager em =
-                org.mockito.Mockito.mock(jakarta.persistence.EntityManager.class);
+            jakarta.persistence.EntityManager em = org.mockito.Mockito.mock(jakarta.persistence.EntityManager.class);
             org.mockito.Mockito.when(em.getEntityManagerFactory()).thenReturn(emf);
             org.mockito.Mockito.when(em.getDelegate()).thenReturn(new Object());
 
-            java.lang.reflect.Method method = MyJpaRepositoryFactoryBean.class.getDeclaredMethod(
-                "createRepositoryFactory", jakarta.persistence.EntityManager.class);
+            java.lang.reflect.Method method = MyJpaRepositoryFactoryBean.class
+                .getDeclaredMethod("createRepositoryFactory", jakarta.persistence.EntityManager.class);
             method.setAccessible(true);
 
             Object result = method.invoke(bean, em);

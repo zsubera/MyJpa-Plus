@@ -201,8 +201,7 @@ class DefaultMyJpaRepositoryBranchTest {
         SoftDeleteRepoTestEntity entity = saveEntity("a", false);
         DefaultMyJpaRepository.setAutoFilterEnabled(false);
         DefaultMyJpaRepository.setBlockUnconditionalDelete(true);
-        assertThrows(Exception.class,
-            () -> repository.deleteAllById(List.of(entity.getId())));
+        assertThrows(Exception.class, () -> repository.deleteAllById(List.of(entity.getId())));
     }
 
     @Test
@@ -374,9 +373,14 @@ class DefaultMyJpaRepositoryBranchTest {
         try {
             DefaultMyJpaRepository.ConfigProvider provider = new DefaultMyJpaRepository.ConfigProvider() {
                 @Override
-                public boolean isAutoFilterEnabled() { return true; }
+                public boolean isAutoFilterEnabled() {
+                    return true;
+                }
+
                 @Override
-                public boolean isBlockUnconditionalDelete() { return true; }
+                public boolean isBlockUnconditionalDelete() {
+                    return true;
+                }
             };
             f.set(null, provider);
             DefaultMyJpaRepository.setAutoFilterEnabled(false);
@@ -424,9 +428,14 @@ class DefaultMyJpaRepositoryBranchTest {
         try {
             DefaultMyJpaRepository.ConfigProvider provider = new DefaultMyJpaRepository.ConfigProvider() {
                 @Override
-                public boolean isAutoFilterEnabled() { return true; }
+                public boolean isAutoFilterEnabled() {
+                    return true;
+                }
+
                 @Override
-                public boolean isBlockUnconditionalDelete() { return true; }
+                public boolean isBlockUnconditionalDelete() {
+                    return true;
+                }
             };
             f.set(null, provider);
             DefaultMyJpaRepository.setBlockUnconditionalDelete(false);
@@ -477,8 +486,7 @@ class DefaultMyJpaRepositoryBranchTest {
         saveEntity("deleted", true);
         DefaultMyJpaRepository.setAutoFilterEnabled(false);
         try {
-            Specification<SoftDeleteRepoTestEntity> spec =
-                (root, query, cb) -> cb.conjunction();
+            Specification<SoftDeleteRepoTestEntity> spec = (root, query, cb) -> cb.conjunction();
             List<SoftDeleteRepoTestEntity> result = repository.findAll(spec);
             assertEquals(2, result.size());
         } finally {

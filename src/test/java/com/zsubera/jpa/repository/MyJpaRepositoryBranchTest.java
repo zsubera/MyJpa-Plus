@@ -95,8 +95,7 @@ class MyJpaRepositoryBranchTest {
         e2.setDeleted(true);
         repository.save(e2);
         Page<MyJpaTestEntity> page = repository.findNotDeletedAll(
-            (Specification<MyJpaTestEntity>)(root, query, cb) -> cb.conjunction(),
-            PageRequest.of(0, 10));
+            (Specification<MyJpaTestEntity>)(root, query, cb) -> cb.conjunction(), PageRequest.of(0, 10));
         assertEquals(1, page.getTotalElements());
     }
 
@@ -106,8 +105,8 @@ class MyJpaRepositoryBranchTest {
         e1.setName("pageNull");
         e1.setDeleted(false);
         repository.save(e1);
-        Page<MyJpaTestEntity> page = repository.findNotDeletedAll(
-            (Specification<MyJpaTestEntity>)null, PageRequest.of(0, 10));
+        Page<MyJpaTestEntity> page =
+            repository.findNotDeletedAll((Specification<MyJpaTestEntity>)null, PageRequest.of(0, 10));
         assertEquals(1, page.getTotalElements());
     }
 
@@ -179,8 +178,8 @@ class MyJpaRepositoryBranchTest {
         e2.setName("cnt");
         e2.setDeleted(true);
         repository.save(e2);
-        long count = repository.countNotDeleted(
-            (Specification<MyJpaTestEntity>)(root, query, cb) -> cb.equal(root.get("name"), "cnt"));
+        long count = repository
+            .countNotDeleted((Specification<MyJpaTestEntity>)(root, query, cb) -> cb.equal(root.get("name"), "cnt"));
         assertEquals(1, count);
     }
 
@@ -282,8 +281,8 @@ class MyJpaRepositoryBranchTest {
         SimpleTestEntity e1 = new SimpleTestEntity();
         e1.setName("simple");
         simpleRepository.save(e1);
-        List<SimpleTestEntity> result = simpleRepository.findNotDeletedAll(
-            (Specification<SimpleTestEntity>)(root, query, cb) -> cb.conjunction());
+        List<SimpleTestEntity> result =
+            simpleRepository.findNotDeletedAll((Specification<SimpleTestEntity>)(root, query, cb) -> cb.conjunction());
         assertTrue(result.size() >= 1);
     }
 
@@ -306,23 +305,27 @@ class MyJpaRepositoryBranchTest {
         e2.setName("a");
         e2.setDeleted(false);
         repository.save(e2);
-        List<MyJpaTestEntity> result = repository.findAll(s -> s.eq(MyJpaTestEntity::getDeleted, false), Sort.by("name"));
+        List<MyJpaTestEntity> result =
+            repository.findAll(s -> s.eq(MyJpaTestEntity::getDeleted, false), Sort.by("name"));
         assertEquals(2, result.size());
         assertEquals("a", result.get(0).getName());
     }
 
     @Test
     void testExecute_nullUpdateSpec_throws() {
-        assertThrows(Exception.class, () -> repository.execute((com.zsubera.jpa.update.UpdateSpec<MyJpaTestEntity>)null));
+        assertThrows(Exception.class,
+            () -> repository.execute((com.zsubera.jpa.update.UpdateSpec<MyJpaTestEntity>)null));
     }
 
     @Test
     void testExecute_nullDeleteSpec_throws() {
-        assertThrows(Exception.class, () -> repository.execute((com.zsubera.jpa.update.DeleteSpec<MyJpaTestEntity>)null));
+        assertThrows(Exception.class,
+            () -> repository.execute((com.zsubera.jpa.update.DeleteSpec<MyJpaTestEntity>)null));
     }
 
     @Test
     void testExecute_nullMergeSpec_throws() {
-        assertThrows(Exception.class, () -> repository.execute((com.zsubera.jpa.update.MergeSpec<MyJpaTestEntity>)null));
+        assertThrows(Exception.class,
+            () -> repository.execute((com.zsubera.jpa.update.MergeSpec<MyJpaTestEntity>)null));
     }
 }

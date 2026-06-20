@@ -97,7 +97,9 @@ class EntityManagerHelperFinalTest {
 
         // Register two resolvers - one throws
         EntityManagerHelper.registerResolver(String.class, type -> entityManagerFactory);
-        EntityManagerHelper.registerResolver(Integer.class, type -> { throw new RuntimeException("fail"); });
+        EntityManagerHelper.registerResolver(Integer.class, type -> {
+            throw new RuntimeException("fail");
+        });
 
         // Remove the good one - remaining resolver throws
         EntityManagerHelper.removeResolver(String.class);
@@ -216,14 +218,12 @@ class EntityManagerHelperFinalTest {
 
     @Test
     void registerResolver_nullEntityType_throws() {
-        assertThrows(NullPointerException.class,
-            () -> EntityManagerHelper.registerResolver(null, type -> null));
+        assertThrows(NullPointerException.class, () -> EntityManagerHelper.registerResolver(null, type -> null));
     }
 
     @Test
     void registerResolver_nullResolver_throws() {
-        assertThrows(NullPointerException.class,
-            () -> EntityManagerHelper.registerResolver(String.class, null));
+        assertThrows(NullPointerException.class, () -> EntityManagerHelper.registerResolver(String.class, null));
     }
 
     @Test

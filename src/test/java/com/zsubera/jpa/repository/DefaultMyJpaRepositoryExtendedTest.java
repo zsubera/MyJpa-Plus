@@ -202,8 +202,7 @@ class DefaultMyJpaRepositoryExtendedTest {
         SoftDeleteRepoTestEntity entity = saveEntity("a", false);
         DefaultMyJpaRepository.setAutoFilterEnabled(false);
         DefaultMyJpaRepository.setBlockUnconditionalDelete(true);
-        assertThrows(Exception.class,
-            () -> repository.deleteAllById(Arrays.asList(entity.getId())));
+        assertThrows(Exception.class, () -> repository.deleteAllById(Arrays.asList(entity.getId())));
     }
 
     @Test
@@ -352,9 +351,14 @@ class DefaultMyJpaRepositoryExtendedTest {
         try {
             DefaultMyJpaRepository.ConfigProvider provider = new DefaultMyJpaRepository.ConfigProvider() {
                 @Override
-                public boolean isAutoFilterEnabled() { return true; }
+                public boolean isAutoFilterEnabled() {
+                    return true;
+                }
+
                 @Override
-                public boolean isBlockUnconditionalDelete() { return true; }
+                public boolean isBlockUnconditionalDelete() {
+                    return true;
+                }
             };
             f.set(null, provider);
             DefaultMyJpaRepository.setAutoFilterEnabled(false);
@@ -402,9 +406,14 @@ class DefaultMyJpaRepositoryExtendedTest {
         try {
             DefaultMyJpaRepository.ConfigProvider provider = new DefaultMyJpaRepository.ConfigProvider() {
                 @Override
-                public boolean isAutoFilterEnabled() { return true; }
+                public boolean isAutoFilterEnabled() {
+                    return true;
+                }
+
                 @Override
-                public boolean isBlockUnconditionalDelete() { return true; }
+                public boolean isBlockUnconditionalDelete() {
+                    return true;
+                }
             };
             f.set(null, provider);
             DefaultMyJpaRepository.setBlockUnconditionalDelete(false);

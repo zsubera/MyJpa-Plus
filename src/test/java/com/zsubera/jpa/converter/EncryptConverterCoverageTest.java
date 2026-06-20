@@ -7,8 +7,6 @@ import java.lang.reflect.Method;
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
 import java.util.concurrent.ConcurrentHashMap;
-import javax.crypto.Cipher;
-import javax.crypto.SecretKey;
 import javax.crypto.spec.SecretKeySpec;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -47,10 +45,10 @@ class EncryptConverterCoverageTest {
         f.setAccessible(true);
         f.set(null, false);
         EncryptConverter.validateKeyConfiguration();
-        assertTrue((boolean) f.get(null));
+        assertTrue((boolean)f.get(null));
         // Second call should hit synchronized block early return
         EncryptConverter.validateKeyConfiguration();
-        assertTrue((boolean) f.get(null));
+        assertTrue((boolean)f.get(null));
     }
 
     @Test
@@ -65,7 +63,8 @@ class EncryptConverterCoverageTest {
             EncryptConverter.validateKeyConfiguration();
         } finally {
             System.clearProperty("myjpa.encrypt.key");
-            if (oldEnv != null) System.setProperty("myjpa.encrypt.key", oldEnv);
+            if (oldEnv != null)
+                System.setProperty("myjpa.encrypt.key", oldEnv);
         }
     }
 
@@ -89,8 +88,8 @@ class EncryptConverterCoverageTest {
     void getKeyVersion_cacheHitInSynchronizedBlock() throws Exception {
         Method m = EncryptConverter.class.getDeclaredMethod("getKeyVersion");
         m.setAccessible(true);
-        String v1 = (String) m.invoke(null);
-        String v2 = (String) m.invoke(null);
+        String v1 = (String)m.invoke(null);
+        String v2 = (String)m.invoke(null);
         assertEquals(v1, v2);
     }
 
@@ -157,7 +156,7 @@ class EncryptConverterCoverageTest {
         // Without SALT_ENV set, should check SALT_PROPERTY
         System.clearProperty("myjpa.encrypt.salt");
         System.setProperty("myjpa-plus.encrypt.skip-salt-check", "true");
-        assertTrue((boolean) m.invoke(null));
+        assertTrue((boolean)m.invoke(null));
     }
 
     @Test
@@ -166,7 +165,7 @@ class EncryptConverterCoverageTest {
         m.setAccessible(true);
         System.setProperty("myjpa.encrypt.salt", "my-salt");
         try {
-            assertFalse((boolean) m.invoke(null));
+            assertFalse((boolean)m.invoke(null));
         } finally {
             System.clearProperty("myjpa.encrypt.salt");
         }
@@ -181,7 +180,7 @@ class EncryptConverterCoverageTest {
         // Can't set env vars, but we can test the property path
         System.setProperty("myjpa-plus.encrypt.require-salt", "true");
         try {
-            assertTrue((boolean) m.invoke(null));
+            assertTrue((boolean)m.invoke(null));
         } finally {
             System.clearProperty("myjpa-plus.encrypt.require-salt");
         }
@@ -193,7 +192,7 @@ class EncryptConverterCoverageTest {
         m.setAccessible(true);
         System.setProperty("spring.profiles.active", "prod");
         try {
-            assertTrue((boolean) m.invoke(null));
+            assertTrue((boolean)m.invoke(null));
         } finally {
             System.clearProperty("spring.profiles.active");
         }
@@ -205,7 +204,7 @@ class EncryptConverterCoverageTest {
         m.setAccessible(true);
         System.setProperty("spring.profiles.active", "dev");
         try {
-            assertFalse((boolean) m.invoke(null));
+            assertFalse((boolean)m.invoke(null));
         } finally {
             System.clearProperty("spring.profiles.active");
         }
@@ -236,7 +235,7 @@ class EncryptConverterCoverageTest {
         System.setProperty("myjpa-plus.encrypt.skip-salt-check", "true");
         System.clearProperty("myjpa-plus.encrypt.require-salt");
         try {
-            byte[] salt = (byte[]) m.invoke(null);
+            byte[] salt = (byte[])m.invoke(null);
             assertNotNull(salt);
             assertArrayEquals("myjpa-plus-dev-salt-2024".getBytes(StandardCharsets.UTF_8), salt);
         } finally {
@@ -256,7 +255,7 @@ class EncryptConverterCoverageTest {
         // reEncrypt should validate key first
         String reEncrypted = EncryptConverter.reEncrypt(encrypted);
         assertNotNull(reEncrypted);
-        assertTrue((boolean) f.get(null));
+        assertTrue((boolean)f.get(null));
     }
 
     // ---- warmUpKeyCacheSync: exception path ----
@@ -275,7 +274,8 @@ class EncryptConverterCoverageTest {
         } catch (Exception e) {
             fail(e);
         } finally {
-            if (oldKey != null) System.setProperty("myjpa.encrypt.key", oldKey);
+            if (oldKey != null)
+                System.setProperty("myjpa.encrypt.key", oldKey);
             EncryptConverter.clearCacheForTesting();
         }
     }
@@ -288,7 +288,7 @@ class EncryptConverterCoverageTest {
         EncryptConverter.clearCacheForTesting();
         Method m = EncryptConverter.class.getDeclaredMethod("getKeyVersion");
         m.setAccessible(true);
-        String version = (String) m.invoke(null);
+        String version = (String)m.invoke(null);
         assertEquals("v3", version);
         System.clearProperty("myjpa.encrypt.key.version");
     }
@@ -299,7 +299,7 @@ class EncryptConverterCoverageTest {
         EncryptConverter.clearCacheForTesting();
         Method m = EncryptConverter.class.getDeclaredMethod("getKeyVersion");
         m.setAccessible(true);
-        String version = (String) m.invoke(null);
+        String version = (String)m.invoke(null);
         assertEquals("v1", version);
     }
 
@@ -314,7 +314,7 @@ class EncryptConverterCoverageTest {
         // Can't set env vars, but we can test the property path
         System.setProperty("myjpa-plus.encrypt.skip-salt-check", "true");
         try {
-            assertTrue((boolean) m.invoke(null));
+            assertTrue((boolean)m.invoke(null));
         } finally {
             System.setProperty("myjpa-plus.encrypt.skip-salt-check", "true");
         }
@@ -329,7 +329,7 @@ class EncryptConverterCoverageTest {
         // Can't set env vars, but we can test the property path
         System.setProperty("spring.profiles.active", "prod");
         try {
-            assertTrue((boolean) m.invoke(null));
+            assertTrue((boolean)m.invoke(null));
         } finally {
             System.clearProperty("spring.profiles.active");
         }
@@ -421,7 +421,7 @@ class EncryptConverterCoverageTest {
     @Test
     void convertToEntityAttribute_shortData() {
         EncryptConverter converter = new EncryptConverter();
-        String shortData = Base64.getEncoder().encodeToString(new byte[]{1, 2, 3});
+        String shortData = Base64.getEncoder().encodeToString(new byte[] {1, 2, 3});
         assertThrows(Exception.class, () -> converter.convertToEntityAttribute("v1:" + shortData));
     }
 
@@ -504,11 +504,11 @@ class EncryptConverterCoverageTest {
     void isProdProfile_various() throws Exception {
         Method m = EncryptConverter.class.getDeclaredMethod("isProdProfile", String.class);
         m.setAccessible(true);
-        assertTrue((boolean) m.invoke(null, "prod"));
-        assertTrue((boolean) m.invoke(null, "production"));
-        assertTrue((boolean) m.invoke(null, "dev,prod,qa"));
-        assertTrue((boolean) m.invoke(null, "PROD"));
-        assertFalse((boolean) m.invoke(null, "dev"));
-        assertFalse((boolean) m.invoke(null, "reproduction"));
+        assertTrue((boolean)m.invoke(null, "prod"));
+        assertTrue((boolean)m.invoke(null, "production"));
+        assertTrue((boolean)m.invoke(null, "dev,prod,qa"));
+        assertTrue((boolean)m.invoke(null, "PROD"));
+        assertFalse((boolean)m.invoke(null, "dev"));
+        assertFalse((boolean)m.invoke(null, "reproduction"));
     }
 }

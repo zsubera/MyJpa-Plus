@@ -60,8 +60,8 @@ class RepositoryFinalPushTest {
     @Test
     void simpleEntity_findAll_withSpec() {
         SimpleTestEntity e = saveSimple("a");
-        assertEquals(1, simpleRepository.findAll(
-            (Specification<SimpleTestEntity>)(root, query, cb) -> cb.conjunction()).size());
+        assertEquals(1,
+            simpleRepository.findAll((Specification<SimpleTestEntity>)(root, query, cb) -> cb.conjunction()).size());
     }
 
     @Test
@@ -73,8 +73,7 @@ class RepositoryFinalPushTest {
     @Test
     void simpleEntity_findAll_withSpecAndPageable() {
         SimpleTestEntity e = saveSimple("a");
-        var page = simpleRepository.findAll(
-            (Specification<SimpleTestEntity>)(root, query, cb) -> cb.conjunction(),
+        var page = simpleRepository.findAll((Specification<SimpleTestEntity>)(root, query, cb) -> cb.conjunction(),
             org.springframework.data.domain.PageRequest.of(0, 10));
         assertEquals(1, page.getTotalElements());
     }
@@ -82,30 +81,27 @@ class RepositoryFinalPushTest {
     @Test
     void simpleEntity_findAll_withSpecAndSort() {
         SimpleTestEntity e = saveSimple("a");
-        assertEquals(1, simpleRepository.findAll(
-            (Specification<SimpleTestEntity>)(root, query, cb) -> cb.conjunction(),
+        assertEquals(1, simpleRepository.findAll((Specification<SimpleTestEntity>)(root, query, cb) -> cb.conjunction(),
             org.springframework.data.domain.Sort.by("name")).size());
     }
 
     @Test
     void simpleEntity_findOne() {
         SimpleTestEntity e = saveSimple("a");
-        assertTrue(simpleRepository.findOne(
-            (Specification<SimpleTestEntity>)(root, query, cb) -> cb.conjunction()).isPresent());
+        assertTrue(simpleRepository.findOne((Specification<SimpleTestEntity>)(root, query, cb) -> cb.conjunction())
+            .isPresent());
     }
 
     @Test
     void simpleEntity_count() {
         SimpleTestEntity e = saveSimple("a");
-        assertEquals(1, simpleRepository.count(
-            (Specification<SimpleTestEntity>)(root, query, cb) -> cb.conjunction()));
+        assertEquals(1, simpleRepository.count((Specification<SimpleTestEntity>)(root, query, cb) -> cb.conjunction()));
     }
 
     @Test
     void simpleEntity_exists() {
         SimpleTestEntity e = saveSimple("a");
-        assertTrue(simpleRepository.exists(
-            (Specification<SimpleTestEntity>)(root, query, cb) -> cb.conjunction()));
+        assertTrue(simpleRepository.exists((Specification<SimpleTestEntity>)(root, query, cb) -> cb.conjunction()));
     }
 
     @Test
@@ -137,8 +133,8 @@ class RepositoryFinalPushTest {
     @Test
     void simpleEntity_findNotDeletedAll_withSpec() {
         SimpleTestEntity e = saveSimple("a");
-        assertEquals(1, simpleRepository.findNotDeletedAll(
-            (Specification<SimpleTestEntity>)(root, query, cb) -> cb.conjunction()).size());
+        assertEquals(1, simpleRepository
+            .findNotDeletedAll((Specification<SimpleTestEntity>)(root, query, cb) -> cb.conjunction()).size());
     }
 
     @Test
@@ -161,8 +157,8 @@ class RepositoryFinalPushTest {
     @Test
     void simpleEntity_findNotDeletedOne_withSpec() {
         SimpleTestEntity e = saveSimple("a");
-        assertTrue(simpleRepository.findNotDeletedOne(
-            (Specification<SimpleTestEntity>)(root, query, cb) -> cb.conjunction()).isPresent());
+        assertTrue(simpleRepository
+            .findNotDeletedOne((Specification<SimpleTestEntity>)(root, query, cb) -> cb.conjunction()).isPresent());
     }
 
     @Test
@@ -174,8 +170,8 @@ class RepositoryFinalPushTest {
     @Test
     void simpleEntity_countNotDeleted_withSpec() {
         SimpleTestEntity e = saveSimple("a");
-        assertEquals(1, simpleRepository.countNotDeleted(
-            (Specification<SimpleTestEntity>)(root, query, cb) -> cb.conjunction()));
+        assertEquals(1,
+            simpleRepository.countNotDeleted((Specification<SimpleTestEntity>)(root, query, cb) -> cb.conjunction()));
     }
 
     @Test
@@ -310,8 +306,8 @@ class RepositoryFinalPushTest {
         saveSoftDeleteDeleted("deleted");
         SoftDeleteContext.pushIgnore();
         try {
-            assertEquals(2, repository.findAll(
-                (Specification<SoftDeleteRepoTestEntity>)(root, query, cb) -> cb.conjunction()).size());
+            assertEquals(2, repository
+                .findAll((Specification<SoftDeleteRepoTestEntity>)(root, query, cb) -> cb.conjunction()).size());
         } finally {
             SoftDeleteContext.popIgnore();
         }
@@ -323,9 +319,9 @@ class RepositoryFinalPushTest {
         saveSoftDeleteDeleted("deleted");
         SoftDeleteContext.pushIgnore();
         try {
-            assertEquals(2, repository.findAll(
-                (Specification<SoftDeleteRepoTestEntity>)(root, query, cb) -> cb.conjunction(),
-                org.springframework.data.domain.PageRequest.of(0, 10)).getTotalElements());
+            assertEquals(2,
+                repository.findAll((Specification<SoftDeleteRepoTestEntity>)(root, query, cb) -> cb.conjunction(),
+                    org.springframework.data.domain.PageRequest.of(0, 10)).getTotalElements());
         } finally {
             SoftDeleteContext.popIgnore();
         }
@@ -337,9 +333,9 @@ class RepositoryFinalPushTest {
         saveSoftDeleteDeleted("deleted");
         SoftDeleteContext.pushIgnore();
         try {
-            assertEquals(2, repository.findAll(
-                (Specification<SoftDeleteRepoTestEntity>)(root, query, cb) -> cb.conjunction(),
-                org.springframework.data.domain.Sort.by("name")).size());
+            assertEquals(2,
+                repository.findAll((Specification<SoftDeleteRepoTestEntity>)(root, query, cb) -> cb.conjunction(),
+                    org.springframework.data.domain.Sort.by("name")).size());
         } finally {
             SoftDeleteContext.popIgnore();
         }

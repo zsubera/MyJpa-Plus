@@ -108,7 +108,7 @@ class EncryptConverterExtendedTest {
     @Test
     void convertToEntityAttribute_shortData() {
         EncryptConverter converter = new EncryptConverter();
-        String shortData = Base64.getEncoder().encodeToString(new byte[]{1, 2, 3});
+        String shortData = Base64.getEncoder().encodeToString(new byte[] {1, 2, 3});
         assertThrows(Exception.class, () -> converter.convertToEntityAttribute("v1:" + shortData));
     }
 
@@ -153,7 +153,7 @@ class EncryptConverterExtendedTest {
         try {
             Method m = EncryptConverter.class.getDeclaredMethod("isUsingDevSalt");
             m.setAccessible(true);
-            assertFalse((boolean) m.invoke(null));
+            assertFalse((boolean)m.invoke(null));
         } finally {
             System.clearProperty("myjpa.encrypt.salt");
         }
@@ -166,7 +166,7 @@ class EncryptConverterExtendedTest {
         try {
             Method m = EncryptConverter.class.getDeclaredMethod("isUsingDevSalt");
             m.setAccessible(true);
-            assertTrue((boolean) m.invoke(null));
+            assertTrue((boolean)m.invoke(null));
         } finally {
             System.setProperty("myjpa-plus.encrypt.skip-salt-check", "true");
         }
@@ -179,7 +179,7 @@ class EncryptConverterExtendedTest {
         try {
             Method m = EncryptConverter.class.getDeclaredMethod("isUsingDevSalt");
             m.setAccessible(true);
-            assertFalse((boolean) m.invoke(null));
+            assertFalse((boolean)m.invoke(null));
         } finally {
             System.setProperty("myjpa-plus.encrypt.skip-salt-check", "true");
         }
@@ -191,7 +191,7 @@ class EncryptConverterExtendedTest {
         try {
             Method m = EncryptConverter.class.getDeclaredMethod("isProductionEnvironment");
             m.setAccessible(true);
-            assertTrue((boolean) m.invoke(null));
+            assertTrue((boolean)m.invoke(null));
         } finally {
             System.clearProperty("myjpa-plus.encrypt.require-salt");
         }
@@ -203,7 +203,7 @@ class EncryptConverterExtendedTest {
         try {
             Method m = EncryptConverter.class.getDeclaredMethod("isProductionEnvironment");
             m.setAccessible(true);
-            assertTrue((boolean) m.invoke(null));
+            assertTrue((boolean)m.invoke(null));
         } finally {
             System.clearProperty("spring.profiles.active");
         }
@@ -215,7 +215,7 @@ class EncryptConverterExtendedTest {
         try {
             Method m = EncryptConverter.class.getDeclaredMethod("isProductionEnvironment");
             m.setAccessible(true);
-            assertFalse((boolean) m.invoke(null));
+            assertFalse((boolean)m.invoke(null));
         } finally {
             System.clearProperty("spring.profiles.active");
         }
@@ -243,8 +243,8 @@ class EncryptConverterExtendedTest {
         EncryptConverter.clearCacheForTesting();
         Method m = EncryptConverter.class.getDeclaredMethod("getKeyVersion");
         m.setAccessible(true);
-        String v1 = (String) m.invoke(null);
-        String v2 = (String) m.invoke(null);
+        String v1 = (String)m.invoke(null);
+        String v2 = (String)m.invoke(null);
         assertEquals(v1, v2);
         assertEquals("v2", v1);
         System.clearProperty("myjpa.encrypt.key.version");
@@ -330,7 +330,7 @@ class EncryptConverterExtendedTest {
         try {
             Method m = EncryptConverter.class.getDeclaredMethod("getSalt");
             m.setAccessible(true);
-            byte[] salt = (byte[]) m.invoke(null);
+            byte[] salt = (byte[])m.invoke(null);
             assertNotNull(salt);
             assertArrayEquals("my-salt-value".getBytes(StandardCharsets.UTF_8), salt);
         } finally {
@@ -355,11 +355,11 @@ class EncryptConverterExtendedTest {
     void isProdProfile_various() throws Exception {
         Method m = EncryptConverter.class.getDeclaredMethod("isProdProfile", String.class);
         m.setAccessible(true);
-        assertTrue((boolean) m.invoke(null, "prod"));
-        assertTrue((boolean) m.invoke(null, "production"));
-        assertTrue((boolean) m.invoke(null, "dev,prod,qa"));
-        assertTrue((boolean) m.invoke(null, "PROD"));
-        assertFalse((boolean) m.invoke(null, "dev"));
-        assertFalse((boolean) m.invoke(null, "reproduction"));
+        assertTrue((boolean)m.invoke(null, "prod"));
+        assertTrue((boolean)m.invoke(null, "production"));
+        assertTrue((boolean)m.invoke(null, "dev,prod,qa"));
+        assertTrue((boolean)m.invoke(null, "PROD"));
+        assertFalse((boolean)m.invoke(null, "dev"));
+        assertFalse((boolean)m.invoke(null, "reproduction"));
     }
 }

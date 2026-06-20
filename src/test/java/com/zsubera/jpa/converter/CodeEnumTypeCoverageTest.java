@@ -16,34 +16,62 @@ class CodeEnumTypeCoverageTest {
 
     enum LongCodeEnum {
         A(100L), B(200L);
+
         @CodeEnumValue
         private final Long code;
-        LongCodeEnum(Long code) { this.code = code; }
-        public Long getCode() { return code; }
+
+        LongCodeEnum(Long code) {
+            this.code = code;
+        }
+
+        public Long getCode() {
+            return code;
+        }
     }
 
     enum IntCodeEnum {
         ACTIVE(0), DELETED(1);
+
         @CodeEnumValue
         private final int code;
-        IntCodeEnum(int code) { this.code = code; }
-        public int getCode() { return code; }
+
+        IntCodeEnum(int code) {
+            this.code = code;
+        }
+
+        public int getCode() {
+            return code;
+        }
     }
 
     enum StringCodeEnum {
         MALE("M"), FEMALE("F");
+
         @CodeEnumValue
         private final String code;
-        StringCodeEnum(String code) { this.code = code; }
-        public String getCode() { return code; }
+
+        StringCodeEnum(String code) {
+            this.code = code;
+        }
+
+        public String getCode() {
+            return code;
+        }
     }
 
     enum CharCodeEnum {
         A('X'), B('Y');
+
         @CodeEnumValue
         private final Character code;
-        CharCodeEnum(Character code) { this.code = code; }
-        public Character getCode() { return code; }
+
+        CharCodeEnum(Character code) {
+            this.code = code;
+        }
+
+        public Character getCode() {
+            return code;
+        }
     }
 
     enum NoAnnotationEnum {
@@ -382,7 +410,7 @@ class CodeEnumTypeCoverageTest {
         m.setAccessible(true);
         @SuppressWarnings("unchecked")
         java.util.concurrent.ConcurrentMap<String, Object> map =
-            (java.util.concurrent.ConcurrentMap<String, Object>) m.invoke(type);
+            (java.util.concurrent.ConcurrentMap<String, Object>)m.invoke(type);
         assertNotNull(map);
         assertEquals(StringCodeEnum.MALE, map.get("M"));
         assertEquals(StringCodeEnum.FEMALE, map.get("F"));

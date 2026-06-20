@@ -7,12 +7,10 @@ import com.zsubera.jpa.annotation.RetryOnOptimisticLock;
 import jakarta.persistence.OptimisticLockException;
 import jakarta.persistence.PersistenceException;
 import java.lang.reflect.Method;
-import java.util.concurrent.atomic.AtomicInteger;
 import org.aspectj.lang.ProceedingJoinPoint;
 import org.aspectj.lang.reflect.MethodSignature;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.springframework.test.util.AopTestUtils;
 
 class OptimisticLockRetryAdvisorMockTest {
 
@@ -59,10 +57,8 @@ class OptimisticLockRetryAdvisorMockTest {
         Method method = RetryableService.class.getMethod("retry");
         when(pjp.getSignature()).thenReturn(signature);
         when(signature.getMethod()).thenReturn(method);
-        when(pjp.proceed())
-            .thenThrow(new OptimisticLockException("lock"))
-            .thenThrow(new OptimisticLockException("lock"))
-            .thenReturn("success");
+        when(pjp.proceed()).thenThrow(new OptimisticLockException("lock"))
+            .thenThrow(new OptimisticLockException("lock")).thenReturn("success");
 
         Object result = advisor.retryOnOptimisticLock(pjp);
         assertEquals("success", result);
@@ -88,8 +84,7 @@ class OptimisticLockRetryAdvisorMockTest {
         Method method = RetryableService.class.getMethod("retry");
         when(pjp.getSignature()).thenReturn(signature);
         when(signature.getMethod()).thenReturn(method);
-        when(pjp.proceed())
-            .thenThrow(new PersistenceException("wrapped", new OptimisticLockException("cause")))
+        when(pjp.proceed()).thenThrow(new PersistenceException("wrapped", new OptimisticLockException("cause")))
             .thenReturn("success");
 
         Object result = advisor.retryOnOptimisticLock(pjp);
@@ -179,13 +174,19 @@ class OptimisticLockRetryAdvisorMockTest {
 
     static class RetryableService {
         @RetryOnOptimisticLock(maxRetries = 2, backoffMs = 10)
-        public Object retry() throws Throwable { return "ok"; }
+        public Object retry() throws Throwable {
+            return "ok";
+        }
 
         @RetryOnOptimisticLock(maxRetries = 0, backoffMs = 10)
-        public Object zeroRetries() throws Throwable { return "ok"; }
+        public Object zeroRetries() throws Throwable {
+            return "ok";
+        }
     }
 
     static class NoAnnotationService {
-        public Object noAnnotation() { return "ok"; }
+        public Object noAnnotation() {
+            return "ok";
+        }
     }
 }
