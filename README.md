@@ -6,14 +6,14 @@
 
 [![Maven Central](https://img.shields.io/maven-central/v/io.github.zsubera/myjpa-plus?style=flat-square&logo=apachemaven&logoColor=white)](https://central.sonatype.com/artifact/io.github.zsubera/myjpa-plus)
 [![构建状态](https://img.shields.io/github/actions/workflow/status/zsubera/myjpa-plus/ci.yml?style=flat-square&logo=githubactions&logoColor=white)](https://github.com/zsubera/MyJpa-Plus/actions)
-[![测试覆盖率](https://img.shields.io/badge/coverage-60%25%2B-brightgreen?style=flat-square)](https://github.com/zsubera/MyJpa-Plus/actions)
+[![测试覆盖率](https://img.shields.io/badge/coverage-86%25%2B-brightgreen?style=flat-square)](https://github.com/zsubera/MyJpa-Plus/actions)
 [![许可证](https://img.shields.io/badge/license-Apache%202.0-blue.svg?style=flat-square)](LICENSE)
 [![JDK](https://img.shields.io/badge/JDK-17%2B-green.svg?style=flat-square&logo=openjdk&logoColor=white)](https://adoptium.net)
 [![Spring Boot](https://img.shields.io/badge/Spring%20Boot-3.x-brightgreen?style=flat-square&logo=springboot&logoColor=white)](https://spring.io/projects/spring-boot)
 
 ---
 
-**专为 Spring Data JPA 设计，提供查询构建、批量操作、UPSERT/MERGE、CTE、投影查询、字段加密/脱敏、SQL 慢查询监控、乐观锁自动重试、查询缓存和代码生成。**
+**专为 Spring Data JPA 设计，提供查询构建、批量操作、UPSERT/MERGE、CTE、投影查询、字段加密/脱敏、SQL 慢查询监控、乐观锁自动重试、聚合查询、查询缓存和代码生成。**
 
 [快速开始](#快速开始) · [特性概览](#特性) · [API 文档](#api-一览) · [迁移指南](./MIGRATION.md)
 
@@ -310,6 +310,21 @@ myjpa-plus:
 | 执行 | `execute(spec)`, `executeWithMaxRows(spec, maxRows)` |
 | 分批 | `executeBatch(spec, batchSize)`, `executeBatchInSeparateTransactions(spec, batchSize)` |
 | 保存 | `saveAllBatched(entities, batchSize)` |
+
+</details>
+
+<details>
+<summary><b>QueryAggregates（聚合工具）</b></summary>
+
+| 方法 | 说明 |
+|:---|:---|
+| `count(root)` | COUNT(*) |
+| `count(root, field)` | COUNT(field) |
+| `countDistinct(root, field)` | COUNT(DISTINCT field) |
+| `sum(root, field)` | SUM(field) |
+| `avg(root, field)` | AVG(field) |
+| `max(root, field)` | MAX(field) |
+| `min(root, field)` | MIN(field) |
 
 </details>
 

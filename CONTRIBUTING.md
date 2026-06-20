@@ -37,16 +37,19 @@ cd myjpa-plus
 
 | 包 | 职责 |
 |---|---|
-| `com.zsubera.jpa.spec` | 核心查询构建：QuerySpec、ConditionBuilder（含子接口）、ConditionNode、NodeResolver、CteSpec |
-| `com.zsubera.jpa.update` | 批量操作：UpdateSpec、DeleteSpec、MergeSpec |
-| `com.zsubera.jpa.repository` | 扩展 Repository：MyJpaRepository、DefaultMyJpaRepository、EntityManagerHelper、EntityManagerResolver |
+| `com.zsubera.jpa.spec` | 核心查询构建：QuerySpec、ConditionBuilder（含子接口）、ConditionNode、NodeResolver、CteSpec、QueryAggregates |
+| `com.zsubera.jpa.update` | 批量操作：UpdateSpec、DeleteSpec、MergeSpec、DialectDetector、DialectStrategy |
+| `com.zsubera.jpa.repository` | 扩展 Repository：MyJpaRepository、DefaultMyJpaRepository、SoftDeleteContext、EntityManagerHelper、EntityManagerResolver、OptimisticLockRetryAdvisor、IgnoreSoftDeleteAdvisor |
 | `com.zsubera.jpa.projection` | 投影查询：ProjectionSpec |
-| `com.zsubera.jpa.template` | 模板与缓存：MyJpaTemplate、QueryCacheManager |
+| `com.zsubera.jpa.template` | 模板与缓存：MyJpaTemplate、BulkOperationTemplate、BatchSaveTemplate、KeysetPaginationHelper、QueryCacheManager |
 | `com.zsubera.jpa.converter` | 枚举转换与序列化：@CodeEnum、@CodeEnumValue、CodeEnumType、EncryptConverter、MaskSerializer |
-| `com.zsubera.jpa.annotation` | 注解：@SoftDelete、@IgnoreSoftDelete、@Encrypt、@Mask、@RetryOnOptimisticLock |
-| `com.zsubera.jpa.monitor` | SQL 监控：SqlSlowQueryInterceptor |
+| `com.zsubera.jpa.annotation` | 注解：@SoftDelete、@IgnoreSoftDelete、@Encrypt、@Mask、@RetryOnOptimisticLock、@CodeEnumValue |
+| `com.zsubera.jpa.autoconfigure` | 自动配置：GlobalConfigHolder、MyJpaPlusAutoConfiguration、SoftDeleteFilterBean、MyJpaPlusProperties |
+| `com.zsubera.jpa.monitor` | SQL 监控：SqlSlowQueryInterceptor、QueryMetricsCollector |
 | `com.zsubera.jpa.codegen` | 代码生成：EntityCodeGenerator |
-| `com.zsubera.jpa.util` | 工具类：LambdaUtils、InClauseBuilder |
+| `com.zsubera.jpa.exception` | 异常类：MyJpaPlusException、QueryBuildException、BulkOperationException、DataAccessException、SecurityViolationException、TimeoutException |
+| `com.zsubera.jpa.softdelete` | 软删除：SoftDeleteHelper |
+| `com.zsubera.jpa.util` | 工具类：LambdaUtils、IdentifierValidator、InClauseBuilder、EntityClassResolver、EntityGraphHelper |
 
 ## 代码风格
 
@@ -108,7 +111,7 @@ cd myjpa-plus
 - [ ] 格式检查通过：`./mvnw spotless:check`
 - [ ] 构建通过：`./mvnw clean verify -Dgpg.skip=true -Ddependency-check.skip=true`
 - [ ] SpotBugs 检查通过（Medium 阈值）
-- [ ] JaCoCo 覆盖率 >= 48%
+- [ ] JaCoCo 覆盖率 >= 90% LINE（spec, update, repository, projection, template, annotation, autoconfigure, codegen, converter, exception, monitor, softdelete, util）
 - [ ] 为新增功能添加了测试
 - [ ] 已更新 CHANGELOG.md
 - [ ] 已更新 README.md（如有 API 变更）
