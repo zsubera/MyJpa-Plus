@@ -414,6 +414,9 @@ public class DefaultMyJpaRepository<T, ID> extends SimpleJpaRepository<T, ID> im
         String idFieldName = EntityClassResolver.resolveIdFieldName(domainClass);
         Specification<T> idSpec = Specification.where((root, query, cb) -> root.get(idFieldName).in(idList));
         Specification<T> softDeleteSpec = SoftDeleteHelper.isNotDeleted(domainClass);
+        if (softDeleteSpec == null) {
+            return findAll(idSpec);
+        }
         return findAll(idSpec.and(softDeleteSpec));
     }
 

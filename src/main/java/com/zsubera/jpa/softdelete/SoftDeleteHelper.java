@@ -313,11 +313,10 @@ public final class SoftDeleteHelper {
         }
         // 更新后检查：检测竞态条件导致的实际行数超限
         if (maxRows > 0 && updated > maxRows) {
-            log.warn(
-                "softDeleteAll affected {} rows, exceeding the pre-check limit of {}. "
-                    + "This may indicate a race condition between COUNT and UPDATE. "
-                    + "Consider using a transaction with explicit rollback if row limit is critical.",
-                updated, maxRows);
+            throw new IllegalStateException("softDeleteAll affected " + updated
+                + " rows, exceeding the pre-check limit of " + maxRows
+                + ". This indicates a race condition between COUNT and UPDATE. "
+                + "Consider using a transaction with pessimistic locking or softDeleteByIds() with explicit ID lists.");
         }
         if (updated > 0) {
             em.clear();

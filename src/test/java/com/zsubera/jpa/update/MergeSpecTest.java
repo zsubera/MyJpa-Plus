@@ -317,13 +317,15 @@ class MergeSpecTest {
     // ===== executeBatch 边界路径 =====
 
     @Test
-    void testExecuteBatchNullEntitiesReturnsZero() {
-        assertEquals(0, new MergeSpec<>(TestEntity.class).onConflict(TestEntity::getName).executeBatch(null, em));
+    void testExecuteBatchNullEntitiesThrows() {
+        assertThrows(IllegalArgumentException.class,
+            () -> new MergeSpec<>(TestEntity.class).onConflict(TestEntity::getName).executeBatch(null, em));
     }
 
     @Test
-    void testExecuteBatchEmptyEntitiesReturnsZero() {
-        assertEquals(0, new MergeSpec<>(TestEntity.class).onConflict(TestEntity::getName).executeBatch(List.of(), em));
+    void testExecuteBatchEmptyEntitiesThrows() {
+        assertThrows(IllegalArgumentException.class,
+            () -> new MergeSpec<>(TestEntity.class).onConflict(TestEntity::getName).executeBatch(List.of(), em));
     }
 
     @Test

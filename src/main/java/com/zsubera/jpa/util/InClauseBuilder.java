@@ -5,6 +5,7 @@ import jakarta.persistence.criteria.CriteriaBuilder;
 import jakarta.persistence.criteria.Path;
 import jakarta.persistence.criteria.Predicate;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicReference;
@@ -172,16 +173,7 @@ public final class InClauseBuilder {
     }
 
     private static NullFilterResult filterNulls(Object[] values) {
-        List<Object> nonNullValues = new ArrayList<>(values.length);
-        boolean hasNull = false;
-        for (Object v : values) {
-            if (v == null) {
-                hasNull = true;
-            } else {
-                nonNullValues.add(v);
-            }
-        }
-        return new NullFilterResult(nonNullValues, hasNull);
+        return filterNulls(Arrays.asList(values));
     }
 
     private static NullFilterResult filterNulls(Collection<?> values) {

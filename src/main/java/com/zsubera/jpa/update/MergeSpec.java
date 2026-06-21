@@ -342,7 +342,7 @@ public class MergeSpec<T> {
      */
     public int executeBatch(List<T> entities, EntityManager em) {
         if (entities == null || entities.isEmpty()) {
-            return 0;
+            throw new IllegalArgumentException("entities must not be null or empty");
         }
         return executeBatch(entities, em, 100);
     }

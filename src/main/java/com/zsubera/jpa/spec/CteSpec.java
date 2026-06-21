@@ -603,9 +603,9 @@ public class CteSpec {
     private static final Pattern COMMENT_INJECTION_PATTERN = Pattern.compile("/\\*|\\*/|--\\s");
     private static final Pattern SEMICOLON_INJECTION_PATTERN = Pattern.compile(";\\s*\\w");
 
-    /** UNION SELECT 注入检测模式。同时检测 UNION SELECT 和 UNION ALL SELECT。 */
+    /** UNION SELECT 注入检测模式。仅检测 UNION SELECT（不含 ALL），因为 UNION ALL 是递归 CTE 的合法语法。 */
     private static final Pattern UNION_SELECT_PATTERN =
-        Pattern.compile("\\bUNION(\\s+ALL)?\\s+SELECT\\b", Pattern.CASE_INSENSITIVE);
+        Pattern.compile("\\bUNION\\s+SELECT\\b", Pattern.CASE_INSENSITIVE);
 
     /** WAITFOR DELAY 时间盲注检测模式（SQL Server）。 */
     private static final Pattern WAITFOR_DELAY_PATTERN =

@@ -9,6 +9,7 @@ import java.security.SecureRandom;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.atomic.AtomicBoolean;
 import javax.crypto.Cipher;
 import javax.crypto.SecretKeyFactory;
 import javax.crypto.spec.GCMParameterSpec;
@@ -152,11 +153,11 @@ public class EncryptConverter implements AttributeConverter<String, String> {
     /** 加密数据版本前缀匹配模式（如 "v1"、"v2"）。 */
     private static final java.util.regex.Pattern VERSION_PATTERN = java.util.regex.Pattern.compile("v\\d+");
 
-    /** 跟踪密钥验证是否已执行的标志。 */
-    private static volatile boolean keyValidated = false;
+    /** 跟踪密钥验证是否已执行的标志。使用 AtomicBoolean 保证 check-then-act 原子性。 */
+    private static final AtomicBoolean KEY_VALIDATED = new AtomicBoolean(false);
 
-    /** 跟踪是否已记录过开发盐值警告（避免每次加密都记录）。 */
-    private static volatile boolean devSaltWarningLogged = false;
+    /** 跟踪是否已记录过开发盐值警告（避免每次加密都记录）。使用 AtomicBoolean 保证只记录一次。 */
+    private static final AtomicBoolean DEV_SALT_WARNING_LOGGED = new AtomicBoolean(false);
 
     /**
      * 清除当前线程的 Cipher 缓存。在请求结束后调用此方法可防止 ThreadLocal 泄漏。
@@ -180,8 +181,8 @@ public class EncryptConverter implements AttributeConverter<String, String> {
         KEY_CACHE.clear();
         cachedKeyVersion = null;
         lastKeyVersionRefresh = 0;
-        keyValidated = false;
-        devSaltWarningLogged = false;
+        KEY_VALIDATED.set(false);
+        DEV_SALT_WARNING_LOGGED.set(false);
     }
 
     /**
@@ -262,7 +263,7 @@ public class EncryptConverter implements AttributeConverter<String, String> {
             cachedKeyVersion = null;
             KEY_CACHE.clear();
             lastKeyVersionRefresh = System.currentTimeMillis();
-            devSaltWarningLogged = false;
+            DEV_SALT_WARNING_LOGGED.set(false);
         }
         log.info("Encryption key version cache refreshed");
     }
@@ -277,11 +278,11 @@ public class EncryptConverter implements AttributeConverter<String, String> {
      * 此方法使用 synchronized 保证仅执行一次验证（避免多线程重复验证）。
      */
     public static void validateKeyConfiguration() {
-        if (keyValidated) {
+        if (KEY_VALIDATED.get()) {
             return;
         }
         synchronized (EncryptConverter.class) {
-            if (keyValidated) {
+            if (KEY_VALIDATED.get()) {
                 return;
             }
             String keyEnv = System.getenv(KEY_ENV);
@@ -312,7 +313,7 @@ public class EncryptConverter implements AttributeConverter<String, String> {
                         + "Use environment variable '{}' for production environments.", KEY_PROPERTY, KEY_ENV);
                 }
             }
-            keyValidated = true;
+            KEY_VALIDATED.set(true);
         }
     }
 
@@ -367,12 +368,11 @@ public class EncryptConverter implements AttributeConverter<String, String> {
             return null;
         }
         // 加密前校验密钥配置以实现快速失败
-        if (!keyValidated) {
+        if (!KEY_VALIDATED.get()) {
             validateKeyConfiguration();
         }
         // 首次加密时检查是否使用开发盐值，发出一次性 CRITICAL 警告
-        if (!devSaltWarningLogged && isUsingDevSalt()) {
-            devSaltWarningLogged = true;
+        if (DEV_SALT_WARNING_LOGGED.compareAndSet(false, true) && isUsingDevSalt()) {
             log.error("CRITICAL: Encryption is using a predictable development salt! "
                 + "Encrypted data WILL NOT BE SECURE in production. "
                 + "Set environment variable {} or system property {} before deploying.", SALT_ENV, SALT_PROPERTY);
@@ -582,8 +582,9 @@ public class EncryptConverter implements AttributeConverter<String, String> {
     }
 
     private static void logVersionMismatch(String version) {
-        // 使用 java.util.logging 避免引入额外依赖
-        log.warn("Key version '{}' not found in multi-key configuration. Using primary key.", version);
+        log.warn("Key version '{}' requested but only a single key is configured. "
+            + "If using single-key mode, this warning is expected. " + "Set MYJPA_ENCRYPT_KEY_VERSION=v1 to suppress.",
+            version);
     }
 
     /**
@@ -739,7 +740,7 @@ public class EncryptConverter implements AttributeConverter<String, String> {
         if (encryptedValue == null) {
             throw new IllegalArgumentException("encryptedValue must not be null");
         }
-        if (!keyValidated) {
+        if (!KEY_VALIDATED.get()) {
             validateKeyConfiguration();
         }
         EncryptConverter instance = new EncryptConverter();
