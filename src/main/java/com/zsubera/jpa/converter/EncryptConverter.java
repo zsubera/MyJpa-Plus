@@ -116,15 +116,16 @@ public class EncryptConverter implements AttributeConverter<String, String> {
     /** 密钥版本缓存刷新间隔（毫秒），默认 5 分钟。 */
     private static final long KEY_VERSION_REFRESH_INTERVAL_MS = 300_000L;
 
-    private static volatile java.util.concurrent.ExecutorService WARM_UP_EXECUTOR =
-        java.util.concurrent.Executors.newFixedThreadPool(1, r -> {
-            Thread t = new Thread(r, "encrypt-key-warmup");
-            t.setDaemon(true);
-            return t;
-        });
+    private static final java.util.concurrent.atomic.AtomicReference<
+        java.util.concurrent.ExecutorService> WARM_UP_EXECUTOR = new java.util.concurrent.atomic.AtomicReference<>(
+            java.util.concurrent.Executors.newFixedThreadPool(1, r -> {
+                Thread t = new Thread(r, "encrypt-key-warmup");
+                t.setDaemon(true);
+                return t;
+            }));
 
     private static final Thread WARM_UP_SHUTDOWN_HOOK = new Thread(() -> {
-        java.util.concurrent.ExecutorService executor = WARM_UP_EXECUTOR;
+        java.util.concurrent.ExecutorService executor = WARM_UP_EXECUTOR.getAndSet(null);
         if (executor != null) {
             executor.shutdown();
             try {
@@ -135,7 +136,6 @@ public class EncryptConverter implements AttributeConverter<String, String> {
                 executor.shutdownNow();
                 Thread.currentThread().interrupt();
             }
-            WARM_UP_EXECUTOR = null;
         }
     }, "encrypt-key-warmup-shutdown");
 
@@ -209,7 +209,10 @@ public class EncryptConverter implements AttributeConverter<String, String> {
      * 此方法在后台线程中执行密钥派生，不阻塞主线程。如果密钥未配置，会记录警告日志。
      */
     public static void warmUpKeyCache() {
-
+        java.util.concurrent.ExecutorService executor = WARM_UP_EXECUTOR.get();
+        if (executor == null) {
+            return;
+        }
         try {
             java.util.concurrent.CompletableFuture.runAsync(() -> {
                 try {
@@ -219,7 +222,7 @@ public class EncryptConverter implements AttributeConverter<String, String> {
                 } catch (Exception e) {
                     log.warn("Failed to warm up encryption key cache: {}", e.getMessage());
                 }
-            }, WARM_UP_EXECUTOR);
+            }, executor);
         } catch (java.util.concurrent.RejectedExecutionException e) {
             log.warn("Encryption key warm-up executor rejected task (may be shutting down): {}", e.getMessage());
         }
@@ -703,12 +706,12 @@ public class EncryptConverter implements AttributeConverter<String, String> {
 
     /**
      * 检查 profile 字符串是否包含生产环境标识。
-     * 使用 contains 匹配支持 production-us、prod-v2 等变体。
+     * 使用 startsWith 匹配支持 production-us、prod-v2 等变体，但不匹配 reproduction。
      */
     private static boolean isProdProfile(String profile) {
         String lower = profile.toLowerCase(java.util.Locale.ROOT);
         for (String p : lower.split("[,\\s]+")) {
-            if (p.contains("prod") || p.contains("production")) {
+            if (p.startsWith("prod") || p.startsWith("production")) {
                 return true;
             }
         }

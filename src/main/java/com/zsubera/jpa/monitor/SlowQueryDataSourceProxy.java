@@ -213,10 +213,15 @@ public final class SlowQueryDataSourceProxy {
 
                 Object summary = cachedSummary;
                 if (summary == null) {
-                    summary = cache.summaryBuilderMethod().invoke(null, "myjpa.query.duration");
-                    summary = cache.summaryDescMethod().invoke(summary, "JPA query execution duration");
-                    summary = cache.summaryRegisterMethod().invoke(summary, cache.meterRegistry());
-                    cachedSummary = summary;
+                    synchronized (PreparedStatementTimingHandler.class) {
+                        summary = cachedSummary;
+                        if (summary == null) {
+                            summary = cache.summaryBuilderMethod().invoke(null, "myjpa.query.duration");
+                            summary = cache.summaryDescMethod().invoke(summary, "JPA query execution duration");
+                            summary = cache.summaryRegisterMethod().invoke(summary, cache.meterRegistry());
+                            cachedSummary = summary;
+                        }
+                    }
                 }
 
                 cache.summaryRecordMethod().invoke(summary, tags, (double)elapsedMs);

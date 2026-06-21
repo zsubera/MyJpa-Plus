@@ -391,7 +391,7 @@ public class MyJpaTemplate implements MyJpaTemplateOperations {
         List<T> cached = cacheAdapter.get(cacheKey);
         if (cached != null) {
             log.debug("Cache hit for key: {}", cacheKey);
-            return cached;
+            return new ArrayList<>(cached);
         }
         log.debug("Cache miss for key: {}", cacheKey);
         List<T> result = findAll(entityClass, spec);
@@ -1158,7 +1158,9 @@ public class MyJpaTemplate implements MyJpaTemplateOperations {
         if (batchSize <= 0) {
             throw new IllegalArgumentException("batchSize must be positive");
         }
-        return getBulkOperationTemplate().executeBatch(mergeSpec, entities, batchSize);
+        int affected = getBulkOperationTemplate().executeBatch(mergeSpec, entities, batchSize);
+        publishEntityModifiedEvent(mergeSpec.getEntityClass(), affected);
+        return affected;
     }
 
     /**
@@ -1179,7 +1181,9 @@ public class MyJpaTemplate implements MyJpaTemplateOperations {
         if (maxRows <= 0 && maxRows != -1) {
             throw new IllegalArgumentException("maxRows must be positive or -1 (use global config)");
         }
-        return getBulkOperationTemplate().executeWithMaxRows(spec, maxRows);
+        int affected = getBulkOperationTemplate().executeWithMaxRows(spec, maxRows);
+        publishEntityModifiedEvent(spec.getEntityClass(), affected);
+        return affected;
     }
 
     /**
@@ -1200,7 +1204,9 @@ public class MyJpaTemplate implements MyJpaTemplateOperations {
         if (maxRows <= 0 && maxRows != -1) {
             throw new IllegalArgumentException("maxRows must be positive or -1 (use global config)");
         }
-        return getBulkOperationTemplate().executeWithMaxRows(spec, maxRows);
+        int affected = getBulkOperationTemplate().executeWithMaxRows(spec, maxRows);
+        publishEntityModifiedEvent(spec.getEntityClass(), affected);
+        return affected;
     }
 
     /**
@@ -1215,7 +1221,9 @@ public class MyJpaTemplate implements MyJpaTemplateOperations {
     @Transactional(rollbackFor = Exception.class)
     public <T> int executeBatch(UpdateSpec<T> spec, int batchSize) {
         validateBatchParams(spec, "spec", batchSize);
-        return getBulkOperationTemplate().executeBatch(spec, batchSize);
+        int affected = getBulkOperationTemplate().executeBatch(spec, batchSize);
+        publishEntityModifiedEvent(spec.getEntityClass(), affected);
+        return affected;
     }
 
     /**
@@ -1230,7 +1238,9 @@ public class MyJpaTemplate implements MyJpaTemplateOperations {
     @Transactional(rollbackFor = Exception.class)
     public <T> int executeBatch(DeleteSpec<T> spec, int batchSize) {
         validateBatchParams(spec, "spec", batchSize);
-        return getBulkOperationTemplate().executeBatch(spec, batchSize);
+        int affected = getBulkOperationTemplate().executeBatch(spec, batchSize);
+        publishEntityModifiedEvent(spec.getEntityClass(), affected);
+        return affected;
     }
 
     // ---- 分批提交事务的批量操作 ----
@@ -1253,6 +1263,7 @@ public class MyJpaTemplate implements MyJpaTemplateOperations {
         }
         BulkOperationTemplate.BatchResult result = getBulkOperationTemplate().executeBatchInSeparateTransactions(spec,
             batchSize, convertFailureStrategy(failureStrategy));
+        publishEntityModifiedEvent(spec.getEntityClass(), result.totalRows());
         return new MyJpaTemplateOperations.BatchResult(result.totalRows(), result.batchCount(), result.success(),
             result.failedBatchIndex(), result.failureCause());
     }
@@ -1275,6 +1286,7 @@ public class MyJpaTemplate implements MyJpaTemplateOperations {
         }
         BulkOperationTemplate.BatchResult result = getBulkOperationTemplate().executeBatchInSeparateTransactions(spec,
             batchSize, convertFailureStrategy(failureStrategy));
+        publishEntityModifiedEvent(spec.getEntityClass(), result.totalRows());
         return new MyJpaTemplateOperations.BatchResult(result.totalRows(), result.batchCount(), result.success(),
             result.failedBatchIndex(), result.failureCause());
     }
@@ -1298,7 +1310,9 @@ public class MyJpaTemplate implements MyJpaTemplateOperations {
     @Override
     public <T> int executeBatchInSeparateTransactions(UpdateSpec<T> spec, int batchSize) {
         validateBatchParams(spec, "spec", batchSize);
-        return getBulkOperationTemplate().executeBatchInSeparateTransactions(spec, batchSize);
+        int affected = getBulkOperationTemplate().executeBatchInSeparateTransactions(spec, batchSize);
+        publishEntityModifiedEvent(spec.getEntityClass(), affected);
+        return affected;
     }
 
     /**
@@ -1312,7 +1326,9 @@ public class MyJpaTemplate implements MyJpaTemplateOperations {
     @Override
     public <T> int executeBatchInSeparateTransactions(DeleteSpec<T> spec, int batchSize) {
         validateBatchParams(spec, "spec", batchSize);
-        return getBulkOperationTemplate().executeBatchInSeparateTransactions(spec, batchSize);
+        int affected = getBulkOperationTemplate().executeBatchInSeparateTransactions(spec, batchSize);
+        publishEntityModifiedEvent(spec.getEntityClass(), affected);
+        return affected;
     }
 
     /**

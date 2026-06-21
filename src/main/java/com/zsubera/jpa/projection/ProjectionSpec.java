@@ -760,9 +760,10 @@ public class ProjectionSpec<T> {
                     applyHavingPredicates(groupRoot, cb, groupCountQuery);
                 }
                 // 选择第一个分组字段来计数分组数
-                @SuppressWarnings("unchecked")
-                jakarta.persistence.criteria.Selection<Object> firstGroup =
-                    (jakarta.persistence.criteria.Selection<Object>)groupByExpressions.get(0);
+                // Path<?> 在 JPA 运行时实现 Selection 接口，但类型系统未声明
+                @SuppressWarnings("rawtypes")
+                jakarta.persistence.criteria.Selection firstGroup =
+                    (jakarta.persistence.criteria.Selection)groupByExpressions.get(0);
                 groupCountQuery.select(firstGroup);
                 jakarta.persistence.TypedQuery<Object> groupCountTypedQuery = em.createQuery(groupCountQuery);
                 QueryTimeoutHelper.applyTimeout(groupCountTypedQuery);

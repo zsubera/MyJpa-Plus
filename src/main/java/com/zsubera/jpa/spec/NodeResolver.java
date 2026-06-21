@@ -375,7 +375,7 @@ final class NodeResolver {
         Predicate inner = resolveNodeWithDepth(node.inner, ctx.path(), ctx.rootPath(), ctx.query(), ctx.cb(),
             ctx.joinCache(), ctx.pathPrefix(), ctx.depth() + 1, ctx.fetchPaths());
         if (inner == null) {
-            return ctx.cb().disjunction();
+            return ctx.cb().conjunction();
         }
         return ctx.cb().not(inner);
     }

@@ -23,7 +23,7 @@ class EncryptConverterCoverageTest {
         EncryptConverter.clearCaches();
         Field f = EncryptConverter.class.getDeclaredField("KEY_VALIDATED");
         f.setAccessible(true);
-        ((java.util.concurrent.atomic.AtomicBoolean) f.get(null)).set(false);
+        ((java.util.concurrent.atomic.AtomicBoolean)f.get(null)).set(false);
     }
 
     @AfterEach
@@ -34,28 +34,28 @@ class EncryptConverterCoverageTest {
         EncryptConverter.clearCaches();
         Field f = EncryptConverter.class.getDeclaredField("KEY_VALIDATED");
         f.setAccessible(true);
-        ((java.util.concurrent.atomic.AtomicBoolean) f.get(null)).set(false);
+        ((java.util.concurrent.atomic.AtomicBoolean)f.get(null)).set(false);
     }
 
     // ---- validateKeyConfiguration: synchronized block ----
 
     @Test
     void validateKeyConfiguration_validKey_synchronizedPath() throws Exception {
-        Field f = EncryptConverter.class.getDeclaredField("keyValidated");
+        Field f = EncryptConverter.class.getDeclaredField("KEY_VALIDATED");
         f.setAccessible(true);
-        f.set(null, false);
+        ((java.util.concurrent.atomic.AtomicBoolean)f.get(null)).set(false);
         EncryptConverter.validateKeyConfiguration();
-        assertTrue((boolean)f.get(null));
+        assertTrue(((java.util.concurrent.atomic.AtomicBoolean)f.get(null)).get());
         // Second call should hit synchronized block early return
         EncryptConverter.validateKeyConfiguration();
-        assertTrue((boolean)f.get(null));
+        assertTrue(((java.util.concurrent.atomic.AtomicBoolean)f.get(null)).get());
     }
 
     @Test
     void validateKeyConfiguration_withSystemProperty() throws Exception {
-        Field f = EncryptConverter.class.getDeclaredField("keyValidated");
+        Field f = EncryptConverter.class.getDeclaredField("KEY_VALIDATED");
         f.setAccessible(true);
-        f.set(null, false);
+        ((java.util.concurrent.atomic.AtomicBoolean)f.get(null)).set(false);
         String oldEnv = System.getenv("MYJPA_ENCRYPT_KEY");
         System.clearProperty("myjpa.encrypt.key");
         try {
@@ -70,9 +70,9 @@ class EncryptConverterCoverageTest {
 
     @Test
     void validateKeyConfiguration_withEnvProperty() throws Exception {
-        Field f = EncryptConverter.class.getDeclaredField("keyValidated");
+        Field f = EncryptConverter.class.getDeclaredField("KEY_VALIDATED");
         f.setAccessible(true);
-        f.set(null, false);
+        ((java.util.concurrent.atomic.AtomicBoolean)f.get(null)).set(false);
         System.clearProperty("myjpa.encrypt.key");
         // Can't set env vars, but we can test the path where both are null
         try {
@@ -103,9 +103,9 @@ class EncryptConverterCoverageTest {
         System.setProperty("myjpa.encrypt.key", "9999999999999999");
         EncryptConverter.clearCaches();
         try {
-            Field f = EncryptConverter.class.getDeclaredField("keyValidated");
+            Field f = EncryptConverter.class.getDeclaredField("KEY_VALIDATED");
             f.setAccessible(true);
-            f.set(null, false);
+            ((java.util.concurrent.atomic.AtomicBoolean)f.get(null)).set(false);
             EncryptConverter converter2 = new EncryptConverter();
             assertThrows(Exception.class, () -> converter2.convertToEntityAttribute(encrypted));
         } catch (Exception e) {
@@ -243,19 +243,19 @@ class EncryptConverterCoverageTest {
         }
     }
 
-    // ---- reEncrypt: keyValidated path ----
+    // ---- reEncrypt: KEY_VALIDATED path ----
 
     @Test
     void reEncrypt_validatesKeyFirst() throws Exception {
-        Field f = EncryptConverter.class.getDeclaredField("keyValidated");
+        Field f = EncryptConverter.class.getDeclaredField("KEY_VALIDATED");
         f.setAccessible(true);
-        f.set(null, false);
+        ((java.util.concurrent.atomic.AtomicBoolean)f.get(null)).set(false);
         EncryptConverter converter = new EncryptConverter();
         String encrypted = converter.convertToDatabaseColumn("test");
         // reEncrypt should validate key first
         String reEncrypted = EncryptConverter.reEncrypt(encrypted);
         assertNotNull(reEncrypted);
-        assertTrue((boolean)f.get(null));
+        assertTrue(((java.util.concurrent.atomic.AtomicBoolean)f.get(null)).get());
     }
 
     // ---- warmUpKeyCacheSync: exception path ----
@@ -266,9 +266,9 @@ class EncryptConverterCoverageTest {
         System.clearProperty("myjpa.encrypt.key");
         EncryptConverter.clearCaches();
         try {
-            Field f = EncryptConverter.class.getDeclaredField("keyValidated");
+            Field f = EncryptConverter.class.getDeclaredField("KEY_VALIDATED");
             f.setAccessible(true);
-            f.set(null, false);
+            ((java.util.concurrent.atomic.AtomicBoolean)f.get(null)).set(false);
             // Without a key configured, warmUpKeyCacheSync should handle the exception
             assertDoesNotThrow(() -> EncryptConverter.warmUpKeyCacheSync());
         } catch (Exception e) {
@@ -369,9 +369,9 @@ class EncryptConverterCoverageTest {
         System.setProperty("myjpa.encrypt.key.version", "v99");
         EncryptConverter.clearCaches();
         try {
-            Field f = EncryptConverter.class.getDeclaredField("keyValidated");
+            Field f = EncryptConverter.class.getDeclaredField("KEY_VALIDATED");
             f.setAccessible(true);
-            f.set(null, false);
+            ((java.util.concurrent.atomic.AtomicBoolean)f.get(null)).set(false);
             EncryptConverter converter = new EncryptConverter();
             // Should trigger logVersionMismatch
             String encrypted = converter.convertToDatabaseColumn("test");
@@ -395,9 +395,9 @@ class EncryptConverterCoverageTest {
         System.setProperty("myjpa.encrypt.key", "9999999999999999");
         EncryptConverter.clearCaches();
         try {
-            Field f = EncryptConverter.class.getDeclaredField("keyValidated");
+            Field f = EncryptConverter.class.getDeclaredField("KEY_VALIDATED");
             f.setAccessible(true);
-            f.set(null, false);
+            ((java.util.concurrent.atomic.AtomicBoolean)f.get(null)).set(false);
             EncryptConverter converter2 = new EncryptConverter();
             assertThrows(Exception.class, () -> converter2.convertToEntityAttribute(encrypted));
         } catch (Exception e) {
@@ -443,9 +443,9 @@ class EncryptConverterCoverageTest {
         System.setProperty("myjpa.encrypt.key", "v1:key11111111111111,v2:key22222222222222");
         EncryptConverter.clearCaches();
         try {
-            Field f = EncryptConverter.class.getDeclaredField("keyValidated");
+            Field f = EncryptConverter.class.getDeclaredField("KEY_VALIDATED");
             f.setAccessible(true);
-            f.set(null, false);
+            ((java.util.concurrent.atomic.AtomicBoolean)f.get(null)).set(false);
             System.setProperty("myjpa.encrypt.key.version", "v2");
             EncryptConverter converter = new EncryptConverter();
             String encrypted = converter.convertToDatabaseColumn("test");
@@ -465,9 +465,9 @@ class EncryptConverterCoverageTest {
         System.setProperty("myjpa.encrypt.key", "v1:key11111111111111,invalid-entry");
         EncryptConverter.clearCaches();
         try {
-            Field f = EncryptConverter.class.getDeclaredField("keyValidated");
+            Field f = EncryptConverter.class.getDeclaredField("KEY_VALIDATED");
             f.setAccessible(true);
-            f.set(null, false);
+            ((java.util.concurrent.atomic.AtomicBoolean)f.get(null)).set(false);
             EncryptConverter converter = new EncryptConverter();
             assertThrows(Exception.class, () -> converter.convertToDatabaseColumn("test"));
         } catch (Exception e) {
@@ -483,9 +483,9 @@ class EncryptConverterCoverageTest {
         System.setProperty("myjpa.encrypt.key", "v1:key11111111111111,v2:key22222222222222");
         EncryptConverter.clearCaches();
         try {
-            Field f = EncryptConverter.class.getDeclaredField("keyValidated");
+            Field f = EncryptConverter.class.getDeclaredField("KEY_VALIDATED");
             f.setAccessible(true);
-            f.set(null, false);
+            ((java.util.concurrent.atomic.AtomicBoolean)f.get(null)).set(false);
             System.setProperty("myjpa.encrypt.key.version", "v99");
             EncryptConverter converter = new EncryptConverter();
             assertThrows(Exception.class, () -> converter.convertToDatabaseColumn("test"));

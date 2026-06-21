@@ -11,7 +11,7 @@ import com.zsubera.jpa.monitor.SlowQueryDataSourceProxy;
 import java.lang.reflect.Field;
 import java.lang.reflect.Proxy;
 import java.util.List;
-import java.util.concurrent.ThreadPoolExecutor;
+
 import java.util.concurrent.TimeUnit;
 import javax.sql.DataSource;
 import org.junit.jupiter.api.Test;
@@ -103,10 +103,13 @@ class AutoconfigureSecurityTest {
 
     @Test
     void configInitializer_encryptKeyRejectedExecution() throws Exception {
-        // Get the WARM_UP_EXECUTOR field from EncryptConverter
+        // Get the WARM_UP_EXECUTOR field from EncryptConverter (now AtomicReference<ExecutorService>)
         Field executorField = EncryptConverter.class.getDeclaredField("WARM_UP_EXECUTOR");
         executorField.setAccessible(true);
-        ThreadPoolExecutor originalExecutor = (ThreadPoolExecutor)executorField.get(null);
+        @SuppressWarnings("unchecked")
+        java.util.concurrent.atomic.AtomicReference<java.util.concurrent.ExecutorService> executorRef =
+            (java.util.concurrent.atomic.AtomicReference<java.util.concurrent.ExecutorService>)executorField.get(null);
+        java.util.concurrent.ExecutorService originalExecutor = executorRef.get();
 
         try {
             // Shut down the executor to cause RejectedExecutionException
@@ -129,7 +132,7 @@ class AutoconfigureSecurityTest {
             }
         } finally {
             // Restore the executor
-            executorField.set(null, originalExecutor);
+            executorRef.set(originalExecutor);
         }
     }
 
