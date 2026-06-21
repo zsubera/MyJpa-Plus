@@ -321,10 +321,14 @@ public class MergeSpec<T> {
             }
             return result;
         } catch (RuntimeException e) {
-            safeRollback(tx, e);
+            if (isNewTransaction) {
+                safeRollback(tx, e);
+            }
             throw e;
         } catch (Exception e) {
-            safeRollback(tx, e);
+            if (isNewTransaction) {
+                safeRollback(tx, e);
+            }
             throw new MyJpaPlusException("Merge operation failed: " + e.getClass().getSimpleName(), e);
         }
     }

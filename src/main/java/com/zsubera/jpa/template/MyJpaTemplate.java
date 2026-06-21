@@ -395,7 +395,7 @@ public class MyJpaTemplate implements MyJpaTemplateOperations {
         }
         log.debug("Cache miss for key: {}", cacheKey);
         List<T> result = findAll(entityClass, spec);
-        List<T> immutableResult = Collections.unmodifiableList(new ArrayList<>(result));
+        List<T> immutableResult = Collections.unmodifiableList(result);
         if (org.springframework.transaction.support.TransactionSynchronizationManager.isActualTransactionActive()) {
             org.springframework.transaction.support.TransactionSynchronizationManager
                 .registerSynchronization(new org.springframework.transaction.support.TransactionSynchronization() {

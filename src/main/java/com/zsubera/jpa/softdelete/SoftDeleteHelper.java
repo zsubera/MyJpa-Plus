@@ -276,6 +276,7 @@ public final class SoftDeleteHelper {
         String escapedColumn = validateIdentifier(columnName);
         ResolvedDeletedValue resolved = resolveDeletedValue(entityClass, field, annotation);
         // 行数保护：先 COUNT 再执行（仅计数实际会被更新的行，即未软删除的行）
+        // 注意：COUNT 和 UPDATE 之间存在竞态窗口，高并发下实际更新行数可能略超 maxRows
         if (maxRows > 0) {
             String countSql;
             var countQuery = em.createNativeQuery("SELECT COUNT(*) FROM " + escapedTable + " WHERE "
@@ -309,6 +310,14 @@ public final class SoftDeleteHelper {
                     .setParameter(1, resolved.dbValue());
             QueryTimeoutHelper.applyTimeout(q);
             updated = q.executeUpdate();
+        }
+        // 更新后检查：检测竞态条件导致的实际行数超限
+        if (maxRows > 0 && updated > maxRows) {
+            log.warn(
+                "softDeleteAll affected {} rows, exceeding the pre-check limit of {}. "
+                    + "This may indicate a race condition between COUNT and UPDATE. "
+                    + "Consider using a transaction with explicit rollback if row limit is critical.",
+                updated, maxRows);
         }
         if (updated > 0) {
             em.clear();

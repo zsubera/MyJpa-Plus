@@ -741,9 +741,10 @@ public class ProjectionSpec<T> {
         try {
             Long total;
             if (!groupByFields.isEmpty()) {
-                // 当存在 GROUP BY 时，使用单独的计数查询，
-                // 按相同字段分组并对分组计数（而非总行数）。
-                CriteriaQuery<Long> groupCountQuery = cb.createQuery(Long.class);
+                // 统计 GROUP BY 分组数：执行 GROUP BY 查询并计数结果行数
+                @SuppressWarnings("unchecked")
+                CriteriaQuery<Object> groupCountQuery =
+                    (CriteriaQuery<Object>)(CriteriaQuery<?>)cb.createQuery(Object.class);
                 Root<T> groupRoot = groupCountQuery.from(entityClass);
                 resolveJoins(groupRoot, cb);
                 // 应用 WHERE 谓词
@@ -758,10 +759,14 @@ public class ProjectionSpec<T> {
                 if (!havingPredicateFns.isEmpty()) {
                     applyHavingPredicates(groupRoot, cb, groupCountQuery);
                 }
-                groupCountQuery.select(cb.countDistinct(groupRoot));
-                TypedQuery<Long> groupCountTypedQuery = em.createQuery(groupCountQuery);
+                // 选择第一个分组字段来计数分组数
+                @SuppressWarnings("unchecked")
+                jakarta.persistence.criteria.Selection<Object> firstGroup =
+                    (jakarta.persistence.criteria.Selection<Object>)groupByExpressions.get(0);
+                groupCountQuery.select(firstGroup);
+                jakarta.persistence.TypedQuery<Object> groupCountTypedQuery = em.createQuery(groupCountQuery);
                 QueryTimeoutHelper.applyTimeout(groupCountTypedQuery);
-                total = groupCountTypedQuery.getSingleResult();
+                total = (long)groupCountTypedQuery.getResultList().size();
             } else {
                 // 仅在用户显式启用 distinct 时使用 countDistinct
                 CriteriaQuery<Long> countQuery = cb.createQuery(Long.class);

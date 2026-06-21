@@ -57,25 +57,33 @@ public class UpdateSpec<T> extends AbstractBulkOperationSpec<T, UpdateSpec<T>> {
     /** 缓存最大容量限制 */
     private static final int MAX_CACHE_SIZE = 256;
 
+    /** 驱逐操作的原子守卫，防止多线程同时执行冗余驱逐 */
+    private static final java.util.concurrent.atomic.AtomicBoolean EVICTING =
+        new java.util.concurrent.atomic.AtomicBoolean();
+
     /**
      * 缓存驱逐辅助方法：当缓存超过限制时确定性触发驱逐。
      *
      * <p>
+     * 使用 {@link java.util.concurrent.atomic.AtomicBoolean} 守卫确保同一时刻只有一个线程执行驱逐，
+     * 避免多线程并发检测到缓存超限时同时触发冗余驱逐。
      * 使用 {@link java.util.concurrent.ConcurrentHashMap} 的弱一致性迭代器进行驱逐，
-     * 多线程并发驱逐是安全的（Iterator.remove() 是线程安全的）。
-     * 缓存可能暂时超过 {@link #MAX_CACHE_SIZE}，但不会无限增长。
+     * Iterator.remove() 是线程安全的。
      */
     private static void evictCacheIfNeeded(java.util.concurrent.ConcurrentMap<?, ?> cache) {
 
-        int currentSize = cache.size();
-        if (currentSize > MAX_CACHE_SIZE) {
-            int toRemove = currentSize / 2;
-            int removed = 0;
-            java.util.Iterator<?> it = cache.keySet().iterator();
-            while (it.hasNext() && removed < toRemove) {
-                it.next();
-                it.remove();
-                removed++;
+        if (cache.size() > MAX_CACHE_SIZE && EVICTING.compareAndSet(false, true)) {
+            try {
+                int toRemove = cache.size() / 2;
+                java.util.Iterator<?> it = cache.keySet().iterator();
+                int removed = 0;
+                while (it.hasNext() && removed < toRemove) {
+                    it.next();
+                    it.remove();
+                    removed++;
+                }
+            } finally {
+                EVICTING.set(false);
             }
         }
     }

@@ -48,6 +48,22 @@ public interface BulkConditionSupport<T, SELF extends BulkConditionSupport<T, SE
 
     // ---- 比较运算符 ----
 
+    default SELF eqStrict(SFunction<T, ?> field, Object value) {
+        requireField(field);
+        if (value == null) {
+            throw new IllegalArgumentException("value must not be null. Use isNull() for null comparisons.");
+        }
+        return addCondition((root, cb) -> ConditionNode.Op.EQ.resolve(root, property(field), value, '\0', cb));
+    }
+
+    default SELF neStrict(SFunction<T, ?> field, Object value) {
+        requireField(field);
+        if (value == null) {
+            throw new IllegalArgumentException("value must not be null. Use isNotNull() for null comparisons.");
+        }
+        return addCondition((root, cb) -> ConditionNode.Op.NE.resolve(root, property(field), value, '\0', cb));
+    }
+
     default SELF eq(SFunction<T, ?> field, @Nullable Object value) {
         requireField(field);
         return addCondition((root, cb) -> ConditionNode.Op.EQ.resolve(root, property(field), value, '\0', cb));

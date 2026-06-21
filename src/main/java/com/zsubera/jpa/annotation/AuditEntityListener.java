@@ -121,19 +121,18 @@ public class AuditEntityListener implements ApplicationContextAware {
         if (providerLookupAttempted) {
             return userProvider == NO_PROVIDER_SENTINEL ? null : userProvider;
         }
-        ApplicationContext ctx = applicationContext;
-        if (ctx != null) {
-            synchronized (AuditEntityListener.class) {
-                if (!providerLookupAttempted) {
+        synchronized (AuditEntityListener.class) {
+            if (!providerLookupAttempted) {
+                ApplicationContext ctx = applicationContext;
+                if (ctx != null) {
                     try {
                         userProvider = ctx.getBean(AuditUserProvider.class);
-                        providerLookupAttempted = true;
                     } catch (Exception e) {
-                        providerLookupAttempted = true;
                         userProvider = NO_PROVIDER_SENTINEL;
                         log.debug("No AuditUserProvider bean found, createdBy/updatedBy will not be auto-filled");
                     }
                 }
+                providerLookupAttempted = true;
             }
         }
         return userProvider == NO_PROVIDER_SENTINEL ? null : userProvider;
