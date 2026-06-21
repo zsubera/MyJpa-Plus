@@ -135,7 +135,7 @@ void setUp() {
 }
 ```
 
-**连接池**：`application.properties` 配置 HikariCP `maximum-pool-size=5`。Surefire 使用 `parallel=none` + `forkCount=1` 防止连接池耗尽。
+**连接池**：`application.properties` 配置 HikariCP `maximum-pool-size=5`。Surefire 使用 `parallel=none` + `forkCount=1` 防止连接池耗尽。全量测试套件（3000+）可能仍会触发 `Too many connections`，分批运行更可靠。
 
 **集成测试**：`@Tag("integration")` + Testcontainers（PostgreSQL、MySQL）
 
@@ -147,10 +147,14 @@ void setUp() {
 - **MySQL 自引用 UPDATE**：MySQL 阻止 `UPDATE ... WHERE EXISTS(SELECT ... FROM same_table)`。在 EXISTS 子查询中使用不同实体类型。
 - **`saveAllBatchedPure`** 总是调用 `persist()` — 分离/已存在实体抛出 `EntityExistsException`。混合列表使用 `saveAllBatched`。
 - **GlobalConfigHolder.getConfig()** 未配置时返回默认实例。测试需在 `@BeforeEach`/`@AfterEach` 中调用 `setConfig(null)`。
-- **EncryptConverter 测试设置**：在 `@BeforeEach`/`@AfterEach` 中调用 `EncryptConverter.clearCaches()` 并通过反射重置 `keyValidated`。设置 `myjpa-plus.encrypt.skip-salt-check=true` 跳过 PBKDF2 盐值检查。
+- **EncryptConverter 测试设置**：在 `@BeforeEach`/`@AfterEach` 中调用 `EncryptConverter.clearCaches()` 并通过反射重置 `KEY_VALIDATED`（`AtomicBoolean`）。设置 `myjpa-plus.encrypt.skip-salt-check=true` 跳过 PBKDF2 盐值检查。
 - **`deleteByIdIfExists`**：此方法在 `DefaultMyJpaRepository` 上，不在接口上。通过反射测试：`Method m = DefaultMyJpaRepository.class.getMethod("deleteByIdIfExists", Object.class); m.invoke(proxy, id);`
 
-### 当前测试数量：3010 个单元测试
+### 当前测试数量：3026 个单元测试
+
+### 已知问题
+
+- **FuncNodeTest 状态污染**：`FunctionWhitelist.EXTRA_SAFE_FUNCTION_NAMES` 是全局静态状态，测试之间不清理。部分 FuncNodeTest 会因前序测试的残留状态而失败。单独运行 `FuncNodeTest` 可能通过，但在全量套件中会因状态污染而失败。
 
 ## 关键约定
 
