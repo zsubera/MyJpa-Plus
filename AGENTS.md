@@ -150,33 +150,13 @@ void setUp() {
 - **EncryptConverter 测试设置**：在 `@BeforeEach`/`@AfterEach` 中调用 `EncryptConverter.clearCaches()` 并通过反射重置 `keyValidated`。设置 `myjpa-plus.encrypt.skip-salt-check=true` 跳过 PBKDF2 盐值检查。
 - **`deleteByIdIfExists`**：此方法在 `DefaultMyJpaRepository` 上，不在接口上。通过反射测试：`Method m = DefaultMyJpaRepository.class.getMethod("deleteByIdIfExists", Object.class); m.invoke(proxy, id);`
 
-### 当前测试数量：3010 个单元测试（2026-06-21 更新）
+### 当前测试数量：3010 个单元测试
 
 ## 关键约定
 
 - JaCoCo 最低 90% 行覆盖率（强制执行于：spec、update、repository、projection、template、annotation、autoconfigure、codegen、converter、exception、monitor、softdelete、util）
 - SpotBugs Medium 阈值
 - PR 检查清单：spotless:check → verify → SpotBugs → JaCoCo → 测试 → CHANGELOG
-
-## 近期修复（2026-06-21）
-
-### P0: ConditionNode 原生类型数组处理
-- `Op.resolve()` 的 IN/NOT_IN 现在通过 `toObjectArray()` 辅助方法支持 `int[]`、`long[]` 等原生类型数组
-- 位置：`ConditionNode.java:144-149`（IN）、`164-169`（NOT_IN）
-
-### P0: SoftDeleteHelper 竞态条件缓解
-- `softDeleteAll()` 在 UPDATE 后检查实际影响行数，检测 COUNT/UPDATE 竞态窗口
-- 超出 `maxRows` 时记录 WARN 日志而非静默忽略
-- 位置：`SoftDeleteHelper.java:313-317`
-
-### P1: EncryptConverter 启动时盐值检查
-- `MyJpaPlusAutoConfiguration` 在密钥预热前验证盐值配置
-- 生产环境未配置盐值时拒绝启动，开发环境仅记录警告
-- 位置：`MyJpaPlusAutoConfiguration.java:160-202`
-
-### P1: SecurityContextAuditUserProvider 反射缓存
-- Method 对象在 static 块中缓存，消除每次 `getCurrentUser()` 的 4+ 次反射开销
-- 位置：`MyJpaPlusAutoConfiguration.java:255-281`
 
 ## SpotBugs 抑制
 
