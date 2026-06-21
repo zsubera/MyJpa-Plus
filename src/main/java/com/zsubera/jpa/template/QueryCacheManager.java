@@ -232,9 +232,11 @@ public class QueryCacheManager implements CacheAdapter {
             evictIfNeeded();
         }
 
-        CachedQueryResult<?> oldValue = store.put(key, new CachedQueryResult<>(value, ttlSeconds));
-        if (oldValue == null) {
-            // 新 key：追加到 deque 并更新计数
+        CachedQueryResult<?> newValue = new CachedQueryResult<>(value, ttlSeconds);
+        CachedQueryResult<?> existing = store.putIfAbsent(key, newValue);
+        if (existing != null) {
+            store.put(key, newValue);
+        } else {
             insertionOrder.addLast(key);
             dequeSize.incrementAndGet();
         }

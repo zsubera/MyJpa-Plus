@@ -3,6 +3,7 @@ package com.zsubera.jpa.update;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
+import com.zsubera.jpa.exception.MyJpaPlusException;
 import com.zsubera.jpa.spec.TestEntity;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.EntityTransaction;
@@ -273,5 +274,31 @@ class MergeSpecTransactionTest {
         assertThrows(RuntimeException.class, () -> invokeExecuteInManagedTransaction(em, () -> {
             throw new RuntimeException("runtime");
         }));
+    }
+
+    @Test
+    void testExecuteInManagedTransactionExistingTxRuntimeExceptionNoRollback() throws Exception {
+        EntityManager em = mock(EntityManager.class);
+        EntityTransaction tx = mock(EntityTransaction.class);
+        when(em.getTransaction()).thenReturn(tx);
+        when(tx.isActive()).thenReturn(true);
+
+        assertThrows(RuntimeException.class, () -> invokeExecuteInManagedTransaction(em, () -> {
+            throw new RuntimeException("boom");
+        }));
+        verify(tx, never()).rollback();
+    }
+
+    @Test
+    void testExecuteInManagedTransactionExistingTxCheckedExceptionNoRollback() throws Exception {
+        EntityManager em = mock(EntityManager.class);
+        EntityTransaction tx = mock(EntityTransaction.class);
+        when(em.getTransaction()).thenReturn(tx);
+        when(tx.isActive()).thenReturn(true);
+
+        assertThrows(RuntimeException.class, () -> invokeExecuteInManagedTransaction(em, () -> {
+            throw new MyJpaPlusException("checked");
+        }));
+        verify(tx, never()).rollback();
     }
 }

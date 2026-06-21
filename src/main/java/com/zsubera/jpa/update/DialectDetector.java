@@ -241,14 +241,9 @@ final class DialectDetector {
             }
             if (jdbcUrl != null) {
                 String url = jdbcUrl.toString();
-                Object user = emf.getProperties().get("jakarta.persistence.jdbc.user");
-                if (user == null) {
-                    user = emf.getProperties().get("hibernate.connection.username");
-                }
-                if (user != null) {
-                    return url + "#" + user;
-                }
-                return url;
+                // 从 URL 中移除凭据信息以防止堆转储泄露
+                String sanitizedUrl = url.replaceAll("://[^:]+:[^@]+@", "://***:***@");
+                return sanitizedUrl;
             }
         } catch (Exception ignored) {
             // 回退到基于 identity 的键

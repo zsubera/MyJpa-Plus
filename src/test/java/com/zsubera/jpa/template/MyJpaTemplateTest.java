@@ -1352,6 +1352,28 @@ class MyJpaTemplateTest {
     }
 
     @Test
+    void testFindAllCachedReturnIsMutableAndCacheIsIndependent() {
+        QueryCacheManager cacheManager = new QueryCacheManager();
+        template.setCacheManager(cacheManager);
+
+        TestEntity e = new TestEntity();
+        e.setName("mutable");
+        e.setStatus(1);
+        repository.save(e);
+
+        QuerySpec<TestEntity> qs = new QuerySpec<>();
+        qs.eq(TestEntity::getName, "mutable");
+        List<TestEntity> result = template.findAllCached(TestEntity.class, qs, 60);
+        assertEquals(1, result.size());
+
+        result.clear();
+        assertEquals(0, result.size());
+
+        List<TestEntity> cached = template.findAllCached(TestEntity.class, qs, 60);
+        assertEquals(1, cached.size());
+    }
+
+    @Test
     void testGetSetCacheManager() {
         QueryCacheManager cm = new QueryCacheManager();
         template.setCacheManager(cm);

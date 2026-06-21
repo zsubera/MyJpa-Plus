@@ -33,6 +33,16 @@ final class PostgresDialect implements DialectStrategy {
      */
     @Override
     public String escapeIdentifier(String identifier) {
+        if (identifier.indexOf('.') >= 0) {
+            String[] parts = identifier.split("\\.");
+            StringBuilder sb = new StringBuilder();
+            for (int i = 0; i < parts.length; i++) {
+                if (i > 0)
+                    sb.append('.');
+                sb.append('"').append(parts[i].replace("\"", "\"\"")).append('"');
+            }
+            return sb.toString();
+        }
         return "\"" + identifier.replace("\"", "\"\"") + "\"";
     }
 

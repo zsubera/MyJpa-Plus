@@ -370,7 +370,8 @@ public final class LambdaUtils {
         // Record 访问器与字段同名（例如，对于名为 "name" 的 Record 组件，访问器就是 "name"）
         // 排除 java.lang.Object 的固有方法，避免将 hashCode/toString 等误识别为属性名
         if ("hashCode".equals(methodName) || "toString".equals(methodName) || "getClass".equals(methodName)
-            || "notify".equals(methodName) || "notifyAll".equals(methodName) || "wait".equals(methodName)) {
+            || "notify".equals(methodName) || "notifyAll".equals(methodName) || "wait".equals(methodName)
+            || "equals".equals(methodName) || "clone".equals(methodName) || "finalize".equals(methodName)) {
             throw new IllegalArgumentException("Method '" + methodName + "' is not a property accessor. "
                 + "Use a getter method reference (Entity::getField) or record accessor.");
         }

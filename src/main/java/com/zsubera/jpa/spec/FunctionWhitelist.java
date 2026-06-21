@@ -111,7 +111,9 @@ public final class FunctionWhitelist {
     public static void freezeExtraFunctionNames() {
         Set<String> safeSnapshot = Set.copyOf(EXTRA_SAFE_FUNCTION_NAMES);
         Set<String> boolSnapshot = Set.copyOf(EXTRA_BOOLEAN_FUNCTION_NAMES);
-        FROZEN_EXTRA_SAFE_FUNCTION_NAMES.set(safeSnapshot);
-        FROZEN_EXTRA_BOOLEAN_FUNCTION_NAMES.set(boolSnapshot);
+        FROZEN_EXTRA_SAFE_FUNCTION_NAMES
+            .updateAndGet(current -> current.size() >= safeSnapshot.size() ? current : safeSnapshot);
+        FROZEN_EXTRA_BOOLEAN_FUNCTION_NAMES
+            .updateAndGet(current -> current.size() >= boolSnapshot.size() ? current : boolSnapshot);
     }
 }

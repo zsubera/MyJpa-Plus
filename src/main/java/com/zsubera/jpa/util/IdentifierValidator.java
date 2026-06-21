@@ -105,6 +105,9 @@ public final class IdentifierValidator {
                 + MAX_IDENTIFIER_LENGTH + "): '" + identifier.substring(0, 64) + "...'");
         }
         String[] parts = identifier.split("\\.");
+        if (parts.length == 0) {
+            throw new MyJpaPlusException("Identifier must contain at least one valid part: '" + identifier + "'");
+        }
         for (String part : parts) {
             validatePart(part, identifier);
         }

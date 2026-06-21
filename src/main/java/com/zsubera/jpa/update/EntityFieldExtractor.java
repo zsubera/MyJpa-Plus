@@ -37,13 +37,19 @@ final class EntityFieldExtractor<T> {
     static {
         Object strategy = null;
         java.lang.reflect.Method method = null;
-        try {
-            Class<?> strategyClass = Class.forName("org.springframework.boot.orm.jpa.SpringPhysicalNamingStrategy");
-            strategy = strategyClass.getDeclaredConstructor().newInstance();
-            method = strategyClass.getMethod("toPhysicalColumnName", String.class, java.util.Locale.class);
-        } catch (ClassNotFoundException | NoSuchMethodException | InstantiationException | IllegalAccessException
-            | java.lang.reflect.InvocationTargetException ignored) {
-            // Spring 命名策略不在类路径上
+        // Spring Boot 3.x moved the class; try both old and new locations
+        String[] candidates = {"org.springframework.boot.orm.jpa.hibernate.SpringPhysicalNamingStrategy",
+            "org.springframework.boot.orm.jpa.SpringPhysicalNamingStrategy"};
+        for (String className : candidates) {
+            try {
+                Class<?> strategyClass = Class.forName(className);
+                strategy = strategyClass.getDeclaredConstructor().newInstance();
+                method = strategyClass.getMethod("toPhysicalColumnName", String.class, java.util.Locale.class);
+                break;
+            } catch (ClassNotFoundException | NoSuchMethodException | InstantiationException | IllegalAccessException
+                | java.lang.reflect.InvocationTargetException ignored) {
+                // try next candidate
+            }
         }
         CACHED_NAMING_STRATEGY = strategy;
         CACHED_TO_PHYSICAL_METHOD = method;

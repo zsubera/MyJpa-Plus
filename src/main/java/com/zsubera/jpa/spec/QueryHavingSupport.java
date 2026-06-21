@@ -132,8 +132,9 @@ final class QueryHavingSupport<T> {
      */
     @SuppressWarnings({"unchecked", "rawtypes"})
     QuerySpec<T> havingSum(SFunction<T, ?> field, ConditionNode.Op op, Number value) {
+        String fieldName = LambdaUtils.getPropertyName(field);
         return addHavingCondition(field, op, "value", value, (root, cb) -> {
-            Expression<? extends Number> sumExpr = cb.sum((Expression)root.get(LambdaUtils.getPropertyName(field)));
+            Expression<? extends Number> sumExpr = cb.sum((Expression)root.get(fieldName));
             return AggregateHelper.compareExpression(cb, sumExpr, op, value);
         });
     }
@@ -148,8 +149,9 @@ final class QueryHavingSupport<T> {
      */
     @SuppressWarnings({"unchecked", "rawtypes"})
     QuerySpec<T> havingAvg(SFunction<T, ?> field, ConditionNode.Op op, Number value) {
+        String fieldName = LambdaUtils.getPropertyName(field);
         return addHavingCondition(field, op, "value", value, (root, cb) -> {
-            Expression<Double> avgExpr = cb.avg((Expression)root.get(LambdaUtils.getPropertyName(field)));
+            Expression<Double> avgExpr = cb.avg((Expression)root.get(fieldName));
             return AggregateHelper.compareExpression(cb, avgExpr, op, value);
         });
     }

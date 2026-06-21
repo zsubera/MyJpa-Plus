@@ -75,6 +75,9 @@ public final class PredicateHelper {
                 // （例如特殊的double值如NaN、Infinity）
                 double startVal = ((Number)start).doubleValue();
                 double endVal = ((Number)end).doubleValue();
+                if (Double.isNaN(startVal) || Double.isNaN(endVal)) {
+                    throw new IllegalArgumentException("NaN values are not allowed in range comparisons");
+                }
                 if (Double.compare(startVal, endVal) > 0) {
                     throw new IllegalArgumentException("start must not be greater than end");
                 }

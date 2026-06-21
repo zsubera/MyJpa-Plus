@@ -73,12 +73,24 @@ public sealed interface ConditionNode permits ConditionNode.SimpleNode, Conditio
                 case NE:
                     return value == null ? cb.isNotNull(fieldPath) : cb.notEqual(fieldPath, value);
                 case GT:
+                    if (value == null) {
+                        throw new IllegalArgumentException("GT operator requires non-null value");
+                    }
                     return cb.greaterThan((Expression<Comparable>)fieldPath, (Comparable)value);
                 case GE:
+                    if (value == null) {
+                        throw new IllegalArgumentException("GE operator requires non-null value");
+                    }
                     return cb.greaterThanOrEqualTo((Expression<Comparable>)fieldPath, (Comparable)value);
                 case LT:
+                    if (value == null) {
+                        throw new IllegalArgumentException("LT operator requires non-null value");
+                    }
                     return cb.lessThan((Expression<Comparable>)fieldPath, (Comparable)value);
                 case LE:
+                    if (value == null) {
+                        throw new IllegalArgumentException("LE operator requires non-null value");
+                    }
                     return cb.lessThanOrEqualTo((Expression<Comparable>)fieldPath, (Comparable)value);
                 case LIKE:
                     if (value == null) {
@@ -130,7 +142,16 @@ public sealed interface ConditionNode permits ConditionNode.SimpleNode, Conditio
                         return InClauseBuilder.in(cb, fieldPath, col);
                     }
                     if (value.getClass().isArray()) {
-                        Object[] arr = (Object[])value;
+                        Object[] arr;
+                        if (value instanceof Object[] objArr) {
+                            arr = objArr;
+                        } else {
+                            int len = java.lang.reflect.Array.getLength(value);
+                            arr = new Object[len];
+                            for (int i = 0; i < len; i++) {
+                                arr[i] = java.lang.reflect.Array.get(value, i);
+                            }
+                        }
                         if (arr.length == 0) {
                             return cb.disjunction();
                         }
@@ -150,7 +171,16 @@ public sealed interface ConditionNode permits ConditionNode.SimpleNode, Conditio
                         return InClauseBuilder.notIn(cb, fieldPath, col);
                     }
                     if (value.getClass().isArray()) {
-                        Object[] arr = (Object[])value;
+                        Object[] arr;
+                        if (value instanceof Object[] objArr) {
+                            arr = objArr;
+                        } else {
+                            int len = java.lang.reflect.Array.getLength(value);
+                            arr = new Object[len];
+                            for (int i = 0; i < len; i++) {
+                                arr[i] = java.lang.reflect.Array.get(value, i);
+                            }
+                        }
                         if (arr.length == 0) {
                             return cb.conjunction();
                         }
@@ -160,6 +190,13 @@ public sealed interface ConditionNode permits ConditionNode.SimpleNode, Conditio
                         "NOT_IN operator requires Collection or array, got: " + value.getClass().getName());
                 }
                 case BETWEEN: {
+                    if (value == null) {
+                        throw new IllegalArgumentException("BETWEEN operator requires non-null value");
+                    }
+                    if (!(value instanceof Comparable<?>[])) {
+                        throw new IllegalArgumentException(
+                            "BETWEEN requires a Comparable[] value, got: " + value.getClass().getName());
+                    }
                     Comparable<?>[] range = (Comparable<?>[])value;
                     if (range.length != 2) {
                         throw new IllegalArgumentException("BETWEEN requires exactly 2 values, got " + range.length);
@@ -167,6 +204,13 @@ public sealed interface ConditionNode permits ConditionNode.SimpleNode, Conditio
                     return cb.between((Expression<Comparable>)fieldPath, (Comparable)range[0], (Comparable)range[1]);
                 }
                 case NOT_BETWEEN: {
+                    if (value == null) {
+                        throw new IllegalArgumentException("NOT_BETWEEN operator requires non-null value");
+                    }
+                    if (!(value instanceof Comparable<?>[])) {
+                        throw new IllegalArgumentException(
+                            "NOT_BETWEEN requires a Comparable[] value, got: " + value.getClass().getName());
+                    }
                     Comparable<?>[] range = (Comparable<?>[])value;
                     if (range.length != 2) {
                         throw new IllegalArgumentException(

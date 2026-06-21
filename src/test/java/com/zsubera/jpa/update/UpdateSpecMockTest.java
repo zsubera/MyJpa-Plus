@@ -11,6 +11,10 @@ import jakarta.persistence.criteria.CriteriaUpdate;
 import jakarta.persistence.criteria.Path;
 import jakarta.persistence.criteria.Predicate;
 import jakarta.persistence.criteria.Root;
+import java.lang.reflect.Method;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Test;
 
 class UpdateSpecMockTest {
@@ -185,5 +189,41 @@ class UpdateSpecMockTest {
         when(em.createQuery(any(CriteriaUpdate.class))).thenReturn(tq);
         when(cb.createQuery(Long.class)).thenReturn(mock(CriteriaQuery.class));
         return em;
+    }
+
+    @Test
+    void evictCacheIfNeeded_concurrentThreadsNoRedundantEvictions() throws Exception {
+        Method evictMethod =
+            UpdateSpec.class.getDeclaredMethod("evictCacheIfNeeded", java.util.concurrent.ConcurrentMap.class);
+        evictMethod.setAccessible(true);
+
+        int threadCount = 8;
+        CountDownLatch startLatch = new CountDownLatch(1);
+        CountDownLatch doneLatch = new CountDownLatch(threadCount);
+        AtomicInteger evictionCount = new AtomicInteger(0);
+
+        java.util.concurrent.ExecutorService executor = java.util.concurrent.Executors.newFixedThreadPool(threadCount);
+        java.util.concurrent.ConcurrentHashMap<String, Boolean> cache = new ConcurrentHashMap<>();
+
+        for (int t = 0; t < threadCount; t++) {
+            final int threadId = t;
+            executor.submit(() -> {
+                try {
+                    startLatch.await();
+                    for (int i = 0; i < 10; i++) {
+                        cache.put("key-" + threadId + "-" + i, Boolean.TRUE);
+                    }
+                    evictMethod.invoke(null, cache);
+                    doneLatch.countDown();
+                } catch (Exception e) {
+                    doneLatch.countDown();
+                }
+            });
+        }
+
+        startLatch.countDown();
+        assertTrue(doneLatch.await(10, java.util.concurrent.TimeUnit.SECONDS));
+        executor.shutdown();
+        assertTrue(cache.size() <= 256);
     }
 }

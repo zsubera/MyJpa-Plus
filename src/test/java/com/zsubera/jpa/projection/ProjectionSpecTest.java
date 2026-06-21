@@ -722,7 +722,27 @@ class ProjectionSpecTest {
         Page<Tuple> page = new ProjectionSpec<>(TestEntity.class).select(TestEntity::getStatus).selectCount()
             .groupBy(TestEntity::getStatus).findPage(em, PageRequest.of(0, 10));
         assertNotNull(page);
-        assertTrue(page.getTotalElements() > 0);
+        assertEquals(3, page.getTotalElements());
+    }
+
+    @Test
+    void testFindPageWithGroupByAndHaving() {
+        for (int i = 0; i < 5; i++) {
+            TestEntity e = new TestEntity();
+            e.setName("gh" + i);
+            e.setStatus(1);
+            testEntityManager.persistAndFlush(e);
+        }
+        TestEntity single = new TestEntity();
+        single.setName("gh_single");
+        single.setStatus(2);
+        testEntityManager.persistAndFlush(single);
+
+        Page<Tuple> page = new ProjectionSpec<>(TestEntity.class).select(TestEntity::getStatus).selectCount()
+            .groupBy(TestEntity::getStatus).having((root, cb) -> cb.greaterThan(cb.count(root), 1L))
+            .findPage(em, PageRequest.of(0, 10));
+        assertNotNull(page);
+        assertEquals(1, page.getTotalElements());
     }
 
     @Test

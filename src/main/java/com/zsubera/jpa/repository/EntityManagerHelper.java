@@ -76,8 +76,8 @@ public final class EntityManagerHelper {
     public static void registerResolver(Class<?> entityType, EntityManagerResolver resolver) {
         Objects.requireNonNull(entityType, "entityType must not be null");
         Objects.requireNonNull(resolver, "resolver must not be null");
-        resolvers.put(entityType, resolver);
         synchronized (resolverCheckLock) {
+            resolvers.put(entityType, resolver);
             // 仅当 resolver 返回非默认 EMF 时才禁用 fast-path
             EntityManagerFactory defaultEmf = defaultEntityManagerFactory;
             if (defaultEmf == null) {
@@ -210,8 +210,10 @@ public final class EntityManagerHelper {
         EntityManagerFactory emf = resolveEntityManagerFactory(entityType);
         EntityManager em = EntityManagerFactoryUtils.getTransactionalEntityManager(emf);
         if (em == null) {
-            throw new IllegalStateException(
-                "No transactional EntityManager available. Ensure the operation is running within a transaction.");
+            throw new IllegalStateException("No transactional EntityManager available. "
+                + "Ensure the operation is running within a @Transactional context. "
+                + "Example: annotate the calling method with @Transactional, "
+                + "or use MyJpaTemplate which manages transactions automatically.");
         }
         return em;
     }

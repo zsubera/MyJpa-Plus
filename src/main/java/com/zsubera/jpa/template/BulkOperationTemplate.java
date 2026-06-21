@@ -374,7 +374,7 @@ class BulkOperationTemplate {
                     log.debug("Batch {} committed: {} rows {}ed in this batch (total: {})", operationName, batchResult,
                         operationName, total);
                 }
-                if (batchResult < batchSize) {
+                if (batchResult == 0) {
                     shouldContinue = false;
                 }
                 if (maxBulkOperationRows > 0 && total >= maxBulkOperationRows) {

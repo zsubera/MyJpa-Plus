@@ -127,7 +127,9 @@ final class CacheKeyBuilder {
             }
             sb.append(")");
         } else if (node instanceof ConditionNode.MultiLikeNode mln) {
-            sb.append("MULTILIKE(").append(mln.keyword);
+            sb.append("MULTILIKE(");
+            // 转义关键字中的分隔符防止缓存键结构被破坏
+            sb.append(mln.keyword.replace(")", "\\)").replace(",", "\\,"));
             for (String f : mln.fieldNames) {
                 sb.append(",").append(f);
             }
@@ -181,7 +183,8 @@ final class CacheKeyBuilder {
      */
     private static void appendHashedValue(StringBuilder sb, Object value) {
         if (value instanceof String s) {
-            sb.append("S[").append(s.length()).append(":").append(s.hashCode()).append("]");
+            sb.append("S[").append(s.length()).append(":").append(s.hashCode()).append(":")
+                .append(s.isEmpty() ? 0 : s.charAt(0)).append("]");
         } else if (value instanceof Object[] arr) {
             sb.append("A[").append(arr.length).append(":").append(java.util.Arrays.deepHashCode(arr)).append("]");
         } else if (value instanceof int[] arr) {
@@ -196,7 +199,7 @@ final class CacheKeyBuilder {
         } else {
             String s = String.valueOf(value);
             sb.append("N[").append(value.getClass().getName()).append(":").append(s.length()).append(":")
-                .append(s.hashCode()).append("]");
+                .append(s.hashCode()).append(":").append(s.isEmpty() ? 0 : s.charAt(0)).append("]");
         }
     }
 }

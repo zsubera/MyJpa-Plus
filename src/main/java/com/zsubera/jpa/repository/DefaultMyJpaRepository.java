@@ -128,7 +128,7 @@ public class DefaultMyJpaRepository<T, ID> extends SimpleJpaRepository<T, ID> im
      *
      * @return 如果自动过滤已启用返回 true
      */
-    public static synchronized boolean isAutoFilterEnabled() {
+    public static boolean isAutoFilterEnabled() {
         // Check GlobalConfigHolder first (primary config source)
         com.zsubera.jpa.autoconfigure.MyJpaPlusGlobalConfig config =
             com.zsubera.jpa.autoconfigure.GlobalConfigHolder.getConfig();
@@ -150,7 +150,7 @@ public class DefaultMyJpaRepository<T, ID> extends SimpleJpaRepository<T, ID> im
      *
      * @return 如果阻断已启用返回 true
      */
-    public static synchronized boolean isBlockUnconditionalDelete() {
+    public static boolean isBlockUnconditionalDelete() {
         // Check GlobalConfigHolder first (primary config source)
         com.zsubera.jpa.autoconfigure.MyJpaPlusGlobalConfig config =
             com.zsubera.jpa.autoconfigure.GlobalConfigHolder.getConfig();
@@ -435,14 +435,25 @@ public class DefaultMyJpaRepository<T, ID> extends SimpleJpaRepository<T, ID> im
             }
             return false;
         }
-        // 软删除场景：使用单次 UPDATE 替代 SELECT + DELETE 避免 N+1
         String idFieldName = EntityClassResolver.resolveIdFieldName(domainClass);
-        Specification<T> idSpec = Specification.where((root, query, cb) -> cb.equal(root.get(idFieldName), id));
-        Specification<T> softDeleteSpec = SoftDeleteHelper.isNotDeleted(domainClass);
-        Specification<T> combinedSpec = softDeleteSpec != null ? idSpec.and(softDeleteSpec) : idSpec;
-        Optional<T> entity = findOne(combinedSpec);
-        if (entity.isPresent()) {
-            delete(entity.get());
+        String softDeleteFieldName = SoftDeleteHelper.findSoftDeleteField(domainClass);
+        jakarta.persistence.criteria.CriteriaBuilder cb = entityManager.getCriteriaBuilder();
+        jakarta.persistence.criteria.CriteriaQuery<Long> cq = cb.createQuery(Long.class);
+        jakarta.persistence.criteria.Root<T> root = cq.from(domainClass);
+        cq.select(cb.count(root));
+        jakarta.persistence.criteria.Predicate idPredicate = cb.equal(root.get(idFieldName), id);
+        if (softDeleteFieldName != null) {
+            jakarta.persistence.criteria.Predicate notDeleted =
+                cb.or(cb.isNull(root.get(softDeleteFieldName)), cb.equal(root.get(softDeleteFieldName), false));
+            cq.where(idPredicate, notDeleted);
+        } else {
+            cq.where(idPredicate);
+        }
+        Long count = entityManager.createQuery(cq).getSingleResult();
+        if (count > 0) {
+            @SuppressWarnings("unchecked")
+            ID castId = id;
+            SoftDeleteHelper.softDeleteByIds(entityManager, domainClass, java.util.List.of(castId));
             return true;
         }
         return false;

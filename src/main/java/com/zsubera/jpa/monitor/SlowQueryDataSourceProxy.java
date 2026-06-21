@@ -167,6 +167,7 @@ public final class SlowQueryDataSourceProxy {
         }
 
         private static volatile MicrometerReflectCache micrometerCache;
+        private static volatile Object cachedSummary;
 
         @SuppressFBWarnings(value = "EI_EXPOSE_REP2",
             justification = "Internal timing handler stores JDBC proxy target for delegation")
@@ -179,7 +180,8 @@ public final class SlowQueryDataSourceProxy {
         @Override
         public Object invoke(Object proxy, Method method, Object[] args) throws Throwable {
             String name = method.getName();
-            if ("executeQuery".equals(name) || "executeUpdate".equals(name) || "execute".equals(name)) {
+            if ("executeQuery".equals(name) || "executeUpdate".equals(name) || "execute".equals(name)
+                || "executeBatch".equals(name)) {
                 long start = System.nanoTime();
                 try {
                     return method.invoke(target, args);
@@ -209,9 +211,13 @@ public final class SlowQueryDataSourceProxy {
             try {
                 Object tags = cache.tagsOfMethod().invoke(null, "type", operationType);
 
-                Object summary = cache.summaryBuilderMethod().invoke(null, "myjpa.query.duration");
-                summary = cache.summaryDescMethod().invoke(summary, "JPA query execution duration");
-                summary = cache.summaryRegisterMethod().invoke(summary, cache.meterRegistry());
+                Object summary = cachedSummary;
+                if (summary == null) {
+                    summary = cache.summaryBuilderMethod().invoke(null, "myjpa.query.duration");
+                    summary = cache.summaryDescMethod().invoke(summary, "JPA query execution duration");
+                    summary = cache.summaryRegisterMethod().invoke(summary, cache.meterRegistry());
+                    cachedSummary = summary;
+                }
 
                 cache.summaryRecordMethod().invoke(summary, tags, (double)elapsedMs);
             } catch (ReflectiveOperationException e) {

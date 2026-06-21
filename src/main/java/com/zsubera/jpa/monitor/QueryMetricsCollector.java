@@ -197,18 +197,17 @@ public class QueryMetricsCollector {
     }
 
     /**
-     * 概率淘汰：随机选择一个条目移除，O(1) 时间复杂度。
+     * 概率淘汰：随机移除 10% 的条目，为新条目腾出空间。
      */
     private void evictRandomEntry() {
         String[] keys = metricsMap.keySet().toArray(new String[0]);
-        if (keys.length > 1) {
-            String randomKey = keys[java.util.concurrent.ThreadLocalRandom.current().nextInt(keys.length)];
+        int toEvict = Math.max(1, keys.length / 10);
+        java.util.concurrent.ThreadLocalRandom rng = java.util.concurrent.ThreadLocalRandom.current();
+        for (int i = 0; i < toEvict && keys.length > 0; i++) {
+            String randomKey = keys[rng.nextInt(keys.length)];
             metricsMap.remove(randomKey);
-            log.debug("Evicted random metrics entry: '{}'", randomKey);
-        } else if (keys.length == 1) {
-            metricsMap.remove(keys[0]);
-            log.debug("Evicted last metrics entry: '{}'", keys[0]);
         }
+        log.debug("Evicted {} random metrics entries", toEvict);
     }
 
     /**

@@ -170,10 +170,8 @@ class BatchSaveTemplate {
             }
             return false;
         } catch (RuntimeException e) {
-            if (log.isDebugEnabled()) {
-                log.debug("PersistenceUnitUtil.getIdentifier() failed for {}: {}", entity.getClass().getSimpleName(),
-                    e.getMessage());
-            }
+            log.warn("PersistenceUnitUtil.getIdentifier() failed for {}, falling back to getId(): {}",
+                entity.getClass().getSimpleName(), e.getMessage());
         }
         try {
             if (ID_METHOD_CACHE.size() >= MAX_ID_METHOD_CACHE_SIZE) {
@@ -196,12 +194,13 @@ class BatchSaveTemplate {
             }
             Object id = getId.invoke(entity);
             return id == null;
-        } catch (ReflectiveOperationException ignored) {
+        } catch (ReflectiveOperationException e) {
+            throw new com.zsubera.jpa.exception.MyJpaPlusException(
+                "Cannot determine if entity is new for " + entity.getClass().getSimpleName()
+                    + ". Entity must have a getId() method or be managed by PersistenceUnitUtil. "
+                    + "Use saveAllBatchedPure() for new entities, or implement getId().",
+                e);
         }
-        throw new com.zsubera.jpa.exception.MyJpaPlusException(
-            "Cannot determine if entity is new for " + entity.getClass().getSimpleName()
-                + ". Entity must have a getId() method or be managed by PersistenceUnitUtil. "
-                + "Use saveAllBatchedPure() for new entities, or implement getId().");
     }
 
     /**

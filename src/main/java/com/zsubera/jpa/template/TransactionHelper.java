@@ -121,12 +121,8 @@ class TransactionHelper {
         TransactionTemplate txTemplate;
         if (existingTransaction) {
 
-            log.warn("executeInNewTransaction called within an active transaction. "
-                + "Using PROPAGATION_REQUIRES_NEW to create an independent transaction. "
-                + "The outer transaction will be suspended. "
-                + "Note: on some databases (e.g., H2), locks held by the outer transaction "
-                + "may conflict with the new transaction, causing deadlocks. "
-                + "Consider calling outside @Transactional methods to avoid lock conflicts.");
+            log.debug("executeInNewTransaction called within an active transaction. "
+                + "Using PROPAGATION_REQUIRES_NEW to create an independent transaction.");
             txTemplate = getOrCreateRequiresNewTemplate(txManager);
         } else {
             txTemplate = getOrCreateRequiredTemplate(txManager);

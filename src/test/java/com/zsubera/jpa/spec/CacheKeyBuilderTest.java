@@ -202,4 +202,34 @@ class CacheKeyBuilderTest {
             null, null);
         assertNotEquals(key1, key2);
     }
+
+    @Test
+    void stringHashCodeCollision_differentStringsProduceDifferentKeys() {
+        List<ConditionNode> c1 = new ArrayList<>();
+        c1.add(new ConditionNode.SimpleNode("name", "Aa", ConditionNode.Op.EQ));
+        List<ConditionNode> c2 = new ArrayList<>();
+        c2.add(new ConditionNode.SimpleNode("name", "BB", ConditionNode.Op.EQ));
+
+        String key1 = CacheKeyBuilder.buildCacheKey(c1, c1, emptyGroupStack(), false, List.of(), List.of(), List.of(),
+            null, null);
+        String key2 = CacheKeyBuilder.buildCacheKey(c2, c2, emptyGroupStack(), false, List.of(), List.of(), List.of(),
+            null, null);
+        assertNotEquals(key1, key2,
+            "Different strings with same hashCode (Aa vs BB) must produce different cache keys");
+    }
+
+    @Test
+    void nonStringHashCodeCollision_differentValuesProduceDifferentKeys() {
+        List<ConditionNode> c1 = new ArrayList<>();
+        c1.add(new ConditionNode.SimpleNode("val", 12, ConditionNode.Op.EQ));
+        List<ConditionNode> c2 = new ArrayList<>();
+        c2.add(new ConditionNode.SimpleNode("val", 21, ConditionNode.Op.EQ));
+
+        String key1 = CacheKeyBuilder.buildCacheKey(c1, c1, emptyGroupStack(), false, List.of(), List.of(), List.of(),
+            null, null);
+        String key2 = CacheKeyBuilder.buildCacheKey(c2, c2, emptyGroupStack(), false, List.of(), List.of(), List.of(),
+            null, null);
+        assertNotEquals(key1, key2,
+            "Different non-String values with same String.valueOf length must produce different cache keys");
+    }
 }

@@ -323,6 +323,74 @@ class EntityCodeGeneratorTest {
     }
 
     @Test
+    void generateRepository_invalidTableName_throws() {
+        List<EntityCodeGenerator.ColumnDef> columns =
+            List.of(new EntityCodeGenerator.ColumnDef("name", "String", false));
+        assertThrows(IllegalArgumentException.class,
+            () -> EntityCodeGenerator.generateRepository("table;DROP", columns, "com.example", "com.repo"));
+        assertThrows(IllegalArgumentException.class,
+            () -> EntityCodeGenerator.generateRepository("table\nRuntime.exec", columns, "com.example", "com.repo"));
+    }
+
+    @Test
+    void generateRepository_invalidEntityPackage_throws() {
+        List<EntityCodeGenerator.ColumnDef> columns =
+            List.of(new EntityCodeGenerator.ColumnDef("name", "String", false));
+        assertThrows(IllegalArgumentException.class,
+            () -> EntityCodeGenerator.generateRepository("table", columns, ".com.example", "com.repo"));
+        assertThrows(IllegalArgumentException.class,
+            () -> EntityCodeGenerator.generateRepository("table", columns, "com.example.", "com.repo"));
+        assertThrows(IllegalArgumentException.class,
+            () -> EntityCodeGenerator.generateRepository("table", columns, "com-example", "com.repo"));
+    }
+
+    @Test
+    void generateRepository_invalidRepoPackage_throws() {
+        List<EntityCodeGenerator.ColumnDef> columns =
+            List.of(new EntityCodeGenerator.ColumnDef("name", "String", false));
+        assertThrows(IllegalArgumentException.class,
+            () -> EntityCodeGenerator.generateRepository("table", columns, "com.example", ".com.repo"));
+        assertThrows(IllegalArgumentException.class,
+            () -> EntityCodeGenerator.generateRepository("table", columns, "com.example", "com-repo"));
+    }
+
+    @Test
+    void generateEntity_templateWithInvalidTableName_throws() {
+        String template = "package ${package};\nclass ${className} {}\n";
+        List<EntityCodeGenerator.ColumnDef> columns =
+            List.of(new EntityCodeGenerator.ColumnDef("name", "String", false));
+        assertThrows(IllegalArgumentException.class,
+            () -> EntityCodeGenerator.generateEntity("table;DROP", columns, "com.example", template));
+    }
+
+    @Test
+    void generateEntity_templateWithInvalidPackage_throws() {
+        String template = "package ${package};\nclass ${className} {}\n";
+        List<EntityCodeGenerator.ColumnDef> columns =
+            List.of(new EntityCodeGenerator.ColumnDef("name", "String", false));
+        assertThrows(IllegalArgumentException.class,
+            () -> EntityCodeGenerator.generateEntity("table", columns, ".com.example", template));
+    }
+
+    @Test
+    void generateEntity_templateWithNullTableName_throws() {
+        String template = "package ${package};\nclass ${className} {}\n";
+        List<EntityCodeGenerator.ColumnDef> columns =
+            List.of(new EntityCodeGenerator.ColumnDef("name", "String", false));
+        assertThrows(IllegalArgumentException.class,
+            () -> EntityCodeGenerator.generateEntity(null, columns, "com.example", template));
+    }
+
+    @Test
+    void generateEntity_templateWithInvalidPackageChars_throws() {
+        String template = "package ${package};\nclass ${className} {}\n";
+        List<EntityCodeGenerator.ColumnDef> columns =
+            List.of(new EntityCodeGenerator.ColumnDef("name", "String", false));
+        assertThrows(IllegalArgumentException.class,
+            () -> EntityCodeGenerator.generateEntity("table", columns, "com-example", template));
+    }
+
+    @Test
     void columnDef_getters() {
         EntityCodeGenerator.ColumnDef col = new EntityCodeGenerator.ColumnDef("name", "String", true);
         assertEquals("name", col.getName());

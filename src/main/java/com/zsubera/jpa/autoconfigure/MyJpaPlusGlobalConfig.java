@@ -65,6 +65,10 @@ public class MyJpaPlusGlobalConfig {
     }
 
     public void setDefaultTimeoutSeconds(int defaultTimeoutSeconds) {
+        if (defaultTimeoutSeconds < -1) {
+            throw new IllegalArgumentException(
+                "defaultTimeoutSeconds must be -1 (disabled) or non-negative, got: " + defaultTimeoutSeconds);
+        }
         this.defaultTimeoutSeconds = defaultTimeoutSeconds;
     }
 
@@ -86,6 +90,9 @@ public class MyJpaPlusGlobalConfig {
     }
 
     public void setMaxResults(int maxResults) {
+        if (maxResults <= 0) {
+            throw new IllegalArgumentException("maxResults must be positive, got: " + maxResults);
+        }
         this.maxResults = maxResults;
     }
 
@@ -94,6 +101,10 @@ public class MyJpaPlusGlobalConfig {
     }
 
     public void setMaxBulkOperationRows(int maxBulkOperationRows) {
+        if (maxBulkOperationRows < -1) {
+            throw new IllegalArgumentException(
+                "maxBulkOperationRows must be -1 (unlimited) or non-negative, got: " + maxBulkOperationRows);
+        }
         this.maxBulkOperationRows = maxBulkOperationRows;
     }
 
@@ -102,6 +113,10 @@ public class MyJpaPlusGlobalConfig {
     }
 
     public void setDeepPaginationOffsetThreshold(int deepPaginationOffsetThreshold) {
+        if (deepPaginationOffsetThreshold < 0) {
+            throw new IllegalArgumentException(
+                "deepPaginationOffsetThreshold must be non-negative, got: " + deepPaginationOffsetThreshold);
+        }
         this.deepPaginationOffsetThreshold = deepPaginationOffsetThreshold;
     }
 
@@ -110,6 +125,10 @@ public class MyJpaPlusGlobalConfig {
     }
 
     public void setDeepPaginationOffsetLimit(int deepPaginationOffsetLimit) {
+        if (deepPaginationOffsetLimit < -1) {
+            throw new IllegalArgumentException(
+                "deepPaginationOffsetLimit must be -1 (unlimited) or non-negative, got: " + deepPaginationOffsetLimit);
+        }
         this.deepPaginationOffsetLimit = deepPaginationOffsetLimit;
     }
 }

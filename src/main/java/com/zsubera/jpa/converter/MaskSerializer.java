@@ -93,7 +93,12 @@ public class MaskSerializer extends JsonSerializer<String> {
     private static String maskEmail(String email) {
         int atIndex = email.lastIndexOf('@');
         if (atIndex <= 0) {
-            return email;
+            int len = email.codePointCount(0, email.length());
+            if (len <= 1) {
+                return email;
+            }
+            int firstEnd = email.offsetByCodePoints(0, 1);
+            return email.substring(0, firstEnd) + "*".repeat(len - 1);
         }
         String localPart = email.substring(0, atIndex);
         String domain = email.substring(atIndex);

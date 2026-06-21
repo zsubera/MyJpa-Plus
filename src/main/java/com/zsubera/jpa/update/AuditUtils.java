@@ -92,9 +92,6 @@ public final class AuditUtils {
      * @return 格式化的调用栈字符串
      */
     public static String getCallStack() {
-        // 使用StackWalker（Java 9+）进行高效的部分栈遍历。
-        // StackWalker仅实例化请求的帧数，而不像
-        // Thread.currentThread().getStackTrace()那样捕获整个栈。
         int depth = maxStackDepth;
         StringBuilder sb = new StringBuilder();
         STACK_WALKER.walk(frames -> {
@@ -102,8 +99,10 @@ public final class AuditUtils {
                 if (!sb.isEmpty()) {
                     sb.append(" <- ");
                 }
-                sb.append(frame.getClassName()).append(".").append(frame.getMethodName());
-                sb.append(":").append(frame.getLineNumber());
+                // 仅暴露类名（不含包名和方法/行号），防止内部实现细节泄露到生产日志
+                String className = frame.getClassName();
+                int lastDot = className.lastIndexOf('.');
+                sb.append(lastDot >= 0 ? className.substring(lastDot + 1) : className);
             });
             return sb;
         });

@@ -520,4 +520,38 @@ class DefaultMyJpaRepositoryTest {
         assertTrue(provider.isAutoFilterEnabled());
         assertFalse(provider.isBlockUnconditionalDelete());
     }
+
+    // ---- deleteByIdIfExists: soft-delete branch ----
+
+    @Test
+    void deleteByIdIfExists_softDeletesActiveEntity() throws Exception {
+        SoftDeleteRepoTestEntity entity = saveEntity("toSoftDelete", false);
+        Long id = entity.getId();
+        Object target = org.springframework.test.util.AopTestUtils.getTargetObject(repository);
+        java.lang.reflect.Method method = DefaultMyJpaRepository.class.getMethod("deleteByIdIfExists", Object.class);
+        boolean result = (boolean)method.invoke(target, id);
+        assertTrue(result);
+        repository.flush();
+        List<SoftDeleteRepoTestEntity> all = findAllIncludingDeleted();
+        assertEquals(1, all.size(), "Entity should still exist after soft delete");
+        assertTrue(Boolean.TRUE.equals(all.get(0).getDeleted()), "Entity should be soft-deleted");
+    }
+
+    @Test
+    void deleteByIdIfExists_returnsFalseForNonExistentId() throws Exception {
+        Object target = org.springframework.test.util.AopTestUtils.getTargetObject(repository);
+        java.lang.reflect.Method method = DefaultMyJpaRepository.class.getMethod("deleteByIdIfExists", Object.class);
+        boolean result = (boolean)method.invoke(target, 999999L);
+        assertFalse(result);
+    }
+
+    @Test
+    void deleteByIdIfExists_returnsFalseForAlreadyDeletedEntity() throws Exception {
+        SoftDeleteRepoTestEntity entity = saveEntity("alreadyDeleted", true);
+        Long id = entity.getId();
+        Object target = org.springframework.test.util.AopTestUtils.getTargetObject(repository);
+        java.lang.reflect.Method method = DefaultMyJpaRepository.class.getMethod("deleteByIdIfExists", Object.class);
+        boolean result = (boolean)method.invoke(target, id);
+        assertFalse(result);
+    }
 }

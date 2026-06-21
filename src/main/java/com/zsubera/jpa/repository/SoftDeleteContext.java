@@ -157,11 +157,11 @@ public final class SoftDeleteContext {
      * @throws IllegalStateException 如果计数超过安全上限（可能存在泄漏）
      */
     public static void pushIgnore() {
-        // 简化为单次读取 - ThreadLocal.withInitial保证非null
         int count = IGNORE_COUNT.get();
-        if (count >= maxIgnoreCount) {
+        int limit = maxIgnoreCount;
+        if (count >= limit) {
             throw new IllegalStateException(
-                "SoftDeleteContext ignore count exceeded maximum (" + maxIgnoreCount + "). Possible leak detected.");
+                "SoftDeleteContext ignore count exceeded maximum (" + limit + "). Possible leak detected.");
         }
         IGNORE_COUNT.set(count + 1);
     }

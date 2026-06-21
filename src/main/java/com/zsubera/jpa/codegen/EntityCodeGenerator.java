@@ -242,6 +242,19 @@ public final class EntityCodeGenerator {
         if (template == null || template.isBlank()) {
             return generateEntity(tableName, columns, entityPackage);
         }
+        if (tableName == null || !tableName.matches("[a-zA-Z0-9_]+")) {
+            throw new IllegalArgumentException(
+                "tableName contains invalid characters. Only alphanumeric and underscore are allowed: " + tableName);
+        }
+        if (entityPackage == null || !entityPackage.matches("[a-zA-Z_][a-zA-Z0-9_.]*")) {
+            throw new IllegalArgumentException(
+                "entityPackage contains invalid characters. Only alphanumeric, underscore, and dot are allowed: "
+                    + entityPackage);
+        }
+        if (entityPackage.startsWith(".") || entityPackage.endsWith(".") || entityPackage.contains("..")) {
+            throw new IllegalArgumentException(
+                "entityPackage must not start/end with dot or contain consecutive dots: " + entityPackage);
+        }
         String className = toClassName(tableName);
         String imports = buildExtraImports(columns);
         String fields = buildFields(columns);
@@ -265,14 +278,36 @@ public final class EntityCodeGenerator {
         if (tableName == null || tableName.isBlank()) {
             throw new IllegalArgumentException("tableName must not be blank");
         }
+        if (!tableName.matches("[a-zA-Z0-9_]+")) {
+            throw new IllegalArgumentException(
+                "tableName contains invalid characters. Only alphanumeric and underscore are allowed: " + tableName);
+        }
         if (columns == null) {
             throw new IllegalArgumentException("columns must not be null");
         }
         if (entityPackage == null || entityPackage.isBlank()) {
             throw new IllegalArgumentException("entityPackage must not be blank");
         }
+        if (!entityPackage.matches("[a-zA-Z_][a-zA-Z0-9_.]*")) {
+            throw new IllegalArgumentException(
+                "entityPackage contains invalid characters. Only alphanumeric, underscore, and dot are allowed: "
+                    + entityPackage);
+        }
+        if (entityPackage.startsWith(".") || entityPackage.endsWith(".") || entityPackage.contains("..")) {
+            throw new IllegalArgumentException(
+                "entityPackage must not start/end with dot or contain consecutive dots: " + entityPackage);
+        }
         if (repoPackage == null || repoPackage.isBlank()) {
             throw new IllegalArgumentException("repoPackage must not be blank");
+        }
+        if (!repoPackage.matches("[a-zA-Z_][a-zA-Z0-9_.]*")) {
+            throw new IllegalArgumentException(
+                "repoPackage contains invalid characters. Only alphanumeric, underscore, and dot are allowed: "
+                    + repoPackage);
+        }
+        if (repoPackage.startsWith(".") || repoPackage.endsWith(".") || repoPackage.contains("..")) {
+            throw new IllegalArgumentException(
+                "repoPackage must not start/end with dot or contain consecutive dots: " + repoPackage);
         }
 
         String className = toClassName(tableName);
@@ -304,6 +339,20 @@ public final class EntityCodeGenerator {
         String repoPackage, String template) {
         if (template == null || template.isBlank()) {
             return generateRepository(tableName, columns, entityPackage, repoPackage);
+        }
+        if (tableName == null || !tableName.matches("[a-zA-Z0-9_]+")) {
+            throw new IllegalArgumentException(
+                "tableName contains invalid characters. Only alphanumeric and underscore are allowed: " + tableName);
+        }
+        if (entityPackage == null || !entityPackage.matches("[a-zA-Z_][a-zA-Z0-9_.]*")) {
+            throw new IllegalArgumentException(
+                "entityPackage contains invalid characters. Only alphanumeric, underscore, and dot are allowed: "
+                    + entityPackage);
+        }
+        if (repoPackage == null || !repoPackage.matches("[a-zA-Z_][a-zA-Z0-9_.]*")) {
+            throw new IllegalArgumentException(
+                "repoPackage contains invalid characters. Only alphanumeric, underscore, and dot are allowed: "
+                    + repoPackage);
         }
         String className = toClassName(tableName);
         String repoName = className + "Repository";
@@ -343,7 +392,7 @@ public final class EntityCodeGenerator {
         "enum", "extends", "final", "finally", "float", "for", "goto", "if", "implements", "import", "instanceof",
         "int", "interface", "long", "native", "new", "package", "private", "protected", "public", "return", "short",
         "static", "strictfp", "super", "switch", "synchronized", "this", "throw", "throws", "transient", "try", "void",
-        "volatile", "while", "true", "false", "null");
+        "volatile", "while", "true", "false", "null", "var", "yield", "record", "sealed", "permits");
 
     /**
      * 校验字段名是否为 Java 保留字，如果是则追加下划线后缀。

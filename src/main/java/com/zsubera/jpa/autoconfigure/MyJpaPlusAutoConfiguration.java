@@ -124,7 +124,7 @@ public class MyJpaPlusAutoConfiguration {
 
             // 应用查询超时配置
             int timeout = properties.getQuery().getDefaultTimeoutSeconds();
-            if (timeout > 0 || timeout == -1) {
+            if (timeout > 0 || timeout == -1 || timeout == 0) {
                 QueryTimeoutHelper.setDefaultTimeoutSeconds(timeout);
             }
 
@@ -157,6 +157,8 @@ public class MyJpaPlusAutoConfiguration {
                 encryptKey = System.getProperty("myjpa.encrypt.key");
             }
             if (encryptKey != null && !encryptKey.isEmpty()) {
+                // 启动时检查盐值配置，防止生产环境使用不安全的开发盐值
+                validateEncryptionSalt();
                 try {
                     com.zsubera.jpa.converter.EncryptConverter.warmUpKeyCache();
                     log.info("EncryptConverter key warmup started in background");
@@ -164,6 +166,75 @@ public class MyJpaPlusAutoConfiguration {
                     log.warn("Failed to warm up EncryptConverter key cache: {}", e.getMessage());
                 }
             }
+        }
+
+        /**
+         * 启动时验证加密盐值配置，防止生产环境使用不安全的开发盐值。
+         *
+         * <p>检查逻辑：</p>
+         * <ol>
+         *   <li>如果已配置盐值（环境变量或系统属性），直接通过</li>
+         *   <li>如果未配置盐值，在生产环境直接拒绝启动</li>
+         *   <li>如果未配置盐值，在开发/测试环境记录警告</li>
+         * </ol>
+         */
+        private void validateEncryptionSalt() {
+            String salt = System.getenv("MYJPA_ENCRYPT_SALT");
+            if (salt == null || salt.isEmpty()) {
+                salt = System.getProperty("myjpa.encrypt.salt");
+            }
+            if (salt != null && !salt.isEmpty()) {
+                return; // 盐值已配置，安全
+            }
+
+            // 盐值未配置 — 检查是否为生产环境
+            if (isProductionEnvironment()) {
+                throw new IllegalStateException(
+                    "CRITICAL: PBKDF2 salt must be configured for encryption in production. "
+                        + "Set environment variable MYJPA_ENCRYPT_SALT or system property myjpa.encrypt.salt "
+                        + "before starting the application.");
+            }
+
+            // 开发/测试环境 — 记录警告但不阻止启动
+            log.warn("SECURITY: PBKDF2 salt not configured. " + "Encrypted data will use a fixed development salt. "
+                + "Set environment variable MYJPA_ENCRYPT_SALT or system property myjpa.encrypt.salt for production.");
+        }
+
+        /**
+         * 检查当前是否为生产环境。
+         */
+        private boolean isProductionEnvironment() {
+            String requireSalt = System.getProperty("myjpa-plus.encrypt.require-salt");
+            if ("true".equalsIgnoreCase(requireSalt)) {
+                return true;
+            }
+            requireSalt = System.getenv("MYJPA_ENCRYPT_REQUIRE_SALT");
+            if ("true".equalsIgnoreCase(requireSalt)) {
+                return true;
+            }
+            String profile = System.getProperty("spring.profiles.active", "");
+            if (isProdProfile(profile)) {
+                return true;
+            }
+            profile = System.getenv("SPRING_PROFILES_ACTIVE");
+            if (profile != null && isProdProfile(profile)) {
+                return true;
+            }
+            profile = System.getenv("SPRING_PROFILES");
+            return profile != null && isProdProfile(profile);
+        }
+
+        private boolean isProdProfile(String profile) {
+            if (profile == null || profile.isEmpty()) {
+                return false;
+            }
+            for (String p : profile.split(",")) {
+                String trimmed = p.trim().toLowerCase();
+                if (trimmed.contains("prod") || trimmed.contains("production")) {
+                    return true;
+                }
+            }
+            return false;
         }
     }
 
@@ -261,16 +332,46 @@ public class MyJpaPlusAutoConfiguration {
         private static final org.slf4j.Logger secLog =
             org.slf4j.LoggerFactory.getLogger(SecurityContextAuditUserProvider.class);
 
+        private static volatile java.lang.reflect.Method getContextMethod;
+        private static volatile java.lang.reflect.Method getAuthenticationMethod;
+        private static volatile java.lang.reflect.Method isAuthenticatedMethod;
+        private static volatile java.lang.reflect.Method getNameMethod;
+
+        static {
+            try {
+                Class<?> shc = Class.forName("org.springframework.security.core.context.SecurityContextHolder");
+                getContextMethod = shc.getMethod("getContext");
+                Class<?> ctxClass = Class.forName("org.springframework.security.core.context.SecurityContext");
+                getAuthenticationMethod = ctxClass.getMethod("getAuthentication");
+                Class<?> authClass = Class.forName("org.springframework.security.core.Authentication");
+                isAuthenticatedMethod = authClass.getMethod("isAuthenticated");
+                getNameMethod = authClass.getMethod("getName");
+            } catch (Exception e) {
+                // Security not available — leave all methods null
+            }
+        }
+
         @Override
         public String getCurrentUser() {
             try {
-                Class<?> shc = Class.forName("org.springframework.security.core.context.SecurityContextHolder");
-                Object context = shc.getMethod("getContext").invoke(null);
-                Object auth = context.getClass().getMethod("getAuthentication").invoke(context);
+                java.lang.reflect.Method ctx = getContextMethod;
+                if (ctx == null)
+                    return "ANONYMOUS";
+                Object context = ctx.invoke(null);
+                java.lang.reflect.Method getAuth = getAuthenticationMethod;
+                if (getAuth == null)
+                    return "ANONYMOUS";
+                Object auth = getAuth.invoke(context);
                 if (auth != null) {
-                    Boolean authenticated = (Boolean)auth.getClass().getMethod("isAuthenticated").invoke(auth);
-                    if (Boolean.TRUE.equals(authenticated)) {
-                        return (String)auth.getClass().getMethod("getName").invoke(auth);
+                    java.lang.reflect.Method isAuth = isAuthenticatedMethod;
+                    if (isAuth != null) {
+                        Boolean authenticated = (Boolean)isAuth.invoke(auth);
+                        if (Boolean.TRUE.equals(authenticated)) {
+                            java.lang.reflect.Method getName = getNameMethod;
+                            if (getName != null) {
+                                return (String)getName.invoke(auth);
+                            }
+                        }
                     }
                 }
             } catch (Exception e) {
@@ -409,13 +510,41 @@ public class MyJpaPlusAutoConfiguration {
      */
     @EventListener(ContextClosedEvent.class)
     public void onContextClosed(ContextClosedEvent event) {
-        LambdaUtils.shutdown();
-        com.zsubera.jpa.converter.EncryptConverter.clearCaches();
-        com.zsubera.jpa.converter.EncryptConverter.removeCipher();
-        com.zsubera.jpa.softdelete.SoftDeleteHelper.shutdown();
-        DefaultMyJpaRepository.clearThreadLocal();
-        com.zsubera.jpa.repository.SoftDeleteContext.reset();
-        com.zsubera.jpa.repository.EntityManagerHelper.reset();
+        try {
+            LambdaUtils.shutdown();
+        } catch (Exception e) {
+            log.warn("LambdaUtils shutdown failed", e);
+        }
+        try {
+            com.zsubera.jpa.converter.EncryptConverter.clearCaches();
+        } catch (Exception e) {
+            log.warn("EncryptConverter cache cleanup failed", e);
+        }
+        try {
+            com.zsubera.jpa.converter.EncryptConverter.removeCipher();
+        } catch (Exception e) {
+            log.warn("EncryptConverter cipher cleanup failed", e);
+        }
+        try {
+            com.zsubera.jpa.softdelete.SoftDeleteHelper.shutdown();
+        } catch (Exception e) {
+            log.warn("SoftDeleteHelper shutdown failed", e);
+        }
+        try {
+            DefaultMyJpaRepository.clearThreadLocal();
+        } catch (Exception e) {
+            log.warn("DefaultMyJpaRepository cleanup failed", e);
+        }
+        try {
+            com.zsubera.jpa.repository.SoftDeleteContext.reset();
+        } catch (Exception e) {
+            log.warn("SoftDeleteContext reset failed", e);
+        }
+        try {
+            com.zsubera.jpa.repository.EntityManagerHelper.reset();
+        } catch (Exception e) {
+            log.warn("EntityManagerHelper reset failed", e);
+        }
         log.info("MyJpa-Plus context closed, caches cleaned");
     }
 

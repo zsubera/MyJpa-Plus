@@ -79,7 +79,8 @@ public class DeleteSpec<T> extends AbstractBulkOperationSpec<T, DeleteSpec<T>> {
     public int execute(EntityManager em) {
         // 检查是否有最大行数保护配置（使用快速估算避免全表 COUNT）
         com.zsubera.jpa.autoconfigure.MyJpaPlusGlobalConfig config = getGlobalConfig();
-        if (config != null && config.getMaxBulkOperationRows() > 0) {
+        if (config != null && config.getMaxBulkOperationRows() > 0
+            && config.getMaxBulkOperationRows() < Integer.MAX_VALUE) {
             checkRowCountBeforeExecute(em, config.getMaxBulkOperationRows(), "DELETE");
         }
         var query = em.createQuery(toDelete(em));

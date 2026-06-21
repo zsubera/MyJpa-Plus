@@ -479,15 +479,14 @@ public class EncryptConverter implements AttributeConverter<String, String> {
         if (existing != null) {
             return existing;
         }
-        if (KEY_CACHE.size() >= MAX_KEY_CACHE_SIZE && !KEY_CACHE.containsKey(cacheKey)) {
-            throw new MyJpaPlusException(
-                "Encryption key cache is full (" + MAX_KEY_CACHE_SIZE + " entries). " + "Cannot load key version '"
-                    + cacheKey + "'. " + "This may indicate a malicious attempt to exhaust CPU via PBKDF2 derivation. "
-                    + "Clear cache or increase MAX_KEY_CACHE_SIZE if this is legitimate key rotation.");
-        }
         SecretKeySpec result = KEY_CACHE.compute(cacheKey, (k, v) -> {
             if (v != null) {
                 return v;
+            }
+            if (KEY_CACHE.size() >= MAX_KEY_CACHE_SIZE) {
+                throw new MyJpaPlusException(
+                    "Encryption key cache is full (" + MAX_KEY_CACHE_SIZE + " entries). " + "Cannot load key version '"
+                        + k + "'. " + "Clear cache or increase MAX_KEY_CACHE_SIZE if this is legitimate key rotation.");
             }
             String rawKey = resolveRawKey(k);
             return deriveKey(rawKey);
@@ -543,9 +542,16 @@ public class EncryptConverter implements AttributeConverter<String, String> {
                     }
                 }
             }
-            // 多密钥配置中未找到目标版本 — 抛出明确错误
+            // 多密钥配置中未找到目标版本 — 只暴露版本号，不暴露密钥材料
+            List<String> availableVersions = new ArrayList<>();
+            for (String entry : entries) {
+                int idx = entry.indexOf(':');
+                if (idx > 0) {
+                    availableVersions.add(entry.substring(0, idx).trim());
+                }
+            }
             throw new MyJpaPlusException("Key version '" + version + "' not found in multi-key configuration. "
-                + "Available entries: " + java.util.Arrays.toString(entries) + ". " + "Set the correct key version via "
+                + "Available versions: " + availableVersions + ". " + "Set the correct key version via "
                 + KEY_VERSION_ENV + " or " + KEY_VERSION_PROPERTY + ".");
         }
 
@@ -696,13 +702,12 @@ public class EncryptConverter implements AttributeConverter<String, String> {
 
     /**
      * 检查 profile 字符串是否包含生产环境标识。
-     * 使用精确匹配避免 "reproduction" 等误判。
+     * 使用 contains 匹配支持 production-us、prod-v2 等变体。
      */
     private static boolean isProdProfile(String profile) {
         String lower = profile.toLowerCase(java.util.Locale.ROOT);
-        // 逗号分隔多 profile 支持
         for (String p : lower.split("[,\\s]+")) {
-            if ("prod".equals(p) || "production".equals(p)) {
+            if (p.contains("prod") || p.contains("production")) {
                 return true;
             }
         }

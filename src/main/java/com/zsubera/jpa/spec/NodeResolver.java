@@ -374,6 +374,9 @@ final class NodeResolver {
     private static Predicate resolveNegate(ConditionNode.NegateNode node, NodeContext ctx) {
         Predicate inner = resolveNodeWithDepth(node.inner, ctx.path(), ctx.rootPath(), ctx.query(), ctx.cb(),
             ctx.joinCache(), ctx.pathPrefix(), ctx.depth() + 1, ctx.fetchPaths());
-        return inner != null ? ctx.cb().not(inner) : null;
+        if (inner == null) {
+            return ctx.cb().disjunction();
+        }
+        return ctx.cb().not(inner);
     }
 }
