@@ -62,31 +62,25 @@ cd myjpa-plus
 
 ## 添加新运算符
 
-1. 在 `ConditionNode.Op` 中添加枚举值
+1. 在 `ConditionNode.Op` 中添加枚举值和 `resolve()` case
 2. 在 `ConditionBuilder<E, SELF>` 中添加默认方法
 3. 在 `ConditionalMethods.java` 中添加抽象方法声明（若批量操作也需要）
-4. 在 `NodeResolver` 中添加对应的 `if-else instanceof` 分支（Java 17，不用 switch 模式匹配）
-5. 在 `SubQuerySpec` 中添加对应方法
-6. 在 `AbstractBulkOperationSpec` 中添加对应方法（若需要）
-7. 在 `OrConditionBuilder` 中添加实现（若批量 OR 组也需要）
-8. 在 `QuerySpecTest` 中添加测试
+4. 在 `QuerySpecTest` 中添加测试
+
+**无需修改**：`PredicateHelper`、`NodeResolver`、`BulkConditionSupport`、`OrConditionBuilder` — 它们自动委托给 `Op.resolve()`。
 
 ### 新增条件类型同步检查清单
 
-新增条件类型时，请确保同步更新以下 **7 个位置**：
+新增条件类型时，请确保同步更新以下 **4 个位置**：
 
 | 序号 | 文件 | 位置 | 说明 |
 |---|---|---|---|
-| 1 | `ConditionNode.java` | `Op` 枚举 | 添加新的枚举值（sealed 接口，新增节点类型需加 `permits`） |
+| 1 | `ConditionNode.java` | `Op` 枚举 | 添加新的枚举值 + `resolve()` case（sealed 接口，新增节点类型需加 `permits`） |
 | 2 | `ConditionBuilder.java` | `default` 方法 | 添加类型安全的条件方法 |
 | 3 | `ConditionalMethods.java` | 抽象方法声明 | 添加抽象方法（若批量操作也需要） |
-| 4 | `NodeResolver.java` | `resolveNode()` | 添加对应的 `if-else instanceof` 分支（深度限制 50 层） |
-| 5 | `AbstractBulkOperationSpec.java` | 实现 | 添加批量操作实现（若需要） |
-| 6 | `OrConditionBuilder.java` | 实现 | 添加批量 OR 组实现（若需要） |
-| 7 | `QuerySpecTest.java` | 测试用例 | 添加对应的测试 |
+| 4 | `QuerySpecTest.java` | 测试用例 | 添加对应的测试 |
 
-> **注意：**`AbstractBulkOperationSpec` 是 `UpdateSpec` 和 `DeleteSpec` 的基类，条件方法定义在此基类中。
-> `SubQuerySpec` 和 `ProjectionSpec.ProjectionJoinGroup` 也需同步更新（如果新条件适用于子查询或投影 JOIN 场景）。
+> **注意：**`Op.resolve()` 是谓词构建的唯一真实来源。`PredicateHelper`、`NodeResolver`、`BulkConditionSupport` 均自动委托给 `Op.resolve()`，无需修改。
 
 ## 枚举转换开发
 

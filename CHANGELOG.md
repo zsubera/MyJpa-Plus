@@ -24,8 +24,38 @@
 - **softDeleteAll 行数保护** — `SoftDeleteHelper.softDeleteAll()` 新增 `maxRows` 参数，默认最多更新 10000 行
 - **multiLike 嵌套字段校验** — `multiLike(keyword, "address.city")` 现在对每段调用 `IdentifierValidator.validateColumnName()` 进行安全校验
 - **EncryptConverter 事务清理** — 新增 `registerTransactionCleanupIfNeeded()`，在事务中自动注册 `afterCompletion` 回调清理 Cipher ThreadLocal，防止虚拟线程场景内存泄漏
+- **CacheAdapter SPI** — 新增可插拔缓存适配器接口，支持注入 Redis/Caffeine 等分布式缓存
+  - 新增 `CacheAdapter` 接口、`DisabledCacheAdapter` 无操作实现
+  - `QueryCacheManager` 实现 `CacheAdapter`（向后兼容）
+  - `MyJpaTemplate` 内部使用 `CacheAdapter`，新增 `setCacheAdapter()`/`getCacheAdapter()`
+  - `CacheInvalidationListener` 接受 `CacheAdapter`（旧 `QueryCacheManager` 构造函数标记为 `@Deprecated`）
+- **Java 模块系统兼容性** — 完整的 `--add-opens` 修复指引
+  - `ModuleCompatibilityChecker` 输出 Maven/Gradle/CLI/环境变量修复命令
+  - `LambdaUtils` 错误消息包含构建工具配置
+  - README.md 新增醒目的模块系统兼容性章节
+- **Op.resolve() 策略模式** — `Op` 枚举作为谓词构建的唯一真实来源
+  - 添加新运算符从 7 文件同步简化为 4 文件
+  - `PredicateHelper`、`BulkConditionSupport` 自动委托给 `Op.resolve()`
 
 ### 优化
+- **QuerySpec 拆分** — 从 1265 行拆分为 887 行 + 7 个辅助类
+  - `QueryHavingSupport`: HAVING 条件（通用 + 类型安全聚合）
+  - `QueryConditionSupport`: 协调层（子查询/JOIN/组合）
+  - `QueryCompositionSupport`: OR/NOT 组、条件组合
+  - `QuerySubQuerySupport`: EXISTS/IN 子查询
+  - `QueryJoinSupport`: INNER/LEFT/FETCH JOIN
+  - `QueryAggregateSupport`: GROUP BY 字段管理
+  - `QueryOrderBySupport`: ORDER BY 字段管理
+- **Deprecated API 清理** — 移除 11 个废弃方法，简化代码库
+  - `QuerySpec`: `setGlobalConfig()`, `setMaxTimeoutSeconds()`, `toSql()`
+  - `DefaultMyJpaRepository`: `setAutoFilterEnabled()`, `setBlockUnconditionalDelete()`, `deleteByIdOrThrow()`
+  - `ConditionBuilder`: `addSafeFunctionNames()`, `addBooleanFunctionNames()`, `freezeExtraFunctionNames()`
+  - `EncryptConverter`: `clearCacheForTesting()`
+  - `CacheInvalidationListener`: `CacheInvalidationListener(QueryCacheManager)` 构造函数
+  - `MyJpaPlusGlobalConfig`: `setAutoFilterEnabled()`
+  - `SoftDeleteContext`: `captureAndReset()`
+- **@since/@deprecated 注解清理** — 移除所有文件中的 `@since` 注解
+- **HikariCP 连接池配置** — 测试环境配置 `maximum-pool-size=5`，解决 MySQL 连接池耗尽问题
 - **EntityManagerHelper 单数据源快速路径** — 移除 `setEntityManagerFactory()` 中不安全的 `allResolversUseDefault` 竞态赋值，由 `register/remove` 统一管理
 - **BulkOperationTemplate 迭代计数** — 修复 `executeBatchInSeparateTransactionsWithResult` 中失败批次 iteration 双重递增问题，统一到循环末尾递增
 - **MergeSpec 事务管理** — 提取 `safeRollback()` 方法消除重复的 rollback 逻辑，`executeInManagedTransaction` 和 `executeBatchInSeparateTransactions` 统一使用
@@ -50,11 +80,11 @@
 - **QuerySpec.copy() 深拷贝** — 修复浅拷贝导致 JoinNode/OrNode/AndNode 嵌套条件共享可变状态的问题
 - **QueryCacheManager deque 漂移** — 改进 drift 清理机制，drift 超过阈值时执行全量遍历清理
 - **UpdateSpec 缓存驱逐** — 将概率采样驱逐（10%）改为确定性驱逐，消除高并发下缓存无限增长风险
-- **@Deprecated 版本号修正** — `QuerySpec.setGlobalConfig()` 的 `@Deprecated(since = "2.1.0")` 修正为 `since = "1.3.0"`
 - **ConditionBuilder 扩展性文档修正** — 移除过时的"通过系统属性扩展"描述，改为实际可用的 `addSafeFunctionNames()` API
 - **批量操作安全漏洞** — 修复批量操作中的安全漏洞和性能问题
 - **OptimisticLockRetryAdvisorTest** — 修复上下文加载失败及缓存自动失效问题
 - **QuerySpec.copy() groupStack** — 修复顺序反转 bug
+- **DefaultMyJpaRepository 配置同步** — `isAutoFilterEnabled()` 和 `isBlockUnconditionalDelete()` 优先检查 `GlobalConfigHolder`，修复移除废弃同步方法后配置断开的问题
 
 ## [1.2.0] - 2026-06-12
 

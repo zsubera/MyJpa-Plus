@@ -2,6 +2,26 @@
 
 ## 从 1.2.0 升级到 1.3.0
 
+### 破坏性变更
+
+- **移除废弃方法**：以下方法已在 1.3.0 中移除，请迁移到替代方案：
+  - `QuerySpec.setGlobalConfig()` → `GlobalConfigHolder.setConfig()`
+  - `QuerySpec.setMaxTimeoutSeconds()` → `myjpa-plus.query.max-timeout-seconds` 配置属性
+  - `QuerySpec.toSql()` → `toDescription()`
+  - `DefaultMyJpaRepository.setAutoFilterEnabled()` → `MyJpaPlusGlobalConfig.setSoftDeleteAutoFilter()`
+  - `DefaultMyJpaRepository.setBlockUnconditionalDelete()` → `MyJpaPlusGlobalConfig.setBlockUnconditionalDelete()`
+  - `DefaultMyJpaRepository.deleteByIdOrThrow()` → `deleteById()`
+  - `ConditionBuilder.addSafeFunctionNames()` → `FunctionWhitelist.addSafeFunctionNames()`
+  - `ConditionBuilder.addBooleanFunctionNames()` → `FunctionWhitelist.addBooleanFunctionNames()`
+  - `ConditionBuilder.freezeExtraFunctionNames()` → `FunctionWhitelist.freezeExtraFunctionNames()`
+  - `EncryptConverter.clearCacheForTesting()` → `EncryptConverter.clearCaches()`
+  - `CacheInvalidationListener(QueryCacheManager)` → `CacheInvalidationListener(CacheAdapter)`
+  - `MyJpaPlusGlobalConfig.setAutoFilterEnabled()` → `setSoftDeleteAutoFilter()`
+  - `SoftDeleteContext.captureAndReset()` → `captureAndResetForAsync()` / `withIgnore()`
+
+- **QuerySpec 拆分**：QuerySpec 内部方法已提取到辅助类，公共 API 不变
+- **@since/@deprecated 注解清理**：移除所有 `@since` 注解
+
 ### 新增功能（向后兼容）
 
 - **查询 Lambda 便捷重载**：`MyJpaRepository` 和 `MyJpaTemplate` 新增 `Consumer<QuerySpec<T>>` Lambda 重载，无需 `new QuerySpec<>()`
@@ -28,12 +48,21 @@
 | `SqlSlowQueryInterceptor` | 无条件注册 | 仅在 Hibernate 环境注册（`@ConditionalOnClass`） | EclipseLink 环境不再因缺少 Hibernate 而启动失败 |
 | 函数白名单扩展 | 直接修改全局 ConcurrentHashMap | 使用不可变快照（`AtomicReference<Set<String>>`） | 运行时检查无锁且线程安全 |
 
-### 废弃 API
+### 废弃 API（已在 1.3.0 中移除）
 
 - `QuerySpec.setMaxTimeoutSeconds(int)` — 请使用 `myjpa-plus.query.max-timeout-seconds` 配置属性
-- `DefaultMyJpaRepository.setAutoFilterEnabled(boolean)` — 请使用 `MyJpaPlusGlobalConfig.setAutoFilterEnabled(boolean)`
+- `DefaultMyJpaRepository.setAutoFilterEnabled(boolean)` — 请使用 `MyJpaPlusGlobalConfig.setSoftDeleteAutoFilter(boolean)`
 - `DefaultMyJpaRepository.setBlockUnconditionalDelete(boolean)` — 请使用 `MyJpaPlusGlobalConfig.setBlockUnconditionalDelete(boolean)`
 - `EncryptConverter.clearCacheForTesting()` — 请使用 `EncryptConverter.clearCaches()`
+- `QuerySpec.setGlobalConfig()` — 请使用 `GlobalConfigHolder.setConfig()`
+- `QuerySpec.toSql()` — 请使用 `toDescription()`
+- `DefaultMyJpaRepository.deleteByIdOrThrow()` — 请使用 `deleteById()`
+- `ConditionBuilder.addSafeFunctionNames()` — 请使用 `FunctionWhitelist.addSafeFunctionNames()`
+- `ConditionBuilder.addBooleanFunctionNames()` — 请使用 `FunctionWhitelist.addBooleanFunctionNames()`
+- `ConditionBuilder.freezeExtraFunctionNames()` — 请使用 `FunctionWhitelist.freezeExtraFunctionNames()`
+- `CacheInvalidationListener(QueryCacheManager)` — 请使用 `CacheInvalidationListener(CacheAdapter)`
+- `MyJpaPlusGlobalConfig.setAutoFilterEnabled()` — 请使用 `setSoftDeleteAutoFilter()`
+- `SoftDeleteContext.captureAndReset()` — 请使用 `captureAndResetForAsync()` / `withIgnore()`
 
 ### Bug 修复
 

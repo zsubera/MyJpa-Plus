@@ -39,6 +39,7 @@
 | 🗑️ | **软删除** — 支持 Boolean/Integer/Enum/String 类型 |
 | 🏗️ | **多数据源** — 按实体类型解析不同的 EntityManagerFactory |
 | ☕ | **Spring Boot 自动配置** — 开箱即用，零配置 |
+| 🔌 | **可插拔缓存** — CacheAdapter SPI 支持注入 Redis/Caffeine 等分布式缓存 |
 
 </div>
 

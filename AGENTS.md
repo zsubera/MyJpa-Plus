@@ -83,11 +83,11 @@ CI MySQL 密码：`ci_test_2024`。本地：`1351.zhong`。
 
 ## QuerySpec 拆分
 
-QuerySpec（977 行）已拆分为专注的辅助类：
+QuerySpec（887 行）已拆分为专注的辅助类：
 
 | 类 | 行数 | 职责 |
 |---|---|---|
-| `QuerySpec` | 977 | 核心状态、`toSpecification()`、`toPredicate()`、ConditionBuilder 方法、`copy()` |
+| `QuerySpec` | 887 | 核心状态、`toSpecification()`、`toPredicate()`、ConditionBuilder 方法、`copy()` |
 | `QueryConditionSupport` | 102 | 协调层 — 委托给子查询/JOIN/组合辅助类 |
 | `QueryCompositionSupport` | 160 | OR/NOT 组、`then()`、`and()`、`toSpecification()` |
 | `QuerySubQuerySupport` | 106 | EXISTS/IN 子查询 |
@@ -147,10 +147,10 @@ void setUp() {
 - **MySQL 自引用 UPDATE**：MySQL 阻止 `UPDATE ... WHERE EXISTS(SELECT ... FROM same_table)`。在 EXISTS 子查询中使用不同实体类型。
 - **`saveAllBatchedPure`** 总是调用 `persist()` — 分离/已存在实体抛出 `EntityExistsException`。混合列表使用 `saveAllBatched`。
 - **GlobalConfigHolder.getConfig()** 未配置时返回默认实例。测试需在 `@BeforeEach`/`@AfterEach` 中调用 `setConfig(null)`。
-- **EncryptConverter 测试设置**：在 `@BeforeEach`/`@AfterEach` 中调用 `EncryptConverter.clearCacheForTesting()` 并通过反射重置 `keyValidated`。设置 `myjpa-plus.encrypt.skip-salt-check=true` 跳过 PBKDF2 盐值检查。
-- **`deleteByIdIfExists` / `deleteByIdOrThrow`**：这些方法在 `DefaultMyJpaRepository` 上，不在接口上。通过反射测试：`Method m = DefaultMyJpaRepository.class.getMethod("deleteByIdIfExists", Object.class); m.invoke(proxy, id);`
+- **EncryptConverter 测试设置**：在 `@BeforeEach`/`@AfterEach` 中调用 `EncryptConverter.clearCaches()` 并通过反射重置 `keyValidated`。设置 `myjpa-plus.encrypt.skip-salt-check=true` 跳过 PBKDF2 盐值检查。
+- **`deleteByIdIfExists`**：此方法在 `DefaultMyJpaRepository` 上，不在接口上。通过反射测试：`Method m = DefaultMyJpaRepository.class.getMethod("deleteByIdIfExists", Object.class); m.invoke(proxy, id);`
 
-### 当前测试数量：约 3043 个单元测试
+### 当前测试数量：约 2993 个单元测试
 
 ## 关键约定
 
@@ -186,9 +186,10 @@ void setUp() {
 
 ## 关键类中的辅助方法
 
-**DefaultMyJpaRepository**（605 行）：
+**DefaultMyJpaRepository**（557 行）：
 - `executeDeleteOrBlock()` — 统一的三路删除逻辑（软删除 → 硬删除阻断 → 硬删除回退）
 - `withIdAndSoftDelete()` — 基于 ID 的规格与软删除过滤器合并
+- `isAutoFilterEnabled()` / `isBlockUnconditionalDelete()` — 优先检查 GlobalConfigHolder，回退到本地 ConfigProvider
 
 **MyJpaTemplate**（1557 行）：
 - `validateQueryParams()` — entityClass + spec 的 null 检查
