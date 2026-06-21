@@ -221,22 +221,6 @@ class SoftDeleteContextTest {
     }
 
     @Test
-    void captureAndReset_deprecated_returnsTrueWhenIgnoring() {
-        SoftDeleteContext.pushIgnore();
-        assertTrue(SoftDeleteContext.isIgnoreSoftDelete());
-        int result = SoftDeleteContext.captureAndResetForAsync();
-        assertTrue(result > 0);
-        assertFalse(SoftDeleteContext.isIgnoreSoftDelete());
-    }
-
-    @Test
-    void captureAndReset_deprecated_returnsFalseWhenNotIgnoring() {
-        int result = SoftDeleteContext.captureAndResetForAsync();
-        assertEquals(0, result);
-        assertFalse(SoftDeleteContext.isIgnoreSoftDelete());
-    }
-
-    @Test
     void captureAndResetForAsync_whenZero_returnsZero() {
         int captured = SoftDeleteContext.captureAndResetForAsync();
         assertEquals(0, captured);

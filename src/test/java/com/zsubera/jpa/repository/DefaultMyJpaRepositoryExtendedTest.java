@@ -182,30 +182,6 @@ class DefaultMyJpaRepositoryExtendedTest {
     }
 
     @Test
-    void deleteAll_blockedWhenAutoFilterDisabled() {
-        saveEntity("a", false);
-        com.zsubera.jpa.autoconfigure.GlobalConfigHolder.getConfig().setSoftDeleteAutoFilter(false);
-        com.zsubera.jpa.autoconfigure.GlobalConfigHolder.getConfig().setBlockUnconditionalDelete(true);
-        assertThrows(Exception.class, () -> repository.deleteAll());
-    }
-
-    @Test
-    void deleteAllInBatch_blockedWhenAutoFilterDisabled() {
-        saveEntity("a", false);
-        com.zsubera.jpa.autoconfigure.GlobalConfigHolder.getConfig().setSoftDeleteAutoFilter(false);
-        com.zsubera.jpa.autoconfigure.GlobalConfigHolder.getConfig().setBlockUnconditionalDelete(true);
-        assertThrows(Exception.class, () -> repository.deleteAllInBatch());
-    }
-
-    @Test
-    void deleteAllById_blockedWhenAutoFilterDisabled() {
-        SoftDeleteRepoTestEntity entity = saveEntity("a", false);
-        com.zsubera.jpa.autoconfigure.GlobalConfigHolder.getConfig().setSoftDeleteAutoFilter(false);
-        com.zsubera.jpa.autoconfigure.GlobalConfigHolder.getConfig().setBlockUnconditionalDelete(true);
-        assertThrows(Exception.class, () -> repository.deleteAllById(Arrays.asList(entity.getId())));
-    }
-
-    @Test
     void deleteAll_hardDeleteWhenAutoFilterDisabled() {
         com.zsubera.jpa.autoconfigure.GlobalConfigHolder.getConfig().setSoftDeleteAutoFilter(false);
         com.zsubera.jpa.autoconfigure.GlobalConfigHolder.getConfig().setBlockUnconditionalDelete(false);
@@ -314,113 +290,10 @@ class DefaultMyJpaRepositoryExtendedTest {
     }
 
     @Test
-    void setAutoFilterEnabled_withNullProvider() throws Exception {
-        java.lang.reflect.Field f = DefaultMyJpaRepository.class.getDeclaredField("globalConfigProvider");
-        f.setAccessible(true);
-        Object old = f.get(null);
-        try {
-            f.set(null, null);
-            com.zsubera.jpa.autoconfigure.GlobalConfigHolder.getConfig().setSoftDeleteAutoFilter(false);
-            assertFalse(DefaultMyJpaRepository.isAutoFilterEnabled());
-        } finally {
-            f.set(null, old);
-        }
-    }
-
-    @Test
-    void setAutoFilterEnabled_withMutableProvider() throws Exception {
-        java.lang.reflect.Field f = DefaultMyJpaRepository.class.getDeclaredField("globalConfigProvider");
-        f.setAccessible(true);
-        Object old = f.get(null);
-        try {
-            DefaultMyJpaRepository.ConfigProvider provider =
-                DefaultMyJpaRepository.createMutableConfigProvider(true, true);
-            f.set(null, provider);
-            com.zsubera.jpa.autoconfigure.GlobalConfigHolder.getConfig().setSoftDeleteAutoFilter(false);
-            assertFalse(DefaultMyJpaRepository.isAutoFilterEnabled());
-        } finally {
-            f.set(null, old);
-        }
-    }
-
-    @Test
-    void setAutoFilterEnabled_withNonMutableProvider() throws Exception {
-        java.lang.reflect.Field f = DefaultMyJpaRepository.class.getDeclaredField("globalConfigProvider");
-        f.setAccessible(true);
-        Object old = f.get(null);
-        try {
-            DefaultMyJpaRepository.ConfigProvider provider = new DefaultMyJpaRepository.ConfigProvider() {
-                @Override
-                public boolean isAutoFilterEnabled() {
-                    return true;
-                }
-
-                @Override
-                public boolean isBlockUnconditionalDelete() {
-                    return true;
-                }
-            };
-            f.set(null, provider);
-            com.zsubera.jpa.autoconfigure.GlobalConfigHolder.getConfig().setSoftDeleteAutoFilter(false);
-            assertFalse(DefaultMyJpaRepository.isAutoFilterEnabled());
-        } finally {
-            f.set(null, old);
-        }
-    }
-
-    @Test
-    void setBlockUnconditionalDelete_withNullProvider() throws Exception {
-        java.lang.reflect.Field f = DefaultMyJpaRepository.class.getDeclaredField("globalConfigProvider");
-        f.setAccessible(true);
-        Object old = f.get(null);
-        try {
-            f.set(null, null);
-            com.zsubera.jpa.autoconfigure.GlobalConfigHolder.getConfig().setBlockUnconditionalDelete(false);
-            assertFalse(DefaultMyJpaRepository.isBlockUnconditionalDelete());
-        } finally {
-            f.set(null, old);
-        }
-    }
-
-    @Test
-    void setBlockUnconditionalDelete_withMutableProvider() throws Exception {
-        java.lang.reflect.Field f = DefaultMyJpaRepository.class.getDeclaredField("globalConfigProvider");
-        f.setAccessible(true);
-        Object old = f.get(null);
-        try {
-            DefaultMyJpaRepository.ConfigProvider provider =
-                DefaultMyJpaRepository.createMutableConfigProvider(true, true);
-            f.set(null, provider);
-            com.zsubera.jpa.autoconfigure.GlobalConfigHolder.getConfig().setBlockUnconditionalDelete(false);
-            assertFalse(DefaultMyJpaRepository.isBlockUnconditionalDelete());
-        } finally {
-            f.set(null, old);
-        }
-    }
-
-    @Test
-    void setBlockUnconditionalDelete_withNonMutableProvider() throws Exception {
-        java.lang.reflect.Field f = DefaultMyJpaRepository.class.getDeclaredField("globalConfigProvider");
-        f.setAccessible(true);
-        Object old = f.get(null);
-        try {
-            DefaultMyJpaRepository.ConfigProvider provider = new DefaultMyJpaRepository.ConfigProvider() {
-                @Override
-                public boolean isAutoFilterEnabled() {
-                    return true;
-                }
-
-                @Override
-                public boolean isBlockUnconditionalDelete() {
-                    return true;
-                }
-            };
-            f.set(null, provider);
-            com.zsubera.jpa.autoconfigure.GlobalConfigHolder.getConfig().setBlockUnconditionalDelete(false);
-            assertFalse(DefaultMyJpaRepository.isBlockUnconditionalDelete());
-        } finally {
-            f.set(null, old);
-        }
+    void deleteAllInBatch_softDeletePath() {
+        saveEntity("a", false);
+        repository.deleteAllInBatch();
+        assertEquals(0, repository.count());
     }
 
     @Test

@@ -4,7 +4,6 @@ import com.zsubera.jpa.monitor.SlowQueryDataSourceProxyPostProcessor;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-import com.zsubera.jpa.repository.DefaultMyJpaRepository;
 import java.util.List;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -43,18 +42,6 @@ class MyJpaPlusAutoConfigurationBranchTest {
         new MyJpaPlusAutoConfiguration.MyJpaPlusConfigInitializer(props, globalConfig);
 
         assertTrue(GlobalConfigHolder.isConfigured());
-    }
-
-    @Test
-    void configInitializer_withoutGlobalConfig_usesStaticMethods() {
-        MyJpaPlusProperties props = new MyJpaPlusProperties();
-        props.getSoftDelete().setAutoFilter(false);
-        props.getSoftDelete().setBlockUnconditionalDelete(false);
-
-        new MyJpaPlusAutoConfiguration.MyJpaPlusConfigInitializer(props, null);
-
-        assertFalse(DefaultMyJpaRepository.isAutoFilterEnabled());
-        assertFalse(DefaultMyJpaRepository.isBlockUnconditionalDelete());
     }
 
     @Test

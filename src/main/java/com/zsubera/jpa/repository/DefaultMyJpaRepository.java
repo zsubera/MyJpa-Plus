@@ -129,13 +129,20 @@ public class DefaultMyJpaRepository<T, ID> extends SimpleJpaRepository<T, ID> im
      * @return 如果自动过滤已启用返回 true
      */
     public static synchronized boolean isAutoFilterEnabled() {
-        ConfigProvider provider = globalConfigProvider;
-        if (provider == null) {
-            log.debug("globalConfigProvider not initialized, auto-filter defaults to true. "
-                + "Ensure MyJpaPlusAutoConfiguration is registered.");
-            return true;
+        // Check GlobalConfigHolder first (primary config source)
+        com.zsubera.jpa.autoconfigure.MyJpaPlusGlobalConfig config =
+            com.zsubera.jpa.autoconfigure.GlobalConfigHolder.getConfig();
+        if (config != null) {
+            return config.isSoftDeleteAutoFilter();
         }
-        return provider.isAutoFilterEnabled();
+        // Fallback to local ConfigProvider
+        ConfigProvider provider = globalConfigProvider;
+        if (provider != null) {
+            return provider.isAutoFilterEnabled();
+        }
+        log.debug("globalConfigProvider not initialized, auto-filter defaults to true. "
+            + "Ensure MyJpaPlusAutoConfiguration is registered.");
+        return true;
     }
 
     /**
@@ -144,11 +151,18 @@ public class DefaultMyJpaRepository<T, ID> extends SimpleJpaRepository<T, ID> im
      * @return 如果阻断已启用返回 true
      */
     public static synchronized boolean isBlockUnconditionalDelete() {
-        ConfigProvider provider = globalConfigProvider;
-        if (provider == null) {
-            return true;
+        // Check GlobalConfigHolder first (primary config source)
+        com.zsubera.jpa.autoconfigure.MyJpaPlusGlobalConfig config =
+            com.zsubera.jpa.autoconfigure.GlobalConfigHolder.getConfig();
+        if (config != null) {
+            return config.isBlockUnconditionalDelete();
         }
-        return provider.isBlockUnconditionalDelete();
+        // Fallback to local ConfigProvider
+        ConfigProvider provider = globalConfigProvider;
+        if (provider != null) {
+            return provider.isBlockUnconditionalDelete();
+        }
+        return true;
     }
 
     /**

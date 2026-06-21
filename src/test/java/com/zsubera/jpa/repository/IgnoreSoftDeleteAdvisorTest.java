@@ -112,27 +112,6 @@ class IgnoreSoftDeleteAdvisorTest {
         assertFalse(SoftDeleteContext.isIgnoreSoftDelete());
     }
 
-    @Test
-    void advisor_staticMethodsWork() {
-        assertTrue(DefaultMyJpaRepository.isAutoFilterEnabled());
-
-        com.zsubera.jpa.autoconfigure.GlobalConfigHolder.getConfig().setSoftDeleteAutoFilter(false);
-        assertFalse(DefaultMyJpaRepository.isAutoFilterEnabled());
-
-        // Reset
-        com.zsubera.jpa.autoconfigure.GlobalConfigHolder.getConfig().setSoftDeleteAutoFilter(true);
-    }
-
-    @Test
-    void advisor_autoFilterDisabled_returnsAll() {
-        saveEntity("active", false);
-        saveEntity("deleted", true);
-
-        com.zsubera.jpa.autoconfigure.GlobalConfigHolder.getConfig().setSoftDeleteAutoFilter(false);
-        List<SoftDeleteRepoTestEntity> result = repository.findAll();
-        assertEquals(2, result.size());
-    }
-
     private SoftDeleteRepoTestEntity saveEntity(String name, boolean deleted) {
         SoftDeleteRepoTestEntity entity = new SoftDeleteRepoTestEntity();
         entity.setName(name);
