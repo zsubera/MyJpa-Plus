@@ -21,9 +21,9 @@ class EncryptConverterCoverageTest {
         System.setProperty("myjpa.encrypt.key", TEST_KEY);
         System.setProperty("myjpa-plus.encrypt.skip-salt-check", "true");
         EncryptConverter.clearCaches();
-        Field f = EncryptConverter.class.getDeclaredField("keyValidated");
+        Field f = EncryptConverter.class.getDeclaredField("KEY_VALIDATED");
         f.setAccessible(true);
-        f.set(null, false);
+        ((java.util.concurrent.atomic.AtomicBoolean) f.get(null)).set(false);
     }
 
     @AfterEach
@@ -32,9 +32,9 @@ class EncryptConverterCoverageTest {
         System.clearProperty("myjpa-plus.encrypt.skip-salt-check");
         System.clearProperty("myjpa.encrypt.key.version");
         EncryptConverter.clearCaches();
-        Field f = EncryptConverter.class.getDeclaredField("keyValidated");
+        Field f = EncryptConverter.class.getDeclaredField("KEY_VALIDATED");
         f.setAccessible(true);
-        f.set(null, false);
+        ((java.util.concurrent.atomic.AtomicBoolean) f.get(null)).set(false);
     }
 
     // ---- validateKeyConfiguration: synchronized block ----
