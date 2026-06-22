@@ -4,7 +4,7 @@ package com.zsubera.jpa.template;
  * 禁用的缓存适配器，所有操作均为无操作。
  *
  * <p>
- * 通过 {@link CacheAdapterdisabled()} 获取单例实例。适用于不需要查询缓存的场景。
+ * 通过 {@link CacheAdapter#disabled()} 获取单例实例。适用于不需要查询缓存的场景。
  *
 
  */

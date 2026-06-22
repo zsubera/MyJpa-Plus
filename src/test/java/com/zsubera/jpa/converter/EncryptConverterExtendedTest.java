@@ -352,14 +352,12 @@ class EncryptConverterExtendedTest {
     }
 
     @Test
-    void isProdProfile_various() throws Exception {
-        Method m = EncryptConverter.class.getDeclaredMethod("isProdProfile", String.class);
-        m.setAccessible(true);
-        assertTrue((boolean)m.invoke(null, "prod"));
-        assertTrue((boolean)m.invoke(null, "production"));
-        assertTrue((boolean)m.invoke(null, "dev,prod,qa"));
-        assertTrue((boolean)m.invoke(null, "PROD"));
-        assertFalse((boolean)m.invoke(null, "dev"));
-        assertFalse((boolean)m.invoke(null, "reproduction"));
+    void isProdProfile_various() {
+        assertTrue(com.zsubera.jpa.autoconfigure.EnvironmentHelper.isProdProfile("prod"));
+        assertTrue(com.zsubera.jpa.autoconfigure.EnvironmentHelper.isProdProfile("production"));
+        assertTrue(com.zsubera.jpa.autoconfigure.EnvironmentHelper.isProdProfile("dev,prod,qa"));
+        assertTrue(com.zsubera.jpa.autoconfigure.EnvironmentHelper.isProdProfile("PROD"));
+        assertFalse(com.zsubera.jpa.autoconfigure.EnvironmentHelper.isProdProfile("dev"));
+        assertFalse(com.zsubera.jpa.autoconfigure.EnvironmentHelper.isProdProfile("reproduction"));
     }
 }

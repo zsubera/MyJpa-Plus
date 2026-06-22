@@ -72,7 +72,6 @@ public class EncryptConverter implements AttributeConverter<String, String> {
     private static final String KEY_VERSION_PROPERTY = "myjpa.encrypt.key.version";
     private static final String SALT_ENV = "MYJPA_ENCRYPT_SALT";
     private static final String SALT_PROPERTY = "myjpa.encrypt.salt";
-    private static final String REQUIRE_SALT_PROPERTY = "myjpa-plus.encrypt.require-salt";
     private static final SecureRandom SECURE_RANDOM = new SecureRandom();
     private static final int PBKDF2_ITERATIONS = 600_000;
     private static final int PBKDF2_KEY_LENGTH = 256;
@@ -102,6 +101,10 @@ public class EncryptConverter implements AttributeConverter<String, String> {
     private static final int MAX_KEY_CACHE_SIZE = 16;
 
     /** 缓存的密钥版本，避免重复读取环境变量。 */
+
+    /** 用于 reEncrypt() 的共享实例（所有方法仅使用静态状态，线程安全）。 */
+    private static final EncryptConverter SHARED_INSTANCE = new EncryptConverter();
+
     private static volatile String cachedKeyVersion;
 
     /** 上次刷新密钥版本的时间戳。 */
@@ -679,50 +682,14 @@ public class EncryptConverter implements AttributeConverter<String, String> {
 
     /**
      * 检查当前是否为生产环境或需要强制要求盐值配置。
-     *
      * <p>
-     * 检测优先级：
-     * <ol>
-     * <li>显式配置 {@code myjpa-plus.encrypt.require-salt=true} 或 {@code MYJPA_ENCRYPT_REQUIRE_SALT=true}</li>
-     * <li>系统属性 {@code spring.profiles.active} 包含 prod/production</li>
-     * <li>环境变量 {@code SPRING_PROFILES_ACTIVE} 或 {@code SPRING_PROFILES} 包含 prod/production</li>
-     * </ol>
+     * 委托给 {@link com.zsubera.jpa.autoconfigure.EnvironmentHelper#isProductionEnvironment()}，
+     * 消除与 {@code MyJpaPlusAutoConfiguration} 之间的重复代码。
      *
      * @return 如果需要强制要求盐值配置返回 true
      */
     private static boolean isProductionEnvironment() {
-        String requireSalt = System.getProperty(REQUIRE_SALT_PROPERTY);
-        if ("true".equalsIgnoreCase(requireSalt)) {
-            return true;
-        }
-        requireSalt = System.getenv("MYJPA_ENCRYPT_REQUIRE_SALT");
-        if ("true".equalsIgnoreCase(requireSalt)) {
-            return true;
-        }
-        String profile = System.getProperty("spring.profiles.active", "");
-        if (isProdProfile(profile)) {
-            return true;
-        }
-        profile = System.getenv("SPRING_PROFILES_ACTIVE");
-        if (profile != null && isProdProfile(profile)) {
-            return true;
-        }
-        profile = System.getenv("SPRING_PROFILES");
-        return profile != null && isProdProfile(profile);
-    }
-
-    /**
-     * 检查 profile 字符串是否包含生产环境标识。
-     * 使用 startsWith 匹配支持 production-us、prod-v2 等变体，但不匹配 reproduction。
-     */
-    private static boolean isProdProfile(String profile) {
-        String lower = profile.toLowerCase(java.util.Locale.ROOT);
-        for (String p : lower.split("[,\\s]+")) {
-            if (p.startsWith("prod") || p.startsWith("production")) {
-                return true;
-            }
-        }
-        return false;
+        return com.zsubera.jpa.autoconfigure.EnvironmentHelper.isProductionEnvironment();
     }
 
     /**
@@ -753,8 +720,7 @@ public class EncryptConverter implements AttributeConverter<String, String> {
         if (!KEY_VALIDATED.get()) {
             validateKeyConfiguration();
         }
-        EncryptConverter instance = new EncryptConverter();
-        String decrypted = instance.convertToEntityAttribute(encryptedValue);
-        return instance.convertToDatabaseColumn(decrypted);
+        String decrypted = SHARED_INSTANCE.convertToEntityAttribute(encryptedValue);
+        return SHARED_INSTANCE.convertToDatabaseColumn(decrypted);
     }
 }

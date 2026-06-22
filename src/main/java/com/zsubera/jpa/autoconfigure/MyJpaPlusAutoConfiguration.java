@@ -112,7 +112,8 @@ public class MyJpaPlusAutoConfiguration {
             if (globalConfig != null) {
                 DefaultMyJpaRepository.setGlobalConfigProvider(DefaultMyJpaRepository.createMutableConfigProvider(
                     globalConfig.isSoftDeleteAutoFilter(), globalConfig.isBlockUnconditionalDelete()));
-                // 通过 GlobalConfigHolder 集中管理全局配置访问
+                    // 通过 GlobalConfigHolder 集中管理全局配置访问
+                GlobalConfigHolder.setApplicationContext(applicationContext);
                 GlobalConfigHolder.setConfig(globalConfig);
             }
 
@@ -209,39 +210,12 @@ public class MyJpaPlusAutoConfiguration {
 
         /**
          * 检查当前是否为生产环境。
+         * <p>
+         * 委托给 {@link EnvironmentHelper#isProductionEnvironment()}，
+         * 消除与 {@link com.zsubera.jpa.converter.EncryptConverter} 之间的重复代码。
          */
-        private boolean isProductionEnvironment() {
-            String requireSalt = System.getProperty("myjpa-plus.encrypt.require-salt");
-            if ("true".equalsIgnoreCase(requireSalt)) {
-                return true;
-            }
-            requireSalt = System.getenv("MYJPA_ENCRYPT_REQUIRE_SALT");
-            if ("true".equalsIgnoreCase(requireSalt)) {
-                return true;
-            }
-            String profile = System.getProperty("spring.profiles.active", "");
-            if (isProdProfile(profile)) {
-                return true;
-            }
-            profile = System.getenv("SPRING_PROFILES_ACTIVE");
-            if (profile != null && isProdProfile(profile)) {
-                return true;
-            }
-            profile = System.getenv("SPRING_PROFILES");
-            return profile != null && isProdProfile(profile);
-        }
-
-        private boolean isProdProfile(String profile) {
-            if (profile == null || profile.isEmpty()) {
-                return false;
-            }
-            for (String p : profile.split(",")) {
-                String trimmed = p.trim().toLowerCase();
-                if (trimmed.contains("prod") || trimmed.contains("production")) {
-                    return true;
-                }
-            }
-            return false;
+        private static boolean isProductionEnvironment() {
+            return EnvironmentHelper.isProductionEnvironment();
         }
     }
 

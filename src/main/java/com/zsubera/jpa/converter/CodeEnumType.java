@@ -54,22 +54,6 @@ public class CodeEnumType implements UserType<Object>, DynamicParameterizedType 
 
     private static final Logger log = LoggerFactory.getLogger(CodeEnumType.class);
 
-    private static final ConcurrentMap<Class<?>, Field> CODE_FIELD_CACHE =
-        new org.springframework.util.ConcurrentReferenceHashMap<>(16,
-            org.springframework.util.ConcurrentReferenceHashMap.ReferenceType.WEAK);
-
-    /** 哨兵值，用于区分缓存中"未扫描"和"已扫描但未找到"的状态。 */
-    private static final Field NO_CODE_FIELD_SENTINEL;
-
-    static {
-        try {
-            // 使用本类的稳定字段作为哨兵——不会被重命名
-            NO_CODE_FIELD_SENTINEL = CodeEnumType.class.getDeclaredField("enumClass");
-        } catch (NoSuchFieldException e) {
-            throw new ExceptionInInitializerError(e);
-        }
-    }
-
     /** 枚举类 -> (code -> enum constant) 的缓存，用于 nullSafeGet 的 O(1) 查找。 */
     private static final ConcurrentMap<Class<?>, ConcurrentMap<String, Object>> ENUM_CODE_CACHE =
         new org.springframework.util.ConcurrentReferenceHashMap<>(16,
@@ -128,29 +112,14 @@ public class CodeEnumType implements UserType<Object>, DynamicParameterizedType 
 
     /**
      * 解析枚举类中带有 {@link CodeEnumValue} 注解的字段。
+     * <p>
+     * 委托给 {@link CodeEnumHelper#resolveCodeField(Class)}，共享缓存。
      *
      * @param enumClass 枚举类
      * @return 标注了 {@code @CodeEnumValue} 的字段，如果未找到则返回 null
      */
     public static Field resolveCodeField(Class<?> enumClass) {
-        Field cached = CODE_FIELD_CACHE.computeIfAbsent(enumClass, cls -> {
-            for (Field field : cls.getDeclaredFields()) {
-                if (field.isAnnotationPresent(CodeEnumValue.class)) {
-                    try {
-                        field.setAccessible(true);
-                        return field;
-                    } catch (java.lang.reflect.InaccessibleObjectException e) {
-                        log.warn(
-                            "Cannot access @CodeEnumValue field '{}' in {}. On Java 17+, add JVM argument: "
-                                + "--add-opens java.base/java.lang.reflect=ALL-UNNAMED",
-                            field.getName(), cls.getName());
-                        return NO_CODE_FIELD_SENTINEL;
-                    }
-                }
-            }
-            return NO_CODE_FIELD_SENTINEL;
-        });
-        return cached == NO_CODE_FIELD_SENTINEL ? null : cached;
+        return CodeEnumHelper.resolveCodeField(enumClass);
     }
 
     /**
@@ -160,7 +129,7 @@ public class CodeEnumType implements UserType<Object>, DynamicParameterizedType 
      * @return 如果存在 {@code @CodeEnumValue} 字段则返回 true
      */
     public static boolean hasCodeEnumValue(Class<?> enumClass) {
-        return resolveCodeField(enumClass) != null;
+        return CodeEnumHelper.hasCodeEnumValue(enumClass);
     }
 
     @Override

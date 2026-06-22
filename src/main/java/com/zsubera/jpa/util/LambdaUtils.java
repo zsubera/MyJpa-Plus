@@ -3,6 +3,11 @@ package com.zsubera.jpa.util;
 import com.zsubera.jpa.exception.MyJpaPlusException;
 import com.zsubera.jpa.spec.SFunction;
 import java.beans.Introspector;
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
 import java.lang.invoke.SerializedLambda;
 import java.lang.reflect.InaccessibleObjectException;
 import java.lang.reflect.Method;
@@ -166,6 +171,16 @@ public final class LambdaUtils {
     /**
      * 从方法引用中提取属性名称。
      *
+     * <p>
+     * 使用 primary + fallback 双路径策略：
+     * <ul>
+     *   <li><strong>Primary（反射路径）：</strong>通过 {@code SerializedLambda.writeReplace()} 反射提取。
+     *       需要 {@code --add-opens java.base/java.lang.invoke=ALL-UNNAMED}。</li>
+     *   <li><strong>Fallback（序列化路径）：</strong>当 primary 因 JPMS 模块限制失败时，
+     *       通过标准 Java 序列化 {@link ObjectOutputStream} 触发 lambda 的 {@code writeReplace()}，
+     *       无需 {@code --add-opens}。</li>
+     * </ul>
+     *
      * @param <T> 实体类型
      * @param fn 实体属性的方法引用
      * @return 属性名称
@@ -177,55 +192,87 @@ public final class LambdaUtils {
             throw new IllegalArgumentException("SFunction must not be null");
         }
         try {
-            Class<?> fnClass = fn.getClass();
-            Method writeReplace = METHOD_CACHE.computeIfAbsent(fnClass, clazz -> {
+            return resolveViaReflection(fn);
+        } catch (InaccessibleObjectException | SecurityException e) {
+            log.debug("Reflection path for LambdaUtils failed (JPMS restricted), falling back to serialization path", e);
+        } catch (ReflectiveOperationException e) {
+            log.debug("Reflection path for LambdaUtils failed, falling back to serialization path", e);
+        }
+        return resolveViaSerialization(fn);
+    }
+
+    /**
+     * 通过反射 {@code SerializedLambda.writeReplace()} 解析属性名。
+     * 需要 {@code --add-opens java.base/java.lang.invoke=ALL-UNNAMED}。
+     */
+    private static <T> String resolveViaReflection(SFunction<T, ?> fn) throws ReflectiveOperationException {
+        Class<?> fnClass = fn.getClass();
+        Method writeReplace;
+        try {
+            writeReplace = METHOD_CACHE.computeIfAbsent(fnClass, clazz -> {
                 try {
                     Method m = clazz.getDeclaredMethod("writeReplace");
                     m.setAccessible(true);
                     return m;
-                } catch (InaccessibleObjectException e) {
-                    throw new MyJpaPlusException(
-                        "Failed to access SerializedLambda.writeReplace() due to Java module system restrictions. "
-                            + "Add JVM argument: --add-opens java.base/java.lang.invoke=ALL-UNNAMED\n"
-                            + "Maven: <jvmArguments>--add-opens java.base/java.lang.invoke=ALL-UNNAMED</jvmArguments>\n"
-                            + "Gradle: bootRun { jvmArgs '--add-opens java.base/java.lang.invoke=ALL-UNNAMED' }",
-                        e);
                 } catch (ReflectiveOperationException e) {
-                    throw new MyJpaPlusException("Failed to extract property name from method reference. "
-                        + "Ensure you are using a method reference directly (e.g., Entity::getField). "
-                        + "Lambda expressions like e -> e.getField() are not supported. "
-                        + "If using Java 17+ module system, add JVM argument: "
-                        + "--add-opens java.base/java.lang.invoke=ALL-UNNAMED\n"
-                        + "Maven: <jvmArguments>--add-opens java.base/java.lang.invoke=ALL-UNNAMED</jvmArguments>\n"
-                        + "Gradle: bootRun { jvmArgs '--add-opens java.base/java.lang.invoke=ALL-UNNAMED' }", e);
+                    throw new RuntimeException(e);
                 }
             });
-            SerializedLambda lambda = (SerializedLambda)writeReplace.invoke(fn);
-            String key = lambda.getImplClass() + "#" + lambda.getImplMethodName();
-
-            // 使用采样策略（每 100 次调用检查一次），开销可忽略
-            evictCacheIfNeeded();
-            evictMethodCacheIfNeeded();
-            String cached = CACHE.get(key);
-            if (cached != null) {
-                return cached;
+        } catch (RuntimeException e) {
+            if (e.getCause() instanceof ReflectiveOperationException roe) {
+                throw roe;
             }
-            return CACHE.computeIfAbsent(key, k -> methodToProperty(lambda.getImplMethodName()));
-        } catch (ReflectiveOperationException e) {
-            throw new MyJpaPlusException("Failed to extract property name from method reference. "
-                + "Ensure you are using a method reference directly (e.g., Entity::getField). "
-                + "Lambda expressions like e -> e.getField() are not supported. "
-                + "If using Java 17+ module system, add JVM argument: "
-                + "--add-opens java.base/java.lang.invoke=ALL-UNNAMED\n"
-                + "Maven: <jvmArguments>--add-opens java.base/java.lang.invoke=ALL-UNNAMED</jvmArguments>\n"
-                + "Gradle: bootRun { jvmArgs '--add-opens java.base/java.lang.invoke=ALL-UNNAMED' }", e);
-        } catch (SecurityException e) {
-            throw new MyJpaPlusException("Failed to extract property name due to security restriction. "
-                + "If using Java 17+ module system, add JVM argument: "
-                + "--add-opens java.base/java.lang.invoke=ALL-UNNAMED\n"
-                + "Maven: <jvmArguments>--add-opens java.base/java.lang.invoke=ALL-UNNAMED</jvmArguments>\n"
-                + "Gradle: bootRun { jvmArgs '--add-opens java.base/java.lang.invoke=ALL-UNNAMED' }", e);
+            throw e;
         }
+        SerializedLambda lambda = (SerializedLambda)writeReplace.invoke(fn);
+        return resolvePropertyFromLambda(lambda);
+    }
+
+    /**
+     * 通过标准 Java 序列化解析属性名。利用 {@link ObjectOutputStream} 自动调用
+     * lambda 的 {@code writeReplace()} 方法，无需 {@code --add-opens} 反射访问。
+     *
+     * <p>
+     * ponytail: 序列化路径每次调用产生 IO 开销（约 5-10μs），但仅在反射路径不可用时的降级路径触发。
+     * 结果仍会被 {@link #CACHE} 缓存，后续调用命中缓存后绕过此路径。
+     */
+    private static <T> String resolveViaSerialization(SFunction<T, ?> fn) {
+        try {
+            ByteArrayOutputStream baos = new ByteArrayOutputStream(256);
+            ObjectOutputStream oos = new ObjectOutputStream(baos);
+            oos.writeObject(fn);
+            oos.close();
+            ByteArrayInputStream bais = new ByteArrayInputStream(baos.toByteArray());
+            ObjectInputStream ois = new ObjectInputStream(bais);
+            SerializedLambda lambda = (SerializedLambda)ois.readObject();
+            ois.close();
+            return resolvePropertyFromLambda(lambda);
+        } catch (IOException | ClassNotFoundException e) {
+            throw new MyJpaPlusException(
+                "Failed to extract property name from method reference via serialization path. "
+                    + "Ensure you are using a method reference directly (e.g., Entity::getField). "
+                    + "Lambda expressions like e -> e.getField() are not supported. "
+                    + "If using Java 17+ module system, add JVM argument: "
+                    + "--add-opens java.base/java.lang.invoke=ALL-UNNAMED\n"
+                    + "Maven: <jvmArguments>--add-opens java.base/java.lang.invoke=ALL-UNNAMED</jvmArguments>\n"
+                    + "Gradle: bootRun { jvmArgs '--add-opens java.base/java.lang.invoke=ALL-UNNAMED' }", e);
+        }
+    }
+
+    /**
+     * 从 {@link SerializedLambda} 中提取方法名并转换为属性名。
+     * 包含缓存查找和采样驱逐检查。
+     */
+    private static String resolvePropertyFromLambda(SerializedLambda lambda) {
+        String key = lambda.getImplClass() + "#" + lambda.getImplMethodName();
+
+        evictCacheIfNeeded();
+        evictMethodCacheIfNeeded();
+        String cached = CACHE.get(key);
+        if (cached != null) {
+            return cached;
+        }
+        return CACHE.computeIfAbsent(key, k -> methodToProperty(lambda.getImplMethodName()));
     }
 
     /**

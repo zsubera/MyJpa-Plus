@@ -333,7 +333,6 @@ public final class SoftDeleteHelper {
         // 行数保护：先 COUNT 再执行（仅计数实际会被更新的行，即未软删除的行）
         // 注意：COUNT 和 UPDATE 之间存在竞态窗口，高并发下实际更新行数可能略超 maxRows
         if (maxRows > 0) {
-            String countSql;
             var countQuery = em.createNativeQuery("SELECT COUNT(*) FROM " + escapedTable + " WHERE "
                 + (resolved.booleanField() ? "(" + escapedColumn + " = ?1 OR " + escapedColumn + " IS NULL)"
                     : "(" + escapedColumn + " != ?1 OR " + escapedColumn + " IS NULL)"));

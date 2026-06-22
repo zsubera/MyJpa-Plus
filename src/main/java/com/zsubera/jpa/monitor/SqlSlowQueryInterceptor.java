@@ -8,21 +8,22 @@ import org.slf4j.LoggerFactory;
  * Hibernate SQL 慢查询拦截器，实现了 Hibernate {@link StatementInspector} 接口。
  *
  * <p>
- * 此类仅在 Hibernate 环境中可用。实际的 JDBC DataSource 代理计时功能由
- * {@link SlowQueryDataSourceProxy} 提供，不依赖任何特定 JPA 实现。
+ * <strong>Hibernate 专有：</strong>此类实现了 {@code org.hibernate.resource.jdbc.spi.StatementInspector}，
+ * 仅在 Hibernate 作为 JPA Provider 时可用。由自动配置中的
+ * {@code @ConditionalOnClass(name = "org.hibernate.resource.jdbc.spi.StatementInspector")} 条件控制注册。
+ *
+ * <p>
+ * <strong>非 Hibernate 环境：</strong>慢查询监控功能由 {@link SlowQueryDataSourceProxy}
+ * 通过纯 JDK {@link java.lang.reflect.Proxy} 实现，不依赖任何特定 JPA 实现。
+ * 此机制与 Hibernate {@code StatementInspector} 互补，但完全独立运行。
  *
  * <p>
  * <strong>自动装配说明：</strong>
  * <ul>
- * <li>Hibernate 环境：自动注册本类作为 {@code StatementInspector}（通过
- * {@code hibernate.session_factory.statement_inspector}），同时通过 {@link SlowQueryDataSourceProxy}
- * 提供 DataSource 代理计时</li>
- * <li>非 Hibernate 环境：仅通过 {@link SlowQueryDataSourceProxy} 提供 DataSource 代理计时</li>
+ * <li>Hibernate 环境：同时注册本类（StatementInspector）和 {@link SlowQueryDataSourceProxyPostProcessor}
+ * （DataSource 代理），提供双重监控</li>
+ * <li>非 Hibernate 环境：仅通过 {@link SlowQueryDataSourceProxyPostProcessor} 注册 DataSource 代理</li>
  * </ul>
- *
- * <p>
- * <strong>DataSource 包装：</strong>如需手动包装 DataSource，使用
- * {@link SlowQueryDataSourceProxy#wrap(javax.sql.DataSource, long)} 而非本类。
  *
  * <p>
  * 使用方式：

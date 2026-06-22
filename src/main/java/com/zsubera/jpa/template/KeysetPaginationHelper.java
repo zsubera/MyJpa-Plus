@@ -165,9 +165,11 @@ final class KeysetPaginationHelper {
                 }
             }
             if (order.isAscending()) {
-                return cb.greaterThan(field, (Comparable)value);
+                return nullsFirst ? cb.greaterThan(field, (Comparable)value)
+                    : cb.or(cb.greaterThan(field, (Comparable)value), cb.isNull(field));
             } else {
-                return cb.lessThan(field, (Comparable)value);
+                return nullsFirst ? cb.lessThan(field, (Comparable)value)
+                    : cb.or(cb.lessThan(field, (Comparable)value), cb.isNull(field));
             }
         }
 
@@ -197,9 +199,11 @@ final class KeysetPaginationHelper {
                     andPredicates.add(cb.disjunction());
                 }
             } else if (currentOrder.isAscending()) {
-                andPredicates.add(cb.greaterThan(currentField, (Comparable)currentValue));
+                andPredicates.add(nullsFirst ? cb.greaterThan(currentField, (Comparable)currentValue)
+                    : cb.or(cb.greaterThan(currentField, (Comparable)currentValue), cb.isNull(currentField)));
             } else {
-                andPredicates.add(cb.lessThan(currentField, (Comparable)currentValue));
+                andPredicates.add(nullsFirst ? cb.lessThan(currentField, (Comparable)currentValue)
+                    : cb.or(cb.lessThan(currentField, (Comparable)currentValue), cb.isNull(currentField)));
             }
             orPredicates.add(cb.and(andPredicates.toArray(new jakarta.persistence.criteria.Predicate[0])));
         }
