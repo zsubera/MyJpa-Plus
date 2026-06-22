@@ -63,7 +63,7 @@ class MyJpaPlusAutoConfigurationTest {
     @Test
     void autoConfiguration_constructor_acceptsProperties() {
         MyJpaPlusProperties properties = new MyJpaPlusProperties();
-        assertDoesNotThrow(() -> new MyJpaPlusAutoConfiguration(properties));
+        assertDoesNotThrow(() -> new MyJpaPlusAutoConfiguration(properties, null));
     }
 
     @Test
@@ -71,7 +71,7 @@ class MyJpaPlusAutoConfigurationTest {
         MyJpaPlusProperties properties = new MyJpaPlusProperties();
         properties.getQuery().setMaxResults(5000);
         properties.getQuery().setDeepPaginationOffsetThreshold(50000);
-        MyJpaPlusAutoConfiguration configuration = new MyJpaPlusAutoConfiguration(properties);
+        MyJpaPlusAutoConfiguration configuration = new MyJpaPlusAutoConfiguration(properties, null);
         MyJpaTemplate template = configuration.myJpaTemplate(properties);
         assertNotNull(template);
     }
@@ -274,7 +274,7 @@ class MyJpaPlusAutoConfigurationTest {
     @Test
     void autoConfiguration_myJpaTemplate_defaultConfig() {
         MyJpaPlusProperties properties = new MyJpaPlusProperties();
-        MyJpaPlusAutoConfiguration config = new MyJpaPlusAutoConfiguration(properties);
+        MyJpaPlusAutoConfiguration config = new MyJpaPlusAutoConfiguration(properties, null);
         MyJpaTemplate template = config.myJpaTemplate(properties);
         assertNotNull(template);
     }

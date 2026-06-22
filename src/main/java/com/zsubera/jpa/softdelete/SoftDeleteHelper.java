@@ -60,6 +60,19 @@ public final class SoftDeleteHelper {
     private static final int MAX_CACHE_SIZE = 1024;
     private static final Logger log = org.slf4j.LoggerFactory.getLogger(SoftDeleteHelper.class);
 
+    /**
+     * SQL 保留字集合（MySQL + PostgreSQL 交集），用于表名验证。
+     */
+    private static final java.util.Set<String> SQL_RESERVED_WORDS =
+        java.util.Set.of("SELECT", "INSERT", "UPDATE", "DELETE", "FROM", "WHERE", "INTO", "VALUES", "SET", "JOIN",
+            "LEFT", "RIGHT", "INNER", "OUTER", "CROSS", "ON", "USING", "AS", "DISTINCT", "ALL", "UNION", "EXCEPT",
+            "INTERSECT", "ORDER", "BY", "GROUP", "HAVING", "LIMIT", "OFFSET", "CREATE", "ALTER", "DROP", "TRUNCATE",
+            "RENAME", "INDEX", "TABLE", "VIEW", "SCHEMA", "DATABASE", "PRIMARY", "KEY", "FOREIGN", "REFERENCES",
+            "UNIQUE", "CHECK", "DEFAULT", "NULL", "NOT", "CONSTRAINT", "BEGIN", "COMMIT", "ROLLBACK", "SAVEPOINT",
+            "TRANSACTION", "TRUE", "FALSE", "AND", "OR", "IN", "EXISTS", "BETWEEN", "LIKE", "IS", "ANY", "SOME",
+            "COUNT", "SUM", "AVG", "MIN", "MAX", "COALESCE", "NULLIF", "CASE", "WHEN", "THEN", "ELSE", "END", "CAST",
+            "USER", "COLUMN", "ROW", "VALUE", "TYPE", "STATUS", "NAME", "ID", "DATA", "TEXT", "DATE", "TIME");
+
     /** 采样缓存大小检查的计数器，减少开销。 */
     private static final java.util.concurrent.atomic.AtomicInteger CALL_COUNTER =
         new java.util.concurrent.atomic.AtomicInteger(0);
@@ -124,9 +137,51 @@ public final class SoftDeleteHelper {
 
     /**
      * 验证表名标识符。用于原生 SQL 中不需要大小写敏感的场景。
+     *
+     * <p>
+     * 额外检查表名是否为 SQL 保留字，防止语法错误。
      */
     static String validateTableName(String identifier) {
-        return validateIdentifier(identifier);
+        String validated = validateIdentifier(identifier);
+        // 检查是否为 SQL 保留字（不区分大小写）
+        String upper = validated.toUpperCase(java.util.Locale.ROOT);
+        if (SQL_RESERVED_WORDS.contains(upper)) {
+            log.warn("Table name '{}' is a SQL reserved word. " + "This may cause syntax errors on some databases. "
+                + "Consider using @Table(name = \"...\") to specify a different table name.", identifier);
+        }
+        return validated;
+    }
+
+    /**
+     * 可选的事件发布回调，用于在批量软删除操作后通知缓存失效。
+     * 由 MyJpaPlusAutoConfiguration 在启动时注册。
+     */
+    @FunctionalInterface
+    public interface EventPublisher {
+        void publish(Class<?> entityClass, int affectedRows);
+    }
+
+    private static volatile EventPublisher eventPublisher;
+
+    /**
+     * 设置事件发布回调。由自动配置类在启动时调用。
+     *
+     * @param publisher 事件发布回调，传入 null 可禁用事件发布
+     */
+    public static void setEventPublisher(EventPublisher publisher) {
+        eventPublisher = publisher;
+    }
+
+    private static void publishEvent(Class<?> entityClass, int affectedRows) {
+        EventPublisher publisher = eventPublisher;
+        if (publisher != null && affectedRows > 0) {
+            try {
+                publisher.publish(entityClass, affectedRows);
+            } catch (Exception e) {
+                log.debug("Failed to publish entity modified event for {}: {}", entityClass.getSimpleName(),
+                    e.getMessage());
+            }
+        }
     }
 
     private SoftDeleteHelper() {}
@@ -320,6 +375,7 @@ public final class SoftDeleteHelper {
         }
         if (updated > 0) {
             em.clear();
+            publishEvent(entityClass, updated);
         }
         return updated;
     }
@@ -420,6 +476,7 @@ public final class SoftDeleteHelper {
         // 原生 SQL 绕过 JPA 生命周期，需要清除 L1 缓存以确保后续查询一致性
         if (total > 0) {
             em.clear();
+            publishEvent(entityClass, total);
         }
         return total;
     }

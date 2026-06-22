@@ -36,7 +36,7 @@ class AutoconfigureExtendedCoverageTest {
             props.getQuery().setExtraSafeFunctions(List.of());
             props.getQuery().setExtraBooleanFunctions(List.of());
             MyJpaPlusGlobalConfig globalConfig = new MyJpaPlusGlobalConfig();
-            new MyJpaPlusAutoConfiguration.MyJpaPlusConfigInitializer(props, globalConfig);
+            new MyJpaPlusAutoConfiguration.MyJpaPlusConfigInitializer(props, globalConfig, null);
         } finally {
             logger.setLevel(oldLevel);
         }
@@ -51,7 +51,7 @@ class AutoconfigureExtendedCoverageTest {
             MyJpaPlusProperties props = new MyJpaPlusProperties();
             props.getQuery().setExtraSafeFunctions(List.of());
             props.getQuery().setExtraBooleanFunctions(List.of());
-            new MyJpaPlusAutoConfiguration.MyJpaPlusConfigInitializer(props, null);
+            new MyJpaPlusAutoConfiguration.MyJpaPlusConfigInitializer(props, null, null);
         } finally {
             logger.setLevel(oldLevel);
         }
@@ -114,14 +114,14 @@ class AutoconfigureExtendedCoverageTest {
         props.getQuery().setDeepPaginationOffsetThreshold(50000);
         props.getQuery().setDeepPaginationOffsetLimit(1000000);
         props.getQuery().setDefaultTimeoutSeconds(60);
-        MyJpaPlusAutoConfiguration config = new MyJpaPlusAutoConfiguration(props);
+        MyJpaPlusAutoConfiguration config = new MyJpaPlusAutoConfiguration(props, null);
         assertNotNull(config.myJpaTemplate(props));
     }
 
     @Test
     void myJpaTemplate_defaultConfig() {
         MyJpaPlusProperties props = new MyJpaPlusProperties();
-        MyJpaPlusAutoConfiguration config = new MyJpaPlusAutoConfiguration(props);
+        MyJpaPlusAutoConfiguration config = new MyJpaPlusAutoConfiguration(props, null);
         assertNotNull(config.myJpaTemplate(props));
     }
 
@@ -135,7 +135,7 @@ class AutoconfigureExtendedCoverageTest {
         props.getQuery().setMaxBulkOperationRows(2000);
         props.getQuery().setDeepPaginationOffsetThreshold(50000);
         props.getQuery().setDeepPaginationOffsetLimit(1000000);
-        MyJpaPlusAutoConfiguration config = new MyJpaPlusAutoConfiguration(props);
+        MyJpaPlusAutoConfiguration config = new MyJpaPlusAutoConfiguration(props, null);
         MyJpaPlusGlobalConfig globalConfig = config.myJpaPlusGlobalConfig(props);
         assertFalse(globalConfig.isSoftDeleteAutoFilter());
         assertFalse(globalConfig.isBlockUnconditionalDelete());
@@ -152,7 +152,7 @@ class AutoconfigureExtendedCoverageTest {
         try {
             System.setProperty("myjpa.encrypt.key", "invalid-key");
             MyJpaPlusProperties props = new MyJpaPlusProperties();
-            assertDoesNotThrow(() -> new MyJpaPlusAutoConfiguration.MyJpaPlusConfigInitializer(props, null));
+            assertDoesNotThrow(() -> new MyJpaPlusAutoConfiguration.MyJpaPlusConfigInitializer(props, null, null));
         } finally {
             if (oldProp != null) {
                 System.setProperty("myjpa.encrypt.key", oldProp);
@@ -166,13 +166,13 @@ class AutoconfigureExtendedCoverageTest {
     void configInitializer_timeoutZero() {
         MyJpaPlusProperties props = new MyJpaPlusProperties();
         props.getQuery().setDefaultTimeoutSeconds(-1);
-        assertDoesNotThrow(() -> new MyJpaPlusAutoConfiguration.MyJpaPlusConfigInitializer(props, null));
+        assertDoesNotThrow(() -> new MyJpaPlusAutoConfiguration.MyJpaPlusConfigInitializer(props, null, null));
     }
 
     @Test
     void allBeanMethods_coverage() {
         MyJpaPlusProperties props = new MyJpaPlusProperties();
-        MyJpaPlusAutoConfiguration config = new MyJpaPlusAutoConfiguration(props);
+        MyJpaPlusAutoConfiguration config = new MyJpaPlusAutoConfiguration(props, null);
         assertNotNull(config.myJpaPlusGlobalConfig(props));
         assertNotNull(config.myJpaTemplate(props));
         assertNotNull(config.queryCacheManager());
@@ -183,7 +183,7 @@ class AutoconfigureExtendedCoverageTest {
     @Test
     void onContextClosed_coverage() {
         MyJpaPlusProperties props = new MyJpaPlusProperties();
-        MyJpaPlusAutoConfiguration config = new MyJpaPlusAutoConfiguration(props);
+        MyJpaPlusAutoConfiguration config = new MyJpaPlusAutoConfiguration(props, null);
         assertDoesNotThrow(() -> config.onContextClosed(null));
     }
 

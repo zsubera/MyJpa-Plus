@@ -63,4 +63,15 @@ public final class GlobalConfigHolder {
     public static boolean isConfigured() {
         return config != null;
     }
+
+    /**
+     * 重置全局配置为未配置状态（恢复为默认配置）。
+     *
+     * <p>
+     * 此方法主要用于测试环境，在 {@code @AfterEach} 中调用以防止测试间状态泄漏。
+     * 生产环境不应调用此方法。
+     */
+    public static void reset() {
+        config = null;
+    }
 }

@@ -95,10 +95,6 @@ public class QueryCacheManager implements CacheAdapter {
     private final java.util.concurrent.ConcurrentLinkedDeque<String> insertionOrder =
         new java.util.concurrent.ConcurrentLinkedDeque<>();
 
-    /** deque 中的条目数量（包括可能不在 store 中的陈旧条目）。 */
-    private final java.util.concurrent.atomic.AtomicInteger dequeSize =
-        new java.util.concurrent.atomic.AtomicInteger(0);
-
     /**
      * ReentrantLock with tryLock() for eviction guard — non-blocking and optimal here because
      * ConcurrentHashMap already provides lock-free reads; StampedLock optimistic reads would add
@@ -180,9 +176,7 @@ public class QueryCacheManager implements CacheAdapter {
             // 原子移除：仅当条目确实是当前过期条目时才移除，避免竞态条件误删新条目
             boolean removed = store.remove(key, result);
             if (removed) {
-                if (insertionOrder.remove(key)) {
-                    dequeSize.decrementAndGet();
-                }
+                insertionOrder.remove(key);
                 log.debug("Cache expired for key: {}", key);
             }
             return null;
@@ -238,7 +232,6 @@ public class QueryCacheManager implements CacheAdapter {
             store.put(key, newValue);
         } else {
             insertionOrder.addLast(key);
-            dequeSize.incrementAndGet();
         }
         // 更新已有 key 时不需要修改 insertionOrder——旧条目会在 deque 漂移清理时被跳过
 
@@ -257,7 +250,6 @@ public class QueryCacheManager implements CacheAdapter {
             if (oldest == null) {
                 break;
             }
-            dequeSize.decrementAndGet();
             // 仅当 store 中确实存在该 key 时才算有效驱逐，否则跳过陈旧 deque 条目
             if (store.remove(oldest) != null) {
                 log.debug("Post-put evicted oldest cache entry: {}", oldest);
@@ -302,7 +294,6 @@ public class QueryCacheManager implements CacheAdapter {
             if (oldest == null) {
                 return;
             }
-            dequeSize.decrementAndGet();
             // 仅当 store 中确实存在该 key 时才执行驱逐
             if (store.remove(oldest) != null) {
                 log.debug("Evicted oldest cache entry: {}", oldest);
@@ -330,7 +321,6 @@ public class QueryCacheManager implements CacheAdapter {
                 String k = it.next();
                 if (!store.containsKey(k)) {
                     it.remove();
-                    dequeSize.decrementAndGet();
                     cleaned++;
                 }
             }
@@ -347,7 +337,6 @@ public class QueryCacheManager implements CacheAdapter {
                     break;
                 }
                 insertionOrder.pollFirst();
-                dequeSize.decrementAndGet();
                 cleaned++;
             }
         }
@@ -411,9 +400,7 @@ public class QueryCacheManager implements CacheAdapter {
             }
             if (entry.getValue().isExpired()) {
                 if (store.remove(entry.getKey(), entry.getValue())) {
-                    if (insertionOrder.remove(entry.getKey())) {
-                        dequeSize.decrementAndGet();
-                    }
+                    insertionOrder.remove(entry.getKey());
                     log.debug("Cache expired for key: {}", entry.getKey());
                 }
             }
@@ -427,10 +414,8 @@ public class QueryCacheManager implements CacheAdapter {
      */
     @Override
     public void evict(String key) {
-        Object removed = store.remove(key);
-        if (removed != null && insertionOrder.remove(key)) {
-            dequeSize.decrementAndGet();
-        }
+        store.remove(key);
+        insertionOrder.remove(key);
         log.debug("Cache evicted for key: {}", key);
     }
 
@@ -447,7 +432,6 @@ public class QueryCacheManager implements CacheAdapter {
         try {
             store.clear();
             insertionOrder.clear();
-            dequeSize.set(0);
         } finally {
             evictionLock.unlock();
         }
@@ -479,9 +463,7 @@ public class QueryCacheManager implements CacheAdapter {
             Map.Entry<String, CachedQueryResult<?>> entry = it.next();
             if (entry.getKey().startsWith(keyPrefix)) {
                 it.remove();
-                if (insertionOrder.remove(entry.getKey())) {
-                    dequeSize.decrementAndGet();
-                }
+                insertionOrder.remove(entry.getKey());
                 count++;
             }
         }

@@ -14,11 +14,30 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * 条件节点类型的密封层次结构，由 {@link QuerySpec}、{@link ConditionBuilder} 及相关类使用， 用于构建延迟执行的
- * {@link jakarta.persistence.criteria.Predicate} 树。
+ * 条件节点类型的密封层次结构，由 {@link QuerySpec}、{@link ConditionBuilder} 及相关类使用，
+ * 用于构建延迟执行的 {@link jakarta.persistence.criteria.Predicate} 树。
  *
  * <p>
- * 每个节点表示查询条件树中的一个条件或结构元素（例如，简单比较、JOIN、OR 组、子查询等）， 在查询执行时进行解析。
+ * 每个节点表示查询条件树中的一个条件或结构元素（例如，简单比较、JOIN、OR 组、子查询等），
+ * 在查询执行时进行解析。
+ *
+ * <h3>扩展指南</h3>
+ * <p>
+ * 本接口使用 Java sealed 机制限制实现类型。如需新增节点类型：
+ * <ol>
+ * <li>在本接口中添加新的 {@code final class} 实现（必须为 {@code final}）</li>
+ * <li>在此接口的 {@code permits} 子句中添加新类</li>
+ * <li>在 {@link NodeResolver} 的 {@code STRATEGIES} 映射中添加解析策略</li>
+ * <li>在 {@link ConditionBuilder} 中添加对应的构建方法</li>
+ * </ol>
+ *
+ * <p>
+ * <strong>新增运算符（非节点类型）</strong>更简单——只需在 {@link Op} 枚举中添加新值，
+ * 在 {@link ConditionBuilder} 中添加 default 方法，无需修改 {@link NodeResolver}。
+ *
+ * @see QuerySpec
+ * @see ConditionBuilder
+ * @see NodeResolver
  */
 public sealed interface ConditionNode permits ConditionNode.SimpleNode, ConditionNode.JoinNode, ConditionNode.OrNode,
     ConditionNode.AndNode, ConditionNode.MultiLikeNode, ConditionNode.CollectionNode, ConditionNode.ExistsNode,

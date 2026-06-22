@@ -247,9 +247,19 @@ MyJpa-Plus 完全兼容 Java 21+ 虚拟线程（Virtual Threads）：
 ## 环境要求
 
 - **Java**: 17+
-- **Spring Boot**: 3.x
-- **Spring Data JPA**
+- **Spring Boot**: 3.2+（推荐 3.3.5）
+- **Spring Data JPA**: 3.x
 - **JPA 实现**: Hibernate 6.x（推荐）
+
+### 兼容性说明
+
+| JPA 实现 | 状态 | 说明 |
+|:---|:---:|:---|
+| Hibernate 6.x | ✅ 完全支持 | CI 全面测试，推荐使用 |
+| EclipseLink 4.x | ⚠️ 部分支持 | JPA Criteria API 标准功能可用，`From.fetch()` 行为可能有差异 |
+| Hibernate 5.x | ❌ 不支持 | 需要 Spring Boot 2.x |
+
+> **注意**：当前 CI 仅验证 Hibernate + MySQL/PostgreSQL。Oracle/SQL Server 方言通过 Testcontainers 验证。
 
 ---
 
@@ -376,6 +386,155 @@ myjpa-plus:
 | `min(root, field)` | MIN(field) |
 
 </details>
+
+---
+
+## 高级用法
+
+### CTE（公共表表达式）
+
+```java
+// 非递归 CTE：查询活跃用户
+List<Object[]> results = CteSpec
+    .with("active_users").columns("id", "name")
+    .as("SELECT id, name FROM users WHERE active = true")
+    .select("SELECT * FROM active_users WHERE name LIKE :name")
+    .setParameter("name", "%John%")
+    .getResultList(em);
+
+// 递归 CTE：查询分类树
+List<Object[]> tree = CteSpec
+    .withRecursive("category_tree").columns("id", "name", "parent_id", "depth")
+    .as("SELECT id, name, parent_id, 0 FROM categories WHERE parent_id IS NULL"
+        + " UNION ALL "
+        + "SELECT c.id, c.name, c.parent_id, ct.depth + 1 FROM categories c "
+        + "JOIN category_tree ct ON c.parent_id = ct.id")
+    .select("SELECT * FROM category_tree ORDER BY depth")
+    .getResultList(em);
+```
+
+### 投影查询
+
+```java
+// 选择特定字段，返回 Tuple
+List<Tuple> results = new ProjectionSpec<>(User.class)
+    .select(User::getName)
+    .select(User::getEmail)
+    .join(User::getDepartment, j -> j.eq(Department::getName, "Engineering"))
+    .orderByAsc(User::getName)
+    .where(q -> q.eq(User::getStatus, "ACTIVE"))
+    .toTupleQuery(entityManager)
+    .getResultList();
+
+// DTO 投影（自动构造函数映射）
+public record UserNameEmail(String name, String email) {}
+
+List<UserNameEmail> dtos = new ProjectionSpec<>(User.class)
+    .select(User::getName)
+    .select(User::getEmail)
+    .where(q -> q.eq(User::getStatus, "ACTIVE"))
+    .asDto(UserNameEmail.class)
+    .toDtoQuery(entityManager)
+    .getResultList();
+
+// 聚合投影
+List<Tuple> stats = new ProjectionSpec<>(Order.class)
+    .selectCount(Order::getId, "orderCount")
+    .selectSum(Order::getAmount, "totalAmount")
+    .groupBy(Order::getStatus)
+    .toTupleQuery(entityManager)
+    .getResultList();
+```
+
+### 字段脱敏
+
+```java
+// 定义 DTO，使用 @Mask 注解
+public class UserDto {
+    private String name;
+
+    @Mask(type = MaskType.PHONE)
+    private String phone;    // 输出: 138****1234
+
+    @Mask(type = MaskType.EMAIL)
+    private String email;    // 输出: j***@example.com
+
+    @Mask(type = MaskType.ID_CARD)
+    private String idCard;   // 输出: 110***********1234
+}
+
+// 注册 Jackson 模块
+@Configuration
+public class JacksonConfig {
+    @Bean
+    public ObjectMapper objectMapper() {
+        ObjectMapper mapper = new ObjectMapper();
+        mapper.registerModule(new MaskSerializer.MaskModule());
+        return mapper;
+    }
+}
+```
+
+支持的脱敏类型：`PHONE`、`EMAIL`、`ID_CARD`、`NAME`、`BANK_CARD`、`ADDRESS`、`LICENSE_PLATE`
+
+### 乐观锁自动重试
+
+```java
+@Service
+public class ProductService {
+
+    @RetryOnOptimisticLock(maxRetries = 5, backoffMs = 200)
+    @Transactional
+    public void updateProduct(Long id, String newName) {
+        Product p = repository.findById(id).orElseThrow();
+        p.setName(newName);
+        repository.save(p);  // 如果版本冲突，自动重试
+    }
+}
+```
+
+重试策略：首次等待 200ms，之后指数退避（200ms → 400ms → 800ms → 1600ms → 3200ms），最多重试 5 次。
+
+### 查询缓存
+
+```java
+// 使用 MyJpaTemplate 的缓存查询
+List<User> users = jpa.findAllCached(User.class,
+    new QuerySpec<User>().eq(User::getStatus, "ACTIVE"),
+    60);  // TTL 60 秒
+
+// 手动管理缓存
+QueryCacheManager cache = new QueryCacheManager();
+cache.put("active-users", userList, 60);
+List<User> cached = cache.get("active-users");
+
+// 事务提交后自动清除缓存
+cache.evictByPrefixAfterTransactionCommit("User:");
+```
+
+### Keyset 分页（游标分页）
+
+```java
+// 第一页
+MyJpaTemplateOperations.KeysetPage<User> page1 = jpa.findKeysetPage(
+    User.class, spec, Sort.by("id"), 20, (Object[]) null);
+
+// 下一页：使用上一页的 lastSortValues
+MyJpaTemplateOperations.KeysetPage<User> page2 = jpa.findKeysetPage(
+    User.class, spec, Sort.by("id"), 20, page1.lastSortValues());
+```
+
+### 函数调用
+
+```java
+// 使用数据库函数进行条件判断
+qs.func(User::getMetadata, "jsonb_exists", "key")
+  // 生成: jsonb_exists(user.metadata, 'key') = true
+
+// 使用空间函数
+qs.func(Location::getGeom, "ST_Contains", polygonWkt)
+  // 生成: ST_Contains(location.geom, ?) = true
+```
 
 ---
 

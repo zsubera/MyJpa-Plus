@@ -78,7 +78,7 @@ class MyJpaPlusAutoConfigurationIntegrationTest {
 
     @Test
     void onContextClosed_doesNotThrow() {
-        MyJpaPlusAutoConfiguration config = new MyJpaPlusAutoConfiguration(properties);
+        MyJpaPlusAutoConfiguration config = new MyJpaPlusAutoConfiguration(properties, null);
         assertDoesNotThrow(() -> config.onContextClosed(null));
     }
 

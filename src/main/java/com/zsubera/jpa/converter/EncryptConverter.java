@@ -116,31 +116,37 @@ public class EncryptConverter implements AttributeConverter<String, String> {
     /** 密钥版本缓存刷新间隔（毫秒），默认 5 分钟。 */
     private static final long KEY_VERSION_REFRESH_INTERVAL_MS = 300_000L;
 
+    /** 懒初始化的密钥预热线程池。使用 AtomicReference + lazy init 避免类加载时创建线程。 */
     private static final java.util.concurrent.atomic.AtomicReference<
-        java.util.concurrent.ExecutorService> WARM_UP_EXECUTOR = new java.util.concurrent.atomic.AtomicReference<>(
-            java.util.concurrent.Executors.newFixedThreadPool(1, r -> {
+        java.util.concurrent.ExecutorService> WARM_UP_EXECUTOR = new java.util.concurrent.atomic.AtomicReference<>();
+
+    private static java.util.concurrent.ExecutorService getOrCreateWarmUpExecutor() {
+        java.util.concurrent.ExecutorService executor = WARM_UP_EXECUTOR.get();
+        if (executor != null) {
+            return executor;
+        }
+        synchronized (WARM_UP_EXECUTOR) {
+            executor = WARM_UP_EXECUTOR.get();
+            if (executor != null) {
+                return executor;
+            }
+            executor = java.util.concurrent.Executors.newFixedThreadPool(1, r -> {
                 Thread t = new Thread(r, "encrypt-key-warmup");
                 t.setDaemon(true);
                 return t;
-            }));
-
-    private static final Thread WARM_UP_SHUTDOWN_HOOK = new Thread(() -> {
-        java.util.concurrent.ExecutorService executor = WARM_UP_EXECUTOR.getAndSet(null);
-        if (executor != null) {
-            executor.shutdown();
-            try {
-                if (!executor.awaitTermination(2, java.util.concurrent.TimeUnit.SECONDS)) {
-                    executor.shutdownNow();
-                }
-            } catch (InterruptedException e) {
-                executor.shutdownNow();
-                Thread.currentThread().interrupt();
-            }
+            });
+            WARM_UP_EXECUTOR.set(executor);
+            return executor;
         }
-    }, "encrypt-key-warmup-shutdown");
+    }
 
     static {
-        Runtime.getRuntime().addShutdownHook(WARM_UP_SHUTDOWN_HOOK);
+        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+            java.util.concurrent.ExecutorService executor = WARM_UP_EXECUTOR.getAndSet(null);
+            if (executor != null) {
+                executor.shutdownNow();
+            }
+        }, "encrypt-key-warmup-shutdown"));
     }
 
     /** 开发环境可选：显式设置为 true 时跳过盐值检查（仅限开发环境）。 */
@@ -209,10 +215,7 @@ public class EncryptConverter implements AttributeConverter<String, String> {
      * 此方法在后台线程中执行密钥派生，不阻塞主线程。如果密钥未配置，会记录警告日志。
      */
     public static void warmUpKeyCache() {
-        java.util.concurrent.ExecutorService executor = WARM_UP_EXECUTOR.get();
-        if (executor == null) {
-            return;
-        }
+        java.util.concurrent.ExecutorService executor = getOrCreateWarmUpExecutor();
         try {
             java.util.concurrent.CompletableFuture.runAsync(() -> {
                 try {
@@ -482,19 +485,22 @@ public class EncryptConverter implements AttributeConverter<String, String> {
         if (existing != null) {
             return existing;
         }
-        SecretKeySpec result = KEY_CACHE.compute(cacheKey, (k, v) -> {
-            if (v != null) {
-                return v;
+        // 使用 synchronized 保证 size 检查与 put 的原子性，防止并发超限
+        synchronized (EncryptConverter.class) {
+            existing = KEY_CACHE.get(cacheKey);
+            if (existing != null) {
+                return existing;
             }
             if (KEY_CACHE.size() >= MAX_KEY_CACHE_SIZE) {
-                throw new MyJpaPlusException(
-                    "Encryption key cache is full (" + MAX_KEY_CACHE_SIZE + " entries). " + "Cannot load key version '"
-                        + k + "'. " + "Clear cache or increase MAX_KEY_CACHE_SIZE if this is legitimate key rotation.");
+                throw new MyJpaPlusException("Encryption key cache is full (" + MAX_KEY_CACHE_SIZE + " entries). "
+                    + "Cannot load key version '" + cacheKey + "'. "
+                    + "Clear cache or increase MAX_KEY_CACHE_SIZE if this is legitimate key rotation.");
             }
-            String rawKey = resolveRawKey(k);
-            return deriveKey(rawKey);
-        });
-        return result;
+            String rawKey = resolveRawKey(cacheKey);
+            SecretKeySpec derived = deriveKey(rawKey);
+            KEY_CACHE.put(cacheKey, derived);
+            return derived;
+        }
     }
 
     /**

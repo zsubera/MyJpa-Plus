@@ -120,6 +120,17 @@ public interface CacheAdapter {
     void resetStats();
 
     /**
+     * 关闭缓存适配器，释放底层资源。
+     *
+     * <p>
+     * 默认实现为空操作。需要释放资源的实现（如 Redis 连接池）应覆盖此方法。
+     * 此方法在应用关闭时由 {@link com.zsubera.jpa.autoconfigure.MyJpaPlusAutoConfiguration} 调用。
+     */
+    default void close() {
+        // 默认空操作，子类可覆盖以释放资源
+    }
+
+    /**
      * 返回一个禁用的缓存适配器实例，所有操作均为无操作。
      *
      * <p>

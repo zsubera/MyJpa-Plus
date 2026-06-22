@@ -122,7 +122,7 @@ class AutoconfigureSecurityTest {
                 System.setProperty("myjpa.encrypt.key", "test-key-12345678");
                 MyJpaPlusProperties props = new MyJpaPlusProperties();
                 // This should trigger RejectedExecutionException in warmUpKeyCache
-                assertDoesNotThrow(() -> new MyJpaPlusAutoConfiguration.MyJpaPlusConfigInitializer(props, null));
+                assertDoesNotThrow(() -> new MyJpaPlusAutoConfiguration.MyJpaPlusConfigInitializer(props, null, null));
             } finally {
                 if (oldProp != null) {
                     System.setProperty("myjpa.encrypt.key", oldProp);

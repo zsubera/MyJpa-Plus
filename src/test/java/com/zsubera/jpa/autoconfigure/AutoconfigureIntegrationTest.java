@@ -112,7 +112,7 @@ class AutoconfigureIntegrationTest {
             props.getQuery().setExtraSafeFunctions(List.of());
             props.getQuery().setExtraBooleanFunctions(List.of());
             MyJpaPlusGlobalConfig globalConfig = new MyJpaPlusGlobalConfig();
-            new MyJpaPlusAutoConfiguration.MyJpaPlusConfigInitializer(props, globalConfig);
+            new MyJpaPlusAutoConfiguration.MyJpaPlusConfigInitializer(props, globalConfig, null);
         } finally {
             logger.setLevel(oldLevel);
         }
@@ -127,7 +127,7 @@ class AutoconfigureIntegrationTest {
             MyJpaPlusProperties props = new MyJpaPlusProperties();
             props.getQuery().setExtraSafeFunctions(List.of());
             props.getQuery().setExtraBooleanFunctions(List.of());
-            new MyJpaPlusAutoConfiguration.MyJpaPlusConfigInitializer(props, null);
+            new MyJpaPlusAutoConfiguration.MyJpaPlusConfigInitializer(props, null, null);
         } finally {
             logger.setLevel(oldLevel);
         }
@@ -251,7 +251,8 @@ class AutoconfigureIntegrationTest {
 
     @Test
     void onContextClosed_cleansUp() {
-        MyJpaPlusAutoConfiguration config = new MyJpaPlusAutoConfiguration(context.getBean(MyJpaPlusProperties.class));
+        MyJpaPlusAutoConfiguration config =
+            new MyJpaPlusAutoConfiguration(context.getBean(MyJpaPlusProperties.class, null), null);
         assertDoesNotThrow(() -> config.onContextClosed(null));
     }
 
@@ -260,7 +261,7 @@ class AutoconfigureIntegrationTest {
     @Test
     void allBeanMethods() {
         MyJpaPlusProperties props = context.getBean(MyJpaPlusProperties.class);
-        MyJpaPlusAutoConfiguration config = new MyJpaPlusAutoConfiguration(props);
+        MyJpaPlusAutoConfiguration config = new MyJpaPlusAutoConfiguration(props, null);
         assertNotNull(config.myJpaPlusGlobalConfig(props));
         assertNotNull(config.myJpaTemplate(props));
         assertNotNull(config.queryCacheManager());

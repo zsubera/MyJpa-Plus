@@ -168,7 +168,7 @@ public class MyJpaTemplate implements MyJpaTemplateOperations {
      *
      * @param entityManager 要使用的 EntityManager 实例
      */
-    MyJpaTemplate(EntityManager entityManager) {
+    public MyJpaTemplate(EntityManager entityManager) {
         this.entityManager = entityManager;
     }
 

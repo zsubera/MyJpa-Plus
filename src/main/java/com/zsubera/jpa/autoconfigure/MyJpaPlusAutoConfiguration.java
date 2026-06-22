@@ -5,6 +5,7 @@ import com.zsubera.jpa.monitor.SlowQueryDataSourceProxyPostProcessor;
 import com.zsubera.jpa.monitor.SqlSlowQueryInterceptor;
 import com.zsubera.jpa.repository.DefaultMyJpaRepository;
 import com.zsubera.jpa.repository.MyJpaRepositoryFactoryBean;
+import com.zsubera.jpa.template.CacheAdapter;
 import com.zsubera.jpa.template.MyJpaTemplate;
 import com.zsubera.jpa.template.MyJpaTemplateOperations;
 import com.zsubera.jpa.util.InClauseBuilder;
@@ -65,13 +66,18 @@ public class MyJpaPlusAutoConfiguration {
 
     private final MyJpaPlusProperties properties;
 
+    private final org.springframework.context.ApplicationContext applicationContext;
+
     @SuppressFBWarnings(value = "EI_EXPOSE_REP2",
         justification = "AutoConfiguration stores Spring-managed properties bean; lifecycle managed by Spring container")
-    public MyJpaPlusAutoConfiguration(MyJpaPlusProperties properties) {
+    public MyJpaPlusAutoConfiguration(MyJpaPlusProperties properties,
+        @org.springframework.beans.factory.annotation.Autowired(
+            required = false) org.springframework.context.ApplicationContext applicationContext) {
         if (properties == null) {
             throw new IllegalArgumentException("properties must not be null");
         }
         this.properties = properties;
+        this.applicationContext = applicationContext;
         log.info("MyJpa-Plus AutoConfiguration created");
     }
 
@@ -101,13 +107,23 @@ public class MyJpaPlusAutoConfiguration {
 
         MyJpaPlusConfigInitializer(MyJpaPlusProperties properties,
             @org.springframework.beans.factory.annotation.Autowired(
-                required = false) MyJpaPlusGlobalConfig globalConfig) {
+                required = false) MyJpaPlusGlobalConfig globalConfig,
+            @org.springframework.beans.factory.annotation.Autowired(
+                required = false) org.springframework.context.ApplicationContext applicationContext) {
             // 使用全局配置提供者替代静态可变状态
             if (globalConfig != null) {
                 DefaultMyJpaRepository.setGlobalConfigProvider(DefaultMyJpaRepository.createMutableConfigProvider(
                     globalConfig.isSoftDeleteAutoFilter(), globalConfig.isBlockUnconditionalDelete()));
                 // 通过 GlobalConfigHolder 集中管理全局配置访问
                 GlobalConfigHolder.setConfig(globalConfig);
+            }
+
+            // 注册 SoftDeleteHelper 事件发布回调，支持批量软删除操作后的缓存自动失效
+            if (applicationContext != null) {
+                com.zsubera.jpa.softdelete.SoftDeleteHelper.setEventPublisher((entityClass, affectedRows) -> {
+                    applicationContext
+                        .publishEvent(new com.zsubera.jpa.template.EntityModifiedEvent(entityClass, affectedRows));
+                });
             }
 
             // 应用 IN 子句配置
@@ -544,6 +560,18 @@ public class MyJpaPlusAutoConfiguration {
             com.zsubera.jpa.repository.EntityManagerHelper.reset();
         } catch (Exception e) {
             log.warn("EntityManagerHelper reset failed", e);
+        }
+        try {
+            com.zsubera.jpa.softdelete.SoftDeleteHelper.setEventPublisher(null);
+        } catch (Exception e) {
+            log.warn("SoftDeleteHelper event publisher cleanup failed", e);
+        }
+        try {
+            CacheAdapter cacheAdapter = applicationContext.getBean(CacheAdapter.class);
+            cacheAdapter.close();
+        } catch (Exception e) {
+            // CacheAdapter might not be available or already destroyed by Spring
+            log.debug("CacheAdapter close skipped: {}", e.getMessage());
         }
         log.info("MyJpa-Plus context closed, caches cleaned");
     }

@@ -6,6 +6,10 @@ MyJpa-Plus 是一个基于 Lambda 表达式的类型安全 JPA 工具库。提�
 
 **技术栈**：Java 17+、Spring Boot 3.3.5、Hibernate 6.x、Spring Data JPA
 
+## Java 17+ 模块系统（关键）
+
+Lambda 查询（`Entity::getName`）依赖反射访问 `SerializedLambda.writeReplace()`。未配置 `--add-opens` 时**所有 Lambda 查询在运行时抛异常**。Surefire 已在 `pom.xml` 中配置了 argLine，本地 IDE 运行测试需手动添加 JVM 参数。
+
 ## 快速命令
 
 ```bash
@@ -53,6 +57,10 @@ CI MySQL 密码：`ci_test_2024`。本地：`1351.zhong`。
 - `ConditionNode` 是密封接口；所有实现必须为 `final`
 - 公共 API 参数必须有 null 检查
 - 除非被要求，否则不添加注释；避免过度设计
+- **禁止 `@since` 注解**：不要在方法、类或字段上添加 `@since` 注解。已有的 `@since` 注解在修改该代码时一并删除
+- **过时方法直接删除**：不使用 `@Deprecated` 标记过时方法，直接删除即可。本库不维护向后兼容性
+- **Javadoc 必须完整**：所有公共方法必须有完整的 Javadoc 注释，包括描述、`@param`、`@return`、`@throws`
+- **类级别 Javadoc 必须完整**：所有类必须有类级别的 Javadoc 注释，包括用途说明
 
 ## 包结构
 

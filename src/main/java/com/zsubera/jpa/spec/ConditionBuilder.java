@@ -853,13 +853,21 @@ public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> ext
         if (params == null) {
             throw new IllegalArgumentException("params must not be null");
         }
+        // 提前验证函数名白名单，避免创建不必要的数组和对象
+        // 注意：仅检查动态扩展白名单，SAFE_FUNCTION_NAMES 已包含所有默认函数
+        String upperName = functionName.toUpperCase(java.util.Locale.ROOT);
+        if (!SAFE_FUNCTION_NAMES.contains(upperName)
+            && !com.zsubera.jpa.spec.FunctionWhitelist.FROZEN_EXTRA_SAFE_FUNCTION_NAMES.get().contains(upperName)) {
+            throw new com.zsubera.jpa.exception.SecurityViolationException(
+                "Function not in whitelist: '" + functionName + "'. " + "Only whitelisted functions are allowed. "
+                    + "Use myjpa-plus.query.extra-safe-functions to add custom functions.");
+        }
         String name = resolveProperty(field);
         Object[] allParams = new Object[params.length + 1];
         allParams[0] = name;
         System.arraycopy(params, 0, allParams, 1, params.length);
-        // 使用 FuncNode.of() 工厂方法进行安全白名单校验，
+        // 使用 FuncNode.of() 工厂方法进行安全白名单校验（包括布尔函数检查），
         // 而非通过直接构造调用绕过校验。
-        // FuncNode.of() 内部处理白名单检查和日志记录。
         conditions().add(ConditionNode.FuncNode.of(functionName, allParams));
         return self();
     }

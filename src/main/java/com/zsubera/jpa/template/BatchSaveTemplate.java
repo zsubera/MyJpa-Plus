@@ -185,11 +185,18 @@ class BatchSaveTemplate {
                 }
             });
             if (getId == NO_ID_METHOD_SENTINEL) {
-                log.warn(
-                    "No getId() method found for {}; assuming existing entity. "
-                        + "This may cause unnecessary SELECT queries during merge. "
-                        + "Consider implementing getId() method or using saveAllBatchedPure() for new entities.",
-                    entity.getClass().getSimpleName());
+                // No getId() method — check for @Id annotation as a last resort
+                boolean hasIdAnnotation = hasIdAnnotation(entity.getClass());
+                if (hasIdAnnotation) {
+                    log.debug("No getId() method found for {} but @Id annotation present; "
+                        + "assuming existing entity (merge will be used).", entity.getClass().getSimpleName());
+                } else {
+                    log.warn(
+                        "No getId() method and no @Id annotation found for {}; assuming existing entity. "
+                            + "This may cause unnecessary SELECT queries during merge. "
+                            + "Consider implementing getId() method or using saveAllBatchedPure() for new entities.",
+                        entity.getClass().getSimpleName());
+                }
                 return false;
             }
             Object id = getId.invoke(entity);
@@ -204,9 +211,26 @@ class BatchSaveTemplate {
     }
 
     /**
-     * 采样驱逐 ID_METHOD_CACHE：移除约 25% 的条目，避免全量清空导致的性能抖动。
+     * 检查实体类或其父类是否声明了 {@code @Id} 或 {@code @EmbeddedId} 注解的字段。
+     */
+    private static boolean hasIdAnnotation(Class<?> entityClass) {
+        Class<?> current = entityClass;
+        while (current != null && current != Object.class) {
+            for (java.lang.reflect.Field field : current.getDeclaredFields()) {
+                if (field.isAnnotationPresent(jakarta.persistence.Id.class)
+                    || field.isAnnotationPresent(jakarta.persistence.EmbeddedId.class)) {
+                    return true;
+                }
+            }
+            current = current.getSuperclass();
+        }
+        return false;
+    }
 
-     * 避免 ConcurrentHashMap 弱一致性迭代器在并发写入时跳过条目导致驱逐不完全。
+    /**
+     * 采样驱逐 ID_METHOD_CACHE：移除约 25% 的条目，避免全量清空导致的性能抖动。
+     *
+     * 使用 keySetView.iterator() 避免 toArray() 的临时数组开销。
      */
     private static void evictIdMethodCache() {
         int targetSize = MAX_ID_METHOD_CACHE_SIZE / 4;
@@ -214,15 +238,12 @@ class BatchSaveTemplate {
         if (toRemove <= 0) {
             return;
         }
-        Object[] keys = ID_METHOD_CACHE.keySet().toArray();
+        java.util.Iterator<Class<?>> it = ID_METHOD_CACHE.keySet().iterator();
         int removed = 0;
-        for (Object key : keys) {
-            if (removed >= toRemove) {
-                break;
-            }
-            if (ID_METHOD_CACHE.remove(key) != null) {
-                removed++;
-            }
+        while (it.hasNext() && removed < toRemove) {
+            it.next();
+            it.remove();
+            removed++;
         }
     }
 }

@@ -470,25 +470,6 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
         return havingSupport.having(condition);
     }
 
-    // ---- ORDER BY 方法（委托给 QueryOrderBySupport） ----
-
-    /**
-     * 添加 INNER JOIN 关联。
-     *
-     * @param field 关联字段的方法引用
-     * @param <J> 关联实体类型
-     * @return JoinGroup 实例，用于配置关联条件
-     */
-    // ---- JOIN 方法（委托给 QueryConditionSupport） ----
-
-    /**
-     * 使用消费者构建 JOIN 关联，自动关闭关联组。
-     *
-     * @param field 关联字段的方法引用
-     * @param config JoinGroup 配置消费者
-     * @param <J> 关联实体类型
-     * @return 当前 QuerySpec 实例，支持链式调用
-     */
     // ---- OR/NOT 方法（委托给 QueryConditionSupport） ----
 
     /**
@@ -570,8 +551,6 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
         return conditionSupport.notInSubQuery(outerField, subEntity, config);
     }
 
-    // ---- JOIN 方法（委托给 QueryConditionSupport） ----
-
     /**
      * 使用消费者构建 JOIN 关联，自动关闭关联组。
      *
@@ -619,8 +598,6 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
     public <J> QuerySpec<T> leftFetchJoin(SFunction<T, ?> field, Consumer<JoinGroup<T, J>> config) {
         return conditionSupport.leftFetchJoin(field, config);
     }
-
-    // ---- OR/NOT 方法（委托给 QueryConditionSupport） ----
 
     /**
      * 将此 QuerySpec 转换为 Spring Data {@link Specification}。
@@ -844,46 +821,29 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
      * @return 查询条件描述字符串
      */
     public String toDescription() {
-        StringBuilder sb = new StringBuilder("Query{");
+        java.util.StringJoiner sj = new java.util.StringJoiner(", ", "Query{", "}");
 
         if (distinct) {
-            sb.append("SELECT DISTINCT, ");
+            sj.add("SELECT DISTINCT");
         }
-
-        // WHERE 条件
         if (!conditions.isEmpty()) {
-            sb.append("WHERE: ").append(conditions).append(", ");
+            sj.add("WHERE: " + conditions);
         }
-
-        // GROUP BY
         if (!groupByFields.isEmpty()) {
-            sb.append("GROUP BY: ").append(groupByFields).append(", ");
+            sj.add("GROUP BY: " + groupByFields);
         }
-
-        // HAVING
         if (!havingConditions.isEmpty()) {
-            sb.append("HAVING: ").append(havingConditions.size()).append(" conditions, ");
+            sj.add("HAVING: " + havingConditions.size() + " conditions");
         }
-
-        // ORDER BY
         if (!orderNodes.isEmpty()) {
-            sb.append("ORDER BY: ").append(orderNodes).append(", ");
+            sj.add("ORDER BY: " + orderNodes);
         }
-
-        // 超时和锁模式
         if (queryTimeout != null) {
-            sb.append("timeout=").append(queryTimeout).append("s, ");
+            sj.add("timeout=" + queryTimeout + "s");
         }
         if (lockMode != null) {
-            sb.append("lockMode=").append(lockMode).append(", ");
+            sj.add("lockMode=" + lockMode);
         }
-
-        // 移除末尾的逗号和空格
-        int len = sb.length();
-        if (len > 6 && sb.charAt(len - 2) == ',') {
-            sb.setLength(len - 2);
-        }
-        sb.append('}');
-        return sb.toString();
+        return sj.toString();
     }
 }

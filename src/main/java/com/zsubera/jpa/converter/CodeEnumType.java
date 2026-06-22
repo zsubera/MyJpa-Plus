@@ -78,7 +78,6 @@ public class CodeEnumType implements UserType<Object>, DynamicParameterizedType 
     private Class<?> enumClass;
     private Field codeField;
     private int sqlType;
-    private boolean useOrdinal;
 
     @Override
     public void setParameterValues(Properties parameters) {
@@ -107,26 +106,23 @@ public class CodeEnumType implements UserType<Object>, DynamicParameterizedType 
 
     private void resolveCodeField() {
         this.codeField = resolveCodeField(enumClass);
-        this.useOrdinal = (codeField == null);
-        if (useOrdinal) {
+        if (this.codeField == null) {
             throw new HibernateException("@CodeEnumValue not found in enum " + enumClass.getSimpleName()
-                + ". Add @CodeEnumValue annotation to the code field. "
-                + "Ordinal-based mapping is not supported to prevent silent data corruption when enum constants are reordered.");
+                + ". Add @CodeEnumValue annotation to the code field.");
+        }
+        Class<?> fieldType = codeField.getType();
+        if (fieldType == String.class) {
+            this.sqlType = Types.VARCHAR;
+        } else if (fieldType == long.class || fieldType == Long.class) {
+            this.sqlType = Types.BIGINT;
+        } else if (fieldType == int.class || fieldType == Integer.class) {
+            this.sqlType = Types.INTEGER;
         } else {
-            Class<?> fieldType = codeField.getType();
-            if (fieldType == String.class) {
-                this.sqlType = Types.VARCHAR;
-            } else if (fieldType == long.class || fieldType == Long.class) {
-                this.sqlType = Types.BIGINT;
-            } else if (fieldType == int.class || fieldType == Integer.class) {
-                this.sqlType = Types.INTEGER;
-            } else {
-                this.sqlType = Types.CHAR;
-                log.warn(
-                    "Unsupported @CodeEnumValue field type '{}' in enum {}. Using Types.CHAR as fallback. "
-                        + "Supported types: String, int/Integer, long/Long.",
-                    fieldType.getName(), enumClass.getSimpleName());
-            }
+            this.sqlType = Types.CHAR;
+            log.warn(
+                "Unsupported @CodeEnumValue field type '{}' in enum {}. Using Types.CHAR as fallback. "
+                    + "Supported types: String, int/Integer, long/Long.",
+                fieldType.getName(), enumClass.getSimpleName());
         }
     }
 
@@ -212,24 +208,6 @@ public class CodeEnumType implements UserType<Object>, DynamicParameterizedType 
         }
         String trimmedValue = value.trim();
 
-        if (useOrdinal) {
-            try {
-                int ordinal = Integer.parseInt(trimmedValue);
-                Object[] constants = enumClass.getEnumConstants();
-                if (ordinal >= 0 && ordinal < constants.length) {
-                    return constants[ordinal];
-                }
-                // ordinal 越界
-                throw new HibernateException(
-                    String.format("No enum constant with ordinal '%s' in %s (valid range: 0-%d)", trimmedValue,
-                        enumClass.getSimpleName(), constants.length - 1));
-            } catch (NumberFormatException e) {
-                throw new HibernateException(
-                    String.format("No enum constant with ordinal '%s' in %s", trimmedValue, enumClass.getSimpleName()),
-                    e);
-            }
-        }
-
         ConcurrentMap<String, Object> codeMap = getOrBuildCodeMap();
         Object result = codeMap.get(trimmedValue);
         if (result != null) {
@@ -246,24 +224,19 @@ public class CodeEnumType implements UserType<Object>, DynamicParameterizedType 
             st.setNull(index, sqlType);
             return;
         }
-        if (useOrdinal) {
-            st.setInt(index, ((Enum<?>)value).ordinal());
-        } else {
-            try {
-                Object codeValue = codeField.get(value);
-                if (codeValue == null) {
-                    st.setNull(index, sqlType);
-                } else if (codeValue instanceof Integer intVal) {
-                    // 根据 code 字段类型使用类型化的 setter
-                    st.setInt(index, intVal);
-                } else if (codeValue instanceof Long longVal) {
-                    st.setLong(index, longVal);
-                } else {
-                    st.setString(index, String.valueOf(codeValue));
-                }
-            } catch (IllegalAccessException e) {
-                throw new HibernateException("Failed to read @CodeEnumValue field", e);
+        try {
+            Object codeValue = codeField.get(value);
+            if (codeValue == null) {
+                st.setNull(index, sqlType);
+            } else if (codeValue instanceof Integer intVal) {
+                st.setInt(index, intVal);
+            } else if (codeValue instanceof Long longVal) {
+                st.setLong(index, longVal);
+            } else {
+                st.setString(index, String.valueOf(codeValue));
             }
+        } catch (IllegalAccessException e) {
+            throw new HibernateException("Failed to read @CodeEnumValue field", e);
         }
     }
 
@@ -282,14 +255,10 @@ public class CodeEnumType implements UserType<Object>, DynamicParameterizedType 
         if (value == null) {
             return null;
         }
-        if (useOrdinal) {
-            return String.valueOf(((Enum<?>)value).ordinal());
-        }
         try {
             Object codeValue = codeField.get(value);
             return codeValue != null ? String.valueOf(codeValue) : null;
         } catch (IllegalAccessException e) {
-            // 抛出异常而非静默返回 null，防止二级缓存场景下丢失枚举值
             throw new HibernateException(
                 "Failed to access code field for enum " + value.getClass().getSimpleName() + ": " + e.getMessage(), e);
         }
@@ -301,22 +270,6 @@ public class CodeEnumType implements UserType<Object>, DynamicParameterizedType 
             return null;
         }
         String code = cached.toString();
-        if (useOrdinal) {
-            try {
-                int ordinal = Integer.parseInt(code);
-                Object[] constants = enumClass.getEnumConstants();
-                if (ordinal >= 0 && ordinal < constants.length) {
-                    return constants[ordinal];
-                }
-                // ordinal 越界
-                throw new HibernateException(
-                    String.format("No enum constant with ordinal '%s' in %s (valid range: 0-%d)", code,
-                        enumClass.getSimpleName(), constants.length - 1));
-            } catch (NumberFormatException e) {
-                throw new HibernateException(
-                    String.format("No enum constant with ordinal '%s' in %s", code, enumClass.getSimpleName()), e);
-            }
-        }
         // 使用共享的 getOrBuildCodeMap() 实现 O(1) 查找
         ConcurrentMap<String, Object> codeMap = getOrBuildCodeMap();
         Object result = codeMap.get(code);

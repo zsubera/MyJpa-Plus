@@ -34,7 +34,7 @@ class AutoconfigureCoverageTest {
         props.getQuery().setExtraSafeFunctions(List.of());
         props.getQuery().setExtraBooleanFunctions(List.of());
         MyJpaPlusGlobalConfig globalConfig = new MyJpaPlusGlobalConfig();
-        new MyJpaPlusAutoConfiguration.MyJpaPlusConfigInitializer(props, globalConfig);
+        new MyJpaPlusAutoConfiguration.MyJpaPlusConfigInitializer(props, globalConfig, null);
     }
 
     @Test
@@ -42,7 +42,7 @@ class AutoconfigureCoverageTest {
         MyJpaPlusProperties props = new MyJpaPlusProperties();
         props.getQuery().setExtraSafeFunctions(List.of());
         props.getQuery().setExtraBooleanFunctions(List.of());
-        new MyJpaPlusAutoConfiguration.MyJpaPlusConfigInitializer(props, null);
+        new MyJpaPlusAutoConfiguration.MyJpaPlusConfigInitializer(props, null, null);
     }
 
     // ---- ConfigInitializer: encrypt key from system property ----
@@ -53,7 +53,7 @@ class AutoconfigureCoverageTest {
         try {
             System.setProperty("myjpa.encrypt.key", "test-key-12345678");
             MyJpaPlusProperties props = new MyJpaPlusProperties();
-            assertDoesNotThrow(() -> new MyJpaPlusAutoConfiguration.MyJpaPlusConfigInitializer(props, null));
+            assertDoesNotThrow(() -> new MyJpaPlusAutoConfiguration.MyJpaPlusConfigInitializer(props, null, null));
         } finally {
             if (oldProp != null) {
                 System.setProperty("myjpa.encrypt.key", oldProp);
@@ -69,7 +69,7 @@ class AutoconfigureCoverageTest {
         try {
             System.clearProperty("myjpa.encrypt.key");
             MyJpaPlusProperties props = new MyJpaPlusProperties();
-            assertDoesNotThrow(() -> new MyJpaPlusAutoConfiguration.MyJpaPlusConfigInitializer(props, null));
+            assertDoesNotThrow(() -> new MyJpaPlusAutoConfiguration.MyJpaPlusConfigInitializer(props, null, null));
         } finally {
             if (oldProp != null) {
                 System.setProperty("myjpa.encrypt.key", oldProp);
@@ -243,7 +243,7 @@ class AutoconfigureCoverageTest {
     @Test
     void onContextClosed_cleansUp() {
         MyJpaPlusProperties props = new MyJpaPlusProperties();
-        MyJpaPlusAutoConfiguration config = new MyJpaPlusAutoConfiguration(props);
+        MyJpaPlusAutoConfiguration config = new MyJpaPlusAutoConfiguration(props, null);
         assertDoesNotThrow(() -> config.onContextClosed(null));
     }
 
@@ -252,7 +252,7 @@ class AutoconfigureCoverageTest {
     @Test
     void allBeanMethods() {
         MyJpaPlusProperties props = new MyJpaPlusProperties();
-        MyJpaPlusAutoConfiguration config = new MyJpaPlusAutoConfiguration(props);
+        MyJpaPlusAutoConfiguration config = new MyJpaPlusAutoConfiguration(props, null);
 
         MyJpaPlusGlobalConfig globalConfig = config.myJpaPlusGlobalConfig(props);
         assertNotNull(globalConfig);

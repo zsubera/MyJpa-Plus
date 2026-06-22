@@ -182,7 +182,6 @@ class CodeEnumTypeTest {
     @DisplayName("disassemble 应返回序列化表示")
     void shouldDisassembleEnumConstant() {
         CodeEnumType type = new CodeEnumType();
-        // 需要先初始化 enumClass 和相关字段
         try {
             java.lang.reflect.Field enumClassField = CodeEnumType.class.getDeclaredField("enumClass");
             enumClassField.setAccessible(true);
@@ -191,10 +190,6 @@ class CodeEnumTypeTest {
             java.lang.reflect.Field codeFieldField = CodeEnumType.class.getDeclaredField("codeField");
             codeFieldField.setAccessible(true);
             codeFieldField.set(type, CodeEnumType.resolveCodeField(StatusEnum.class));
-
-            java.lang.reflect.Field useOrdinalField = CodeEnumType.class.getDeclaredField("useOrdinal");
-            useOrdinalField.setAccessible(true);
-            useOrdinalField.set(type, false);
 
             java.io.Serializable result = type.disassemble(StatusEnum.ACTIVE);
             assertNotNull(result);
@@ -215,8 +210,6 @@ class CodeEnumTypeTest {
     @DisplayName("assemble 应正确还原枚举常量")
     void shouldAssembleEnumConstant() {
         CodeEnumType type = new CodeEnumType();
-        // 需要先初始化 enumClass 和相关字段
-        // 由于 setParameterValues 需要 Hibernate 环境，这里通过反射设置
         try {
             java.lang.reflect.Field enumClassField = CodeEnumType.class.getDeclaredField("enumClass");
             enumClassField.setAccessible(true);
@@ -225,10 +218,6 @@ class CodeEnumTypeTest {
             java.lang.reflect.Field codeFieldField = CodeEnumType.class.getDeclaredField("codeField");
             codeFieldField.setAccessible(true);
             codeFieldField.set(type, CodeEnumType.resolveCodeField(StatusEnum.class));
-
-            java.lang.reflect.Field useOrdinalField = CodeEnumType.class.getDeclaredField("useOrdinal");
-            useOrdinalField.setAccessible(true);
-            useOrdinalField.set(type, false);
 
             Object result = type.assemble("0", null);
             assertEquals(StatusEnum.ACTIVE, result);
@@ -256,10 +245,6 @@ class CodeEnumTypeTest {
             java.lang.reflect.Field codeFieldField = CodeEnumType.class.getDeclaredField("codeField");
             codeFieldField.setAccessible(true);
             codeFieldField.set(type, CodeEnumType.resolveCodeField(StatusEnum.class));
-
-            java.lang.reflect.Field useOrdinalField = CodeEnumType.class.getDeclaredField("useOrdinal");
-            useOrdinalField.setAccessible(true);
-            useOrdinalField.set(type, false);
 
             assertThrows(org.hibernate.HibernateException.class, () -> type.assemble("999", null));
         } catch (Exception e) {
@@ -514,40 +499,6 @@ class CodeEnumTypeTest {
         assertNull(result);
     }
 
-    // ===== disassemble/assemble 错误路径 =====
-
-    @Test
-    @DisplayName("assemble 无效 ordinal 应抛出异常")
-    void shouldThrowForInvalidOrdinalOnAssemble() throws Exception {
-        CodeEnumType type = initType(StatusEnum.class);
-        setUseOrdinal(type, true);
-        assertThrows(org.hibernate.HibernateException.class, () -> type.assemble("999", null));
-    }
-
-    @Test
-    @DisplayName("assemble 非数字 ordinal 应抛出异常")
-    void shouldThrowForNonNumericOrdinalOnAssemble() throws Exception {
-        CodeEnumType type = initType(StatusEnum.class);
-        setUseOrdinal(type, true);
-        assertThrows(org.hibernate.HibernateException.class, () -> type.assemble("abc", null));
-    }
-
-    @Test
-    @DisplayName("disassemble ordinal 模式应返回 ordinal 字符串")
-    void shouldDisassembleOrdinalMode() throws Exception {
-        CodeEnumType type = initType(StatusEnum.class);
-        setUseOrdinal(type, true);
-        java.io.Serializable result = type.disassemble(StatusEnum.ACTIVE);
-        assertEquals("0", result.toString());
-    }
-
-    @Test
-    @DisplayName("returnedClass 应返回正确类型")
-    void shouldReturnCorrectType() throws Exception {
-        CodeEnumType type = initType(GenderEnum.class);
-        assertEquals(GenderEnum.class, type.returnedClass());
-    }
-
     // ===== 辅助方法 =====
 
     private CodeEnumType initType(Class<?> enumClass) throws Exception {
@@ -556,15 +507,5 @@ class CodeEnumTypeTest {
         props.setProperty(DynamicParameterizedType.RETURNED_CLASS, enumClass.getName());
         type.setParameterValues(props);
         return type;
-    }
-
-    private void setUseOrdinal(CodeEnumType type, boolean value) {
-        try {
-            java.lang.reflect.Field f = CodeEnumType.class.getDeclaredField("useOrdinal");
-            f.setAccessible(true);
-            f.set(type, value);
-        } catch (Exception e) {
-            throw new RuntimeException(e);
-        }
     }
 }

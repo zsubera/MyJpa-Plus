@@ -24,7 +24,7 @@ class MyJpaPlusAutoConfigurationExtendedTest {
 
     @Test
     void autoConfiguration_constructor_nullProperties_throws() {
-        assertThrows(IllegalArgumentException.class, () -> new MyJpaPlusAutoConfiguration(null));
+        assertThrows(IllegalArgumentException.class, () -> new MyJpaPlusAutoConfiguration(null, null));
     }
 
     @Test
@@ -38,7 +38,7 @@ class MyJpaPlusAutoConfigurationExtendedTest {
         props.getQuery().setDeepPaginationOffsetThreshold(50000);
         props.getQuery().setDeepPaginationOffsetLimit(1000000);
 
-        MyJpaPlusAutoConfiguration config = new MyJpaPlusAutoConfiguration(props);
+        MyJpaPlusAutoConfiguration config = new MyJpaPlusAutoConfiguration(props, null);
         MyJpaPlusGlobalConfig globalConfig = config.myJpaPlusGlobalConfig(props);
 
         assertFalse(globalConfig.isSoftDeleteAutoFilter());
@@ -56,7 +56,7 @@ class MyJpaPlusAutoConfigurationExtendedTest {
         props.getQuery().setDeepPaginationOffsetLimit(500);
         props.getQuery().setDefaultTimeoutSeconds(60);
 
-        MyJpaPlusAutoConfiguration config = new MyJpaPlusAutoConfiguration(props);
+        MyJpaPlusAutoConfiguration config = new MyJpaPlusAutoConfiguration(props, null);
         MyJpaTemplate template = config.myJpaTemplate(props);
         assertNotNull(template);
     }
@@ -66,7 +66,7 @@ class MyJpaPlusAutoConfigurationExtendedTest {
         MyJpaPlusProperties props = new MyJpaPlusProperties();
         props.getQuery().setDefaultTimeoutSeconds(-1);
 
-        MyJpaPlusAutoConfiguration config = new MyJpaPlusAutoConfiguration(props);
+        MyJpaPlusAutoConfiguration config = new MyJpaPlusAutoConfiguration(props, null);
         MyJpaTemplate template = config.myJpaTemplate(props);
         assertNotNull(template);
     }
@@ -76,7 +76,7 @@ class MyJpaPlusAutoConfigurationExtendedTest {
         MyJpaPlusProperties props = new MyJpaPlusProperties();
         props.getQuery().setDeepPaginationOffsetLimit(-1);
 
-        MyJpaPlusAutoConfiguration config = new MyJpaPlusAutoConfiguration(props);
+        MyJpaPlusAutoConfiguration config = new MyJpaPlusAutoConfiguration(props, null);
         MyJpaTemplate template = config.myJpaTemplate(props);
         assertNotNull(template);
     }
@@ -84,28 +84,28 @@ class MyJpaPlusAutoConfigurationExtendedTest {
     @Test
     void onContextClosed_doesNotThrow() {
         MyJpaPlusProperties props = new MyJpaPlusProperties();
-        MyJpaPlusAutoConfiguration config = new MyJpaPlusAutoConfiguration(props);
+        MyJpaPlusAutoConfiguration config = new MyJpaPlusAutoConfiguration(props, null);
         assertDoesNotThrow(() -> config.onContextClosed(null));
     }
 
     @Test
     void queryCacheManager_returnsNonNull() {
         MyJpaPlusProperties props = new MyJpaPlusProperties();
-        MyJpaPlusAutoConfiguration config = new MyJpaPlusAutoConfiguration(props);
+        MyJpaPlusAutoConfiguration config = new MyJpaPlusAutoConfiguration(props, null);
         assertNotNull(config.queryCacheManager());
     }
 
     @Test
     void auditEntityListener_returnsNonNull() {
         MyJpaPlusProperties props = new MyJpaPlusProperties();
-        MyJpaPlusAutoConfiguration config = new MyJpaPlusAutoConfiguration(props);
+        MyJpaPlusAutoConfiguration config = new MyJpaPlusAutoConfiguration(props, null);
         assertNotNull(config.auditEntityListener());
     }
 
     @Test
     void cacheInvalidationListener_returnsNonNull() {
         MyJpaPlusProperties props = new MyJpaPlusProperties();
-        MyJpaPlusAutoConfiguration config = new MyJpaPlusAutoConfiguration(props);
+        MyJpaPlusAutoConfiguration config = new MyJpaPlusAutoConfiguration(props, null);
         assertNotNull(config.cacheInvalidationListener(config.queryCacheManager()));
     }
 
@@ -232,7 +232,7 @@ class MyJpaPlusAutoConfigurationExtendedTest {
         globalConfig.setBlockUnconditionalDelete(true);
 
         MyJpaPlusAutoConfiguration.MyJpaPlusConfigInitializer initializer =
-            new MyJpaPlusAutoConfiguration.MyJpaPlusConfigInitializer(props, globalConfig);
+            new MyJpaPlusAutoConfiguration.MyJpaPlusConfigInitializer(props, globalConfig, null);
 
         assertNotNull(initializer);
     }
@@ -242,7 +242,7 @@ class MyJpaPlusAutoConfigurationExtendedTest {
         MyJpaPlusProperties props = new MyJpaPlusProperties();
 
         MyJpaPlusAutoConfiguration.MyJpaPlusConfigInitializer initializer =
-            new MyJpaPlusAutoConfiguration.MyJpaPlusConfigInitializer(props, null);
+            new MyJpaPlusAutoConfiguration.MyJpaPlusConfigInitializer(props, null, null);
 
         assertNotNull(initializer);
     }
@@ -254,7 +254,7 @@ class MyJpaPlusAutoConfigurationExtendedTest {
         props.getQuery().setInClauseHardLimit(1000);
 
         assertThrows(IllegalArgumentException.class,
-            () -> new MyJpaPlusAutoConfiguration.MyJpaPlusConfigInitializer(props, null));
+            () -> new MyJpaPlusAutoConfiguration.MyJpaPlusConfigInitializer(props, null, null));
     }
 
     @Test
@@ -263,7 +263,7 @@ class MyJpaPlusAutoConfigurationExtendedTest {
         props.getQuery().setExtraSafeFunctions(List.of("FUNC1", "FUNC2"));
         props.getQuery().setExtraBooleanFunctions(List.of("BOOL1"));
 
-        assertDoesNotThrow(() -> new MyJpaPlusAutoConfiguration.MyJpaPlusConfigInitializer(props, null));
+        assertDoesNotThrow(() -> new MyJpaPlusAutoConfiguration.MyJpaPlusConfigInitializer(props, null, null));
     }
 
     @Test
@@ -272,7 +272,7 @@ class MyJpaPlusAutoConfigurationExtendedTest {
         try {
             System.setProperty("myjpa.encrypt.key", "test-key-12345678");
             MyJpaPlusProperties props = new MyJpaPlusProperties();
-            assertDoesNotThrow(() -> new MyJpaPlusAutoConfiguration.MyJpaPlusConfigInitializer(props, null));
+            assertDoesNotThrow(() -> new MyJpaPlusAutoConfiguration.MyJpaPlusConfigInitializer(props, null, null));
         } finally {
             if (oldProp != null) {
                 System.setProperty("myjpa.encrypt.key", oldProp);
@@ -287,7 +287,7 @@ class MyJpaPlusAutoConfigurationExtendedTest {
         MyJpaPlusProperties props = new MyJpaPlusProperties();
         props.getQuery().setDefaultTimeoutSeconds(-1);
 
-        assertDoesNotThrow(() -> new MyJpaPlusAutoConfiguration.MyJpaPlusConfigInitializer(props, null));
+        assertDoesNotThrow(() -> new MyJpaPlusAutoConfiguration.MyJpaPlusConfigInitializer(props, null, null));
     }
 
     @Test
@@ -313,7 +313,7 @@ class MyJpaPlusAutoConfigurationExtendedTest {
         globalConfig.setSoftDeleteAutoFilter(true);
         globalConfig.setBlockUnconditionalDelete(true);
 
-        assertDoesNotThrow(() -> new MyJpaPlusAutoConfiguration.MyJpaPlusConfigInitializer(props, globalConfig));
+        assertDoesNotThrow(() -> new MyJpaPlusAutoConfiguration.MyJpaPlusConfigInitializer(props, globalConfig, null));
     }
 
     @Test
@@ -323,13 +323,13 @@ class MyJpaPlusAutoConfigurationExtendedTest {
         props.getQuery().setExtraBooleanFunctions(List.of("BFUNC1"));
         MyJpaPlusGlobalConfig globalConfig = new MyJpaPlusGlobalConfig();
 
-        assertDoesNotThrow(() -> new MyJpaPlusAutoConfiguration.MyJpaPlusConfigInitializer(props, globalConfig));
+        assertDoesNotThrow(() -> new MyJpaPlusAutoConfiguration.MyJpaPlusConfigInitializer(props, globalConfig, null));
     }
 
     @Test
     void myJpaPlusConfigInitializer_debugLogging() {
         MyJpaPlusProperties props = new MyJpaPlusProperties();
-        assertDoesNotThrow(() -> new MyJpaPlusAutoConfiguration.MyJpaPlusConfigInitializer(props, null));
+        assertDoesNotThrow(() -> new MyJpaPlusAutoConfiguration.MyJpaPlusConfigInitializer(props, null, null));
     }
 
     @Test

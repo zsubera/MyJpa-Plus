@@ -299,38 +299,7 @@ public class MergeSpec<T> {
      * 在托管事务中执行操作。如果没有活动事务，自动创建新事务。
      */
     private int executeInManagedTransaction(EntityManager em, java.util.function.IntSupplier action) {
-        if (TransactionSynchronizationManager.isActualTransactionActive()) {
-            return action.getAsInt();
-        }
-        EntityTransaction tx = em.getTransaction();
-        if (tx == null) {
-            if (!isJtaTransactionActive(em)) {
-                throw new MyJpaPlusException("JTA environment detected but no active transaction. "
-                    + "Use @Transactional annotation or manually begin a transaction.");
-            }
-            return action.getAsInt();
-        }
-        boolean isNewTransaction = !tx.isActive();
-        if (isNewTransaction) {
-            tx.begin();
-        }
-        try {
-            int result = action.getAsInt();
-            if (isNewTransaction) {
-                tx.commit();
-            }
-            return result;
-        } catch (RuntimeException e) {
-            if (isNewTransaction) {
-                safeRollback(tx, e);
-            }
-            throw e;
-        } catch (Exception e) {
-            if (isNewTransaction) {
-                safeRollback(tx, e);
-            }
-            throw new MyJpaPlusException("Merge operation failed: " + e.getClass().getSimpleName(), e);
-        }
+        return BulkTransactionHelper.executeInManagedTransaction(em, action);
     }
 
     /**
@@ -457,14 +426,7 @@ public class MergeSpec<T> {
     }
 
     private void safeRollback(EntityTransaction tx, Exception original) {
-        if (tx != null && tx.isActive()) {
-            try {
-                tx.rollback();
-            } catch (Exception rollbackEx) {
-                log.error("Transaction rollback failed", rollbackEx);
-                original.addSuppressed(rollbackEx);
-            }
-        }
+        BulkTransactionHelper.safeRollback(tx, original);
     }
 
     private SqlWithParams buildSqlFor(EntityManager em, T entity, DialectStrategy strategy) {
@@ -515,10 +477,6 @@ public class MergeSpec<T> {
     }
 
     private static boolean isJtaTransactionActive(EntityManager em) {
-        try {
-            return em.getTransaction() != null && em.getTransaction().isActive();
-        } catch (Exception e) {
-            return false;
-        }
+        return BulkTransactionHelper.isJtaTransactionActive(em);
     }
 }
