@@ -2,7 +2,6 @@ package com.zsubera.jpa.spec;
 
 import com.zsubera.jpa.util.InClauseBuilder;
 import jakarta.persistence.criteria.CriteriaBuilder;
-import jakarta.persistence.criteria.Expression;
 import jakarta.persistence.criteria.Path;
 import jakarta.persistence.criteria.Predicate;
 import java.util.ArrayList;
@@ -88,68 +87,50 @@ public sealed interface ConditionNode permits ConditionNode.SimpleNode, Conditio
             Path<?> fieldPath = path.get(fieldName);
             switch (this) {
                 case EQ:
-                    return value == null ? cb.isNull(fieldPath) : cb.equal(fieldPath, value);
+                    return PredicateHelper.eq(path, fieldName, value, cb);
                 case NE:
-                    return value == null ? cb.isNotNull(fieldPath) : cb.notEqual(fieldPath, value);
+                    return PredicateHelper.ne(path, fieldName, value, cb);
                 case GT:
                     if (value == null) {
                         throw new IllegalArgumentException("GT operator requires non-null value");
                     }
-                    return cb.greaterThan((Expression<Comparable>)fieldPath, (Comparable)value);
+                    return PredicateHelper.gt(path, fieldName, (Comparable)value, cb);
                 case GE:
                     if (value == null) {
                         throw new IllegalArgumentException("GE operator requires non-null value");
                     }
-                    return cb.greaterThanOrEqualTo((Expression<Comparable>)fieldPath, (Comparable)value);
+                    return PredicateHelper.ge(path, fieldName, (Comparable)value, cb);
                 case LT:
                     if (value == null) {
                         throw new IllegalArgumentException("LT operator requires non-null value");
                     }
-                    return cb.lessThan((Expression<Comparable>)fieldPath, (Comparable)value);
+                    return PredicateHelper.lt(path, fieldName, (Comparable)value, cb);
                 case LE:
                     if (value == null) {
                         throw new IllegalArgumentException("LE operator requires non-null value");
                     }
-                    return cb.lessThanOrEqualTo((Expression<Comparable>)fieldPath, (Comparable)value);
+                    return PredicateHelper.le(path, fieldName, (Comparable)value, cb);
                 case LIKE:
-                    if (value == null) {
-                        return cb.conjunction();
-                    }
                     if (escapeChar != '\0') {
-                        return cb.like(fieldPath.as(String.class), (String)value, escapeChar);
+                        return PredicateHelper.like(path, fieldName, (String)value, cb, escapeChar);
                     }
-                    return cb.like(fieldPath.as(String.class), (String)value);
+                    return PredicateHelper.like(path, fieldName, (String)value, cb);
                 case NOT_LIKE:
-                    if (value == null) {
-                        return cb.disjunction();
-                    }
                     if (escapeChar != '\0') {
-                        return cb.notLike(fieldPath.as(String.class), (String)value, escapeChar);
+                        return PredicateHelper.notLike(path, fieldName, (String)value, cb, escapeChar);
                     }
-                    return cb.notLike(fieldPath.as(String.class), (String)value);
+                    return PredicateHelper.notLike(path, fieldName, (String)value, cb);
                 case EQ_IGNORE_CASE:
-                    if (value == null) {
-                        return cb.isNull(fieldPath);
-                    }
-                    return cb.equal(cb.upper(fieldPath.as(String.class)),
-                        ((String)value).toUpperCase(java.util.Locale.ROOT));
+                    return PredicateHelper.eqIgnoreCase(path, fieldName, (String)value, cb);
                 case NE_IGNORE_CASE:
-                    if (value == null) {
-                        return cb.isNotNull(fieldPath);
-                    }
-                    return cb.notEqual(cb.upper(fieldPath.as(String.class)),
-                        ((String)value).toUpperCase(java.util.Locale.ROOT));
+                    return PredicateHelper.neIgnoreCase(path, fieldName, (String)value, cb);
                 case LIKE_IGNORE_CASE:
-                    if (value == null) {
-                        return cb.conjunction();
-                    }
                     char esc = escapeChar != '\0' ? escapeChar : LIKE_ESCAPE;
-                    return cb.like(cb.upper(fieldPath.as(String.class)),
-                        ((String)value).toUpperCase(java.util.Locale.ROOT), esc);
+                    return PredicateHelper.likeIgnoreCase(path, fieldName, (String)value, cb, esc);
                 case IS_NULL:
-                    return cb.isNull(fieldPath);
+                    return PredicateHelper.isNull(path, fieldName, cb);
                 case IS_NOT_NULL:
-                    return cb.isNotNull(fieldPath);
+                    return PredicateHelper.isNotNull(path, fieldName, cb);
                 case IN: {
                     if (value == null) {
                         throw new IllegalArgumentException("IN operator requires non-null value, got null");
@@ -220,7 +201,7 @@ public sealed interface ConditionNode permits ConditionNode.SimpleNode, Conditio
                     if (range.length != 2) {
                         throw new IllegalArgumentException("BETWEEN requires exactly 2 values, got " + range.length);
                     }
-                    return cb.between((Expression<Comparable>)fieldPath, (Comparable)range[0], (Comparable)range[1]);
+                    return PredicateHelper.between(path, fieldName, range[0], range[1], cb);
                 }
                 case NOT_BETWEEN: {
                     if (value == null) {
@@ -235,8 +216,7 @@ public sealed interface ConditionNode permits ConditionNode.SimpleNode, Conditio
                         throw new IllegalArgumentException(
                             "NOT_BETWEEN requires exactly 2 values, got " + range.length);
                     }
-                    return cb
-                        .not(cb.between((Expression<Comparable>)fieldPath, (Comparable)range[0], (Comparable)range[1]));
+                    return PredicateHelper.notBetween(path, fieldName, range[0], range[1], cb);
                 }
                 default:
                     throw new IllegalArgumentException("Unhandled Op: " + this);
@@ -378,6 +358,14 @@ public sealed interface ConditionNode permits ConditionNode.SimpleNode, Conditio
     /** 条件的 AND 组。 */
     final class AndNode implements ConditionNode {
         final List<ConditionNode> nodes = new ArrayList<>();
+
+        /** 向 AND 组添加一个条件节点。 */
+        void addNode(ConditionNode node) {
+            if (node == null) {
+                throw new IllegalArgumentException("node must not be null");
+            }
+            nodes.add(node);
+        }
 
         /** 返回 AND 组中的子条件列表（不可变视图）。 */
         @edu.umd.cs.findbugs.annotations.SuppressFBWarnings(value = "EI_EXPOSE_REP",

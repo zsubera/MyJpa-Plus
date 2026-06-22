@@ -119,13 +119,13 @@ class AutoconfigureMonitoringTest {
     }
 
     @Test
-    void securityContextAuditUserProvider_reflectionPaths() {
-        MyJpaPlusAutoConfiguration.SecurityContextAuditUserProvider provider =
-            new MyJpaPlusAutoConfiguration.SecurityContextAuditUserProvider();
-        // Without Spring Security, should return ANONYMOUS
-        String user = provider.getCurrentUser();
+    void SecurityContextAuditorAware_reflectionPaths() {
+        MyJpaPlusAutoConfiguration.SecurityContextAuditorAware provider =
+            new MyJpaPlusAutoConfiguration.SecurityContextAuditorAware();
+        // Without Spring Security, should return SYSTEM
+        java.util.Optional<String> user = provider.getCurrentAuditor();
         assertNotNull(user);
-        assertEquals("ANONYMOUS", user);
+        assertEquals("SYSTEM", user.get());
     }
 
     @Test

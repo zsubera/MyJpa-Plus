@@ -140,32 +140,6 @@ class ExceptionSubclassesTest {
         assertInstanceOf(MyJpaPlusException.class, new QueryBuildException("err"));
     }
 
-    // ==================== TimeoutException ====================
-
-    @Test
-    void timeout_messageAndTimeoutMs_setsFields() {
-        TimeoutException ex = new TimeoutException("query timed out", 5000);
-        assertEquals("query timed out", ex.getMessage());
-        assertEquals(5000, ex.getTimeoutMs());
-        assertEquals(MyJpaPlusException.ErrorCode.TIMEOUT, ex.getErrorCode());
-        assertNull(ex.getCause());
-    }
-
-    @Test
-    void timeout_messageTimeoutMsAndCause_setsAll() {
-        RuntimeException cause = new RuntimeException("socket timeout");
-        TimeoutException ex = new TimeoutException("timed out", 3000, cause);
-        assertEquals("timed out", ex.getMessage());
-        assertEquals(3000, ex.getTimeoutMs());
-        assertSame(cause, ex.getCause());
-    }
-
-    @Test
-    void timeout_isRuntimeException() {
-        assertInstanceOf(RuntimeException.class, new TimeoutException("err", 1000));
-        assertInstanceOf(MyJpaPlusException.class, new TimeoutException("err", 1000));
-    }
-
     // ==================== MyJpaPlusException ====================
 
     @Test
@@ -216,7 +190,6 @@ class ExceptionSubclassesTest {
         assertNotNull(MyJpaPlusException.ErrorCode.SECURITY);
         assertNotNull(MyJpaPlusException.ErrorCode.CONCURRENCY);
         assertNotNull(MyJpaPlusException.ErrorCode.DATA_ACCESS);
-        assertNotNull(MyJpaPlusException.ErrorCode.TIMEOUT);
     }
 
     @Test

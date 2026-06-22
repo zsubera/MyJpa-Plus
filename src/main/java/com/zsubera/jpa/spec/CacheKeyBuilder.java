@@ -1,7 +1,9 @@
 package com.zsubera.jpa.spec;
 
+import java.nio.charset.StandardCharsets;
 import java.util.Collection;
 import java.util.List;
+import java.util.zip.CRC32C;
 
 /**
  * 从 {@link QuerySpec} 提取的缓存键生成逻辑。
@@ -181,10 +183,12 @@ final class CacheKeyBuilder {
      * <p>对数组使用 {@link java.util.Arrays#deepHashCode} 基于内容哈希，
      * 而非 Object.hashCode()（基于对象地址），确保不同内容的数组产生不同的缓存键。</p>
      */
+    // ponytail: CRC32C instead of hashCode() — collisions still possible (32-bit)
+    // but vastly less likely than String.hashCode() (birthday bound ~77k for hashCode vs
+    // CRC32C's avalanche property). Zero-collision would require SHA-256 on the full value.
     private static void appendHashedValue(StringBuilder sb, Object value) {
         if (value instanceof String s) {
-            sb.append("S[").append(s.length()).append(":").append(s.hashCode()).append(":")
-                .append(s.isEmpty() ? 0 : s.charAt(0)).append("]");
+            sb.append("S[").append(s.length()).append(":").append(crc32c(s)).append("]");
         } else if (value instanceof Object[] arr) {
             sb.append("A[").append(arr.length).append(":").append(java.util.Arrays.deepHashCode(arr)).append("]");
         } else if (value instanceof int[] arr) {
@@ -198,8 +202,13 @@ final class CacheKeyBuilder {
                 .append(java.util.Arrays.deepHashCode(new Object[] {value})).append("]");
         } else {
             String s = String.valueOf(value);
-            sb.append("N[").append(value.getClass().getName()).append(":").append(s.length()).append(":")
-                .append(s.hashCode()).append(":").append(s.isEmpty() ? 0 : s.charAt(0)).append("]");
+            sb.append("N[").append(value.getClass().getName()).append(":").append(crc32c(s)).append("]");
         }
+    }
+
+    private static int crc32c(String s) {
+        CRC32C crc = new CRC32C();
+        crc.update(s.getBytes(StandardCharsets.UTF_8));
+        return (int)crc.getValue();
     }
 }

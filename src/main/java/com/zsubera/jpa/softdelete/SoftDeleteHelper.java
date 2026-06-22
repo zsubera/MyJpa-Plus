@@ -5,7 +5,6 @@ import com.zsubera.jpa.exception.MyJpaPlusException;
 import com.zsubera.jpa.spec.ConditionNode;
 import com.zsubera.jpa.spec.QuerySpec;
 import com.zsubera.jpa.util.IdentifierValidator;
-import com.zsubera.jpa.util.QueryTimeoutHelper;
 import com.zsubera.jpa.update.AuditUtils;
 import com.zsubera.jpa.util.StringHelper;
 import jakarta.persistence.EnumType;
@@ -14,6 +13,7 @@ import jakarta.persistence.EntityManager;
 import jakarta.persistence.criteria.CriteriaBuilder;
 import jakarta.persistence.criteria.Path;
 import jakarta.persistence.criteria.Predicate;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import java.lang.reflect.Field;
 import java.lang.reflect.Modifier;
 import java.util.List;
@@ -342,7 +342,6 @@ public final class SoftDeleteHelper {
             } else {
                 countQuery.setParameter(1, resolved.dbValue());
             }
-            QueryTimeoutHelper.applyTimeout(countQuery);
             long rowCount = ((Number)countQuery.getSingleResult()).longValue();
             if (rowCount > maxRows) {
                 throw new IllegalStateException(
@@ -355,15 +354,13 @@ public final class SoftDeleteHelper {
             var q = em
                 .createNativeQuery("UPDATE " + escapedTable + " SET " + escapedColumn + " = ?1 WHERE " + escapedColumn
                     + " = ?2 OR " + escapedColumn + " IS NULL")
-                .setParameter(1, Boolean.TRUE).setParameter(2, Boolean.FALSE);
-            QueryTimeoutHelper.applyTimeout(q);
+                .setParameter(1, Boolean.TRUE)                .setParameter(2, Boolean.FALSE);
             updated = q.executeUpdate();
         } else {
             String whereClause = escapedColumn + " != ?1 OR " + escapedColumn + " IS NULL";
             var q =
                 em.createNativeQuery("UPDATE " + escapedTable + " SET " + escapedColumn + " = ?1 WHERE " + whereClause)
                     .setParameter(1, resolved.dbValue());
-            QueryTimeoutHelper.applyTimeout(q);
             updated = q.executeUpdate();
         }
         // 更新后检查：检测竞态条件导致的实际行数超限
@@ -411,6 +408,11 @@ public final class SoftDeleteHelper {
         }
         if (ids == null || ids.isEmpty()) {
             return 0;
+        }
+        if (!TransactionSynchronizationManager.isActualTransactionActive()) {
+            throw new com.zsubera.jpa.exception.MyJpaPlusException(
+                "softDeleteByIds requires an active transaction. "
+                    + "Use @Transactional on the calling method.");
         }
         // 检查ID列表大小是否超过硬限制，防止Oracle等数据库的IN子句参数限制
         int hardLimit = com.zsubera.jpa.util.InClauseBuilder.getHardLimit();
@@ -464,7 +466,6 @@ public final class SoftDeleteHelper {
             String sql = "UPDATE " + escapedTable + " SET " + setClause + " WHERE " + escapedIdColumn + " IN ("
                 + placeholders + ")";
             var query = em.createNativeQuery(sql);
-            QueryTimeoutHelper.applyTimeout(query);
             if (useParamBinding) {
                 query.setParameter(setParamName, deletedParamValue);
             }
@@ -548,7 +549,7 @@ public final class SoftDeleteHelper {
     @SuppressWarnings("unchecked")
     public static <T> Specification<T> isNotDeleted(Class<T> entityClass) {
         if (entityClass == null) {
-            throw new NullPointerException("entityClass must not be null");
+            throw new IllegalArgumentException("entityClass must not be null");
         }
         return (Specification<T>)NOT_DELETED_SPEC_CACHE.computeIfAbsent(entityClass, cls -> {
             String fieldName = findSoftDeleteField(entityClass);
@@ -572,7 +573,7 @@ public final class SoftDeleteHelper {
     @SuppressWarnings("unchecked")
     public static <T> Specification<T> isDeleted(Class<T> entityClass) {
         if (entityClass == null) {
-            throw new NullPointerException("entityClass must not be null");
+            throw new IllegalArgumentException("entityClass must not be null");
         }
         return (Specification<T>)DELETED_SPEC_CACHE.computeIfAbsent(entityClass, cls -> {
             String fieldName = findSoftDeleteField(entityClass);
@@ -796,8 +797,9 @@ public final class SoftDeleteHelper {
             throw new MyJpaPlusException(String.format(
                 "Failed to read soft delete field '%s' from entity %s. "
                     + "If using Java 17+ module system, add JVM argument: "
-                    + "--add-opens java.base/java.lang.reflect=ALL-UNNAMED",
-                fieldName, entity.getClass().getSimpleName()), e);
+                    + "--add-opens %s=ALL-UNNAMED",
+                fieldName, entity.getClass().getSimpleName(),
+                entity.getClass().getPackageName()), e);
         }
     }
 

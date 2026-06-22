@@ -6,6 +6,7 @@ import java.lang.reflect.Method;
 import java.lang.reflect.Proxy;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.locks.ReentrantLock;
 import javax.sql.DataSource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -50,6 +51,7 @@ public final class SlowQueryDataSourceProxy {
 
     private static final int MAX_PROXY_CLASS_CACHE_SIZE = 512;
     private static final ConcurrentMap<Class<?>, Class<?>> PROXY_CLASS_CACHE = new ConcurrentHashMap<>();
+    private static final ReentrantLock CACHE_LOCK = new ReentrantLock();
 
     private SlowQueryDataSourceProxy() {}
 
@@ -90,13 +92,21 @@ public final class SlowQueryDataSourceProxy {
         if (PROXY_CLASS_CACHE.size() <= MAX_PROXY_CLASS_CACHE_SIZE) {
             return;
         }
-        int toRemove = Math.max(1, PROXY_CLASS_CACHE.size() / 4);
-        int removed = 0;
-        java.util.Iterator<Class<?>> it = PROXY_CLASS_CACHE.keySet().iterator();
-        while (it.hasNext() && removed < toRemove) {
-            it.next();
-            it.remove();
-            removed++;
+        CACHE_LOCK.lock();
+        try {
+            if (PROXY_CLASS_CACHE.size() <= MAX_PROXY_CLASS_CACHE_SIZE) {
+                return;
+            }
+            int toRemove = Math.max(1, PROXY_CLASS_CACHE.size() / 4);
+            int removed = 0;
+            java.util.Iterator<Class<?>> it = PROXY_CLASS_CACHE.keySet().iterator();
+            while (it.hasNext() && removed < toRemove) {
+                it.next();
+                it.remove();
+                removed++;
+            }
+        } finally {
+            CACHE_LOCK.unlock();
         }
     }
 
@@ -138,11 +148,16 @@ public final class SlowQueryDataSourceProxy {
 
             Class<?> proxyClass = PROXY_CLASS_CACHE.get(stmtClass);
             if (proxyClass == null) {
-                if (PROXY_CLASS_CACHE.size() >= MAX_PROXY_CLASS_CACHE_SIZE) {
-                    evictCacheIfNeeded();
+                CACHE_LOCK.lock();
+                try {
+                    if (PROXY_CLASS_CACHE.size() >= MAX_PROXY_CLASS_CACHE_SIZE) {
+                        evictCacheIfNeeded();
+                    }
+                    proxyClass = PROXY_CLASS_CACHE.computeIfAbsent(stmtClass,
+                        clz -> Proxy.getProxyClass(clz.getClassLoader(), clz.getInterfaces()));
+                } finally {
+                    CACHE_LOCK.unlock();
                 }
-                proxyClass = PROXY_CLASS_CACHE.computeIfAbsent(stmtClass,
-                    clz -> Proxy.getProxyClass(clz.getClassLoader(), clz.getInterfaces()));
             }
             try {
                 return proxyClass.getConstructor(InvocationHandler.class)

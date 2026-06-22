@@ -241,18 +241,28 @@ public class QueryCacheManager implements CacheAdapter {
         if (drift > Math.max(10, maxEntries / 10)) {
             cleanupDrift(drift > maxEntries / 2);
         }
-        // ConcurrentLinkedDeque.pollFirst() 和 ConcurrentHashMap.remove() 都是线程安全的，
-        // 限制最大尝试次数为 maxEntries/10，避免高负载下长时间循环
+        // CAS-based eviction: peek first, get current value, CAS remove(key, value).
+        // 这避免并发 put 替换值后误删新条目。CAS 失败时保留 deque 条目（条目仍有效，只是值已更新）。
         int maxAttempts = Math.max(16, maxEntries / 10);
         int attempts = 0;
         while (store.size() > maxEntries && attempts < maxAttempts) {
-            String oldest = insertionOrder.pollFirst();
+            String oldest = insertionOrder.peekFirst();
             if (oldest == null) {
                 break;
             }
-            // 仅当 store 中确实存在该 key 时才算有效驱逐，否则跳过陈旧 deque 条目
-            if (store.remove(oldest) != null) {
+            CachedQueryResult<?> val = store.get(oldest);
+            if (val == null) {
+                // 陈旧 deque 条目（已从 store 移除），清理
+                insertionOrder.pollFirst();
+                attempts++;
+                continue;
+            }
+            if (store.remove(oldest, val)) {
+                insertionOrder.pollFirst();
                 log.debug("Post-put evicted oldest cache entry: {}", oldest);
+            } else {
+                // CAS 失败：条目被并发替换或移除，保留 deque 避免漂移
+                break;
             }
             attempts++;
         }
@@ -290,16 +300,21 @@ public class QueryCacheManager implements CacheAdapter {
     private void evictOldestEntry() {
         int maxAttempts = Math.max(8, maxEntries / 20);
         for (int attempt = 0; attempt < maxAttempts; attempt++) {
-            String oldest = insertionOrder.pollFirst();
+            String oldest = insertionOrder.peekFirst();
             if (oldest == null) {
                 return;
             }
-            // 仅当 store 中确实存在该 key 时才执行驱逐
-            if (store.remove(oldest) != null) {
+            CachedQueryResult<?> val = store.get(oldest);
+            if (val == null) {
+                insertionOrder.pollFirst();
+                continue;
+            }
+            if (store.remove(oldest, val)) {
+                insertionOrder.pollFirst();
                 log.debug("Evicted oldest cache entry: {}", oldest);
                 return;
             }
-            // deque 中的陈旧条目已跳过，继续尝试下一个
+            // CAS 失败：条目被并发替换，保留 deque 条目，下次循环重试其他 key
         }
     }
 
@@ -388,8 +403,10 @@ public class QueryCacheManager implements CacheAdapter {
      * 清除过期条目。采样部分条目进行检查，避免全量扫描带来的 CPU 热点。
      * 同时清理 insertionOrder 中对应的陈旧条目。
      */
+    // ponytail: sample scales with store size — 64 was too small for 10k+ entries
     private void evictExpiredEntries() {
-        int sampleSize = Math.min(store.size(), 64);
+        int storeSize = store.size();
+        int sampleSize = storeSize > 64 ? Math.min(storeSize, Math.max(64, storeSize / 10)) : 64;
         if (sampleSize == 0) {
             return;
         }

@@ -29,9 +29,7 @@ public class MyJpaPlusException extends RuntimeException {
         /** 并发冲突错误。 */
         CONCURRENCY,
         /** 数据访问错误。 */
-        DATA_ACCESS,
-        /** 超时错误。 */
-        TIMEOUT
+        DATA_ACCESS
     }
 
     private final ErrorCode errorCode;

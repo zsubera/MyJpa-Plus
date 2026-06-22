@@ -1,13 +1,17 @@
 package com.zsubera.jpa.integration;
 
-import com.zsubera.jpa.annotation.*;
 import jakarta.persistence.*;
 import java.time.Instant;
+import org.springframework.data.annotation.CreatedBy;
+import org.springframework.data.annotation.CreatedDate;
+import org.springframework.data.annotation.LastModifiedBy;
+import org.springframework.data.annotation.LastModifiedDate;
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 @Entity
 @Table(name = "audit_integration_entity")
-@EntityListeners(AuditEntityListener.class)
+@EntityListeners(AuditingEntityListener.class)
 class AuditEntity {
 
     @Id
@@ -16,16 +20,16 @@ class AuditEntity {
 
     private String name;
 
-    @CreatedAt
+    @CreatedDate
     private Instant createdAt;
 
-    @UpdatedAt
+    @LastModifiedDate
     private Instant updatedAt;
 
     @CreatedBy
     private String createdBy;
 
-    @UpdatedBy
+    @LastModifiedBy
     private String updatedBy;
 
     public Long getId() {

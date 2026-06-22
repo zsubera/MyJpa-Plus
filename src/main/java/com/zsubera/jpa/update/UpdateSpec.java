@@ -251,13 +251,20 @@ public class UpdateSpec<T> extends AbstractBulkOperationSpec<T, UpdateSpec<T>> {
     @Override
     public int execute(EntityManager em) {
         com.zsubera.jpa.autoconfigure.MyJpaPlusGlobalConfig config = getGlobalConfig();
-        if (config != null && config.getMaxBulkOperationRows() > 0
-            && config.getMaxBulkOperationRows() < Integer.MAX_VALUE) {
-            checkRowCountBeforeExecute(em, config.getMaxBulkOperationRows(), "UPDATE");
+        int limit = (config != null && config.getMaxBulkOperationRows() > 0
+            && config.getMaxBulkOperationRows() < Integer.MAX_VALUE) ? config.getMaxBulkOperationRows() : -1;
+        if (limit > 0) {
+            checkRowCountBeforeExecute(em, limit, "UPDATE");
         }
         var query = em.createQuery(toUpdate(em));
-        applyTimeout(query);
-        return query.executeUpdate();
+        int updated = query.executeUpdate();
+        // ponytail: post-execute check for race condition between COUNT and UPDATE
+        if (limit > 0 && updated > limit) {
+            throw new com.zsubera.jpa.exception.MyJpaPlusException(
+                "UPDATE affected " + updated + " rows, exceeding the pre-check limit of " + limit
+                    + ". Concurrent modifications detected. Transaction will be rolled back.");
+        }
+        return updated;
     }
 
     @Override
@@ -391,7 +398,6 @@ public class UpdateSpec<T> extends AbstractBulkOperationSpec<T, UpdateSpec<T>> {
         applyExpressionSetClauses(update, root, cb);
         applyVersionIncrement(update, root, cb);
         var q = em.createQuery(update);
-        applyTimeout(q);
         return q.executeUpdate();
     }
 
@@ -503,7 +509,6 @@ public class UpdateSpec<T> extends AbstractBulkOperationSpec<T, UpdateSpec<T>> {
         }
         idQuery.where(predicates.length > 0 ? cb.and(predicates) : cb.conjunction());
         TypedQuery<?> query = em.createQuery(idQuery);
-        applyTimeout(query);
         query.setMaxResults(limit);
         if (pessimisticLock) {
             query.setLockMode(LockModeType.PESSIMISTIC_WRITE);
@@ -524,7 +529,6 @@ public class UpdateSpec<T> extends AbstractBulkOperationSpec<T, UpdateSpec<T>> {
         applyVersionIncrement(update, updateRoot, cb);
         update.where(InClauseBuilder.in(cb, updateRoot.get(idFieldName), ids));
         var uq = em.createQuery(update);
-        applyTimeout(uq);
         int updated = uq.executeUpdate();
         // 在 UPDATE 执行后再清除持久化上下文，保留悲观锁直到操作完成
         em.clear();

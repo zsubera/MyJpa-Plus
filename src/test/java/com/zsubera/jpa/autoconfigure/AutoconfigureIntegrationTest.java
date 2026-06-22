@@ -10,7 +10,6 @@ import com.zsubera.jpa.monitor.SlowQueryDataSourceProxy;
 import com.zsubera.jpa.template.MyJpaTemplateOperations;
 import com.zsubera.jpa.template.QueryCacheManager;
 import com.zsubera.jpa.template.CacheInvalidationListener;
-import com.zsubera.jpa.annotation.AuditEntityListener;
 import java.util.List;
 import javax.sql.DataSource;
 import org.junit.jupiter.api.AfterEach;
@@ -20,6 +19,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.ApplicationContext;
+import org.springframework.data.domain.AuditorAware;
 
 @SpringBootTest(classes = AutoconfigureIntegrationTest.TestConfig.class)
 class AutoconfigureIntegrationTest {
@@ -81,9 +81,9 @@ class AutoconfigureIntegrationTest {
     }
 
     @Test
-    void auditEntityListener_exists() {
-        AuditEntityListener listener = context.getBean(AuditEntityListener.class);
-        assertNotNull(listener);
+    void auditorAware_exists() {
+        AuditorAware<?> auditorAware = context.getBean(AuditorAware.class);
+        assertNotNull(auditorAware);
     }
 
     @Test
@@ -133,13 +133,13 @@ class AutoconfigureIntegrationTest {
         }
     }
 
-    // ---- SecurityContextAuditUserProvider ----
+    // ---- SecurityContextAuditorAware ----
 
     @Test
-    void securityContextAuditUserProvider_returnsAnonymous() {
-        MyJpaPlusAutoConfiguration.SecurityContextAuditUserProvider provider =
-            new MyJpaPlusAutoConfiguration.SecurityContextAuditUserProvider();
-        assertEquals("ANONYMOUS", provider.getCurrentUser());
+    void SecurityContextAuditorAware_returnsAnonymous() {
+        MyJpaPlusAutoConfiguration.SecurityContextAuditorAware provider =
+            new MyJpaPlusAutoConfiguration.SecurityContextAuditorAware();
+        assertEquals("SYSTEM", provider.getCurrentAuditor().get());
     }
 
     // ---- DataSourceSlowQueryProxyPostProcessor ----
@@ -265,7 +265,7 @@ class AutoconfigureIntegrationTest {
         assertNotNull(config.myJpaPlusGlobalConfig(props));
         assertNotNull(config.myJpaTemplate(props));
         assertNotNull(config.queryCacheManager());
-        assertNotNull(config.auditEntityListener());
+        assertNotNull(config.auditorAware());
         assertNotNull(config.cacheInvalidationListener(config.queryCacheManager()));
     }
 
@@ -291,7 +291,6 @@ class AutoconfigureIntegrationTest {
         q.setInClauseMaxSize(500);
         q.setInClauseHardLimit(1000);
         q.setLambdaCacheSize(1024);
-        q.setDefaultTimeoutSeconds(30);
         q.setMaxBulkOperationRows(5000);
         q.setExtraSafeFunctions(List.of("FUNC1"));
         q.setExtraBooleanFunctions(List.of("BFUNC1"));
@@ -314,10 +313,6 @@ class AutoconfigureIntegrationTest {
         assertFalse(config.isSoftDeleteAutoFilter());
         config.setBlockUnconditionalDelete(false);
         assertFalse(config.isBlockUnconditionalDelete());
-        config.setDefaultTimeoutSeconds(60);
-        assertEquals(60, config.getDefaultTimeoutSeconds());
-        config.setMaxTimeoutSeconds(600);
-        assertEquals(600, config.getMaxTimeoutSeconds());
         config.setMaxResults(5000);
         assertEquals(5000, config.getMaxResults());
         config.setMaxBulkOperationRows(2000);
@@ -326,13 +321,6 @@ class AutoconfigureIntegrationTest {
         assertEquals(50000, config.getDeepPaginationOffsetThreshold());
         config.setDeepPaginationOffsetLimit(1000000);
         assertEquals(1000000, config.getDeepPaginationOffsetLimit());
-    }
-
-    @Test
-    void globalConfig_maxTimeoutSeconds_invalid() {
-        MyJpaPlusGlobalConfig config = new MyJpaPlusGlobalConfig();
-        assertThrows(IllegalArgumentException.class, () -> config.setMaxTimeoutSeconds(0));
-        assertThrows(IllegalArgumentException.class, () -> config.setMaxTimeoutSeconds(-1));
     }
 
     @Test

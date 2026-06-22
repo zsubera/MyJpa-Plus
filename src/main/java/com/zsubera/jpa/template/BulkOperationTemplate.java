@@ -4,9 +4,11 @@ import com.zsubera.jpa.update.DeleteSpec;
 import com.zsubera.jpa.update.MergeSpec;
 import com.zsubera.jpa.update.UpdateSpec;
 import jakarta.persistence.EntityManager;
-import jakarta.persistence.EntityManagerFactory;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
+import org.springframework.transaction.support.TransactionTemplate;
 
 /**
  * 批量操作执行模板，封装 {@link UpdateSpec}、{@link DeleteSpec} 和 {@link MergeSpec} 的批量执行逻辑。
@@ -23,7 +25,7 @@ import org.slf4j.LoggerFactory;
  * <p>
  * 事务管理职责归属于调用方 {@link MyJpaTemplate}，其方法通过 {@code @Transactional} 注解由 Spring 管理事务。
  * 如需在事务内开启独立的新事务（例如分批提交以避免大事务锁表），
- * 请使用 {@link TransactionHelper}，它通过 {@code REQUIRES_NEW} 传播行为创建独立事务。
+ * 请使用 {@link TransactionTemplate} 配合 {@code REQUIRES_NEW} 传播行为创建独立事务。
  *
  * <p>
  * <strong>功能：</strong>
@@ -47,21 +49,39 @@ class BulkOperationTemplate {
 
     private final EntityManager entityManager;
     private volatile int maxBulkOperationRows;
-    private final TransactionHelper transactionHelper;
+    private final TransactionTemplate requiredTxTemplate;
+    private final TransactionTemplate requiresNewTxTemplate;
 
     /**
      * 创建 BulkOperationTemplate 实例。
      *
      * @param entityManager 实体管理器
      * @param maxBulkOperationRows 批量操作最大影响行数限制（-1 表示不限制）
-     * @param entityManagerFactory 实体管理器工厂（用于 TransactionHelper）
-     * @param applicationContext Spring 应用上下文（用于获取 TransactionManager）
+     * @param txManager Spring 事务管理器
      */
     BulkOperationTemplate(EntityManager entityManager, int maxBulkOperationRows,
-        EntityManagerFactory entityManagerFactory, org.springframework.context.ApplicationContext applicationContext) {
+        PlatformTransactionManager txManager) {
         this.entityManager = entityManager;
         this.maxBulkOperationRows = maxBulkOperationRows;
-        this.transactionHelper = new TransactionHelper(entityManager, entityManagerFactory, applicationContext);
+        this.requiredTxTemplate = new TransactionTemplate(txManager);
+        this.requiredTxTemplate.setPropagationBehavior(
+            org.springframework.transaction.TransactionDefinition.PROPAGATION_REQUIRED);
+        this.requiresNewTxTemplate = new TransactionTemplate(txManager);
+        this.requiresNewTxTemplate.setPropagationBehavior(
+            org.springframework.transaction.TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+    }
+
+    private <R> R executeInNewTransaction(java.util.function.Function<EntityManager, R> operation) {
+        TransactionTemplate template = TransactionSynchronizationManager.isActualTransactionActive()
+            ? requiresNewTxTemplate : requiredTxTemplate;
+        return template.execute(status -> {
+            R r = operation.apply(entityManager);
+            if (status.isRollbackOnly()) {
+                throw new org.springframework.transaction.UnexpectedRollbackException(
+                    "Transaction was unexpectedly rolled back.");
+            }
+            return r;
+        });
     }
 
     /**
@@ -326,7 +346,7 @@ class BulkOperationTemplate {
             throw new IllegalArgumentException("failureStrategy must not be null");
         }
         return executeBatchInSeparateTransactionsWithResult(batchSize, "update",
-            size -> transactionHelper.executeInNewTransaction(em -> spec.executeLimited(em, size)), failureStrategy);
+            size -> executeInNewTransaction(em -> spec.executeLimited(em, size)), failureStrategy);
     }
 
     /**
@@ -350,7 +370,7 @@ class BulkOperationTemplate {
             throw new IllegalArgumentException("failureStrategy must not be null");
         }
         return executeBatchInSeparateTransactionsWithResult(batchSize, "delete",
-            size -> transactionHelper.executeInNewTransaction(em -> spec.executeLimited(em, size)), failureStrategy);
+            size -> executeInNewTransaction(em -> spec.executeLimited(em, size)), failureStrategy);
     }
 
     /**
@@ -414,7 +434,7 @@ class BulkOperationTemplate {
             throw new IllegalArgumentException("batchSize must be positive");
         }
         return executeBatchInSeparateTransactionsInternal(batchSize, "update",
-            size -> transactionHelper.executeInNewTransaction(em -> spec.executeLimited(em, size)));
+            size -> executeInNewTransaction(em -> spec.executeLimited(em, size)));
     }
 
     /**
@@ -433,7 +453,7 @@ class BulkOperationTemplate {
             throw new IllegalArgumentException("batchSize must be positive");
         }
         return executeBatchInSeparateTransactionsInternal(batchSize, "delete",
-            size -> transactionHelper.executeInNewTransaction(em -> spec.executeLimited(em, size)));
+            size -> executeInNewTransaction(em -> spec.executeLimited(em, size)));
     }
 
     /**

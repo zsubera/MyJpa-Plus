@@ -123,26 +123,29 @@ public class DefaultMyJpaRepository<T, ID> extends SimpleJpaRepository<T, ID> im
         globalConfigProvider = provider;
     }
 
+    private static <R> R resolveGlobalConfig(
+        java.util.function.Function<com.zsubera.jpa.autoconfigure.MyJpaPlusGlobalConfig, R> globalGetter,
+        java.util.function.Function<ConfigProvider, R> providerGetter, R defaultValue) {
+        com.zsubera.jpa.autoconfigure.MyJpaPlusGlobalConfig config =
+            com.zsubera.jpa.autoconfigure.GlobalConfigHolder.getConfig();
+        if (config != null) {
+            return globalGetter.apply(config);
+        }
+        ConfigProvider provider = globalConfigProvider;
+        if (provider != null) {
+            return providerGetter.apply(provider);
+        }
+        return defaultValue;
+    }
+
     /**
      * 获取当前全局自动过滤开关状态。
      *
      * @return 如果自动过滤已启用返回 true
      */
     public static boolean isAutoFilterEnabled() {
-        // Check GlobalConfigHolder first (primary config source)
-        com.zsubera.jpa.autoconfigure.MyJpaPlusGlobalConfig config =
-            com.zsubera.jpa.autoconfigure.GlobalConfigHolder.getConfig();
-        if (config != null) {
-            return config.isSoftDeleteAutoFilter();
-        }
-        // Fallback to local ConfigProvider
-        ConfigProvider provider = globalConfigProvider;
-        if (provider != null) {
-            return provider.isAutoFilterEnabled();
-        }
-        log.debug("globalConfigProvider not initialized, auto-filter defaults to true. "
-            + "Ensure MyJpaPlusAutoConfiguration is registered.");
-        return true;
+        return resolveGlobalConfig(com.zsubera.jpa.autoconfigure.MyJpaPlusGlobalConfig::isSoftDeleteAutoFilter,
+            ConfigProvider::isAutoFilterEnabled, true);
     }
 
     /**
@@ -151,18 +154,8 @@ public class DefaultMyJpaRepository<T, ID> extends SimpleJpaRepository<T, ID> im
      * @return 如果阻断已启用返回 true
      */
     public static boolean isBlockUnconditionalDelete() {
-        // Check GlobalConfigHolder first (primary config source)
-        com.zsubera.jpa.autoconfigure.MyJpaPlusGlobalConfig config =
-            com.zsubera.jpa.autoconfigure.GlobalConfigHolder.getConfig();
-        if (config != null) {
-            return config.isBlockUnconditionalDelete();
-        }
-        // Fallback to local ConfigProvider
-        ConfigProvider provider = globalConfigProvider;
-        if (provider != null) {
-            return provider.isBlockUnconditionalDelete();
-        }
-        return true;
+        return resolveGlobalConfig(com.zsubera.jpa.autoconfigure.MyJpaPlusGlobalConfig::isBlockUnconditionalDelete,
+            ConfigProvider::isBlockUnconditionalDelete, true);
     }
 
     /**

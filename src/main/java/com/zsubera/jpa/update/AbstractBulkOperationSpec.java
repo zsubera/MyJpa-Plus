@@ -8,7 +8,6 @@ import com.zsubera.jpa.spec.ConditionalMethods;
 import com.zsubera.jpa.spec.PredicateHelper;
 import com.zsubera.jpa.spec.SFunction;
 import com.zsubera.jpa.util.LambdaUtils;
-import com.zsubera.jpa.util.QueryTimeoutHelper;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.EntityTransaction;
@@ -542,15 +541,6 @@ public abstract class AbstractBulkOperationSpec<T, SELF extends AbstractBulkOper
     @SafeVarargs
     public final SELF multiLike(boolean condition, String keyword, SFunction<T, ?>... fields) {
         return condition ? multiLike(keyword, fields) : self();
-    }
-
-    /**
-     * 为批量操作查询应用全局默认超时。
-     *
-     * @param query JPA Query 实例
-     */
-    protected void applyTimeout(jakarta.persistence.Query query) {
-        QueryTimeoutHelper.applyTimeout(query);
     }
 
     /**

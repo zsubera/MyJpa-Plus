@@ -5,12 +5,12 @@ import static org.junit.jupiter.api.Assertions.*;
 import com.zsubera.jpa.template.MyJpaTemplateOperations;
 import com.zsubera.jpa.template.QueryCacheManager;
 import com.zsubera.jpa.template.CacheInvalidationListener;
-import com.zsubera.jpa.annotation.AuditEntityListener;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.ApplicationContext;
+import org.springframework.data.domain.AuditorAware;
 
 @SpringBootTest(classes = MyJpaPlusAutoConfigurationIntegrationTest.TestConfig.class)
 class MyJpaPlusAutoConfigurationIntegrationTest {
@@ -41,7 +41,6 @@ class MyJpaPlusAutoConfigurationIntegrationTest {
         assertNotNull(config);
         assertTrue(config.isSoftDeleteAutoFilter());
         assertTrue(config.isBlockUnconditionalDelete());
-        assertEquals(30, config.getDefaultTimeoutSeconds());
         assertEquals(10000, config.getMaxResults());
     }
 
@@ -64,9 +63,9 @@ class MyJpaPlusAutoConfigurationIntegrationTest {
     }
 
     @Test
-    void auditEntityListener_exists() {
-        AuditEntityListener listener = context.getBean(AuditEntityListener.class);
-        assertNotNull(listener);
+    void auditorAware_exists() {
+        AuditorAware<?> auditorAware = context.getBean(AuditorAware.class);
+        assertNotNull(auditorAware);
     }
 
     @Test

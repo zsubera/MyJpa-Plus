@@ -141,6 +141,13 @@ public final class InClauseBuilder {
     }
 
     /**
+     * 重置配置为系统属性或默认值。用于测试隔离。
+     */
+    public static void reset() {
+        CONFIG_REF.set(Config.loadFromSystemProperties());
+    }
+
+    /**
      * 获取单个 IN 子句中的最大参数数量。
      */
     public static int getMaxInClauseSize() {

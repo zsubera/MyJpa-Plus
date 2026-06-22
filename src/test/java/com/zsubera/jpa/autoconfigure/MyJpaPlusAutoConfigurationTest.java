@@ -157,26 +157,6 @@ class MyJpaPlusAutoConfigurationTest {
     }
 
     @Test
-    void properties_query_setDefaultTimeoutSeconds() {
-        MyJpaPlusProperties.Query q = new MyJpaPlusProperties.Query();
-        q.setDefaultTimeoutSeconds(60);
-        assertEquals(60, q.getDefaultTimeoutSeconds());
-    }
-
-    @Test
-    void properties_query_setDefaultTimeoutSeconds_disabled() {
-        MyJpaPlusProperties.Query q = new MyJpaPlusProperties.Query();
-        q.setDefaultTimeoutSeconds(-1);
-        assertEquals(-1, q.getDefaultTimeoutSeconds());
-    }
-
-    @Test
-    void properties_query_setDefaultTimeoutSeconds_invalid_throws() {
-        MyJpaPlusProperties.Query q = new MyJpaPlusProperties.Query();
-        assertThrows(IllegalArgumentException.class, () -> q.setDefaultTimeoutSeconds(0));
-    }
-
-    @Test
     void properties_query_setMaxBulkOperationRows() {
         MyJpaPlusProperties.Query q = new MyJpaPlusProperties.Query();
         q.setMaxBulkOperationRows(5000);

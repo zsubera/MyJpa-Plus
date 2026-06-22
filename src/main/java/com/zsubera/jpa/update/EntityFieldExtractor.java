@@ -313,6 +313,9 @@ final class EntityFieldExtractor<T> {
     }
 
     private static void evictAutoIdCache() {
+        if (AUTO_GENERATED_ID_CACHE.size() <= AUTO_ID_CACHE_MAX_SIZE) {
+            return;
+        }
         int toRemove = AUTO_GENERATED_ID_CACHE.size() / 2;
         int removed = 0;
         java.util.Iterator<String> it = AUTO_GENERATED_ID_CACHE.keySet().iterator();

@@ -32,12 +32,12 @@ class AutoconfigureSecurityTest {
     @Autowired
     private org.springframework.context.ApplicationContext context;
 
-    // ---- SecurityContextAuditUserProvider: with Spring Security ----
+    // ---- SecurityContextAuditorAware: with Spring Security ----
 
     @Test
-    void securityContextAuditUserProvider_authenticatedUser() {
-        MyJpaPlusAutoConfiguration.SecurityContextAuditUserProvider provider =
-            new MyJpaPlusAutoConfiguration.SecurityContextAuditUserProvider();
+    void SecurityContextAuditorAware_authenticatedUser() {
+        MyJpaPlusAutoConfiguration.SecurityContextAuditorAware provider =
+            new MyJpaPlusAutoConfiguration.SecurityContextAuditorAware();
 
         SecurityContext secCtx = SecurityContextHolder.createEmptyContext();
         Authentication auth = new UsernamePasswordAuthenticationToken("testuser", "password", List.of());
@@ -45,17 +45,17 @@ class AutoconfigureSecurityTest {
         SecurityContextHolder.setContext(secCtx);
 
         try {
-            String user = provider.getCurrentUser();
-            assertEquals("testuser", user);
+            java.util.Optional<String> user = provider.getCurrentAuditor();
+            assertEquals("testuser", user.get());
         } finally {
             SecurityContextHolder.clearContext();
         }
     }
 
     @Test
-    void securityContextAuditUserProvider_unauthenticatedUser() {
-        MyJpaPlusAutoConfiguration.SecurityContextAuditUserProvider provider =
-            new MyJpaPlusAutoConfiguration.SecurityContextAuditUserProvider();
+    void SecurityContextAuditorAware_unauthenticatedUser() {
+        MyJpaPlusAutoConfiguration.SecurityContextAuditorAware provider =
+            new MyJpaPlusAutoConfiguration.SecurityContextAuditorAware();
 
         SecurityContext secCtx = SecurityContextHolder.createEmptyContext();
         // 2-arg constructor creates unauthenticated token
@@ -64,39 +64,55 @@ class AutoconfigureSecurityTest {
         SecurityContextHolder.setContext(secCtx);
 
         try {
-            String user = provider.getCurrentUser();
-            assertEquals("ANONYMOUS", user);
+            java.util.Optional<String> user = provider.getCurrentAuditor();
+            assertEquals("SYSTEM", user.get());
         } finally {
             SecurityContextHolder.clearContext();
         }
     }
 
     @Test
-    void securityContextAuditUserProvider_nullAuthentication() {
-        MyJpaPlusAutoConfiguration.SecurityContextAuditUserProvider provider =
-            new MyJpaPlusAutoConfiguration.SecurityContextAuditUserProvider();
+    void SecurityContextAuditorAware_nullAuthentication() {
+        MyJpaPlusAutoConfiguration.SecurityContextAuditorAware provider =
+            new MyJpaPlusAutoConfiguration.SecurityContextAuditorAware();
 
         SecurityContext secCtx = SecurityContextHolder.createEmptyContext();
         secCtx.setAuthentication(null);
         SecurityContextHolder.setContext(secCtx);
 
         try {
-            String user = provider.getCurrentUser();
-            assertEquals("ANONYMOUS", user);
+            java.util.Optional<String> user = provider.getCurrentAuditor();
+            assertEquals("SYSTEM", user.get());
         } finally {
             SecurityContextHolder.clearContext();
         }
     }
 
     @Test
-    void securityContextAuditUserProvider_noSecurityContext() {
-        MyJpaPlusAutoConfiguration.SecurityContextAuditUserProvider provider =
-            new MyJpaPlusAutoConfiguration.SecurityContextAuditUserProvider();
+    void SecurityContextAuditorAware_noSecurityContext() {
+        MyJpaPlusAutoConfiguration.SecurityContextAuditorAware provider =
+            new MyJpaPlusAutoConfiguration.SecurityContextAuditorAware();
 
         SecurityContextHolder.clearContext();
 
-        String user = provider.getCurrentUser();
-        assertEquals("ANONYMOUS", user);
+        java.util.Optional<String> user = provider.getCurrentAuditor();
+        assertEquals("SYSTEM", user.get());
+    }
+
+    @Test
+    void SecurityContextAuditorAware_fastPathAfterFirstCall() {
+        MyJpaPlusAutoConfiguration.SecurityContextAuditorAware provider =
+            new MyJpaPlusAutoConfiguration.SecurityContextAuditorAware();
+
+        SecurityContextHolder.clearContext();
+
+        // 第一次调用触发 initSecurityReflection() + securityChecked = true
+        java.util.Optional<String> first = provider.getCurrentAuditor();
+        assertEquals("SYSTEM", first.get());
+
+        // 第二次调用走 securityChecked 快速路径
+        java.util.Optional<String> second = provider.getCurrentAuditor();
+        assertEquals("SYSTEM", second.get());
     }
 
     // ---- EncryptConverter exception: RejectedExecutionException ----

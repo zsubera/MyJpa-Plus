@@ -79,13 +79,20 @@ public class DeleteSpec<T> extends AbstractBulkOperationSpec<T, DeleteSpec<T>> {
     public int execute(EntityManager em) {
         // 检查是否有最大行数保护配置（使用快速估算避免全表 COUNT）
         com.zsubera.jpa.autoconfigure.MyJpaPlusGlobalConfig config = getGlobalConfig();
-        if (config != null && config.getMaxBulkOperationRows() > 0
-            && config.getMaxBulkOperationRows() < Integer.MAX_VALUE) {
-            checkRowCountBeforeExecute(em, config.getMaxBulkOperationRows(), "DELETE");
+        int limit = (config != null && config.getMaxBulkOperationRows() > 0
+            && config.getMaxBulkOperationRows() < Integer.MAX_VALUE) ? config.getMaxBulkOperationRows() : -1;
+        if (limit > 0) {
+            checkRowCountBeforeExecute(em, limit, "DELETE");
         }
         var query = em.createQuery(toDelete(em));
-        applyTimeout(query);
-        return query.executeUpdate();
+        int deleted = query.executeUpdate();
+        // ponytail: post-execute check for race condition between COUNT and DELETE
+        if (limit > 0 && deleted > limit) {
+            throw new com.zsubera.jpa.exception.MyJpaPlusException(
+                "DELETE affected " + deleted + " rows, exceeding the pre-check limit of " + limit
+                    + ". Concurrent modifications detected. Transaction will be rolled back.");
+        }
+        return deleted;
     }
 
     @Override
@@ -141,7 +148,6 @@ public class DeleteSpec<T> extends AbstractBulkOperationSpec<T, DeleteSpec<T>> {
         CriteriaDelete<T> delete = cb.createCriteriaDelete(entityClass);
         delete.from(entityClass);
         var q = em.createQuery(delete);
-        applyTimeout(q);
         return q.executeUpdate();
     }
 
@@ -253,7 +259,6 @@ public class DeleteSpec<T> extends AbstractBulkOperationSpec<T, DeleteSpec<T>> {
         }
         idQuery.where(predicates.length > 0 ? cb.and(predicates) : cb.conjunction());
         TypedQuery<?> query = em.createQuery(idQuery);
-        applyTimeout(query);
         query.setMaxResults(limit);
         if (pessimisticLock) {
             query.setLockMode(LockModeType.PESSIMISTIC_WRITE);
@@ -268,7 +273,6 @@ public class DeleteSpec<T> extends AbstractBulkOperationSpec<T, DeleteSpec<T>> {
         Root<T> deleteRoot = delete.from(entityClass);
         delete.where(InClauseBuilder.in(cb, deleteRoot.get(idFieldName), ids));
         var dq = em.createQuery(delete);
-        applyTimeout(dq);
         int deleted = dq.executeUpdate();
         // 在 DELETE 执行后再清除持久化上下文，保留悲观锁直到操作完成
         em.clear();

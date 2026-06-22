@@ -129,9 +129,11 @@ public final class EntityManagerHelper {
     public static void registerEntityManagerFactoryIfAbsent(Class<?> entityType, EntityManagerFactory emf) {
         Objects.requireNonNull(entityType, "entityType must not be null");
         Objects.requireNonNull(emf, "entityManagerFactory must not be null");
-        resolvers.putIfAbsent(entityType, type -> emf);
-        // 如果注册的 EMF 与默认 EMF 相同，保持 allResolversUseDefault 标志
-        // putIfAbsent 可能未实际插入（已存在），此时不修改标志
+        boolean wasAbsent = resolvers.putIfAbsent(entityType, type -> emf) == null;
+        // 仅当实际插入了新 resolver 且该 EMF 与默认 EMF 不同时，标记为非单数据源
+        if (wasAbsent && defaultEntityManagerFactory != null && emf != defaultEntityManagerFactory) {
+            allResolversUseDefault = false;
+        }
     }
 
     /**
@@ -148,9 +150,6 @@ public final class EntityManagerHelper {
     }
 
     /**
-     * 重新检查 allResolversUseDefault 标志。移除 resolver 后调用。
-     */
-    /**
      * 重新检查 allResolversUseDefault 标志。调用方必须持有 resolverCheckLock。
      */
     private static void recheckAllResolversUseDefault() {
@@ -163,9 +162,11 @@ public final class EntityManagerHelper {
             allResolversUseDefault = false;
             return;
         }
+        // 用第一个注册的实体类型作为探针，避免传 null 给 resolver
+        Class<?> probeType = resolvers.keySet().iterator().next();
         for (EntityManagerResolver resolver : resolvers.values()) {
             try {
-                if (resolver.resolve(null) != defaultEmf) {
+                if (resolver.resolve(probeType) != defaultEmf) {
                     allResolversUseDefault = false;
                     return;
                 }

@@ -133,11 +133,10 @@ class MySQLFinalCoverageIntegrationTest {
             jakarta.persistence.criteria.Path<MySQLTestEntity>, jakarta.persistence.criteria.Predicate>)null));
     }
 
-    // ==================== QuerySpec.setMaxTimeoutSeconds ====================
+    // ==================== QuerySpec.timeout ====================
 
     @Test
-    void querySpec_setMaxTimeoutSeconds() {
-        com.zsubera.jpa.autoconfigure.GlobalConfigHolder.getConfig().setMaxTimeoutSeconds(60);
+    void querySpec_setTimeout() {
         QuerySpec<MySQLTestEntity> qs = new QuerySpec<>();
         qs.timeout(50);
         assertEquals(50, qs.getQueryTimeout().intValue());
@@ -398,18 +397,6 @@ class MySQLFinalCoverageIntegrationTest {
         } finally {
             jpaTemplate.setDeepPaginationOffsetLimit(original);
         }
-    }
-
-    // ==================== MyJpaTemplate.setDefaultTimeoutSeconds ====================
-
-    @Test
-    void template_setDefaultTimeoutSeconds() {
-        jpaTemplate.setDefaultTimeoutSeconds(30);
-        save("test", 1);
-        QuerySpec<MySQLTestEntity> spec = new QuerySpec<>();
-        List<MySQLTestEntity> result = jpaTemplate.findAll(MySQLTestEntity.class, spec);
-        assertEquals(1, result.size());
-        jpaTemplate.setDefaultTimeoutSeconds(-1);
     }
 
     // ==================== MyJpaTemplate.setMaxResults ====================

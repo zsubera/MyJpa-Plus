@@ -42,8 +42,8 @@ class BulkOperationTemplateTest {
 
         @Bean
         public BulkOperationTemplate bulkOperationTemplate(jakarta.persistence.EntityManager entityManager,
-            jakarta.persistence.EntityManagerFactory entityManagerFactory, ApplicationContext applicationContext) {
-            return new BulkOperationTemplate(entityManager, 10000, entityManagerFactory, applicationContext);
+            org.springframework.transaction.PlatformTransactionManager txManager) {
+            return new BulkOperationTemplate(entityManager, 10000, txManager);
         }
     }
 

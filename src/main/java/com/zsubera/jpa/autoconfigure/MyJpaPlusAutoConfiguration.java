@@ -1,6 +1,5 @@
 package com.zsubera.jpa.autoconfigure;
 
-import com.zsubera.jpa.annotation.AuditEntityListener;
 import com.zsubera.jpa.monitor.SlowQueryDataSourceProxyPostProcessor;
 import com.zsubera.jpa.monitor.SqlSlowQueryInterceptor;
 import com.zsubera.jpa.repository.DefaultMyJpaRepository;
@@ -10,7 +9,6 @@ import com.zsubera.jpa.template.MyJpaTemplate;
 import com.zsubera.jpa.template.MyJpaTemplateOperations;
 import com.zsubera.jpa.util.InClauseBuilder;
 import com.zsubera.jpa.util.LambdaUtils;
-import com.zsubera.jpa.util.QueryTimeoutHelper;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import jakarta.persistence.EntityManager;
 import org.slf4j.Logger;
@@ -29,6 +27,8 @@ import org.springframework.context.annotation.Import;
 import org.springframework.context.event.ContextClosedEvent;
 import org.springframework.context.event.EventListener;
 import org.springframework.core.Ordered;
+import org.springframework.data.domain.AuditorAware;
+import org.springframework.data.jpa.repository.config.EnableJpaAuditing;
 
 /**
  * MyJpa-Plus 的自动配置类。
@@ -47,15 +47,14 @@ import org.springframework.core.Ordered;
  * <li>{@code myjpa-plus.query.in-clause-max-size} — IN 子句最大参数数量（默认：1000）
  * <li>{@code myjpa-plus.query.in-clause-hard-limit} — IN 子句硬限制（默认：5000）
  * <li>{@code myjpa-plus.query.lambda-cache-size} — Lambda 缓存大小（默认：4096）
- * <li>{@code myjpa-plus.query.default-timeout-seconds} — 查询超时时间（秒），-1 禁用（默认：30）
- * <li>{@code myjpa-plus.monitoring.enabled} — 启用 SQL 慢查询监控（默认：false）
- * <li>{@code myjpa-plus.monitoring.slow-query-threshold-ms} — 慢查询阈值，单位毫秒（默认：1000）
+ * <li>{@code spring.jpa.properties.jakarta.persistence.query.timeout} — 查询超时时间（毫秒），Spring Boot 标准属性
  * <li>{@code myjpa-plus.auto-repository-base-class} — 自动注册 DefaultMyJpaRepository 为仓库基类（默认：true）
  * </ul>
  */
 @AutoConfiguration
 @ConditionalOnClass({EntityManager.class})
 @EnableConfigurationProperties(MyJpaPlusProperties.class)
+@EnableJpaAuditing
 @Import({SoftDeleteFilterBean.class, MyJpaPlusAutoConfiguration.ModuleCompatibilityChecker.class,
     MyJpaPlusAutoConfiguration.MyJpaPlusConfigInitializer.class})
 @SuppressFBWarnings(value = "CT_CONSTRUCTOR_THROW",
@@ -93,7 +92,6 @@ public class MyJpaPlusAutoConfiguration {
         MyJpaPlusGlobalConfig config = new MyJpaPlusGlobalConfig();
         config.setSoftDeleteAutoFilter(properties.getSoftDelete().isAutoFilter());
         config.setBlockUnconditionalDelete(properties.getSoftDelete().isBlockUnconditionalDelete());
-        config.setDefaultTimeoutSeconds(properties.getQuery().getDefaultTimeoutSeconds());
         config.setMaxResults(properties.getQuery().getMaxResults());
         config.setMaxBulkOperationRows(properties.getQuery().getMaxBulkOperationRows());
         config.setDeepPaginationOffsetThreshold(properties.getQuery().getDeepPaginationOffsetThreshold());
@@ -138,12 +136,6 @@ public class MyJpaPlusAutoConfiguration {
             // 应用 Lambda 缓存配置
             LambdaUtils.setMaxCacheSize(properties.getQuery().getLambdaCacheSize());
 
-            // 应用查询超时配置
-            int timeout = properties.getQuery().getDefaultTimeoutSeconds();
-            if (timeout > 0 || timeout == -1 || timeout == 0) {
-                QueryTimeoutHelper.setDefaultTimeoutSeconds(timeout);
-            }
-
             // 应用额外函数白名单配置
             java.util.List<String> extraSafe = properties.getQuery().getExtraSafeFunctions();
             if (extraSafe != null && !extraSafe.isEmpty()) {
@@ -164,7 +156,6 @@ public class MyJpaPlusAutoConfiguration {
                 log.debug("  query.in-clause-max-size = {}", properties.getQuery().getInClauseMaxSize());
                 log.debug("  query.in-clause-hard-limit = {}", properties.getQuery().getInClauseHardLimit());
                 log.debug("  query.lambda-cache-size = {}", properties.getQuery().getLambdaCacheSize());
-                log.debug("  query.default-timeout-seconds = {}", properties.getQuery().getDefaultTimeoutSeconds());
             }
 
             // 自动预热加密密钥缓存（仅在密钥已配置时）
@@ -318,42 +309,64 @@ public class MyJpaPlusAutoConfiguration {
     }
 
     /**
-     * 创建 AuditEntityListener Bean。
+     * 创建默认的 {@link AuditorAware} Bean，用于 Spring Data JPA 审计功能。
      *
      * <p>
-     * 通过自动配置注册而非 {@code @Component}，避免与 JPA {@code @EntityListeners} 机制的身份混淆。 该 Bean 实现
-     * {@code ApplicationContextAware}，通过静态变量桥接 Spring 上下文与 JPA 实体监听器。
+     * 如果类路径上有 Spring Security，优先从 {@code SecurityContextHolder} 获取当前用户名；
+     * 否则返回 {@code "SYSTEM"}。用户可提供自定义 {@code AuditorAware<String>} Bean 覆盖。
      *
-     * @return AuditEntityListener 实例
+     * @return AuditorAware 实例
      */
     @Bean
-    @ConditionalOnMissingBean(AuditEntityListener.class)
-    public AuditEntityListener auditEntityListener() {
-        return new AuditEntityListener();
+    @ConditionalOnMissingBean(AuditorAware.class)
+    public AuditorAware<String> auditorAware() {
+        return new SecurityContextAuditorAware();
     }
 
     /**
-     * 基于 Spring Security SecurityContextHolder 的默认 AuditUserProvider 实现。
+     * 基于 Spring Security SecurityContextHolder 的默认 AuditorAware 实现。
      *
      * <p>
-     * 仅当 Spring Security 在类路径上且用户未提供自定义 AuditUserProvider 时激活。
      * 使用反射访问 SecurityContextHolder，避免编译时依赖 Spring Security。
      */
-    @org.springframework.context.annotation.Lazy(false)
-    @org.springframework.stereotype.Component
-    @ConditionalOnClass(name = "org.springframework.security.core.context.SecurityContextHolder")
-    @ConditionalOnMissingBean(com.zsubera.jpa.annotation.AuditUserProvider.class)
-    static class SecurityContextAuditUserProvider implements com.zsubera.jpa.annotation.AuditUserProvider {
+    static class SecurityContextAuditorAware implements AuditorAware<String> {
 
         private static final org.slf4j.Logger secLog =
-            org.slf4j.LoggerFactory.getLogger(SecurityContextAuditUserProvider.class);
+            org.slf4j.LoggerFactory.getLogger(SecurityContextAuditorAware.class);
 
         private static volatile java.lang.reflect.Method getContextMethod;
         private static volatile java.lang.reflect.Method getAuthenticationMethod;
         private static volatile java.lang.reflect.Method isAuthenticatedMethod;
         private static volatile java.lang.reflect.Method getNameMethod;
+        private static volatile boolean securityChecked;
 
-        static {
+        @Override
+        public java.util.Optional<String> getCurrentAuditor() {
+            if (!securityChecked) {
+                initSecurityReflection();
+            }
+            if (getContextMethod == null) {
+                return java.util.Optional.of("SYSTEM");
+            }
+            try {
+                Object context = getContextMethod.invoke(null);
+                Object auth = getAuthenticationMethod != null ? getAuthenticationMethod.invoke(context) : null;
+                if (auth != null && isAuthenticatedMethod != null) {
+                    Boolean authenticated = (Boolean)isAuthenticatedMethod.invoke(auth);
+                    if (Boolean.TRUE.equals(authenticated) && getNameMethod != null) {
+                        return java.util.Optional.of((String)getNameMethod.invoke(auth));
+                    }
+                }
+            } catch (Exception e) {
+                secLog.debug("Could not get user from SecurityContext: {}", e.getMessage());
+            }
+            return java.util.Optional.of("SYSTEM");
+        }
+
+        private static synchronized void initSecurityReflection() {
+            if (securityChecked) {
+                return;
+            }
             try {
                 Class<?> shc = Class.forName("org.springframework.security.core.context.SecurityContextHolder");
                 getContextMethod = shc.getMethod("getContext");
@@ -362,38 +375,11 @@ public class MyJpaPlusAutoConfiguration {
                 Class<?> authClass = Class.forName("org.springframework.security.core.Authentication");
                 isAuthenticatedMethod = authClass.getMethod("isAuthenticated");
                 getNameMethod = authClass.getMethod("getName");
+                secLog.info("Spring Security detected — AuditorAware will use SecurityContext");
             } catch (Exception e) {
-                // Security not available — leave all methods null
+                secLog.debug("Spring Security not available on classpath");
             }
-        }
-
-        @Override
-        public String getCurrentUser() {
-            try {
-                java.lang.reflect.Method ctx = getContextMethod;
-                if (ctx == null)
-                    return "ANONYMOUS";
-                Object context = ctx.invoke(null);
-                java.lang.reflect.Method getAuth = getAuthenticationMethod;
-                if (getAuth == null)
-                    return "ANONYMOUS";
-                Object auth = getAuth.invoke(context);
-                if (auth != null) {
-                    java.lang.reflect.Method isAuth = isAuthenticatedMethod;
-                    if (isAuth != null) {
-                        Boolean authenticated = (Boolean)isAuth.invoke(auth);
-                        if (Boolean.TRUE.equals(authenticated)) {
-                            java.lang.reflect.Method getName = getNameMethod;
-                            if (getName != null) {
-                                return (String)getName.invoke(auth);
-                            }
-                        }
-                    }
-                }
-            } catch (Exception e) {
-                secLog.debug("Could not get user from SecurityContext: {}", e.getMessage());
-            }
-            return "ANONYMOUS";
+            securityChecked = true;
         }
     }
 
@@ -411,10 +397,6 @@ public class MyJpaPlusAutoConfiguration {
         int limit = properties.getQuery().getDeepPaginationOffsetLimit();
         if (limit > 0) {
             template.setDeepPaginationOffsetLimit(limit);
-        }
-        int timeout = properties.getQuery().getDefaultTimeoutSeconds();
-        if (timeout > 0 || timeout == -1) {
-            template.setDefaultTimeoutSeconds(timeout);
         }
         return template;
     }
@@ -566,12 +548,14 @@ public class MyJpaPlusAutoConfiguration {
         } catch (Exception e) {
             log.warn("SoftDeleteHelper event publisher cleanup failed", e);
         }
-        try {
-            CacheAdapter cacheAdapter = applicationContext.getBean(CacheAdapter.class);
-            cacheAdapter.close();
-        } catch (Exception e) {
-            // CacheAdapter might not be available or already destroyed by Spring
-            log.debug("CacheAdapter close skipped: {}", e.getMessage());
+        if (applicationContext != null) {
+            try {
+                CacheAdapter cacheAdapter = applicationContext.getBean(CacheAdapter.class);
+                cacheAdapter.close();
+            } catch (Exception e) {
+                // CacheAdapter might not be available or already destroyed by Spring
+                log.debug("CacheAdapter close skipped: {}", e.getMessage());
+            }
         }
         log.info("MyJpa-Plus context closed, caches cleaned");
     }

@@ -76,7 +76,6 @@ class AutoconfigureCoverageGapTest {
     @Test
     void myJpaPlusConfigInitializer_timeoutZero() {
         MyJpaPlusProperties props = new MyJpaPlusProperties();
-        props.getQuery().setDefaultTimeoutSeconds(-1);
         assertDoesNotThrow(() -> new MyJpaPlusAutoConfiguration.MyJpaPlusConfigInitializer(props, null, null));
     }
 
@@ -106,40 +105,36 @@ class AutoconfigureCoverageGapTest {
     }
 
     @Test
-    void myJpaTemplate_limitZeroTimeoutNegative1() {
+    void myJpaTemplate_limitZero() {
         MyJpaPlusProperties props = new MyJpaPlusProperties();
         props.getQuery().setDeepPaginationOffsetLimit(-1);
-        props.getQuery().setDefaultTimeoutSeconds(-1);
         MyJpaPlusAutoConfiguration config = new MyJpaPlusAutoConfiguration(props, null);
         var template = config.myJpaTemplate(props);
         assertNotNull(template);
     }
 
     @Test
-    void myJpaTemplate_limitPositiveTimeoutPositive() {
+    void myJpaTemplate_limitPositive() {
         MyJpaPlusProperties props = new MyJpaPlusProperties();
         props.getQuery().setDeepPaginationOffsetLimit(500);
-        props.getQuery().setDefaultTimeoutSeconds(60);
         MyJpaPlusAutoConfiguration config = new MyJpaPlusAutoConfiguration(props, null);
         var template = config.myJpaTemplate(props);
         assertNotNull(template);
     }
 
     @Test
-    void myJpaTemplate_limitNegativeTimeoutPositive() {
+    void myJpaTemplate_limitNegative() {
         MyJpaPlusProperties props = new MyJpaPlusProperties();
         props.getQuery().setDeepPaginationOffsetLimit(-1);
-        props.getQuery().setDefaultTimeoutSeconds(60);
         MyJpaPlusAutoConfiguration config = new MyJpaPlusAutoConfiguration(props, null);
         var template = config.myJpaTemplate(props);
         assertNotNull(template);
     }
 
     @Test
-    void myJpaTemplate_limitPositiveTimeoutNegative1() {
+    void myJpaTemplate_limitPositiveDeep() {
         MyJpaPlusProperties props = new MyJpaPlusProperties();
         props.getQuery().setDeepPaginationOffsetLimit(500);
-        props.getQuery().setDefaultTimeoutSeconds(-1);
         MyJpaPlusAutoConfiguration config = new MyJpaPlusAutoConfiguration(props, null);
         var template = config.myJpaTemplate(props);
         assertNotNull(template);
@@ -225,8 +220,6 @@ class AutoconfigureCoverageGapTest {
         assertEquals(10000, props.getQuery().getInClauseHardLimit());
         props.getQuery().setLambdaCacheSize(8192);
         assertEquals(8192, props.getQuery().getLambdaCacheSize());
-        props.getQuery().setDefaultTimeoutSeconds(60);
-        assertEquals(60, props.getQuery().getDefaultTimeoutSeconds());
         props.getQuery().setMaxBulkOperationRows(5000);
         assertEquals(5000, props.getQuery().getMaxBulkOperationRows());
         props.getQuery().setExtraSafeFunctions(List.of("F1", "F2"));
@@ -261,7 +254,6 @@ class AutoconfigureCoverageGapTest {
         q.setInClauseMaxSize(100);
         q.setInClauseHardLimit(1000);
         q.setLambdaCacheSize(100);
-        q.setDefaultTimeoutSeconds(30);
         q.setMaxBulkOperationRows(100);
         assertDoesNotThrow(q::validate);
     }

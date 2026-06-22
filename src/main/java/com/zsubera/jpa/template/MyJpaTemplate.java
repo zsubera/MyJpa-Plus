@@ -5,10 +5,10 @@ import com.zsubera.jpa.spec.QuerySpec;
 import com.zsubera.jpa.update.DeleteSpec;
 import com.zsubera.jpa.update.UpdateSpec;
 import com.zsubera.jpa.util.EntityGraphHelper;
-import com.zsubera.jpa.util.QueryTimeoutHelper;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.EntityManagerFactory;
 import jakarta.persistence.PersistenceContext;
+import org.springframework.transaction.PlatformTransactionManager;
 import jakarta.persistence.TypedQuery;
 import jakarta.persistence.criteria.CriteriaBuilder;
 import jakarta.persistence.criteria.CriteriaQuery;
@@ -127,9 +127,6 @@ public class MyJpaTemplate implements MyJpaTemplateOperations {
     /** 批量操作最大影响行数限制。默认 10000，{@code DISABLED} 表示不限制。 */
     private volatile int maxBulkOperationRows = DEFAULT_MAX_BULK_OPERATION_ROWS;
 
-    /** 查询默认超时时间（秒）。设置后所有查询将自动应用此超时。默认 -1 表示不设置。 */
-    private volatile int defaultTimeoutSeconds = -1;
-
     /** 缓存适配器，支持可插拔的缓存后端（本地、Redis 等）。 */
     @Autowired(required = false)
     private CacheAdapter cacheAdapter;
@@ -237,37 +234,6 @@ public class MyJpaTemplate implements MyJpaTemplateOperations {
     }
 
     /**
-     * 设置查询默认超时时间（秒）。设置后所有查询将自动应用此超时。
-     *
-     * <p>
-     * 设置为 {@code -1} 表示不设置默认超时。
-     *
-     * @param defaultTimeoutSeconds 查询超时秒数，或 {@code -1} 表示不设置
-     * @throws IllegalArgumentException 如果值不是正数且不等于 -1
-     */
-    public void setDefaultTimeoutSeconds(int defaultTimeoutSeconds) {
-        if (defaultTimeoutSeconds <= 0 && defaultTimeoutSeconds != -1) {
-            throw new IllegalArgumentException("defaultTimeoutSeconds must be positive or -1 (disabled)");
-        }
-        // 转换为毫秒时防止溢出（int 最大值约 24.8 天）
-        if (defaultTimeoutSeconds > Integer.MAX_VALUE / 1000) {
-            throw new IllegalArgumentException("defaultTimeoutSeconds too large for millisecond conversion: "
-                + defaultTimeoutSeconds + " (max " + (Integer.MAX_VALUE / 1000) + ")");
-        }
-        this.defaultTimeoutSeconds = defaultTimeoutSeconds;
-        com.zsubera.jpa.util.QueryTimeoutHelper.setDefaultTimeoutSeconds(defaultTimeoutSeconds);
-    }
-
-    /**
-     * 获取查询默认超时时间（秒）。
-     *
-     * @return 查询超时秒数，-1 表示不设置
-     */
-    public int getDefaultTimeoutSeconds() {
-        return defaultTimeoutSeconds;
-    }
-
-    /**
      * 设置查询缓存管理器。注入后可使用 {@link #findAllCached} 方法。
      *
      * <p>
@@ -316,13 +282,28 @@ public class MyJpaTemplate implements MyJpaTemplateOperations {
      */
     @PostConstruct
     private void initBulkOperationTemplate() {
+        PlatformTransactionManager txManager = resolveTransactionManager();
+        if (txManager == null) {
+            throw new IllegalStateException(
+                "PlatformTransactionManager not available. Cannot initialize batch operation templates. "
+                    + "Ensure @Transactional support is enabled or configure a PlatformTransactionManager bean.");
+        }
         this.bulkOperationTemplate =
-            new BulkOperationTemplate(entityManager, maxBulkOperationRows, entityManagerFactory, applicationContext);
-        /* 事务工具类，用于在新事务中执行批量保存操作。 */
-        TransactionHelper transactionHelper =
-            new TransactionHelper(entityManager, entityManagerFactory, applicationContext);
-        this.batchSaveTemplate = new BatchSaveTemplate(entityManager, transactionHelper);
+            new BulkOperationTemplate(entityManager, maxBulkOperationRows, txManager);
+        this.batchSaveTemplate = new BatchSaveTemplate(entityManager, txManager);
         this.keysetPaginationHelper = new KeysetPaginationHelper(entityManager);
+    }
+
+    private PlatformTransactionManager resolveTransactionManager() {
+        if (applicationContext == null) {
+            return null;
+        }
+        try {
+            return applicationContext.getBean(PlatformTransactionManager.class);
+        } catch (org.springframework.beans.BeansException e) {
+            log.debug("PlatformTransactionManager bean not found: {}", e.getMessage());
+            return null;
+        }
     }
 
     /**
@@ -377,17 +358,11 @@ public class MyJpaTemplate implements MyJpaTemplateOperations {
                 "CacheAdapter not available. " + "Inject a CacheAdapter bean or use MyJpaTemplate.setCacheAdapter().");
         }
         validateQueryParams(entityClass, spec);
-        if (entityClass == null) {
-            throw new IllegalArgumentException("entityClass must not be null");
-        }
-        if (spec == null) {
-            throw new IllegalArgumentException("spec must not be null");
-        }
         if (ttlSeconds < 0) {
             throw new IllegalArgumentException("ttlSeconds must not be negative");
         }
         // 使用 cacheKey() 包含实际参数值，避免不同参数值的查询产生相同的缓存键
-        String cacheKey = entityClass.getSimpleName() + "@" + spec.cacheKey() + "@" + spec.getSort();
+        String cacheKey = entityClass.getName() + "@" + spec.cacheKey() + "@" + spec.getSort();
         List<T> cached = cacheAdapter.get(cacheKey);
         if (cached != null) {
             log.debug("Cache hit for key: {}", cacheKey);
@@ -558,7 +533,6 @@ public class MyJpaTemplate implements MyJpaTemplateOperations {
         }
         TypedQuery<T> query = entityManager.createQuery(cq);
         query.setMaxResults(1);
-        QueryTimeoutHelper.applyTimeout(query);
         List<T> results = query.getResultList();
         return results.isEmpty() ? Optional.empty() : Optional.of(results.get(0));
     }
@@ -584,7 +558,6 @@ public class MyJpaTemplate implements MyJpaTemplateOperations {
         }
         TypedQuery<T> query = entityManager.createQuery(cq);
         query.setMaxResults(1);
-        QueryTimeoutHelper.applyTimeout(query);
         spec.applyQuerySettings(query);
         List<T> results = query.getResultList();
         return results.isEmpty() ? Optional.empty() : Optional.of(results.get(0));
@@ -854,7 +827,6 @@ public class MyJpaTemplate implements MyJpaTemplateOperations {
         }
         TypedQuery<T> query = entityManager.createQuery(cq);
         query.setMaxResults(1);
-        QueryTimeoutHelper.applyTimeout(query);
         List<T> results = query.getResultList();
         return results.isEmpty() ? Optional.empty() : Optional.of(results.get(0));
     }
@@ -918,7 +890,6 @@ public class MyJpaTemplate implements MyJpaTemplateOperations {
         if (maxResults != null) {
             query.setMaxResults(maxResults);
         }
-        QueryTimeoutHelper.applyTimeout(query);
         return query;
     }
 
@@ -1007,7 +978,6 @@ public class MyJpaTemplate implements MyJpaTemplateOperations {
             countCq.where(countPredicate);
         }
         TypedQuery<Long> countQuery = entityManager.createQuery(countCq);
-        QueryTimeoutHelper.applyTimeout(countQuery);
         return countQuery.getSingleResult();
     }
 
@@ -1088,9 +1058,7 @@ public class MyJpaTemplate implements MyJpaTemplateOperations {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public <T> int execute(UpdateSpec<T> spec) {
-        if (spec == null) {
-            throw new IllegalArgumentException("spec must not be null");
-        }
+        requireNonNull(spec);
         int affected = getBulkOperationTemplate().execute(spec);
         publishEntityModifiedEvent(spec.getEntityClass(), affected);
         return affected;
@@ -1106,9 +1074,7 @@ public class MyJpaTemplate implements MyJpaTemplateOperations {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public <T> int execute(DeleteSpec<T> spec) {
-        if (spec == null) {
-            throw new IllegalArgumentException("spec must not be null");
-        }
+        requireNonNull(spec);
         int affected = getBulkOperationTemplate().execute(spec);
         publishEntityModifiedEvent(spec.getEntityClass(), affected);
         return affected;
@@ -1125,12 +1091,16 @@ public class MyJpaTemplate implements MyJpaTemplateOperations {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public <T> int execute(com.zsubera.jpa.update.MergeSpec<T> spec) {
-        if (spec == null) {
-            throw new IllegalArgumentException("spec must not be null");
-        }
+        requireNonNull(spec);
         int affected = getBulkOperationTemplate().execute(spec);
         publishEntityModifiedEvent(spec.getEntityClass(), affected);
         return affected;
+    }
+
+    private static void requireNonNull(Object spec) {
+        if (spec == null) {
+            throw new IllegalArgumentException("spec must not be null");
+        }
     }
 
     /**
@@ -1361,7 +1331,6 @@ public class MyJpaTemplate implements MyJpaTemplateOperations {
         }
         applySort(cq, root, cb, pageable.getSort());
         TypedQuery<T> query = entityManager.createQuery(cq);
-        QueryTimeoutHelper.applyTimeout(query);
         try {
             query.setFirstResult(Math.toIntExact(pageable.getOffset()));
         } catch (ArithmeticException e) {
@@ -1380,10 +1349,21 @@ public class MyJpaTemplate implements MyJpaTemplateOperations {
         List<T> content = query.getResultList();
         boolean hasNext;
         if (maxResultsLimited) {
-            // 当 maxResults 限制了请求行数时：
-            // - 返回行数 == fetchLimit（即 maxResults）→ 可能还有更多数据，保守标记 hasNext=true
-            // - 返回行数 < fetchLimit → 已到达数据末尾，没有下一页
+            // ponytail: maxResults 是硬限制，无法准确判断 hasNext
+            // fetchLimit=maxResults, 结果集被截断到 maxResults 行
+            // 如果 content.size() < fetchLimit，说明数据已取完 → 无下一页
+            // 如果 content.size() == fetchLimit（==maxResults），可能还有更多，
+            //   但无法区分"正好 maxResults 行"和"被截断"，保守标记 hasNext=true
             hasNext = content.size() >= this.maxResults;
+            if (hasNext && content.size() <= pageable.getPageSize()) {
+                // 当 maxResults <= pageSize 时，上面逻辑会误报
+                // 因为取到的行数永远 >= maxResults（等于 pageSize+1 截断后可能刚好等于 maxResults）
+                // 这种情况无法判断，保守返回 true
+                log.warn("findSlice with maxResultsLimited=true " +
+                    "(maxResults={}, pageSize={}) cannot accurately determine hasNext. " +
+                    "Consider increasing maxResults or reducing pageSize.",
+                    this.maxResults, pageable.getPageSize());
+            }
         } else {
             hasNext = content.size() > pageable.getPageSize();
         }
@@ -1422,7 +1402,6 @@ public class MyJpaTemplate implements MyJpaTemplateOperations {
         // 直接传递 ids Collection 以避免不必要的 toArray() 转换
         cq.where(com.zsubera.jpa.util.InClauseBuilder.in(cb, root.get(idFieldName), ids));
         TypedQuery<T> query = entityManager.createQuery(cq);
-        QueryTimeoutHelper.applyTimeout(query);
         return query.getResultList();
     }
 
@@ -1462,7 +1441,6 @@ public class MyJpaTemplate implements MyJpaTemplateOperations {
             cq.where(predicate);
         }
         TypedQuery<T> query = entityManager.createQuery(cq);
-        QueryTimeoutHelper.applyTimeout(query);
         return query.getResultList();
     }
 

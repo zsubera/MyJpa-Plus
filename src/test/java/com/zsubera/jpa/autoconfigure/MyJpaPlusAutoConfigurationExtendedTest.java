@@ -32,7 +32,6 @@ class MyJpaPlusAutoConfigurationExtendedTest {
         MyJpaPlusProperties props = new MyJpaPlusProperties();
         props.getSoftDelete().setAutoFilter(false);
         props.getSoftDelete().setBlockUnconditionalDelete(false);
-        props.getQuery().setDefaultTimeoutSeconds(60);
         props.getQuery().setMaxResults(5000);
         props.getQuery().setMaxBulkOperationRows(2000);
         props.getQuery().setDeepPaginationOffsetThreshold(50000);
@@ -43,7 +42,6 @@ class MyJpaPlusAutoConfigurationExtendedTest {
 
         assertFalse(globalConfig.isSoftDeleteAutoFilter());
         assertFalse(globalConfig.isBlockUnconditionalDelete());
-        assertEquals(60, globalConfig.getDefaultTimeoutSeconds());
         assertEquals(5000, globalConfig.getMaxResults());
         assertEquals(2000, globalConfig.getMaxBulkOperationRows());
         assertEquals(50000, globalConfig.getDeepPaginationOffsetThreshold());
@@ -51,10 +49,9 @@ class MyJpaPlusAutoConfigurationExtendedTest {
     }
 
     @Test
-    void myJpaTemplate_withLimitAndTimeout() {
+    void myJpaTemplate_withLimit() {
         MyJpaPlusProperties props = new MyJpaPlusProperties();
         props.getQuery().setDeepPaginationOffsetLimit(500);
-        props.getQuery().setDefaultTimeoutSeconds(60);
 
         MyJpaPlusAutoConfiguration config = new MyJpaPlusAutoConfiguration(props, null);
         MyJpaTemplate template = config.myJpaTemplate(props);
@@ -64,7 +61,6 @@ class MyJpaPlusAutoConfigurationExtendedTest {
     @Test
     void myJpaTemplate_defaultTimeoutDisabled() {
         MyJpaPlusProperties props = new MyJpaPlusProperties();
-        props.getQuery().setDefaultTimeoutSeconds(-1);
 
         MyJpaPlusAutoConfiguration config = new MyJpaPlusAutoConfiguration(props, null);
         MyJpaTemplate template = config.myJpaTemplate(props);
@@ -96,10 +92,10 @@ class MyJpaPlusAutoConfigurationExtendedTest {
     }
 
     @Test
-    void auditEntityListener_returnsNonNull() {
+    void auditorAware_returnsNonNull() {
         MyJpaPlusProperties props = new MyJpaPlusProperties();
         MyJpaPlusAutoConfiguration config = new MyJpaPlusAutoConfiguration(props, null);
-        assertNotNull(config.auditEntityListener());
+        assertNotNull(config.auditorAware());
     }
 
     @Test
@@ -186,18 +182,18 @@ class MyJpaPlusAutoConfigurationExtendedTest {
     }
 
     @Test
-    void securityContextAuditUserProvider_getCurrentUser_returnsAnonymous() {
-        MyJpaPlusAutoConfiguration.SecurityContextAuditUserProvider provider =
-            new MyJpaPlusAutoConfiguration.SecurityContextAuditUserProvider();
-        assertEquals("ANONYMOUS", provider.getCurrentUser());
+    void SecurityContextAuditorAware_getCurrentUser_returnsAnonymous() {
+        MyJpaPlusAutoConfiguration.SecurityContextAuditorAware provider =
+            new MyJpaPlusAutoConfiguration.SecurityContextAuditorAware();
+        assertEquals("SYSTEM", provider.getCurrentAuditor().get());
     }
 
     @Test
-    void securityContextAuditUserProvider_getCurrentUser_withSecurityContext() {
-        MyJpaPlusAutoConfiguration.SecurityContextAuditUserProvider provider =
-            new MyJpaPlusAutoConfiguration.SecurityContextAuditUserProvider();
-        // Without Spring Security on classpath, should return ANONYMOUS
-        assertEquals("ANONYMOUS", provider.getCurrentUser());
+    void SecurityContextAuditorAware_getCurrentUser_withSecurityContext() {
+        MyJpaPlusAutoConfiguration.SecurityContextAuditorAware provider =
+            new MyJpaPlusAutoConfiguration.SecurityContextAuditorAware();
+        // Without Spring Security on classpath, should return SYSTEM
+        assertEquals("SYSTEM", provider.getCurrentAuditor().get());
     }
 
     @Test
@@ -285,7 +281,6 @@ class MyJpaPlusAutoConfigurationExtendedTest {
     @Test
     void myJpaPlusConfigInitializer_timeoutNegative1() {
         MyJpaPlusProperties props = new MyJpaPlusProperties();
-        props.getQuery().setDefaultTimeoutSeconds(-1);
 
         assertDoesNotThrow(() -> new MyJpaPlusAutoConfiguration.MyJpaPlusConfigInitializer(props, null, null));
     }
@@ -398,10 +393,6 @@ class MyJpaPlusAutoConfigurationExtendedTest {
         assertFalse(config.isSoftDeleteAutoFilter());
         config.setBlockUnconditionalDelete(false);
         assertFalse(config.isBlockUnconditionalDelete());
-        config.setDefaultTimeoutSeconds(60);
-        assertEquals(60, config.getDefaultTimeoutSeconds());
-        config.setMaxTimeoutSeconds(600);
-        assertEquals(600, config.getMaxTimeoutSeconds());
         config.setMaxResults(5000);
         assertEquals(5000, config.getMaxResults());
         config.setMaxBulkOperationRows(2000);
@@ -412,10 +403,4 @@ class MyJpaPlusAutoConfigurationExtendedTest {
         assertEquals(1000000, config.getDeepPaginationOffsetLimit());
     }
 
-    @Test
-    void myJpaPlusGlobalConfig_maxTimeoutSeconds_invalid() {
-        MyJpaPlusGlobalConfig config = new MyJpaPlusGlobalConfig();
-        assertThrows(IllegalArgumentException.class, () -> config.setMaxTimeoutSeconds(0));
-        assertThrows(IllegalArgumentException.class, () -> config.setMaxTimeoutSeconds(-1));
-    }
 }

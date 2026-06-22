@@ -121,7 +121,6 @@ class MyJpaPlusAutoConfigurationBranchTest {
     @Test
     void configInitializer_timeoutPositive() {
         MyJpaPlusProperties props = new MyJpaPlusProperties();
-        props.getQuery().setDefaultTimeoutSeconds(60);
 
         assertDoesNotThrow(() -> new MyJpaPlusAutoConfiguration.MyJpaPlusConfigInitializer(props, null, null));
     }
@@ -129,7 +128,6 @@ class MyJpaPlusAutoConfigurationBranchTest {
     @Test
     void configInitializer_timeoutNegative1() {
         MyJpaPlusProperties props = new MyJpaPlusProperties();
-        props.getQuery().setDefaultTimeoutSeconds(-1);
 
         assertDoesNotThrow(() -> new MyJpaPlusAutoConfiguration.MyJpaPlusConfigInitializer(props, null, null));
     }
@@ -137,20 +135,17 @@ class MyJpaPlusAutoConfigurationBranchTest {
     @Test
     void configInitializer_timeoutZero_skipsTimeoutSetting() {
         MyJpaPlusProperties props = new MyJpaPlusProperties();
-        // timeout=0 is invalid for setter, but we test the branch where timeout <= 0 && timeout != -1
-        // The setter throws, so we need to test with a valid value that hits the branch
-        props.getQuery().setDefaultTimeoutSeconds(-1);
 
         assertDoesNotThrow(() -> new MyJpaPlusAutoConfiguration.MyJpaPlusConfigInitializer(props, null, null));
     }
 
     @Test
-    void securityContextAuditUserProvider_returnsAnonymous() {
-        MyJpaPlusAutoConfiguration.SecurityContextAuditUserProvider provider =
-            new MyJpaPlusAutoConfiguration.SecurityContextAuditUserProvider();
+    void SecurityContextAuditorAware_returnsAnonymous() {
+        MyJpaPlusAutoConfiguration.SecurityContextAuditorAware provider =
+            new MyJpaPlusAutoConfiguration.SecurityContextAuditorAware();
 
-        String user = provider.getCurrentUser();
-        assertEquals("ANONYMOUS", user);
+        java.util.Optional<String> user = provider.getCurrentAuditor();
+        assertEquals("SYSTEM", user.get());
     }
 
     @Test
@@ -276,10 +271,10 @@ class MyJpaPlusAutoConfigurationBranchTest {
     }
 
     @Test
-    void autoConfiguration_auditEntityListener() {
+    void autoConfiguration_auditorAware() {
         MyJpaPlusProperties props = new MyJpaPlusProperties();
         MyJpaPlusAutoConfiguration config = new MyJpaPlusAutoConfiguration(props, null);
-        assertNotNull(config.auditEntityListener());
+        assertNotNull(config.auditorAware());
     }
 
     @Test

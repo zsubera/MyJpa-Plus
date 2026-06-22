@@ -63,10 +63,11 @@ public final class PredicateHelper {
                 throw new IllegalArgumentException("start and end must be compatible types, but got "
                     + start.getClass().getName() + " and " + end.getClass().getName());
             }
-            // 使用BigDecimal进行精确的跨数值类型比较，避免精度损失
+            // ponytail: BigDecimal.valueOf(double) uses Double.toString() internally,
+            // handling floating-point values correctly without locale risk
             try {
-                java.math.BigDecimal startDecimal = new java.math.BigDecimal(start.toString());
-                java.math.BigDecimal endDecimal = new java.math.BigDecimal(end.toString());
+                java.math.BigDecimal startDecimal = java.math.BigDecimal.valueOf(((Number)start).doubleValue());
+                java.math.BigDecimal endDecimal = java.math.BigDecimal.valueOf(((Number)end).doubleValue());
                 if (startDecimal.compareTo(endDecimal) > 0) {
                     throw new IllegalArgumentException("start must not be greater than end");
                 }

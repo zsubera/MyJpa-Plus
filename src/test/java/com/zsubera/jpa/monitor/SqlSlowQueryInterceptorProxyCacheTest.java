@@ -61,16 +61,16 @@ class SqlSlowQueryInterceptorProxyCacheTest {
     }
 
     /**
-     * 测试代理类缓存驱逐使用 synchronized 块保证线程安全。
+     * 测试代理类缓存驱逐使用 ReentrantLock 保证线程安全。
      */
     @Test
-    void proxyClassCacheEvictionShouldUseSynchronized() {
+    void proxyClassCacheEvictionShouldUseLock() {
         try {
-            // 验证驱逐逻辑使用 synchronized 块而非 ReentrantLock
-            // 通过检查 wrapPreparedStatement 方法源码确认使用 synchronized(PROXY_CLASS_CACHE)
-            java.lang.reflect.Method method = SlowQueryDataSourceProxy.DataSourceProxyHandler.class
-                .getDeclaredMethod("wrapPreparedStatement", Object.class, String.class);
-            assertNotNull(method, "wrapPreparedStatement method should exist");
+            java.lang.reflect.Field lockField = SlowQueryDataSourceProxy.class.getDeclaredField("CACHE_LOCK");
+            lockField.setAccessible(true);
+            Object lock = lockField.get(null);
+            assertInstanceOf(java.util.concurrent.locks.ReentrantLock.class, lock,
+                "CACHE_LOCK should be a ReentrantLock");
         } catch (Exception e) {
             fail("Failed to verify eviction mechanism: " + e.getMessage());
         }

@@ -113,7 +113,6 @@ class AutoconfigureExtendedCoverageTest {
         props.getQuery().setMaxResults(5000);
         props.getQuery().setDeepPaginationOffsetThreshold(50000);
         props.getQuery().setDeepPaginationOffsetLimit(1000000);
-        props.getQuery().setDefaultTimeoutSeconds(60);
         MyJpaPlusAutoConfiguration config = new MyJpaPlusAutoConfiguration(props, null);
         assertNotNull(config.myJpaTemplate(props));
     }
@@ -130,7 +129,6 @@ class AutoconfigureExtendedCoverageTest {
         MyJpaPlusProperties props = new MyJpaPlusProperties();
         props.getSoftDelete().setAutoFilter(false);
         props.getSoftDelete().setBlockUnconditionalDelete(false);
-        props.getQuery().setDefaultTimeoutSeconds(60);
         props.getQuery().setMaxResults(5000);
         props.getQuery().setMaxBulkOperationRows(2000);
         props.getQuery().setDeepPaginationOffsetThreshold(50000);
@@ -139,7 +137,6 @@ class AutoconfigureExtendedCoverageTest {
         MyJpaPlusGlobalConfig globalConfig = config.myJpaPlusGlobalConfig(props);
         assertFalse(globalConfig.isSoftDeleteAutoFilter());
         assertFalse(globalConfig.isBlockUnconditionalDelete());
-        assertEquals(60, globalConfig.getDefaultTimeoutSeconds());
         assertEquals(5000, globalConfig.getMaxResults());
         assertEquals(2000, globalConfig.getMaxBulkOperationRows());
         assertEquals(50000, globalConfig.getDeepPaginationOffsetThreshold());
@@ -165,7 +162,6 @@ class AutoconfigureExtendedCoverageTest {
     @Test
     void configInitializer_timeoutZero() {
         MyJpaPlusProperties props = new MyJpaPlusProperties();
-        props.getQuery().setDefaultTimeoutSeconds(-1);
         assertDoesNotThrow(() -> new MyJpaPlusAutoConfiguration.MyJpaPlusConfigInitializer(props, null, null));
     }
 
@@ -176,7 +172,7 @@ class AutoconfigureExtendedCoverageTest {
         assertNotNull(config.myJpaPlusGlobalConfig(props));
         assertNotNull(config.myJpaTemplate(props));
         assertNotNull(config.queryCacheManager());
-        assertNotNull(config.auditEntityListener());
+        assertNotNull(config.auditorAware());
         assertNotNull(config.cacheInvalidationListener(config.queryCacheManager()));
     }
 
@@ -188,10 +184,10 @@ class AutoconfigureExtendedCoverageTest {
     }
 
     @Test
-    void securityContextAuditUserProvider_coverage() {
-        MyJpaPlusAutoConfiguration.SecurityContextAuditUserProvider provider =
-            new MyJpaPlusAutoConfiguration.SecurityContextAuditUserProvider();
-        assertEquals("ANONYMOUS", provider.getCurrentUser());
+    void SecurityContextAuditorAware_coverage() {
+        MyJpaPlusAutoConfiguration.SecurityContextAuditorAware provider =
+            new MyJpaPlusAutoConfiguration.SecurityContextAuditorAware();
+        assertEquals("SYSTEM", provider.getCurrentAuditor().get());
     }
 
     @Test
@@ -244,7 +240,6 @@ class AutoconfigureExtendedCoverageTest {
         q.setInClauseMaxSize(500);
         q.setInClauseHardLimit(1000);
         q.setLambdaCacheSize(1024);
-        q.setDefaultTimeoutSeconds(30);
         q.setMaxBulkOperationRows(5000);
         q.setExtraSafeFunctions(List.of("FUNC1"));
         q.setExtraBooleanFunctions(List.of("BFUNC1"));

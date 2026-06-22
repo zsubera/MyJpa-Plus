@@ -146,6 +146,7 @@ public class EncryptConverter implements AttributeConverter<String, String> {
             if (executor != null) {
                 executor.shutdownNow();
             }
+            CIPHER_THREAD_LOCAL.remove();
         }, "encrypt-key-warmup-shutdown"));
     }
 

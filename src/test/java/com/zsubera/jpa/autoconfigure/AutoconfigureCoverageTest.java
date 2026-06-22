@@ -77,15 +77,15 @@ class AutoconfigureCoverageTest {
         }
     }
 
-    // ---- SecurityContextAuditUserProvider: reflection paths ----
+    // ---- SecurityContextAuditorAware: reflection paths ----
 
     @Test
-    void securityContextAuditUserProvider_reflectionPaths() {
-        MyJpaPlusAutoConfiguration.SecurityContextAuditUserProvider provider =
-            new MyJpaPlusAutoConfiguration.SecurityContextAuditUserProvider();
-        String user = provider.getCurrentUser();
+    void SecurityContextAuditorAware_reflectionPaths() {
+        MyJpaPlusAutoConfiguration.SecurityContextAuditorAware provider =
+            new MyJpaPlusAutoConfiguration.SecurityContextAuditorAware();
+        java.util.Optional<String> user = provider.getCurrentAuditor();
         assertNotNull(user);
-        assertEquals("ANONYMOUS", user);
+        assertEquals("SYSTEM", user.get());
     }
 
     // ---- DataSourceSlowQueryProxyPostProcessor: isAlreadyWrapped ----
@@ -259,7 +259,7 @@ class AutoconfigureCoverageTest {
 
         assertNotNull(config.myJpaTemplate(props));
         assertNotNull(config.queryCacheManager());
-        assertNotNull(config.auditEntityListener());
+        assertNotNull(config.auditorAware());
         assertNotNull(config.cacheInvalidationListener(config.queryCacheManager()));
     }
 

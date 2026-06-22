@@ -25,9 +25,8 @@ class BatchSaveTemplateTest {
     static class TestConfig {
         @Bean
         public BatchSaveTemplate batchSaveTemplate(jakarta.persistence.EntityManager entityManager,
-            org.springframework.context.ApplicationContext applicationContext) {
-            TransactionHelper txHelper = new TransactionHelper(entityManager, null, applicationContext);
-            return new BatchSaveTemplate(entityManager, txHelper);
+            org.springframework.transaction.PlatformTransactionManager txManager) {
+            return new BatchSaveTemplate(entityManager, txManager);
         }
     }
 

@@ -136,13 +136,6 @@ class MyJpaPlusPropertiesExtendedTest {
     }
 
     @Test
-    void query_setDefaultTimeoutSeconds_invalid() {
-        MyJpaPlusProperties.Query q = new MyJpaPlusProperties.Query();
-        assertThrows(IllegalArgumentException.class, () -> q.setDefaultTimeoutSeconds(0));
-        assertThrows(IllegalArgumentException.class, () -> q.setDefaultTimeoutSeconds(-2));
-    }
-
-    @Test
     void query_setMaxBulkOperationRows_invalid() {
         MyJpaPlusProperties.Query q = new MyJpaPlusProperties.Query();
         assertThrows(IllegalArgumentException.class, () -> q.setMaxBulkOperationRows(-1));

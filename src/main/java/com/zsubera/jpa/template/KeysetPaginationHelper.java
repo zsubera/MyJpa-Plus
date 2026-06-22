@@ -1,6 +1,5 @@
 package com.zsubera.jpa.template;
 
-import com.zsubera.jpa.util.QueryTimeoutHelper;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.criteria.CriteriaBuilder;
 import jakarta.persistence.criteria.CriteriaQuery;
@@ -117,7 +116,6 @@ final class KeysetPaginationHelper {
 
         // 多查一条以判断是否有下一页
         jakarta.persistence.TypedQuery<T> query = entityManager.createQuery(cq);
-        QueryTimeoutHelper.applyTimeout(query);
         query.setMaxResults(pageSize + 1);
         List<T> results = query.getResultList();
         boolean hasNext = results.size() > pageSize;

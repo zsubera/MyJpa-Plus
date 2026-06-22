@@ -1,7 +1,6 @@
 package com.zsubera.jpa.spec;
 
 import com.zsubera.jpa.util.IdentifierValidator;
-import com.zsubera.jpa.util.QueryTimeoutHelper;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.Query;
 import java.util.ArrayList;
@@ -370,7 +369,6 @@ public class CteSpec {
         String sql = buildSql();
         log.debug("CteSpec: executing native query (length={})", sql.length());
         Query query = em.createNativeQuery(sql);
-        QueryTimeoutHelper.applyTimeout(query);
         applyParameters(query);
         List<?> rawResults = query.getResultList();
         List<Object[]> results = new ArrayList<>();
@@ -400,7 +398,6 @@ public class CteSpec {
         String sql = buildSql();
         log.debug("CteSpec: executing native query for single result (length={})", sql.length());
         Query query = em.createNativeQuery(sql);
-        QueryTimeoutHelper.applyTimeout(query);
         applyParameters(query);
         List<?> results = query.getResultList();
         if (results.isEmpty()) {
@@ -442,7 +439,6 @@ public class CteSpec {
         String sql = buildSql();
         log.debug("CteSpec: executing native stream query (length={})", sql.length());
         Query query = em.createNativeQuery(sql);
-        QueryTimeoutHelper.applyTimeout(query);
         applyParameters(query);
         // 设置 fetchSize 以支持流式查询，避免 PostgreSQL 驱动将整个结果集加载到内存
         applyFetchSize(em, query);

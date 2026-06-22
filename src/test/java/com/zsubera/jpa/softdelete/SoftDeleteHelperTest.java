@@ -290,14 +290,12 @@ class SoftDeleteHelperTest {
 
     @Test
     void testIsNotDeletedWithNullClass() {
-        // findSoftDeleteField throws NPE when entityClass is null
-        assertThrows(NullPointerException.class, () -> SoftDeleteHelper.isNotDeleted(null));
+        assertThrows(IllegalArgumentException.class, () -> SoftDeleteHelper.isNotDeleted(null));
     }
 
     @Test
     void testIsDeletedWithNullClass() {
-        // findSoftDeleteField throws NPE when entityClass is null
-        assertThrows(NullPointerException.class, () -> SoftDeleteHelper.isDeleted(null));
+        assertThrows(IllegalArgumentException.class, () -> SoftDeleteHelper.isDeleted(null));
     }
 
     @Test

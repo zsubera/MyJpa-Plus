@@ -4,7 +4,6 @@ import com.zsubera.jpa.exception.MyJpaPlusException;
 import com.zsubera.jpa.spec.SFunction;
 import com.zsubera.jpa.util.IdentifierValidator;
 import com.zsubera.jpa.util.LambdaUtils;
-import com.zsubera.jpa.util.QueryTimeoutHelper;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.EntityTransaction;
 import java.util.ArrayList;
@@ -222,7 +221,6 @@ public class MergeSpec<T> {
 
     private int executeNativeQuery(EntityManager em, String sql, List<Object> params) {
         var query = em.createNativeQuery(sql);
-        QueryTimeoutHelper.applyTimeout(query);
         for (int i = 0; i < params.size(); i++) {
             query.setParameter(i + 1, params.get(i));
         }

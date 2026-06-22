@@ -111,9 +111,20 @@ public final class FunctionWhitelist {
     public static void freezeExtraFunctionNames() {
         Set<String> safeSnapshot = Set.copyOf(EXTRA_SAFE_FUNCTION_NAMES);
         Set<String> boolSnapshot = Set.copyOf(EXTRA_BOOLEAN_FUNCTION_NAMES);
-        FROZEN_EXTRA_SAFE_FUNCTION_NAMES
-            .updateAndGet(current -> current.size() >= safeSnapshot.size() ? current : safeSnapshot);
-        FROZEN_EXTRA_BOOLEAN_FUNCTION_NAMES
-            .updateAndGet(current -> current.size() >= boolSnapshot.size() ? current : boolSnapshot);
+        FROZEN_EXTRA_SAFE_FUNCTION_NAMES.set(safeSnapshot);
+        FROZEN_EXTRA_BOOLEAN_FUNCTION_NAMES.set(boolSnapshot);
+    }
+
+    /**
+     * 重置所有状态为初始值。用于测试隔离，防止跨测试的状态污染。
+     *
+     * <p>
+     * 调用此方法后，所有扩展函数名和冻结快照都被清除。
+     */
+    public static void reset() {
+        EXTRA_SAFE_FUNCTION_NAMES.clear();
+        EXTRA_BOOLEAN_FUNCTION_NAMES.clear();
+        FROZEN_EXTRA_SAFE_FUNCTION_NAMES.set(Set.of());
+        FROZEN_EXTRA_BOOLEAN_FUNCTION_NAMES.set(Set.of());
     }
 }

@@ -61,15 +61,6 @@
         <Bug pattern="CT_CONSTRUCTOR_THROW"/>
     </Match>
 
-    <!-- Exclude ST_WRITE_TO_STATIC_FROM_INSTANCE_METHOD for AuditEntityListener -->
-    <!-- setApplicationContext() writes to a static volatile field by design: Spring calls this method
-         on a single instance to initialize the static context for use in @PrePersist/@PreUpdate callbacks.
-         The field is declared volatile to ensure visibility across threads. -->
-    <Match>
-        <Class name="com.zsubera.jpa.annotation.AuditEntityListener"/>
-        <Bug pattern="ST_WRITE_TO_STATIC_FROM_INSTANCE_METHOD"/>
-    </Match>
-
     <!-- Exclude EI_EXPOSE_REP for MyJpaTemplate cacheManager -->
     <!-- The cacheManager is intentionally exposed for external configuration and management -->
     <Match>
@@ -119,6 +110,14 @@
         <Bug pattern="ST_WRITE_TO_STATIC_FROM_INSTANCE_METHOD"/>
     </Match>
 
+    <!-- Exclude REC_CATCH_EXCEPTION for SecurityContextAuditorAware -->
+    <!-- initSecurityReflection() catches Exception to handle ClassNotFoundException,
+         NoSuchMethodException, IllegalAccessException etc. from reflection API. -->
+    <Match>
+        <Class name="com.zsubera.jpa.autoconfigure.MyJpaPlusAutoConfiguration$SecurityContextAuditorAware"/>
+        <Bug pattern="REC_CATCH_EXCEPTION"/>
+    </Match>
+
     <!-- Exclude JLM_JSR166_UTILCONCURRENT_MONITORENTER for SqlSlowQueryInterceptor -->
     <!-- Synchronization on PROXY_CLASS_CACHE (ConcurrentMap) is intentional: double-checked locking
          for periodic cache eviction. The synchronized block only triggers when cache exceeds threshold. -->
@@ -152,5 +151,21 @@
     <Match>
         <Class name="com.zsubera.jpa.update.EntityFieldExtractor"/>
         <Bug pattern="REC_CATCH_EXCEPTION"/>
+    </Match>
+
+    <!-- Exclude JLM_JSR166_UTILCONCURRENT_MONITORENTER for EncryptConverter -->
+    <!-- getOrCreateWarmUpExecutor() uses synchronized on AtomicReference to ensure
+         thread-safe lazy initialization. This is intentional. -->
+    <Match>
+        <Class name="com.zsubera.jpa.converter.EncryptConverter"/>
+        <Bug pattern="JLM_JSR166_UTILCONCURRENT_MONITORENTER"/>
+    </Match>
+
+    <!-- Exclude RCN_REDUNDANT_NULLCHECK_OF_NONNULL_VALUE for DefaultMyJpaRepository -->
+    <!-- resolveGlobalConfig() null-checks the result from GlobalConfigHolder.getConfig();
+         the holder may return null in edge cases. The check is defensive. -->
+    <Match>
+        <Class name="com.zsubera.jpa.repository.DefaultMyJpaRepository"/>
+        <Bug pattern="RCN_REDUNDANT_NULLCHECK_OF_NONNULL_VALUE"/>
     </Match>
 </FindBugsFilter>

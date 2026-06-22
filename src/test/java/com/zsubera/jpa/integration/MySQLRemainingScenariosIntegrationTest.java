@@ -26,7 +26,7 @@ import org.springframework.transaction.annotation.Transactional;
 /**
  * Integration tests for remaining uncovered scenarios:
  * <ul>
- *   <li>TransactionHelper: executeInNewTransaction with/without active tx</li>
+ *   <li>executeInSeparateTransaction with/without active tx</li>
  *   <li>CacheInvalidationListener: cache eviction via ApplicationEventPublisher</li>
  *   <li>EntityModifiedEvent: event construction and metadata</li>
  *   <li>PageableHelper: determineFetchSize for MySQL</li>
@@ -61,11 +61,11 @@ class MySQLRemainingScenariosIntegrationTest {
         cacheManager.clear();
     }
 
-    // ==================== TransactionHelper ====================
+    // ==================== executeInSeparateTransaction ====================
 
     @Test
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
-    void transactionHelper_executeInNewTransaction_withoutActiveTx() {
+    void executeInSeparateTransaction_withoutActiveTx() {
         save("before", 1);
 
         int updated = jpaTemplate.execute(jpaTemplate.update(MySQLTestEntity.class).set(MySQLTestEntity::getStatus, 10)
@@ -77,7 +77,7 @@ class MySQLRemainingScenariosIntegrationTest {
     }
 
     @Test
-    void transactionHelper_executeInNewTransaction_withActiveTx() {
+    void executeInSeparateTransaction_withActiveTx() {
         save("before", 1);
 
         int updated = jpaTemplate.execute(jpaTemplate.update(MySQLTestEntity.class).set(MySQLTestEntity::getStatus, 20)
@@ -87,7 +87,7 @@ class MySQLRemainingScenariosIntegrationTest {
 
     @Test
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
-    void transactionHelper_multipleSeparateTransactions() {
+    void multipleSeparateTransactions() {
         for (int i = 0; i < 5; i++) {
             save("tx_" + i, i);
         }

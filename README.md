@@ -273,7 +273,6 @@ myjpa-plus:
     deep-pagination-offset-limit: -1      # 深度分页硬限制（-1 禁用）
     in-clause-max-size: 1000              # IN 子句最大参数数量
     in-clause-hard-limit: 5000            # IN 子句硬限制
-    default-timeout-seconds: 30           # 查询超时（秒），-1 禁用
     max-bulk-operation-rows: 10000        # 批量操作最大影响行数（0 禁用）
     lambda-cache-size: 4096               # Lambda 属性名缓存大小
     extra-safe-functions:                 # 扩展安全函数白名单

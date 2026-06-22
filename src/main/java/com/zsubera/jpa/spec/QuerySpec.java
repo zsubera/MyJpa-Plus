@@ -353,10 +353,6 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
         if (seconds <= 0) {
             throw new IllegalArgumentException("timeout must be positive, got: " + seconds);
         }
-        int maxTimeout = getGlobalConfig().getMaxTimeoutSeconds();
-        if (seconds > maxTimeout) {
-            throw new IllegalArgumentException("timeout must not exceed " + maxTimeout + " seconds, got: " + seconds);
-        }
         this.queryTimeout = seconds;
         return this;
     }

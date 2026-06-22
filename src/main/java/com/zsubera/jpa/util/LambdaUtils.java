@@ -136,17 +136,14 @@ public final class LambdaUtils {
     private static final Map<Class<?>, Method> METHOD_CACHE = new ConcurrentHashMap<>(METHOD_CACHE_INITIAL_CAPACITY);
 
     /**
-     * 关闭后台清理线程。在应用关闭或热部署环境中应调用此方法以确保资源正确释放。
+     * 释放缓存资源。在应用关闭或热部署环境中应调用此方法以确保资源正确释放。
      *
      * <p>
-     * 已在 {@code MyJpaPlusAutoConfiguration} 中通过 {@code DisposableBean} 自动注册关闭钩子。
-     *
-     * <p>
-     * 当前实现为空操作，因为主缓存使用 {@link ConcurrentHashMap} 的近似 FIFO 驱逐策略（通过 {@link #evictCacheIfNeeded()} 自动清理）， METHOD_CACHE
-     * 的清理已在 {@link #evictMethodCacheIfNeeded()} 中自动处理。
+     * 已在 {@code MyJpaPlusAutoConfiguration} 中通过 {@code ContextClosedEvent} 自动注册关闭钩子。
      */
     public static void shutdown() {
-        // 空操作：主缓存使用 ConcurrentHashMap 近似 FIFO 自动驱逐，METHOD_CACHE 通过 evictMethodCacheIfNeeded() 自动清理
+        CACHE.clear();
+        METHOD_CACHE.clear();
     }
 
     private LambdaUtils() {}

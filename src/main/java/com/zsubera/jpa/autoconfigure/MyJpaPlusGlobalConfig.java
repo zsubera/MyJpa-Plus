@@ -22,12 +22,6 @@ public class MyJpaPlusGlobalConfig {
     /** 是否阻断无条件硬删除。 */
     private volatile boolean blockUnconditionalDelete = true;
 
-    /** 查询超时默认时间（秒），-1 表示不设置。 */
-    private volatile int defaultTimeoutSeconds = 30;
-
-    /** 查询超时上限（秒）。 */
-    private volatile int maxTimeoutSeconds = 300;
-
     /** 查询最大返回行数。 */
     private volatile int maxResults = 10000;
 
@@ -56,31 +50,6 @@ public class MyJpaPlusGlobalConfig {
 
     public void setBlockUnconditionalDelete(boolean blockUnconditionalDelete) {
         this.blockUnconditionalDelete = blockUnconditionalDelete;
-    }
-
-    // ---- Query Timeout ----
-
-    public int getDefaultTimeoutSeconds() {
-        return defaultTimeoutSeconds;
-    }
-
-    public void setDefaultTimeoutSeconds(int defaultTimeoutSeconds) {
-        if (defaultTimeoutSeconds < -1) {
-            throw new IllegalArgumentException(
-                "defaultTimeoutSeconds must be -1 (disabled) or non-negative, got: " + defaultTimeoutSeconds);
-        }
-        this.defaultTimeoutSeconds = defaultTimeoutSeconds;
-    }
-
-    public int getMaxTimeoutSeconds() {
-        return maxTimeoutSeconds;
-    }
-
-    public void setMaxTimeoutSeconds(int maxTimeoutSeconds) {
-        if (maxTimeoutSeconds <= 0) {
-            throw new IllegalArgumentException("maxTimeoutSeconds must be positive");
-        }
-        this.maxTimeoutSeconds = maxTimeoutSeconds;
     }
 
     // ---- Query Limits ----

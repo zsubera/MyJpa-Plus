@@ -49,12 +49,6 @@
       "defaultValue": 4096
     },
     {
-      "name": "myjpa-plus.query.default-timeout-seconds",
-      "type": "java.lang.Integer",
-      "description": "Default query timeout in seconds. Set to -1 to disable.",
-      "defaultValue": 30
-    },
-    {
       "name": "myjpa-plus.query.max-bulk-operation-rows",
       "type": "java.lang.Integer",
       "description": "Maximum rows affected by bulk operations. Set to 0 to disable.",

@@ -3,6 +3,8 @@ package com.zsubera.jpa.template;
 import jakarta.persistence.EntityManager;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -44,11 +46,31 @@ class BatchSaveTemplate {
     }
 
     private final EntityManager entityManager;
-    private final TransactionHelper transactionHelper;
+    private final TransactionTemplate requiredTxTemplate;
+    private final TransactionTemplate requiresNewTxTemplate;
 
-    BatchSaveTemplate(EntityManager entityManager, TransactionHelper transactionHelper) {
+    BatchSaveTemplate(EntityManager entityManager,
+        org.springframework.transaction.PlatformTransactionManager txManager) {
         this.entityManager = entityManager;
-        this.transactionHelper = transactionHelper;
+        this.requiredTxTemplate = new TransactionTemplate(txManager);
+        this.requiredTxTemplate.setPropagationBehavior(
+            org.springframework.transaction.TransactionDefinition.PROPAGATION_REQUIRED);
+        this.requiresNewTxTemplate = new TransactionTemplate(txManager);
+        this.requiresNewTxTemplate.setPropagationBehavior(
+            org.springframework.transaction.TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+    }
+
+    private <R> R executeInNewTransaction(java.util.function.Function<EntityManager, R> operation) {
+        TransactionTemplate template = TransactionSynchronizationManager.isActualTransactionActive()
+            ? requiresNewTxTemplate : requiredTxTemplate;
+        return template.execute(status -> {
+            R r = operation.apply(entityManager);
+            if (status.isRollbackOnly()) {
+                throw new org.springframework.transaction.UnexpectedRollbackException(
+                    "Transaction was unexpectedly rolled back.");
+            }
+            return r;
+        });
     }
 
     /**
@@ -144,7 +166,7 @@ class BatchSaveTemplate {
     }
 
     private <T> List<T> executeBatchSave(List<T> batch) {
-        return transactionHelper.executeInNewTransaction(em -> {
+        return executeInNewTransaction(em -> {
             ArrayList<T> batchRes = new ArrayList<>();
             for (T e : batch) {
                 if (isNewEntity(e)) {

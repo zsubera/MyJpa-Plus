@@ -63,8 +63,13 @@ public final class SqlSanitizer {
         Pattern.compile("\\$\\$(?:(?!\\$\\$)[\\s\\S])*\\$\\$|\\$(\\w+)\\$(?:(?!\\$\\1\\$)[\\s\\S])*\\$\\1\\$",
             Pattern.CASE_INSENSITIVE);
 
-    /** Oracle Q 引用字符串模式，支持所有标准分隔符对：[](){}<>'以及单字符分隔符 q'!..!' 等 */
-    private static final Pattern Q_QUOTE_PATTERN = Pattern.compile("q'(.)[\\s\\S]*?'\\1", Pattern.CASE_INSENSITIVE);
+    /** Oracle Q 引用 bracket 对分隔符模式：q'[...]', q'(...)', q'{...}', q'<...>' */
+    private static final Pattern Q_QUOTE_BRACKET_PATTERN =
+        Pattern.compile("q'([\\[({<])[\\s\\S]*?\\1'", Pattern.CASE_INSENSITIVE);
+
+    /** Oracle Q 引用单字符分隔符模式：q'!...!' 等（排除 bracket 和空白） */
+    private static final Pattern Q_QUOTE_CHAR_PATTERN =
+        Pattern.compile("q'([^\\[({<\\s])[\\s\\S]*?\\1'", Pattern.CASE_INSENSITIVE);
 
     /**
      * 对 SQL 语句进行脱敏处理，移除可能包含敏感数据的字符串字面量和数字字面量。
@@ -92,7 +97,8 @@ public final class SqlSanitizer {
 
         // 替换各种字符串字面量（顺序重要：带前缀的模式必须在单引号模式之前）
         result = DOLLAR_QUOTE_PATTERN.matcher(result).replaceAll("?"); // PostgreSQL 美元引用字符串
-        result = Q_QUOTE_PATTERN.matcher(result).replaceAll("?"); // Oracle q'[]' 引用字符串
+        result = Q_QUOTE_BRACKET_PATTERN.matcher(result).replaceAll("?"); // Oracle q'[...]' 引用字符串
+        result = Q_QUOTE_CHAR_PATTERN.matcher(result).replaceAll("?"); // Oracle q'x...x' 引用字符串
         result = HEX_LITERAL_PATTERN.matcher(result).replaceAll("?"); // 十六进制字面量（X'...'）
         result = UNICODE_STRING_PATTERN.matcher(result).replaceAll("?"); // Unicode 字符串（N'...'）
         result = SINGLE_QUOTE_PATTERN.matcher(result).replaceAll("?"); // 单引号字符串

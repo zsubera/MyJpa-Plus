@@ -1381,29 +1381,6 @@ class MyJpaTemplateTest {
     }
 
     @Test
-    void testSetDefaultTimeoutSeconds() {
-        template.setDefaultTimeoutSeconds(30);
-        assertEquals(30, template.getDefaultTimeoutSeconds());
-    }
-
-    @Test
-    void testSetDefaultTimeoutSecondsDisabled() {
-        template.setDefaultTimeoutSeconds(-1);
-        assertEquals(-1, template.getDefaultTimeoutSeconds());
-    }
-
-    @Test
-    void testSetDefaultTimeoutSecondsInvalid() {
-        assertThrows(IllegalArgumentException.class, () -> template.setDefaultTimeoutSeconds(0));
-        assertThrows(IllegalArgumentException.class, () -> template.setDefaultTimeoutSeconds(-2));
-    }
-
-    @Test
-    void testSetDefaultTimeoutSecondsOverflow() {
-        assertThrows(IllegalArgumentException.class, () -> template.setDefaultTimeoutSeconds(Integer.MAX_VALUE));
-    }
-
-    @Test
     void testSetMaxBulkOperationRowsAfterInit() {
         assertDoesNotThrow(() -> template.setMaxBulkOperationRows(5000));
     }

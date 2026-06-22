@@ -160,11 +160,6 @@ public class MyJpaPlusProperties {
         private int lambdaCacheSize = 4096;
 
         /**
-         * 查询超时默认时间（秒）。设置后所有查询将自动应用此超时。 设置为 {@code -1} 表示不设置默认超时。 默认值：{@code 30}（30秒）
-         */
-        private int defaultTimeoutSeconds = 30;
-
-        /**
          * 批量操作最大影响行数。超过此限制时将抛出异常，防止意外大规模更新/删除。 设置为 {@code 0} 表示禁用限制。 默认值：{@code 10000}
          */
         private int maxBulkOperationRows = 10000;
@@ -232,11 +227,6 @@ public class MyJpaPlusProperties {
             if (lambdaCacheSize <= 0) {
                 throw new IllegalArgumentException(
                     "myjpa-plus.query.lambda-cache-size must be positive, got: " + lambdaCacheSize);
-            }
-            if (defaultTimeoutSeconds <= 0 && defaultTimeoutSeconds != -1) {
-                throw new IllegalArgumentException(
-                    "myjpa-plus.query.default-timeout-seconds must be positive or -1 (disabled), got: "
-                        + defaultTimeoutSeconds);
             }
             if (maxBulkOperationRows < 0) {
                 throw new IllegalArgumentException(
@@ -310,17 +300,6 @@ public class MyJpaPlusProperties {
             this.lambdaCacheSize = lambdaCacheSize;
         }
 
-        public int getDefaultTimeoutSeconds() {
-            return defaultTimeoutSeconds;
-        }
-
-        public void setDefaultTimeoutSeconds(int defaultTimeoutSeconds) {
-            if (defaultTimeoutSeconds <= 0 && defaultTimeoutSeconds != -1) {
-                throw new IllegalArgumentException("defaultTimeoutSeconds must be positive or -1 (disabled)");
-            }
-            this.defaultTimeoutSeconds = defaultTimeoutSeconds;
-        }
-
         public int getMaxBulkOperationRows() {
             return maxBulkOperationRows;
         }
@@ -391,12 +370,26 @@ public class MyJpaPlusProperties {
          */
         private boolean autoInvalidationEnabled = true;
 
+        /** 缓存最大条目数。默认值：{@code 10000} */
+        private int maxEntries = 10000;
+
         public boolean isAutoInvalidationEnabled() {
             return autoInvalidationEnabled;
         }
 
         public void setAutoInvalidationEnabled(boolean autoInvalidationEnabled) {
             this.autoInvalidationEnabled = autoInvalidationEnabled;
+        }
+
+        public int getMaxEntries() {
+            return maxEntries;
+        }
+
+        public void setMaxEntries(int maxEntries) {
+            if (maxEntries <= 0) {
+                throw new IllegalArgumentException("maxEntries must be positive");
+            }
+            this.maxEntries = maxEntries;
         }
     }
 }

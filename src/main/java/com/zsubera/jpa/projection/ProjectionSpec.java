@@ -9,7 +9,6 @@ import com.zsubera.jpa.spec.SFunction;
 import com.zsubera.jpa.template.MyJpaTemplate;
 import com.zsubera.jpa.softdelete.SoftDeleteHelper;
 import com.zsubera.jpa.util.LambdaUtils;
-import com.zsubera.jpa.util.QueryTimeoutHelper;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.Tuple;
@@ -569,7 +568,6 @@ public class ProjectionSpec<T> {
             applyOrderBy(root, cb, query);
 
             TypedQuery<Tuple> typedQuery = em.createQuery(query);
-            QueryTimeoutHelper.applyTimeout(typedQuery);
             if (maxResults > 0) {
                 typedQuery.setMaxResults(maxResults);
                 if (maxResults == MyJpaTemplate.DEFAULT_MAX_RESULTS && !selections.isEmpty() && log.isDebugEnabled()) {
@@ -693,7 +691,6 @@ public class ProjectionSpec<T> {
             applyOrderBy(root, cb, query);
 
             TypedQuery<R> typedQuery = em.createQuery(query);
-            QueryTimeoutHelper.applyTimeout(typedQuery);
             if (maxResults > 0) {
                 typedQuery.setMaxResults(maxResults);
             }
@@ -766,7 +763,6 @@ public class ProjectionSpec<T> {
                     (jakarta.persistence.criteria.Selection)groupByExpressions.get(0);
                 groupCountQuery.select(firstGroup);
                 jakarta.persistence.TypedQuery<Object> groupCountTypedQuery = em.createQuery(groupCountQuery);
-                QueryTimeoutHelper.applyTimeout(groupCountTypedQuery);
                 total = (long)groupCountTypedQuery.getResultList().size();
             } else {
                 // 仅在用户显式启用 distinct 时使用 countDistinct
@@ -780,7 +776,6 @@ public class ProjectionSpec<T> {
                 }
                 applyPredicate(countRoot, countQuery, cb);
                 TypedQuery<Long> countTypedQuery = em.createQuery(countQuery);
-                QueryTimeoutHelper.applyTimeout(countTypedQuery);
                 total = countTypedQuery.getSingleResult();
             }
 
@@ -812,7 +807,6 @@ public class ProjectionSpec<T> {
             applyOrderBy(dataRoot, cb, dataQuery);
 
             TypedQuery<Tuple> query = em.createQuery(dataQuery);
-            QueryTimeoutHelper.applyTimeout(query);
             if (pageable.getOffset() > Integer.MAX_VALUE) {
                 throw new IllegalArgumentException("Offset too large: " + pageable.getOffset());
             }

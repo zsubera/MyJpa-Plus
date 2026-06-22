@@ -17,9 +17,7 @@ class FuncNodeTest {
 
     @AfterEach
     void cleanup() {
-        FunctionWhitelist.EXTRA_SAFE_FUNCTION_NAMES.clear();
-        FunctionWhitelist.EXTRA_BOOLEAN_FUNCTION_NAMES.clear();
-        FunctionWhitelist.freezeExtraFunctionNames();
+        FunctionWhitelist.reset();
     }
 
     @Test
