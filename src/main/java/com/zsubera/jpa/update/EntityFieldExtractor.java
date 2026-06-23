@@ -79,6 +79,10 @@ final class EntityFieldExtractor<T> {
     private static final java.util.concurrent.ConcurrentMap<String, List<String>> ID_COLUMN_CACHE =
         new java.util.concurrent.ConcurrentHashMap<>(16);
 
+    /** 缓存 resolveJavaFieldToDbColumn 的结果，避免每次跨实例调用时重复反射扫描类层次 */
+    private static final java.util.concurrent.ConcurrentMap<String, String> JAVA_FIELD_TO_DB_COLUMN_CACHE =
+        new java.util.concurrent.ConcurrentHashMap<>(64);
+
     private final Class<T> entityClass;
 
     EntityFieldExtractor(Class<T> entityClass) {
@@ -108,9 +112,9 @@ final class EntityFieldExtractor<T> {
         return extractFieldValues(entity, new java.util.HashSet<>());
     }
 
-    private List<EntityFieldValue> extractFieldValues(Object entity, Set<Class<?>> visited) {
+    private List<EntityFieldValue> extractFieldValues(Object entity, Set<Object> visited) {
         List<EntityFieldValue> fieldValues = new ArrayList<>();
-        if (!visited.add(entity.getClass())) {
+        if (!visited.add(entity)) {
             throw new MyJpaPlusException("Circular @Embedded reference detected: " + entity.getClass().getName()
                 + " has already been visited. Check your entity mapping for cycles in @Embedded objects.");
         }
@@ -178,7 +182,7 @@ final class EntityFieldExtractor<T> {
      * 递归提取 @Embedded 字段中的子字段，支持嵌套 @Embedded。
      */
     private void extractEmbeddedFields(Object embeddedValue, String prefix, java.util.Map<String, String> overrideMap,
-        List<EntityFieldValue> fieldValues, Set<Class<?>> visited) throws Exception {
+        List<EntityFieldValue> fieldValues, Set<Object> visited) throws Exception {
         for (Field subField : getAllFields(embeddedValue.getClass())) {
             if (java.lang.reflect.Modifier.isStatic(subField.getModifiers()) || subField.isSynthetic()) {
                 continue;
@@ -187,7 +191,8 @@ final class EntityFieldExtractor<T> {
                 // 递归处理嵌套的 @Embedded
                 Object nestedValue = getFieldValue(embeddedValue, subField);
                 if (nestedValue != null) {
-                    if (!visited.add(nestedValue.getClass())) {
+                    // ponytail: 跟踪对象实例而非 Class，允许同一 Embeddable 类型的不同实例共存
+                    if (!visited.add(nestedValue)) {
                         throw new MyJpaPlusException("Circular @Embedded reference detected in field '" + prefix + "."
                             + subField.getName() + "': " + nestedValue.getClass().getName());
                     }
@@ -199,7 +204,7 @@ final class EntityFieldExtractor<T> {
                     }
                     extractEmbeddedFields(nestedValue, prefix + "." + subField.getName(), nestedOverrideMap,
                         fieldValues, visited);
-                    visited.remove(nestedValue.getClass());
+                    visited.remove(nestedValue);
                 }
             } else {
                 Object subValue = getFieldValue(embeddedValue, subField);
@@ -408,15 +413,23 @@ final class EntityFieldExtractor<T> {
      * @return 数据库列名
      */
     String resolveJavaFieldToDbColumn(String javaFieldName) {
+        String cacheKey = entityClass.getName() + "#" + javaFieldName;
+        String cached = JAVA_FIELD_TO_DB_COLUMN_CACHE.get(cacheKey);
+        if (cached != null) {
+            return cached;
+        }
         for (Class<?> c = entityClass; c != null && c != Object.class; c = c.getSuperclass()) {
             for (Field f : c.getDeclaredFields()) {
                 if (f.getName().equals(javaFieldName)) {
-                    return resolveColumnName(f);
+                    String result = resolveColumnName(f);
+                    JAVA_FIELD_TO_DB_COLUMN_CACHE.put(cacheKey, result);
+                    return result;
                 }
             }
         }
         // 回退：未找到 Field，直接使用字段名（安全校验）
         IdentifierValidator.validateColumnName(javaFieldName);
+        JAVA_FIELD_TO_DB_COLUMN_CACHE.put(cacheKey, javaFieldName);
         return javaFieldName;
     }
 }

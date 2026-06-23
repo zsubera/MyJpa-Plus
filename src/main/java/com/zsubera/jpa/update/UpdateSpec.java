@@ -256,7 +256,12 @@ public class UpdateSpec<T> extends AbstractBulkOperationSpec<T, UpdateSpec<T>> {
         if (limit > 0) {
             checkRowCountBeforeExecute(em, limit, "UPDATE");
         }
-        var query = em.createQuery(toUpdate(em));
+        CriteriaUpdate<T> update = toUpdate(em);
+        if (log.isDebugEnabled()) {
+            log.debug("Executing UPDATE on {} with {} set clauses and {} conditions",
+                entityClass.getSimpleName(), setClauses.size() + expressionSetClauses.size(), conditionNodes.size());
+        }
+        var query = em.createQuery(update);
         int updated = query.executeUpdate();
         // ponytail: post-execute check for race condition between COUNT and UPDATE
         if (limit > 0 && updated > limit) {
@@ -388,7 +393,12 @@ public class UpdateSpec<T> extends AbstractBulkOperationSpec<T, UpdateSpec<T>> {
         if (setClauses.isEmpty() && expressionSetClauses.isEmpty()) {
             throw new IllegalStateException("At least one set() clause is required");
         }
-        log.warn("AUDIT: Executing unconditional UPDATE on {}", entityClass.getSimpleName());
+        log.warn("AUDIT: Executing unconditional UPDATE on {} — this will affect ALL rows! Call stack: {}",
+            entityClass.getSimpleName(), AuditUtils.getCallStack());
+        if (log.isDebugEnabled()) {
+            log.debug("Executing unconditional UPDATE on {} with {} set clauses",
+                entityClass.getSimpleName(), setClauses.size() + expressionSetClauses.size());
+        }
         CriteriaBuilder cb = em.getCriteriaBuilder();
         CriteriaUpdate<T> update = cb.createCriteriaUpdate(entityClass);
         Root<T> root = update.from(entityClass);
@@ -426,8 +436,9 @@ public class UpdateSpec<T> extends AbstractBulkOperationSpec<T, UpdateSpec<T>> {
      * 此方法使用 {@link EntityManager#clear()} 分离已更新的实体，允许在不清除持久化上下文的情况下执行多个批次。
      *
      * <p>
-     * <strong>重要副作用：</strong>{@code em.clear()} 会分离当前事务中<strong>所有</strong>托管实体，
+     * <strong>⚠️ 重要副作用：</strong>{@code em.clear()} 会分离当前事务中<strong>所有</strong>托管实体，
      * 包括调用方在同一事务中持有的其他实体。调用方应在 {@code executeLimited} 返回后重新查询需要的实体。
+     * 此副作用在 {@link DeleteSpec#executeLimited} 中同样存在。
      *
      * <p>
      * <strong>安全说明：</strong>此方法默认启用悲观锁（{@code pessimisticLock=true}）， 以防止查询ID和执行更新之间的并发竞态条件。如需禁用悲观锁，请使用

@@ -82,7 +82,21 @@ final class DialectDetector {
     /** 每个 EntityManagerFactory 缓存的方言，避免重复检测。 */
     private static final ConcurrentHashMap<String, String> DIALECT_CACHE = new ConcurrentHashMap<>();
 
+    /** DIALECT_CACHE 最大条目数，防止动态 EMF 导致无限增长。 */
+    private static final int MAX_DIALECT_CACHE_SIZE = 32;
+
     private DialectDetector() {}
+
+    /**
+     * 将方言标识缓存到 DIALECT_CACHE，并在大小超过限制时清空整个缓存。
+     * ponytail: 全缓存清空策略简单直接；若未来需要更精细的淘汰策略（如 LRU），可替换为 Caffeine 并移除此方法。
+     */
+    private static void cacheDialect(String factoryKey, String dialect) {
+        if (DIALECT_CACHE.size() >= MAX_DIALECT_CACHE_SIZE) {
+            DIALECT_CACHE.clear();
+        }
+        DIALECT_CACHE.putIfAbsent(factoryKey, dialect);
+    }
 
     /**
      * 检测数据库方言。
@@ -106,14 +120,14 @@ final class DialectDetector {
             }
             if (jdbcUrl != null) {
                 String url = jdbcUrl.toString().toLowerCase();
-                if (url.contains("postgresql")) {
-                    DIALECT_CACHE.putIfAbsent(factoryKey, "postgresql");
-                    return "postgresql";
-                }
-                if (url.contains("mysql")) {
-                    DIALECT_CACHE.putIfAbsent(factoryKey, "mysql");
-                    return "mysql";
-                }
+                    if (url.contains("postgresql")) {
+                        cacheDialect(factoryKey, "postgresql");
+                        return "postgresql";
+                    }
+                    if (url.contains("mysql")) {
+                        cacheDialect(factoryKey, "mysql");
+                        return "mysql";
+                    }
             }
         } catch (Exception ex) {
             log.debug("Failed to detect dialect from properties: {}", ex.getMessage());
@@ -122,11 +136,16 @@ final class DialectDetector {
         // 优先级 2：通过 EntityManager.unwrap() 的 JDBC Connection.getMetaData() 检测
         try {
             java.sql.Connection conn = em.unwrap(java.sql.Connection.class);
+            // ponytail: Some connection pools (HikariCP proxy) wrap the Connection.
+            // Unwrap recursively to handle pool proxies.
+            while (conn.isWrapperFor(java.sql.Connection.class)) {
+                conn = conn.unwrap(java.sql.Connection.class);
+            }
             if (conn != null) {
                 String productName = conn.getMetaData().getDatabaseProductName().toLowerCase();
                 String dialect = mapDialect(productName);
                 if (DIALECT_STRATEGIES.containsKey(dialect)) {
-                    DIALECT_CACHE.putIfAbsent(factoryKey, dialect);
+                    cacheDialect(factoryKey, dialect);
                     return dialect;
                 }
                 // 未识别的方言不缓存，允许手动配置覆盖
@@ -170,7 +189,7 @@ final class DialectDetector {
             doWork.invoke(session, workProxy);
             String dialect = mapDialect(dialectHolder[0]);
             if (DIALECT_STRATEGIES.containsKey(dialect)) {
-                DIALECT_CACHE.putIfAbsent(factoryKey, dialect);
+                cacheDialect(factoryKey, dialect);
                 return dialect;
             }
             // 未识别的方言不缓存，允许手动配置覆盖
@@ -188,7 +207,7 @@ final class DialectDetector {
         if (manualDialect != null && !manualDialect.isEmpty()) {
             String mapped = mapDialect(manualDialect.toLowerCase());
             log.info("Using manually configured dialect: {}", mapped);
-            DIALECT_CACHE.putIfAbsent(factoryKey, mapped);
+            cacheDialect(factoryKey, mapped);
             return mapped;
         }
         throw new MyJpaPlusException("Failed to detect database dialect and no manual dialect configured. "

@@ -84,7 +84,12 @@ public class DeleteSpec<T> extends AbstractBulkOperationSpec<T, DeleteSpec<T>> {
         if (limit > 0) {
             checkRowCountBeforeExecute(em, limit, "DELETE");
         }
-        var query = em.createQuery(toDelete(em));
+        CriteriaDelete<T> delete = toDelete(em);
+        if (log.isDebugEnabled()) {
+            log.debug("Executing DELETE on {} with {} conditions",
+                entityClass.getSimpleName(), conditionNodes.size());
+        }
+        var query = em.createQuery(delete);
         int deleted = query.executeUpdate();
         // ponytail: post-execute check for race condition between COUNT and DELETE
         if (limit > 0 && deleted > limit) {

@@ -1,9 +1,10 @@
 package com.zsubera.jpa.spec;
 
 import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.util.Collection;
 import java.util.List;
-import java.util.zip.CRC32C;
 
 /**
  * 从 {@link QuerySpec} 提取的缓存键生成逻辑。
@@ -98,7 +99,19 @@ final class CacheKeyBuilder {
         return sb.toString();
     }
 
+    // ponytail: recursion depth limit to prevent StackOverflowError on maliciously deep trees
+    private static final int MAX_CACHE_KEY_DEPTH = 128;
+
     static void appendCacheKey(StringBuilder sb, ConditionNode node) {
+        appendCacheKey(sb, node, 0);
+    }
+
+    private static void appendCacheKey(StringBuilder sb, ConditionNode node, int depth) {
+        if (depth > MAX_CACHE_KEY_DEPTH) {
+            sb.append("DEPTH_EXCEEDED(").append(node.getClass().getSimpleName()).append(")");
+            return;
+        }
+        int nextDepth = depth + 1;
         if (node instanceof ConditionNode.SimpleNode sn) {
             sb.append(sn.fieldName).append(sn.op);
             appendValue(sb, sn.value);
@@ -113,19 +126,19 @@ final class CacheKeyBuilder {
         } else if (node instanceof ConditionNode.JoinNode jn) {
             sb.append("JOIN(").append(jn.fieldName).append(",").append(jn.joinType).append(",");
             for (ConditionNode inner : jn.innerConditions) {
-                appendCacheKey(sb, inner);
+                appendCacheKey(sb, inner, nextDepth);
             }
             sb.append(")");
         } else if (node instanceof ConditionNode.OrNode on) {
             sb.append("OR(");
             for (ConditionNode inner : on.nodes()) {
-                appendCacheKey(sb, inner);
+                appendCacheKey(sb, inner, nextDepth);
             }
             sb.append(")");
         } else if (node instanceof ConditionNode.AndNode an) {
             sb.append("AND(");
             for (ConditionNode inner : an.nodes()) {
-                appendCacheKey(sb, inner);
+                appendCacheKey(sb, inner, nextDepth);
             }
             sb.append(")");
         } else if (node instanceof ConditionNode.MultiLikeNode mln) {
@@ -148,7 +161,7 @@ final class CacheKeyBuilder {
             sb.append(",condHash=").append(isn.config.hashCode()).append(")");
         } else if (node instanceof ConditionNode.NegateNode nn) {
             sb.append("NOT(");
-            appendCacheKey(sb, nn.inner());
+            appendCacheKey(sb, nn.inner(), nextDepth);
             sb.append(")");
         } else if (node instanceof ConditionNode.RawNode rn) {
             sb.append("RAW(").append(rn.fn.getClass().getName()).append("@")
@@ -180,15 +193,12 @@ final class CacheKeyBuilder {
      * 将值的哈希码写入缓存键，而非原始值。防止密码、token 等敏感数据泄露到缓存键中。
      * 包含类型信息和内容哈希以减少碰撞概率。
      *
-     * <p>对数组使用 {@link java.util.Arrays#deepHashCode} 基于内容哈希，
-     * 而非 Object.hashCode()（基于对象地址），确保不同内容的数组产生不同的缓存键。</p>
+     * <p>使用 SHA-256 的前 8 字节（64-bit）作为哈希值。64-bit 哈希的生日碰撞上界为 ~2^32，
+     * 对于百万级缓存条目，碰撞概率可忽略。相比原 CRC32C（32-bit，碰撞上界 ~2^16）大幅提升安全性。</p>
      */
-    // ponytail: CRC32C instead of hashCode() — collisions still possible (32-bit)
-    // but vastly less likely than String.hashCode() (birthday bound ~77k for hashCode vs
-    // CRC32C's avalanche property). Zero-collision would require SHA-256 on the full value.
     private static void appendHashedValue(StringBuilder sb, Object value) {
         if (value instanceof String s) {
-            sb.append("S[").append(s.length()).append(":").append(crc32c(s)).append("]");
+            sb.append("S[").append(s.length()).append(":").append(hash64(s)).append("]");
         } else if (value instanceof Object[] arr) {
             sb.append("A[").append(arr.length).append(":").append(java.util.Arrays.deepHashCode(arr)).append("]");
         } else if (value instanceof int[] arr) {
@@ -202,13 +212,25 @@ final class CacheKeyBuilder {
                 .append(java.util.Arrays.deepHashCode(new Object[] {value})).append("]");
         } else {
             String s = String.valueOf(value);
-            sb.append("N[").append(value.getClass().getName()).append(":").append(crc32c(s)).append("]");
+            sb.append("N[").append(value.getClass().getName()).append(":").append(hash64(s)).append("]");
         }
     }
 
-    private static int crc32c(String s) {
-        CRC32C crc = new CRC32C();
-        crc.update(s.getBytes(StandardCharsets.UTF_8));
-        return (int)crc.getValue();
+    /**
+     * 使用 SHA-256 计算 64-bit 哈希值。取 SHA-256 的前 8 字节作为 long，避免 32-bit 碰撞风险。
+     * SHA-256 由 JDK 内置提供，无需额外依赖。
+     */
+    private static long hash64(String s) {
+        try {
+            MessageDigest md = MessageDigest.getInstance("SHA-256");
+            byte[] digest = md.digest(s.getBytes(StandardCharsets.UTF_8));
+            long hash = 0;
+            for (int i = 0; i < 8; i++) {
+                hash = (hash << 8) | (digest[i] & 0xFF);
+            }
+            return hash;
+        } catch (NoSuchAlgorithmException e) {
+            throw new RuntimeException("SHA-256 not available", e);
+        }
     }
 }

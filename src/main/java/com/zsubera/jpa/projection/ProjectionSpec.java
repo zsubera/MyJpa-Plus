@@ -606,6 +606,9 @@ public class ProjectionSpec<T> {
         if (em == null) {
             throw new IllegalArgumentException("em must not be null");
         }
+        // ponytail: 无查询条件的流式查询容易 OOM，记录警告
+        log.warn("getResultStream() on {} has no row limit — consider adding a WHERE clause or using findPage().",
+            entityClass.getSimpleName());
         TypedQuery<Tuple> query = toTupleQuery(em, -1);
         // P-01：为流式查询设置 fetchSize 以启用服务端游标。
         // PostgreSQL 需要 fetchSize > 0 才能实现真正的流式传输；
@@ -738,26 +741,23 @@ public class ProjectionSpec<T> {
         try {
             Long total;
             if (!groupByFields.isEmpty()) {
-                // 统计 GROUP BY 分组数：执行 GROUP BY 查询并计数结果行数
+                // ponytail: GROUP BY count queries load all groups into memory for portability.
+                // JPA Criteria subqueries don't reliably replicate WHERE/JOIN/GROUP BY.
+                // For extreme group cardinality (>100k), use a native SQL count or Keyset pagination.
                 @SuppressWarnings("unchecked")
                 CriteriaQuery<Object> groupCountQuery =
                     (CriteriaQuery<Object>)(CriteriaQuery<?>)cb.createQuery(Object.class);
                 Root<T> groupRoot = groupCountQuery.from(entityClass);
                 resolveJoins(groupRoot, cb);
-                // 应用 WHERE 谓词
                 applyPredicate(groupRoot, groupCountQuery, cb);
-                // 应用 GROUP BY
                 List<jakarta.persistence.criteria.Expression<?>> groupByExpressions = new ArrayList<>();
                 for (String gf : groupByFields) {
                     groupByExpressions.add(groupRoot.get(gf));
                 }
                 groupCountQuery.groupBy(groupByExpressions);
-                // 应用 HAVING（如果存在）
                 if (!havingPredicateFns.isEmpty()) {
                     applyHavingPredicates(groupRoot, cb, groupCountQuery);
                 }
-                // 选择第一个分组字段来计数分组数
-                // Path<?> 在 JPA 运行时实现 Selection 接口，但类型系统未声明
                 @SuppressWarnings("rawtypes")
                 jakarta.persistence.criteria.Selection firstGroup =
                     (jakarta.persistence.criteria.Selection)groupByExpressions.get(0);

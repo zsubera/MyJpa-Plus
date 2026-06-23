@@ -19,7 +19,7 @@ import com.zsubera.jpa.update.EntityFieldExtractor.EntityFieldValue;
  * <p>
  * 标识符使用反引号转义：{@code `identifier`}
  */
-final class MysqlDialect implements DialectStrategy {
+final class MysqlDialect extends AbstractDialectStrategy {
 
     /**
      * {@inheritDoc}
@@ -31,24 +31,14 @@ final class MysqlDialect implements DialectStrategy {
         return "mysql";
     }
 
-    /**
-     * {@inheritDoc}
-     *
-     * <p>使用反引号转义：{@code `identifier`}。
-     */
     @Override
-    public String escapeIdentifier(String identifier) {
-        if (identifier.indexOf('.') >= 0) {
-            String[] parts = identifier.split("\\.");
-            StringBuilder sb = new StringBuilder();
-            for (int i = 0; i < parts.length; i++) {
-                if (i > 0)
-                    sb.append('.');
-                sb.append('`').append(parts[i].replace("`", "``")).append('`');
-            }
-            return sb.toString();
-        }
-        return "`" + identifier.replace("`", "``") + "`";
+    protected char getQuoteChar() {
+        return '`';
+    }
+
+    @Override
+    protected String getEscapeSequence() {
+        return "``";
     }
 
     /**

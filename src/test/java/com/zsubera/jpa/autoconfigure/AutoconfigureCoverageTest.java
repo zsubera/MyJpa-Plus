@@ -258,9 +258,9 @@ class AutoconfigureCoverageTest {
         assertNotNull(globalConfig);
 
         assertNotNull(config.myJpaTemplate(props));
-        assertNotNull(config.queryCacheManager());
+        assertNotNull(config.queryCacheManager(props));
         assertNotNull(config.auditorAware());
-        assertNotNull(config.cacheInvalidationListener(config.queryCacheManager()));
+        assertNotNull(config.cacheInvalidationListener(config.queryCacheManager(props)));
     }
 
     // ---- Inner class for DataSource proxy test ----

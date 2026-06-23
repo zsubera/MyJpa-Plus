@@ -309,7 +309,7 @@ myjpa-plus:
 | 集合 | `in`, `notIn`, `between`, `isEmpty`, `isNotEmpty` |
 | 空值 | `isNull`, `isNotNull` |
 | 搜索 | `multiLike(keyword, fields...)` |
-| 连接 | `join(field)`, `leftJoin(field)`, `join(field, consumer)` |
+| 连接 | `join(field, config)`, `leftJoin(field, config)`, `fetchJoin(field, config)`, `leftFetchJoin(field, config)` |
 | 子查询 | `exists`, `notExists`, `inSubQuery` |
 | 逻辑 | `or(consumer)`, `not(consumer)` |
 | 聚合 | `groupBy(field1, field2, ...)`, `having(predicate)` |
@@ -324,7 +324,7 @@ myjpa-plus:
 | 分类 | 方法 |
 |:---|:---|
 | 字段选择 | `select(field)` |
-| 聚合 | `selectCount()`, `selectSum()`, `selectAvg()`, `selectMax()`, `selectMin()` |
+| 聚合 | `selectCount()`, `selectCountDistinct()`, `selectSum(field)`, `selectAvg(field)`, `selectMax(field)`, `selectMin(field)` |
 | DTO 投影 | `asDto(DtoClass.class)` |
 | 连接 | `join(field, consumer)`, `leftJoin(field, consumer)` |
 | 排序 | `orderByAsc(field)`, `orderByDesc(field)` |
@@ -436,10 +436,11 @@ List<UserNameEmail> dtos = new ProjectionSpec<>(User.class)
     .toDtoQuery(entityManager)
     .getResultList();
 
-// 聚合投影
+// 聚合投影（别名：count, sum_amount, max_amount）
 List<Tuple> stats = new ProjectionSpec<>(Order.class)
-    .selectCount(Order::getId, "orderCount")
-    .selectSum(Order::getAmount, "totalAmount")
+    .selectCount()
+    .selectSum(Order::getAmount)
+    .selectMax(Order::getAmount)
     .groupBy(Order::getStatus)
     .toTupleQuery(entityManager)
     .getResultList();

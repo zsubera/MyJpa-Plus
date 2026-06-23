@@ -76,20 +76,20 @@ public final class EntityManagerHelper {
     public static void registerResolver(Class<?> entityType, EntityManagerResolver resolver) {
         Objects.requireNonNull(entityType, "entityType must not be null");
         Objects.requireNonNull(resolver, "resolver must not be null");
+        // ponytail: 将用户代码（resolver.resolve）移到锁外，避免阻塞器中 I/O 或慢操作导致锁竞争
+        resolvers.put(entityType, resolver);
+        boolean usesNonDefault = true;
+        EntityManagerFactory defaultEmf = defaultEntityManagerFactory;
+        if (defaultEmf != null) {
+            try {
+                usesNonDefault = resolver.resolve(entityType) != defaultEmf;
+            } catch (Exception e) {
+                usesNonDefault = true;
+            }
+        }
         synchronized (resolverCheckLock) {
-            resolvers.put(entityType, resolver);
-            // 仅当 resolver 返回非默认 EMF 时才禁用 fast-path
-            EntityManagerFactory defaultEmf = defaultEntityManagerFactory;
-            if (defaultEmf == null) {
+            if (usesNonDefault) {
                 allResolversUseDefault = false;
-            } else {
-                try {
-                    if (resolver.resolve(entityType) != defaultEmf) {
-                        allResolversUseDefault = false;
-                    }
-                } catch (Exception e) {
-                    allResolversUseDefault = false;
-                }
             }
         }
     }
@@ -107,8 +107,8 @@ public final class EntityManagerHelper {
     public static void registerEntityManagerFactory(Class<?> entityType, EntityManagerFactory emf) {
         Objects.requireNonNull(entityType, "entityType must not be null");
         Objects.requireNonNull(emf, "entityManagerFactory must not be null");
-        resolvers.put(entityType, type -> emf);
         synchronized (resolverCheckLock) {
+            resolvers.put(entityType, type -> emf);
             // 如果注册的 EMF 与默认 EMF 不同，标记为非单数据源
             if (defaultEntityManagerFactory == null || emf != defaultEntityManagerFactory) {
                 allResolversUseDefault = false;
@@ -129,10 +129,12 @@ public final class EntityManagerHelper {
     public static void registerEntityManagerFactoryIfAbsent(Class<?> entityType, EntityManagerFactory emf) {
         Objects.requireNonNull(entityType, "entityType must not be null");
         Objects.requireNonNull(emf, "entityManagerFactory must not be null");
-        boolean wasAbsent = resolvers.putIfAbsent(entityType, type -> emf) == null;
-        // 仅当实际插入了新 resolver 且该 EMF 与默认 EMF 不同时，标记为非单数据源
-        if (wasAbsent && defaultEntityManagerFactory != null && emf != defaultEntityManagerFactory) {
-            allResolversUseDefault = false;
+        synchronized (resolverCheckLock) {
+            boolean wasAbsent = resolvers.putIfAbsent(entityType, type -> emf) == null;
+            // 仅当实际插入了新 resolver 且该 EMF 与默认 EMF 不同时，标记为非单数据源
+            if (wasAbsent && defaultEntityManagerFactory != null && emf != defaultEntityManagerFactory) {
+                allResolversUseDefault = false;
+            }
         }
     }
 
@@ -162,11 +164,11 @@ public final class EntityManagerHelper {
             allResolversUseDefault = false;
             return;
         }
-        // 用第一个注册的实体类型作为探针，避免传 null 给 resolver
-        Class<?> probeType = resolvers.keySet().iterator().next();
-        for (EntityManagerResolver resolver : resolvers.values()) {
+        // 对每个 resolver 使用其注册的原始实体类型作为探针
+        // 避免单 probe 类型漏判——当 resolver 为不同类型返回不同 EMF 时
+        for (java.util.Map.Entry<Class<?>, EntityManagerResolver> entry : resolvers.entrySet()) {
             try {
-                if (resolver.resolve(probeType) != defaultEmf) {
+                if (entry.getValue().resolve(entry.getKey()) != defaultEmf) {
                     allResolversUseDefault = false;
                     return;
                 }

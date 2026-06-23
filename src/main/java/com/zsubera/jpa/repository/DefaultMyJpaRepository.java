@@ -47,6 +47,7 @@ public class DefaultMyJpaRepository<T, ID> extends SimpleJpaRepository<T, ID> im
     private final Class<T> domainClass;
     private final EntityManager entityManager;
     private final JpaEntityInformation<T, ?> entityInformation;
+    private final @Nullable String softDeleteFieldName;
 
     /**
      * 全局配置提供者。通过 {@link #setGlobalConfigProvider(ConfigProvider)} 注入。
@@ -171,7 +172,7 @@ public class DefaultMyJpaRepository<T, ID> extends SimpleJpaRepository<T, ID> im
      * @return 如果应该阻断返回 true
      */
     private boolean shouldBlockHardDelete() {
-        return isBlockUnconditionalDelete() && SoftDeleteHelper.findSoftDeleteField(domainClass) != null;
+        return isBlockUnconditionalDelete() && softDeleteFieldName != null;
     }
 
     /**
@@ -185,22 +186,7 @@ public class DefaultMyJpaRepository<T, ID> extends SimpleJpaRepository<T, ID> im
      * @param action 要执行的操作
      */
     public static void withAutoFilterOverride(Boolean value, Runnable action) {
-        Boolean previous = AUTO_FILTER_OVERRIDE.get();
-        if (value == null) {
-            AUTO_FILTER_OVERRIDE.remove();
-        } else {
-            AUTO_FILTER_OVERRIDE.set(value);
-        }
-        try {
-            action.run();
-        } finally {
-            // 恢复之前的值，支持嵌套调用
-            if (previous != null) {
-                AUTO_FILTER_OVERRIDE.set(previous);
-            } else {
-                AUTO_FILTER_OVERRIDE.remove();
-            }
-        }
+        runWithOverride(value, () -> { action.run(); return null; });
     }
 
     /**
@@ -212,6 +198,10 @@ public class DefaultMyJpaRepository<T, ID> extends SimpleJpaRepository<T, ID> im
      * @return Supplier 的返回结果
      */
     public static <R> R withAutoFilterOverride(Boolean value, java.util.function.Supplier<R> supplier) {
+        return runWithOverride(value, supplier);
+    }
+
+    private static <R> R runWithOverride(Boolean value, java.util.function.Supplier<R> supplier) {
         Boolean previous = AUTO_FILTER_OVERRIDE.get();
         if (value == null) {
             AUTO_FILTER_OVERRIDE.remove();
@@ -221,7 +211,6 @@ public class DefaultMyJpaRepository<T, ID> extends SimpleJpaRepository<T, ID> im
         try {
             return supplier.get();
         } finally {
-            // 恢复之前的值，支持嵌套调用
             if (previous != null) {
                 AUTO_FILTER_OVERRIDE.set(previous);
             } else {
@@ -248,6 +237,7 @@ public class DefaultMyJpaRepository<T, ID> extends SimpleJpaRepository<T, ID> im
         this.domainClass = entityInformation.getJavaType();
         this.entityManager = entityManager;
         this.entityInformation = entityInformation;
+        this.softDeleteFieldName = SoftDeleteHelper.findSoftDeleteField(domainClass);
     }
 
     /**
@@ -263,11 +253,9 @@ public class DefaultMyJpaRepository<T, ID> extends SimpleJpaRepository<T, ID> im
      * @return 如果应该应用过滤返回 true
      */
     private boolean shouldApplySoftDeleteFilter() {
-        // 优先检查 ThreadLocal 覆盖值，再检查全局配置
         Boolean override = AUTO_FILTER_OVERRIDE.get();
         boolean effectiveAutoFilter = (override != null) ? override : isAutoFilterEnabled();
-        return effectiveAutoFilter && SoftDeleteHelper.findSoftDeleteField(domainClass) != null
-            && !SoftDeleteContext.isIgnoreSoftDelete();
+        return effectiveAutoFilter && softDeleteFieldName != null && !SoftDeleteContext.isIgnoreSoftDelete();
     }
 
     private Specification<T> mergeSoftDeleteFilter(@Nullable Specification<T> spec) {
@@ -432,15 +420,15 @@ public class DefaultMyJpaRepository<T, ID> extends SimpleJpaRepository<T, ID> im
             return false;
         }
         String idFieldName = EntityClassResolver.resolveIdFieldName(domainClass);
-        String softDeleteFieldName = SoftDeleteHelper.findSoftDeleteField(domainClass);
         jakarta.persistence.criteria.CriteriaBuilder cb = entityManager.getCriteriaBuilder();
         jakarta.persistence.criteria.CriteriaQuery<Long> cq = cb.createQuery(Long.class);
         jakarta.persistence.criteria.Root<T> root = cq.from(domainClass);
         cq.select(cb.count(root));
         jakarta.persistence.criteria.Predicate idPredicate = cb.equal(root.get(idFieldName), id);
         if (softDeleteFieldName != null) {
+            jakarta.persistence.criteria.Path<?> deletedPath = root.get(softDeleteFieldName);
             jakarta.persistence.criteria.Predicate notDeleted =
-                cb.or(cb.isNull(root.get(softDeleteFieldName)), cb.equal(root.get(softDeleteFieldName), false));
+                com.zsubera.jpa.softdelete.SoftDeleteHelper.buildNotDeleted(cb, deletedPath, softDeleteFieldName, domainClass);
             cq.where(idPredicate, notDeleted);
         } else {
             cq.where(idPredicate);
@@ -477,7 +465,7 @@ public class DefaultMyJpaRepository<T, ID> extends SimpleJpaRepository<T, ID> im
                 + " is blocked because the entity has a @SoftDelete field. "
                 + "Set DefaultMyJpaRepository.setBlockUnconditionalDelete(false) to allow this operation.");
         } else {
-            if (SoftDeleteHelper.findSoftDeleteField(domainClass) != null && log.isWarnEnabled()) {
+            if (softDeleteFieldName != null && log.isWarnEnabled()) {
                 log.warn("AUDIT: Executing unconditional hard DELETE on {} with @SoftDelete field "
                     + "(autoFilter=false). Call stack: {}", domainClass.getSimpleName(), AuditUtils.getCallStack());
             }

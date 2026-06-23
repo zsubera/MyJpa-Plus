@@ -115,7 +115,7 @@ final class QueryCompositionSupport<T> {
      * @param other 另一个 QuerySpec 实例
      * @return 组合后的 Specification 实例
      */
-    Specification<T> or(QuerySpec<T> other) {
+    Specification<T> orCombine(QuerySpec<T> other) {
         if (other == null) {
             return parent;
         }

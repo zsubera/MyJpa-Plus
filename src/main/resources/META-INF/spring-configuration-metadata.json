@@ -85,6 +85,12 @@
       "defaultValue": true
     },
     {
+      "name": "myjpa-plus.cache.max-entries",
+      "type": "java.lang.Integer",
+      "description": "Maximum number of entries in the query cache. Exceeding this triggers FIFO eviction.",
+      "defaultValue": 10000
+    },
+    {
       "name": "myjpa-plus.auto-repository-base-class",
       "type": "java.lang.Boolean",
       "description": "Automatically register DefaultMyJpaRepository as the base class for all repositories.",

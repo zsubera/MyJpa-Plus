@@ -10,7 +10,6 @@ import com.zsubera.jpa.spec.SFunction;
 import com.zsubera.jpa.util.LambdaUtils;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import jakarta.persistence.EntityManager;
-import jakarta.persistence.EntityTransaction;
 import jakarta.persistence.criteria.CriteriaBuilder;
 import jakarta.persistence.criteria.CriteriaQuery;
 import jakarta.persistence.criteria.Predicate;
@@ -23,7 +22,6 @@ import java.util.function.Function;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.data.jpa.domain.Specification;
-import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 /**
  * JPA 批量操作构建器（{@link UpdateSpec} 和 {@link DeleteSpec}）的抽象基类。
@@ -130,99 +128,14 @@ public abstract class AbstractBulkOperationSpec<T, SELF extends AbstractBulkOper
      *
      * <p>
      * 此重载方法允许子类执行自定义操作（如无条件 deleteAll）并进行正确的事务管理。
+     * 事务管理委托给 {@link BulkTransactionHelper}，消除重复的事务管理代码。
      *
      * @param em 实体管理器
      * @param operation 要执行的操作
      * @return 受影响的行数
      */
     protected int executeInTransaction(EntityManager em, Function<EntityManager, Integer> operation) {
-        // 如果当前存在活动事务，直接执行
-        if (TransactionSynchronizationManager.isActualTransactionActive()) {
-            return operation.apply(em);
-        }
-
-        // 没有 Spring 事务，检查是否为 JTA 环境
-        EntityTransaction tx = em.getTransaction();
-        if (tx == null) {
-            // JTA 环境：容器管理事务，直接执行
-            return executeInJtaEnvironment(em, operation);
-        }
-
-        // 非 JTA 环境：使用 EntityTransaction 管理事务
-        return executeWithEntityTransaction(em, tx, operation);
-    }
-
-    /**
-     * 在 JTA 环境中执行操作。
-     *
-     * @param em 实体管理器
-     * @param operation 要执行的操作
-     * @return 受影响的行数
-     */
-    private int executeInJtaEnvironment(EntityManager em, Function<EntityManager, Integer> operation) {
-        if (log.isDebugEnabled()) {
-            log.debug(
-                "JTA environment detected (getTransaction() returned null), executing with container-managed transaction");
-        }
-        try {
-            return operation.apply(em);
-        } catch (jakarta.persistence.TransactionRequiredException e) {
-            throw new MyJpaPlusException("No active transaction in JTA environment. "
-                + "Ensure a container-managed transaction is active, or use @Transactional annotation.", e);
-        }
-    }
-
-    /**
-     * 使用 JPA EntityTransaction 执行操作。
-     *
-     * @param em 实体管理器
-     * @param tx 实体事务
-     * @param operation 要执行的操作
-     * @return 受影响的行数
-     */
-    private int executeWithEntityTransaction(EntityManager em, EntityTransaction tx,
-        Function<EntityManager, Integer> operation) {
-        boolean isNewTransaction = !tx.isActive();
-        if (isNewTransaction) {
-            tx.begin();
-        }
-        try {
-            int result = operation.apply(em);
-            if (isNewTransaction) {
-                tx.commit();
-            }
-            return result;
-        } catch (RuntimeException e) {
-            if (isNewTransaction) {
-                rollbackIfActive(tx, e);
-            }
-            throw e;
-        } catch (Exception e) {
-            if (isNewTransaction) {
-                rollbackIfActive(tx, e);
-            }
-            log.error("Unexpected checked exception in bulk operation (type: {}): {}", e.getClass().getName(),
-                e.getMessage(), e);
-            throw new MyJpaPlusException(
-                "Bulk operation failed: " + e.getClass().getSimpleName() + " - " + e.getMessage(), e);
-        }
-    }
-
-    /**
-     * 如果事务处于活动状态则回滚，并将回滚异常添加为原始异常的抑制异常。
-     *
-     * @param tx 实体事务
-     * @param original 原始异常
-     */
-    private void rollbackIfActive(EntityTransaction tx, Exception original) {
-        if (tx.isActive()) {
-            try {
-                tx.rollback();
-            } catch (Exception rollbackEx) {
-                log.error("Transaction rollback failed", rollbackEx);
-                original.addSuppressed(rollbackEx);
-            }
-        }
+        return BulkTransactionHelper.executeInManagedTransaction(em, operation);
     }
 
     /**
@@ -553,12 +466,10 @@ public abstract class AbstractBulkOperationSpec<T, SELF extends AbstractBulkOper
     }
 
     /**
-     * 在执行前快速估算受影响的行数是否超过限制。
-     *
-     * <p>
-     * 使用 {@code SELECT 1 FROM table WHERE conditions LIMIT (limit+1)} 进行快速存在性检查，
-     * 避免昂贵的 {@code SELECT COUNT(*)} 全表扫描。当结果数量 {@code <= limit} 时，
-     * 可安全执行操作；当结果数量 {@code > limit} 时，执行精确 COUNT 验证。
+     * 在执行前精确计数受影响的行数。先通过轻量预检（SELECT 1 WHERE ... LIMIT {@code limit+1}）快速探测是否超限，
+     * 仅在预检未触发时执行精确 {@code SELECT COUNT(*)}，避免在大量数据下的全表扫描开销。
+     * 后执行检查提供并发防御——如果并发写入导致实际影响行数超过限制，
+     * 抛出异常触发事务回滚。
      *
      * @param em 实体管理器
      * @param limit 最大允许行数
@@ -566,23 +477,16 @@ public abstract class AbstractBulkOperationSpec<T, SELF extends AbstractBulkOper
      * @throws IllegalStateException 如果受影响行数超过限制
      */
     protected void checkRowCountBeforeExecute(EntityManager em, long limit, String operationName) {
-        CriteriaBuilder cb = em.getCriteriaBuilder();
-        CriteriaQuery<Long> probeQuery = cb.createQuery(Long.class);
-        Root<T> root = probeQuery.from(entityClass);
-        probeQuery.select(cb.literal(1L));
-        Predicate[] predicates = buildPredicates(root, cb);
-        if (predicates.length > 0) {
-            probeQuery.where(cb.and(predicates));
-        }
-        jakarta.persistence.TypedQuery<Long> query = em.createQuery(probeQuery);
         if (limit >= Integer.MAX_VALUE - 1) {
             return;
         }
-        query.setMaxResults((int)limit + 1);
-        int probeCount = query.getResultList().size();
-        if (probeCount <= limit) {
+        // 轻量预检：SELECT 1 WHERE ... LIMIT limit+1
+        // 如果返回行数 ≤ limit，则无需精确 COUNT
+        long probeLimit = Math.min(limit + 1, Integer.MAX_VALUE - 1);
+        if (!probeExceedsLimit(em, (int)probeLimit)) {
             return;
         }
+        // 预检命中上限：执行精确 COUNT 确认
         long exactCount = countBeforeExecute(em);
         if (exactCount > limit) {
             throw new IllegalStateException("Bulk " + operationName + " would affect " + exactCount
@@ -592,7 +496,25 @@ public abstract class AbstractBulkOperationSpec<T, SELF extends AbstractBulkOper
     }
 
     /**
-     * 在执行前精确计数受影响的行数（仅在快速估算超限时调用）。
+     * 轻量预检：用 SELECT 1 + LIMIT probeLimit 快速判断是否可能超过限制。
+     *
+     * @return true 表示需要进一步精确 COUNT（预检结果达到 probeLimit）
+     */
+    private boolean probeExceedsLimit(EntityManager em, int probeLimit) {
+        CriteriaBuilder cb = em.getCriteriaBuilder();
+        CriteriaQuery<Integer> probeQuery = cb.createQuery(Integer.class);
+        Root<T> root = probeQuery.from(entityClass);
+        probeQuery.select(cb.literal(1));
+        Predicate[] predicates = buildPredicates(root, cb);
+        if (predicates.length > 0) {
+            probeQuery.where(cb.and(predicates));
+        }
+        List<Integer> results = em.createQuery(probeQuery).setMaxResults(probeLimit).getResultList();
+        return results.size() >= probeLimit;
+    }
+
+    /**
+     * 在执行前精确计数受影响的行数。
      *
      * @param em 实体管理器
      * @return 精确受影响的行数

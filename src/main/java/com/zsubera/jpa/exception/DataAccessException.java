@@ -14,8 +14,7 @@ import java.io.Serial;
  * <li>数据库连接异常</li>
  * </ul>
  *
- * @author myjpa-plus
-
+ * @author Zsubera
  */
 public class DataAccessException extends MyJpaPlusException {
 

@@ -32,6 +32,57 @@ final class BulkTransactionHelper {
      * 在托管事务中执行操作。如果没有活动事务，自动创建新事务。
      *
      * @param em 实体管理器
+     * @param action 要执行的操作（接收 EntityManager 并返回行数）
+     * @return 操作结果
+     */
+    static int executeInManagedTransaction(EntityManager em, java.util.function.Function<EntityManager, Integer> action) {
+        if (TransactionSynchronizationManager.isActualTransactionActive()) {
+            return action.apply(em);
+        }
+        EntityTransaction tx;
+        try {
+            tx = em.getTransaction();
+        } catch (IllegalStateException e) {
+            if (!TransactionSynchronizationManager.isActualTransactionActive()) {
+                throw new MyJpaPlusException("JTA environment detected but no active transaction. "
+                    + "Use @Transactional annotation or manually begin a transaction.", e);
+            }
+            return action.apply(em);
+        }
+        if (tx == null) {
+            if (!TransactionSynchronizationManager.isActualTransactionActive()) {
+                throw new MyJpaPlusException("JTA environment detected but no active transaction. "
+                    + "Use @Transactional annotation or manually begin a transaction.");
+            }
+            return action.apply(em);
+        }
+        boolean isNewTransaction = !tx.isActive();
+        if (isNewTransaction) {
+            tx.begin();
+        }
+        try {
+            int result = action.apply(em);
+            if (isNewTransaction) {
+                tx.commit();
+            }
+            return result;
+        } catch (RuntimeException e) {
+            if (isNewTransaction) {
+                safeRollback(tx, e);
+            }
+            throw e;
+        } catch (Exception e) {
+            if (isNewTransaction) {
+                safeRollback(tx, e);
+            }
+            throw new MyJpaPlusException("Bulk operation failed: " + e.getClass().getSimpleName(), e);
+        }
+    }
+
+    /**
+     * 在托管事务中执行操作（IntSupplier 重载，兼容无 EntityManager 参数场景）。
+     *
+     * @param em 实体管理器
      * @param action 要执行的操作
      * @return 操作结果
      */
@@ -39,9 +90,20 @@ final class BulkTransactionHelper {
         if (TransactionSynchronizationManager.isActualTransactionActive()) {
             return action.getAsInt();
         }
-        EntityTransaction tx = em.getTransaction();
+        EntityTransaction tx;
+        try {
+            tx = em.getTransaction();
+        } catch (IllegalStateException e) {
+            // JTA 环境：em.getTransaction() 抛出 IllegalStateException
+            // 委派给 Spring TransactionSynchronizationManager 检查
+            if (!TransactionSynchronizationManager.isActualTransactionActive()) {
+                throw new MyJpaPlusException("JTA environment detected but no active transaction. "
+                    + "Use @Transactional annotation or manually begin a transaction.", e);
+            }
+            return action.getAsInt();
+        }
         if (tx == null) {
-            if (!isJtaTransactionActive(em)) {
+            if (!TransactionSynchronizationManager.isActualTransactionActive()) {
                 throw new MyJpaPlusException("JTA environment detected but no active transaction. "
                     + "Use @Transactional annotation or manually begin a transaction.");
             }
@@ -89,12 +151,16 @@ final class BulkTransactionHelper {
 
     /**
      * 检查是否为 JTA 环境且有活动事务。
+     *
+     * <p>JTA 环境下 {@link EntityManager#getTransaction()} 抛出 {@link IllegalStateException}，
+     * 因此通过 Spring 的 {@link TransactionSynchronizationManager} 判断。
      */
     static boolean isJtaTransactionActive(EntityManager em) {
         try {
-            return em.getTransaction() != null && em.getTransaction().isActive();
-        } catch (Exception e) {
-            return false;
+            em.getTransaction();
+            return false; // 未抛出 IllegalStateException → 非 JTA
+        } catch (IllegalStateException e) {
+            return TransactionSynchronizationManager.isActualTransactionActive();
         }
     }
 }

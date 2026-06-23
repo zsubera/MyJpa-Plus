@@ -96,6 +96,10 @@ public class MyJpaPlusAutoConfiguration {
         config.setMaxBulkOperationRows(properties.getQuery().getMaxBulkOperationRows());
         config.setDeepPaginationOffsetThreshold(properties.getQuery().getDeepPaginationOffsetThreshold());
         config.setDeepPaginationOffsetLimit(properties.getQuery().getDeepPaginationOffsetLimit());
+        config.setInClauseMaxSize(properties.getQuery().getInClauseMaxSize());
+        config.setInClauseHardLimit(properties.getQuery().getInClauseHardLimit());
+        config.setLambdaCacheSize(properties.getQuery().getLambdaCacheSize());
+        config.setCacheMaxEntries(properties.getCache().getMaxEntries());
         return config;
     }
 
@@ -378,12 +382,18 @@ public class MyJpaPlusAutoConfiguration {
     /**
      * 创建查询缓存管理器 Bean。
      *
+     * <p>
+     * 默认使用基于 ConcurrentHashMap 的本地缓存实现。用户可通过提供自定义
+     * {@link com.zsubera.jpa.template.QueryCacheManager} Bean 来替换。
+     *
+     * @param properties 配置属性，用于读取 cache.maxEntries 配置
      * @return QueryCacheManager 实例
      */
     @Bean
     @ConditionalOnMissingBean(com.zsubera.jpa.template.QueryCacheManager.class)
-    public com.zsubera.jpa.template.QueryCacheManager queryCacheManager() {
-        return new com.zsubera.jpa.template.QueryCacheManager();
+    public com.zsubera.jpa.template.QueryCacheManager queryCacheManager(MyJpaPlusProperties properties) {
+        int maxEntries = properties.getCache().getMaxEntries();
+        return new com.zsubera.jpa.template.QueryCacheManager(maxEntries);
     }
 
     /**

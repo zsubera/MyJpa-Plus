@@ -1,10 +1,15 @@
 package com.zsubera.jpa.template;
 
+import org.springframework.context.ApplicationEvent;
+
 /**
  * 实体变更事件，用于在实体发生 INSERT/UPDATE/DELETE 操作后触发缓存失效。
  *
  * <p>
- * 此事件通过 Spring ApplicationEvent 机制发布，可在事务提交后自动清除相关查询缓存。
+ * 继承 {@link ApplicationEvent} 以与 Spring 事件体系完全兼容，支持 SpEL 条件过滤
+ * （如 {@code @EventListener(condition = "#event.affectedRows > 10")}）。
+ *
+ * <p>
  * 配合 {@link CacheInvalidationListener} 使用，实现查询缓存的自动失效。
  *
  * <p>
@@ -21,7 +26,7 @@ package com.zsubera.jpa.template;
  * @author myjpa-plus
 
  */
-public class EntityModifiedEvent {
+public class EntityModifiedEvent extends ApplicationEvent {
 
     private final String entityName;
     private final int affectedRows;
@@ -33,6 +38,7 @@ public class EntityModifiedEvent {
      * @param affectedRows 受影响的行数
      */
     public EntityModifiedEvent(Class<?> entityClass, int affectedRows) {
+        super(entityClass);
         this.entityName = entityClass.getSimpleName();
         this.affectedRows = affectedRows;
     }
@@ -44,6 +50,7 @@ public class EntityModifiedEvent {
      * @param affectedRows 受影响的行数
      */
     public EntityModifiedEvent(String entityName, int affectedRows) {
+        super(entityName);
         this.entityName = entityName;
         this.affectedRows = affectedRows;
     }

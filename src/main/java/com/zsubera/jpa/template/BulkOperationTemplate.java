@@ -48,6 +48,7 @@ class BulkOperationTemplate {
     private volatile int maxBatchIterations = DEFAULT_MAX_BATCH_ITERATIONS;
 
     private final EntityManager entityManager;
+    private final jakarta.persistence.EntityManagerFactory entityManagerFactory;
     private volatile int maxBulkOperationRows;
     private final TransactionTemplate requiredTxTemplate;
     private final TransactionTemplate requiresNewTxTemplate;
@@ -62,6 +63,7 @@ class BulkOperationTemplate {
     BulkOperationTemplate(EntityManager entityManager, int maxBulkOperationRows,
         PlatformTransactionManager txManager) {
         this.entityManager = entityManager;
+        this.entityManagerFactory = entityManager.getEntityManagerFactory();
         this.maxBulkOperationRows = maxBulkOperationRows;
         this.requiredTxTemplate = new TransactionTemplate(txManager);
         this.requiredTxTemplate.setPropagationBehavior(
@@ -71,16 +73,25 @@ class BulkOperationTemplate {
             org.springframework.transaction.TransactionDefinition.PROPAGATION_REQUIRES_NEW);
     }
 
+    /**
+     * ponytail: 在新事务中使用 EMF 创建新 EM，而非复用构造时捕获的代理 EM，
+     * 避免 REQUIRES_NEW 事务中使用外层 persistence context 的 EM。
+     */
     private <R> R executeInNewTransaction(java.util.function.Function<EntityManager, R> operation) {
         TransactionTemplate template = TransactionSynchronizationManager.isActualTransactionActive()
             ? requiresNewTxTemplate : requiredTxTemplate;
         return template.execute(status -> {
-            R r = operation.apply(entityManager);
-            if (status.isRollbackOnly()) {
-                throw new org.springframework.transaction.UnexpectedRollbackException(
-                    "Transaction was unexpectedly rolled back.");
+            EntityManager em = entityManagerFactory.createEntityManager();
+            try {
+                R r = operation.apply(em);
+                if (status.isRollbackOnly()) {
+                    throw new org.springframework.transaction.UnexpectedRollbackException(
+                        "Transaction was unexpectedly rolled back.");
+                }
+                return r;
+            } finally {
+                em.close();
             }
-            return r;
         });
     }
 

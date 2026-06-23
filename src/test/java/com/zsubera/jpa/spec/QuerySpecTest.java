@@ -2,6 +2,7 @@ package com.zsubera.jpa.spec;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+import com.zsubera.jpa.exception.QueryBuildException;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
 import java.util.List;
@@ -1321,103 +1322,58 @@ public class QuerySpecTest {
 
     @Test
     void testCopyInsideOrConsumer() {
-        // Verify copy() inside or() consumer: copy's groupStack is empty (not copied)
-        // so subsequent conditions go to root (AND), not to the OR group
+        // Verify copy() inside or() consumer throws QueryBuildException
+        // because groupStack is transient build state and cannot be safely copied
         repository.save(newEntity("a", 1));
         repository.save(newEntity("b", 2));
         repository.save(newEntity("c", 3));
 
-        final QuerySpec<TestEntity>[] copyHolder = new QuerySpec[1];
-
         QuerySpec<TestEntity> qs = new QuerySpec<>();
-        qs.or(o -> {
-            o.eq(TestEntity::getStatus, 1);
-            copyHolder[0] = qs.copy();
+        assertThrows(QueryBuildException.class, () -> {
+            qs.or(o -> {
+                o.eq(TestEntity::getStatus, 1);
+                qs.copy(); // Should throw: cannot copy inside or() consumer
+            });
         });
-
-        QuerySpec<TestEntity> copy = copyHolder[0];
-        // groupStack is not copied, so eq goes to root conditions (AND)
-        copy.eq(TestEntity::getStatus, 2);
-
-        // Original: OR(status=1) => matches status=1
-        List<TestEntity> originalResult = repository.findAll(qs.toSpecification());
-        assertEquals(1, originalResult.size());
-
-        // Copy: OR(status=1) AND status=2 => no match (status can't be both 1 AND 2)
-        List<TestEntity> copyResult = repository.findAll(copy.toSpecification());
-        assertEquals(0, copyResult.size());
     }
 
     @Test
     void testCopyInsideNestedOrConsumer() {
-        // Verify copy() with nested OR: conditions are correctly copied
+        // Verify copy() with nested OR throws QueryBuildException
         repository.save(newEntity("a", 1));
         repository.save(newEntity("b", 2));
         repository.save(newEntity("c", 3));
         repository.save(newEntity("d", 4));
 
-        final QuerySpec<TestEntity>[] copyHolder = new QuerySpec[1];
-
         QuerySpec<TestEntity> qs = new QuerySpec<>();
-        qs.or(outer -> {
-            outer.eq(TestEntity::getStatus, 1);
-            outer.or(inner -> {
-                inner.eq(TestEntity::getStatus, 2);
-                copyHolder[0] = qs.copy();
+        assertThrows(QueryBuildException.class, () -> {
+            qs.or(outer -> {
+                outer.eq(TestEntity::getStatus, 1);
+                outer.or(inner -> {
+                    inner.eq(TestEntity::getStatus, 2);
+                    qs.copy(); // Should throw: cannot copy inside nested or() consumer
+                });
             });
         });
-
-        QuerySpec<TestEntity> copy = copyHolder[0];
-        // groupStack is not copied, so eq goes to root
-        copy.eq(TestEntity::getStatus, 3);
-
-        // Original: OR(status=1, OR(status=2)) => matches status=1 and status=2
-        List<TestEntity> originalResult = repository.findAll(qs.toSpecification());
-        assertEquals(2, originalResult.size());
-
-        // Copy: OR(status=1, OR(status=2)) AND status=3 => matches status=1 AND status=3? No.
-        // Since groupStack is not copied, status=3 goes to root (AND)
-        List<TestEntity> copyResult = repository.findAll(copy.toSpecification());
-        assertEquals(0, copyResult.size()); // No match: OR matches 1,2 but AND status=3 fails
     }
 
     @Test
     void testCopyDeepNestedOrGroupStackOrder() {
-        // Verify that copy() does NOT copy groupStack (it's transient build state)
+        // Verify that copy() inside nested OR throws QueryBuildException
         QuerySpec<TestEntity> qs = new QuerySpec<>();
-        final QuerySpec<TestEntity>[] copyHolder = new QuerySpec[1];
 
-        qs.or(outer -> {
-            outer.eq(TestEntity::getStatus, 1);
-            outer.or(mid -> {
-                mid.eq(TestEntity::getStatus, 2);
-                mid.or(inner -> {
-                    inner.eq(TestEntity::getStatus, 3);
-                    copyHolder[0] = qs.copy();
+        assertThrows(QueryBuildException.class, () -> {
+            qs.or(outer -> {
+                outer.eq(TestEntity::getStatus, 1);
+                outer.or(mid -> {
+                    mid.eq(TestEntity::getStatus, 2);
+                    mid.or(inner -> {
+                        inner.eq(TestEntity::getStatus, 3);
+                        qs.copy(); // Should throw: cannot copy inside nested or() consumer
+                    });
                 });
             });
         });
-
-        QuerySpec<TestEntity> copy = copyHolder[0];
-
-        try {
-            java.lang.reflect.Field stackField = QuerySpec.class.getDeclaredField("groupStack");
-            stackField.setAccessible(true);
-
-            @SuppressWarnings("unchecked")
-            java.util.Deque<?> originalStack = (java.util.Deque<?>)stackField.get(qs);
-            @SuppressWarnings("unchecked")
-            java.util.Deque<?> copyStack = (java.util.Deque<?>)stackField.get(copy);
-
-            // Original stack should be empty (all OR groups closed)
-            assertEquals(0, originalStack.size(), "Original groupStack should be empty after all OR groups are closed");
-
-            // Copy's groupStack should also be empty (not copied — it's transient state)
-            assertEquals(0, copyStack.size(),
-                "Copy groupStack should be empty (groupStack is transient build state, not copied)");
-        } catch (Exception e) {
-            fail("Reflection failed: " + e.getMessage());
-        }
     }
 
     @Test
@@ -1878,7 +1834,7 @@ public class QuerySpecTest {
         QuerySpec<TestEntity> qs = new QuerySpec<>();
         qs.eq(TestEntity::getName, "a");
 
-        Specification<TestEntity> result = qs.or((QuerySpec<TestEntity>)null);
+        Specification<TestEntity> result = qs.orCombine((QuerySpec<TestEntity>)null);
         assertNotNull(result);
     }
 
@@ -2333,7 +2289,7 @@ public class QuerySpecTest {
     void testOrNull() {
         QuerySpec<TestEntity> qs = new QuerySpec<>();
         qs.eq(TestEntity::getName, "test");
-        Specification<TestEntity> result = qs.or((QuerySpec<TestEntity>)null);
+        Specification<TestEntity> result = qs.orCombine((QuerySpec<TestEntity>)null);
         assertNotNull(result);
     }
 

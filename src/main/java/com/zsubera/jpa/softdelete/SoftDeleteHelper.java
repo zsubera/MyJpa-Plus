@@ -109,6 +109,17 @@ public final class SoftDeleteHelper {
     private static final ConcurrentMap<Class<?>, SoftDelete> ANNOTATION_CACHE =
         new ConcurrentReferenceHashMap<>(16, ConcurrentReferenceHashMap.ReferenceType.WEAK);
 
+    /** 缓存: (entityClassName#fieldName) -> resolved column name，避免重复反射扫描类层次。 */
+    private static final ConcurrentMap<String, String> COLUMN_NAME_CACHE =
+        new ConcurrentHashMap<>();
+
+    /** 缓存: entityClassName -> resolved ID column name，避免重复反射。 */
+    private static final ConcurrentMap<String, String> ID_COLUMN_NAME_CACHE =
+        new ConcurrentHashMap<>();
+
+    /** 列名/ID列名缓存最大条目数，防止动态代理类名导致无限增长。 */
+    private static final int MAX_NAME_CACHE_SIZE = 4096;
+
     /**
      * 验证 SQL 标识符安全性，确保不含注入字符。
      *
@@ -311,6 +322,11 @@ public final class SoftDeleteHelper {
             throw new IllegalStateException(
                 "softDeleteAll without conditions is dangerous. Pass allowUnconditional=true to confirm.");
         }
+        if (!org.springframework.transaction.support.TransactionSynchronizationManager.isActualTransactionActive()) {
+            throw new com.zsubera.jpa.exception.MyJpaPlusException(
+                "softDeleteAll requires an active transaction. "
+                    + "Ensure the calling method is annotated with @Transactional.");
+        }
         // 审计日志
         if (log.isWarnEnabled()) {
             log.warn("AUDIT: Executing unconditional soft DELETE on {} — this will affect ALL rows! Call stack: {}",
@@ -489,46 +505,124 @@ public final class SoftDeleteHelper {
     }
 
     /**
-     * 解析字段对应的数据库列名。
+     * 解析字段对应的数据库列名。结果通过 {@link #COLUMN_NAME_CACHE} 缓存，避免重复反射扫描类层次。
+     *
+     * <p>支持字段访问和属性访问两种模式。先查字段上的 @Column，再查 getter 上的 @Column。</p>
      */
     private static String resolveColumnName(Class<?> entityClass, String fieldName) {
+        String cacheKey = getEntityBaseName(entityClass) + "#" + fieldName;
+        String result = COLUMN_NAME_CACHE.get(cacheKey);
+        if (result != null) return result;
+        if (COLUMN_NAME_CACHE.size() >= MAX_NAME_CACHE_SIZE) {
+            COLUMN_NAME_CACHE.clear();
+        }
+        result = doResolveColumnName(entityClass, fieldName);
+        COLUMN_NAME_CACHE.put(cacheKey, result);
+        return result;
+    }
+
+    private static String doResolveColumnName(Class<?> entityClass, String fieldName) {
         Field field = getField(entityClass, fieldName);
         if (field != null) {
             jakarta.persistence.Column columnAnnotation = field.getAnnotation(jakarta.persistence.Column.class);
             if (columnAnnotation != null && !columnAnnotation.name().isEmpty()) {
-                String name = columnAnnotation.name();
-                if (!IdentifierValidator.SAFE_IDENTIFIER_PATTERN.matcher(name).matches()) {
-                    throw new IllegalArgumentException("Invalid @Column name: " + name
-                        + ". Must contain only alphanumeric characters and underscores.");
+                return validateAndReturnColumnName(columnAnnotation.name());
+            }
+        }
+        // 属性访问模式：检查 getter 上的 @Column
+        String getterName = "get" + Character.toUpperCase(fieldName.charAt(0)) + fieldName.substring(1);
+        for (Class<?> c = entityClass; c != null && c != Object.class; c = c.getSuperclass()) {
+            for (java.lang.reflect.Method m : c.getDeclaredMethods()) {
+                if (m.getName().equals(getterName) && m.getParameterCount() == 0) {
+                    jakarta.persistence.Column columnAnnotation = m.getAnnotation(jakarta.persistence.Column.class);
+                    if (columnAnnotation != null && !columnAnnotation.name().isEmpty()) {
+                        return validateAndReturnColumnName(columnAnnotation.name());
+                    }
+                    return StringHelper.camelToSnake(fieldName);
                 }
-                return name;
             }
         }
         return StringHelper.camelToSnake(fieldName);
     }
 
+    private static String validateAndReturnColumnName(String name) {
+        if (!IdentifierValidator.SAFE_IDENTIFIER_PATTERN.matcher(name).matches()) {
+            throw new IllegalArgumentException("Invalid @Column name: " + name
+                + ". Must contain only alphanumeric characters and underscores.");
+        }
+        return name;
+    }
+
     /**
-     * 解析实体类的 ID 列名。
+     * 解析实体类的 ID 列名。结果通过 {@link #ID_COLUMN_NAME_CACHE} 缓存，避免重复反射。
+     *
+     * <p>支持字段访问和属性访问两种模式（@Id 可能在字段上也可能在 getter 方法上）。</p>
      */
     private static String resolveIdColumnName(Class<?> entityClass) {
+        String cacheKey = getEntityBaseName(entityClass);
+        String result = ID_COLUMN_NAME_CACHE.get(cacheKey);
+        if (result != null) return result;
+        if (ID_COLUMN_NAME_CACHE.size() >= MAX_NAME_CACHE_SIZE) {
+            ID_COLUMN_NAME_CACHE.clear();
+        }
+        result = doResolveIdColumnName(entityClass);
+        ID_COLUMN_NAME_CACHE.put(cacheKey, result);
+        return result;
+    }
+
+    /**
+     * 获取实体的基类名称，剥离 Hibernate 动态代理后缀（如 {@code _$$_javassist_1}）。
+     * 确保缓存键不因代理类而产生爆炸。
+     * ponytail: 只处理已知的 Hibernate 代理模式（_$$_），其他 AOP 框架（如 Spring AOP CGLIB）不在本方法覆盖范围内。
+     */
+    private static String getEntityBaseName(Class<?> entityClass) {
+        String name = entityClass.getName();
+        int idx = name.indexOf("_$$_");
+        return idx > 0 ? name.substring(0, idx) : name;
+    }
+
+    private static String doResolveIdColumnName(Class<?> entityClass) {
         for (Class<?> c = entityClass; c != null && c != Object.class; c = c.getSuperclass()) {
+            // 检查字段上的 @Id
             for (Field f : c.getDeclaredFields()) {
                 if (f.isAnnotationPresent(jakarta.persistence.Id.class)) {
-                    jakarta.persistence.Column columnAnnotation = f.getAnnotation(jakarta.persistence.Column.class);
+                    return resolveColumnFromIdField(f);
+                }
+            }
+            // 检查 getter 方法上的 @Id（属性访问模式）
+            for (java.lang.reflect.Method m : c.getDeclaredMethods()) {
+                if (m.isAnnotationPresent(jakarta.persistence.Id.class)
+                    && m.getName().startsWith("get") && m.getParameterCount() == 0) {
+                    String methodName = m.getName();
+                    String fieldName = Character.toLowerCase(methodName.charAt(3)) + methodName.substring(4);
+                    jakarta.persistence.Column columnAnnotation = m.getAnnotation(jakarta.persistence.Column.class);
                     if (columnAnnotation != null && !columnAnnotation.name().isEmpty()) {
                         String name = columnAnnotation.name();
                         if (!IdentifierValidator.SAFE_IDENTIFIER_PATTERN.matcher(name).matches()) {
-                            throw new IllegalArgumentException("Invalid @Column name for @Id field: " + name
+                            throw new IllegalArgumentException("Invalid @Column name for @Id method: " + name
                                 + ". Must contain only alphanumeric characters and underscores.");
                         }
                         return name;
                     }
-                    return StringHelper.camelToSnake(f.getName());
+                    return StringHelper.camelToSnake(fieldName);
                 }
             }
         }
         throw new IllegalStateException(
-            "No @Id field found in " + (entityClass != null ? entityClass.getName() : "null"));
+            "No @Id field or getter method found in " + (entityClass != null ? entityClass.getName() : "null"));
+    }
+
+    private static String resolveColumnFromIdField(Field f) {
+        jakarta.persistence.Column columnAnnotation = f.getAnnotation(jakarta.persistence.Column.class);
+        if (columnAnnotation != null && !columnAnnotation.name().isEmpty()) {
+            String name = columnAnnotation.name();
+            if (!IdentifierValidator.SAFE_IDENTIFIER_PATTERN.matcher(name).matches()) {
+                throw new IllegalArgumentException("Invalid @Column name for @Id field: " + name
+                    + ". Must contain only alphanumeric characters and underscores.");
+            }
+            return name;
+        }
+        return StringHelper.camelToSnake(f.getName());
     }
 
     /**
@@ -628,10 +722,10 @@ public final class SoftDeleteHelper {
         Class<?> entityClass, boolean isNotDeleted) {
         Field field = getField(entityClass, fieldName);
         if (field == null) {
-            if (isNotDeleted) {
-                return cb.or(cb.isNull(path.get(fieldName)), cb.equal(path.get(fieldName), false));
-            }
-            return cb.equal(path.get(fieldName), true);
+            // ponytail: 字段无法解析时抛出明确异常，而非静默回退到 Boolean 逻辑（对 Integer/Enum/String 类型会产生错误谓词）
+            throw new com.zsubera.jpa.exception.MyJpaPlusException(
+                "Cannot resolve @SoftDelete field '" + fieldName + "' in " + entityClass.getName()
+                    + ". Ensure the field exists and is accessible.");
         }
         SoftDelete annotation = ANNOTATION_CACHE.computeIfAbsent(entityClass, cls -> {
             Field f = getField(cls, fieldName);
@@ -679,8 +773,8 @@ public final class SoftDeleteHelper {
      * @return 字段名称，如果未找到 {@code @SoftDelete} 字段则返回 {@code null}
      */
     public static String findSoftDeleteField(Class<?> entityClass) {
-        // 使用采样策略——每 64 次调用才检查一次缓存大小以减少开销
-        if ((CALL_COUNTER.incrementAndGet() & 63) == 0) {
+        // 使用采样策略——每 256 次调用才检查一次缓存大小以减少开销
+        if ((CALL_COUNTER.incrementAndGet() & 255) == 0) {
             int currentSize = FIELD_CACHE.size();
             if (currentSize > MAX_CACHE_SIZE) {
                 log.warn("SoftDeleteHelper field cache size ({}) exceeds limit ({}). "
@@ -834,5 +928,7 @@ public final class SoftDeleteHelper {
         FIELD_OBJECT_CACHE.clear();
         ANNOTATION_CACHE.clear();
         FIELDS_CACHE.clear();
+        COLUMN_NAME_CACHE.clear();
+        ID_COLUMN_NAME_CACHE.clear();
     }
 }

@@ -489,46 +489,83 @@ public class CteSpec {
      * @param query JPA Query 实例
      */
     private void applyFetchSize(EntityManager em, Query query) {
-        try {
-            if (HIBERNATE_SESSION_CLASS == null || HIBERNATE_WORK_CLASS == null) {
-                return;
+        String productName = null;
+        // 优先使用 Hibernate 路径
+        if (HIBERNATE_SESSION_CLASS != null && HIBERNATE_WORK_CLASS != null) {
+            productName = detectProductViaHibernate(em);
+        }
+        // Hibernate 不可用时，尝试通过直接 unwrap Connection（兼容 EclipseLink）
+        if (productName == null) {
+            productName = detectProductViaConnection(em);
+        }
+        if (productName != null) {
+            String lower = productName.toLowerCase();
+            if (lower.contains("postgresql") || lower.contains("mysql")) {
+                setNativeQueryFetchSize(query, 100);
             }
-            // 使用 Hibernate Session.doWork 获取数据库连接并检测类型
-            Class<?> sessionClass = HIBERNATE_SESSION_CLASS;
-            Class<?> workClass = HIBERNATE_WORK_CLASS;
-            Object session = em.unwrap(sessionClass);
-            String[] productNameHolder = new String[1];
-            Object workProxy = java.lang.reflect.Proxy.newProxyInstance(workClass.getClassLoader(),
-                new Class<?>[] {workClass}, (proxy, method, args) -> {
+        }
+    }
+
+    /**
+     * 通过 Hibernate Session.doWork 检测数据库产品名。
+     *
+     * @return 数据库产品名，失败时返回 null
+     */
+    private String detectProductViaHibernate(EntityManager em) {
+        try {
+            Object session = em.unwrap(HIBERNATE_SESSION_CLASS);
+            String[] holder = new String[1];
+            Object workProxy = java.lang.reflect.Proxy.newProxyInstance(HIBERNATE_WORK_CLASS.getClassLoader(),
+                new Class<?>[] {HIBERNATE_WORK_CLASS}, (proxy, method, args) -> {
                     if ("execute".equals(method.getName()) && args.length == 1
                         && args[0] instanceof java.sql.Connection conn) {
-                        productNameHolder[0] = conn.getMetaData().getDatabaseProductName();
+                        holder[0] = conn.getMetaData().getDatabaseProductName();
                         return null;
                     }
                     if (method.getDeclaringClass() == Object.class) {
                         return method.invoke(this, args);
                     }
-                    throw new UnsupportedOperationException("Unexpected method on Work: " + method.getName());
+                    return null;
                 });
-            java.lang.reflect.Method doWork = sessionClass.getMethod("doWork", workClass);
+            java.lang.reflect.Method doWork = HIBERNATE_SESSION_CLASS.getMethod("doWork", HIBERNATE_WORK_CLASS);
             doWork.invoke(session, workProxy);
-            if (productNameHolder[0] != null) {
-                String lower = productNameHolder[0].toLowerCase();
-                if (lower.contains("postgresql") || lower.contains("mysql")) {
-                    Class<?> nativeQueryClass = Class.forName("org.hibernate.query.NativeQuery");
-                    if (nativeQueryClass.isInstance(query)) {
-                        java.lang.reflect.Method setFetchSize = nativeQueryClass.getMethod("setFetchSize", int.class);
-                        setFetchSize.invoke(query, 100);
-                    }
-                }
-            }
-        } catch (ClassNotFoundException | NoSuchMethodException | IllegalAccessException e) {
+            return holder[0];
+        } catch (Exception e) {
+            log.debug("CteSpec: Hibernate product detection failed, trying fallback: {}", e.getMessage());
+            return null;
+        }
+    }
+
+    /**
+     * 通过直接 unwrap JDBC Connection 检测数据库产品名。
+     * 适用于 EclipseLink 等非 Hibernate JPA 提供者。
+     */
+    private String detectProductViaConnection(EntityManager em) {
+        try {
+            java.sql.Connection conn = em.unwrap(java.sql.Connection.class);
+            return conn.getMetaData().getDatabaseProductName();
+        } catch (Exception e) {
             log.warn("CteSpec: Cannot determine database product name for fetchSize, streaming may be inefficient: {}",
                 e.getMessage());
-        } catch (java.lang.reflect.InvocationTargetException e) {
-            log.warn("CteSpec: Failed to execute reflection call for fetchSize: {}",
-                e.getCause() != null ? e.getCause().getMessage() : e.getMessage());
+            return null;
         }
+    }
+
+    /**
+     * 通过反射设置 NativeQuery.fetchSize。适用于 Hibernate 和 EclipseLink 的 NativeQuery。
+     */
+    private static void setNativeQueryFetchSize(Query query, int fetchSize) {
+        // Hibernate NativeQuery
+        try {
+            Class<?> hibernateNq = Class.forName("org.hibernate.query.NativeQuery");
+            if (hibernateNq.isInstance(query)) {
+                hibernateNq.getMethod("setFetchSize", int.class).invoke(query, fetchSize);
+                return;
+            }
+        } catch (Exception ignored) {
+        }
+        // EclipseLink: 使用 JPA 查询 hint
+        query.setHint("eclipselink.jdbc.fetch-size", fetchSize);
     }
 
     /**

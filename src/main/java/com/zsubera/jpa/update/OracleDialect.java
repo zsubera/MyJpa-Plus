@@ -6,17 +6,15 @@ import java.util.List;
 import com.zsubera.jpa.update.EntityFieldExtractor.EntityFieldValue;
 
 /**
- * Oracle 方言实现。
+ * Oracle dialect implementation.
  *
  * <p>
- * UPSERT 语法：{@code MERGE INTO t USING (SELECT ... FROM DUAL) ON (condition) WHEN MATCHED THEN UPDATE ... WHEN NOT MATCHED THEN INSERT ...}
+ * UPSERT syntax: {@code MERGE INTO t USING (SELECT ... FROM DUAL) ON (condition) WHEN MATCHED THEN UPDATE ... WHEN NOT MATCHED THEN INSERT ...}
  *
  * <p>
- * 标识符使用双引号转义：{@code "identifier"}（Oracle 标准 SQL 标识符规则）。
- *
-
+ * Identifiers are escaped using double quotes: {@code "identifier"} (Oracle standard SQL identifier rules).
  */
-final class OracleDialect implements DialectStrategy {
+final class OracleDialect extends AbstractDialectStrategy {
 
     @Override
     public String name() {
@@ -24,18 +22,13 @@ final class OracleDialect implements DialectStrategy {
     }
 
     @Override
-    public String escapeIdentifier(String identifier) {
-        if (identifier.indexOf('.') >= 0) {
-            String[] parts = identifier.split("\\.");
-            StringBuilder sb = new StringBuilder();
-            for (int i = 0; i < parts.length; i++) {
-                if (i > 0)
-                    sb.append('.');
-                sb.append('"').append(parts[i].replace("\"", "\"\"")).append('"');
-            }
-            return sb.toString();
-        }
-        return "\"" + identifier.replace("\"", "\"\"") + "\"";
+    protected char getQuoteChar() {
+        return '"';
+    }
+
+    @Override
+    protected String getEscapeSequence() {
+        return "\"\"";
     }
 
     @Override

@@ -31,7 +31,17 @@ import org.springframework.data.jpa.domain.Specification;
  */
 public final class PageableHelper {
 
+    /** 数据库类型检测结果的缓存。首次检测后缓存，避免每次流式查询都解析 JDBC URL。 */
+    private static volatile Integer cachedFetchSize;
+
     private PageableHelper() {}
+
+    /**
+     * ponytail: 重置 fetchSize 缓存。多数据源切换后调用此方法确保重新检测数据库类型。
+     */
+    public static void resetFetchSizeCache() {
+        cachedFetchSize = null;
+    }
 
     /**
      * 创建一个没有排序的 {@link PageRequest}，保留 {@link Specification} 上设置的任何排序 （例如来自 {@link QuerySpec#orderByAsc}）。
@@ -101,7 +111,27 @@ public final class PageableHelper {
      * @param em EntityManager 实例
      * @return fetchSize 值，0 表示不设置提示
      */
+    /**
+     * 根据数据库方言确定流式查询的 fetchSize。结果首次计算后缓存，避免重复解析 JDBC URL。
+     *
+     * <p>
+     * PostgreSQL 需要 fetchSize > 0 以启用服务端游标进行流式查询。MySQL 使用 {@code Integer.MIN_VALUE}
+     * 以启用流式模式。其他数据库使用默认值（不设置提示）。
+     *
+     * @param em EntityManager 实例
+     * @return fetchSize 值，0 表示不设置提示
+     */
     public static int determineFetchSize(jakarta.persistence.EntityManager em) {
+        Integer cached = cachedFetchSize;
+        if (cached != null) {
+            return cached;
+        }
+        int result = doDetermineFetchSize(em);
+        cachedFetchSize = result;
+        return result;
+    }
+
+    private static int doDetermineFetchSize(jakarta.persistence.EntityManager em) {
         try {
             Object urlObj = em.getEntityManagerFactory().getProperties().get("jakarta.persistence.jdbc.url");
             if (urlObj == null) {

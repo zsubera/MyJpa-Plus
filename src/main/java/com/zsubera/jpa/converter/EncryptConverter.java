@@ -10,6 +10,9 @@ import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReentrantLock;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
 import javax.crypto.Cipher;
 import javax.crypto.SecretKeyFactory;
 import javax.crypto.spec.GCMParameterSpec;
@@ -78,16 +81,18 @@ public class EncryptConverter implements AttributeConverter<String, String> {
     private static final Logger log = LoggerFactory.getLogger(EncryptConverter.class);
 
     /**
-     * Cipher 实例缓存。Cipher.getInstance() 涉及 JCE Provider 查找，开销较大。
-     * Cipher 非线程安全，使用 ThreadLocal 保证线程隔离。
+     * GCM 模式下 Cipher 实例每次操作新建，不重用。
+     *
+     * <p>JDK 的 GCM Cipher 实现存在已知 bug（JDK-8201324）：doFinal() 失败后 Cipher
+     * 内部状态未完全重置，复用会导致后续加解密输出错误结果。每次调用创建新实例是最安全的模式。</p>
      */
-    private static final ThreadLocal<Cipher> CIPHER_THREAD_LOCAL = ThreadLocal.withInitial(() -> {
+    private static Cipher createCipher() {
         try {
             return Cipher.getInstance(ALGORITHM);
         } catch (GeneralSecurityException e) {
             throw new MyJpaPlusException("Failed to initialize cipher", e);
         }
-    });
+    }
 
     /** 防止弱密钥攻击的最小密钥长度（字符数）。 */
     private static final int MIN_KEY_LENGTH = 16;
@@ -100,15 +105,8 @@ public class EncryptConverter implements AttributeConverter<String, String> {
     /** 缓存的密钥规范最大数量，防止恶意版本前缀导致内存耗尽。 */
     private static final int MAX_KEY_CACHE_SIZE = 16;
 
-    /** 缓存的密钥版本，避免重复读取环境变量。 */
-
     /** 用于 reEncrypt() 的共享实例（所有方法仅使用静态状态，线程安全）。 */
     private static final EncryptConverter SHARED_INSTANCE = new EncryptConverter();
-
-    private static volatile String cachedKeyVersion;
-
-    /** 上次刷新密钥版本的时间戳。 */
-    private static volatile long lastKeyVersionRefresh;
 
     /** 多密钥格式正则表达式：vN:key,vN:key */
     private static final java.util.regex.Pattern MULTI_KEY_PATTERN = java.util.regex.Pattern.compile(".*v\\d+:.*,.+");
@@ -149,13 +147,20 @@ public class EncryptConverter implements AttributeConverter<String, String> {
             if (executor != null) {
                 executor.shutdownNow();
             }
-            CIPHER_THREAD_LOCAL.remove();
         }, "encrypt-key-warmup-shutdown"));
     }
 
     /** 开发环境可选：显式设置为 true 时跳过盐值检查（仅限开发环境）。 */
     private static final String SKIP_SALT_PROPERTY = "myjpa-plus.encrypt.skip-salt-check";
     private static final String SKIP_SALT_ENV = "MYJPA_ENCRYPT_SKIP_SALT_CHECK";
+
+    /** 保护 getKeySpec 缓存的读写锁：读路径（缓存命中）无需锁，写路径（缓存未命中/KDF 派生）互斥。 */
+    private static final ReentrantReadWriteLock KEY_SPEC_LOCK = new ReentrantReadWriteLock();
+    private static final Lock KEY_SPEC_READ_LOCK = KEY_SPEC_LOCK.readLock();
+    private static final Lock KEY_SPEC_WRITE_LOCK = KEY_SPEC_LOCK.writeLock();
+
+    /** 保护 getKeyVersion 缓存刷新的轻量锁（仅每 5 分钟触发一次写路径）。 */
+    private static final ReentrantLock KEY_VERSION_LOCK = new ReentrantLock();
 
     /** 开发环境固定盐值。仅在 skip-salt-check=true 时使用，确保跨 JVM 重启的数据可恢复性。 */
     private static final String DEV_SALT = "myjpa-plus-dev-salt-2024";
@@ -170,18 +175,12 @@ public class EncryptConverter implements AttributeConverter<String, String> {
     private static final AtomicBoolean DEV_SALT_WARNING_LOGGED = new AtomicBoolean(false);
 
     /**
-     * 清除当前线程的 Cipher 缓存。在请求结束后调用此方法可防止 ThreadLocal 泄漏。
+     * 清除当前线程的 Cipher 缓存（无操作：GCM 模式下每次操作新建 Cipher 实例，无需缓存清理）。
      *
-     * <p>
-     * 在 Servlet 容器线程池中，线程会被复用。如果不清理 ThreadLocal，Cipher 实例会一直保留，
-     * 阻止类加载器被垃圾回收。在热重载或 OSGi 环境中，这会导致整个类加载器泄漏。
-     *
-     * <p>
-     * <strong>注意：</strong>不要在每次加密/解密操作后调用此方法，否则会完全抵消 ThreadLocal 缓存的性能优势。
-     * 应在请求结束或会话结束时调用（例如 Servlet Filter 的 afterCompletion 中）。
+     * <p>此方法保留以保持 API 兼容性，实际已无操作。</p>
      */
     public static void removeCipher() {
-        CIPHER_THREAD_LOCAL.remove();
+        // GCM 模式下不缓存 Cipher，无需清理
     }
 
     /**
@@ -189,8 +188,7 @@ public class EncryptConverter implements AttributeConverter<String, String> {
      */
     public static void clearCaches() {
         KEY_CACHE.clear();
-        cachedKeyVersion = null;
-        lastKeyVersionRefresh = 0;
+        keyVersionSnapshot = new KeyVersionSnapshot("v1", 0);
         KEY_VALIDATED.set(false);
         DEV_SALT_WARNING_LOGGED.set(false);
     }
@@ -269,11 +267,12 @@ public class EncryptConverter implements AttributeConverter<String, String> {
      * 此方法线程安全，可在运行时调用以支持在线密钥轮换。
      */
     public static void refreshKeyVersion() {
-        synchronized (EncryptConverter.class) {
-            cachedKeyVersion = null;
+        KEY_SPEC_WRITE_LOCK.lock();
+        try {
             KEY_CACHE.clear();
-            lastKeyVersionRefresh = System.currentTimeMillis();
-            DEV_SALT_WARNING_LOGGED.set(false);
+            keyVersionSnapshot = new KeyVersionSnapshot(null, 0);
+        } finally {
+            KEY_SPEC_WRITE_LOCK.unlock();
         }
         log.info("Encryption key version cache refreshed");
     }
@@ -327,6 +326,18 @@ public class EncryptConverter implements AttributeConverter<String, String> {
         }
     }
 
+    /** 密钥版本快照：将 version 和 refreshTimestamp 组合为单个 volatile 引用，保证原子读取。 */
+    private static volatile KeyVersionSnapshot keyVersionSnapshot = new KeyVersionSnapshot("v1", 0);
+
+    private static final class KeyVersionSnapshot {
+        final String version;
+        final long refreshTimestamp;
+        KeyVersionSnapshot(String version, long refreshTimestamp) {
+            this.version = version;
+            this.refreshTimestamp = refreshTimestamp;
+        }
+    }
+
     /**
      * 获取当前密钥版本标识。结果缓存以避免每次操作读取环境变量。
      *
@@ -336,28 +347,28 @@ public class EncryptConverter implements AttributeConverter<String, String> {
      * @return 密钥版本标识
      */
     private static String getKeyVersion() {
-        // 使用单一 volatile 读取确保版本与时间戳的一致性
-        String version = cachedKeyVersion;
-        long lastRefresh = lastKeyVersionRefresh;
+        // ponytail: 单次 volatile 读取快照对象，避免两次 volatile 读之间的竞态导致版本与时间戳不一致
+        KeyVersionSnapshot snap = keyVersionSnapshot;
         long now = System.currentTimeMillis();
-        if (version != null && (now - lastRefresh) < KEY_VERSION_REFRESH_INTERVAL_MS) {
-            return version;
+        if (snap.version != null && (now - snap.refreshTimestamp) < KEY_VERSION_REFRESH_INTERVAL_MS) {
+            return snap.version;
         }
-        // 定期刷新或首次加载
-        synchronized (EncryptConverter.class) {
-            // 在同步块内重新读取以避免过期检查
+        KEY_VERSION_LOCK.lock();
+        try {
+            snap = keyVersionSnapshot;
             now = System.currentTimeMillis();
-            version = cachedKeyVersion;
-            if (version != null && (now - lastKeyVersionRefresh) < KEY_VERSION_REFRESH_INTERVAL_MS) {
-                return version;
+            if (snap.version != null && (now - snap.refreshTimestamp) < KEY_VERSION_REFRESH_INTERVAL_MS) {
+                return snap.version;
             }
-            version = System.getenv(KEY_VERSION_ENV);
+            String version = System.getenv(KEY_VERSION_ENV);
             if (version == null || version.isEmpty()) {
                 version = System.getProperty(KEY_VERSION_PROPERTY);
             }
-            cachedKeyVersion = (version != null && !version.isEmpty()) ? version : "v1";
-            lastKeyVersionRefresh = now;
-            return cachedKeyVersion;
+            String resolved = (version != null && !version.isEmpty()) ? version : "v1";
+            keyVersionSnapshot = new KeyVersionSnapshot(resolved, now);
+            return resolved;
+        } finally {
+            KEY_VERSION_LOCK.unlock();
         }
     }
 
@@ -389,7 +400,7 @@ public class EncryptConverter implements AttributeConverter<String, String> {
         }
         try {
             SecretKeySpec keySpec = getKeySpec();
-            Cipher cipher = CIPHER_THREAD_LOCAL.get();
+            Cipher cipher = createCipher();
             byte[] iv = new byte[GCM_IV_LENGTH];
             SECURE_RANDOM.nextBytes(iv);
             cipher.init(Cipher.ENCRYPT_MODE, keySpec, new GCMParameterSpec(GCM_TAG_LENGTH, iv));
@@ -433,9 +444,9 @@ public class EncryptConverter implements AttributeConverter<String, String> {
                 int colonIndex = dbData.indexOf(':');
                 version = dbData.substring(0, colonIndex);
                 if (!VERSION_PATTERN.matcher(version).matches()) {
-                    log.warn("Invalid version prefix format '{}' in encrypted data, treating as unversioned", version);
-                    version = null;
-                    base64Data = dbData;
+                    throw new MyJpaPlusException("Invalid key version prefix: '" + version
+                        + "'. Expected format: v1, v2, etc. "
+                        + "Encrypted data may be corrupted or produced by a different system.");
                 } else {
                     base64Data = dbData.substring(colonIndex + 1);
                 }
@@ -460,7 +471,7 @@ public class EncryptConverter implements AttributeConverter<String, String> {
             byte[] encrypted = new byte[combined.length - GCM_IV_LENGTH];
             System.arraycopy(combined, GCM_IV_LENGTH, encrypted, 0, encrypted.length);
             SecretKeySpec keySpec = getKeySpec(version);
-            Cipher cipher = CIPHER_THREAD_LOCAL.get();
+            Cipher cipher = createCipher();
             cipher.init(Cipher.DECRYPT_MODE, keySpec, new GCMParameterSpec(GCM_TAG_LENGTH, iv));
             byte[] decrypted = cipher.doFinal(encrypted);
             return new String(decrypted, StandardCharsets.UTF_8);
@@ -485,12 +496,14 @@ public class EncryptConverter implements AttributeConverter<String, String> {
      */
     private static SecretKeySpec getKeySpec(String version) {
         String cacheKey = version != null ? version : "default";
+        // 快速路径：ConcurrentHashMap 无锁读，缓存命中时零锁开销
         SecretKeySpec existing = KEY_CACHE.get(cacheKey);
         if (existing != null) {
             return existing;
         }
-        // 使用 synchronized 保证 size 检查与 put 的原子性，防止并发超限
-        synchronized (EncryptConverter.class) {
+        // 慢速路径：写锁保护 size 检查与 put 的原子性，避免并发超限和重复 KDF 派生
+        KEY_SPEC_WRITE_LOCK.lock();
+        try {
             existing = KEY_CACHE.get(cacheKey);
             if (existing != null) {
                 return existing;
@@ -504,6 +517,8 @@ public class EncryptConverter implements AttributeConverter<String, String> {
             SecretKeySpec derived = deriveKey(rawKey);
             KEY_CACHE.put(cacheKey, derived);
             return derived;
+        } finally {
+            KEY_SPEC_WRITE_LOCK.unlock();
         }
     }
 
@@ -607,18 +622,18 @@ public class EncryptConverter implements AttributeConverter<String, String> {
      * @return 派生的 AES 密钥规范
      */
     private static SecretKeySpec deriveKey(String rawKeyMaterial) {
+        char[] keyChars = rawKeyMaterial.toCharArray();
         try {
-            // 始终通过 PBKDF2 派生密钥以保证安全性——已移除直接使用快捷方式
-            // 直接使用原始密钥字节存在安全风险，因为低熵密码
-            // 可以直接用作 AES 密钥。
             byte[] salt = getSalt();
-            PBEKeySpec spec = new PBEKeySpec(rawKeyMaterial.toCharArray(), salt, PBKDF2_ITERATIONS, PBKDF2_KEY_LENGTH);
+            PBEKeySpec spec = new PBEKeySpec(keyChars, salt, PBKDF2_ITERATIONS, PBKDF2_KEY_LENGTH);
             SecretKeyFactory factory = SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256");
             byte[] derived = factory.generateSecret(spec).getEncoded();
             return new SecretKeySpec(derived, "AES");
         } catch (GeneralSecurityException e) {
-            // 使用 MyJpaPlusException 替代 IllegalStateException 保持一致性
             throw new MyJpaPlusException("Failed to derive encryption key via PBKDF2", e);
+        } finally {
+            // ponytail: 清零敏感密钥材料，防止 heap dump 泄露
+            java.util.Arrays.fill(keyChars, '\0');
         }
     }
 

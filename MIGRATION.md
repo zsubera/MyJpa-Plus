@@ -47,6 +47,16 @@
 | `QuerySpec.toPredicate()` | 调用 `validateCleanState()` | 仅在 `toSpecification()` 中验证 | Spring Data 内部组合 Specification 时不再意外触发验证 |
 | `SqlSlowQueryInterceptor` | 无条件注册 | 仅在 Hibernate 环境注册（`@ConditionalOnClass`） | EclipseLink 环境不再因缺少 Hibernate 而启动失败 |
 | 函数白名单扩展 | 直接修改全局 ConcurrentHashMap | 使用不可变快照（`AtomicReference<Set<String>>`） | 运行时检查无锁且线程安全 |
+| `checkRowCountBeforeExecute` 计数策略 | 先 `SELECT 1 LIMIT n+1` 快速探测，超限时精确 COUNT | 直接精确 `SELECT COUNT(*)` | 更准确（消除探测与 COUNT 间的竞态），代价为多一次 COUNT 查询 |
+| `FunctionWhitelist` 函数名检查 | 仅查冻结快照 | 先查冻结快照，未命中回退到 `ConcurrentHashMap` 实时集合 | 启动期间冻结滞后不再导致误拒绝 |
+| `EncryptConverter.removeCipher()` | 清理 ThreadLocal Cipher | 无操作（GCM 模式下每次操作新建 Cipher 实例） | API 保持兼容，调用无副作用 |
+| `EncryptConverter` 版本前缀解析失败 | 警告日志 + 静默当作无版本数据 | 抛出 `MyJpaPlusException` | 数据损坏可被及早发现，不再静默降级 |
+| `IdentifierValidator.strictMode` | 每次调用读取 `System.getProperty()` | 静态初始化缓存一次，提供 `setStrictMode(boolean)` setter | 性能优化，可运行时切换 |
+| `SoftDeleteHelper.softDeleteAll` | 无条件执行全表 UPDATE | 检查 `TransactionSynchronizationManager.isActualTransactionActive()` | 防止无事务场景下不可回滚的数据丢失 |
+| `EntityFieldExtractor @Embedded` 循环检测 | `Set<Class<?>>`（class 引用） | `Set<Object>`（实例引用） | 同类型不同实体实例不再误判为循环 |
+| `NodeResolver` 软删除 JOIN 过滤 | LEFT JOIN 的软删除条件放在 WHERE 子句 | LEFT JOIN 条件放在 `join.on()` 子句（新创建的 join） | 修复 LEFT JOIN 退化为 INNER JOIN |
+| `EncryptConverter` GCM Cipher | ThreadLocal 缓存，每次操作复用 | 每次操作新建 Cipher 实例 | 修复 JDK-8201324 状态损坏，线程安全 |
+| `CacheKeyBuilder.appendCacheKey` | 无递归限制 | 128 层深度限制，超出后截断为 `DEPTH_EXCEEDED` | 防止恶意深层条件树导致 StackOverflowError |
 
 ### 废弃 API（已在 1.3.0 中移除）
 
@@ -73,6 +83,17 @@
 - **QuerySpec.copy() 深拷贝**：修复浅拷贝导致 JoinNode/OrNode/AndNode 嵌套条件共享可变状态
 - **QueryCacheManager deque 漂移**：改进 drift 清理机制，drift 超过阈值时执行全量遍历清理
 - **@Deprecated 版本号修正**：`QuerySpec.setGlobalConfig()` 的 `@Deprecated(since)` 修正为 `1.3.0`
+- **NodeResolver LEFT JOIN 软删除**：软删除条件从 WHERE 移至 ON 子句，修复 LEFT JOIN 退化为 INNER JOIN
+- **DefaultMyJpaRepository 硬编码谓词**：`deleteByIdIfExists` 改用 `SoftDeleteHelper.buildNotDeleted()`，支持非 Boolean 软删除类型
+- **LambdaUtils 类型转换**：`writeReplace()` 返回值做 `instanceof` 检查后再转型，修复 JDK 版本差异
+- **PredicateHelper 精度丢失**：`between` 操作使用 `BigDecimal.toString()` 构造避免 `valueOf(double)` 精度问题
+- **IdentifierValidator 性能**：`strictMode` 缓存到静态字段，消除每次调用的系统属性读取开销
+- **EncryptConverter GCM 状态损坏**：移除非线程安全的 ThreadLocal Cipher 缓存，每次操作新建实例
+- **SoftDeleteHelper 属性访问**：`resolveIdColumnName`/`resolveColumnName` 增加 getter 方法扫描，支持 `@Access(AccessType.PROPERTY)` 实体
+- **SoftDeleteHelper 事务保护**：`softDeleteAll` 增加活动事务检查
+- **AbstractBulkOperationSpec 计数准确性**：`checkRowCountBeforeExecute` 改用精确 COUNT 消除竞态
+- **FunctionWhitelist 冻结滞后**：`containsSafeFunction()`/`containsBooleanFunction()` 增加实时集合回退
+- **CacheKeyBuilder 递归保护**：`appendCacheKey` 添加 128 层深度限制
 
 ## 从 1.1.0 升级到 1.2.0
 

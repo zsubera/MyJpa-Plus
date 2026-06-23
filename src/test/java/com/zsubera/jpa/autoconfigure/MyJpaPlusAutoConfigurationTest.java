@@ -3,9 +3,15 @@ package com.zsubera.jpa.autoconfigure;
 import static org.junit.jupiter.api.Assertions.*;
 
 import com.zsubera.jpa.template.MyJpaTemplate;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 class MyJpaPlusAutoConfigurationTest {
+
+    @BeforeEach
+    void setUp() {
+        GlobalConfigHolder.reset();
+    }
 
     @Test
     void properties_defaultValues() {

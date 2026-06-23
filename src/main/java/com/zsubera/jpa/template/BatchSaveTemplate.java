@@ -1,5 +1,6 @@
 package com.zsubera.jpa.template;
 
+import com.zsubera.jpa.util.SampledEvictionCache;
 import jakarta.persistence.EntityManager;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -8,8 +9,6 @@ import org.springframework.transaction.support.TransactionTemplate;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentMap;
 
 /**
  * 批量保存操作模板，封装 {@code persist()/merge()} 的批量保存逻辑。
@@ -31,10 +30,8 @@ class BatchSaveTemplate {
     private static final Logger log = LoggerFactory.getLogger(BatchSaveTemplate.class);
 
     /** getId() 方法缓存，避免 isNewEntity() 每次反射查找。key = entity class，最大 1024 条 */
-    private static final ConcurrentMap<Class<?>, java.lang.reflect.Method> ID_METHOD_CACHE =
-        new ConcurrentHashMap<>(64);
-
-    private static final int MAX_ID_METHOD_CACHE_SIZE = 1024;
+    private static final SampledEvictionCache<Class<?>, java.lang.reflect.Method> ID_METHOD_CACHE =
+        new SampledEvictionCache<>(1024, 0.25, 1, 64);
     private static final java.lang.reflect.Method NO_ID_METHOD_SENTINEL;
 
     static {
@@ -46,12 +43,14 @@ class BatchSaveTemplate {
     }
 
     private final EntityManager entityManager;
+    private final jakarta.persistence.EntityManagerFactory entityManagerFactory;
     private final TransactionTemplate requiredTxTemplate;
     private final TransactionTemplate requiresNewTxTemplate;
 
     BatchSaveTemplate(EntityManager entityManager,
         org.springframework.transaction.PlatformTransactionManager txManager) {
         this.entityManager = entityManager;
+        this.entityManagerFactory = entityManager.getEntityManagerFactory();
         this.requiredTxTemplate = new TransactionTemplate(txManager);
         this.requiredTxTemplate.setPropagationBehavior(
             org.springframework.transaction.TransactionDefinition.PROPAGATION_REQUIRED);
@@ -64,12 +63,17 @@ class BatchSaveTemplate {
         TransactionTemplate template = TransactionSynchronizationManager.isActualTransactionActive()
             ? requiresNewTxTemplate : requiredTxTemplate;
         return template.execute(status -> {
-            R r = operation.apply(entityManager);
-            if (status.isRollbackOnly()) {
-                throw new org.springframework.transaction.UnexpectedRollbackException(
-                    "Transaction was unexpectedly rolled back.");
+            EntityManager em = entityManagerFactory.createEntityManager();
+            try {
+                R r = operation.apply(em);
+                if (status.isRollbackOnly()) {
+                    throw new org.springframework.transaction.UnexpectedRollbackException(
+                        "Transaction was unexpectedly rolled back.");
+                }
+                return r;
+            } finally {
+                em.close();
             }
-            return r;
         });
     }
 
@@ -196,9 +200,6 @@ class BatchSaveTemplate {
                 entity.getClass().getSimpleName(), e.getMessage());
         }
         try {
-            if (ID_METHOD_CACHE.size() >= MAX_ID_METHOD_CACHE_SIZE) {
-                evictIdMethodCache();
-            }
             java.lang.reflect.Method getId = ID_METHOD_CACHE.computeIfAbsent(entity.getClass(), clazz -> {
                 try {
                     return clazz.getMethod("getId");
@@ -249,23 +250,4 @@ class BatchSaveTemplate {
         return false;
     }
 
-    /**
-     * 采样驱逐 ID_METHOD_CACHE：移除约 25% 的条目，避免全量清空导致的性能抖动。
-     *
-     * 使用 keySetView.iterator() 避免 toArray() 的临时数组开销。
-     */
-    private static void evictIdMethodCache() {
-        int targetSize = MAX_ID_METHOD_CACHE_SIZE / 4;
-        int toRemove = ID_METHOD_CACHE.size() - targetSize;
-        if (toRemove <= 0) {
-            return;
-        }
-        java.util.Iterator<Class<?>> it = ID_METHOD_CACHE.keySet().iterator();
-        int removed = 0;
-        while (it.hasNext() && removed < toRemove) {
-            it.next();
-            it.remove();
-            removed++;
-        }
-    }
 }

@@ -116,6 +116,30 @@ public final class FunctionWhitelist {
     }
 
     /**
+     * 检查函数名是否在扩展安全函数白名单中。先查冻结快照（无锁），
+     * 未命中时回退到实时集合，解决启动期间冻结快照未更新导致的误判。
+     *
+     * @param upperName 大写函数名
+     * @return 如果在扩展白名单中返回 true
+     */
+    public static boolean containsSafeFunction(String upperName) {
+        return FROZEN_EXTRA_SAFE_FUNCTION_NAMES.get().contains(upperName)
+            || EXTRA_SAFE_FUNCTION_NAMES.contains(upperName);
+    }
+
+    /**
+     * 检查函数名是否在扩展布尔函数白名单中。先查冻结快照（无锁），
+     * 未命中时回退到实时集合。
+     *
+     * @param upperName 大写函数名
+     * @return 如果在扩展布尔白名单中返回 true
+     */
+    public static boolean containsBooleanFunction(String upperName) {
+        return FROZEN_EXTRA_BOOLEAN_FUNCTION_NAMES.get().contains(upperName)
+            || EXTRA_BOOLEAN_FUNCTION_NAMES.contains(upperName);
+    }
+
+    /**
      * 重置所有状态为初始值。用于测试隔离，防止跨测试的状态污染。
      *
      * <p>

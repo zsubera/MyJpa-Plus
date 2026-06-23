@@ -85,6 +85,21 @@
 - **OptimisticLockRetryAdvisorTest** — 修复上下文加载失败及缓存自动失效问题
 - **QuerySpec.copy() groupStack** — 修复顺序反转 bug
 - **DefaultMyJpaRepository 配置同步** — `isAutoFilterEnabled()` 和 `isBlockUnconditionalDelete()` 优先检查 `GlobalConfigHolder`，修复移除废弃同步方法后配置断开的问题
+- **NodeResolver LEFT JOIN 软删除过滤位置** — 软删除条件从 WHERE 子句移至 ON 子句，修复 LEFT JOIN 退化为 INNER JOIN 的问题
+- **DefaultMyJpaRepository.deleteByIdIfExists 硬编码谓词** — 改用 `SoftDeleteHelper.buildNotDeleted()` 替换硬编码 `Boolean.FALSE` 谓词，支持非 Boolean 软删除类型
+- **JTA 事务检测崩溃** — `AbstractBulkOperationSpec` 和 `BulkTransactionHelper` 捕获 `IllegalStateException`，修复 JTA 环境中 `em.getTransaction()` 崩溃
+- **EntityManagerHelper 多数据源竞争条件** — `resolvers.put()` 和 `registerEntityManagerFactoryIfAbsent()` 加同步锁；每个 entry 独立探测类型，修复并发注册时的竞态
+- **LambdaUtils.writeReplace 类型转换** — 修复 JDK 不同版本上 `writeReplace()` 返回类型不一致导致的 `ClassCastException`
+- **PredicateHelper BigDecimal 精度丢失** — `between` 操作中改用 `new BigDecimal(value.toString())` 避免 `BigDecimal.valueOf(double)` 精度丢失
+- **EntityFieldExtractor @Embedded 循环检测** — 从 `Set<Class<?>>` 改为 `Set<Object>`（实例检测），修复同类型不同实例误判为循环引用
+- **IdentifierValidator System.getProperty 缓存** — `strictMode` 缓存到静态字段，避免每次调用 `checkHomoglyphs()` 读取系统属性
+- **EncryptConverter GCM Cipher 生命周期** — 移除 `CIPHER_THREAD_LOCAL`，每次操作创建新 Cipher 实例，修复 JDK-8201324 GCM 状态损坏
+- **SoftDeleteHelper 属性访问实体支持** — `resolveIdColumnName` 和 `resolveColumnName` 新增 getter 方法 `@Id`/`@Column` 扫描，支持 `@Access(AccessType.PROPERTY)` 实体
+- **SoftDeleteHelper.softDeleteAll 事务检查** — 执行前检查 `TransactionSynchronizationManager.isActualTransactionActive()`，防止无事务的全表更新不可回滚
+- **EncryptConverter 版本前缀解析失败** — 无效版本前缀从静默降级改为抛出 `MyJpaPlusException`，避免掩盖数据损坏
+- **AbstractBulkOperationSpec 预执行精确计数** — `checkRowCountBeforeExecute` 改用精确 `SELECT COUNT(*)` 替代快速探测 `SELECT 1 LIMIT n`，消除探测与精确计数间的竞态窗口
+- **FunctionWhitelist 懒冻结** — 新增 `containsSafeFunction()`/`containsBooleanFunction()`，消费者先查冻结快照，未命中回退到实时集合，修复启动期间冻结滞后导致的误拒绝
+- **CacheKeyBuilder 递归深度保护** — `appendCacheKey` 添加 128 层递归深度限制，防止恶意深层条件树导致 `StackOverflowError`
 
 ## [1.2.0] - 2026-06-12
 
@@ -97,9 +112,7 @@
 - **乐观锁自动重试** — `@RetryOnOptimisticLock` 注解，指数退避
 - **查询结果缓存** — `QueryCacheManager`，TTL 过期策略
 - **数据库函数调用** — `func(field, functionName, comparisonOp, value)` 条件方法
-- **DTO 分页查询** — `ProjectionSpec.findDtoPage()` 返回 `Page<DTO>`
-- **DTO 列表查询** — `ProjectionSpec.toDtoList()` / `findOneDto()`
-- **Case-insensitive 字符串方法** — `containsIgnoreCase`、`startsWithIgnoreCase`、`endsWithIgnoreCase`
+- **Case-insensitive 字符串查询** — `eqIgnoreCase`、`neIgnoreCase`、`likeIgnoreCase`
 - **多字段 LIKE 搜索** — `multiLike(keyword, "field1", "field2")` 支持字符串字段名
 - **String 类型软删除** — 支持 `@SoftDelete` 注解的 String 类型 deletedValue
 - **实体管理器工厂支持** — 改进 `EntityManagerFactory` 集成

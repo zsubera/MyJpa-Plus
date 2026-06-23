@@ -104,7 +104,7 @@ class MergeSpecTransactionTest {
     }
 
     @Test
-    void testIsJtaTransactionActiveTrue() throws Exception {
+    void testIsJtaTransactionActiveNonJtaEmReturnsFalse() throws Exception {
         EntityManager em = mock(EntityManager.class);
         EntityTransaction tx = mock(EntityTransaction.class);
         when(em.getTransaction()).thenReturn(tx);
@@ -113,7 +113,7 @@ class MergeSpecTransactionTest {
         var method = MergeSpec.class.getDeclaredMethod("isJtaTransactionActive", EntityManager.class);
         method.setAccessible(true);
         boolean result = (boolean)method.invoke(null, em);
-        assertTrue(result);
+        assertFalse(result);
     }
 
     @Test
@@ -124,6 +124,54 @@ class MergeSpecTransactionTest {
         when(tx.isActive()).thenReturn(false);
 
         var method = MergeSpec.class.getDeclaredMethod("isJtaTransactionActive", EntityManager.class);
+        method.setAccessible(true);
+        boolean result = (boolean)method.invoke(null, em);
+        assertFalse(result);
+    }
+
+    @Test
+    void testIsEntityTransactionActiveTrue() throws Exception {
+        EntityManager em = mock(EntityManager.class);
+        EntityTransaction tx = mock(EntityTransaction.class);
+        when(em.getTransaction()).thenReturn(tx);
+        when(tx.isActive()).thenReturn(true);
+
+        var method = MergeSpec.class.getDeclaredMethod("isEntityTransactionActive", EntityManager.class);
+        method.setAccessible(true);
+        boolean result = (boolean)method.invoke(null, em);
+        assertTrue(result);
+    }
+
+    @Test
+    void testIsEntityTransactionActiveFalse() throws Exception {
+        EntityManager em = mock(EntityManager.class);
+        EntityTransaction tx = mock(EntityTransaction.class);
+        when(em.getTransaction()).thenReturn(tx);
+        when(tx.isActive()).thenReturn(false);
+
+        var method = MergeSpec.class.getDeclaredMethod("isEntityTransactionActive", EntityManager.class);
+        method.setAccessible(true);
+        boolean result = (boolean)method.invoke(null, em);
+        assertFalse(result);
+    }
+
+    @Test
+    void testIsEntityTransactionActiveNullTxReturnsFalse() throws Exception {
+        EntityManager em = mock(EntityManager.class);
+        when(em.getTransaction()).thenReturn(null);
+
+        var method = MergeSpec.class.getDeclaredMethod("isEntityTransactionActive", EntityManager.class);
+        method.setAccessible(true);
+        boolean result = (boolean)method.invoke(null, em);
+        assertFalse(result);
+    }
+
+    @Test
+    void testIsEntityTransactionActiveJtaEnvReturnsFalse() throws Exception {
+        EntityManager em = mock(EntityManager.class);
+        when(em.getTransaction()).thenThrow(new IllegalStateException("JTA environment"));
+
+        var method = MergeSpec.class.getDeclaredMethod("isEntityTransactionActive", EntityManager.class);
         method.setAccessible(true);
         boolean result = (boolean)method.invoke(null, em);
         assertFalse(result);

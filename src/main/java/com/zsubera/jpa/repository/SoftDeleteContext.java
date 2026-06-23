@@ -73,10 +73,12 @@ public final class SoftDeleteContext {
     }
 
     /**
-     * 设置最大忽略计数。
+     * 设置最大忽略计数。仅允许通过系统属性 myjpa-plus.soft-delete.max-ignore-count 配置。
      *
      * @param count 最大忽略计数（1-1024）
+     * @deprecated 此方法已弃用——maxIgnoreCount 应通过系统属性配置，避免运行时被任意代码绕过安全上限。
      */
+    @Deprecated
     public static void setMaxIgnoreCount(int count) {
         if (count > 0 && count <= 1024) {
             maxIgnoreCount = count;
@@ -173,17 +175,15 @@ public final class SoftDeleteContext {
      * 当计数归零时自动清除 ThreadLocal，防止内存泄漏。包含防御性检查以处理异常场景下的计数漂移。
      */
     public static void popIgnore() {
-        // ThreadLocal.withInitial保证非null，所以count始终>=0。
-        // null检查不可达但保留作为防御性编程。
         int count = IGNORE_COUNT.get();
         if (count <= 0) {
-            // 异常场景下计数漂移的防御性清理
             log.warn("SoftDeleteContext.popIgnore() called with count={}, possible push/pop mismatch. "
                 + "Cleaning up ThreadLocal to prevent memory leak.", count);
             IGNORE_COUNT.remove();
             return;
         }
-        if (count - 1 <= 0) {
+        // ponytail: count >= 1 here, so count == 1 means "last level — remove entirely"
+        if (count == 1) {
             IGNORE_COUNT.remove();
         } else {
             IGNORE_COUNT.set(count - 1);

@@ -1,5 +1,6 @@
 package com.zsubera.jpa.spec;
 
+import com.zsubera.jpa.exception.QueryBuildException;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import jakarta.persistence.LockModeType;
 import jakarta.persistence.TypedQuery;
@@ -136,14 +137,20 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
     /**
      * 创建此 QuerySpec 的防御性拷贝。
      *
+     * <p>
+     * <strong>注意：</strong>不能在 or() 或 not() 消费者内部调用此方法，因为 groupStack 是可变状态，
+     * 拷贝会导致后续条件添加到根节点而非当前条件组。此时会抛出 {@link QueryBuildException}。
+     *
      * @return QuerySpec 的独立副本
+     * @throws QueryBuildException 如果在 or()/not() 消费者内部调用
      */
     @SuppressWarnings("unchecked")
     public QuerySpec<T> copy() {
         if (!groupStack.isEmpty()) {
-            log.warn("QuerySpec.copy() called inside or() consumer. "
-                + "The copy's groupStack is empty, so subsequent conditions will be added to the root (AND), "
-                + "not to the or() group. This may not be the intended behavior.");
+            throw new QueryBuildException(
+                "Cannot copy QuerySpec inside or() or not() consumer. "
+                    + "The copy's groupStack is empty, so subsequent conditions would be added to the root (AND), "
+                    + "not to the current group. Complete the or()/not() group before copying.");
         }
         if (conditions.isEmpty() && orderBySupport.isEmpty() && groupByFields.isEmpty() && havingSupport.isEmpty()
             && queryTimeout == null && lockMode == null) {
@@ -248,7 +255,12 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
             return copy;
         } else if (node instanceof ConditionNode.NegateNode nn) {
             return new ConditionNode.NegateNode(deepCopyNode(nn.inner()));
+        } else if (node instanceof ConditionNode.MultiLikeNode mln) {
+            return new ConditionNode.MultiLikeNode(mln.keyword, mln.fieldNames.clone());
+        } else if (node instanceof ConditionNode.FuncNode fn) {
+            return new ConditionNode.FuncNode(fn.functionName, fn.params.clone());
         }
+        // ponytail: CollectionNode、ExistsNode、InSubQueryNode、RawNode 为不可变/共享节点，按引用返回
         return node;
     }
 
@@ -621,8 +633,8 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
      * @param other 另一个 QuerySpec 实例
      * @return 组合后的 Specification 实例
      */
-    public Specification<T> or(QuerySpec<T> other) {
-        return conditionSupport.or(other);
+    public Specification<T> orCombine(QuerySpec<T> other) {
+        return conditionSupport.orCombine(other);
     }
 
     /**

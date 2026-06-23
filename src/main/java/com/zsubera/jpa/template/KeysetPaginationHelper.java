@@ -1,5 +1,6 @@
 package com.zsubera.jpa.template;
 
+import com.zsubera.jpa.util.SampledEvictionCache;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.criteria.CriteriaBuilder;
 import jakarta.persistence.criteria.CriteriaQuery;
@@ -28,8 +29,8 @@ final class KeysetPaginationHelper {
     private static final Logger log = LoggerFactory.getLogger(KeysetPaginationHelper.class);
 
     /** Getter 方法缓存，避免 extractSortValues 每次反射查找。key = className#propertyName */
-    private static final java.util.concurrent.ConcurrentMap<String, java.lang.reflect.Method> GETTER_CACHE =
-        new java.util.concurrent.ConcurrentHashMap<>(256);
+    private static final SampledEvictionCache<String, java.lang.reflect.Method> GETTER_CACHE =
+        new SampledEvictionCache<>(4096, 0.25, 10000, 256);
 
     /** 哨兵值：表示 getter 方法不存在，用于替代 ConcurrentHashMap 不允许的 null value */
     private static final java.lang.reflect.Method NO_GETTER_SENTINEL;
@@ -41,13 +42,6 @@ final class KeysetPaginationHelper {
             throw new RuntimeException(e);
         }
     }
-
-    /** 静态缓存最大条目数，超出时触发采样驱逐防止内存泄漏 */
-    private static final int MAX_GETTER_CACHE_SIZE = 4096;
-
-    /** 缓存访问计数器，用于触发周期性采样驱逐 */
-    private static final java.util.concurrent.atomic.AtomicLong GETTER_CACHE_ACCESS_COUNT =
-        new java.util.concurrent.atomic.AtomicLong(0);
 
     private final EntityManager entityManager;
 
@@ -222,11 +216,6 @@ final class KeysetPaginationHelper {
         for (int i = 0; i < orders.size(); i++) {
             String property = orders.get(i).getProperty();
             String cacheKey = entity.getClass().getName() + "#" + property;
-            // 每 10000 次访问采样驱逐一次缓存
-            long count = GETTER_CACHE_ACCESS_COUNT.incrementAndGet();
-            if (count % 10000 == 0 && GETTER_CACHE.size() > MAX_GETTER_CACHE_SIZE / 2) {
-                evictGetterCache();
-            }
             java.lang.reflect.Method getter = GETTER_CACHE.computeIfAbsent(cacheKey, k -> {
                 try {
                     return entity.getClass()
@@ -255,28 +244,5 @@ final class KeysetPaginationHelper {
             }
         }
         return values;
-    }
-
-    /**
-     * 采样驱逐 GETTER_CACHE：移除约 25% 的条目，避免全量清空导致的性能抖动。
-
-     * 避免 ConcurrentHashMap 弱一致性迭代器在并发写入时跳过条目导致驱逐不完全。
-     */
-    private static void evictGetterCache() {
-        int targetSize = MAX_GETTER_CACHE_SIZE / 4;
-        int toRemove = GETTER_CACHE.size() - targetSize;
-        if (toRemove <= 0) {
-            return;
-        }
-        Object[] keys = GETTER_CACHE.keySet().toArray();
-        int removed = 0;
-        for (Object key : keys) {
-            if (removed >= toRemove) {
-                break;
-            }
-            if (GETTER_CACHE.remove(key) != null) {
-                removed++;
-            }
-        }
     }
 }

@@ -65,11 +65,14 @@ public final class IdentifierValidator {
     /** 是否启用 Unicode 标识符支持。可通过系统属性 myjpa-plus.merge.unicode-identifiers=true 启用。 */
     private static volatile boolean unicodeIdentifiers = false;
 
+    private static volatile boolean strictMode = false;
+
     static {
         String prop = System.getProperty("myjpa-plus.merge.unicode-identifiers");
         if ("true".equalsIgnoreCase(prop)) {
             unicodeIdentifiers = true;
         }
+        strictMode = "true".equalsIgnoreCase(System.getProperty("myjpa-plus.merge.strict-mode", "false"));
     }
 
     /**
@@ -209,11 +212,15 @@ public final class IdentifierValidator {
      * @param part 标识符段
      * @throws MyJpaPlusException 如果启用严格模式且检测到同形字符
      */
+    public static void setStrictMode(boolean enabled) {
+        strictMode = enabled;
+    }
+
     private static void checkHomoglyphs(String part) {
         if (unicodeIdentifiers && HOMOGLYPH_PATTERN.matcher(part).find()) {
             String homoglyphMsg = "SECURITY: Identifier '" + part + "' contains Unicode homoglyph characters "
                 + "(Cyrillic/Greek/Armenian). This may indicate a homoglyph attack attempt.";
-            if ("true".equalsIgnoreCase(System.getProperty("myjpa-plus.merge.strict-mode", "false"))) {
+            if (strictMode) {
                 throw new MyJpaPlusException(homoglyphMsg);
             }
             log.warn(homoglyphMsg);

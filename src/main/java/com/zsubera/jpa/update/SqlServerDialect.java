@@ -6,17 +6,15 @@ import java.util.List;
 import com.zsubera.jpa.update.EntityFieldExtractor.EntityFieldValue;
 
 /**
- * SQL Server 方言实现。
+ * SQL Server dialect implementation.
  *
  * <p>
- * UPSERT 语法：{@code MERGE INTO t USING (SELECT ...) ON (condition) WHEN MATCHED THEN UPDATE ... WHEN NOT MATCHED THEN INSERT ...}
+ * UPSERT syntax: {@code MERGE INTO t USING (SELECT ...) ON (condition) WHEN MATCHED THEN UPDATE ... WHEN NOT MATCHED THEN INSERT ...}
  *
  * <p>
- * SQL Server 使用方括号转义标识符：{@code [identifier]}。
- *
-
+ * SQL Server uses square brackets to escape identifiers: {@code [identifier]}.
  */
-final class SqlServerDialect implements DialectStrategy {
+final class SqlServerDialect extends AbstractDialectStrategy {
 
     @Override
     public String name() {
@@ -24,18 +22,18 @@ final class SqlServerDialect implements DialectStrategy {
     }
 
     @Override
-    public String escapeIdentifier(String identifier) {
-        if (identifier.indexOf('.') >= 0) {
-            String[] parts = identifier.split("\\.");
-            StringBuilder sb = new StringBuilder();
-            for (int i = 0; i < parts.length; i++) {
-                if (i > 0)
-                    sb.append('.');
-                sb.append('[').append(parts[i].replace("]", "]]")).append(']');
-            }
-            return sb.toString();
-        }
-        return "[" + identifier.replace("]", "]]") + "]";
+    protected char getQuoteChar() {
+        return '[';
+    }
+
+    @Override
+    protected char getClosingQuoteChar() {
+        return ']';
+    }
+
+    @Override
+    protected String getEscapeSequence() {
+        return "]]";
     }
 
     @Override

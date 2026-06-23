@@ -12,7 +12,6 @@ package com.zsubera.jpa.autoconfigure;
  * setter 方法在 Spring 启动阶段调用，运行时为只读访问。
  *
  * @author myjpa-plus
-
  */
 public class MyJpaPlusGlobalConfig {
 
@@ -33,6 +32,18 @@ public class MyJpaPlusGlobalConfig {
 
     /** 深度分页硬限制。 */
     private volatile int deepPaginationOffsetLimit = -1;
+
+    /** IN 子句最大参数数量。 */
+    private volatile int inClauseMaxSize = 1000;
+
+    /** IN 子句硬限制。 */
+    private volatile int inClauseHardLimit = 5000;
+
+    /** Lambda 属性名缓存大小。 */
+    private volatile int lambdaCacheSize = 4096;
+
+    /** 缓存最大条目数。 */
+    private volatile int cacheMaxEntries = 10000;
 
     // ---- Soft Delete ----
 
@@ -99,5 +110,55 @@ public class MyJpaPlusGlobalConfig {
                 "deepPaginationOffsetLimit must be -1 (unlimited) or non-negative, got: " + deepPaginationOffsetLimit);
         }
         this.deepPaginationOffsetLimit = deepPaginationOffsetLimit;
+    }
+
+    // ---- IN Clause ----
+
+    public int getInClauseMaxSize() {
+        return inClauseMaxSize;
+    }
+
+    public void setInClauseMaxSize(int inClauseMaxSize) {
+        if (inClauseMaxSize <= 0) {
+            throw new IllegalArgumentException("inClauseMaxSize must be positive, got: " + inClauseMaxSize);
+        }
+        this.inClauseMaxSize = inClauseMaxSize;
+    }
+
+    public int getInClauseHardLimit() {
+        return inClauseHardLimit;
+    }
+
+    public void setInClauseHardLimit(int inClauseHardLimit) {
+        if (inClauseHardLimit <= 0) {
+            throw new IllegalArgumentException("inClauseHardLimit must be positive, got: " + inClauseHardLimit);
+        }
+        this.inClauseHardLimit = inClauseHardLimit;
+    }
+
+    // ---- Lambda Cache ----
+
+    public int getLambdaCacheSize() {
+        return lambdaCacheSize;
+    }
+
+    public void setLambdaCacheSize(int lambdaCacheSize) {
+        if (lambdaCacheSize <= 0) {
+            throw new IllegalArgumentException("lambdaCacheSize must be positive, got: " + lambdaCacheSize);
+        }
+        this.lambdaCacheSize = lambdaCacheSize;
+    }
+
+    // ---- Cache ----
+
+    public int getCacheMaxEntries() {
+        return cacheMaxEntries;
+    }
+
+    public void setCacheMaxEntries(int cacheMaxEntries) {
+        if (cacheMaxEntries <= 0) {
+            throw new IllegalArgumentException("cacheMaxEntries must be positive, got: " + cacheMaxEntries);
+        }
+        this.cacheMaxEntries = cacheMaxEntries;
     }
 }

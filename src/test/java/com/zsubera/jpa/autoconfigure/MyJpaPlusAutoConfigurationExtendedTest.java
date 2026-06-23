@@ -88,7 +88,7 @@ class MyJpaPlusAutoConfigurationExtendedTest {
     void queryCacheManager_returnsNonNull() {
         MyJpaPlusProperties props = new MyJpaPlusProperties();
         MyJpaPlusAutoConfiguration config = new MyJpaPlusAutoConfiguration(props, null);
-        assertNotNull(config.queryCacheManager());
+        assertNotNull(config.queryCacheManager(props));
     }
 
     @Test
@@ -102,7 +102,7 @@ class MyJpaPlusAutoConfigurationExtendedTest {
     void cacheInvalidationListener_returnsNonNull() {
         MyJpaPlusProperties props = new MyJpaPlusProperties();
         MyJpaPlusAutoConfiguration config = new MyJpaPlusAutoConfiguration(props, null);
-        assertNotNull(config.cacheInvalidationListener(config.queryCacheManager()));
+        assertNotNull(config.cacheInvalidationListener(config.queryCacheManager(props)));
     }
 
     @Test

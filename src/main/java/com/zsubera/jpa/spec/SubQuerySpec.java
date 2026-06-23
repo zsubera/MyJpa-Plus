@@ -1,5 +1,6 @@
 package com.zsubera.jpa.spec;
 
+import com.zsubera.jpa.util.IdentifierValidator;
 import com.zsubera.jpa.util.LambdaUtils;
 import jakarta.persistence.criteria.CriteriaBuilder;
 import jakarta.persistence.criteria.Path;
@@ -742,6 +743,10 @@ public class SubQuerySpec<S> implements ConditionalMethods<S, SubQuerySpec<S>> {
                 }
                 if (!ConditionBuilder.SAFE_NESTED_FIELD_NAME_PATTERN.matcher(fieldName).matches()) {
                     throw new IllegalArgumentException("fieldName contains invalid characters: " + fieldName);
+                }
+                String[] segments = fieldName.split("\\.");
+                for (String segment : segments) {
+                    IdentifierValidator.validateColumnName(segment);
                 }
                 likes.add(cb.like(root.get(fieldName).as(String.class), pattern, PredicateHelper.LIKE_ESCAPE_CHAR));
             }

@@ -92,8 +92,8 @@ final class QueryConditionSupport<T> {
         return compositionSupport.toSpecification(external);
     }
 
-    Specification<T> or(QuerySpec<T> other) {
-        return compositionSupport.or(other);
+    Specification<T> orCombine(QuerySpec<T> other) {
+        return compositionSupport.orCombine(other);
     }
 
     QuerySpec<T> then(QuerySpec<T> other) {

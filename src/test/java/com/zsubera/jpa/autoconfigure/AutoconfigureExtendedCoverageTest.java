@@ -171,9 +171,9 @@ class AutoconfigureExtendedCoverageTest {
         MyJpaPlusAutoConfiguration config = new MyJpaPlusAutoConfiguration(props, null);
         assertNotNull(config.myJpaPlusGlobalConfig(props));
         assertNotNull(config.myJpaTemplate(props));
-        assertNotNull(config.queryCacheManager());
+        assertNotNull(config.queryCacheManager(props));
         assertNotNull(config.auditorAware());
-        assertNotNull(config.cacheInvalidationListener(config.queryCacheManager()));
+        assertNotNull(config.cacheInvalidationListener(config.queryCacheManager(props)));
     }
 
     @Test

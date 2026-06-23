@@ -857,7 +857,7 @@ public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> ext
         // 注意：仅检查动态扩展白名单，SAFE_FUNCTION_NAMES 已包含所有默认函数
         String upperName = functionName.toUpperCase(java.util.Locale.ROOT);
         if (!SAFE_FUNCTION_NAMES.contains(upperName)
-            && !com.zsubera.jpa.spec.FunctionWhitelist.FROZEN_EXTRA_SAFE_FUNCTION_NAMES.get().contains(upperName)) {
+            && !com.zsubera.jpa.spec.FunctionWhitelist.containsSafeFunction(upperName)) {
             throw new com.zsubera.jpa.exception.SecurityViolationException(
                 "Function not in whitelist: '" + functionName + "'. " + "Only whitelisted functions are allowed. "
                     + "Use myjpa-plus.query.extra-safe-functions to add custom functions.");

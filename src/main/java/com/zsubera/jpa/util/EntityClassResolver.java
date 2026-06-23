@@ -2,6 +2,7 @@ package com.zsubera.jpa.util;
 
 import jakarta.persistence.Id;
 import java.lang.reflect.Field;
+import java.util.Objects;
 import java.util.concurrent.ConcurrentMap;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -52,6 +53,7 @@ public final class EntityClassResolver {
      */
     @SuppressWarnings("unchecked")
     public static <T> Class<T> resolve(Class<?> repositoryClass) {
+        Objects.requireNonNull(repositoryClass, "repositoryClass must not be null");
         Class<?> cached = CACHE.computeIfAbsent(repositoryClass, EntityClassResolver::doResolve);
         return cached == UNRESOLVABLE_SENTINEL ? null : (Class<T>)cached;
     }
@@ -72,6 +74,7 @@ public final class EntityClassResolver {
      * @throws IllegalStateException 如果未找到 {@code @Id}、{@code @EmbeddedId} 或 {@code @IdClass} 字段
      */
     public static String resolveIdFieldName(Class<?> entityClass) {
+        Objects.requireNonNull(entityClass, "entityClass must not be null");
         String cached = ID_FIELD_CACHE.get(entityClass);
         if (cached != null) {
             return cached;
@@ -112,6 +115,7 @@ public final class EntityClassResolver {
      * @return 如果实体使用复合主键则返回 true
      */
     public static boolean hasCompositeKey(Class<?> entityClass) {
+        Objects.requireNonNull(entityClass, "entityClass must not be null");
         return COMPOSITE_KEY_CACHE.computeIfAbsent(entityClass, cls -> {
             for (Class<?> c = cls; c != null && c != Object.class; c = c.getSuperclass()) {
                 for (Field f : c.getDeclaredFields()) {

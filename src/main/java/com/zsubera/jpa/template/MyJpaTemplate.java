@@ -437,7 +437,7 @@ public class MyJpaTemplate implements MyJpaTemplateOperations {
      * @throws IllegalArgumentException 如果 entities 为 null 或 batchSize 不是正数
      */
     @Override
-    @Transactional(rollbackFor = Exception.class)
+    @Transactional
     public <T> List<T> saveAllBatched(Iterable<T> entities, int batchSize) {
         validateBatchParams(entities, "entities", batchSize);
         return getBatchSaveTemplate().saveAllBatched(entities, batchSize);
@@ -460,7 +460,7 @@ public class MyJpaTemplate implements MyJpaTemplateOperations {
      * @throws IllegalArgumentException 如果 entities 为 null 或 batchSize 不是正数
      */
     @Override
-    @Transactional(rollbackFor = Exception.class)
+    @Transactional
     public <T> List<T> saveAllBatchedPure(Iterable<T> entities, int batchSize) {
         validateBatchParams(entities, "entities", batchSize);
         return getBatchSaveTemplate().saveAllBatchedPure(entities, batchSize);
@@ -926,12 +926,7 @@ public class MyJpaTemplate implements MyJpaTemplateOperations {
         if (pageable == null) {
             throw new IllegalArgumentException("pageable must not be null");
         }
-        return findPageInternal(entityClass, spec.toSpecification(), pageable, spec);
-    }
-
-    private <T> Page<T> findPageInternal(Class<T> entityClass, Specification<T> spec, Pageable pageable,
-        QuerySpec<T> querySpec) {
-        return doFindPage(entityClass, spec, pageable, querySpec);
+        return doFindPage(entityClass, spec.toSpecification(), pageable, spec);
     }
 
     /**

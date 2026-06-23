@@ -82,7 +82,7 @@ public final class AuditUtils {
      * 获取调用栈信息，用于审计日志。
      *
      * <p>
-     * 返回从调用者开始的最近 N 层调用栈（N 由 {@code maxStackDepth} 配置）， 格式为 {@code className.methodName:lineNumber}， 各层之间用 {@code <- }
+     * 返回从调用者开始的最近 N 层调用栈（N 由 {@code maxStackDepth} 配置）， 格式为 {@code SimpleClassName}， 各层之间用 {@code <- }
      * 分隔。
      *
      * <p>

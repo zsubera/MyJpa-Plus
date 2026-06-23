@@ -130,12 +130,25 @@ public final class SlowQueryDataSourceProxy {
 
         @Override
         public Object invoke(Object proxy, Method method, Object[] args) throws Throwable {
-            if ("prepareStatement".equals(method.getName())) {
-                String sql = args.length > 0 && args[0] instanceof String ? (String)args[0] : "unknown";
+            String methodName = method.getName();
+            if ("prepareStatement".equals(methodName)
+                || "prepareCall".equals(methodName)
+                || "createStatement".equals(methodName)) {
+                String sql = extractSql(args);
                 Object stmt = method.invoke(target, args);
+                if ("prepareCall".equals(methodName) || "createStatement".equals(methodName)) {
+                    return wrapStatement(stmt, sql);
+                }
                 return wrapPreparedStatement(stmt, sql);
             }
             return method.invoke(target, args);
+        }
+
+        private String extractSql(Object[] args) {
+            if (args != null && args.length > 0 && args[0] instanceof String s) {
+                return s;
+            }
+            return "unknown";
         }
 
         private Object wrapPreparedStatement(Object stmt, String sql) {
@@ -145,7 +158,20 @@ public final class SlowQueryDataSourceProxy {
                     stmtClass.getName());
                 return stmt;
             }
+            return createProxy(stmtClass, stmt, new PreparedStatementTimingHandler(stmt, sql, slowQueryThresholdMs));
+        }
 
+        private Object wrapStatement(Object stmt, String sql) {
+            Class<?> stmtClass = stmt.getClass();
+            if (stmtClass.getInterfaces().length == 0) {
+                log.debug("Statement class {} implements no interfaces, skipping proxy wrapping",
+                    stmtClass.getName());
+                return stmt;
+            }
+            return createProxy(stmtClass, stmt, new StatementTimingHandler(stmt, sql, slowQueryThresholdMs));
+        }
+
+        private Object createProxy(Class<?> stmtClass, Object stmt, InvocationHandler handler) {
             Class<?> proxyClass = PROXY_CLASS_CACHE.get(stmtClass);
             if (proxyClass == null) {
                 CACHE_LOCK.lock();
@@ -160,11 +186,9 @@ public final class SlowQueryDataSourceProxy {
                 }
             }
             try {
-                return proxyClass.getConstructor(InvocationHandler.class)
-                    .newInstance(new PreparedStatementTimingHandler(stmt, sql, slowQueryThresholdMs));
+                return proxyClass.getConstructor(InvocationHandler.class).newInstance(handler);
             } catch (ReflectiveOperationException e) {
-                return Proxy.newProxyInstance(stmtClass.getClassLoader(), stmtClass.getInterfaces(),
-                    new PreparedStatementTimingHandler(stmt, sql, slowQueryThresholdMs));
+                return Proxy.newProxyInstance(stmtClass.getClassLoader(), stmtClass.getInterfaces(), handler);
             }
         }
     }
@@ -175,14 +199,6 @@ public final class SlowQueryDataSourceProxy {
         private final Object target;
         private final String sql;
         private final long slowQueryThresholdMs;
-
-        private record MicrometerReflectCache(Object meterRegistry, Class<?> meterRegistryClass,
-            Class<?> distributionSummaryClass, Class<?> tagsClass, Method tagsOfMethod, Method summaryBuilderMethod,
-            Method summaryDescMethod, Method summaryRegisterMethod, Method summaryRecordMethod) {
-        }
-
-        private static volatile MicrometerReflectCache micrometerCache;
-        private static volatile Object cachedSummary;
 
         @SuppressFBWarnings(value = "EI_EXPOSE_REP2",
             justification = "Internal timing handler stores JDBC proxy target for delegation")
@@ -203,7 +219,7 @@ public final class SlowQueryDataSourceProxy {
                 } finally {
                     long elapsedNanos = System.nanoTime() - start;
                     long elapsedMs = java.util.concurrent.TimeUnit.NANOSECONDS.toMillis(elapsedNanos);
-                    recordMetrics(name, elapsedMs);
+                    MicrometerMetrics.recordQueryDuration(name, elapsedMs);
                     if (elapsedMs >= slowQueryThresholdMs) {
                         String sanitizedSql = SqlSanitizer.sanitize(sql);
                         log.warn("{} SQL execution took {} ms (threshold: {} ms) - {}", SLOW_QUERY_MARKER, elapsedMs,
@@ -213,9 +229,24 @@ public final class SlowQueryDataSourceProxy {
             }
             return method.invoke(target, args);
         }
+    }
 
-        private void recordMetrics(String operationType, long elapsedMs) {
-            MicrometerReflectCache cache = micrometerCache;
+    /**
+     * Micrometer 指标记录工具类。从 PreparedStatementTimingHandler 提取，
+     * 供 PreparedStatementTimingHandler 和 StatementTimingHandler 共用。
+     */
+    private static final class MicrometerMetrics {
+
+        private record ReflectCache(Object meterRegistry, Class<?> meterRegistryClass,
+            Class<?> distributionSummaryClass, Class<?> tagsClass, Method tagsOfMethod, Method summaryBuilderMethod,
+            Method summaryDescMethod, Method summaryRegisterMethod, Method summaryRecordMethod) {
+        }
+
+        private static volatile ReflectCache micrometerCache;
+        private static volatile Object cachedSummary;
+
+        static void recordQueryDuration(String operationType, long elapsedMs) {
+            ReflectCache cache = micrometerCache;
             if (cache == null) {
                 checkMicrometerAvailable();
                 cache = micrometerCache;
@@ -225,10 +256,9 @@ public final class SlowQueryDataSourceProxy {
             }
             try {
                 Object tags = cache.tagsOfMethod().invoke(null, "type", operationType);
-
                 Object summary = cachedSummary;
                 if (summary == null) {
-                    synchronized (PreparedStatementTimingHandler.class) {
+                    synchronized (MicrometerMetrics.class) {
                         summary = cachedSummary;
                         if (summary == null) {
                             summary = cache.summaryBuilderMethod().invoke(null, "myjpa.query.duration");
@@ -238,8 +268,7 @@ public final class SlowQueryDataSourceProxy {
                         }
                     }
                 }
-
-                cache.summaryRecordMethod().invoke(summary, tags, (double)elapsedMs);
+                cache.summaryRecordMethod().invoke(summary, tags, (double) elapsedMs);
             } catch (ReflectiveOperationException e) {
                 log.debug("Failed to record Micrometer metrics", e);
             }
@@ -258,7 +287,7 @@ public final class SlowQueryDataSourceProxy {
                 }
                 Class<?> tagsClass = Class.forName("io.micrometer.core.instrument.Tags");
                 Class<?> distSummaryClass = Class.forName("io.micrometer.core.instrument.DistributionSummary");
-                micrometerCache = new MicrometerReflectCache(registry, registryClass, distSummaryClass, tagsClass,
+                micrometerCache = new ReflectCache(registry, registryClass, distSummaryClass, tagsClass,
                     tagsClass.getMethod("of", String.class, String.class),
                     distSummaryClass.getMethod("builder", String.class),
                     distSummaryClass.getMethod("description", String.class),
@@ -268,6 +297,45 @@ public final class SlowQueryDataSourceProxy {
             } catch (ReflectiveOperationException e) {
                 log.trace("Micrometer not available on classpath", e);
             }
+        }
+    }
+
+    /**
+     * Statement 计时处理器（用于 createStatement() 和 prepareCall() 返回的 Statement 对象）。
+     * 与 PreparedStatementTimingHandler 共享相同计时逻辑和 Micrometer 指标记录。
+     */
+    private static class StatementTimingHandler implements InvocationHandler {
+
+        private static final String SLOW_QUERY_MARKER = "[SLOW QUERY]";
+        private final Object target;
+        private final String sql;
+        private final long slowQueryThresholdMs;
+
+        StatementTimingHandler(Object target, String sql, long slowQueryThresholdMs) {
+            this.target = target;
+            this.sql = sql;
+            this.slowQueryThresholdMs = slowQueryThresholdMs;
+        }
+
+        @Override
+        public Object invoke(Object proxy, Method method, Object[] args) throws Throwable {
+            String name = method.getName();
+            if ("executeQuery".equals(name) || "executeUpdate".equals(name) || "execute".equals(name)
+                || "executeBatch".equals(name)) {
+                long start = System.nanoTime();
+                try {
+                    return method.invoke(target, args);
+                } finally {
+                    long elapsedMs = java.util.concurrent.TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - start);
+                    MicrometerMetrics.recordQueryDuration(name, elapsedMs);
+                    if (elapsedMs >= slowQueryThresholdMs) {
+                        String sanitizedSql = SqlSanitizer.sanitize(sql);
+                        log.warn("{} Statement execution took {} ms (threshold: {} ms) - {}", SLOW_QUERY_MARKER,
+                            elapsedMs, slowQueryThresholdMs, sanitizedSql);
+                    }
+                }
+            }
+            return method.invoke(target, args);
         }
     }
 }

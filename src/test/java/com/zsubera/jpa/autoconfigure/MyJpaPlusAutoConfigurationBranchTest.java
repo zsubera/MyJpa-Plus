@@ -260,14 +260,14 @@ class MyJpaPlusAutoConfigurationBranchTest {
     void autoConfiguration_queryCacheManager() {
         MyJpaPlusProperties props = new MyJpaPlusProperties();
         MyJpaPlusAutoConfiguration config = new MyJpaPlusAutoConfiguration(props, null);
-        assertNotNull(config.queryCacheManager());
+        assertNotNull(config.queryCacheManager(props));
     }
 
     @Test
     void autoConfiguration_cacheInvalidationListener() {
         MyJpaPlusProperties props = new MyJpaPlusProperties();
         MyJpaPlusAutoConfiguration config = new MyJpaPlusAutoConfiguration(props, null);
-        assertNotNull(config.cacheInvalidationListener(config.queryCacheManager()));
+        assertNotNull(config.cacheInvalidationListener(config.queryCacheManager(props)));
     }
 
     @Test

@@ -18,6 +18,20 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
  * UPSERT/MERGE 操作的类型安全构建器，使用 JPA 原生查询生成数据库特定的 SQL。
  *
  * <p>
+ * <strong>⚠️ 重要：</strong>此构建器使用 {@code em.createNativeQuery()} 执行原生 SQL，
+ * <strong>绕过</strong> JPA 生命周期回调（{@code @PrePersist}、{@code @PreUpdate}、{@code @PreRemove} 等）。
+ * 如需触发生命周期回调，请在执行 UPSERT 前手动处理：
+ * <pre>{@code
+ * // 如果实体已存在于持久化上下文，先 flush 确保回调触发
+ * if (em.contains(entity)) {
+ *     em.flush();
+ * }
+ * new MergeSpec<>(User.class).withEntity(entity).onConflict(User::getEmail).execute(em);
+ * }</pre>
+ * 对于包含 {@code @PrePersist} / {@code @PreUpdate} 回调的实体，建议在 UPSERT 前显式调用 {@code entityManager.persist(entity)}
+ * 或 {@code entityManager.merge(entity)} 触发回调，然后 flush。或使用 JPA 标准 {@code merge()} 作为替代。
+ *
+ * <p>
  * 支持两种数据库方言：
  * <ul>
  * <li>PostgreSQL: {@code INSERT ... ON CONFLICT (...) DO UPDATE SET ...}</li>
@@ -333,9 +347,12 @@ public class MergeSpec<T> {
             throw new IllegalArgumentException("batchSize must be positive");
         }
         if (!TransactionSynchronizationManager.isActualTransactionActive()) {
-            throw new MyJpaPlusException(
-                "executeBatch requires an active transaction. Use executeBatchInTransaction() for auto-managed transactions, "
-                    + "or executeBatchInSeparateTransactions() for per-batch isolation.");
+            // 纯 JPA 环境：回退到直接检查 EntityTransaction
+            if (!isEntityTransactionActive(em)) {
+                throw new MyJpaPlusException(
+                    "executeBatch requires an active transaction. Use executeBatchInTransaction() for auto-managed transactions, "
+                        + "or executeBatchInSeparateTransactions() for per-batch isolation.");
+            }
         }
         DialectStrategy cachedStrategy = resolveDialectStrategy(em);
         int total = 0;
@@ -476,5 +493,20 @@ public class MergeSpec<T> {
 
     private static boolean isJtaTransactionActive(EntityManager em) {
         return BulkTransactionHelper.isJtaTransactionActive(em);
+    }
+
+    /**
+     * 检查 JPA EntityTransaction 是否活动（纯 JPA 环境回退路径）。
+     * 当 Spring TransactionSynchronizationManager 报告无事务时，
+     * 此方法检查底层的 JPA 本地事务。
+     */
+    private static boolean isEntityTransactionActive(EntityManager em) {
+        try {
+            EntityTransaction tx = em.getTransaction();
+            return tx != null && tx.isActive();
+        } catch (IllegalStateException e) {
+            // JTA 环境：getTransaction() 抛出 IllegalStateException
+            return false;
+        }
     }
 }

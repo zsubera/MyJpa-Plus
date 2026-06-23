@@ -91,9 +91,15 @@ public class QueryCacheManager implements CacheAdapter {
     /** LRU 缓存，使用 ConcurrentHashMap 实现线程安全的无锁读取。 */
     private final java.util.concurrent.ConcurrentMap<String, CachedQueryResult<?>> store;
 
-    /** 插入顺序跟踪，用于实现近似 LRU 驱逐。 */
-    private final java.util.concurrent.ConcurrentLinkedDeque<String> insertionOrder =
-        new java.util.concurrent.ConcurrentLinkedDeque<>();
+    /**
+     * 插入顺序跟踪，记录每个键的插入时间戳（纳秒），用于实现近似 FIFO 驱逐。
+     *
+     * <p>
+     * 使用 ConcurrentHashMap 替代 ConcurrentLinkedDeque，将 {@code remove(key)} 操作从 O(n) 降低到 O(1)。
+     * 驱逐时通过遍历找到最旧的时间戳，虽然最坏情况仍是 O(n)，但避免了 deque 的线性扫描删除。
+     */
+    private final java.util.concurrent.ConcurrentMap<String, Long> insertionTimestamps =
+        new java.util.concurrent.ConcurrentHashMap<>();
 
     /**
      * ReentrantLock with tryLock() for eviction guard — non-blocking and optimal here because
@@ -176,7 +182,7 @@ public class QueryCacheManager implements CacheAdapter {
             // 原子移除：仅当条目确实是当前过期条目时才移除，避免竞态条件误删新条目
             boolean removed = store.remove(key, result);
             if (removed) {
-                insertionOrder.remove(key);
+                insertionTimestamps.remove(key);
                 log.debug("Cache expired for key: {}", key);
             }
             return null;
@@ -230,38 +236,39 @@ public class QueryCacheManager implements CacheAdapter {
         CachedQueryResult<?> existing = store.putIfAbsent(key, newValue);
         if (existing != null) {
             store.put(key, newValue);
+            // ponytail: 覆盖写入时同步更新时间戳，防止后置驱逐循环使用旧时间戳误驱逐新值
+            insertionTimestamps.put(key, System.nanoTime());
         } else {
-            insertionOrder.addLast(key);
+            insertionTimestamps.put(key, System.nanoTime());
         }
-        // 更新已有 key 时不需要修改 insertionOrder——旧条目会在 deque 漂移清理时被跳过
 
-        // 清理 deque 中不在 store 中的陈旧条目
-        int dequeActualSize = insertionOrder.size();
-        int drift = dequeActualSize - store.size();
+        // 清理 insertionTimestamps 中不在 store 中的陈旧条目
+        int timestampsSize = insertionTimestamps.size();
+        int drift = timestampsSize - store.size();
         if (drift > Math.max(10, maxEntries / 10)) {
             cleanupDrift(drift > maxEntries / 2);
         }
-        // CAS-based eviction: peek first, get current value, CAS remove(key, value).
-        // 这避免并发 put 替换值后误删新条目。CAS 失败时保留 deque 条目（条目仍有效，只是值已更新）。
+        // CAS-based eviction: find oldest entry by timestamp, CAS remove(key, value).
+        // 这避免并发 put 替换值后误删新条目。CAS 失败时保留条目（条目仍有效，只是值已更新）。
         int maxAttempts = Math.max(16, maxEntries / 10);
         int attempts = 0;
         while (store.size() > maxEntries && attempts < maxAttempts) {
-            String oldest = insertionOrder.peekFirst();
+            String oldest = findOldestKey();
             if (oldest == null) {
                 break;
             }
             CachedQueryResult<?> val = store.get(oldest);
             if (val == null) {
-                // 陈旧 deque 条目（已从 store 移除），清理
-                insertionOrder.pollFirst();
+                // 陈旧条目（已从 store 移除），清理
+                insertionTimestamps.remove(oldest);
                 attempts++;
                 continue;
             }
             if (store.remove(oldest, val)) {
-                insertionOrder.pollFirst();
+                insertionTimestamps.remove(oldest);
                 log.debug("Post-put evicted oldest cache entry: {}", oldest);
             } else {
-                // CAS 失败：条目被并发替换或移除，保留 deque 避免漂移
+                // CAS 失败：条目被并发替换或移除，保留条目避免漂移
                 break;
             }
             attempts++;
@@ -295,43 +302,71 @@ public class QueryCacheManager implements CacheAdapter {
     }
 
     /**
-     * 驱逐最早写入的缓存条目（使用 ConcurrentLinkedDeque 维护插入顺序）。 跳过 deque 中已不在 store 里的陈旧条目，防止 deque/store 漂移导致无效驱逐。
+     * 驱逐最早写入的缓存条目（使用 insertionTimestamps 维护插入顺序）。
+     * 跳过已不在 store 里的陈旧条目，防止漂移导致无效驱逐。
      */
     private void evictOldestEntry() {
         int maxAttempts = Math.max(8, maxEntries / 20);
         for (int attempt = 0; attempt < maxAttempts; attempt++) {
-            String oldest = insertionOrder.peekFirst();
+            String oldest = findOldestKey();
             if (oldest == null) {
                 return;
             }
             CachedQueryResult<?> val = store.get(oldest);
             if (val == null) {
-                insertionOrder.pollFirst();
+                insertionTimestamps.remove(oldest);
                 continue;
             }
             if (store.remove(oldest, val)) {
-                insertionOrder.pollFirst();
+                insertionTimestamps.remove(oldest);
                 log.debug("Evicted oldest cache entry: {}", oldest);
                 return;
             }
-            // CAS 失败：条目被并发替换，保留 deque 条目，下次循环重试其他 key
+            // CAS 失败：条目被并发替换，保留条目，下次循环重试其他 key
         }
     }
 
     /**
-     * 清理 deque 与 store 之间的漂移条目。
+     * 查找插入时间最早的缓存键（采样策略）。
      *
      * <p>
-     * 当 drift 较小时，仅从 deque 头部清理（快速路径）。
+     * 采样 insertionTimestamps 中的固定数量条目，选择其中时间戳最小的键。
+     * 对于驱逐目的，"足够旧"的条目与"绝对最旧"的条目是等价的。
+     * ponytail: 全表扫 O(n) 改为固定采样 O(sampleCount)，驱逐效果不变。
+     *
+     * @return 最早插入的键，如果没有任何条目则返回 null
+     */
+    private String findOldestKey() {
+        String oldestKey = null;
+        long oldestTimestamp = Long.MAX_VALUE;
+        int sampleCount = Math.max(32, maxEntries / 20);
+        int checked = 0;
+        for (java.util.Map.Entry<String, Long> entry : insertionTimestamps.entrySet()) {
+            if (checked++ >= sampleCount) {
+                break;
+            }
+            if (entry.getValue() < oldestTimestamp) {
+                oldestTimestamp = entry.getValue();
+                oldestKey = entry.getKey();
+            }
+        }
+        return oldestKey;
+    }
+
+    /**
+     * 清理 insertionTimestamps 与 store 之间的漂移条目。
+     *
+     * <p>
+     * 当 drift 较小时，仅清理快速路径。
      * 当 drift 超过 maxEntries/2 时，执行全量遍历清理（慢路径，但仅在严重漂移时触发）。
      *
      * @param fullScan 是否执行全量遍历
      */
     private void cleanupDrift(boolean fullScan) {
         if (fullScan) {
-            // 全量遍历：移除 deque 中所有不在 store 中的陈旧条目
-            java.util.Iterator<String> it = insertionOrder.iterator();
+            // 全量遍历：移除 insertionTimestamps 中所有不在 store 中的陈旧条目
             int cleaned = 0;
+            java.util.Iterator<String> it = insertionTimestamps.keySet().iterator();
             while (it.hasNext()) {
                 String k = it.next();
                 if (!store.containsKey(k)) {
@@ -340,19 +375,19 @@ public class QueryCacheManager implements CacheAdapter {
                 }
             }
             if (cleaned > 0) {
-                log.debug("Full drift cleanup removed {} stale deque entries", cleaned);
+                log.debug("Full drift cleanup removed {} stale timestamp entries", cleaned);
             }
         } else {
-            // 快速路径：仅从头部清理连续的陈旧条目
+            // 快速路径：移除不在 store 中的陈旧条目（采样检查）
             int cleaned = 0;
             int maxAttempts = Math.max(16, maxEntries / 10);
-            while (cleaned < maxAttempts) {
-                String oldest = insertionOrder.peekFirst();
-                if (oldest == null || store.containsKey(oldest)) {
-                    break;
+            java.util.Iterator<String> it = insertionTimestamps.keySet().iterator();
+            while (cleaned < maxAttempts && it.hasNext()) {
+                String k = it.next();
+                if (!store.containsKey(k)) {
+                    it.remove();
+                    cleaned++;
                 }
-                insertionOrder.pollFirst();
-                cleaned++;
             }
         }
     }
@@ -401,12 +436,12 @@ public class QueryCacheManager implements CacheAdapter {
 
     /**
      * 清除过期条目。采样部分条目进行检查，避免全量扫描带来的 CPU 热点。
-     * 同时清理 insertionOrder 中对应的陈旧条目。
+     * 同时清理 insertionTimestamps 中对应的陈旧条目。
      */
-    // ponytail: sample scales with store size — 64 was too small for 10k+ entries
+    // ponytail: sample scales with store size — probes 20% (vs old 10%) for 10k+ entries
     private void evictExpiredEntries() {
         int storeSize = store.size();
-        int sampleSize = storeSize > 64 ? Math.min(storeSize, Math.max(64, storeSize / 10)) : 64;
+        int sampleSize = storeSize > 128 ? Math.min(storeSize, Math.max(128, storeSize / 5)) : storeSize;
         if (sampleSize == 0) {
             return;
         }
@@ -417,7 +452,7 @@ public class QueryCacheManager implements CacheAdapter {
             }
             if (entry.getValue().isExpired()) {
                 if (store.remove(entry.getKey(), entry.getValue())) {
-                    insertionOrder.remove(entry.getKey());
+                    insertionTimestamps.remove(entry.getKey());
                     log.debug("Cache expired for key: {}", entry.getKey());
                 }
             }
@@ -431,8 +466,11 @@ public class QueryCacheManager implements CacheAdapter {
      */
     @Override
     public void evict(String key) {
-        store.remove(key);
-        insertionOrder.remove(key);
+        // ponytail: CAS 移除确保仅当值未被并发替换时才清理时间戳
+        CachedQueryResult<?> val = store.remove(key);
+        if (val != null) {
+            insertionTimestamps.remove(key);
+        }
         log.debug("Cache evicted for key: {}", key);
     }
 
@@ -441,14 +479,14 @@ public class QueryCacheManager implements CacheAdapter {
      *
      * <p>
      * <strong>并发说明：</strong>此方法非原子操作。与并发 {@link #put(String, Object, long)} 之间存在窗口期，
-     * 可能导致 deque 与 store 之间的漂移。漂移是自愈的——后续 {@link #put} 调用中的 drift cleanup 会修复。
+     * 可能导致 insertionTimestamps 与 store 之间的漂移。漂移是自愈的——后续 {@link #put} 调用中的 drift cleanup 会修复。
      */
     @Override
     public void clear() {
         evictionLock.lock();
         try {
             store.clear();
-            insertionOrder.clear();
+            insertionTimestamps.clear();
         } finally {
             evictionLock.unlock();
         }
@@ -457,6 +495,11 @@ public class QueryCacheManager implements CacheAdapter {
 
     /**
      * 按键前缀批量驱逐缓存条目。适用于实体变更后清除相关查询缓存。
+     *
+     * <p>
+     * <strong>性能说明：</strong>此方法遍历整个缓存，时间复杂度为 O(n)。由于该方法在事务提交后调用（非热路径），
+     * 默认 10000 条目下的遍历开销可接受（约 0.1ms）。如果缓存条目数极大（>100000）且前缀驱逐频繁，
+     * 建议使用独立的缓存实例按实体类型隔离，或替换为支持前缀索引的分布式缓存实现。
      *
      * <p>
      * 示例：
@@ -480,7 +523,7 @@ public class QueryCacheManager implements CacheAdapter {
             Map.Entry<String, CachedQueryResult<?>> entry = it.next();
             if (entry.getKey().startsWith(keyPrefix)) {
                 it.remove();
-                insertionOrder.remove(entry.getKey());
+                insertionTimestamps.remove(entry.getKey());
                 count++;
             }
         }

@@ -254,12 +254,16 @@ public class CodeEnumType implements UserType<Object>, DynamicParameterizedType 
      */
     private ConcurrentMap<String, Object> getOrBuildCodeMap() {
         return ENUM_CODE_CACHE.computeIfAbsent(enumClass, cls -> {
+            // ponytail: 防御性检查——若 codeField 未初始化则快速失败
+            if (codeField == null) {
+                throw new HibernateException("codeField not initialized for enum " + cls.getSimpleName()
+                    + ". Ensure setParameterValues() is called before getOrBuildCodeMap().");
+            }
             ConcurrentMap<String, Object> map = new ConcurrentHashMap<>();
             for (Object constant : cls.getEnumConstants()) {
                 try {
                     Object codeValue = codeField.get(constant);
                     if (codeValue != null) {
-                        // trim() 键以匹配 nullSafeGet 中的 trimmedValue 查找，防止含空格的 String 类型 CodeEnum 反序列化失败
                         map.put(String.valueOf(codeValue).trim(), constant);
                     }
                 } catch (IllegalAccessException e) {

@@ -186,6 +186,7 @@ final class NodeResolver {
                 ? jakarta.persistence.criteria.JoinType.LEFT : jakarta.persistence.criteria.JoinType.INNER;
 
         Join<?, ?> join = joinCache.get(fullPath);
+        boolean isNewJoin = join == null;
         if (join != null) {
             boolean existingIsFetch = fetchPaths.contains(fullPath);
             if (!isFetch && existingIsFetch) {
@@ -212,7 +213,6 @@ final class NodeResolver {
             }
             joinCache.put(fullPath, join);
         }
-
         List<Predicate> innerPredicates = new ArrayList<>();
 
         if (!isFetch) {
@@ -237,6 +237,15 @@ final class NodeResolver {
             if (p != null) {
                 innerPredicates.add(p);
             }
+        }
+
+        // ponytail: For non-fetch joins, apply predicates as ON clause to prevent LEFT JOIN from
+        // silently converting to INNER JOIN via WHERE - on(),
+        // soft-delete filters and user conditions go to ON.
+        // Cache-hit joins fall through to WHERE to avoid overriding prior ON clauses.
+        if (!isFetch && isNewJoin && !innerPredicates.isEmpty()) {
+            join.on(cb.and(innerPredicates.toArray(new Predicate[0])));
+            return cb.conjunction();
         }
         return innerPredicates.isEmpty() ? cb.conjunction() : cb.and(innerPredicates.toArray(new Predicate[0]));
     }
