@@ -163,7 +163,8 @@ public final class SoftDeleteContext {
         int limit = maxIgnoreCount;
         if (count >= limit) {
             throw new IllegalStateException(
-                "SoftDeleteContext ignore count exceeded maximum (" + limit + "). Possible leak detected.");
+                "SoftDeleteContext ignore count exceeded maximum (" + limit + "). Possible leak detected."
+                    + " Ensure every pushIgnore() has a matching popIgnore() in a finally block.");
         }
         IGNORE_COUNT.set(count + 1);
     }

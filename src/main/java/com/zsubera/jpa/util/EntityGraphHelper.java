@@ -46,6 +46,7 @@ public final class EntityGraphHelper<T> {
     public static final String HINT_LOADGRAPH = "jakarta.persistence.loadgraph";
 
     private final Class<T> entityClass;
+    /** ponytail: 非线程安全 — 每个线程/请求应使用独立实例。 */
     private final Map<String, String[]> attributePaths = new HashMap<>();
     private boolean loadGraphType = false;
     private String lastAddedPath = null;

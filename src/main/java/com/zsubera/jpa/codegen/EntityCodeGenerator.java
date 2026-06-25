@@ -404,11 +404,9 @@ public final class EntityCodeGenerator {
         if (fieldName == null || fieldName.isEmpty()) {
             return fieldName;
         }
-        // 如果字段名是 Java 保留字则追加下划线
-        if (JAVA_RESERVED_WORDS.contains(fieldName.toLowerCase())) {
+        if (JAVA_RESERVED_WORDS.contains(fieldName)) {
             return fieldName + "_";
         }
-        // 如果以数字开头则前置下划线
         if (Character.isDigit(fieldName.charAt(0))) {
             return "_" + fieldName;
         }

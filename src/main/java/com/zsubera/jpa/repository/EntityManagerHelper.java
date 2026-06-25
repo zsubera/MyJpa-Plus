@@ -280,8 +280,10 @@ public final class EntityManagerHelper {
      * 清理所有注册的 resolver 和默认 EMF。用于应用关闭时的资源清理。
      */
     public static void reset() {
-        defaultEntityManagerFactory = null;
-        resolvers.clear();
-        allResolversUseDefault = true;
+        synchronized (resolverCheckLock) {
+            defaultEntityManagerFactory = null;
+            resolvers.clear();
+            allResolversUseDefault = true;
+        }
     }
 }

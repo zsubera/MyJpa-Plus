@@ -31,14 +31,10 @@ public final class StringHelper {
         if (name == null || name.isEmpty()) {
             return name;
         }
-        StringBuilder sb = new StringBuilder();
+        StringBuilder sb = new StringBuilder(name.length() + 4);
         for (int i = 0; i < name.length(); i++) {
             char c = name.charAt(i);
             if (Character.isUpperCase(c)) {
-                // 在大写字母前添加下划线，如果：
-                // - 不在开头位置
-                // - 前一个字符是小写字母（例如 "camelCase" -> "camel_case"）
-                // - 下一个字符是小写字母且前一个字符是大写字母（例如 "XMLParser" -> "xml_parser"）
                 if (i > 0) {
                     char prev = name.charAt(i - 1);
                     boolean nextIsLower = (i + 1 < name.length()) && Character.isLowerCase(name.charAt(i + 1));

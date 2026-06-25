@@ -762,6 +762,8 @@ public class ProjectionSpec<T> {
                 jakarta.persistence.criteria.Selection firstGroup =
                     (jakarta.persistence.criteria.Selection)groupByExpressions.get(0);
                 groupCountQuery.select(firstGroup);
+                // ponytail: GROUP BY 计数将所有分组加载到内存中计数。
+                // 对于高基数分组（>10万），这可能导致 OOM。如需优化，请使用原生 SQL 的 COUNT(DISTINCT ...)。
                 jakarta.persistence.TypedQuery<Object> groupCountTypedQuery = em.createQuery(groupCountQuery);
                 total = (long)groupCountTypedQuery.getResultList().size();
             } else {

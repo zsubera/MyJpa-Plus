@@ -47,15 +47,17 @@ final class QueryOrderBySupport<T> {
         if (fields == null) {
             throw new IllegalArgumentException("fields must not be null");
         }
+        java.util.List<String> names = new java.util.ArrayList<>(fields.length);
         for (SFunction<T, ?> f : fields) {
             if (f == null) {
                 throw new IllegalArgumentException("fields must not contain null elements");
             }
-            orderNodes.add(new ConditionNode.OrderNode(LambdaUtils.getPropertyName(f), true));
+            String name = LambdaUtils.getPropertyName(f);
+            orderNodes.add(new ConditionNode.OrderNode(name, true));
+            names.add(name);
         }
         if (log.isDebugEnabled()) {
-            log.debug("QuerySpec: ORDER BY ASC {}",
-                Arrays.stream(fields).map(LambdaUtils::getPropertyName).collect(Collectors.joining(", ")));
+            log.debug("QuerySpec: ORDER BY ASC {}", String.join(", ", names));
         }
         return parent;
     }
@@ -71,15 +73,17 @@ final class QueryOrderBySupport<T> {
         if (fields == null) {
             throw new IllegalArgumentException("fields must not be null");
         }
+        java.util.List<String> names = new java.util.ArrayList<>(fields.length);
         for (SFunction<T, ?> f : fields) {
             if (f == null) {
                 throw new IllegalArgumentException("fields must not contain null elements");
             }
-            orderNodes.add(new ConditionNode.OrderNode(LambdaUtils.getPropertyName(f), false));
+            String name = LambdaUtils.getPropertyName(f);
+            orderNodes.add(new ConditionNode.OrderNode(name, false));
+            names.add(name);
         }
         if (log.isDebugEnabled()) {
-            log.debug("QuerySpec: ORDER BY DESC {}",
-                Arrays.stream(fields).map(LambdaUtils::getPropertyName).collect(Collectors.joining(", ")));
+            log.debug("QuerySpec: ORDER BY DESC {}", String.join(", ", names));
         }
         return parent;
     }
