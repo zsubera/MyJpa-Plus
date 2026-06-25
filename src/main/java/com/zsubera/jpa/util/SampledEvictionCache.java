@@ -119,12 +119,16 @@ public class SampledEvictionCache<K, V> {
                 int target = (int) (maxSize * evictionTargetRatio);
                 int toRemove = currentSize - target;
                 if (toRemove > 0) {
-                    Iterator<Map.Entry<K, V>> it = store.entrySet().iterator();
+                    java.util.List<K> keys = new java.util.ArrayList<>(store.keySet());
+                    java.util.Collections.shuffle(keys);
                     int removed = 0;
-                    while (it.hasNext() && removed < toRemove) {
-                        it.next();
-                        it.remove();
-                        removed++;
+                    for (K key : keys) {
+                        if (removed >= toRemove) {
+                            break;
+                        }
+                        if (store.remove(key) != null) {
+                            removed++;
+                        }
                     }
                 }
             }

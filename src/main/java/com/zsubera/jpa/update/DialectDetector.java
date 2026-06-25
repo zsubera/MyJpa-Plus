@@ -92,10 +92,11 @@ final class DialectDetector {
      * ponytail: 全缓存清空策略简单直接；若未来需要更精细的淘汰策略（如 LRU），可替换为 Caffeine 并移除此方法。
      */
     private static void cacheDialect(String factoryKey, String dialect) {
-        if (DIALECT_CACHE.size() >= MAX_DIALECT_CACHE_SIZE) {
-            DIALECT_CACHE.clear();
-        }
         DIALECT_CACHE.putIfAbsent(factoryKey, dialect);
+        if (DIALECT_CACHE.size() > MAX_DIALECT_CACHE_SIZE) {
+            DIALECT_CACHE.clear();
+            DIALECT_CACHE.put(factoryKey, dialect);
+        }
     }
 
     /**

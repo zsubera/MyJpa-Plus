@@ -93,9 +93,9 @@ public class MyJpaPlusGlobalConfig {
     }
 
     public void setDeepPaginationOffsetThreshold(int deepPaginationOffsetThreshold) {
-        if (deepPaginationOffsetThreshold < 0) {
+        if (deepPaginationOffsetThreshold <= 0) {
             throw new IllegalArgumentException(
-                "deepPaginationOffsetThreshold must be non-negative, got: " + deepPaginationOffsetThreshold);
+                "deepPaginationOffsetThreshold must be positive, got: " + deepPaginationOffsetThreshold);
         }
         this.deepPaginationOffsetThreshold = deepPaginationOffsetThreshold;
     }

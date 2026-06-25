@@ -63,7 +63,8 @@ public final class EntityClassResolver {
         if (result != null) {
             return result;
         }
-        return resolveThroughHierarchy(repositoryClass);
+        result = resolveThroughHierarchy(repositoryClass);
+        return result != null ? result : UNRESOLVABLE_SENTINEL;
     }
 
     /**

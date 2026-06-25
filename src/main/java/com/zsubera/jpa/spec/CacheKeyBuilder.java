@@ -220,17 +220,22 @@ final class CacheKeyBuilder {
      * 使用 SHA-256 计算 64-bit 哈希值。取 SHA-256 的前 8 字节作为 long，避免 32-bit 碰撞风险。
      * SHA-256 由 JDK 内置提供，无需额外依赖。
      */
-    private static long hash64(String s) {
+    private static final ThreadLocal<java.security.MessageDigest> MD = ThreadLocal.withInitial(() -> {
         try {
-            MessageDigest md = MessageDigest.getInstance("SHA-256");
-            byte[] digest = md.digest(s.getBytes(StandardCharsets.UTF_8));
-            long hash = 0;
-            for (int i = 0; i < 8; i++) {
-                hash = (hash << 8) | (digest[i] & 0xFF);
-            }
-            return hash;
-        } catch (NoSuchAlgorithmException e) {
-            throw new RuntimeException("SHA-256 not available", e);
+            return java.security.MessageDigest.getInstance("SHA-256");
+        } catch (java.security.NoSuchAlgorithmException e) {
+            throw new RuntimeException(e);
         }
+    });
+
+    private static long hash64(String s) {
+        java.security.MessageDigest md = MD.get();
+        md.reset();
+        byte[] digest = md.digest(s.getBytes(StandardCharsets.UTF_8));
+        long hash = 0;
+        for (int i = 0; i < 8; i++) {
+            hash = (hash << 8) | (digest[i] & 0xFF);
+        }
+        return hash;
     }
 }

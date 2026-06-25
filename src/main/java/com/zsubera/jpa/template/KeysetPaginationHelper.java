@@ -45,18 +45,19 @@ final class KeysetPaginationHelper {
 
     private final EntityManager entityManager;
 
-    /** 是否假设数据库使用 NULLS FIRST 语义（MySQL、PostgreSQL 默认）。 Oracle/SQL Server 默认 NULLS LAST。 */
+    /** 是否假设数据库使用 NULLS FIRST 语义。Oracle/SQL Server 默认 NULLS LAST，PostgreSQL 默认 NULLS LAST，MySQL NULLs 作为最小值。 */
     private final boolean nullsFirst;
 
     /**
-     * 创建使用默认 NULLS FIRST 语义的分页助手。
+     * 创建使用默认 NULLS LAST 语义的分页助手。
      *
      * <p>
-     * MySQL 和 PostgreSQL 默认使用 NULLS FIRST。对于 Oracle 和 SQL Server（默认 NULLS LAST），
-     * 请使用 {@link #KeysetPaginationHelper(EntityManager, boolean)} 并设置 {@code nullsFirst=false}。
+     * 大多数数据库（PostgreSQL、Oracle、SQL Server）默认 NULLS LAST。
+     * MySQL 将 NULL 视为最小值（ASC 时 NULLS FIRST，DESC 时 NULLS LAST）。
+     * 对于需要 NULLS FIRST 语义的场景，请使用 {@link #KeysetPaginationHelper(EntityManager, boolean)} 并设置 {@code nullsFirst=true}。
      */
     KeysetPaginationHelper(EntityManager entityManager) {
-        this(entityManager, true);
+        this(entityManager, false);
     }
 
     KeysetPaginationHelper(EntityManager entityManager, boolean nullsFirst) {

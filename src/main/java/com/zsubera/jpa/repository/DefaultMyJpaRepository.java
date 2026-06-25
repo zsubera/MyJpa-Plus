@@ -426,9 +426,8 @@ public class DefaultMyJpaRepository<T, ID> extends SimpleJpaRepository<T, ID> im
         cq.select(cb.count(root));
         jakarta.persistence.criteria.Predicate idPredicate = cb.equal(root.get(idFieldName), id);
         if (softDeleteFieldName != null) {
-            jakarta.persistence.criteria.Path<?> deletedPath = root.get(softDeleteFieldName);
             jakarta.persistence.criteria.Predicate notDeleted =
-                com.zsubera.jpa.softdelete.SoftDeleteHelper.buildNotDeleted(cb, deletedPath, softDeleteFieldName, domainClass);
+                com.zsubera.jpa.softdelete.SoftDeleteHelper.buildNotDeleted(cb, root, softDeleteFieldName, domainClass);
             cq.where(idPredicate, notDeleted);
         } else {
             cq.where(idPredicate);
@@ -548,5 +547,24 @@ public class DefaultMyJpaRepository<T, ID> extends SimpleJpaRepository<T, ID> im
             }
             SoftDeleteHelper.softDeleteAll(entityManager, domainClass, true);
         }, super::deleteAllInBatch);
+    }
+
+    /**
+     * 覆写 deleteById(ID) 以支持软删除过滤。
+     *
+     * <p>
+     * 默认的 {@link SimpleJpaRepository#deleteById(Object)} 直接调用 {@code entityManager.remove()}，
+     * 绕过软删除逻辑。此实现通过 {@link #executeDeleteOrBlock} 统一处理软删除/硬删除/阻断三路分支。
+     *
+     * @param id 要删除的实体 ID
+     */
+    @Override
+    public void deleteById(ID id) {
+        if (id == null) {
+            throw new IllegalArgumentException("ID must not be null");
+        }
+        executeDeleteOrBlock(
+            () -> SoftDeleteHelper.softDeleteByIds(entityManager, domainClass, java.util.List.of(id)),
+            () -> super.deleteById(id));
     }
 }

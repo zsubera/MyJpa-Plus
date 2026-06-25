@@ -9,6 +9,7 @@ import java.lang.reflect.InaccessibleObjectException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicBoolean;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.util.ConcurrentReferenceHashMap;
@@ -317,17 +318,23 @@ final class EntityFieldExtractor<T> {
         return result;
     }
 
+    private static final AtomicBoolean AUTO_ID_EVICTING = new AtomicBoolean();
+
     private static void evictAutoIdCache() {
-        if (AUTO_GENERATED_ID_CACHE.size() <= AUTO_ID_CACHE_MAX_SIZE) {
+        if (AUTO_GENERATED_ID_CACHE.size() <= AUTO_ID_CACHE_MAX_SIZE || !AUTO_ID_EVICTING.compareAndSet(false, true)) {
             return;
         }
-        int toRemove = AUTO_GENERATED_ID_CACHE.size() / 2;
-        int removed = 0;
-        java.util.Iterator<String> it = AUTO_GENERATED_ID_CACHE.keySet().iterator();
-        while (it.hasNext() && removed < toRemove) {
-            it.next();
-            it.remove();
-            removed++;
+        try {
+            int toRemove = AUTO_GENERATED_ID_CACHE.size() / 2;
+            int removed = 0;
+            java.util.Iterator<String> it = AUTO_GENERATED_ID_CACHE.keySet().iterator();
+            while (it.hasNext() && removed < toRemove) {
+                it.next();
+                it.remove();
+                removed++;
+            }
+        } finally {
+            AUTO_ID_EVICTING.set(false);
         }
     }
 

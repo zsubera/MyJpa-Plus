@@ -245,10 +245,6 @@ public final class LambdaUtils {
      */
     private static String resolvePropertyFromLambda(SerializedLambda lambda) {
         String key = lambda.getImplClass() + "#" + lambda.getImplMethodName();
-        String cached = CACHE.get(key);
-        if (cached != null) {
-            return cached;
-        }
         return CACHE.computeIfAbsent(key, k -> methodToProperty(lambda.getImplMethodName()));
     }
 

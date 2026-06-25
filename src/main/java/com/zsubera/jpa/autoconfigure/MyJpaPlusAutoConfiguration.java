@@ -54,9 +54,8 @@ import org.springframework.data.jpa.repository.config.EnableJpaAuditing;
 @AutoConfiguration
 @ConditionalOnClass({EntityManager.class})
 @EnableConfigurationProperties(MyJpaPlusProperties.class)
-@EnableJpaAuditing
 @Import({SoftDeleteFilterBean.class, MyJpaPlusAutoConfiguration.ModuleCompatibilityChecker.class,
-    MyJpaPlusAutoConfiguration.MyJpaPlusConfigInitializer.class})
+    MyJpaPlusAutoConfiguration.MyJpaPlusConfigInitializer.class, MyJpaPlusAutoConfiguration.JpaAuditingConfig.class})
 @SuppressFBWarnings(value = "CT_CONSTRUCTOR_THROW",
     justification = "Constructor validates parameters before assignment")
 public class MyJpaPlusAutoConfiguration {
@@ -590,5 +589,15 @@ public class MyJpaPlusAutoConfiguration {
         public void postProcessBeanFactory(ConfigurableListableBeanFactory beanFactory) throws BeansException {
             // No-op — 所有修改在 postProcessBeanDefinitionRegistry 中完成
         }
+    }
+
+    /**
+     * 条件性启用 JPA 审计。仅在用户未自行配置 {@code @EnableJpaAuditing} 时生效。
+     * 检测方式：如果容器中已存在 auditing 相关 Bean（如 AuditingHandler），则跳过。
+     */
+    @org.springframework.context.annotation.Configuration
+    @EnableJpaAuditing
+    @ConditionalOnMissingBean(name = "auditingHandler")
+    static class JpaAuditingConfig {
     }
 }

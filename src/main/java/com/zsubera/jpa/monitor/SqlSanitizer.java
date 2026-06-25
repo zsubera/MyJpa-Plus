@@ -121,7 +121,8 @@ public final class SqlSanitizer {
 
         while (limitMatcher.find()) {
             sb.append(sql, lastEnd, limitMatcher.start());
-            sb.append("\0PROTECTED_").append(protectedParts.size()).append("\0");
+            String sentinel = "\0PROTECTED_" + protectedParts.size() + "\0";
+            sb.append(sentinel);
             protectedParts.add(limitMatcher.group());
             lastEnd = limitMatcher.end();
         }

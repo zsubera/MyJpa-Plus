@@ -523,7 +523,12 @@ public class CteSpec {
                         return null;
                     }
                     if (method.getDeclaringClass() == Object.class) {
-                        return method.invoke(this, args);
+                        return switch (method.getName()) {
+                            case "toString" -> "CteSpec.WorkProxy";
+                            case "hashCode" -> System.identityHashCode(proxy);
+                            case "equals" -> proxy == args[0];
+                            default -> method.invoke(proxy, args);
+                        };
                     }
                     return null;
                 });

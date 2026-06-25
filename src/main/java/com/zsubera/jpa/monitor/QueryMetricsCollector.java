@@ -203,16 +203,17 @@ public class QueryMetricsCollector {
      * 使用迭代器直接采样而非 {@code keySet().toArray()}，避免数组分配。
      */
     private void evictRandomEntry() {
-        int toEvict = Math.max(1, metricsMap.size() / 10);
+        int currentSize = metricsMap.size();
+        if (currentSize == 0) {
+            return;
+        }
+        int toEvict = Math.max(1, currentSize / 10);
         java.util.Iterator<String> it = metricsMap.keySet().iterator();
-        // ponytail: sample-based eviction — iterates until enough entries evicted or exhausted.
-        // For MAX_METRICS_ENTRIES=4096, a full iteration is ~0.05ms.
         int evicted = 0;
-        int step = Math.max(1, metricsMap.size() / toEvict);
-        int count = 0;
+        java.util.concurrent.ThreadLocalRandom rnd = java.util.concurrent.ThreadLocalRandom.current();
         while (it.hasNext() && evicted < toEvict) {
-            String key = it.next();
-            if (count++ % step == 0) {
+            it.next();
+            if (rnd.nextInt(currentSize) < toEvict) {
                 it.remove();
                 evicted++;
             }

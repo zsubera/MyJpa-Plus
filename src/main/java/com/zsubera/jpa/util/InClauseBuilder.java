@@ -184,6 +184,22 @@ public final class InClauseBuilder {
     }
 
     private static NullFilterResult filterNulls(Collection<?> values) {
+        if (values.isEmpty()) {
+            return new NullFilterResult(java.util.Collections.emptyList(), false);
+        }
+        // ponytail: 小集合内联 null 检查，避免分配 ArrayList
+        if (values.size() <= 16) {
+            boolean hasNull = false;
+            for (Object v : values) {
+                if (v == null) {
+                    hasNull = true;
+                    break;
+                }
+            }
+            if (!hasNull) {
+                return new NullFilterResult(List.copyOf(values), false);
+            }
+        }
         List<Object> nonNullValues = new ArrayList<>(values.size());
         boolean hasNull = false;
         for (Object v : values) {

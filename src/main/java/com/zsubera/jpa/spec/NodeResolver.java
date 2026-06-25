@@ -159,7 +159,7 @@ final class NodeResolver {
             if (param instanceof String fieldName && i == 0) {
                 args[i] = path.get(fieldName);
             } else {
-                args[i] = cb.literal(param);
+                args[i] = param != null ? cb.literal(param) : cb.nullLiteral(Object.class);
             }
         }
         Expression<Boolean> funcExpr = cb.function(node.functionName, Boolean.class, args);

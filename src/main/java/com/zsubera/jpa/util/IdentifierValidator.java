@@ -107,10 +107,10 @@ public final class IdentifierValidator {
             throw new MyJpaPlusException("Identifier length (" + identifier.length() + ") exceeds maximum ("
                 + MAX_IDENTIFIER_LENGTH + "): '" + identifier.substring(0, 64) + "...'");
         }
-        String[] parts = identifier.split("\\.");
-        if (parts.length == 0) {
-            throw new MyJpaPlusException("Identifier must contain at least one valid part: '" + identifier + "'");
+        if (identifier.endsWith(".")) {
+            throw new MyJpaPlusException("Identifier must not end with '.': '" + identifier + "'");
         }
+        String[] parts = identifier.split("\\.");
         for (String part : parts) {
             validatePart(part, identifier);
         }

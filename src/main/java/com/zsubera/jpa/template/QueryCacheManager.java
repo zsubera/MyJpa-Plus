@@ -485,8 +485,8 @@ public class QueryCacheManager implements CacheAdapter {
     public void clear() {
         evictionLock.lock();
         try {
-            store.clear();
             insertionTimestamps.clear();
+            store.clear();
         } finally {
             evictionLock.unlock();
         }

@@ -48,6 +48,7 @@ public final class GlobalConfigHolder {
         justification = "Spring-managed singleton intentionally stored for global access")
     public static void setApplicationContext(ApplicationContext ctx) {
         applicationContext = ctx;
+        cachedBean = null;
     }
 
     /**
@@ -59,7 +60,13 @@ public final class GlobalConfigHolder {
         justification = "Spring-managed singleton intentionally stored for global access")
     public static void setConfig(MyJpaPlusGlobalConfig globalConfig) {
         config = globalConfig;
+        cachedBean = null;
     }
+
+    /**
+     * 缓存的 Spring Bean 引用，避免每次 getConfig() 调用 ctx.getBean()。
+     */
+    private static volatile MyJpaPlusGlobalConfig cachedBean;
 
     /**
      * 获取全局配置。优先级：Spring Bean 容器 > 静态持有实例 > 默认配置。
@@ -69,21 +76,24 @@ public final class GlobalConfigHolder {
     @SuppressFBWarnings(value = "MS_EXPOSE_REP",
         justification = "Intentionally returns shared config singleton for global access")
     public static MyJpaPlusGlobalConfig getConfig() {
-        // 优先从 ApplicationContext 查找
+        // 优先从 ApplicationContext 查找（首次命中后缓存 Bean 引用）
+        MyJpaPlusGlobalConfig bean = cachedBean;
+        if (bean != null) {
+            return bean;
+        }
         ApplicationContext ctx = applicationContext;
         if (ctx != null) {
             try {
-                return ctx.getBean(MyJpaPlusGlobalConfig.class);
+                bean = ctx.getBean(MyJpaPlusGlobalConfig.class);
+                cachedBean = bean;
+                return bean;
             } catch (Exception ignored) {
-                // Spring 上下文可能尚未就绪或已关闭
+                cachedBean = null;
             }
         }
         // 回退到静态持有实例
         MyJpaPlusGlobalConfig c = config;
-        if (c == null) {
-            return new MyJpaPlusGlobalConfig();
-        }
-        return c;
+        return c != null ? c : new MyJpaPlusGlobalConfig();
     }
 
     /**
@@ -109,5 +119,6 @@ public final class GlobalConfigHolder {
     public static void reset() {
         config = null;
         applicationContext = null;
+        cachedBean = null;
     }
 }

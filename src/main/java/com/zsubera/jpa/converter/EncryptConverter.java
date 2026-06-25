@@ -623,17 +623,20 @@ public class EncryptConverter implements AttributeConverter<String, String> {
      */
     private static SecretKeySpec deriveKey(String rawKeyMaterial) {
         char[] keyChars = rawKeyMaterial.toCharArray();
+        byte[] derived = null;
         try {
             byte[] salt = getSalt();
             PBEKeySpec spec = new PBEKeySpec(keyChars, salt, PBKDF2_ITERATIONS, PBKDF2_KEY_LENGTH);
             SecretKeyFactory factory = SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256");
-            byte[] derived = factory.generateSecret(spec).getEncoded();
+            derived = factory.generateSecret(spec).getEncoded();
             return new SecretKeySpec(derived, "AES");
         } catch (GeneralSecurityException e) {
             throw new MyJpaPlusException("Failed to derive encryption key via PBKDF2", e);
         } finally {
-            // ponytail: 清零敏感密钥材料，防止 heap dump 泄露
             java.util.Arrays.fill(keyChars, '\0');
+            if (derived != null) {
+                java.util.Arrays.fill(derived, (byte) 0);
+            }
         }
     }
 

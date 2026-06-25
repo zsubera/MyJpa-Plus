@@ -358,19 +358,16 @@ public class UpdateSpec<T> extends AbstractBulkOperationSpec<T, UpdateSpec<T>> {
         if (cached != null) {
             return cached;
         }
-        // 使用 computeIfAbsent 原子操作避免缓存竞争
         for (Class<?> c = clazz; c != null && c != Object.class; c = c.getSuperclass()) {
             for (java.lang.reflect.Field f : c.getDeclaredFields()) {
                 if (f.isAnnotationPresent(jakarta.persistence.Version.class)) {
                     String result = f.getName();
-                    VERSION_FIELD_CACHE.put(cacheKey, result);
-                    evictCacheIfNeeded(VERSION_FIELD_CACHE);
+                    VERSION_FIELD_CACHE.putIfAbsent(cacheKey, result);
                     return result;
                 }
             }
         }
-        NO_VERSION_CACHE.put(cacheKey, Boolean.TRUE);
-        evictCacheIfNeeded(NO_VERSION_CACHE);
+        NO_VERSION_CACHE.putIfAbsent(cacheKey, Boolean.TRUE);
         return null;
     }
 
