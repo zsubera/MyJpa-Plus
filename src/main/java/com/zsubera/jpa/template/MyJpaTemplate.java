@@ -361,8 +361,8 @@ public class MyJpaTemplate implements MyJpaTemplateOperations {
         if (ttlSeconds < 0) {
             throw new IllegalArgumentException("ttlSeconds must not be negative");
         }
-        // 使用 cacheKey() 包含实际参数值，避免不同参数值的查询产生相同的缓存键
-        String cacheKey = entityClass.getName() + "@" + spec.cacheKey() + "@" + spec.getSort();
+        // ponytail: 使用 simpleName + ":" 格式，与 CacheInvalidationListener 的 evictByPrefix 匹配
+        String cacheKey = entityClass.getSimpleName() + ":" + spec.cacheKey() + ":" + spec.getSort();
         List<T> cached = cacheAdapter.get(cacheKey);
         if (cached != null) {
             log.debug("Cache hit for key: {}", cacheKey);
@@ -863,7 +863,7 @@ public class MyJpaTemplate implements MyJpaTemplateOperations {
             throw new IllegalArgumentException("maxResults must be positive or -1 (disabled)");
         }
         if (maxResults == DISABLED) {
-            TypedQuery<T> query = buildSpecificationQuery(entityClass, spec, null, 0);
+            TypedQuery<T> query = buildSpecificationQuery(entityClass, spec, null, null);
             return query.getResultList();
         }
         TypedQuery<T> query = buildSpecificationQuery(entityClass, spec, null, maxResults);
