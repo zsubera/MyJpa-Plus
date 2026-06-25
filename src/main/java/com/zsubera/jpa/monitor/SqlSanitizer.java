@@ -45,6 +45,9 @@ public final class SqlSanitizer {
     /** PostgreSQL E-字符串模式（E'...'）— 必须在单引号模式之前匹配 */
     private static final Pattern PG_ESTRING_PATTERN = Pattern.compile("E'(?:[^'\\\\]|\\\\.|'')*'");
 
+    /** 双引号字符串模式（MySQL ANSI_QUOTES / SQLite）— 必须在单引号模式之前匹配 */
+    private static final Pattern DOUBLE_QUOTE_PATTERN = Pattern.compile("\"(?:[^\"\\\\]|\\\\.|\"\")*\"");
+
     /** 单引号字符串模式，支持转义 '' 和反斜杠转义 \' */
     private static final Pattern SINGLE_QUOTE_PATTERN = Pattern.compile("'(?:[^'\\\\]|\\\\.|'')*'");
 
@@ -105,6 +108,7 @@ public final class SqlSanitizer {
         result = HEX_LITERAL_PATTERN.matcher(result).replaceAll("?"); // 十六进制字面量（X'...'）
         result = UNICODE_STRING_PATTERN.matcher(result).replaceAll("?"); // Unicode 字符串（N'...'）
         result = PG_ESTRING_PATTERN.matcher(result).replaceAll("?"); // PostgreSQL E-字符串（E'...'）
+        result = DOUBLE_QUOTE_PATTERN.matcher(result).replaceAll("?"); // 双引号字符串（MySQL ANSI_QUOTES）
         result = SINGLE_QUOTE_PATTERN.matcher(result).replaceAll("?"); // 单引号字符串
         result = DOLLAR_PARAM_PATTERN.matcher(result).replaceAll("?"); // PostgreSQL 美元参数
 

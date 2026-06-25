@@ -405,12 +405,17 @@ public class EncryptConverter implements AttributeConverter<String, String> {
             byte[] iv = new byte[GCM_IV_LENGTH];
             SECURE_RANDOM.nextBytes(iv);
             cipher.init(Cipher.ENCRYPT_MODE, keySpec, new GCMParameterSpec(GCM_TAG_LENGTH, iv));
-            byte[] encrypted = cipher.doFinal(attribute.getBytes(StandardCharsets.UTF_8));
-            byte[] combined = new byte[iv.length + encrypted.length];
-            System.arraycopy(iv, 0, combined, 0, iv.length);
-            System.arraycopy(encrypted, 0, combined, iv.length, encrypted.length);
-            String version = getKeyVersion();
-            return version + ":" + Base64.getEncoder().encodeToString(combined);
+            byte[] plaintextBytes = attribute.getBytes(StandardCharsets.UTF_8);
+            try {
+                byte[] encrypted = cipher.doFinal(plaintextBytes);
+                byte[] combined = new byte[iv.length + encrypted.length];
+                System.arraycopy(iv, 0, combined, 0, iv.length);
+                System.arraycopy(encrypted, 0, combined, iv.length, encrypted.length);
+                String version = getKeyVersion();
+                return version + ":" + Base64.getEncoder().encodeToString(combined);
+            } finally {
+                java.util.Arrays.fill(plaintextBytes, (byte) 0);
+            }
         } catch (GeneralSecurityException e) {
             log.error("Encryption failed", e);
             throw new MyJpaPlusException("Failed to encrypt value. Check encryption key configuration.", e);
@@ -475,7 +480,11 @@ public class EncryptConverter implements AttributeConverter<String, String> {
             Cipher cipher = createCipher();
             cipher.init(Cipher.DECRYPT_MODE, keySpec, new GCMParameterSpec(GCM_TAG_LENGTH, iv));
             byte[] decrypted = cipher.doFinal(encrypted);
-            return new String(decrypted, StandardCharsets.UTF_8);
+            try {
+                return new String(decrypted, StandardCharsets.UTF_8);
+            } finally {
+                java.util.Arrays.fill(decrypted, (byte) 0);
+            }
         } catch (GeneralSecurityException e) {
             log.error("Decryption failed", e);
             throw new MyJpaPlusException("Failed to decrypt value. Check encryption key configuration.", e);
