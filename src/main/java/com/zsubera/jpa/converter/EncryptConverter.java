@@ -177,8 +177,9 @@ public class EncryptConverter implements AttributeConverter<String, String> {
     /**
      * 清除当前线程的 Cipher 缓存（无操作：GCM 模式下每次操作新建 Cipher 实例，无需缓存清理）。
      *
-     * <p>此方法保留以保持 API 兼容性，实际已无操作。</p>
+     * @deprecated 此方法已无操作，保留仅为 API 兼容性。GCM 模式下每次操作新建 Cipher 实例，无需缓存清理。
      */
+    @Deprecated(forRemoval = true)
     public static void removeCipher() {
         // GCM 模式下不缓存 Cipher，无需清理
     }

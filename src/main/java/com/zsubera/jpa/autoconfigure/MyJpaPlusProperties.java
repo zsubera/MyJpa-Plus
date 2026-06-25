@@ -279,8 +279,8 @@ public class MyJpaPlusProperties {
         }
 
         public void setMaxBulkOperationRows(int maxBulkOperationRows) {
-            if (maxBulkOperationRows < 0) {
-                throw new IllegalArgumentException("maxBulkOperationRows must be >= 0");
+            if (maxBulkOperationRows < -1) {
+                throw new IllegalArgumentException("maxBulkOperationRows must be -1 (unlimited) or non-negative");
             }
             this.maxBulkOperationRows = maxBulkOperationRows;
         }

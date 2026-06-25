@@ -859,8 +859,12 @@ public class MyJpaTemplate implements MyJpaTemplateOperations {
     @Transactional(readOnly = true)
     public <T> List<T> find(Class<T> entityClass, Specification<T> spec, int maxResults) {
         validateQueryParams(entityClass, spec);
-        if (maxResults <= 0) {
-            throw new IllegalArgumentException("maxResults must be positive");
+        if (maxResults <= 0 && maxResults != DISABLED) {
+            throw new IllegalArgumentException("maxResults must be positive or -1 (disabled)");
+        }
+        if (maxResults == DISABLED) {
+            TypedQuery<T> query = buildSpecificationQuery(entityClass, spec, null, 0);
+            return query.getResultList();
         }
         TypedQuery<T> query = buildSpecificationQuery(entityClass, spec, null, maxResults);
         return query.getResultList();

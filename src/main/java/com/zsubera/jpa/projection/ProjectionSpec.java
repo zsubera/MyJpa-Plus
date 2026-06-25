@@ -77,8 +77,8 @@ public class ProjectionSpec<T> {
     /** 深度分页硬限制（默认 1000000）。 */
     private int deepPaginationOffsetLimit = MyJpaTemplate.DEFAULT_DEEP_PAGINATION_OFFSET_LIMIT;
 
-    /** 深度分页警告日志限流：上次记录时间。 */
-    private final AtomicLong lastDeepPaginationWarnTime = new AtomicLong(0);
+    /** 深度分页警告日志限流：上次记录时间。ponytail: static 保证跨实例限流。 */
+    private static final AtomicLong lastDeepPaginationWarnTime = new AtomicLong(0);
 
     /** 深度分页警告日志最小间隔（1 分钟）。 */
     private static final long DEEP_PAGINATION_WARN_INTERVAL_MS = 60_000;

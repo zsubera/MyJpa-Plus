@@ -56,7 +56,7 @@ public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> ext
      * 安全数据库函数名白名单。仅允许调用以下常见安全函数。
      *
      * <p>
-     * 此集合为不可变集合，禁止调用危险函数如 {@code pg_sleep}、{@code SLEEP}、{code LOAD_FILE} 等。
+     * 此集合为不可变集合，禁止调用危险函数如 {@code pg_sleep}、{@code SLEEP}、{@code LOAD_FILE} 等。
      *
      * <p>
      * 白名单强制执行由 {@link #WHITELIST_ENFORCED} 控制（硬编码为 true）。 如需扩展白名单，请使用

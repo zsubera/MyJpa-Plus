@@ -179,7 +179,7 @@ class MyJpaPlusAutoConfigurationTest {
     @Test
     void properties_query_setMaxBulkOperationRows_invalid_throws() {
         MyJpaPlusProperties.Query q = new MyJpaPlusProperties.Query();
-        assertThrows(IllegalArgumentException.class, () -> q.setMaxBulkOperationRows(-1));
+        assertThrows(IllegalArgumentException.class, () -> q.setMaxBulkOperationRows(-2));
     }
 
     @Test

@@ -138,7 +138,7 @@ class MyJpaPlusPropertiesExtendedTest {
     @Test
     void query_setMaxBulkOperationRows_invalid() {
         MyJpaPlusProperties.Query q = new MyJpaPlusProperties.Query();
-        assertThrows(IllegalArgumentException.class, () -> q.setMaxBulkOperationRows(-1));
+        assertThrows(IllegalArgumentException.class, () -> q.setMaxBulkOperationRows(-2));
     }
 
     @Test
