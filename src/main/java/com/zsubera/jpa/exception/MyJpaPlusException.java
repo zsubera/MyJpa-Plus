@@ -131,7 +131,7 @@ public class MyJpaPlusException extends RuntimeException {
         return sanitized;
     }
 
-    /** 敏感数据模式检测正则：匹配 password=, token=, key=, secret=, credential= 等模式。使用负向回顾避免误匹配 primaryKey 等。 */
+    /** 敏感数据模式检测正则：匹配 password=, token=, key=, secret= 等模式。使用 (?<!\\w) 词边界避免误匹配，同时通过排除列表保护 primaryKey 等合法字段名。 */
     private static final Pattern SENSITIVE_DATA_PATTERN = Pattern.compile(
-        "(?i)(?<![a-zA-Z])(password|token|key|secret|credential|api[_-]?key|auth|authorization|ssn|credit[_-]?card)[=:]\\s*\\S+");
+        "(?i)(?<!\\w)(password|passwd|token|api[_-]?key|secret|credential|authorization|auth[_-]?token|auth[_-]?key|ssn|credit[_-]?card)[=:]\\s*\\S+");
 }

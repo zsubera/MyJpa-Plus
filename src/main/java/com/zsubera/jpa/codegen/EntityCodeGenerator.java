@@ -246,6 +246,9 @@ public final class EntityCodeGenerator {
             throw new IllegalArgumentException(
                 "tableName contains invalid characters. Only alphanumeric and underscore are allowed: " + tableName);
         }
+        if (columns == null) {
+            throw new IllegalArgumentException("columns must not be null");
+        }
         if (entityPackage == null || !entityPackage.matches("[a-zA-Z_][a-zA-Z0-9_.]*")) {
             throw new IllegalArgumentException(
                 "entityPackage contains invalid characters. Only alphanumeric, underscore, and dot are allowed: "
@@ -344,15 +347,26 @@ public final class EntityCodeGenerator {
             throw new IllegalArgumentException(
                 "tableName contains invalid characters. Only alphanumeric and underscore are allowed: " + tableName);
         }
+        if (columns == null) {
+            throw new IllegalArgumentException("columns must not be null");
+        }
         if (entityPackage == null || !entityPackage.matches("[a-zA-Z_][a-zA-Z0-9_.]*")) {
             throw new IllegalArgumentException(
                 "entityPackage contains invalid characters. Only alphanumeric, underscore, and dot are allowed: "
                     + entityPackage);
         }
+        if (entityPackage.startsWith(".") || entityPackage.endsWith(".") || entityPackage.contains("..")) {
+            throw new IllegalArgumentException(
+                "entityPackage must not start/end with dot or contain consecutive dots: " + entityPackage);
+        }
         if (repoPackage == null || !repoPackage.matches("[a-zA-Z_][a-zA-Z0-9_.]*")) {
             throw new IllegalArgumentException(
                 "repoPackage contains invalid characters. Only alphanumeric, underscore, and dot are allowed: "
                     + repoPackage);
+        }
+        if (repoPackage.startsWith(".") || repoPackage.endsWith(".") || repoPackage.contains("..")) {
+            throw new IllegalArgumentException(
+                "repoPackage must not start/end with dot or contain consecutive dots: " + repoPackage);
         }
         String className = toClassName(tableName);
         String repoName = className + "Repository";
@@ -392,7 +406,8 @@ public final class EntityCodeGenerator {
         "enum", "extends", "final", "finally", "float", "for", "goto", "if", "implements", "import", "instanceof",
         "int", "interface", "long", "native", "new", "package", "private", "protected", "public", "return", "short",
         "static", "strictfp", "super", "switch", "synchronized", "this", "throw", "throws", "transient", "try", "void",
-        "volatile", "while", "true", "false", "null", "var", "yield", "record", "sealed", "permits");
+        "volatile", "while", "true", "false", "null", "var", "yield", "record", "sealed", "permits",
+        "exports", "module", "opens", "provides", "requires", "to", "transitive", "uses", "with", "_");
 
     /**
      * 校验字段名是否为 Java 保留字，如果是则追加下划线后缀。
