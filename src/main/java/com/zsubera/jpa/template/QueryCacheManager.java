@@ -88,6 +88,10 @@ public class QueryCacheManager implements CacheAdapter {
     /** 缓存未命中计数 */
     private final java.util.concurrent.atomic.AtomicLong missCount = new java.util.concurrent.atomic.AtomicLong(0);
 
+    /** ponytail: 本地命中/未命中计数器，批量同步到全局计数器，减少原子操作开销 */
+    private final java.util.concurrent.atomic.AtomicLong localHits = new java.util.concurrent.atomic.AtomicLong(0);
+    private final java.util.concurrent.atomic.AtomicLong localMisses = new java.util.concurrent.atomic.AtomicLong(0);
+
     /** LRU 缓存，使用 ConcurrentHashMap 实现线程安全的无锁读取。 */
     private final java.util.concurrent.ConcurrentMap<String, CachedQueryResult<?>> store;
 
@@ -168,18 +172,19 @@ public class QueryCacheManager implements CacheAdapter {
     @Override
     @SuppressWarnings("unchecked")
     public <T> T get(String key) {
-        // 读取时采样触发过期清理，防止高读低写场景下过期条目长期占用内存
+        // ponytail: 延迟统计，仅每 EVICTION_CHECK_INTERVAL 次操作更新一次计数器
         if (getCounter.incrementAndGet() % EVICTION_CHECK_INTERVAL == 0) {
             evictExpiredEntries();
+            hitCount.addAndGet(localHits.getAndSet(0));
+            missCount.addAndGet(localMisses.getAndSet(0));
         }
         CachedQueryResult<?> result = store.get(key);
         if (result == null) {
-            missCount.incrementAndGet();
+            localMisses.incrementAndGet();
             return null;
         }
         if (result.isExpired()) {
-            missCount.incrementAndGet();
-            // 原子移除：仅当条目确实是当前过期条目时才移除，避免竞态条件误删新条目
+            localMisses.incrementAndGet();
             boolean removed = store.remove(key, result);
             if (removed) {
                 insertionTimestamps.remove(key);
@@ -187,7 +192,7 @@ public class QueryCacheManager implements CacheAdapter {
             }
             return null;
         }
-        hitCount.incrementAndGet();
+        localHits.incrementAndGet();
         try {
             return (T)result.getValue();
         } catch (ClassCastException e) {

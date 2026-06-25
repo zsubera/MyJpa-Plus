@@ -12,6 +12,7 @@ import java.lang.invoke.SerializedLambda;
 import java.lang.reflect.InaccessibleObjectException;
 import java.lang.reflect.Method;
 import java.util.Set;
+import java.util.concurrent.ConcurrentMap;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -159,9 +160,21 @@ public final class LambdaUtils {
      * @throws IllegalArgumentException 如果 fn 为 null
      * @throws MyJpaPlusException 如果无法从方法引用中提取属性名称
      */
+    /**
+     * ponytail: 缓存 SerializedLambda 解析结果，避免每次调用都反射。
+     * key = lambda 类名 + 方法名，value = 属性名。
+     */
+    private static final ConcurrentMap<String, String> PROPERTY_CACHE =
+        new java.util.concurrent.ConcurrentHashMap<>(256);
+
     public static <T> String getPropertyName(SFunction<T, ?> fn) {
         if (fn == null) {
             throw new IllegalArgumentException("SFunction must not be null");
+        }
+        String key = fn.getClass().getName() + "#" + fn.hashCode();
+        String cached = PROPERTY_CACHE.get(key);
+        if (cached != null) {
+            return cached;
         }
         String propertyName;
         try {
@@ -174,6 +187,7 @@ public final class LambdaUtils {
             propertyName = resolveViaSerialization(fn);
         }
         IdentifierValidator.validateColumnName(propertyName);
+        PROPERTY_CACHE.putIfAbsent(key, propertyName);
         return propertyName;
     }
 

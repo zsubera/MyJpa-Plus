@@ -251,7 +251,11 @@ final class NodeResolver {
     }
 
     private static Predicate resolveOr(ConditionNode.OrNode node, NodeContext ctx) {
-        List<Predicate> childPredicates = new ArrayList<>();
+        if (node.nodes.size() == 1) {
+            return resolveNodeWithDepth(node.nodes.get(0), ctx.path(), ctx.rootPath(), ctx.query(), ctx.cb(),
+                ctx.joinCache(), ctx.pathPrefix(), ctx.depth() + 1, ctx.fetchPaths());
+        }
+        List<Predicate> childPredicates = new ArrayList<>(node.nodes.size());
         for (ConditionNode child : node.nodes) {
             Predicate p = resolveNodeWithDepth(child, ctx.path(), ctx.rootPath(), ctx.query(), ctx.cb(),
                 ctx.joinCache(), ctx.pathPrefix(), ctx.depth() + 1, ctx.fetchPaths());
@@ -269,7 +273,11 @@ final class NodeResolver {
     }
 
     private static Predicate resolveAnd(ConditionNode.AndNode node, NodeContext ctx) {
-        List<Predicate> childPredicates = new ArrayList<>();
+        if (node.nodes.size() == 1) {
+            return resolveNodeWithDepth(node.nodes.get(0), ctx.path(), ctx.rootPath(), ctx.query(), ctx.cb(),
+                ctx.joinCache(), ctx.pathPrefix(), ctx.depth() + 1, ctx.fetchPaths());
+        }
+        List<Predicate> childPredicates = new ArrayList<>(node.nodes.size());
         for (ConditionNode child : node.nodes) {
             Predicate p = resolveNodeWithDepth(child, ctx.path(), ctx.rootPath(), ctx.query(), ctx.cb(),
                 ctx.joinCache(), ctx.pathPrefix(), ctx.depth() + 1, ctx.fetchPaths());

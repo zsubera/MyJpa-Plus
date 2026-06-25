@@ -676,7 +676,7 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
             applyDistinctAndGroupBy(root, query, cb);
             applyOrderBy(root, query, cb);
         }
-        Map<String, Join<?, ?>> joinCache = new LinkedHashMap<>();
+        Map<String, Join<?, ?>> joinCache = new java.util.HashMap<>();
         java.util.Set<String> fetchPaths = java.util.Collections.newSetFromMap(new java.util.HashMap<>());
         List<Predicate> predicates = new ArrayList<>();
         for (ConditionNode node : conditions) {

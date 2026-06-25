@@ -718,20 +718,26 @@ public final class SoftDeleteHelper {
      * @param isNotDeleted true 表示构建"未删除"谓词，false 表示构建"已删除"谓词
      * @return 构建的谓词
      */
+    /** ponytail: 缓存 ResolvedDeletedValue，避免每次 JOIN 重新解析。 */
+    private static final ConcurrentMap<String, ResolvedDeletedValue> RESOLVED_VALUE_CACHE =
+        new ConcurrentHashMap<>(64);
+
     private static Predicate resolveDeletedPredicate(CriteriaBuilder cb, Path<?> path, String fieldName,
         Class<?> entityClass, boolean isNotDeleted) {
         Field field = getField(entityClass, fieldName);
         if (field == null) {
-            // ponytail: 字段无法解析时抛出明确异常，而非静默回退到 Boolean 逻辑（对 Integer/Enum/String 类型会产生错误谓词）
             throw new com.zsubera.jpa.exception.MyJpaPlusException(
                 "Cannot resolve @SoftDelete field '" + fieldName + "' in " + entityClass.getName()
                     + ". Ensure the field exists and is accessible.");
         }
-        SoftDelete annotation = ANNOTATION_CACHE.computeIfAbsent(entityClass, cls -> {
-            Field f = getField(cls, fieldName);
-            return f != null ? f.getAnnotation(SoftDelete.class) : null;
+        String cacheKey = entityClass.getName() + "#" + fieldName;
+        ResolvedDeletedValue resolved = RESOLVED_VALUE_CACHE.computeIfAbsent(cacheKey, k -> {
+            SoftDelete annotation = ANNOTATION_CACHE.computeIfAbsent(entityClass, cls -> {
+                Field f = getField(cls, fieldName);
+                return f != null ? f.getAnnotation(SoftDelete.class) : null;
+            });
+            return resolveDeletedValue(entityClass, field, annotation);
         });
-        ResolvedDeletedValue resolved = resolveDeletedValue(entityClass, field, annotation);
         if (resolved.booleanField()) {
             if (isNotDeleted) {
                 return cb.or(cb.isNull(path.get(fieldName)), cb.equal(path.get(fieldName), false));
