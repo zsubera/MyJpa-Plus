@@ -147,24 +147,24 @@ class EncryptConverterCoverageTest {
         assertNotNull(encrypted2);
     }
 
-    // ---- isUsingDevSalt: SALT_ENV check ----
+    // ---- isSaltCheckSkipped: SALT_ENV check ----
 
     @Test
-    void isUsingDevSalt_withSaltEnv() throws Exception {
-        Method m = EncryptConverter.class.getDeclaredMethod("isUsingDevSalt");
+    void isSaltCheckSkipped_withSkipEnv() throws Exception {
+        Method m = EncryptConverter.class.getDeclaredMethod("isSaltCheckSkipped");
         m.setAccessible(true);
-        // Without SALT_ENV set, should check SALT_PROPERTY
-        System.clearProperty("myjpa.encrypt.salt");
         System.setProperty("myjpa-plus.encrypt.skip-salt-check", "true");
         assertTrue((boolean)m.invoke(null));
     }
 
     @Test
-    void isUsingDevSalt_withSaltProperty() throws Exception {
-        Method m = EncryptConverter.class.getDeclaredMethod("isUsingDevSalt");
+    void isSaltCheckSkipped_withSaltProperty() throws Exception {
+        Method m = EncryptConverter.class.getDeclaredMethod("isSaltCheckSkipped");
         m.setAccessible(true);
         System.setProperty("myjpa.encrypt.salt", "my-salt");
+        System.clearProperty("myjpa-plus.encrypt.skip-salt-check");
         try {
+            // isSaltCheckSkipped only checks the skip flag, not whether salt is configured
             assertFalse((boolean)m.invoke(null));
         } finally {
             System.clearProperty("myjpa.encrypt.salt");
@@ -237,7 +237,7 @@ class EncryptConverterCoverageTest {
         try {
             byte[] salt = (byte[])m.invoke(null);
             assertNotNull(salt);
-            assertArrayEquals("myjpa-plus-dev-salt-2024".getBytes(StandardCharsets.UTF_8), salt);
+            assertTrue(salt.length > 0);
         } finally {
             System.clearProperty("myjpa-plus.encrypt.skip-salt-check");
         }
@@ -303,11 +303,11 @@ class EncryptConverterCoverageTest {
         assertEquals("v1", version);
     }
 
-    // ---- isUsingDevSalt: with SKIP_SALT_ENV ----
+    // ---- isSaltCheckSkipped: with SKIP_SALT_ENV ----
 
     @Test
-    void isUsingDevSalt_withSkipSaltEnv() throws Exception {
-        Method m = EncryptConverter.class.getDeclaredMethod("isUsingDevSalt");
+    void isSaltCheckSkipped_withSkipSaltEnv() throws Exception {
+        Method m = EncryptConverter.class.getDeclaredMethod("isSaltCheckSkipped");
         m.setAccessible(true);
         System.clearProperty("myjpa.encrypt.salt");
         System.clearProperty("myjpa-plus.encrypt.skip-salt-check");

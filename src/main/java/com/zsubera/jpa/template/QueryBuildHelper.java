@@ -1,0 +1,83 @@
+package com.zsubera.jpa.template;
+
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.TypedQuery;
+import jakarta.persistence.criteria.CriteriaBuilder;
+import jakarta.persistence.criteria.CriteriaQuery;
+import jakarta.persistence.criteria.Root;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.jpa.domain.Specification;
+import org.springframework.lang.Nullable;
+
+/**
+ * 共享的 JPA 查询构建工具类，消除 {@link MyJpaTemplate} 和
+ * {@link com.zsubera.jpa.projection.ProjectionSpec} 之间的查询构建重复逻辑。
+ *
+ * <p>
+ * 内部工具类——不建议应用代码直接使用。
+ */
+final class QueryBuildHelper {
+
+    private QueryBuildHelper() {}
+
+    /**
+     * 构建基于 Specification 的 TypedQuery。
+     *
+     * @param entityManager EntityManager 实例
+     * @param entityClass 实体类
+     * @param spec 查询规范（可为 null）
+     * @param sort 排序规则（可为 null）
+     * @param maxResults 最大结果数（null 表示不限制）
+     * @param <T> 实体类型
+     * @return 构建的 TypedQuery
+     */
+    static <T> TypedQuery<T> buildSpecificationQuery(EntityManager entityManager, Class<T> entityClass,
+        @Nullable Specification<T> spec, @Nullable Sort sort, @Nullable Integer maxResults) {
+        CriteriaBuilder cb = entityManager.getCriteriaBuilder();
+        CriteriaQuery<T> cq = cb.createQuery(entityClass);
+        Root<T> root = cq.from(entityClass);
+        if (spec != null) {
+            jakarta.persistence.criteria.Predicate predicate = spec.toPredicate(root, cq, cb);
+            if (predicate != null) {
+                cq.where(predicate);
+            }
+        }
+        applySort(cq, root, cb, sort);
+        TypedQuery<T> query = entityManager.createQuery(cq);
+        if (maxResults != null) {
+            query.setMaxResults(maxResults);
+        }
+        return query;
+    }
+
+    /**
+     * 将 Spring Data {@link Sort} 应用到 JPA CriteriaQuery。
+     */
+    static <T> void applySort(CriteriaQuery<T> query, Root<T> root, CriteriaBuilder cb,
+        @Nullable Sort sort) {
+        if (sort != null && sort.isSorted()) {
+            query.orderBy(sort.stream().map(order -> order.isAscending()
+                ? cb.asc(root.get(order.getProperty()))
+                : cb.desc(root.get(order.getProperty()))).toList());
+        }
+    }
+
+    /**
+     * 执行计数查询。
+     */
+    static <T> long executeCountQuery(EntityManager entityManager, Class<T> entityClass,
+        Specification<T> spec) {
+        CriteriaBuilder cb = entityManager.getCriteriaBuilder();
+        CriteriaQuery<Long> countCq = cb.createQuery(Long.class);
+        Root<T> countRoot = countCq.from(entityClass);
+        countCq.select(cb.count(countRoot));
+        if (spec != null) {
+            jakarta.persistence.criteria.Predicate countPredicate = spec.toPredicate(countRoot, countCq, cb);
+            if (countPredicate != null) {
+                countCq.where(countPredicate);
+            }
+        }
+        TypedQuery<Long> countQuery = entityManager.createQuery(countCq);
+        return countQuery.getSingleResult();
+    }
+}

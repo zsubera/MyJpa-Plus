@@ -148,40 +148,43 @@ class EncryptConverterExtendedTest {
     }
 
     @Test
-    void isUsingDevSalt_withSaltProperty() throws Exception {
+    void isSaltCheckSkipped_withSaltProperty() throws Exception {
         System.setProperty("myjpa.encrypt.salt", "my-salt");
+        System.clearProperty("myjpa-plus.encrypt.skip-salt-check");
         try {
-            Method m = EncryptConverter.class.getDeclaredMethod("isUsingDevSalt");
+            Method m = EncryptConverter.class.getDeclaredMethod("isSaltCheckSkipped");
             m.setAccessible(true);
+            // isSaltCheckSkipped only checks the skip flag, not whether salt is configured
             assertFalse((boolean)m.invoke(null));
         } finally {
             System.clearProperty("myjpa.encrypt.salt");
+            System.setProperty("myjpa-plus.encrypt.skip-salt-check", "true");
         }
     }
 
     @Test
-    void isUsingDevSalt_withSkipCheck() throws Exception {
+    void isSaltCheckSkipped_withSkipCheck() throws Exception {
         System.clearProperty("myjpa.encrypt.salt");
         System.setProperty("myjpa-plus.encrypt.skip-salt-check", "true");
         try {
-            Method m = EncryptConverter.class.getDeclaredMethod("isUsingDevSalt");
+            Method m = EncryptConverter.class.getDeclaredMethod("isSaltCheckSkipped");
             m.setAccessible(true);
             assertTrue((boolean)m.invoke(null));
         } finally {
-            System.setProperty("myjpa-plus.encrypt.skip-salt-check", "true");
+            System.clearProperty("myjpa-plus.encrypt.skip-salt-check");
         }
     }
 
     @Test
-    void isUsingDevSalt_noSaltNoSkip() throws Exception {
+    void isSaltCheckSkipped_noSaltNoSkip() throws Exception {
         System.clearProperty("myjpa.encrypt.salt");
         System.clearProperty("myjpa-plus.encrypt.skip-salt-check");
         try {
-            Method m = EncryptConverter.class.getDeclaredMethod("isUsingDevSalt");
+            Method m = EncryptConverter.class.getDeclaredMethod("isSaltCheckSkipped");
             m.setAccessible(true);
             assertFalse((boolean)m.invoke(null));
         } finally {
-            System.setProperty("myjpa-plus.encrypt.skip-salt-check", "true");
+            System.clearProperty("myjpa-plus.encrypt.skip-salt-check");
         }
     }
 

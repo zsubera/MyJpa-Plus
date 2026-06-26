@@ -121,4 +121,35 @@ public final class GlobalConfigHolder {
         applicationContext = null;
         cachedBean = null;
     }
+
+    // ---- 共享配置解析工具方法 ----
+
+    /**
+     * 从 GlobalConfig 解析整数配置值。优先使用 GlobalConfig 中的值，回退到默认值。
+     *
+     * @param getter 从 GlobalConfig 获取值的函数
+     * @param defaultValue 默认值（GlobalConfig 未配置或值无效时使用）
+     * @return 解析后的配置值
+     */
+    public static int resolveConfigValue(java.util.function.Function<MyJpaPlusGlobalConfig, Integer> getter,
+        int defaultValue) {
+        MyJpaPlusGlobalConfig cfg = getConfig();
+        if (cfg != null) {
+            int value = getter.apply(cfg);
+            if (value != 0) {
+                return value;
+            }
+        }
+        return defaultValue;
+    }
+
+    /**
+     * 从 GlobalConfig 解析最大批量操作行数。
+     *
+     * @param localFallback 本地回退值
+     * @return 解析后的配置值
+     */
+    public static int resolveMaxBulkOperationRows(int localFallback) {
+        return resolveConfigValue(MyJpaPlusGlobalConfig::getMaxBulkOperationRows, localFallback);
+    }
 }

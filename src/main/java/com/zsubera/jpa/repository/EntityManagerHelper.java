@@ -278,6 +278,10 @@ public final class EntityManagerHelper {
 
     /**
      * 清理所有注册的 resolver 和默认 EMF。用于应用关闭时的资源清理。
+     *
+     * <p>
+     * <strong>⚠️ 调用约束：</strong>此方法必须仅在没有活动事务时调用。 在活动事务中调用会导致后续
+     * {@link #getTransactionalEntityManager(Class)} 抛出 {@link IllegalStateException}。
      */
     public static void reset() {
         synchronized (resolverCheckLock) {

@@ -50,7 +50,8 @@ public final class SlowQueryDataSourceProxy {
     private static final Logger log = LoggerFactory.getLogger(SlowQueryDataSourceProxy.class);
 
     private static final int MAX_PROXY_CLASS_CACHE_SIZE = 512;
-    private static final ConcurrentMap<Class<?>, Class<?>> PROXY_CLASS_CACHE = new ConcurrentHashMap<>();
+    private static final com.zsubera.jpa.util.SampledEvictionCache<Class<?>, Class<?>> PROXY_CLASS_CACHE =
+        new com.zsubera.jpa.util.SampledEvictionCache<>(MAX_PROXY_CLASS_CACHE_SIZE, 0.75, 100, 64);
     private static final ReentrantLock CACHE_LOCK = new ReentrantLock();
 
     private SlowQueryDataSourceProxy() {}
@@ -89,30 +90,12 @@ public final class SlowQueryDataSourceProxy {
     }
 
     private static void evictCacheIfNeeded() {
-        if (PROXY_CLASS_CACHE.size() <= MAX_PROXY_CLASS_CACHE_SIZE) {
-            return;
-        }
-        CACHE_LOCK.lock();
-        try {
-            if (PROXY_CLASS_CACHE.size() <= MAX_PROXY_CLASS_CACHE_SIZE) {
-                return;
-            }
-            int toRemove = Math.max(1, PROXY_CLASS_CACHE.size() / 4);
-            int removed = 0;
-            java.util.Iterator<Class<?>> it = PROXY_CLASS_CACHE.keySet().iterator();
-            while (it.hasNext() && removed < toRemove) {
-                it.next();
-                it.remove();
-                removed++;
-            }
-        } finally {
-            CACHE_LOCK.unlock();
-        }
+        // ponytail: SampledEvictionCache handles eviction internally; this method is a no-op.
     }
 
     @SuppressFBWarnings(value = "EI_EXPOSE_REP",
         justification = "Proxy class cache is intentionally shared across all proxy instances for performance")
-    static ConcurrentMap<Class<?>, Class<?>> getProxyClassCache() {
+    static com.zsubera.jpa.util.SampledEvictionCache<Class<?>, Class<?>> getProxyClassCache() {
         return PROXY_CLASS_CACHE;
     }
 

@@ -129,7 +129,7 @@ public final class SqlSanitizer {
 
         while (limitMatcher.find()) {
             sb.append(sql, lastEnd, limitMatcher.start());
-            String sentinel = "\0PROTECTED_" + protectedParts.size() + "\0";
+            String sentinel = "\uE000PROTECTED_" + protectedParts.size() + "\uE000";
             sb.append(sentinel);
             protectedParts.add(limitMatcher.group());
             lastEnd = limitMatcher.end();
@@ -141,7 +141,7 @@ public final class SqlSanitizer {
 
         // 恢复被保护的部分
         for (int i = 0; i < protectedParts.size(); i++) {
-            result = result.replace("\0PROTECTED_" + i + "\0", protectedParts.get(i));
+            result = result.replace("\uE000PROTECTED_" + i + "\uE000", protectedParts.get(i));
         }
 
         return result;

@@ -154,16 +154,15 @@ public class EncryptConverter implements AttributeConverter<String, String> {
     private static final String SKIP_SALT_PROPERTY = "myjpa-plus.encrypt.skip-salt-check";
     private static final String SKIP_SALT_ENV = "MYJPA_ENCRYPT_SKIP_SALT_CHECK";
 
-    /** 保护 getKeySpec 缓存的读写锁：读路径（缓存命中）无需锁，写路径（缓存未命中/KDF 派生）互斥。 */
+    /** 保护 getKeySpec 缓存的读写锁：写路径（缓存未命中/KDF 派生）互斥。 */
     private static final ReentrantReadWriteLock KEY_SPEC_LOCK = new ReentrantReadWriteLock();
-    private static final Lock KEY_SPEC_READ_LOCK = KEY_SPEC_LOCK.readLock();
     private static final Lock KEY_SPEC_WRITE_LOCK = KEY_SPEC_LOCK.writeLock();
 
     /** 保护 getKeyVersion 缓存刷新的轻量锁（仅每 5 分钟触发一次写路径）。 */
     private static final ReentrantLock KEY_VERSION_LOCK = new ReentrantLock();
 
-    /** 开发环境固定盐值。仅在 skip-salt-check=true 时使用，确保跨 JVM 重启的数据可恢复性。 */
-    private static final String DEV_SALT = "myjpa-plus-dev-salt-2024";
+    // ponytail: DEV_SALT removed — hardcoded salt defeats PBKDF2 security.
+    // Callers must configure MYJPA_ENCRYPT_SALT or set myjpa-plus.encrypt.skip-salt-check=true with their own salt.
 
     /** 加密数据版本前缀匹配模式（如 "v1"、"v2"）。 */
     private static final java.util.regex.Pattern VERSION_PATTERN = java.util.regex.Pattern.compile("v\\d+");
@@ -188,8 +187,13 @@ public class EncryptConverter implements AttributeConverter<String, String> {
      * 清除所有缓存的密钥和版本信息。用于应用关闭时清理和测试环境重置。
      */
     public static void clearCaches() {
-        KEY_CACHE.clear();
-        keyVersionSnapshot = new KeyVersionSnapshot("v1", 0);
+        KEY_SPEC_WRITE_LOCK.lock();
+        try {
+            KEY_CACHE.clear();
+            keyVersionSnapshot = new KeyVersionSnapshot("v1", 0);
+        } finally {
+            KEY_SPEC_WRITE_LOCK.unlock();
+        }
         KEY_VALIDATED.set(false);
         DEV_SALT_WARNING_LOGGED.set(false);
     }
@@ -393,11 +397,11 @@ public class EncryptConverter implements AttributeConverter<String, String> {
         if (!KEY_VALIDATED.get()) {
             validateKeyConfiguration();
         }
-        // 首次加密时检查是否使用开发盐值，发出一次性 CRITICAL 警告
-        if (DEV_SALT_WARNING_LOGGED.compareAndSet(false, true) && isUsingDevSalt()) {
-            log.error("CRITICAL: Encryption is using a predictable development salt! "
-                + "Encrypted data WILL NOT BE SECURE in production. "
-                + "Set environment variable {} or system property {} before deploying.", SALT_ENV, SALT_PROPERTY);
+        // 首次加密时检查是否跳过了盐值检查，发出一次性警告
+        if (DEV_SALT_WARNING_LOGGED.compareAndSet(false, true) && isSaltCheckSkipped()) {
+            log.warn("SECURITY: PBKDF2 salt check is skipped via configuration. "
+                + "Encrypted data may not be secure without a proper salt. "
+                + "Set environment variable {} or system property {} for production.", SALT_ENV, SALT_PROPERTY);
         }
         try {
             SecretKeySpec keySpec = getKeySpec();
@@ -520,7 +524,6 @@ public class EncryptConverter implements AttributeConverter<String, String> {
             }
             if (KEY_CACHE.size() >= MAX_KEY_CACHE_SIZE) {
                 throw new MyJpaPlusException("Encryption key cache is full (" + MAX_KEY_CACHE_SIZE + " entries). "
-                    + "Cannot load key version '" + cacheKey + "'. "
                     + "Clear cache or increase MAX_KEY_CACHE_SIZE if this is legitimate key rotation.");
             }
             String rawKey = resolveRawKey(cacheKey);
@@ -651,25 +654,6 @@ public class EncryptConverter implements AttributeConverter<String, String> {
     }
 
     /**
-     * 检查当前是否使用开发盐值（未配置生产盐值且启用了 skip-salt-check）。
-     */
-    private static boolean isUsingDevSalt() {
-        String salt = System.getenv(SALT_ENV);
-        if (salt != null && !salt.isEmpty()) {
-            return false;
-        }
-        salt = System.getProperty(SALT_PROPERTY);
-        if (salt != null && !salt.isEmpty()) {
-            return false;
-        }
-        String skipCheck = System.getProperty(SKIP_SALT_PROPERTY);
-        if (!"true".equalsIgnoreCase(skipCheck)) {
-            skipCheck = System.getenv(SKIP_SALT_ENV);
-        }
-        return "true".equalsIgnoreCase(skipCheck);
-    }
-
-    /**
      * 获取 PBKDF2 盐值。优先从环境变量/系统属性获取，未配置时使用开发盐值常量。
      *
      * <p>
@@ -688,24 +672,33 @@ public class EncryptConverter implements AttributeConverter<String, String> {
             return salt.getBytes(StandardCharsets.UTF_8);
         }
         // 未配置盐值 — 默认拒绝，除非显式跳过
-        String skipCheck = System.getProperty(SKIP_SALT_PROPERTY);
-        if (!"true".equalsIgnoreCase(skipCheck)) {
-            skipCheck = System.getenv(SKIP_SALT_ENV);
-        }
-        if ("true".equalsIgnoreCase(skipCheck)) {
+        if (isSaltCheckSkipped()) {
             if (isProductionEnvironment()) {
                 throw new IllegalStateException("Cannot skip PBKDF2 salt check in production environment. "
                     + "Set environment variable " + SALT_ENV + " or system property " + SALT_PROPERTY + ".");
             }
             log.warn("SECURITY: PBKDF2 salt check is skipped via configuration. "
-                + "Encrypted data will use a fixed development salt. "
-                + "Data encrypted with this salt WILL NOT BE RECOVERABLE if the key changes. "
-                + "Set environment variable {} or system property {} for production.", SALT_ENV, SALT_PROPERTY);
-            return DEV_SALT.getBytes(StandardCharsets.UTF_8);
+                + "A random salt will be generated per JVM startup — data encrypted in this session "
+                + "WILL NOT BE RECOVERABLE after restart. "
+                + "Set environment variable {} or system property {} for persistent salt.", SALT_ENV, SALT_PROPERTY);
+            byte[] randomSalt = new byte[16];
+            SECURE_RANDOM.nextBytes(randomSalt);
+            return randomSalt;
         }
         throw new IllegalStateException("PBKDF2 salt must be configured. " + "Set environment variable " + SALT_ENV
             + " or system property " + SALT_PROPERTY + ". " + "Salt is required for PBKDF2 key derivation security. "
             + "To skip this check (development only), set " + SKIP_SALT_PROPERTY + "=true.");
+    }
+
+    /**
+     * 检查是否跳过了盐值检查（仅用于启动时警告日志）。
+     */
+    private static boolean isSaltCheckSkipped() {
+        String skipCheck = System.getProperty(SKIP_SALT_PROPERTY);
+        if (!"true".equalsIgnoreCase(skipCheck)) {
+            skipCheck = System.getenv(SKIP_SALT_ENV);
+        }
+        return "true".equalsIgnoreCase(skipCheck);
     }
 
     /**

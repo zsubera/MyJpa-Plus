@@ -77,27 +77,14 @@ public class DeleteSpec<T> extends AbstractBulkOperationSpec<T, DeleteSpec<T>> {
      */
     @Override
     public int execute(EntityManager em) {
-        // 检查是否有最大行数保护配置（使用快速估算避免全表 COUNT）
-        com.zsubera.jpa.autoconfigure.MyJpaPlusGlobalConfig config = getGlobalConfig();
-        int limit = (config != null && config.getMaxBulkOperationRows() > 0
-            && config.getMaxBulkOperationRows() < Integer.MAX_VALUE) ? config.getMaxBulkOperationRows() : -1;
-        if (limit > 0) {
-            checkRowCountBeforeExecute(em, limit, "DELETE");
-        }
-        CriteriaDelete<T> delete = toDelete(em);
-        if (log.isDebugEnabled()) {
-            log.debug("Executing DELETE on {} with {} conditions",
-                entityClass.getSimpleName(), conditionNodes.size());
-        }
-        var query = em.createQuery(delete);
-        int deleted = query.executeUpdate();
-        // ponytail: post-execute check for race condition between COUNT and DELETE
-        if (limit > 0 && deleted > limit) {
-            throw new com.zsubera.jpa.exception.MyJpaPlusException(
-                "DELETE affected " + deleted + " rows, exceeding the pre-check limit of " + limit
-                    + ". Concurrent modifications detected. Transaction will be rolled back.");
-        }
-        return deleted;
+        return executeWithLimitCheck(em, "DELETE", e -> {
+            CriteriaDelete<T> delete = toDelete(e);
+            if (log.isDebugEnabled()) {
+                log.debug("Executing DELETE on {} with {} conditions",
+                    entityClass.getSimpleName(), conditionNodes.size());
+            }
+            return e.createQuery(delete).executeUpdate();
+        });
     }
 
     @Override

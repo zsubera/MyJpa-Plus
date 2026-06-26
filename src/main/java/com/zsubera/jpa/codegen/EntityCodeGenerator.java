@@ -139,34 +139,16 @@ public final class EntityCodeGenerator {
      * @return 实体类的 Java 源码字符串
      */
     public static String generateEntity(String tableName, List<ColumnDef> columns, String entityPackage) {
-        if (tableName == null || tableName.isBlank()) {
-            throw new IllegalArgumentException("tableName must not be blank");
-        }
-        // 校验 tableName 以防止代码注入
-        if (!tableName.matches("[a-zA-Z0-9_]+")) {
-            throw new IllegalArgumentException(
-                "tableName contains invalid characters. Only alphanumeric and underscore are allowed: " + tableName);
-        }
-        if (columns == null) {
-            throw new IllegalArgumentException("columns must not be null");
-        }
-        if (entityPackage == null || entityPackage.isBlank()) {
-            throw new IllegalArgumentException("entityPackage must not be blank");
-        }
-        // 校验包名以防止代码注入
-        if (!entityPackage.matches("[a-zA-Z_][a-zA-Z0-9_.]*")) {
-            throw new IllegalArgumentException(
-                "entityPackage contains invalid characters. Only alphanumeric, underscore, and dot are allowed: "
-                    + entityPackage);
-        }
-        if (entityPackage.startsWith(".") || entityPackage.endsWith(".") || entityPackage.contains("..")) {
-            throw new IllegalArgumentException(
-                "entityPackage must not start/end with dot or contain consecutive dots: " + entityPackage);
-        }
+        validateTableName(tableName);
+        validateColumns(columns);
+        validatePackage(entityPackage);
 
         String className = toClassName(tableName);
-        StringBuilder sb = new StringBuilder();
+        String imports = buildExtraImports(columns);
+        String fields = buildFields(columns);
+        String gettersSetters = buildGettersSetters(columns);
 
+        StringBuilder sb = new StringBuilder();
         sb.append("package ").append(entityPackage).append(";\n\n");
         sb.append("import jakarta.persistence.Column;\n");
         sb.append("import jakarta.persistence.Entity;\n");
@@ -174,45 +156,14 @@ public final class EntityCodeGenerator {
         sb.append("import jakarta.persistence.GenerationType;\n");
         sb.append("import jakarta.persistence.Id;\n");
         sb.append("import jakarta.persistence.Table;\n");
-        appendExtraImports(sb, columns);
+        sb.append(imports);
         sb.append("\n");
 
         sb.append("@Entity\n");
         sb.append("@Table(name = \"").append(tableName).append("\")\n");
         sb.append("public class ").append(className).append(" {\n\n");
-
-        sb.append("    @Id\n");
-        sb.append("    @GeneratedValue(strategy = GenerationType.IDENTITY)\n");
-        sb.append("    private Long id;\n\n");
-
-        for (ColumnDef col : columns) {
-            if (!col.isNullable()) {
-                sb.append("    @Column(nullable = false)\n");
-            }
-            String safeName = sanitizeFieldName(col.getName());
-            sb.append("    private ").append(col.getJavaType()).append(" ").append(safeName).append(";\n\n");
-        }
-
-        // id 的 getter/setter
-        sb.append("    public Long getId() {\n");
-        sb.append("        return id;\n");
-        sb.append("    }\n\n");
-        sb.append("    public void setId(Long id) {\n");
-        sb.append("        this.id = id;\n");
-        sb.append("    }\n\n");
-
-        for (ColumnDef col : columns) {
-            String safeName = sanitizeFieldName(col.getName());
-            String capitalName = capitalize(safeName);
-            sb.append("    public ").append(col.getJavaType()).append(" get").append(capitalName).append("() {\n");
-            sb.append("        return ").append(safeName).append(";\n");
-            sb.append("    }\n\n");
-            sb.append("    public void set").append(capitalName).append("(").append(col.getJavaType()).append(" ")
-                .append(safeName).append(") {\n");
-            sb.append("        this.").append(safeName).append(" = ").append(safeName).append(";\n");
-            sb.append("    }\n\n");
-        }
-
+        sb.append(fields);
+        sb.append(gettersSetters);
         sb.append("}\n");
         return sb.toString();
     }
@@ -242,22 +193,9 @@ public final class EntityCodeGenerator {
         if (template == null || template.isBlank()) {
             return generateEntity(tableName, columns, entityPackage);
         }
-        if (tableName == null || !tableName.matches("[a-zA-Z0-9_]+")) {
-            throw new IllegalArgumentException(
-                "tableName contains invalid characters. Only alphanumeric and underscore are allowed: " + tableName);
-        }
-        if (columns == null) {
-            throw new IllegalArgumentException("columns must not be null");
-        }
-        if (entityPackage == null || !entityPackage.matches("[a-zA-Z_][a-zA-Z0-9_.]*")) {
-            throw new IllegalArgumentException(
-                "entityPackage contains invalid characters. Only alphanumeric, underscore, and dot are allowed: "
-                    + entityPackage);
-        }
-        if (entityPackage.startsWith(".") || entityPackage.endsWith(".") || entityPackage.contains("..")) {
-            throw new IllegalArgumentException(
-                "entityPackage must not start/end with dot or contain consecutive dots: " + entityPackage);
-        }
+        validateTableName(tableName);
+        validateColumns(columns);
+        validatePackage(entityPackage);
         String className = toClassName(tableName);
         String imports = buildExtraImports(columns);
         String fields = buildFields(columns);
@@ -278,40 +216,10 @@ public final class EntityCodeGenerator {
      */
     public static String generateRepository(String tableName, List<ColumnDef> columns, String entityPackage,
         String repoPackage) {
-        if (tableName == null || tableName.isBlank()) {
-            throw new IllegalArgumentException("tableName must not be blank");
-        }
-        if (!tableName.matches("[a-zA-Z0-9_]+")) {
-            throw new IllegalArgumentException(
-                "tableName contains invalid characters. Only alphanumeric and underscore are allowed: " + tableName);
-        }
-        if (columns == null) {
-            throw new IllegalArgumentException("columns must not be null");
-        }
-        if (entityPackage == null || entityPackage.isBlank()) {
-            throw new IllegalArgumentException("entityPackage must not be blank");
-        }
-        if (!entityPackage.matches("[a-zA-Z_][a-zA-Z0-9_.]*")) {
-            throw new IllegalArgumentException(
-                "entityPackage contains invalid characters. Only alphanumeric, underscore, and dot are allowed: "
-                    + entityPackage);
-        }
-        if (entityPackage.startsWith(".") || entityPackage.endsWith(".") || entityPackage.contains("..")) {
-            throw new IllegalArgumentException(
-                "entityPackage must not start/end with dot or contain consecutive dots: " + entityPackage);
-        }
-        if (repoPackage == null || repoPackage.isBlank()) {
-            throw new IllegalArgumentException("repoPackage must not be blank");
-        }
-        if (!repoPackage.matches("[a-zA-Z_][a-zA-Z0-9_.]*")) {
-            throw new IllegalArgumentException(
-                "repoPackage contains invalid characters. Only alphanumeric, underscore, and dot are allowed: "
-                    + repoPackage);
-        }
-        if (repoPackage.startsWith(".") || repoPackage.endsWith(".") || repoPackage.contains("..")) {
-            throw new IllegalArgumentException(
-                "repoPackage must not start/end with dot or contain consecutive dots: " + repoPackage);
-        }
+        validateTableName(tableName);
+        validateColumns(columns);
+        validatePackage(entityPackage);
+        validatePackage(repoPackage);
 
         String className = toClassName(tableName);
         String repoName = className + "Repository";
@@ -343,35 +251,47 @@ public final class EntityCodeGenerator {
         if (template == null || template.isBlank()) {
             return generateRepository(tableName, columns, entityPackage, repoPackage);
         }
-        if (tableName == null || !tableName.matches("[a-zA-Z0-9_]+")) {
-            throw new IllegalArgumentException(
-                "tableName contains invalid characters. Only alphanumeric and underscore are allowed: " + tableName);
-        }
-        if (columns == null) {
-            throw new IllegalArgumentException("columns must not be null");
-        }
-        if (entityPackage == null || !entityPackage.matches("[a-zA-Z_][a-zA-Z0-9_.]*")) {
-            throw new IllegalArgumentException(
-                "entityPackage contains invalid characters. Only alphanumeric, underscore, and dot are allowed: "
-                    + entityPackage);
-        }
-        if (entityPackage.startsWith(".") || entityPackage.endsWith(".") || entityPackage.contains("..")) {
-            throw new IllegalArgumentException(
-                "entityPackage must not start/end with dot or contain consecutive dots: " + entityPackage);
-        }
-        if (repoPackage == null || !repoPackage.matches("[a-zA-Z_][a-zA-Z0-9_.]*")) {
-            throw new IllegalArgumentException(
-                "repoPackage contains invalid characters. Only alphanumeric, underscore, and dot are allowed: "
-                    + repoPackage);
-        }
-        if (repoPackage.startsWith(".") || repoPackage.endsWith(".") || repoPackage.contains("..")) {
-            throw new IllegalArgumentException(
-                "repoPackage must not start/end with dot or contain consecutive dots: " + repoPackage);
-        }
+        validateTableName(tableName);
+        validateColumns(columns);
+        validatePackage(entityPackage);
+        validatePackage(repoPackage);
         String className = toClassName(tableName);
         String repoName = className + "Repository";
         return template.replace("${package}", repoPackage).replace("${entityPackage}", entityPackage)
             .replace("${className}", className).replace("${repoName}", repoName).replace("${tableName}", tableName);
+    }
+
+    // ---- 验证辅助方法 ----
+
+    private static void validateTableName(String tableName) {
+        if (tableName == null || tableName.isBlank()) {
+            throw new IllegalArgumentException("tableName must not be blank");
+        }
+        if (!tableName.matches("[a-zA-Z0-9_]+")) {
+            throw new IllegalArgumentException(
+                "tableName contains invalid characters. Only alphanumeric and underscore are allowed: " + tableName);
+        }
+    }
+
+    private static void validateColumns(List<ColumnDef> columns) {
+        if (columns == null) {
+            throw new IllegalArgumentException("columns must not be null");
+        }
+    }
+
+    private static void validatePackage(String packageName) {
+        if (packageName == null || packageName.isBlank()) {
+            throw new IllegalArgumentException("package must not be blank");
+        }
+        if (!packageName.matches("[a-zA-Z_][a-zA-Z0-9_.]*")) {
+            throw new IllegalArgumentException(
+                "package contains invalid characters. Only alphanumeric, underscore, and dot are allowed: "
+                    + packageName);
+        }
+        if (packageName.startsWith(".") || packageName.endsWith(".") || packageName.contains("..")) {
+            throw new IllegalArgumentException(
+                "package must not start/end with dot or contain consecutive dots: " + packageName);
+        }
     }
 
     /**
@@ -457,18 +377,7 @@ public final class EntityCodeGenerator {
 
     private static String buildExtraImports(List<ColumnDef> columns) {
         StringBuilder sb = new StringBuilder();
-        if (columns.stream().anyMatch(c -> "BigDecimal".equals(c.getJavaType()))) {
-            sb.append("import java.math.BigDecimal;\n");
-        }
-        if (columns.stream().anyMatch(c -> "LocalDate".equals(c.getJavaType()))) {
-            sb.append("import java.time.LocalDate;\n");
-        }
-        if (columns.stream().anyMatch(c -> "LocalDateTime".equals(c.getJavaType()))) {
-            sb.append("import java.time.LocalDateTime;\n");
-        }
-        if (columns.stream().anyMatch(c -> "Instant".equals(c.getJavaType()))) {
-            sb.append("import java.time.Instant;\n");
-        }
+        appendExtraImports(sb, columns);
         return sb.toString();
     }
 

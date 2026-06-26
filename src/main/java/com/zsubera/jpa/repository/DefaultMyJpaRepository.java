@@ -207,6 +207,8 @@ public class DefaultMyJpaRepository<T, ID> extends SimpleJpaRepository<T, ID> im
             AUTO_FILTER_OVERRIDE.remove();
         } else {
             AUTO_FILTER_OVERRIDE.set(value);
+            // ponytail: 注册事务完成后清理，作为 try/finally 的安全网
+            registerTransactionCleanup();
         }
         try {
             return supplier.get();
@@ -228,6 +230,23 @@ public class DefaultMyJpaRepository<T, ID> extends SimpleJpaRepository<T, ID> im
      */
     public static void clearThreadLocal() {
         AUTO_FILTER_OVERRIDE.remove();
+    }
+
+    /**
+     * ponytail: 在事务完成后自动清理 AUTO_FILTER_OVERRIDE ThreadLocal，防止泄漏。
+     * 当使用 withAutoFilterOverride() 时，try/finally 已保证清理。
+     * 此方法作为安全网，处理直接设置 ThreadLocal 但忘记清理的场景。
+     */
+    public static void registerTransactionCleanup() {
+        if (org.springframework.transaction.support.TransactionSynchronizationManager.isActualTransactionActive()) {
+            org.springframework.transaction.support.TransactionSynchronizationManager
+                .registerSynchronization(new org.springframework.transaction.support.TransactionSynchronization() {
+                    @Override
+                    public void afterCompletion(int status) {
+                        AUTO_FILTER_OVERRIDE.remove();
+                    }
+                });
+        }
     }
 
     @SuppressFBWarnings(value = "EI_EXPOSE_REP2",
@@ -393,7 +412,7 @@ public class DefaultMyJpaRepository<T, ID> extends SimpleJpaRepository<T, ID> im
             return java.util.Collections.emptyList();
         }
         String idFieldName = EntityClassResolver.resolveIdFieldName(domainClass);
-        Specification<T> idSpec = Specification.where((root, query, cb) -> root.get(idFieldName).in(idList));
+        Specification<T> idSpec = Specification.where((root, query, cb) -> com.zsubera.jpa.util.InClauseBuilder.in(cb, root.get(idFieldName), idList));
         Specification<T> softDeleteSpec = SoftDeleteHelper.isNotDeleted(domainClass);
         if (softDeleteSpec == null) {
             return super.findAll(idSpec);
@@ -412,6 +431,11 @@ public class DefaultMyJpaRepository<T, ID> extends SimpleJpaRepository<T, ID> im
             throw new IllegalArgumentException("ID must not be null");
         }
         if (!shouldApplySoftDeleteFilter()) {
+            if (shouldBlockHardDelete()) {
+                throw new IllegalStateException("Hard DELETE on " + domainClass.getSimpleName()
+                    + " is blocked because the entity has a @SoftDelete field. "
+                    + "Set DefaultMyJpaRepository.setBlockUnconditionalDelete(false) to allow this operation.");
+            }
             Optional<T> entity = findById(id);
             if (entity.isPresent()) {
                 delete(entity.get());

@@ -31,7 +31,7 @@ class BatchSaveTemplate {
 
     /** getId() 方法缓存，避免 isNewEntity() 每次反射查找。key = entity class，最大 1024 条 */
     private static final SampledEvictionCache<Class<?>, java.lang.reflect.Method> ID_METHOD_CACHE =
-        new SampledEvictionCache<>(1024, 0.25, 1, 64);
+        new SampledEvictionCache<>(1024, 0.75, 100, 64);
     private static final java.lang.reflect.Method NO_ID_METHOD_SENTINEL;
 
     static {

@@ -168,6 +168,38 @@ public abstract class AbstractBulkOperationSpec<T, SELF extends AbstractBulkOper
      */
     protected abstract int doExecute(EntityManager em);
 
+    /**
+     * 获取全局配置中的最大批量操作行数限制。
+     *
+     * @return 限制值，如果未配置或禁用则返回 -1
+     */
+    protected int resolveMaxBulkOperationRows() {
+        return com.zsubera.jpa.autoconfigure.GlobalConfigHolder.resolveMaxBulkOperationRows(-1);
+    }
+
+    /**
+     * 执行带行数限制保护的批量操作。统一处理：限制检查 → 执行 → 后执行竞态检测。
+     *
+     * @param em 实体管理器
+     * @param operationName 操作名称（UPDATE/DELETE），用于错误消息
+     * @param buildAndExecute 构建 Criteria 并执行的操作，返回受影响行数
+     * @return 受影响的行数
+     */
+    protected int executeWithLimitCheck(EntityManager em, String operationName,
+        java.util.function.Function<EntityManager, Integer> buildAndExecute) {
+        int limit = resolveMaxBulkOperationRows();
+        if (limit > 0) {
+            checkRowCountBeforeExecute(em, limit, operationName);
+        }
+        int affected = buildAndExecute.apply(em);
+        if (limit > 0 && affected > limit) {
+            throw new com.zsubera.jpa.exception.MyJpaPlusException(
+                operationName + " affected " + affected + " rows, exceeding the pre-check limit of " + limit
+                    + ". Concurrent modifications detected. Transaction will be rolled back.");
+        }
+        return affected;
+    }
+
     /** 批量操作条件树的密封节点类型。支持 AND、OR、NOT 和叶子谓词节点。 */
     sealed interface BulkConditionNode {
         /** 叶子谓词函数节点。 */
@@ -321,28 +353,7 @@ public abstract class AbstractBulkOperationSpec<T, SELF extends AbstractBulkOper
      * @throws IllegalArgumentException 如果任何参数为 null
      */
     public <S> SELF exists(Class<S> subEntity, Consumer<com.zsubera.jpa.spec.SubQuerySpec<S>> config) {
-        if (subEntity == null) {
-            throw new IllegalArgumentException("subEntity must not be null");
-        }
-        if (config == null) {
-            throw new IllegalArgumentException("config must not be null");
-        }
-        BiFunction<Root<?>, CriteriaBuilder, Predicate> existsFn = (root, cb) -> {
-            jakarta.persistence.criteria.CriteriaQuery<?> tempQuery = cb.createQuery(entityClass);
-            jakarta.persistence.criteria.Subquery<S> subquery = tempQuery.subquery(subEntity);
-            Root<S> subRoot = subquery.from(subEntity);
-            Root<?> correlatedOuter = subquery.correlate(root);
-            com.zsubera.jpa.spec.SubQuerySpec<S> subSpec =
-                com.zsubera.jpa.spec.SubQuerySpec.create(subquery, subRoot, correlatedOuter, cb);
-            config.accept(subSpec);
-            subSpec.applyWhere();
-            if (!subSpec.isSelectSet()) {
-                subquery.select(subRoot);
-            }
-            return cb.exists(subquery);
-        };
-        conditionNodes.add(new BulkConditionNode.LeafNode((BiFunction)existsFn));
-        return self();
+        return addSubqueryCondition(subEntity, config, false);
     }
 
     /**
@@ -355,13 +366,19 @@ public abstract class AbstractBulkOperationSpec<T, SELF extends AbstractBulkOper
      * @throws IllegalArgumentException 如果任何参数为 null
      */
     public <S> SELF notExists(Class<S> subEntity, Consumer<com.zsubera.jpa.spec.SubQuerySpec<S>> config) {
+        return addSubqueryCondition(subEntity, config, true);
+    }
+
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    private <S> SELF addSubqueryCondition(Class<S> subEntity, Consumer<com.zsubera.jpa.spec.SubQuerySpec<S>> config,
+        boolean negate) {
         if (subEntity == null) {
             throw new IllegalArgumentException("subEntity must not be null");
         }
         if (config == null) {
             throw new IllegalArgumentException("config must not be null");
         }
-        BiFunction<Root<?>, CriteriaBuilder, Predicate> notExistsFn = (root, cb) -> {
+        BiFunction<Root<?>, CriteriaBuilder, Predicate> subqueryFn = (root, cb) -> {
             jakarta.persistence.criteria.CriteriaQuery<?> tempQuery = cb.createQuery(entityClass);
             jakarta.persistence.criteria.Subquery<S> subquery = tempQuery.subquery(subEntity);
             Root<S> subRoot = subquery.from(subEntity);
@@ -373,9 +390,10 @@ public abstract class AbstractBulkOperationSpec<T, SELF extends AbstractBulkOper
             if (!subSpec.isSelectSet()) {
                 subquery.select(subRoot);
             }
-            return cb.not(cb.exists(subquery));
+            Predicate existsPredicate = cb.exists(subquery);
+            return negate ? cb.not(existsPredicate) : existsPredicate;
         };
-        conditionNodes.add(new BulkConditionNode.LeafNode((BiFunction)notExistsFn));
+        conditionNodes.add(new BulkConditionNode.LeafNode((BiFunction)subqueryFn));
         return self();
     }
 
@@ -560,35 +578,33 @@ public abstract class AbstractBulkOperationSpec<T, SELF extends AbstractBulkOper
             return ((BiFunction<Root<T>, CriteriaBuilder, Predicate>)(BiFunction)l.fn()).apply(root, cb);
         }
         if (node instanceof BulkConditionNode.AndNode a) {
-            List<Predicate> childPredicates = new ArrayList<>();
-            for (BulkConditionNode child : a.children()) {
-                childPredicates.add(resolveNodeWithDepth(child, root, cb, depth + 1));
-            }
-            if (childPredicates.isEmpty()) {
-                return cb.conjunction();
-            }
-            if (childPredicates.size() == 1) {
-                return childPredicates.get(0);
-            }
-            return cb.and(childPredicates.toArray(new Predicate[0]));
+            return resolveCompositeNode(a.children(), root, cb, depth, cb::and, cb.conjunction());
         }
         if (node instanceof BulkConditionNode.OrNode o) {
-            List<Predicate> childPredicates = new ArrayList<>();
-            for (BulkConditionNode child : o.children()) {
-                childPredicates.add(resolveNodeWithDepth(child, root, cb, depth + 1));
-            }
-            if (childPredicates.isEmpty()) {
-                return cb.disjunction();
-            }
-            if (childPredicates.size() == 1) {
-                return childPredicates.get(0);
-            }
-            return cb.or(childPredicates.toArray(new Predicate[0]));
+            return resolveCompositeNode(o.children(), root, cb, depth, cb::or, cb.disjunction());
         }
         if (node instanceof BulkConditionNode.NotNode n) {
             return cb.not(resolveNodeWithDepth(n.child(), root, cb, depth + 1));
         }
         throw new IllegalArgumentException("Unknown BulkConditionNode type: " + node.getClass().getName());
+    }
+
+    /**
+     * 解析组合节点（AND/OR）的共享逻辑。
+     */
+    private Predicate resolveCompositeNode(List<BulkConditionNode> children, Root<T> root, CriteriaBuilder cb,
+        int depth, java.util.function.BinaryOperator<Predicate> combiner, Predicate emptyDefault) {
+        List<Predicate> childPredicates = new ArrayList<>();
+        for (BulkConditionNode child : children) {
+            childPredicates.add(resolveNodeWithDepth(child, root, cb, depth + 1));
+        }
+        if (childPredicates.isEmpty()) {
+            return emptyDefault;
+        }
+        if (childPredicates.size() == 1) {
+            return childPredicates.get(0);
+        }
+        return childPredicates.stream().reduce(combiner).orElse(emptyDefault);
     }
 
     /**

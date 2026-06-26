@@ -409,7 +409,8 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
     public void applyQuerySettings(TypedQuery<?> query) {
         if (queryTimeout != null) {
             // 使用 Math.toIntExact() 防止大超时值的整数溢出
-            query.setHint("jakarta.persistence.query.timeout", Math.toIntExact(queryTimeout * 1000L));
+            query.setHint("jakarta.persistence.query.timeout",
+                Math.toIntExact(java.util.concurrent.TimeUnit.SECONDS.toMillis(queryTimeout)));
         }
         if (lockMode != null) {
             query.setLockMode(lockMode);
@@ -666,6 +667,12 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
      * @param cb Criteria 构建器
      * @return 生成的 Predicate
      */
+    /**
+     * ponytail: 使用初始容量预分配减少 resize 开销。条件数通常较少（<16），避免 HashMap 默认 16 的过度分配。
+     */
+    private static final int INITIAL_JOIN_CACHE_CAPACITY = 8;
+    private static final int INITIAL_PREDICATE_CAPACITY = 8;
+
     @Override
     public Predicate toPredicate(@NonNull Root<T> root, @Nullable CriteriaQuery<?> query, @NonNull CriteriaBuilder cb) {
         if (log.isDebugEnabled()) {
@@ -676,9 +683,10 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
             applyDistinctAndGroupBy(root, query, cb);
             applyOrderBy(root, query, cb);
         }
-        Map<String, Join<?, ?>> joinCache = new java.util.HashMap<>();
-        java.util.Set<String> fetchPaths = java.util.Collections.newSetFromMap(new java.util.HashMap<>());
-        List<Predicate> predicates = new ArrayList<>();
+        // ponytail: 预分配初始容量减少 HashMap/ArrayList 的 resize 开销，高频查询场景下可降低 GC 压力
+        Map<String, Join<?, ?>> joinCache = new java.util.HashMap<>(INITIAL_JOIN_CACHE_CAPACITY);
+        java.util.Set<String> fetchPaths = java.util.Collections.newSetFromMap(new java.util.HashMap<>(INITIAL_JOIN_CACHE_CAPACITY));
+        List<Predicate> predicates = new java.util.ArrayList<>(Math.max(conditions.size(), INITIAL_PREDICATE_CAPACITY));
         for (ConditionNode node : conditions) {
             Predicate p = NodeResolver.resolveNode(node, root, root, query, cb, joinCache, null, fetchPaths);
             if (p != null) {

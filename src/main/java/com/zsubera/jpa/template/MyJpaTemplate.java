@@ -105,7 +105,7 @@ public class MyJpaTemplate implements MyJpaTemplateOperations {
     public static final int DEFAULT_DEEP_PAGINATION_OFFSET_LIMIT = 1000000;
 
     /** 深度分页警告日志的最小间隔（毫秒），防止日志泛滥。 */
-    private static final long DEEP_PAGINATION_WARN_INTERVAL_MS = 60_000;
+    public static final long DEEP_PAGINATION_WARN_INTERVAL_MS = 60_000;
 
     /** 上次记录深度分页警告的时间戳。 */
     private final java.util.concurrent.atomic.AtomicLong lastDeepPaginationWarnTime =
@@ -178,11 +178,20 @@ public class MyJpaTemplate implements MyJpaTemplateOperations {
      * @param maxResults 最大返回行数，或 {@code -1} 表示禁用
      * @throws IllegalArgumentException 如果值不是正数且不等于 -1
      */
+    private static void syncToGlobalConfig(java.util.function.Consumer<com.zsubera.jpa.autoconfigure.MyJpaPlusGlobalConfig> setter) {
+        com.zsubera.jpa.autoconfigure.MyJpaPlusGlobalConfig config =
+            com.zsubera.jpa.autoconfigure.GlobalConfigHolder.getConfig();
+        if (config != null) {
+            setter.accept(config);
+        }
+    }
+
     public void setMaxResults(int maxResults) {
         if (maxResults <= 0 && maxResults != -1) {
             throw new IllegalArgumentException("maxResults must be positive or -1 (disabled)");
         }
         this.maxResults = maxResults;
+        syncToGlobalConfig(c -> c.setMaxResults(maxResults));
     }
 
     /**
@@ -196,6 +205,7 @@ public class MyJpaTemplate implements MyJpaTemplateOperations {
             throw new IllegalArgumentException("deepPaginationOffsetThreshold must be positive");
         }
         this.deepPaginationOffsetThreshold = deepPaginationOffsetThreshold;
+        syncToGlobalConfig(c -> c.setDeepPaginationOffsetThreshold(deepPaginationOffsetThreshold));
     }
 
     /**
@@ -212,6 +222,7 @@ public class MyJpaTemplate implements MyJpaTemplateOperations {
             throw new IllegalArgumentException("deepPaginationOffsetLimit must be positive or -1 (disabled)");
         }
         this.deepPaginationOffsetLimit = deepPaginationOffsetLimit;
+        syncToGlobalConfig(c -> c.setDeepPaginationOffsetLimit(deepPaginationOffsetLimit));
     }
 
     /**
@@ -231,6 +242,7 @@ public class MyJpaTemplate implements MyJpaTemplateOperations {
         if (bulkOperationTemplate != null) {
             getBulkOperationTemplate().setMaxBulkOperationRows(maxBulkOperationRows);
         }
+        syncToGlobalConfig(c -> c.setMaxBulkOperationRows(maxBulkOperationRows));
     }
 
     /**
@@ -383,7 +395,7 @@ public class MyJpaTemplate implements MyJpaTemplateOperations {
         } else {
             cacheAdapter.put(cacheKey, immutableResult, ttlSeconds);
         }
-        return new ArrayList<>(result);
+        return immutableResult;
     }
 
     /**
@@ -614,7 +626,7 @@ public class MyJpaTemplate implements MyJpaTemplateOperations {
     @Transactional(readOnly = true)
     public <T> List<T> findAll(Class<T> entityClass, QuerySpec<T> spec) {
         validateQueryParams(entityClass, spec);
-        return findAll(entityClass, spec, this.maxResults);
+        return findAll(entityClass, spec, resolveMaxResults());
     }
 
     /**
@@ -655,7 +667,7 @@ public class MyJpaTemplate implements MyJpaTemplateOperations {
         if (sort == null) {
             throw new IllegalArgumentException("sort must not be null");
         }
-        TypedQuery<T> query = buildSpecificationQuery(entityClass, spec.toSpecification(), sort, this.maxResults);
+        TypedQuery<T> query = buildSpecificationQuery(entityClass, spec.toSpecification(), sort, resolveMaxResults());
         spec.applyQuerySettings(query);
         return query.getResultList();
     }
@@ -672,7 +684,7 @@ public class MyJpaTemplate implements MyJpaTemplateOperations {
     @Override
     @Transactional(readOnly = true)
     public <T> List<T> findAll(Class<T> entityClass, QuerySpec<T> spec, EntityGraphHelper<T> entityGraph) {
-        return findAll(entityClass, spec, entityGraph, this.maxResults);
+        return findAll(entityClass, spec, entityGraph, resolveMaxResults());
     }
 
     /**
@@ -843,7 +855,7 @@ public class MyJpaTemplate implements MyJpaTemplateOperations {
     @Transactional(readOnly = true)
     public <T> List<T> find(Class<T> entityClass, Specification<T> spec) {
         validateQueryParams(entityClass, spec);
-        return find(entityClass, spec, this.maxResults);
+        return find(entityClass, spec, resolveMaxResults());
     }
 
     /**
@@ -862,56 +874,25 @@ public class MyJpaTemplate implements MyJpaTemplateOperations {
         if (maxResults <= 0 && maxResults != DISABLED) {
             throw new IllegalArgumentException("maxResults must be positive or -1 (disabled)");
         }
-        if (maxResults == DISABLED) {
-            TypedQuery<T> query = buildSpecificationQuery(entityClass, spec, null, null);
-            return query.getResultList();
-        }
-        TypedQuery<T> query = buildSpecificationQuery(entityClass, spec, null, maxResults);
+        Integer effectiveMaxResults = maxResults == DISABLED ? null : maxResults;
+        TypedQuery<T> query = buildSpecificationQuery(entityClass, spec, null, effectiveMaxResults);
         return query.getResultList();
     }
 
     /**
-     * 构建基于 Specification 的 TypedQuery 的公共方法。
-     *
-     * @param entityClass 实体类
-     * @param spec 查询规范
-     * @param sort 排序规则（可为 null）
-     * @param maxResults 最大结果数（null 表示不限制）
-     * @param <T> 实体类型
-     * @return 构建的 TypedQuery
+     * 构建基于 Specification 的 TypedQuery 的公共方法。委托给 {@link QueryBuildHelper}。
      */
     private <T> TypedQuery<T> buildSpecificationQuery(Class<T> entityClass, Specification<T> spec,
         @Nullable org.springframework.data.domain.Sort sort, Integer maxResults) {
-        CriteriaBuilder cb = entityManager.getCriteriaBuilder();
-        CriteriaQuery<T> cq = cb.createQuery(entityClass);
-        Root<T> root = cq.from(entityClass);
-        jakarta.persistence.criteria.Predicate predicate = spec.toPredicate(root, cq, cb);
-        if (predicate != null) {
-            cq.where(predicate);
-        }
-        applySort(cq, root, cb, sort);
-        TypedQuery<T> query = entityManager.createQuery(cq);
-        if (maxResults != null) {
-            query.setMaxResults(maxResults);
-        }
-        return query;
+        return QueryBuildHelper.buildSpecificationQuery(entityManager, entityClass, spec, sort, maxResults);
     }
 
     /**
-     * 将 Spring Data {@link org.springframework.data.domain.Sort} 应用到 JPA CriteriaQuery。
-     *
-     * @param query CriteriaQuery 实例
-     * @param root 查询根实体
-     * @param cb CriteriaBuilder 实例
-     * @param sort 排序规则（可为 null 或未排序）
-     * @param <T> 实体类型
+     * 将 Spring Data {@link org.springframework.data.domain.Sort} 应用到 JPA CriteriaQuery。委托给 {@link QueryBuildHelper}。
      */
     private <T> void applySort(CriteriaQuery<T> query, Root<T> root, CriteriaBuilder cb,
         @Nullable org.springframework.data.domain.Sort sort) {
-        if (sort != null && sort.isSorted()) {
-            query.orderBy(sort.stream().map(order -> order.isAscending() ? cb.asc(root.get(order.getProperty()))
-                : cb.desc(root.get(order.getProperty()))).toList());
-        }
+        QueryBuildHelper.applySort(query, root, cb, sort);
     }
 
     /**
@@ -939,45 +920,50 @@ public class MyJpaTemplate implements MyJpaTemplateOperations {
      * @param offset 分页偏移量
      * @throws IllegalArgumentException 如果 offset 超过硬限制
      */
-    private void checkDeepPagination(long offset) {
-        // 深度分页警告（限流：每分钟最多记录一次）
-        if (offset > this.deepPaginationOffsetThreshold) {
-            long now = System.currentTimeMillis();
-            long lastWarn = lastDeepPaginationWarnTime.get();
-            if (now - lastWarn > DEEP_PAGINATION_WARN_INTERVAL_MS
-                && lastDeepPaginationWarnTime.compareAndSet(lastWarn, now)) {
-                log.warn("Deep pagination detected (offset={}). This may cause slow queries. "
-                    + "Consider using keyset pagination for better performance.", offset);
+    /**
+     * 从 GlobalConfigHolder 解析运行时配置值。优先使用 GlobalConfigHolder 中的值（来自 application.yml），
+     * 回退到本地字段值（程序式配置）。
+     */
+    private static int resolveConfigValue(java.util.function.Function<com.zsubera.jpa.autoconfigure.MyJpaPlusGlobalConfig, Integer> getter,
+        int localFallback) {
+        com.zsubera.jpa.autoconfigure.MyJpaPlusGlobalConfig config =
+            com.zsubera.jpa.autoconfigure.GlobalConfigHolder.getConfig();
+        if (config != null) {
+            int value = getter.apply(config);
+            if (value != 0) {
+                return value;
             }
         }
+        return localFallback;
+    }
 
-        // 深度分页硬限制
-        if (this.deepPaginationOffsetLimit > 0 && offset > this.deepPaginationOffsetLimit) {
-            throw new IllegalArgumentException("Pagination offset (" + offset + ") exceeds the configured hard limit ("
-                + this.deepPaginationOffsetLimit
-                + "). Use keyset pagination for better performance, or adjust myjpa-plus.query.deep-pagination-offset-limit.");
-        }
+    private int resolveMaxResults() {
+        return resolveConfigValue(
+            com.zsubera.jpa.autoconfigure.MyJpaPlusGlobalConfig::getMaxResults, maxResults);
+    }
+
+    private int resolveDeepPaginationOffsetThreshold() {
+        return resolveConfigValue(
+            com.zsubera.jpa.autoconfigure.MyJpaPlusGlobalConfig::getDeepPaginationOffsetThreshold,
+            deepPaginationOffsetThreshold);
+    }
+
+    private int resolveDeepPaginationOffsetLimit() {
+        return resolveConfigValue(
+            com.zsubera.jpa.autoconfigure.MyJpaPlusGlobalConfig::getDeepPaginationOffsetLimit,
+            deepPaginationOffsetLimit);
+    }
+
+    private void checkDeepPagination(long offset) {
+        DeepPaginationGuard.check(offset, resolveDeepPaginationOffsetThreshold(),
+            resolveDeepPaginationOffsetLimit(), lastDeepPaginationWarnTime);
     }
 
     /**
-     * 执行计数查询的公共方法。
-     *
-     * @param entityClass 实体类
-     * @param spec 查询规范
-     * @param cb CriteriaBuilder
-     * @param <T> 实体类型
-     * @return 总记录数
+     * 执行计数查询的公共方法。委托给 {@link QueryBuildHelper}。
      */
     private <T> long executeCountQuery(Class<T> entityClass, Specification<T> spec, CriteriaBuilder cb) {
-        CriteriaQuery<Long> countCq = cb.createQuery(Long.class);
-        Root<T> countRoot = countCq.from(entityClass);
-        countCq.select(cb.count(countRoot));
-        jakarta.persistence.criteria.Predicate countPredicate = spec.toPredicate(countRoot, countCq, cb);
-        if (countPredicate != null) {
-            countCq.where(countPredicate);
-        }
-        TypedQuery<Long> countQuery = entityManager.createQuery(countCq);
-        return countQuery.getSingleResult();
+        return QueryBuildHelper.executeCountQuery(entityManager, entityClass, spec);
     }
 
     /**
@@ -1017,8 +1003,8 @@ public class MyJpaTemplate implements MyJpaTemplateOperations {
             log.debug(
                 "Pageable.unpaged() used with pagination method - applying maxResults limit ({}). "
                     + "Consider using findAll() with explicit maxResults or findAllStream() for large datasets.",
-                this.maxResults);
-            TypedQuery<T> typedQuery = buildSpecificationQuery(entityClass, spec, null, this.maxResults);
+                resolveMaxResults());
+            TypedQuery<T> typedQuery = buildSpecificationQuery(entityClass, spec, null, resolveMaxResults());
             if (querySpec != null) {
                 querySpec.applyQuerySettings(typedQuery);
             }
@@ -1029,7 +1015,7 @@ public class MyJpaTemplate implements MyJpaTemplateOperations {
         checkDeepPagination(pageable.getOffset());
 
         // 计数查询
-        long total = executeCountQuery(entityClass, spec, cb);
+        long total = QueryBuildHelper.executeCountQuery(entityManager, entityClass, spec);
 
         // 数据查询 - 复用 buildSpecificationQuery 避免重复的查询构建逻辑
         TypedQuery<T> query = buildSpecificationQuery(entityClass, spec, pageable.getSort(), pageable.getPageSize());
@@ -1195,14 +1181,6 @@ public class MyJpaTemplate implements MyJpaTemplateOperations {
         return affected;
     }
 
-    /**
-     * 分批执行批量删除。通过分批处理减少内存占用（通过 {@link EntityManager#clear()} 清除一级缓存）， 但所有批次在同一个事务中执行，要么全部成功，要么全部回滚。
-     *
-     * @param spec 要执行的 DeleteSpec
-     * @param batchSize 每批删除的行数
-     * @param <T> 实体类型
-     * @return 受影响的总行数
-     */
     @Override
     @Transactional(rollbackFor = Exception.class)
     public <T> int executeBatch(DeleteSpec<T> spec, int batchSize) {
@@ -1340,8 +1318,9 @@ public class MyJpaTemplate implements MyJpaTemplateOperations {
         // 无法准确判断是否有下一页，此时保守地认为有下一页（除非结果集为空或不足一页）。
         int fetchLimit = pageable.getPageSize() + 1;
         boolean maxResultsLimited = false;
-        if (this.maxResults > 0 && this.maxResults < fetchLimit) {
-            fetchLimit = this.maxResults;
+        int effectiveMaxResults = resolveMaxResults();
+        if (effectiveMaxResults > 0 && effectiveMaxResults < fetchLimit) {
+            fetchLimit = effectiveMaxResults;
             maxResultsLimited = true;
         }
         query.setMaxResults(fetchLimit);
@@ -1353,7 +1332,7 @@ public class MyJpaTemplate implements MyJpaTemplateOperations {
             // 如果 content.size() < fetchLimit，说明数据已取完 → 无下一页
             // 如果 content.size() == fetchLimit（==maxResults），可能还有更多，
             //   但无法区分"正好 maxResults 行"和"被截断"，保守标记 hasNext=true
-            hasNext = content.size() >= this.maxResults;
+            hasNext = content.size() >= effectiveMaxResults;
             if (hasNext && content.size() <= pageable.getPageSize()) {
                 // 当 maxResults <= pageSize 时，上面逻辑会误报
                 // 因为取到的行数永远 >= maxResults（等于 pageSize+1 截断后可能刚好等于 maxResults）
@@ -1361,7 +1340,7 @@ public class MyJpaTemplate implements MyJpaTemplateOperations {
                 log.warn("findSlice with maxResultsLimited=true " +
                     "(maxResults={}, pageSize={}) cannot accurately determine hasNext. " +
                     "Consider increasing maxResults or reducing pageSize.",
-                    this.maxResults, pageable.getPageSize());
+                    effectiveMaxResults, pageable.getPageSize());
             }
         } else {
             hasNext = content.size() > pageable.getPageSize();

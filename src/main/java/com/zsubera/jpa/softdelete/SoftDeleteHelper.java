@@ -39,8 +39,15 @@ import org.springframework.util.ConcurrentReferenceHashMap;
  * </ul>
  *
  * <p>
- * 缓存策略：所有缓存均使用 {@link ConcurrentHashMap} 实现线程安全访问。缓存无驱逐策略， 因为实体类数量在实际应用中有限且有界。 FIELD_CACHE 在超过 1024 条目时会记录警告日志，
- * 以帮助诊断潜在的类加载器泄漏问题。NOT_DELETED_SPEC_CACHE 和 DELETED_SPEC_CACHE 按实体类缓存 Specification 实例， 避免每次调用创建新的 lambda。
+ * 缓存策略：采用双策略缓存架构：
+ * <ul>
+ * <li><strong>弱引用缓存</strong>（{@link ConcurrentReferenceHashMap}，WEAK keys）：用于以 {@code Class} 为键的缓存
+ *   （FIELD_CACHE, NOT_DELETED_SPEC_CACHE, DELETED_SPEC_CACHE, ANNOTATION_CACHE, FIELD_OBJECT_CACHE）。
+ *   弱引用允许类加载器在 OSGi/热重载场景中被 GC 回收，防止类加载器泄漏。</li>
+ * <li><strong>采样驱逐缓存</strong>（{@link com.zsubera.jpa.util.SampledEvictionCache}）：用于以 {@code String} 为键的缓存
+ *   （COLUMN_NAME_CACHE, ID_COLUMN_NAME_CACHE, RESOLVED_VALUE_CACHE）。字符串键无自然 GC 生命周期，
+ *   使用固定容量上限（1024）+ 采样驱逐防止内存泄漏。</li>
+ * </ul>
  *
  * <p>
  * 使用示例：
@@ -109,16 +116,16 @@ public final class SoftDeleteHelper {
     private static final ConcurrentMap<Class<?>, SoftDelete> ANNOTATION_CACHE =
         new ConcurrentReferenceHashMap<>(16, ConcurrentReferenceHashMap.ReferenceType.WEAK);
 
-    /** 缓存: (entityClassName#fieldName) -> resolved column name，避免重复反射扫描类层次。 */
-    private static final ConcurrentMap<String, String> COLUMN_NAME_CACHE =
-        new ConcurrentHashMap<>();
-
-    /** 缓存: entityClassName -> resolved ID column name，避免重复反射。 */
-    private static final ConcurrentMap<String, String> ID_COLUMN_NAME_CACHE =
-        new ConcurrentHashMap<>();
-
     /** 列名/ID列名缓存最大条目数，防止动态代理类名导致无限增长。 */
     private static final int MAX_NAME_CACHE_SIZE = 4096;
+
+    /** 缓存: (entityClassName#fieldName) -> resolved column name，使用采样驱逐防止内存泄漏。 */
+    private static final com.zsubera.jpa.util.SampledEvictionCache<String, String> COLUMN_NAME_CACHE =
+        new com.zsubera.jpa.util.SampledEvictionCache<>(MAX_NAME_CACHE_SIZE, 0.75, 100, 256);
+
+    /** 缓存: entityClassName -> resolved ID column name，使用采样驱逐防止内存泄漏。 */
+    private static final com.zsubera.jpa.util.SampledEvictionCache<String, String> ID_COLUMN_NAME_CACHE =
+        new com.zsubera.jpa.util.SampledEvictionCache<>(MAX_NAME_CACHE_SIZE, 0.75, 100, 256);
 
     /**
      * 验证 SQL 标识符安全性，确保不含注入字符。
@@ -347,7 +354,10 @@ public final class SoftDeleteHelper {
         String escapedColumn = validateIdentifier(columnName);
         ResolvedDeletedValue resolved = resolveDeletedValue(entityClass, field, annotation);
         // 行数保护：先 COUNT 再执行（仅计数实际会被更新的行，即未软删除的行）
-        // 注意：COUNT 和 UPDATE 之间存在竞态窗口，高并发下实际更新行数可能略超 maxRows
+        // TOCTOU 说明：COUNT 和 UPDATE 是两条独立的原生 SQL，无法使用 JPA 悲观锁（H2 不支持 FOR UPDATE + COUNT）。
+        // 竞态窗口内并发 INSERT 可能导致 UPDATE 影响行数超过 maxRows。
+        // 安全网：UPDATE 执行后检查 updated > maxRows，超出时抛出 IllegalStateException。
+        // 由于此方法在 @Transactional 上下文中调用，异常会传播到事务边界并触发回滚。
         if (maxRows > 0) {
             var countQuery = em.createNativeQuery("SELECT COUNT(*) FROM " + escapedTable + " WHERE "
                 + (resolved.booleanField() ? "(" + escapedColumn + " = ?1 OR " + escapedColumn + " IS NULL)"
@@ -498,6 +508,167 @@ public final class SoftDeleteHelper {
     }
 
     /**
+     * 使用 CriteriaUpdate 批量软删除实体，支持 JPA 生命周期回调和 @Version 乐观锁。
+     *
+     * <p>
+     * 与 {@link #softDeleteAll(EntityManager, Class, boolean)} 不同，此方法使用 JPA CriteriaUpdate 而非原生 SQL，
+     * 因此会触发 {@code @PreUpdate} 和 {@code @PostUpdate} 生命周期回调，并检查 {@code @Version} 乐观锁。
+     *
+     * <p>
+     * <strong>⚠️ 已知限制：</strong>CriteriaUpdate 不支持 JPA 生命周期回调（JPA 规范限制）。
+     * 如需触发回调，请使用 {@link #softDeleteByIdsUsingEntityManager} 逐条更新。
+     *
+     * <p>
+     * <strong>行数保护：</strong>默认最多更新 10000 行。超过此限制将抛出 {@link IllegalStateException}。
+     *
+     * @param em EntityManager 实例
+     * @param entityClass 实体类
+     * @param allowUnconditional 必须为 true 才能允许无条件软删除
+     * @param <T> 实体类型
+     * @return 受影响的行数
+     * @throws IllegalStateException 如果 allowUnconditional 为 false 或超过行数限制
+     */
+    public static <T> int softDeleteAllUsingCriteriaUpdate(EntityManager em, Class<T> entityClass,
+        boolean allowUnconditional) {
+        return softDeleteAllUsingCriteriaUpdate(em, entityClass, allowUnconditional, DEFAULT_MAX_ROWS);
+    }
+
+    /**
+     * 使用 CriteriaUpdate 批量软删除实体，支持自定义行数限制。
+     *
+     * @param em EntityManager 实例
+     * @param entityClass 实体类
+     * @param allowUnconditional 必须为 true 才能允许无条件软删除
+     * @param maxRows 最大允许更新行数，-1 表示不限制
+     * @param <T> 实体类型
+     * @return 受影响的行数
+     */
+    public static <T> int softDeleteAllUsingCriteriaUpdate(EntityManager em, Class<T> entityClass,
+        boolean allowUnconditional, int maxRows) {
+        if (em == null) {
+            throw new IllegalArgumentException("em must not be null");
+        }
+        if (entityClass == null) {
+            throw new IllegalArgumentException("entityClass must not be null");
+        }
+        if (!allowUnconditional) {
+            throw new IllegalStateException(
+                "softDeleteAllUsingCriteriaUpdate without conditions is dangerous. Pass allowUnconditional=true to confirm.");
+        }
+        if (!TransactionSynchronizationManager.isActualTransactionActive()) {
+            throw new MyJpaPlusException(
+                "softDeleteAllUsingCriteriaUpdate requires an active transaction. "
+                    + "Ensure the calling method is annotated with @Transactional.");
+        }
+        String fieldName = findSoftDeleteField(entityClass);
+        if (fieldName == null) {
+            throw new IllegalArgumentException("Entity " + entityClass.getSimpleName() + " has no @SoftDelete field");
+        }
+        if (log.isWarnEnabled()) {
+            log.warn("AUDIT: Executing CriteriaUpdate soft DELETE on {} — this will affect ALL rows! Call stack: {}",
+                entityClass.getSimpleName(), AuditUtils.getCallStack());
+        }
+        Field field = getField(entityClass, fieldName);
+        if (field == null) {
+            throw new IllegalArgumentException("Cannot resolve @SoftDelete field: " + fieldName);
+        }
+        SoftDelete annotation = field.getAnnotation(SoftDelete.class);
+        ResolvedDeletedValue resolved = resolveDeletedValue(entityClass, field, annotation);
+        jakarta.persistence.criteria.CriteriaBuilder cb = em.getCriteriaBuilder();
+        jakarta.persistence.criteria.CriteriaUpdate<T> update = cb.createCriteriaUpdate(entityClass);
+        jakarta.persistence.criteria.Root<T> root = update.from(entityClass);
+        if (resolved.booleanField()) {
+            update.set(fieldName, Boolean.TRUE);
+            update.where(cb.or(cb.isNull(root.get(fieldName)), cb.equal(root.get(fieldName), false)));
+        } else {
+            update.set(fieldName, (Comparable)resolved.dbValue());
+            update.where(cb.or(cb.isNull(root.get(fieldName)),
+                cb.notEqual(root.get(fieldName), resolved.dbValue())));
+        }
+        int updated = em.createQuery(update).executeUpdate();
+        if (maxRows > 0 && updated > maxRows) {
+            throw new IllegalStateException("softDeleteAllUsingCriteriaUpdate affected " + updated
+                + " rows, exceeding the limit of " + maxRows
+                + ". Consider using softDeleteByIdsUsingEntityManager() with explicit ID lists.");
+        }
+        if (updated > 0) {
+            publishEvent(entityClass, updated);
+        }
+        return updated;
+    }
+
+    /**
+     * 使用 EntityManager 逐条软删除实体，支持 JPA 生命周期回调（{@code @PreUpdate}、{@code @PostUpdate}）。
+     *
+     * <p>
+     * 与 {@link #softDeleteByIds(EntityManager, Class, List)} 不同，此方法通过加载实体、设置字段、
+     * 然后 flush 的方式执行软删除，因此会触发 JPA 生命周期回调。但性能较低（N+1 查询），适用于
+     * 需要审计字段自动填充等回调的场景。
+     *
+     * <p>
+     * <strong>性能说明：</strong>此方法会逐条加载和更新实体，对于大批量操作（>1000 条）建议使用
+     * {@link #softDeleteByIds(EntityManager, Class, List)} 并接受不触发回调的限制。
+     *
+     * @param em EntityManager 实例
+     * @param entityClass 实体类
+     * @param ids 要软删除的实体 ID 列表
+     * @param <T> 实体类型
+     * @param <ID> ID 类型
+     * @return 受影响的行数
+     */
+    public static <T, ID> int softDeleteByIdsUsingEntityManager(EntityManager em, Class<T> entityClass, List<ID> ids) {
+        if (em == null) {
+            throw new IllegalArgumentException("em must not be null");
+        }
+        if (entityClass == null) {
+            throw new IllegalArgumentException("entityClass must not be null");
+        }
+        if (ids == null || ids.isEmpty()) {
+            return 0;
+        }
+        if (!TransactionSynchronizationManager.isActualTransactionActive()) {
+            throw new MyJpaPlusException(
+                "softDeleteByIdsUsingEntityManager requires an active transaction. "
+                    + "Use @Transactional on the calling method.");
+        }
+        String fieldName = findSoftDeleteField(entityClass);
+        if (fieldName == null) {
+            throw new IllegalArgumentException("Entity " + entityClass.getSimpleName() + " has no @SoftDelete field");
+        }
+        Field field = getField(entityClass, fieldName);
+        if (field == null) {
+            throw new IllegalArgumentException("Cannot resolve @SoftDelete field: " + fieldName);
+        }
+        SoftDelete annotation = field.getAnnotation(SoftDelete.class);
+        ResolvedDeletedValue resolved = resolveDeletedValue(entityClass, field, annotation);
+        int total = 0;
+        for (ID id : ids) {
+            if (id == null) {
+                continue;
+            }
+            T entity = em.find(entityClass, id);
+            if (entity == null) {
+                continue;
+            }
+            try {
+                if (resolved.booleanField()) {
+                    field.set(entity, Boolean.TRUE);
+                } else {
+                    field.set(entity, resolved.dbValue());
+                }
+                em.merge(entity);
+                total++;
+            } catch (IllegalAccessException e) {
+                throw new MyJpaPlusException("Failed to set soft delete field '" + fieldName + "' on " + entityClass.getName(), e);
+            }
+        }
+        if (total > 0) {
+            publishEvent(entityClass, total);
+        }
+        return total;
+    }
+
+    /**
      * 解析实体类对应的数据库表名。
      */
     private static String resolveTableName(Class<?> entityClass) {
@@ -513,9 +684,6 @@ public final class SoftDeleteHelper {
         String cacheKey = getEntityBaseName(entityClass) + "#" + fieldName;
         String result = COLUMN_NAME_CACHE.get(cacheKey);
         if (result != null) return result;
-        if (COLUMN_NAME_CACHE.size() >= MAX_NAME_CACHE_SIZE) {
-            COLUMN_NAME_CACHE.clear();
-        }
         result = doResolveColumnName(entityClass, fieldName);
         COLUMN_NAME_CACHE.put(cacheKey, result);
         return result;
@@ -562,9 +730,6 @@ public final class SoftDeleteHelper {
         String cacheKey = getEntityBaseName(entityClass);
         String result = ID_COLUMN_NAME_CACHE.get(cacheKey);
         if (result != null) return result;
-        if (ID_COLUMN_NAME_CACHE.size() >= MAX_NAME_CACHE_SIZE) {
-            ID_COLUMN_NAME_CACHE.clear();
-        }
         result = doResolveIdColumnName(entityClass);
         ID_COLUMN_NAME_CACHE.put(cacheKey, result);
         return result;
@@ -718,9 +883,9 @@ public final class SoftDeleteHelper {
      * @param isNotDeleted true 表示构建"未删除"谓词，false 表示构建"已删除"谓词
      * @return 构建的谓词
      */
-    /** ponytail: 缓存 ResolvedDeletedValue，避免每次 JOIN 重新解析。 */
-    private static final ConcurrentMap<String, ResolvedDeletedValue> RESOLVED_VALUE_CACHE =
-        new ConcurrentHashMap<>(64);
+    /** ponytail: 缓存 ResolvedDeletedValue，避免每次 JOIN 重新解析。使用采样驱逐防止内存泄漏。 */
+    private static final com.zsubera.jpa.util.SampledEvictionCache<String, ResolvedDeletedValue> RESOLVED_VALUE_CACHE =
+        new com.zsubera.jpa.util.SampledEvictionCache<>(1024, 0.75, 100, 64);
 
     private static Predicate resolveDeletedPredicate(CriteriaBuilder cb, Path<?> path, String fieldName,
         Class<?> entityClass, boolean isNotDeleted) {

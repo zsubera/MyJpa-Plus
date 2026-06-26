@@ -74,6 +74,21 @@ public class QueryCacheManager implements CacheAdapter {
     /** 驱逐检查采样间隔，每 N 次 put/get 操作检查一次驱逐，避免每次操作都遍历全量缓存 */
     private static final int EVICTION_CHECK_INTERVAL = 10;
 
+    /** 漂移检测最小阈值，低于此值不触发清理 */
+    private static final int MIN_DRIFT_THRESHOLD = 10;
+
+    /** CAS 驱逐最小尝试次数 */
+    private static final int MIN_CAS_EVICTION_ATTEMPTS = 16;
+
+    /** 清理漂移最小尝试次数 */
+    private static final int MIN_CLEANUP_ATTEMPTS = 8;
+
+    /** 过期条目清理最小采样数 */
+    private static final int MIN_EXPIRY_SAMPLE_COUNT = 32;
+
+    /** 过期条目清理最小采样数（小缓存） */
+    private static final int MIN_EXPIRY_SAMPLE_COUNT_SMALL = 128;
+
     /** put 操作计数器，用于采样驱逐检查（实例级别，避免多实例干扰） */
     private final java.util.concurrent.atomic.AtomicInteger putCounter =
         new java.util.concurrent.atomic.AtomicInteger();
@@ -112,6 +127,9 @@ public class QueryCacheManager implements CacheAdapter {
      * tryLock() ensures at most one thread evicts at a time; others skip (eviction is idempotent).
      */
     private final ReentrantLock evictionLock = new ReentrantLock();
+
+    /** clear() 调用计数器，用于 put() 检测并发 clear() 后丢弃写入。 */
+    private final java.util.concurrent.atomic.AtomicLong clearGeneration = new java.util.concurrent.atomic.AtomicLong(0);
 
     private volatile int maxEntries;
 
@@ -237,6 +255,9 @@ public class QueryCacheManager implements CacheAdapter {
             evictIfNeeded();
         }
 
+        // 快照 clear() 代数，检测并发 clear() 后丢弃写入
+        long genBefore = clearGeneration.get();
+
         CachedQueryResult<?> newValue = new CachedQueryResult<>(value, ttlSeconds);
         CachedQueryResult<?> existing = store.putIfAbsent(key, newValue);
         if (existing != null) {
@@ -247,15 +268,22 @@ public class QueryCacheManager implements CacheAdapter {
             insertionTimestamps.put(key, System.nanoTime());
         }
 
+        // 如果 clear() 在 put 期间发生，丢弃本次写入
+        if (clearGeneration.get() != genBefore) {
+            store.remove(key);
+            insertionTimestamps.remove(key);
+            return false;
+        }
+
         // 清理 insertionTimestamps 中不在 store 中的陈旧条目
         int timestampsSize = insertionTimestamps.size();
         int drift = timestampsSize - store.size();
-        if (drift > Math.max(10, maxEntries / 10)) {
+        if (drift > Math.max(MIN_DRIFT_THRESHOLD, maxEntries / 10)) {
             cleanupDrift(drift > maxEntries / 2);
         }
         // CAS-based eviction: find oldest entry by timestamp, CAS remove(key, value).
         // 这避免并发 put 替换值后误删新条目。CAS 失败时保留条目（条目仍有效，只是值已更新）。
-        int maxAttempts = Math.max(16, maxEntries / 10);
+        int maxAttempts = Math.max(MIN_CAS_EVICTION_ATTEMPTS, maxEntries / 10);
         int attempts = 0;
         while (store.size() > maxEntries && attempts < maxAttempts) {
             String oldest = findOldestKey();
@@ -297,7 +325,7 @@ public class QueryCacheManager implements CacheAdapter {
         try {
             evictExpiredEntries();
             // 限制驱逐循环次数，避免在高并发写入场景下长时间持锁
-            int maxEvictions = Math.max(16, maxEntries / 10);
+            int maxEvictions = Math.max(MIN_CAS_EVICTION_ATTEMPTS, maxEntries / 10);
             for (int i = 0; i < maxEvictions && store.size() >= maxEntries; i++) {
                 evictOldestEntry();
             }
@@ -311,7 +339,7 @@ public class QueryCacheManager implements CacheAdapter {
      * 跳过已不在 store 里的陈旧条目，防止漂移导致无效驱逐。
      */
     private void evictOldestEntry() {
-        int maxAttempts = Math.max(8, maxEntries / 20);
+        int maxAttempts = Math.max(MIN_CLEANUP_ATTEMPTS, maxEntries / 20);
         for (int attempt = 0; attempt < maxAttempts; attempt++) {
             String oldest = findOldestKey();
             if (oldest == null) {
@@ -344,7 +372,7 @@ public class QueryCacheManager implements CacheAdapter {
     private String findOldestKey() {
         String oldestKey = null;
         long oldestTimestamp = Long.MAX_VALUE;
-        int sampleCount = Math.max(32, maxEntries / 20);
+        int sampleCount = Math.max(MIN_EXPIRY_SAMPLE_COUNT, maxEntries / 20);
         int checked = 0;
         for (java.util.Map.Entry<String, Long> entry : insertionTimestamps.entrySet()) {
             if (checked++ >= sampleCount) {
@@ -385,7 +413,7 @@ public class QueryCacheManager implements CacheAdapter {
         } else {
             // 快速路径：移除不在 store 中的陈旧条目（采样检查）
             int cleaned = 0;
-            int maxAttempts = Math.max(16, maxEntries / 10);
+            int maxAttempts = Math.max(MIN_CAS_EVICTION_ATTEMPTS, maxEntries / 10);
             java.util.Iterator<String> it = insertionTimestamps.keySet().iterator();
             while (cleaned < maxAttempts && it.hasNext()) {
                 String k = it.next();
@@ -446,7 +474,8 @@ public class QueryCacheManager implements CacheAdapter {
     // ponytail: sample scales with store size — probes 20% (vs old 10%) for 10k+ entries
     private void evictExpiredEntries() {
         int storeSize = store.size();
-        int sampleSize = storeSize > 128 ? Math.min(storeSize, Math.max(128, storeSize / 5)) : storeSize;
+        int sampleSize = storeSize > MIN_EXPIRY_SAMPLE_COUNT_SMALL
+            ? Math.min(storeSize, Math.max(MIN_EXPIRY_SAMPLE_COUNT_SMALL, storeSize / 5)) : storeSize;
         if (sampleSize == 0) {
             return;
         }
@@ -492,6 +521,7 @@ public class QueryCacheManager implements CacheAdapter {
         try {
             insertionTimestamps.clear();
             store.clear();
+            clearGeneration.incrementAndGet();
         } finally {
             evictionLock.unlock();
         }

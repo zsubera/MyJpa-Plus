@@ -131,96 +131,65 @@ public sealed interface ConditionNode permits ConditionNode.SimpleNode, Conditio
                     return PredicateHelper.isNull(path, fieldName, cb);
                 case IS_NOT_NULL:
                     return PredicateHelper.isNotNull(path, fieldName, cb);
-                case IN: {
-                    if (value == null) {
-                        throw new IllegalArgumentException("IN operator requires non-null value, got null");
-                    }
-                    if (value instanceof Collection<?> col) {
-                        if (col.isEmpty()) {
-                            return cb.disjunction();
-                        }
-                        return InClauseBuilder.in(cb, fieldPath, col);
-                    }
-                    if (value.getClass().isArray()) {
-                        Object[] arr;
-                        if (value instanceof Object[] objArr) {
-                            arr = objArr;
-                        } else {
-                            int len = java.lang.reflect.Array.getLength(value);
-                            arr = new Object[len];
-                            for (int i = 0; i < len; i++) {
-                                arr[i] = java.lang.reflect.Array.get(value, i);
-                            }
-                        }
-                        if (arr.length == 0) {
-                            return cb.disjunction();
-                        }
-                        return InClauseBuilder.in(cb, fieldPath, arr);
-                    }
-                    throw new IllegalArgumentException(
-                        "IN operator requires Collection or array, got: " + value.getClass().getName());
-                }
-                case NOT_IN: {
-                    if (value == null) {
-                        throw new IllegalArgumentException("NOT_IN operator requires non-null value, got null");
-                    }
-                    if (value instanceof Collection<?> col) {
-                        if (col.isEmpty()) {
-                            return cb.conjunction();
-                        }
-                        return InClauseBuilder.notIn(cb, fieldPath, col);
-                    }
-                    if (value.getClass().isArray()) {
-                        Object[] arr;
-                        if (value instanceof Object[] objArr) {
-                            arr = objArr;
-                        } else {
-                            int len = java.lang.reflect.Array.getLength(value);
-                            arr = new Object[len];
-                            for (int i = 0; i < len; i++) {
-                                arr[i] = java.lang.reflect.Array.get(value, i);
-                            }
-                        }
-                        if (arr.length == 0) {
-                            return cb.conjunction();
-                        }
-                        return InClauseBuilder.notIn(cb, fieldPath, arr);
-                    }
-                    throw new IllegalArgumentException(
-                        "NOT_IN operator requires Collection or array, got: " + value.getClass().getName());
-                }
-                case BETWEEN: {
-                    if (value == null) {
-                        throw new IllegalArgumentException("BETWEEN operator requires non-null value");
-                    }
-                    if (!(value instanceof Comparable<?>[])) {
-                        throw new IllegalArgumentException(
-                            "BETWEEN requires a Comparable[] value, got: " + value.getClass().getName());
-                    }
-                    Comparable<?>[] range = (Comparable<?>[])value;
-                    if (range.length != 2) {
-                        throw new IllegalArgumentException("BETWEEN requires exactly 2 values, got " + range.length);
-                    }
-                    return PredicateHelper.between(path, fieldName, range[0], range[1], cb);
-                }
-                case NOT_BETWEEN: {
-                    if (value == null) {
-                        throw new IllegalArgumentException("NOT_BETWEEN operator requires non-null value");
-                    }
-                    if (!(value instanceof Comparable<?>[])) {
-                        throw new IllegalArgumentException(
-                            "NOT_BETWEEN requires a Comparable[] value, got: " + value.getClass().getName());
-                    }
-                    Comparable<?>[] range = (Comparable<?>[])value;
-                    if (range.length != 2) {
-                        throw new IllegalArgumentException(
-                            "NOT_BETWEEN requires exactly 2 values, got " + range.length);
-                    }
-                    return PredicateHelper.notBetween(path, fieldName, range[0], range[1], cb);
-                }
+                case IN:
+                    return resolveInOrNotIn(fieldPath, value, cb, false);
+                case NOT_IN:
+                    return resolveInOrNotIn(fieldPath, value, cb, true);
+                case BETWEEN:
+                    return resolveBetweenOrNotBetween(path, fieldName, value, cb, false);
+                case NOT_BETWEEN:
+                    return resolveBetweenOrNotBetween(path, fieldName, value, cb, true);
                 default:
                     throw new IllegalArgumentException("Unhandled Op: " + this);
             }
+        }
+
+        private static Predicate resolveInOrNotIn(Path<?> fieldPath, Object value, CriteriaBuilder cb, boolean negate) {
+            if (value == null) {
+                throw new IllegalArgumentException((negate ? "NOT_IN" : "IN") + " operator requires non-null value, got null");
+            }
+            if (value instanceof Collection<?> col) {
+                if (col.isEmpty()) {
+                    return negate ? cb.conjunction() : cb.disjunction();
+                }
+                return negate ? InClauseBuilder.notIn(cb, fieldPath, col) : InClauseBuilder.in(cb, fieldPath, col);
+            }
+            if (value.getClass().isArray()) {
+                Object[] arr;
+                if (value instanceof Object[] objArr) {
+                    arr = objArr;
+                } else {
+                    int len = java.lang.reflect.Array.getLength(value);
+                    arr = new Object[len];
+                    for (int i = 0; i < len; i++) {
+                        arr[i] = java.lang.reflect.Array.get(value, i);
+                    }
+                }
+                if (arr.length == 0) {
+                    return negate ? cb.conjunction() : cb.disjunction();
+                }
+                return negate ? InClauseBuilder.notIn(cb, fieldPath, arr) : InClauseBuilder.in(cb, fieldPath, arr);
+            }
+            throw new IllegalArgumentException(
+                (negate ? "NOT_IN" : "IN") + " operator requires Collection or array, got: " + value.getClass().getName());
+        }
+
+        private static Predicate resolveBetweenOrNotBetween(Path<?> path, String fieldName, Object value,
+            CriteriaBuilder cb, boolean negate) {
+            if (value == null) {
+                throw new IllegalArgumentException((negate ? "NOT_BETWEEN" : "BETWEEN") + " operator requires non-null value");
+            }
+            if (!(value instanceof Comparable<?>[])) {
+                throw new IllegalArgumentException(
+                    (negate ? "NOT_BETWEEN" : "BETWEEN") + " requires a Comparable[] value, got: " + value.getClass().getName());
+            }
+            Comparable<?>[] range = (Comparable<?>[])value;
+            if (range.length != 2) {
+                throw new IllegalArgumentException(
+                    (negate ? "NOT_BETWEEN" : "BETWEEN") + " requires exactly 2 values, got " + range.length);
+            }
+            return negate ? PredicateHelper.notBetween(path, fieldName, range[0], range[1], cb)
+                : PredicateHelper.between(path, fieldName, range[0], range[1], cb);
         }
     }
 

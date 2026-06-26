@@ -3,6 +3,7 @@ package com.zsubera.jpa.repository;
 import com.zsubera.jpa.annotation.IgnoreSoftDelete;
 import java.lang.reflect.Method;
 import java.util.StringJoiner;
+import java.util.concurrent.atomic.AtomicInteger;
 import org.aspectj.lang.ProceedingJoinPoint;
 import org.aspectj.lang.annotation.Around;
 import org.aspectj.lang.annotation.Aspect;
@@ -32,9 +33,19 @@ public class IgnoreSoftDeleteAdvisor {
 
     private static final Logger log = LoggerFactory.getLogger(IgnoreSoftDeleteAdvisor.class);
 
-    /** 缓存注解检查结果，避免重复反射。使用复合键（类名+方法名）确保跨代理类的缓存一致性。 */
+    /**
+     * 缓存注解检查结果，避免重复反射。使用复合键（类名+方法名+参数类型）确保跨代理类的缓存一致性。
+     * ponytail: 添加采样驱逐防止 CGLIB/ByteBuddy 动态代理类名不断变化导致内存泄漏。
+     */
     private static final java.util.concurrent.ConcurrentMap<String, Boolean> ANNOTATION_CACHE =
         new java.util.concurrent.ConcurrentHashMap<>();
+
+    /** ANNOTATION_CACHE 最大条目数，超过时触发采样驱逐。 */
+    private static final int MAX_ANNOTATION_CACHE_SIZE = 4096;
+
+    /** 采样计数器，每 256 次调用检查一次缓存大小。 */
+    private static final java.util.concurrent.atomic.AtomicInteger EVICTION_COUNTER =
+        new java.util.concurrent.atomic.AtomicInteger(0);
 
     /**
      * 拦截所有 Spring Data JPA Repository 方法调用。
@@ -62,6 +73,12 @@ public class IgnoreSoftDeleteAdvisor {
             paramJoiner.add(paramType.getName());
         }
         String cacheKey = method.getDeclaringClass().getName() + "#" + method.getName() + paramJoiner;
+
+        // ponytail: 采样驱逐——每 256 次调用检查缓存大小，超过上限时清空防止动态代理类名导致内存泄漏
+        if ((EVICTION_COUNTER.incrementAndGet() & 255) == 0 && ANNOTATION_CACHE.size() > MAX_ANNOTATION_CACHE_SIZE) {
+            ANNOTATION_CACHE.clear();
+        }
+
         Boolean hasAnnotation = ANNOTATION_CACHE.computeIfAbsent(cacheKey,
             k -> AnnotationUtils.findAnnotation(method, IgnoreSoftDelete.class) != null
                 || AnnotationUtils.findAnnotation(method.getDeclaringClass(), IgnoreSoftDelete.class) != null);

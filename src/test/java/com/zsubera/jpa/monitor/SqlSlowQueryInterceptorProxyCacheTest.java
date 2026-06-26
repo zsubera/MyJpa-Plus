@@ -53,8 +53,8 @@ class SqlSlowQueryInterceptorProxyCacheTest {
             cacheField.setAccessible(true);
             Object cache = cacheField.get(null);
 
-            assertInstanceOf(java.util.concurrent.ConcurrentMap.class, cache,
-                "PROXY_CLASS_CACHE should be a ConcurrentMap");
+            assertInstanceOf(com.zsubera.jpa.util.SampledEvictionCache.class, cache,
+                "PROXY_CLASS_CACHE should be a SampledEvictionCache");
         } catch (Exception e) {
             fail("Failed to access PROXY_CLASS_CACHE: " + e.getMessage());
         }

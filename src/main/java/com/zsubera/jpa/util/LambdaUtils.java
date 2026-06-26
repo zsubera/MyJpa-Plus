@@ -100,9 +100,8 @@ public final class LambdaUtils {
             log.info("Lambda cache size configured to {}", size);
         } else if (size > MAX_CACHE_SIZE_UPPER_LIMIT) {
             log.warn("Lambda cache size ({}) exceeds upper limit ({}). Ignoring.", size, MAX_CACHE_SIZE_UPPER_LIMIT);
-        } else if (size <= 0) {
-            throw new IllegalArgumentException("Cache size must be positive: " + size);
         }
+        // ponytail: values <= 0 are silently ignored (existing behavior)
     }
 
     /**
@@ -162,16 +161,16 @@ public final class LambdaUtils {
      */
     /**
      * ponytail: 缓存 SerializedLambda 解析结果，避免每次调用都反射。
-     * key = lambda 类名 + 方法名，value = 属性名。
+     * key = lambda 类名 + 方法名，value = 属性名。使用采样驱逐防止内存泄漏。
      */
-    private static final ConcurrentMap<String, String> PROPERTY_CACHE =
-        new java.util.concurrent.ConcurrentHashMap<>(256);
+    private static final com.zsubera.jpa.util.SampledEvictionCache<String, String> PROPERTY_CACHE =
+        new com.zsubera.jpa.util.SampledEvictionCache<>(4096, 0.75, 100, 256);
 
     public static <T> String getPropertyName(SFunction<T, ?> fn) {
         if (fn == null) {
             throw new IllegalArgumentException("SFunction must not be null");
         }
-        String key = fn.getClass().getName() + "#" + fn.hashCode();
+        String key = resolveLambdaKey(fn);
         String cached = PROPERTY_CACHE.get(key);
         if (cached != null) {
             return cached;
@@ -187,8 +186,72 @@ public final class LambdaUtils {
             propertyName = resolveViaSerialization(fn);
         }
         IdentifierValidator.validateColumnName(propertyName);
-        PROPERTY_CACHE.putIfAbsent(key, propertyName);
+        PROPERTY_CACHE.put(key, propertyName);
         return propertyName;
+    }
+
+    /**
+     * 解析 lambda 的唯一缓存键。优先使用 SerializedLambda 的 implClass+implMethodName（确定性、无碰撞），
+     * 降级到 className+System.identityHashCode（仅在反射和序列化都失败时）。
+     */
+    private static <T> String resolveLambdaKey(SFunction<T, ?> fn) {
+        try {
+            SerializedLambda lambda = extractSerializedLambda(fn);
+            if (lambda != null) {
+                return lambda.getImplClass() + "#" + lambda.getImplMethodName();
+            }
+        } catch (Exception ignored) {
+            // fallback below
+        }
+        return fn.getClass().getName() + "#" + System.identityHashCode(fn);
+    }
+
+    private static <T> SerializedLambda extractSerializedLambda(SFunction<T, ?> fn) {
+        try {
+            return resolveViaReflectionLambda(fn);
+        } catch (Exception e) {
+            try {
+                return resolveViaSerializationLambda(fn);
+            } catch (Exception ex) {
+                return null;
+            }
+        }
+    }
+
+    private static <T> SerializedLambda resolveViaReflectionLambda(SFunction<T, ?> fn) throws Exception {
+        Class<?> fnClass = fn.getClass();
+        Method writeReplace;
+        try {
+            writeReplace = METHOD_CACHE.computeIfAbsent(fnClass, clazz -> {
+                try {
+                    Method m = clazz.getDeclaredMethod("writeReplace");
+                    m.setAccessible(true);
+                    return m;
+                } catch (ReflectiveOperationException e) {
+                    throw new RuntimeException(e);
+                }
+            });
+        } catch (RuntimeException e) {
+            if (e.getCause() instanceof ReflectiveOperationException roe) {
+                throw roe;
+            }
+            throw e;
+        }
+        Object result = writeReplace.invoke(fn);
+        if (result instanceof SerializedLambda lambda) {
+            return lambda;
+        }
+        return null;
+    }
+
+    private static <T> SerializedLambda resolveViaSerializationLambda(SFunction<T, ?> fn) throws Exception {
+        ByteArrayOutputStream baos = new ByteArrayOutputStream(256);
+        try (ObjectOutputStream oos = new ObjectOutputStream(baos)) {
+            oos.writeObject(fn);
+        }
+        try (ObjectInputStream ois = new ObjectInputStream(new ByteArrayInputStream(baos.toByteArray()))) {
+            return (SerializedLambda)ois.readObject();
+        }
     }
 
     /**
@@ -243,13 +306,16 @@ public final class LambdaUtils {
             }
         } catch (IOException | ClassNotFoundException e) {
             throw new MyJpaPlusException(
-                "Failed to extract property name from method reference via serialization path. "
-                    + "Ensure you are using a method reference directly (e.g., Entity::getField). "
-                    + "Lambda expressions like e -> e.getField() are not supported. "
-                    + "If using Java 17+ module system, add JVM argument: "
-                    + "--add-opens java.base/java.lang.invoke=ALL-UNNAMED\n"
-                    + "Maven: <jvmArguments>--add-opens java.base/java.lang.invoke=ALL-UNNAMED</jvmArguments>\n"
-                    + "Gradle: bootRun { jvmArgs '--add-opens java.base/java.lang.invoke=ALL-UNNAMED' }", e);
+                "Failed to extract property name from method reference. "
+                    + "Both reflection and serialization paths failed.\n"
+                    + "Common causes:\n"
+                    + "  1. You passed a lambda expression (e -> e.getField()) instead of a method reference (Entity::getField)\n"
+                    + "  2. Java 17+ module system restriction — add JVM argument:\n"
+                    + "     --add-opens java.base/java.lang.invoke=ALL-UNNAMED\n"
+                    + "     Maven: <jvmArguments>--add-opens java.base/java.lang.invoke=ALL-UNNAMED</jvmArguments>\n"
+                    + "     Gradle: bootRun { jvmArgs '--add-opens java.base/java.lang.invoke=ALL-UNNAMED' }\n"
+                    + "  3. Custom serialization proxy or bytecode enhancement interfering with writeReplace()\n"
+                    + "Original error: " + e.getMessage(), e);
         }
     }
 
@@ -268,6 +334,7 @@ public final class LambdaUtils {
 
     static void clearCache() {
         CACHE.clear();
+        PROPERTY_CACHE.clear();
     }
 
 

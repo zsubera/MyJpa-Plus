@@ -68,6 +68,9 @@ public class MergeSpec<T> {
 
     private static final Logger log = LoggerFactory.getLogger(MergeSpec.class);
 
+    /** executeBatch(List, EntityManager) 的默认批次大小。 */
+    static final int DEFAULT_BATCH_SIZE = 100;
+
     private final Class<T> entityClass;
     private final EntityFieldExtractor<T> fieldExtractor;
     private volatile T entity;
@@ -325,7 +328,7 @@ public class MergeSpec<T> {
         if (entities == null || entities.isEmpty()) {
             throw new IllegalArgumentException("entities must not be null or empty");
         }
-        return executeBatch(entities, em, 100);
+        return executeBatch(entities, em, DEFAULT_BATCH_SIZE);
     }
 
     /**
@@ -394,7 +397,6 @@ public class MergeSpec<T> {
                     + "Use executeBatch() to run within the existing transaction, "
                     + "or call from a non-transactional context for true batch isolation.");
         }
-        // 预检 JTA 环境：RESOURCE_LOCAL 事务在循环外一次性确认
         EntityTransaction probeTx = em.getTransaction();
         if (probeTx == null) {
             throw new MyJpaPlusException("Cannot manage transactions in JTA environment. "
@@ -405,39 +407,44 @@ public class MergeSpec<T> {
         int batchStart = 0;
         while (batchStart < entities.size()) {
             int batchEnd = Math.min(batchStart + batchSize, entities.size());
-            int batchTotal = 0;
-            EntityTransaction tx = em.getTransaction();
-            if (tx == null || tx.isActive()) {
-                throw new MyJpaPlusException("executeBatchInSeparateTransactions requires no active transaction. "
-                    + "An active RESOURCE_LOCAL transaction was detected. "
-                    + "Use executeBatch() to run within the existing transaction.");
-            }
-            tx.begin();
-            try {
-                for (int i = batchStart; i < batchEnd; i++) {
-                    T ent = entities.get(i);
-                    if (ent == null) {
-                        throw new IllegalArgumentException("entities[" + i + "] must not be null");
-                    }
-                    SqlWithParams sqlWithParams = buildSqlFor(em, ent, cachedStrategy);
-                    batchTotal += executeNativeQuery(em, sqlWithParams.sql(), sqlWithParams.params());
-                }
-                em.flush();
-                tx.commit();
-                total += batchTotal;
-                if (log.isDebugEnabled()) {
-                    log.debug("Batch UPSERT (separate tx): entities [{}-{}] committed (batch affected: {}, total: {})",
-                        batchStart, batchEnd - 1, batchTotal, total);
-                }
-            } catch (RuntimeException e) {
-                safeRollback(tx, e);
-                throw e;
-            } finally {
-                em.clear();
-            }
+            total += executeSingleBatchInTransaction(entities, em, cachedStrategy, batchStart, batchEnd);
             batchStart = batchEnd;
         }
         return total;
+    }
+
+    private int executeSingleBatchInTransaction(List<T> entities, EntityManager em, DialectStrategy strategy,
+        int batchStart, int batchEnd) {
+        EntityTransaction tx = em.getTransaction();
+        if (tx == null || tx.isActive()) {
+            throw new MyJpaPlusException("executeBatchInSeparateTransactions requires no active transaction. "
+                + "An active RESOURCE_LOCAL transaction was detected. "
+                + "Use executeBatch() to run within the existing transaction.");
+        }
+        tx.begin();
+        try {
+            int batchTotal = 0;
+            for (int i = batchStart; i < batchEnd; i++) {
+                T ent = entities.get(i);
+                if (ent == null) {
+                    throw new IllegalArgumentException("entities[" + i + "] must not be null");
+                }
+                SqlWithParams sqlWithParams = buildSqlFor(em, ent, strategy);
+                batchTotal += executeNativeQuery(em, sqlWithParams.sql(), sqlWithParams.params());
+            }
+            em.flush();
+            tx.commit();
+            if (log.isDebugEnabled()) {
+                log.debug("Batch UPSERT (separate tx): entities [{}-{}] committed (batch affected: {})",
+                    batchStart, batchEnd - 1, batchTotal);
+            }
+            return batchTotal;
+        } catch (RuntimeException e) {
+            safeRollback(tx, e);
+            throw e;
+        } finally {
+            em.clear();
+        }
     }
 
     private void safeRollback(EntityTransaction tx, Exception original) {

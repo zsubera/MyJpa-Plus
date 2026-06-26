@@ -77,11 +77,8 @@ public class ProjectionSpec<T> {
     /** 深度分页硬限制（默认 1000000）。 */
     private int deepPaginationOffsetLimit = MyJpaTemplate.DEFAULT_DEEP_PAGINATION_OFFSET_LIMIT;
 
-    /** 深度分页警告日志限流：上次记录时间。ponytail: static 保证跨实例限流。 */
-    private static final AtomicLong lastDeepPaginationWarnTime = new AtomicLong(0);
-
-    /** 深度分页警告日志最小间隔（1 分钟）。 */
-    private static final long DEEP_PAGINATION_WARN_INTERVAL_MS = 60_000;
+    /** 深度分页检查时间戳，与 MyJpaTemplate 共享同一限流逻辑。 */
+    private final AtomicLong lastDeepPaginationWarnTime = new AtomicLong(0);
 
     /**
      * 描述 JOIN 子句的内部记录类。
@@ -531,28 +528,49 @@ public class ProjectionSpec<T> {
      * @return 返回 Tuple 结果的 TypedQuery 实例
      */
     public TypedQuery<Tuple> toTupleQuery(EntityManager em, int maxResults) {
+        return buildProjectionQuery(em, maxResults, Tuple.class, ctx -> {
+            ctx.query().multiselect(ctx.selectionList());
+        });
+    }
+
+    /**
+     * 构建投影查询的共享逻辑。消除 toTupleQuery 和 toDtoQuery 之间的重复代码。
+     *
+     * @param em 实体管理器
+     * @param maxResults 最大返回行数
+     * @param resultType 结果类型
+     * @param <R> 结果类型
+     * @return TypedQuery 实例
+     */
+    @SuppressWarnings("unchecked")
+    private <R> TypedQuery<R> buildProjectionQuery(EntityManager em, int maxResults, Class<R> resultType) {
+        return buildProjectionQuery(em, maxResults, resultType, null);
+    }
+
+    @SuppressWarnings("unchecked")
+    private <R> TypedQuery<R> buildProjectionQuery(EntityManager em, int maxResults, Class<R> resultType,
+        java.util.function.Consumer<ProjectionQueryContext<R>> selectionCustomizer) {
         validateSelectionConsistency();
         CriteriaBuilder cb = em.getCriteriaBuilder();
-        CriteriaQuery<Tuple> query = cb.createTupleQuery();
+        CriteriaQuery<R> query = cb.createQuery(resultType);
         Root<T> root = query.from(entityClass);
 
         try {
-            // 应用 JOIN（对 root 有副作用）
             resolveJoins(root, cb);
-
-            // 应用选择列表
             List<jakarta.persistence.criteria.Selection<?>> selectionList = buildSelectionList(root, cb);
-            query.multiselect(selectionList);
 
-            // 应用 DISTINCT
+            if (selectionCustomizer != null) {
+                selectionCustomizer.accept(new ProjectionQueryContext<>(query, root, cb, selectionList));
+            } else {
+                query.multiselect(selectionList);
+            }
+
             if (distinct) {
                 query.distinct(true);
             }
 
-            // 应用 WHERE
             applyPredicate(root, query, cb);
 
-            // 应用 GROUP BY
             if (!groupByFields.isEmpty()) {
                 List<jakarta.persistence.criteria.Expression<?>> groupByExpressions = new ArrayList<>();
                 for (String field : groupByFields) {
@@ -561,26 +579,22 @@ public class ProjectionSpec<T> {
                 query.groupBy(groupByExpressions);
             }
 
-            // 应用 HAVING
             applyHaving(root, cb, query);
-
-            // 应用 ORDER BY
             applyOrderBy(root, cb, query);
 
-            TypedQuery<Tuple> typedQuery = em.createQuery(query);
+            TypedQuery<R> typedQuery = em.createQuery(query);
             if (maxResults > 0) {
                 typedQuery.setMaxResults(maxResults);
-                if (maxResults == MyJpaTemplate.DEFAULT_MAX_RESULTS && !selections.isEmpty() && log.isDebugEnabled()) {
-                    log.debug(
-                        "ProjectionSpec query limited to {} rows by default. "
-                            + "Use toTupleQuery(em, -1) for unlimited results or toTupleQuery(em, N) for custom limit.",
-                        maxResults);
-                }
             }
             return typedQuery;
         } finally {
             clearJoinCache();
         }
+    }
+
+    /** 投影查询构建上下文，用于传递查询构建过程中的共享对象。 */
+    private record ProjectionQueryContext<R>(CriteriaQuery<R> query, Root<?> root, CriteriaBuilder cb,
+        List<jakarta.persistence.criteria.Selection<?>> selectionList) {
     }
 
     /**
@@ -656,51 +670,10 @@ public class ProjectionSpec<T> {
         if (dtoClass == null) {
             throw new IllegalStateException("asDto() must be called before toDtoQuery()");
         }
-        validateSelectionConsistency();
-        CriteriaBuilder cb = em.getCriteriaBuilder();
-        CriteriaQuery<R> query = (CriteriaQuery<R>)cb.createQuery(dtoClass);
-        Root<T> root = query.from(entityClass);
-
-        try {
-            // 应用 JOIN
-            resolveJoins(root, cb);
-
-            // 将选择列表作为构造函数参数应用
-            List<jakarta.persistence.criteria.Selection<?>> selectionList = buildSelectionList(root, cb);
-            query.select((CompoundSelection<R>)cb.construct(dtoClass,
-                selectionList.toArray(new jakarta.persistence.criteria.Selection[0])));
-
-            // 应用 DISTINCT
-            if (distinct) {
-                query.distinct(true);
-            }
-
-            // 应用 WHERE
-            applyPredicate(root, query, cb);
-
-            // 应用 GROUP BY
-            if (!groupByFields.isEmpty()) {
-                List<jakarta.persistence.criteria.Expression<?>> groupByExpressions = new ArrayList<>();
-                for (String gf : groupByFields) {
-                    groupByExpressions.add(root.get(gf));
-                }
-                query.groupBy(groupByExpressions);
-            }
-
-            // 应用 HAVING
-            applyHaving(root, cb, query);
-
-            // 应用 ORDER BY
-            applyOrderBy(root, cb, query);
-
-            TypedQuery<R> typedQuery = em.createQuery(query);
-            if (maxResults > 0) {
-                typedQuery.setMaxResults(maxResults);
-            }
-            return typedQuery;
-        } finally {
-            clearJoinCache();
-        }
+        return buildProjectionQuery(em, maxResults, (Class<R>)dtoClass, ctx -> {
+            ctx.query().select((CompoundSelection<R>)ctx.cb().construct(dtoClass,
+                ctx.selectionList().toArray(new jakarta.persistence.criteria.Selection[0])));
+        });
     }
 
     /**
@@ -827,20 +800,8 @@ public class ProjectionSpec<T> {
      * 检查深度分页，超过阈值时记录警告，超过硬限制时抛出异常。
      */
     private void checkDeepPagination(long offset) {
-        if (offset > this.deepPaginationOffsetThreshold) {
-            long now = System.currentTimeMillis();
-            long lastWarn = lastDeepPaginationWarnTime.get();
-            if (now - lastWarn > DEEP_PAGINATION_WARN_INTERVAL_MS
-                && lastDeepPaginationWarnTime.compareAndSet(lastWarn, now)) {
-                log.warn("Deep pagination detected (offset={}). This may cause slow queries. "
-                    + "Consider using keyset pagination for better performance.", offset);
-            }
-        }
-        if (this.deepPaginationOffsetLimit > 0 && offset > this.deepPaginationOffsetLimit) {
-            throw new IllegalArgumentException("Pagination offset (" + offset + ") exceeds the configured hard limit ("
-                + this.deepPaginationOffsetLimit
-                + "). Use keyset pagination for better performance, or adjust myjpa-plus.query.deep-pagination-offset-limit.");
-        }
+        com.zsubera.jpa.template.DeepPaginationGuard.check(offset, this.deepPaginationOffsetThreshold,
+            this.deepPaginationOffsetLimit, lastDeepPaginationWarnTime);
     }
 
     /**

@@ -1,5 +1,7 @@
 package com.zsubera.jpa.autoconfigure;
 
+import com.zsubera.jpa.template.MyJpaTemplate;
+
 /**
  * MyJpa-Plus 全局配置中心，替代分散的静态可变状态。
  *
@@ -22,16 +24,16 @@ public class MyJpaPlusGlobalConfig {
     private volatile boolean blockUnconditionalDelete = true;
 
     /** 查询最大返回行数。 */
-    private volatile int maxResults = 10000;
+    private volatile int maxResults = MyJpaTemplate.DEFAULT_MAX_RESULTS;
 
     /** 批量操作最大影响行数。 */
-    private volatile int maxBulkOperationRows = 10000;
+    private volatile int maxBulkOperationRows = MyJpaTemplate.DEFAULT_MAX_BULK_OPERATION_ROWS;
 
     /** 深度分页警告阈值。 */
-    private volatile int deepPaginationOffsetThreshold = 100000;
+    private volatile int deepPaginationOffsetThreshold = MyJpaTemplate.DEFAULT_DEEP_PAGINATION_OFFSET_THRESHOLD;
 
     /** 深度分页硬限制。 */
-    private volatile int deepPaginationOffsetLimit = -1;
+    private volatile int deepPaginationOffsetLimit = MyJpaTemplate.DEFAULT_DEEP_PAGINATION_OFFSET_LIMIT;
 
     /** IN 子句最大参数数量。 */
     private volatile int inClauseMaxSize = 1000;
@@ -70,8 +72,8 @@ public class MyJpaPlusGlobalConfig {
     }
 
     public void setMaxResults(int maxResults) {
-        if (maxResults <= 0) {
-            throw new IllegalArgumentException("maxResults must be positive, got: " + maxResults);
+        if (maxResults <= 0 && maxResults != -1) {
+            throw new IllegalArgumentException("maxResults must be positive or -1 (disabled), got: " + maxResults);
         }
         this.maxResults = maxResults;
     }

@@ -42,50 +42,26 @@ public class UpdateSpec<T> extends AbstractBulkOperationSpec<T, UpdateSpec<T>> {
 
     private static final Logger log = LoggerFactory.getLogger(UpdateSpec.class);
 
-    /** 缓存已验证的字段类型，避免重复反射查找。使用大小限制防止内存泄漏。 */
-    private static final java.util.concurrent.ConcurrentMap<String, Boolean> NUMERIC_FIELD_CACHE =
-        new java.util.concurrent.ConcurrentHashMap<>();
-
-    /** 缓存实体类的 @Version 字段名，避免每次 UPDATE 执行时重复反射遍历类层次。 */
-    private static final java.util.concurrent.ConcurrentMap<String, String> VERSION_FIELD_CACHE =
-        new java.util.concurrent.ConcurrentHashMap<>();
-
-    /** 记录已知无 @Version 字段的实体类，避免哨兵值碰撞风险。 */
-    private static final java.util.concurrent.ConcurrentMap<String, Boolean> NO_VERSION_CACHE =
-        new java.util.concurrent.ConcurrentHashMap<>();
-
     /** 缓存最大容量限制 */
     private static final int MAX_CACHE_SIZE = 256;
 
-    /** 驱逐操作的原子守卫，防止多线程同时执行冗余驱逐 */
-    private static final java.util.concurrent.atomic.AtomicBoolean EVICTING =
-        new java.util.concurrent.atomic.AtomicBoolean();
+    /** 缓存已验证的字段类型，避免重复反射查找。使用采样驱逐防止内存泄漏。 */
+    private static final com.zsubera.jpa.util.SampledEvictionCache<String, Boolean> NUMERIC_FIELD_CACHE =
+        new com.zsubera.jpa.util.SampledEvictionCache<>(MAX_CACHE_SIZE, 0.75, 100, 64);
+
+    /** 缓存实体类的 @Version 字段名，避免每次 UPDATE 执行时重复反射遍历类层次。 */
+    private static final com.zsubera.jpa.util.SampledEvictionCache<String, String> VERSION_FIELD_CACHE =
+        new com.zsubera.jpa.util.SampledEvictionCache<>(MAX_CACHE_SIZE, 0.75, 100, 64);
+
+    /** 记录已知无 @Version 字段的实体类，避免哨兵值碰撞风险。 */
+    private static final com.zsubera.jpa.util.SampledEvictionCache<String, Boolean> NO_VERSION_CACHE =
+        new com.zsubera.jpa.util.SampledEvictionCache<>(MAX_CACHE_SIZE, 0.75, 100, 64);
 
     /**
-     * 缓存驱逐辅助方法：当缓存超过限制时确定性触发驱逐。
-     *
-     * <p>
-     * 使用 {@link java.util.concurrent.atomic.AtomicBoolean} 守卫确保同一时刻只有一个线程执行驱逐，
-     * 避免多线程并发检测到缓存超限时同时触发冗余驱逐。
-     * 使用 {@link java.util.concurrent.ConcurrentHashMap} 的弱一致性迭代器进行驱逐，
-     * Iterator.remove() 是线程安全的。
+     * 缓存驱逐辅助方法：采样驱逐缓存自带容量控制，此方法保留为兼容调用点。
      */
     private static void evictCacheIfNeeded(java.util.concurrent.ConcurrentMap<?, ?> cache) {
-
-        if (cache.size() > MAX_CACHE_SIZE && EVICTING.compareAndSet(false, true)) {
-            try {
-                int toRemove = cache.size() / 2;
-                java.util.Iterator<?> it = cache.keySet().iterator();
-                int removed = 0;
-                while (it.hasNext() && removed < toRemove) {
-                    it.next();
-                    it.remove();
-                    removed++;
-                }
-            } finally {
-                EVICTING.set(false);
-            }
-        }
+        // ponytail: SampledEvictionCache handles eviction internally; this method is a no-op.
     }
 
     private final List<SetClause> setClauses = new ArrayList<>();
@@ -250,26 +226,14 @@ public class UpdateSpec<T> extends AbstractBulkOperationSpec<T, UpdateSpec<T>> {
      */
     @Override
     public int execute(EntityManager em) {
-        com.zsubera.jpa.autoconfigure.MyJpaPlusGlobalConfig config = getGlobalConfig();
-        int limit = (config != null && config.getMaxBulkOperationRows() > 0
-            && config.getMaxBulkOperationRows() < Integer.MAX_VALUE) ? config.getMaxBulkOperationRows() : -1;
-        if (limit > 0) {
-            checkRowCountBeforeExecute(em, limit, "UPDATE");
-        }
-        CriteriaUpdate<T> update = toUpdate(em);
-        if (log.isDebugEnabled()) {
-            log.debug("Executing UPDATE on {} with {} set clauses and {} conditions",
-                entityClass.getSimpleName(), setClauses.size() + expressionSetClauses.size(), conditionNodes.size());
-        }
-        var query = em.createQuery(update);
-        int updated = query.executeUpdate();
-        // ponytail: post-execute check for race condition between COUNT and UPDATE
-        if (limit > 0 && updated > limit) {
-            throw new com.zsubera.jpa.exception.MyJpaPlusException(
-                "UPDATE affected " + updated + " rows, exceeding the pre-check limit of " + limit
-                    + ". Concurrent modifications detected. Transaction will be rolled back.");
-        }
-        return updated;
+        return executeWithLimitCheck(em, "UPDATE", e -> {
+            CriteriaUpdate<T> update = toUpdate(e);
+            if (log.isDebugEnabled()) {
+                log.debug("Executing UPDATE on {} with {} set clauses and {} conditions",
+                    entityClass.getSimpleName(), setClauses.size() + expressionSetClauses.size(), conditionNodes.size());
+            }
+            return e.createQuery(update).executeUpdate();
+        });
     }
 
     @Override
@@ -311,6 +275,23 @@ public class UpdateSpec<T> extends AbstractBulkOperationSpec<T, UpdateSpec<T>> {
         if (setClauses.isEmpty() && expressionSetClauses.isEmpty()) {
             throw new IllegalStateException("At least one set() clause is required");
         }
+        CriteriaUpdate<T> update = buildCriteriaUpdate(em);
+        Predicate[] predicates = buildPredicates(update.getRoot(), em.getCriteriaBuilder());
+        if (predicates.length == 0 && !allowUnconditional) {
+            throw new IllegalStateException("No WHERE conditions specified for UPDATE operation. "
+                + "This would update ALL rows in the table. "
+                + "If unconditional update is intended, use allowUnconditional(true) then updateAll(EntityManager).");
+        }
+        if (predicates.length > 0) {
+            update.where(em.getCriteriaBuilder().and(predicates));
+        }
+        return update;
+    }
+
+    /**
+     * 构建包含 SET 子句、表达式子句和版本递增的 CriteriaUpdate（不含 WHERE 条件）。
+     */
+    private CriteriaUpdate<T> buildCriteriaUpdate(EntityManager em) {
         CriteriaBuilder cb = em.getCriteriaBuilder();
         CriteriaUpdate<T> update = cb.createCriteriaUpdate(entityClass);
         Root<T> root = update.from(entityClass);
@@ -319,15 +300,6 @@ public class UpdateSpec<T> extends AbstractBulkOperationSpec<T, UpdateSpec<T>> {
         }
         applyExpressionSetClauses(update, root, cb);
         applyVersionIncrement(update, root, cb);
-        Predicate[] predicates = buildPredicates(root, cb);
-        if (predicates.length == 0 && !allowUnconditional) {
-            throw new IllegalStateException("No WHERE conditions specified for UPDATE operation. "
-                + "This would update ALL rows in the table. "
-                + "If unconditional update is intended, use allowUnconditional(true) then updateAll(EntityManager).");
-        }
-        if (predicates.length > 0) {
-            update.where(cb.and(predicates));
-        }
         return update;
     }
 
@@ -362,12 +334,12 @@ public class UpdateSpec<T> extends AbstractBulkOperationSpec<T, UpdateSpec<T>> {
             for (java.lang.reflect.Field f : c.getDeclaredFields()) {
                 if (f.isAnnotationPresent(jakarta.persistence.Version.class)) {
                     String result = f.getName();
-                    VERSION_FIELD_CACHE.putIfAbsent(cacheKey, result);
+                    VERSION_FIELD_CACHE.put(cacheKey, result);
                     return result;
                 }
             }
         }
-        NO_VERSION_CACHE.putIfAbsent(cacheKey, Boolean.TRUE);
+        NO_VERSION_CACHE.put(cacheKey, Boolean.TRUE);
         return null;
     }
 
@@ -396,14 +368,7 @@ public class UpdateSpec<T> extends AbstractBulkOperationSpec<T, UpdateSpec<T>> {
             log.debug("Executing unconditional UPDATE on {} with {} set clauses",
                 entityClass.getSimpleName(), setClauses.size() + expressionSetClauses.size());
         }
-        CriteriaBuilder cb = em.getCriteriaBuilder();
-        CriteriaUpdate<T> update = cb.createCriteriaUpdate(entityClass);
-        Root<T> root = update.from(entityClass);
-        for (SetClause sc : setClauses) {
-            update.set(root.get(sc.fieldName), sc.value);
-        }
-        applyExpressionSetClauses(update, root, cb);
-        applyVersionIncrement(update, root, cb);
+        CriteriaUpdate<T> update = buildCriteriaUpdate(em);
         var q = em.createQuery(update);
         return q.executeUpdate();
     }
@@ -537,6 +502,10 @@ public class UpdateSpec<T> extends AbstractBulkOperationSpec<T, UpdateSpec<T>> {
         applyVersionIncrement(update, updateRoot, cb);
         update.where(InClauseBuilder.in(cb, updateRoot.get(idFieldName), ids));
         var uq = em.createQuery(update);
+        // ponytail: TOCTOU 防护——SELECT 和 UPDATE 在同一 RESOURCE_LOCAL 事务中执行。
+        // SELECT 使用 PESSIMISTIC_WRITE 锁定匹配行，事务内的 UPDATE 会等待这些行锁释放，
+        // 有效序列化 SELECT 和 UPDATE 操作。当 pessimisticLock=false 时无此保护，
+        // 并发事务可能在 SELECT 和 UPDATE 之间修改/删除行。
         int updated = uq.executeUpdate();
         // 在 UPDATE 执行后再清除持久化上下文，保留悲观锁直到操作完成
         em.clear();
@@ -574,9 +543,6 @@ public class UpdateSpec<T> extends AbstractBulkOperationSpec<T, UpdateSpec<T>> {
             }
             return false;
         });
-        if (NUMERIC_FIELD_CACHE.size() > MAX_CACHE_SIZE) {
-            evictCacheIfNeeded(NUMERIC_FIELD_CACHE);
-        }
         if (!isNumeric) {
             // 尝试获取字段类型用于错误消息
             String fieldType = "unknown";
