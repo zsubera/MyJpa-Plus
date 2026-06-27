@@ -5,7 +5,11 @@
 
 ## [未发布]
 
+## [1.3.0] - 2026-06-28
+
 ### 新增
+- **FAQ 文档** — 新增 `docs/FAQ.md`，覆盖安装配置、查询构建、批量操作、软删除、加密脱敏、性能调优、兼容性等 30+ 常见问题
+- **数据库兼容性矩阵** — 新增 `docs/database-compatibility.md`，包含 4 种数据库 × 12 个维度的详细对比
 - **executeWithCallbacks** — `MergeSpec.executeWithCallbacks(em)` 先 flush 持久化上下文触发 JPA 生命周期回调后再执行原生 UPSERT
 - **多行 UPSERT 批处理** — `MergeSpec.executeBatch()` 自动使用 `INSERT INTO ... VALUES (...), (...) ON CONFLICT ...` 多行语法（MySQL/PostgreSQL），方言不支持时回退逐行
 - **supportsBatchUpsert()** — `DialectStrategy` 新增能力检测方法，`MergeSpec` 改用能力检查而非 try-catch
@@ -42,6 +46,8 @@
   - `PredicateHelper`、`BulkConditionSupport` 自动委托给 `Op.resolve()`
 
 ### 优化
+- **EncryptionKeyManager LRU 缓存淘汰** — 密钥缓存从 FIFO 改为 LRU 策略，新增访问时间戳追踪，多版本轮换场景下减少密钥重新派生次数
+- **SlowQueryDataSourceProxy 移除冗余锁** — `createProxy` 方法移除 `ReentrantLock`，直接使用 `SampledEvictionCache.computeIfAbsent()` 的 ConcurrentHashMap 原子性保证线程安全
 - **QuerySpec 拆分** — 从 1265 行拆分为 887 行 + 7 个辅助类
   - `QueryHavingSupport`: HAVING 条件（通用 + 类型安全聚合）
   - `QueryConditionSupport`: 协调层（子查询/JOIN/组合）
@@ -76,6 +82,7 @@
 - **or(QuerySpec) 文档改进** — Javadoc 明确说明返回 `Specification<T>` 而非 `QuerySpec<T>` 的原因，引导用户使用 `or(Consumer<OrGroup>)` 模式
 
 ### 修复
+- **EncryptConverter 测试异常类型修正** — 4 个测试断言从 `IllegalStateException` 修正为 `MyJpaPlusException`，与实际实现一致
 - **BulkOperationTemplate 迭代计数** — 修复 `executeBatchInSeparateTransactionsWithResult` 中失败批次 iteration 双重递增导致 `maxBatchIterations` 提前触发的问题
 - **MergeSpec 事务状态追踪** — 修复 `executeBatchInSeparateTransactions` 中失败回滚时 `total` 回退不一致的问题，提取 `safeRollback()` 统一异常处理
 - **MergeSpec 事务异常处理** — 修复 `executeInManagedTransaction` 中 rollback 异常可能导致递归的风险
