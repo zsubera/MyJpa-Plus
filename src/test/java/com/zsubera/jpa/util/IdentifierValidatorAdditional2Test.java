@@ -6,7 +6,7 @@ import com.zsubera.jpa.exception.MyJpaPlusException;
 import com.zsubera.jpa.spec.TestEntity;
 import org.junit.jupiter.api.Test;
 
-class IdentifierValidatorAdditionalTest2 {
+class IdentifierValidatorAdditional2Test {
 
     @Test
     void resolveTableName_withTableAnnotation() {
@@ -65,20 +65,16 @@ class IdentifierValidatorAdditionalTest2 {
 
     @Test
     void validate_homoglyphWithStrictMode_throws() {
-        boolean original = IdentifierValidator.isUnicodeIdentifiersEnabled();
-        String origStrict = System.getProperty("myjpa-plus.merge.strict-mode");
+        boolean originalUnicode = IdentifierValidator.isUnicodeIdentifiersEnabled();
+        IdentifierValidator.setStrictMode(false);
         try {
             IdentifierValidator.setUnicodeIdentifiers(true);
-            System.setProperty("myjpa-plus.merge.strict-mode", "true");
+            IdentifierValidator.setStrictMode(true);
             String homoglyph = "\u0430bc";
             assertThrows(MyJpaPlusException.class, () -> IdentifierValidator.validate(homoglyph));
         } finally {
-            IdentifierValidator.setUnicodeIdentifiers(original);
-            if (origStrict != null) {
-                System.setProperty("myjpa-plus.merge.strict-mode", origStrict);
-            } else {
-                System.clearProperty("myjpa-plus.merge.strict-mode");
-            }
+            IdentifierValidator.setUnicodeIdentifiers(originalUnicode);
+            IdentifierValidator.setStrictMode(false);
         }
     }
 }

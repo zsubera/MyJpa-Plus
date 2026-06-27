@@ -2,6 +2,7 @@ package com.zsubera.jpa.spec;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+import com.zsubera.jpa.exception.QueryBuildException;
 import jakarta.persistence.LockModeType;
 import jakarta.persistence.TypedQuery;
 import java.util.List;
@@ -260,13 +261,11 @@ class QuerySpecCoverageTest {
 
     @Test
     void testCopyInsideOrGroup() {
-        final QuerySpec<TestEntity>[] copyHolder = new QuerySpec[1];
         QuerySpec<TestEntity> qs = new QuerySpec<>();
-        qs.or(o -> {
+        assertThrows(QueryBuildException.class, () -> qs.or(o -> {
             o.eq(TestEntity::getStatus, 1);
-            copyHolder[0] = qs.copy();
-        });
-        assertNotNull(copyHolder[0]);
+            qs.copy();
+        }));
     }
 
     @Test

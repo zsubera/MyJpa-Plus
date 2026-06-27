@@ -1,7 +1,6 @@
 package com.zsubera.jpa.spec;
 
 import java.util.List;
-import java.util.Objects;
 
 /**
  * JOIN 内的 OR 条件组构建器，用于在 {@link JoinGroup} 中构建 OR 条件。
@@ -26,9 +25,9 @@ public class OrJoinGroup<T, J> implements ConditionBuilder<J, OrJoinGroup<T, J>>
     private final ConditionNode.OrNode orNode;
 
     OrJoinGroup(QuerySpec<T> root, ConditionNode.JoinNode joinNode, ConditionNode.OrNode orNode) {
-        Objects.requireNonNull(root, "root must not be null");
-        Objects.requireNonNull(joinNode, "joinNode must not be null");
-        Objects.requireNonNull(orNode, "orNode must not be null");
+        if (root == null) throw new IllegalArgumentException("root must not be null");
+        if (joinNode == null) throw new IllegalArgumentException("joinNode must not be null");
+        if (orNode == null) throw new IllegalArgumentException("orNode must not be null");
         this.orNode = orNode;
     }
 

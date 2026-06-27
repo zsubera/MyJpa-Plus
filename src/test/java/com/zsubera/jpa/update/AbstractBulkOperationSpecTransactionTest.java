@@ -3,6 +3,7 @@ package com.zsubera.jpa.update;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
+import com.zsubera.jpa.exception.MyJpaPlusException;
 import com.zsubera.jpa.spec.TestEntity;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.EntityTransaction;
@@ -31,15 +32,14 @@ class AbstractBulkOperationSpecTransactionTest {
         }
     }
 
-    // ===== JTA 环境（tx=null）成功路径 =====
+    // ===== JTA 环境（tx=null）无活动事务 =====
 
     @Test
     void testExecuteInTransactionJtaEnvironment() throws Exception {
         EntityManager em = mock(EntityManager.class);
         when(em.getTransaction()).thenReturn(null);
 
-        int result = callExecuteInTransaction(em, e -> 42);
-        assertEquals(42, result);
+        assertThrows(MyJpaPlusException.class, () -> callExecuteInTransaction(em, e -> 42));
     }
 
     // ===== JTA 环境 + TransactionRequiredException =====
