@@ -61,7 +61,8 @@ public final class EnvironmentHelper {
         String lower = profile.toLowerCase(Locale.ROOT);
         for (String p : lower.split("[,\\s]+")) {
             String trimmed = p.trim();
-            if (trimmed.startsWith("prod") || trimmed.startsWith("production")) {
+            if ("prod".equals(trimmed) || "production".equals(trimmed)
+                || trimmed.startsWith("prod-") || trimmed.startsWith("production-")) {
                 return true;
             }
         }

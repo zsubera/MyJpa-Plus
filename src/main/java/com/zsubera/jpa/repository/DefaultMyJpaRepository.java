@@ -537,6 +537,10 @@ public class DefaultMyJpaRepository<T, ID> extends SimpleJpaRepository<T, ID> im
                 ID id = (ID)util.getIdentifier(entity);
                 if (id != null) {
                     idList.add(id);
+                } else {
+                    log.warn("deleteInBatch: Could not extract ID from entity {}. "
+                        + "Entity may be detached. Load the entity within a transaction before calling deleteInBatch().",
+                        entity.getClass().getSimpleName());
                 }
             }
             if (!idList.isEmpty()) {

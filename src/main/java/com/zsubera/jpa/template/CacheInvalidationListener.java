@@ -1,6 +1,8 @@
 package com.zsubera.jpa.template;
 
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.event.EventListener;
@@ -54,6 +56,14 @@ public class CacheInvalidationListener {
     private final CacheAdapter cacheAdapter;
 
     /**
+     * 防止同一实体在同一事件中被双重驱逐的去重缓存。
+     * key = 实体名, value = 事件发布的时间戳（纳秒）
+     */
+    private final ConcurrentMap<String, Long> recentEvictions = new ConcurrentHashMap<>();
+
+    private static final long DEDUP_WINDOW_NS = 1_000_000L; // 1ms
+
+    /**
      * 创建缓存失效监听器（使用 CacheAdapter）。
      *
      * @param cacheAdapter 缓存适配器
@@ -70,12 +80,7 @@ public class CacheInvalidationListener {
      */
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onTransactionCommit(EntityModifiedEvent event) {
-        String prefix = event.getEntityName() + ":";
-        int evicted = cacheAdapter.evictByPrefix(prefix);
-        if (evicted > 0) {
-            log.debug("Cache invalidated after transaction commit: {} entries evicted for entity '{}'", evicted,
-                event.getEntityName());
-        }
+        evictByEntity(event.getEntityName(), "transaction commit");
     }
 
     /**
@@ -86,12 +91,22 @@ public class CacheInvalidationListener {
     @EventListener
     public void onEntityModified(EntityModifiedEvent event) {
         if (!org.springframework.transaction.support.TransactionSynchronizationManager.isActualTransactionActive()) {
-            String prefix = event.getEntityName() + ":";
-            int evicted = cacheAdapter.evictByPrefix(prefix);
-            if (evicted > 0) {
-                log.debug("Cache invalidated immediately (no active transaction): {} entries evicted for entity '{}'",
-                    evicted, event.getEntityName());
-            }
+            evictByEntity(event.getEntityName(), "no active transaction");
+        }
+    }
+
+    private void evictByEntity(String entityName, String reason) {
+        long now = System.nanoTime();
+        Long lastEviction = recentEvictions.get(entityName);
+        if (lastEviction != null && (now - lastEviction) < DEDUP_WINDOW_NS) {
+            log.debug("Skipping duplicate cache invalidation for entity '{}' ({})", entityName, reason);
+            return;
+        }
+        recentEvictions.put(entityName, now);
+        String prefix = entityName + ":";
+        int evicted = cacheAdapter.evictByPrefix(prefix);
+        if (evicted > 0) {
+            log.debug("Cache invalidated ({}): {} entries evicted for entity '{}'", reason, evicted, entityName);
         }
     }
 }

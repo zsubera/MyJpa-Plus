@@ -9,12 +9,16 @@ import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Function;
 
 /**
- * 基于 {@link ConcurrentHashMap} 的采样驱逐缓存。
+ * 基于 {@link ConcurrentHashMap} 的周期性驱逐缓存。
  *
  * <p>
  * 当缓存大小超过 {@code maxSize} 时，按 {@code samplingInterval} 采样检查并驱逐条目至
  * {@code maxSize × evictionTargetRatio}。使用 {@link ReentrantLock} 确保只有一个线程执行驱逐——
  * 驱逐是幂等的，其他线程跳过不等待。
+ *
+ * <p>
+ * <strong>驱逐策略：</strong>使用迭代器顺序驱逐（FIFO 语义），按 ConcurrentHashMap 内部哈希顺序
+ * 从迭代器头部开始移除。这不是真正的 LRU 或随机采样，但对于大多数缓存场景已足够。
  *
  * <p>
  * 此类型消除了 {@code keySet().toArray()} 分配（参考 {@code KeysetPaginationHelper} 的原实现），

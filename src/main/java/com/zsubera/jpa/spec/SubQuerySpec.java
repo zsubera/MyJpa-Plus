@@ -731,25 +731,26 @@ public class SubQuerySpec<S> implements ConditionalMethods<S, SubQuerySpec<S>> {
         if (fieldNames == null || fieldNames.length == 0) {
             throw new IllegalArgumentException("fieldNames must not be empty");
         }
-        if (keyword != null && !keyword.isEmpty()) {
-            String pattern = "%" + PredicateHelper.escapeLikeWildcards(keyword) + "%";
-            List<Predicate> likes = new ArrayList<>();
-            for (String fieldName : fieldNames) {
-                if (fieldName == null) {
-                    throw new IllegalArgumentException("fieldNames must not contain null elements");
-                }
-                if (!ConditionBuilder.SAFE_NESTED_FIELD_NAME_PATTERN.matcher(fieldName).matches()) {
-                    throw new IllegalArgumentException("fieldName contains invalid characters: " + fieldName);
-                }
-                String[] segments = fieldName.split("\\.");
-                for (String segment : segments) {
-                    IdentifierValidator.validateColumnName(segment);
-                }
-                likes.add(cb.like(root.get(fieldName).as(String.class), pattern, PredicateHelper.LIKE_ESCAPE_CHAR));
+        if (keyword == null || keyword.isEmpty()) {
+            throw new IllegalArgumentException("keyword must not be null or empty");
+        }
+        String pattern = "%" + PredicateHelper.escapeLikeWildcards(keyword) + "%";
+        List<Predicate> likes = new ArrayList<>();
+        for (String fieldName : fieldNames) {
+            if (fieldName == null) {
+                throw new IllegalArgumentException("fieldNames must not contain null elements");
             }
-            if (!likes.isEmpty()) {
-                predicates.add(likes.size() == 1 ? likes.get(0) : cb.or(likes.toArray(new Predicate[0])));
+            if (!ConditionBuilder.SAFE_NESTED_FIELD_NAME_PATTERN.matcher(fieldName).matches()) {
+                throw new IllegalArgumentException("fieldName contains invalid characters: " + fieldName);
             }
+            String[] segments = fieldName.split("\\.");
+            for (String segment : segments) {
+                IdentifierValidator.validateColumnName(segment);
+            }
+            likes.add(cb.like(root.get(fieldName).as(String.class), pattern, PredicateHelper.LIKE_ESCAPE_CHAR));
+        }
+        if (!likes.isEmpty()) {
+            predicates.add(likes.size() == 1 ? likes.get(0) : cb.or(likes.toArray(new Predicate[0])));
         }
         return this;
     }

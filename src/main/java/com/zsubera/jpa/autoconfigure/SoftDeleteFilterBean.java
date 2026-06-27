@@ -10,7 +10,6 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.lang.Nullable;
-import org.springframework.stereotype.Component;
 
 /**
  * 自动过滤 Bean，用于实现透明的软删除过滤。
@@ -30,8 +29,8 @@ import org.springframework.stereotype.Component;
  *
  * <p>
  * 当配置中设置 {@code auto-filter: true} 时（默认值），此 Bean 会自动激活。
+ * 由 {@link MyJpaPlusAutoConfiguration} 通过 {@code @Import} 注册，无需额外的 {@code @Component}。
  */
-@Component
 @ConditionalOnProperty(prefix = "myjpa-plus.soft-delete", name = "auto-filter", havingValue = "true",
     matchIfMissing = true)
 @EnableConfigurationProperties(MyJpaPlusProperties.class)

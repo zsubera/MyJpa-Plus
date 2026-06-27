@@ -413,6 +413,8 @@ public final class InClauseBuilder {
                 + "You can adjust the limit via -Dmyjpa-plus.in-clause-hard-limit=<value>.");
         }
         int warningThreshold = config.hardLimit() / 2;
+        // NOT IN 阈值更保守（50% vs IN 的 80%），因为 NOT IN 包含 NULL 值时语义危险
+        // （NOT IN (1, 2, NULL) 不返回任何行），且大列表的 NOT IN 查询计划更差
         if (values.size() > warningThreshold) {
             log.warn(
                 "NOT IN clause has {} values (hard limit: {}), which may cause severe database performance degradation. "

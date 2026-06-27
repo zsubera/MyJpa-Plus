@@ -628,6 +628,7 @@ public final class SoftDeleteHelper {
                 + ". Consider using softDeleteByIdsUsingEntityManager() with explicit ID lists.");
         }
         if (updated > 0) {
+            em.clear();
             publishEvent(entityClass, updated);
         }
         return updated;
@@ -678,32 +679,28 @@ public final class SoftDeleteHelper {
         ResolvedDeletedValue resolved = resolveDeletedValue(entityClass, field, annotation);
 
         jakarta.persistence.criteria.CriteriaBuilder cb = em.getCriteriaBuilder();
-        jakarta.persistence.criteria.CriteriaUpdate<T> update = cb.createCriteriaUpdate(entityClass);
-        jakarta.persistence.criteria.Root<T> root = update.from(entityClass);
-
-        // 设置软删除值
-        if (resolved.booleanField()) {
-            update.set(fieldName, Boolean.TRUE);
-        } else {
-            update.set(fieldName, (Comparable) resolved.dbValue());
-        }
 
         // 设置时间戳字段
         Field timestampField = resolveTimestampField(entityClass, annotation);
-        if (timestampField != null) {
-            update.set(annotation.deletedTimestampField(), cb.currentTimestamp());
-        }
 
-        // 按 ID 批量更新，使用 InClauseBuilder 自动分批
+        // 按 ID 批量更新，每批创建新的 CriteriaUpdate 确保 JPA 可移植性
         int batchSize = com.zsubera.jpa.util.InClauseBuilder.getMaxInClauseSize();
         String idFieldName = EntityClassResolver.resolveIdFieldName(entityClass);
         int total = 0;
         for (int i = 0; i < ids.size(); i += batchSize) {
             List<ID> batch = ids.subList(i, Math.min(i + batchSize, ids.size()));
-            update.where(root.get(idFieldName).in(batch));
-            total += em.createQuery(update).executeUpdate();
-            // 重置 WHERE 条件以供下一批使用
-            update.where(cb.conjunction());
+            jakarta.persistence.criteria.CriteriaUpdate<T> batchUpdate = cb.createCriteriaUpdate(entityClass);
+            jakarta.persistence.criteria.Root<T> batchRoot = batchUpdate.from(entityClass);
+            if (resolved.booleanField()) {
+                batchUpdate.set(fieldName, Boolean.TRUE);
+            } else {
+                batchUpdate.set(fieldName, (Comparable) resolved.dbValue());
+            }
+            if (timestampField != null) {
+                batchUpdate.set(annotation.deletedTimestampField(), cb.currentTimestamp());
+            }
+            batchUpdate.where(batchRoot.get(idFieldName).in(batch));
+            total += em.createQuery(batchUpdate).executeUpdate();
         }
 
         if (total > 0) {

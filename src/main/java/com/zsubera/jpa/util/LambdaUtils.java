@@ -179,7 +179,6 @@ public final class LambdaUtils {
             propertyName = resolveViaSerialization(fn);
         }
         IdentifierValidator.validateColumnName(propertyName);
-        CACHE.put(key, propertyName);
         return propertyName;
     }
 
@@ -333,7 +332,8 @@ public final class LambdaUtils {
 
     /** 已知的 java.lang.Object 方法名集合，避免误识别为属性访问器。 */
     private static final Set<String> OBJECT_METHODS =
-        Set.of("hashCode", "toString", "getClass", "notify", "notifyAll", "wait", "equals", "clone", "finalize");
+        Set.of("hashCode", "toString", "getClass", "notify", "notifyAll", "wait", "equals", "clone", "finalize",
+            "isEmpty", "isBlank", "isNaN", "isNull", "isPresent");
 
     /**
      * 将方法名转换为属性名。

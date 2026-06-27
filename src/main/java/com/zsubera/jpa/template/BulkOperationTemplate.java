@@ -437,7 +437,7 @@ class BulkOperationTemplate {
                     shouldContinue = false;
                 }
             } catch (RuntimeException e) {
-                failedBatchIndex = batchCount;
+                failedBatchIndex = batchCount - 1;
                 failureCause = e;
                 consecutiveFailures++;
                 log.error("Batch {} failed at batch index {} (consecutive failures: {}): {}",

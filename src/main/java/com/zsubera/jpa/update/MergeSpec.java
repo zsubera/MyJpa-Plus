@@ -40,8 +40,6 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
  *
  * <p>
  * <strong>线程安全说明：</strong>此构建器非线程安全。不要在多个线程间共享同一个 {@code MergeSpec} 实例。
- * {@code entity} 字段使用 {@code volatile} 修饰以支持与 {@code withEntity()} 的可见性保证，
- * 但 {@code conflictFields} 和 {@code updateFields} 列表不是线程安全的。
  * 如果需要在多线程环境下使用，请为每个线程创建独立的实例。
  *
  * <p>
@@ -79,7 +77,7 @@ public class MergeSpec<T> {
 
     private final Class<T> entityClass;
     private final EntityFieldExtractor<T> fieldExtractor;
-    private volatile T entity;
+    private T entity;
     private final List<String> conflictFields = new ArrayList<>();
     private final List<String> updateFields = new ArrayList<>();
     private boolean explicitUpdateFields = false;
@@ -378,8 +376,9 @@ public class MergeSpec<T> {
                 total += executeWith(em, entity, cachedStrategy);
             }
             em.flush();
-        } finally {
+        } catch (RuntimeException e) {
             em.clear();
+            throw e;
         }
         return total;
     }

@@ -191,7 +191,7 @@ final class CacheKeyBuilder {
      */
     private static void appendHashedValue(StringBuilder sb, Object value) {
         if (value instanceof String s) {
-            sb.append("S[").append(s.length()).append(":").append(hash64(s)).append("]");
+            sb.append("S[").append(s.length()).append(":").append(Long.toUnsignedString(hash64(s))).append("]");
         } else if (value instanceof Object[] arr) {
             sb.append("A[").append(arr.length).append(":").append(java.util.Arrays.deepHashCode(arr)).append("]");
         } else if (value instanceof int[] arr) {
@@ -205,7 +205,7 @@ final class CacheKeyBuilder {
                 .append(java.util.Arrays.deepHashCode(new Object[] {value})).append("]");
         } else {
             String s = String.valueOf(value);
-            sb.append("N[").append(value.getClass().getName()).append(":").append(hash64(s)).append("]");
+            sb.append("N[").append(value.getClass().getName()).append(":").append(Long.toUnsignedString(hash64(s))).append("]");
         }
     }
 

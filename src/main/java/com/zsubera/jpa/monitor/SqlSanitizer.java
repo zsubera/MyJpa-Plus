@@ -69,14 +69,14 @@ public final class SqlSanitizer {
         Pattern.compile("\\$\\$(?:[^$]+|\\$(?!\\$))*\\$\\$|\\$(\\w+)\\$(?:[^$]+|\\$(?!\\1\\$))*\\$\\1\\$",
             Pattern.CASE_INSENSITIVE);
 
-    /** Oracle Q 引用模式：q'[...]', q'(...)', q'{...}', q'<...>', q'!...!' 等。 ponytail: 使用独立模式避免 backreference 兼容性问题。 */
+    /** Oracle Q 引用模式：q'[...]', q'(...)', q'{...}', q'<...>', q'!...!' 等。 ponytail: 使用 {0,4000} 限制匹配长度防止 ReDoS。 */
     private static final Pattern Q_QUOTE_BRACKET_PATTERN =
-        Pattern.compile("q'\\[[\\s\\S]*?\\]'|q'\\([\\s\\S]*?\\)'|q'\\{[\\s\\S]*?\\}'|q'<[\\s\\S]*?>'",
+        Pattern.compile("q'\\[[\\s\\S]{0,4000}?\\]'|q'\\([\\s\\S]{0,4000}?\\)'|q'\\{[\\s\\S]{0,4000}?\\}'|q'<[\\s\\S]{0,4000}?>'",
             Pattern.CASE_INSENSITIVE);
 
-    /** Oracle Q 引用单字符分隔符模式：q'x...x' 等（排除 bracket、空白和引号） */
+    /** Oracle Q 引用单字符分隔符模式：q'x...x' 等（排除 bracket、空白和引号），长度限制 4000 */
     private static final Pattern Q_QUOTE_CHAR_PATTERN =
-        Pattern.compile("q'([^\\[({<\\s'])[\\s\\S]*?\\1'", Pattern.CASE_INSENSITIVE);
+        Pattern.compile("q'([^\\[({<\\s'])[\\s\\S]{0,4000}?\\1'", Pattern.CASE_INSENSITIVE);
 
     /**
      * 对 SQL 语句进行脱敏处理，移除可能包含敏感数据的字符串字面量和数字字面量。
@@ -130,7 +130,7 @@ public final class SqlSanitizer {
 
         while (limitMatcher.find()) {
             sb.append(sql, lastEnd, limitMatcher.start());
-            String sentinel = "\uE000PROTECTED_" + protectedParts.size() + "\uE000";
+            String sentinel = "\uE000MYJPA_PROT_" + protectedParts.size() + "\uE000";
             sb.append(sentinel);
             protectedParts.add(limitMatcher.group());
             lastEnd = limitMatcher.end();
@@ -142,7 +142,7 @@ public final class SqlSanitizer {
 
         // 恢复被保护的部分
         for (int i = 0; i < protectedParts.size(); i++) {
-            result = result.replace("\uE000PROTECTED_" + i + "\uE000", protectedParts.get(i));
+            result = result.replace("\uE000MYJPA_PROT_" + i + "\uE000", protectedParts.get(i));
         }
 
         return result;

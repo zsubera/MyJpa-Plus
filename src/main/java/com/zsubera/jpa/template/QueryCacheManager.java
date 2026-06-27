@@ -293,6 +293,9 @@ public class QueryCacheManager implements CacheAdapter {
         if (ttlSeconds < 0) {
             throw new IllegalArgumentException("ttlSeconds must not be negative, got: " + ttlSeconds);
         }
+        if (ttlSeconds == 0) {
+            return false;
+        }
         // 缓存键长度验证
         if (key.length() > MAX_KEY_LENGTH) {
             log.warn("Cache key length ({}) exceeds maximum ({}). Key rejected: {}...", key.length(), MAX_KEY_LENGTH,
@@ -492,6 +495,9 @@ public class QueryCacheManager implements CacheAdapter {
      */
     @Override
     public double getHitRate() {
+        // 刷新本地计数器确保数据最新
+        hitCount.addAndGet(localHits.getAndSet(0));
+        missCount.addAndGet(localMisses.getAndSet(0));
         long hits = hitCount.get();
         long misses = missCount.get();
         long total = hits + misses;

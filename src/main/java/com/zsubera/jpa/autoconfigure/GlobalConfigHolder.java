@@ -27,6 +27,8 @@ import org.springframework.context.ApplicationContext;
  */
 public final class GlobalConfigHolder {
 
+    private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(GlobalConfigHolder.class);
+
     private GlobalConfigHolder() {}
 
     private static final MyJpaPlusGlobalConfig DEFAULT_CONFIG = new MyJpaPlusGlobalConfig();
@@ -89,7 +91,9 @@ public final class GlobalConfigHolder {
                 bean = ctx.getBean(MyJpaPlusGlobalConfig.class);
                 cachedBean = bean;
                 return bean;
-            } catch (Exception ignored) {
+            } catch (Exception e) {
+                log.warn("Failed to lookup MyJpaPlusGlobalConfig from ApplicationContext, falling back to static config: {}",
+                    e.getMessage());
                 cachedBean = null;
             }
         }

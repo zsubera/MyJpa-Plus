@@ -117,8 +117,22 @@ final class EncryptionKeyManager {
                 return existing;
             }
             if (KEY_CACHE.size() >= MAX_KEY_CACHE_SIZE) {
-                String victim = KEY_CACHE.keySet().iterator().next();
-                KEY_CACHE.remove(victim);
+                // 保护当前版本的密钥不被淘汰
+                String currentVersion = getKeyVersion();
+                String victim = null;
+                for (String k : KEY_CACHE.keySet()) {
+                    if (!k.equals(currentVersion) && !k.equals("default")) {
+                        victim = k;
+                        break;
+                    }
+                }
+                if (victim != null) {
+                    KEY_CACHE.remove(victim);
+                } else {
+                    // 所有条目都是当前版本或 default，随机淘汰一个非 currentVersion 的
+                    String fallback = KEY_CACHE.keySet().iterator().next();
+                    KEY_CACHE.remove(fallback);
+                }
             }
             String rawKey = resolveRawKey(cacheKey);
             SecretKeySpec derived = deriveKey(rawKey);
@@ -321,12 +335,12 @@ final class EncryptionKeyManager {
         KEY_SPEC_WRITE_LOCK.lock();
         try {
             KEY_CACHE.clear();
-            keyVersionSnapshot = new KeyVersionSnapshot("v1", 0);
+            keyVersionSnapshot = new KeyVersionSnapshot(null, 0);
+            KEY_VALIDATED.set(false);
+            DEV_SALT_WARNING_LOGGED.set(false);
         } finally {
             KEY_SPEC_WRITE_LOCK.unlock();
         }
-        KEY_VALIDATED.set(false);
-        DEV_SALT_WARNING_LOGGED.set(false);
     }
 
     static void refreshKeyVersion() {
@@ -334,10 +348,10 @@ final class EncryptionKeyManager {
         try {
             KEY_CACHE.clear();
             keyVersionSnapshot = new KeyVersionSnapshot(null, 0);
+            KEY_VALIDATED.set(false);
         } finally {
             KEY_SPEC_WRITE_LOCK.unlock();
         }
-        KEY_VALIDATED.set(false);
         log.info("Encryption key version cache refreshed");
     }
 

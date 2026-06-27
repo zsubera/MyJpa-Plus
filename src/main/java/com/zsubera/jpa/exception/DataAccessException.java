@@ -15,7 +15,10 @@ import java.io.Serial;
  * </ul>
  *
  * @author Zsubera
+ * @deprecated 使用 {@link MyJpaDataAccessException} 替代，避免与
+ *   {@code org.springframework.dao.DataAccessException} 命名冲突。
  */
+@Deprecated(forRemoval = true)
 public class DataAccessException extends MyJpaPlusException {
 
     @Serial

@@ -65,9 +65,15 @@ public class IgnoreSoftDeleteAdvisor {
         MethodSignature signature = (MethodSignature)pjp.getSignature();
         Method method = signature.getMethod();
 
-        // ponytail: 采样驱逐——每 256 次调用检查缓存大小，超过上限时清空防止动态代理类名导致内存泄漏
+        // ponytail: 采样驱逐——每 256 次调用检查缓存大小，超过上限时淘汰约 25% 条目防止内存泄漏
         if ((EVICTION_COUNTER.incrementAndGet() & 255) == 0 && ANNOTATION_CACHE.size() > MAX_ANNOTATION_CACHE_SIZE) {
-            ANNOTATION_CACHE.clear();
+            int toEvict = MAX_ANNOTATION_CACHE_SIZE / 4;
+            java.util.Iterator<Method> it = ANNOTATION_CACHE.keySet().iterator();
+            while (it.hasNext() && toEvict > 0) {
+                it.next();
+                it.remove();
+                toEvict--;
+            }
         }
 
         Boolean hasAnnotation = ANNOTATION_CACHE.computeIfAbsent(method,

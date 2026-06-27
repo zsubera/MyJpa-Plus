@@ -146,14 +146,12 @@ public final class EntityClassResolver {
 
     private static Class<?> resolveThroughHierarchy(Class<?> repositoryClass) {
         for (Class<?> iface : getAllInterfaces(repositoryClass)) {
-            for (Class<?> superIface : iface.getInterfaces()) {
-                if (superIface == JpaRepository.class) {
-                    ResolvableType ifaceType = ResolvableType.forClass(repositoryClass).as(iface);
-                    if (ifaceType != ResolvableType.NONE && ifaceType.getGenerics().length > 0) {
-                        Class<?> resolved = ifaceType.resolveGeneric(0);
-                        if (resolved != null && resolved != Object.class) {
-                            return resolved;
-                        }
+            if (JpaRepository.class.isAssignableFrom(iface)) {
+                ResolvableType ifaceType = ResolvableType.forClass(repositoryClass).as(iface);
+                if (ifaceType != ResolvableType.NONE && ifaceType.getGenerics().length > 0) {
+                    Class<?> resolved = ifaceType.resolveGeneric(0);
+                    if (resolved != null && resolved != Object.class) {
+                        return resolved;
                     }
                 }
             }

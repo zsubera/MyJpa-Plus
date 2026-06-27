@@ -231,15 +231,14 @@ public class EncryptConverter implements AttributeConverter<String, String> {
         try {
             String base64Data;
             String version = null;
-            if (dbData.contains(":") && dbData.length() > 30) {
-                int colonIndex = dbData.indexOf(':');
-                version = dbData.substring(0, colonIndex);
-                if (!VERSION_PATTERN.matcher(version).matches()) {
-                    throw new MyJpaPlusException("Invalid key version prefix: '" + version
-                        + "'. Expected format: v1, v2, etc. "
-                        + "Encrypted data may be corrupted or produced by a different system.");
-                } else {
+            int colonIndex = dbData.indexOf(':');
+            if (colonIndex > 0) {
+                String candidateVersion = dbData.substring(0, colonIndex);
+                if (VERSION_PATTERN.matcher(candidateVersion).matches()) {
+                    version = candidateVersion;
                     base64Data = dbData.substring(colonIndex + 1);
+                } else {
+                    base64Data = dbData;
                 }
             } else {
                 base64Data = dbData;

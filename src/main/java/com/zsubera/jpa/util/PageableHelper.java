@@ -150,7 +150,7 @@ public final class PageableHelper {
                     + "Add --add-opens java.sql/java.sql=ALL-UNNAMED if needed.", e.getMessage());
         } catch (Exception e) {
             org.slf4j.LoggerFactory.getLogger(PageableHelper.class)
-                .debug("Could not determine fetch size from JDBC URL: {}", e.getMessage());
+                .warn("Could not determine fetch size from JDBC URL: {}", e.getMessage());
         }
         return 0;
     }

@@ -232,6 +232,9 @@ public class CteSpec {
         if (sql == null || sql.isEmpty()) {
             throw new IllegalArgumentException("sql must not be null or empty");
         }
+        if (strictMode) {
+            validateSelectOnly(sql);
+        }
         checkSqlSafety(sql, "CTE");
         CteEntry current = currentCte();
         current.sql = sql;

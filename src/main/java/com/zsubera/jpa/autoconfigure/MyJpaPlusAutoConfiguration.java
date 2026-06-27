@@ -162,10 +162,7 @@ public class MyJpaPlusAutoConfiguration {
             }
 
             // 自动预热加密密钥缓存（仅在密钥已配置时）
-            String encryptKey = System.getenv("MYJPA_ENCRYPT_KEY");
-            if (encryptKey == null || encryptKey.isEmpty()) {
-                encryptKey = System.getProperty("myjpa.encrypt.key");
-            }
+            String encryptKey = EnvironmentHelper.getEnvOrProperty("MYJPA_ENCRYPT_KEY", "myjpa.encrypt.key");
             if (encryptKey != null && !encryptKey.isEmpty()) {
                 // 启动时检查盐值配置，防止生产环境使用不安全的开发盐值
                 validateEncryptionSalt();

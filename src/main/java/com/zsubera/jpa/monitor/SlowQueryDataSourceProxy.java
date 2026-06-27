@@ -186,7 +186,6 @@ public final class SlowQueryDataSourceProxy {
 
     private static class PreparedStatementTimingHandler implements InvocationHandler {
 
-        private static final String SLOW_QUERY_MARKER = "[SLOW QUERY]";
         private final Object target;
         private final String sql;
         private final long slowQueryThresholdMs;
@@ -201,24 +200,7 @@ public final class SlowQueryDataSourceProxy {
 
         @Override
         public Object invoke(Object proxy, Method method, Object[] args) throws Throwable {
-            String name = method.getName();
-            if ("executeQuery".equals(name) || "executeUpdate".equals(name) || "execute".equals(name)
-                || "executeBatch".equals(name)) {
-                long start = System.nanoTime();
-                try {
-                    return method.invoke(target, args);
-                } finally {
-                    long elapsedNanos = System.nanoTime() - start;
-                    long elapsedMs = java.util.concurrent.TimeUnit.NANOSECONDS.toMillis(elapsedNanos);
-                    MicrometerMetrics.recordQueryDuration(name, elapsedMs);
-                    if (elapsedMs >= slowQueryThresholdMs) {
-                        String sanitizedSql = SqlSanitizer.sanitize(sql);
-                        log.warn("{} SQL execution took {} ms (threshold: {} ms) - {}", SLOW_QUERY_MARKER, elapsedMs,
-                            slowQueryThresholdMs, sanitizedSql);
-                    }
-                }
-            }
-            return method.invoke(target, args);
+            return StatementTimingDelegate.invokeTimed(target, sql, slowQueryThresholdMs, method, args);
         }
     }
 
@@ -297,7 +279,6 @@ public final class SlowQueryDataSourceProxy {
      */
     private static class StatementTimingHandler implements InvocationHandler {
 
-        private static final String SLOW_QUERY_MARKER = "[SLOW QUERY]";
         private final Object target;
         private final String sql;
         private final long slowQueryThresholdMs;
@@ -310,6 +291,19 @@ public final class SlowQueryDataSourceProxy {
 
         @Override
         public Object invoke(Object proxy, Method method, Object[] args) throws Throwable {
+            return StatementTimingDelegate.invokeTimed(target, sql, slowQueryThresholdMs, method, args);
+        }
+    }
+
+    /**
+     * 共享的计时委托逻辑，供 PreparedStatementTimingHandler 和 StatementTimingHandler 复用。
+     */
+    private static class StatementTimingDelegate {
+
+        private static final String SLOW_QUERY_MARKER = "[SLOW QUERY]";
+
+        static Object invokeTimed(Object target, String sql, long slowQueryThresholdMs, Method method,
+            Object[] args) throws Throwable {
             String name = method.getName();
             if ("executeQuery".equals(name) || "executeUpdate".equals(name) || "execute".equals(name)
                 || "executeBatch".equals(name)) {
@@ -321,8 +315,8 @@ public final class SlowQueryDataSourceProxy {
                     MicrometerMetrics.recordQueryDuration(name, elapsedMs);
                     if (elapsedMs >= slowQueryThresholdMs) {
                         String sanitizedSql = SqlSanitizer.sanitize(sql);
-                        log.warn("{} Statement execution took {} ms (threshold: {} ms) - {}", SLOW_QUERY_MARKER,
-                            elapsedMs, slowQueryThresholdMs, sanitizedSql);
+                        log.warn("{} {} execution took {} ms (threshold: {} ms) - {}", SLOW_QUERY_MARKER,
+                            name, elapsedMs, slowQueryThresholdMs, sanitizedSql);
                     }
                 }
             }

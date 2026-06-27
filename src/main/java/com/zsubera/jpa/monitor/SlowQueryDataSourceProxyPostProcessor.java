@@ -1,5 +1,6 @@
 package com.zsubera.jpa.monitor;
 
+import java.util.Set;
 import javax.sql.DataSource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -16,6 +17,9 @@ import org.springframework.lang.NonNull;
  * {@link SlowQueryDataSourceProxy#isWrapped(DataSource)} 防止双重包装。
  *
  * <p>
+ * 自动排除 Flyway/Liquibase 等迁移工具的 DataSource Bean，避免不必要的代理开销。
+ *
+ * <p>
  * <strong>自动装配：</strong>由 {@link com.zsubera.jpa.autoconfigure.MyJpaPlusAutoConfiguration}
  * 在 {@code myjpa-plus.monitoring.enabled=true} 时自动注册。
  *
@@ -25,6 +29,11 @@ import org.springframework.lang.NonNull;
 public class SlowQueryDataSourceProxyPostProcessor implements BeanPostProcessor {
 
     private static final Logger log = LoggerFactory.getLogger(SlowQueryDataSourceProxyPostProcessor.class);
+
+    /** 自动排除的 DataSource Bean 名称前缀（迁移工具使用的 DataSource）。 */
+    private static final Set<String> EXCLUDED_BEAN_NAMES = Set.of(
+        "flywayDataSource", "liquibaseDataSource",
+        "migrationDataSource", "schemaInitializerDataSource");
 
     private final long slowQueryThresholdMs;
 
@@ -39,7 +48,8 @@ public class SlowQueryDataSourceProxyPostProcessor implements BeanPostProcessor 
 
     @Override
     public Object postProcessAfterInitialization(@NonNull Object bean, @NonNull String beanName) throws BeansException {
-        if (bean instanceof DataSource ds && !SlowQueryDataSourceProxy.isWrapped(ds)) {
+        if (bean instanceof DataSource ds && !SlowQueryDataSourceProxy.isWrapped(ds)
+            && !EXCLUDED_BEAN_NAMES.contains(beanName)) {
             log.info("Wrapping DataSource '{}' with slow query proxy (threshold={} ms)", beanName,
                 slowQueryThresholdMs);
             return SlowQueryDataSourceProxy.wrap(ds, slowQueryThresholdMs);

@@ -25,7 +25,7 @@ public final class AuditUtils {
     /** 最大调用栈深度上限 */
     private static final int MAX_STACK_DEPTH_LIMIT = 20;
 
-    /** 当前配置的最大调用栈深度 */
+    /** 当前配置的最大调用栈深度（保留为 fallback，优先从 GlobalConfig 读取）。 */
     private static volatile int maxStackDepth;
 
     /** 缓存 StackWalker 实例，避免每次调用都创建新实例 */

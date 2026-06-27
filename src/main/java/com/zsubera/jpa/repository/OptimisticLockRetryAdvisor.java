@@ -11,12 +11,22 @@ import org.aspectj.lang.annotation.Aspect;
 import org.aspectj.lang.reflect.MethodSignature;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.annotation.AnnotationUtils;
 import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
+import org.springframework.transaction.TransactionStatus;
+import org.springframework.transaction.support.DefaultTransactionDefinition;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 /**
  * AOP 通知器，拦截带有 {@link RetryOnOptimisticLock} 注解的方法，在遇到 {@link OptimisticLockException} 时使用指数退避策略进行重试。
+ *
+ * <p>
+ * 每次重试在独立事务（{@code REQUIRES_NEW}）中执行，确保上一次失败的事务已回滚，
+ * L1 缓存中的过期实体被清除，重试时能读取最新数据。
  *
  * <p>
  * 示例：标注 {@code @RetryOnOptimisticLock(maxRetries = 3, backoffMs = 100)} 的方法将最多重试 3 次， 延迟分别为 100ms、200ms 和 400ms。
@@ -35,6 +45,9 @@ public class OptimisticLockRetryAdvisor {
 
     /** 所有重试的总超时限制（60 秒）。 */
     private static final long MAX_TOTAL_TIMEOUT_MS = 60_000;
+
+    @Autowired(required = false)
+    private PlatformTransactionManager transactionManager;
 
     /**
      * 拦截带有 {@link RetryOnOptimisticLock} 注解的方法，在 {@link OptimisticLockException} 时重试。
@@ -93,11 +106,13 @@ public class OptimisticLockRetryAdvisor {
         }
 
         int attempt = 0;
-        long totalElapsed = 0;
         long startTime = System.currentTimeMillis();
         while (true) {
             try {
-                return pjp.proceed();
+                if (attempt == 0) {
+                    return pjp.proceed();
+                }
+                return executeInNewTransaction(pjp);
             } catch (OptimisticLockException | ObjectOptimisticLockingFailureException ex) {
                 attempt = handleRetry(ex, attempt, maxRetries, backoffMs, startTime, method, "");
             } catch (PersistenceException ex) {
@@ -108,6 +123,30 @@ public class OptimisticLockRetryAdvisor {
                 }
             }
         }
+    }
+
+    /**
+     * 在新事务中执行连接点，确保上一次失败事务已回滚且 L1 缓存已清除。
+     * 如果事务管理器不可用或无活动事务，直接执行。
+     */
+    private Object executeInNewTransaction(ProceedingJoinPoint pjp) throws Throwable {
+        if (transactionManager != null && TransactionSynchronizationManager.isActualTransactionActive()) {
+            DefaultTransactionDefinition def = new DefaultTransactionDefinition();
+            def.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+            TransactionStatus status = transactionManager.getTransaction(def);
+            try {
+                Object result = pjp.proceed();
+                transactionManager.commit(status);
+                return result;
+            } catch (RuntimeException e) {
+                transactionManager.rollback(status);
+                throw e;
+            } catch (Throwable e) {
+                transactionManager.rollback(status);
+                throw e;
+            }
+        }
+        return pjp.proceed();
     }
 
     private int handleRetry(Exception ex, int attempt, int maxRetries, long backoffMs, long startTime,

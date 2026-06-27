@@ -186,6 +186,16 @@ public class MyJpaTemplate implements MyJpaTemplateOperations {
         }
     }
 
+    /**
+     * 设置最大查询结果数。
+     *
+     * <p>
+     * <strong>注意：</strong>此方法同时更新全局配置（{@link com.zsubera.jpa.autoconfigure.MyJpaPlusGlobalConfig}），
+     * 影响所有 {@link MyJpaTemplate} 实例。如需仅影响当前实例，请在构造后直接调用。
+     *
+     * @param maxResults 最大结果数，-1 表示不限制
+     * @throws IllegalArgumentException 如果值无效
+     */
     public void setMaxResults(int maxResults) {
         if (maxResults <= 0 && maxResults != -1) {
             throw new IllegalArgumentException("maxResults must be positive or -1 (disabled)");

@@ -72,10 +72,8 @@ public class OrGroup<T> implements ConditionBuilder<T, OrGroup<T>> {
         if (config == null) {
             throw new IllegalArgumentException("config must not be null");
         }
-        ConditionNode.JoinNode joinNode =
-            new ConditionNode.JoinNode(LambdaUtils.getPropertyName(field), ConditionNode.JoinType.INNER);
-        root.currentGroup().add(joinNode);
-        config.accept(new JoinGroup<>(root, joinNode));
+        JoinGroup<T, J> joinGroup = internalJoin(field, ConditionNode.JoinType.INNER);
+        config.accept(joinGroup);
         return this;
     }
 
@@ -95,10 +93,8 @@ public class OrGroup<T> implements ConditionBuilder<T, OrGroup<T>> {
         if (config == null) {
             throw new IllegalArgumentException("config must not be null");
         }
-        ConditionNode.JoinNode joinNode =
-            new ConditionNode.JoinNode(LambdaUtils.getPropertyName(field), ConditionNode.JoinType.LEFT);
-        root.currentGroup().add(joinNode);
-        config.accept(new JoinGroup<>(root, joinNode));
+        JoinGroup<T, J> joinGroup = internalJoin(field, ConditionNode.JoinType.LEFT);
+        config.accept(joinGroup);
         return this;
     }
 }
