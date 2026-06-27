@@ -182,7 +182,7 @@ class ExceptionSubclassesTest {
     @Test
     void myJpaPlusException_errorCodeEnum_allValues() {
         MyJpaPlusException.ErrorCode[] values = MyJpaPlusException.ErrorCode.values();
-        assertEquals(8, values.length);
+        assertEquals(7, values.length);
         assertNotNull(MyJpaPlusException.ErrorCode.GENERAL);
         assertNotNull(MyJpaPlusException.ErrorCode.CONFIGURATION);
         assertNotNull(MyJpaPlusException.ErrorCode.QUERY_BUILD);

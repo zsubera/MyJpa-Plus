@@ -26,7 +26,7 @@ cd myjpa-plus
 # 完整验证（CI 使用）
 ./mvnw clean verify -Dgpg.skip=true -Ddependency-check.skip=true
 
-# 集成测试（需要 Docker）
+# 集成测试（需要 Docker 环境）
 ./mvnw test -Dgroups=integration
 
 # 安装到本地仓库
@@ -36,7 +36,7 @@ cd myjpa-plus
 ## 包结构
 
 | 包 | 职责 |
-|---|---|---|
+|---|---|
 | `com.zsubera.jpa.spec` | 核心查询构建：QuerySpec、ConditionBuilder（含子接口）、ConditionNode、NodeResolver、CteSpec、QueryAggregates |
 | `com.zsubera.jpa.update` | 批量操作：UpdateSpec、DeleteSpec、MergeSpec、DialectDetector、DialectStrategy、EntityFieldExtractor、MysqlDialect、PostgresDialect、OracleDialect、SqlServerDialect |
 | `com.zsubera.jpa.repository` | 扩展 Repository：MyJpaRepository、DefaultMyJpaRepository、SoftDeleteContext、EntityManagerHelper、EntityManagerResolver、OptimisticLockRetryAdvisor、IgnoreSoftDeleteAdvisor |

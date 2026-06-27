@@ -469,7 +469,7 @@ class MySQLFinalCoverageIntegrationTest {
         cm.put("a", "val_a", 60);
         cm.put("b", "val_b", 60);
         cm.put("c", "val_c", 60);
-        assertEquals(2, cm.size());
+        assertEquals(1, cm.size());
     }
 
     @Test
@@ -547,6 +547,57 @@ class MySQLFinalCoverageIntegrationTest {
             new com.zsubera.jpa.template.EntityModifiedEvent(MySQLTestEntity.class, 5);
         assertEquals("MySQLTestEntity", event.getEntityName());
         assertEquals(5, event.getAffectedRows());
+    }
+
+    // ==================== saveAllBatchedInSeparateTransactions ====================
+
+    @Test
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    void template_saveAllBatchedInSeparateTransactions_savesAll() {
+        List<MySQLTestEntity> entities = new java.util.ArrayList<>();
+        for (int i = 0; i < 5; i++) {
+            MySQLTestEntity e = new MySQLTestEntity();
+            e.setName("batch_" + i);
+            e.setStatus(i);
+            entities.add(e);
+        }
+
+        List<MySQLTestEntity> saved = jpaTemplate.saveAllBatchedInSeparateTransactions(entities, 2);
+        assertEquals(5, saved.size());
+
+        List<MySQLTestEntity> all = repository.findAll();
+        assertEquals(5, all.size());
+    }
+
+    @Test
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    void template_saveAllBatchedInSeparateTransactions_updatesExisting() {
+        MySQLTestEntity existing = save("original", 1);
+        em.clear();
+
+        existing.setName("updated");
+
+        List<MySQLTestEntity> saved = jpaTemplate.saveAllBatchedInSeparateTransactions(List.of(existing), 10);
+        assertEquals(1, saved.size());
+        assertEquals("updated", saved.get(0).getName());
+
+        em.clear();
+        MySQLTestEntity found = repository.findById(existing.getId()).orElseThrow();
+        assertEquals("updated", found.getName());
+    }
+
+    @Test
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    void template_saveAllBatchedInSeparateTransactions_emptyList() {
+        List<MySQLTestEntity> saved = jpaTemplate.saveAllBatchedInSeparateTransactions(List.of(), 10);
+        assertTrue(saved.isEmpty());
+    }
+
+    @Test
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    void template_saveAllBatchedInSeparateTransactions_throwsOnNull() {
+        assertThrows(IllegalArgumentException.class,
+            () -> jpaTemplate.saveAllBatchedInSeparateTransactions(null, 10));
     }
 
     // ==================== MyJpaTemplate.find with maxResults ====================

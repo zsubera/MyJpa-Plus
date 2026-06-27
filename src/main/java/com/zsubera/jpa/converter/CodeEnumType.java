@@ -101,6 +101,8 @@ public class CodeEnumType implements UserType<Object>, DynamicParameterizedType 
             this.sqlType = Types.BIGINT;
         } else if (fieldType == int.class || fieldType == Integer.class) {
             this.sqlType = Types.INTEGER;
+        } else if (fieldType == char.class || fieldType == Character.class) {
+            this.sqlType = Types.CHAR;
         } else {
             throw new HibernateException(
                 "Unsupported @CodeEnumValue field type '" + fieldType.getName() + "' in enum "

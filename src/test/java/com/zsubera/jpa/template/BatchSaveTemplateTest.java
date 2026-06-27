@@ -254,8 +254,8 @@ class BatchSaveTemplateTest {
                 java.lang.reflect.Field cacheField = BatchSaveTemplate.class.getDeclaredField("ID_METHOD_CACHE");
                 cacheField.setAccessible(true);
                 @SuppressWarnings("unchecked")
-                java.util.concurrent.ConcurrentMap<java.lang.Class<?>, java.lang.reflect.Method> cache =
-                    (java.util.concurrent.ConcurrentMap<java.lang.Class<?>, java.lang.reflect.Method>)cacheField
+                com.zsubera.jpa.util.SampledEvictionCache<java.lang.Class<?>, java.lang.reflect.Method> cache =
+                    (com.zsubera.jpa.util.SampledEvictionCache<java.lang.Class<?>, java.lang.reflect.Method>)cacheField
                         .get(null);
                 cache.put(e.getClass(), e.getClass().getMethod("getId"));
             } catch (Exception ignored) {
@@ -321,11 +321,11 @@ class BatchSaveTemplateTest {
 
     @Test
     void testSaveAllBatchedNewEntityViaReflection() {
-        java.util.concurrent.ConcurrentMap<Class<?>, java.lang.reflect.Method> cache;
+        com.zsubera.jpa.util.SampledEvictionCache<Class<?>, java.lang.reflect.Method> cache;
         try {
             java.lang.reflect.Field cacheField = BatchSaveTemplate.class.getDeclaredField("ID_METHOD_CACHE");
             cacheField.setAccessible(true);
-            cache = (java.util.concurrent.ConcurrentMap<Class<?>, java.lang.reflect.Method>)cacheField.get(null);
+            cache = (com.zsubera.jpa.util.SampledEvictionCache<Class<?>, java.lang.reflect.Method>)cacheField.get(null);
         } catch (Exception e) {
             throw new RuntimeException(e);
         }
@@ -349,11 +349,11 @@ class BatchSaveTemplateTest {
         TestEntity saved = repository.saveAndFlush(existing);
         entityManager.clear();
 
-        java.util.concurrent.ConcurrentMap<Class<?>, java.lang.reflect.Method> cache;
+        com.zsubera.jpa.util.SampledEvictionCache<Class<?>, java.lang.reflect.Method> cache;
         try {
             java.lang.reflect.Field cacheField = BatchSaveTemplate.class.getDeclaredField("ID_METHOD_CACHE");
             cacheField.setAccessible(true);
-            cache = (java.util.concurrent.ConcurrentMap<Class<?>, java.lang.reflect.Method>)cacheField.get(null);
+            cache = (com.zsubera.jpa.util.SampledEvictionCache<Class<?>, java.lang.reflect.Method>)cacheField.get(null);
         } catch (Exception e) {
             throw new RuntimeException(e);
         }
@@ -370,11 +370,11 @@ class BatchSaveTemplateTest {
 
     @Test
     void testSaveAllBatchedIdMethodCacheEviction() {
-        java.util.concurrent.ConcurrentMap<Class<?>, java.lang.reflect.Method> cache;
+        com.zsubera.jpa.util.SampledEvictionCache<Class<?>, java.lang.reflect.Method> cache;
         try {
             java.lang.reflect.Field cacheField = BatchSaveTemplate.class.getDeclaredField("ID_METHOD_CACHE");
             cacheField.setAccessible(true);
-            cache = (java.util.concurrent.ConcurrentMap<Class<?>, java.lang.reflect.Method>)cacheField.get(null);
+            cache = (com.zsubera.jpa.util.SampledEvictionCache<Class<?>, java.lang.reflect.Method>)cacheField.get(null);
         } catch (Exception e) {
             throw new RuntimeException(e);
         }

@@ -315,7 +315,7 @@ class SqlSlowQueryInterceptorTest {
 
         // Set micrometerCache to null (simulating not available) to skip re-checking
         java.lang.reflect.Field cacheField =
-            getInnerClass("PreparedStatementTimingHandler").getDeclaredField("micrometerCache");
+            getInnerClass("MicrometerMetrics").getDeclaredField("micrometerCache");
         cacheField.setAccessible(true);
         Object previousCache = cacheField.get(null);
         cacheField.set(null, null);
@@ -385,7 +385,7 @@ class SqlSlowQueryInterceptorTest {
 
     private void resetMicrometerState() {
         try {
-            Class<?> handlerClass = getInnerClass("PreparedStatementTimingHandler");
+            Class<?> handlerClass = getInnerClass("MicrometerMetrics");
             java.lang.reflect.Field f = handlerClass.getDeclaredField("micrometerCache");
             f.setAccessible(true);
             f.set(null, null);

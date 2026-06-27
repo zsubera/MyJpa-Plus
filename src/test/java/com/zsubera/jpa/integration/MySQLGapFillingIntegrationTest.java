@@ -664,7 +664,7 @@ class MySQLGapFillingIntegrationTest {
 
     @Test
     void querySpec_timeoutExceedsMax_throws() {
-        assertThrows(IllegalArgumentException.class, () -> new QuerySpec<MySQLTestEntity>().timeout(999));
+        assertThrows(IllegalArgumentException.class, () -> new QuerySpec<MySQLTestEntity>().timeout(86401));
     }
 
     @Test

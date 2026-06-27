@@ -13,9 +13,14 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.TestPropertySource;
 
 @Tag("integration")
-@SpringBootTest(classes = PgTestApplication.class)
-@TestPropertySource(properties = {"myjpa.encrypt.key=1234567890123456", "myjpa.encrypt.salt=test-salt-value", "myjpa-plus.encrypt.skip-salt-check=true"})
-class EncryptIntegrationTest {
+@SpringBootTest
+@TestPropertySource(properties = {
+    "spring.datasource.url=jdbc:mysql://localhost:3306/test?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC",
+    "spring.datasource.username=root", "spring.datasource.password=1351.zhong",
+    "spring.datasource.driver-class-name=com.mysql.cj.jdbc.Driver",
+    "spring.jpa.database-platform=org.hibernate.dialect.MySQLDialect", "spring.jpa.hibernate.ddl-auto=create",
+    "myjpa.encrypt.key=1234567890123456", "myjpa.encrypt.salt=test-salt-value", "myjpa-plus.encrypt.skip-salt-check=true"})
+class MySQLEncryptIntegrationTest {
 
     static {
         System.setProperty("myjpa.encrypt.key", "1234567890123456");

@@ -51,7 +51,7 @@ class CacheInvalidationListenerTest {
     @Test
     void entityModifiedEvent_fromClass() {
         EntityModifiedEvent event = new EntityModifiedEvent(String.class, 10);
-        assertEquals("java.lang.String", event.getEntityName());
+        assertEquals("String", event.getEntityName());
         assertEquals(10, event.getAffectedRows());
     }
 

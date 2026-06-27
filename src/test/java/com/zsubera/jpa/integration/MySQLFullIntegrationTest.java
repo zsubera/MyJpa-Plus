@@ -1257,6 +1257,89 @@ class MySQLFullIntegrationTest {
         assertEquals(3, result.size());
     }
 
+    // ==================== MyJpaRepository Lambda API ====================
+
+    @Test
+    void repository_findAll_lambda() {
+        save("alice", 1);
+        save("bob", 2);
+
+        List<MySQLTestEntity> result = repository.findAll(s -> s.eq(MySQLTestEntity::getName, "alice"));
+        assertEquals(1, result.size());
+        assertEquals("alice", result.get(0).getName());
+    }
+
+    @Test
+    void repository_findAll_lambda_withSort() {
+        save("b", 2);
+        save("a", 1);
+
+        List<MySQLTestEntity> result = repository.findAll(s -> s.eq(MySQLTestEntity::getStatus, 1),
+            org.springframework.data.domain.Sort.by(org.springframework.data.domain.Sort.Direction.DESC, "name"));
+        assertEquals(1, result.size());
+    }
+
+    @Test
+    void repository_findOne_lambda() {
+        save("alice", 1);
+        save("bob", 2);
+
+        java.util.Optional<MySQLTestEntity> result = repository.findOne(s -> s.eq(MySQLTestEntity::getName, "alice"));
+        assertTrue(result.isPresent());
+        assertEquals("alice", result.get().getName());
+    }
+
+    @Test
+    void repository_count_lambda() {
+        save("alice", 1);
+        save("bob", 1);
+        save("charlie", 2);
+
+        long count = repository.count(s -> s.eq(MySQLTestEntity::getStatus, 1));
+        assertEquals(2, count);
+    }
+
+    @Test
+    void repository_exists_lambda() {
+        save("alice", 1);
+
+        boolean exists = repository.exists(s -> s.eq(MySQLTestEntity::getName, "alice"));
+        assertTrue(exists);
+
+        boolean notExists = repository.exists(s -> s.eq(MySQLTestEntity::getName, "nobody"));
+        assertFalse(notExists);
+    }
+
+    @Test
+    void repository_update_lambda() {
+        save("alice", 1);
+
+        int affected = jpaTemplate.execute(
+            jpaTemplate.update(MySQLTestEntity.class)
+                .set(MySQLTestEntity::getStatus, 99)
+                .eq(MySQLTestEntity::getName, "alice"));
+        assertEquals(1, affected);
+        em.flush();
+        em.clear();
+
+        MySQLTestEntity updated = repository.findByName("alice").orElseThrow();
+        assertEquals(99, updated.getStatus());
+    }
+
+    @Test
+    void repository_delete_lambda() {
+        save("alice", 1);
+
+        int affected = jpaTemplate.execute(
+            jpaTemplate.delete(MySQLTestEntity.class)
+                .eq(MySQLTestEntity::getName, "alice"));
+        assertEquals(1, affected);
+        em.flush();
+        em.clear();
+
+        assertTrue(repository.findAll().isEmpty());
+    }
+
     // ==================== Helper methods ====================
 
     private MySQLTestEntity save(String name, Integer status) {

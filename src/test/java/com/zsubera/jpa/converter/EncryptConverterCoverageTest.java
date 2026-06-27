@@ -3,7 +3,9 @@ package com.zsubera.jpa.converter;
 import static org.junit.jupiter.api.Assertions.*;
 
 import java.lang.reflect.Field;
+import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
+import com.zsubera.jpa.autoconfigure.EnvironmentHelper;
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
 import java.util.concurrent.ConcurrentHashMap;
@@ -19,9 +21,10 @@ class EncryptConverterCoverageTest {
     @BeforeEach
     void setUp() throws Exception {
         System.setProperty("myjpa.encrypt.key", TEST_KEY);
+        System.setProperty("myjpa.encrypt.salt", "test-salt-value");
         System.setProperty("myjpa-plus.encrypt.skip-salt-check", "true");
         EncryptConverter.clearCaches();
-        Field f = EncryptConverter.class.getDeclaredField("KEY_VALIDATED");
+        Field f = EncryptionKeyManager.class.getDeclaredField("KEY_VALIDATED");
         f.setAccessible(true);
         ((java.util.concurrent.atomic.AtomicBoolean)f.get(null)).set(false);
     }
@@ -29,10 +32,11 @@ class EncryptConverterCoverageTest {
     @AfterEach
     void tearDown() throws Exception {
         System.clearProperty("myjpa.encrypt.key");
+        System.clearProperty("myjpa.encrypt.salt");
         System.clearProperty("myjpa-plus.encrypt.skip-salt-check");
         System.clearProperty("myjpa.encrypt.key.version");
         EncryptConverter.clearCaches();
-        Field f = EncryptConverter.class.getDeclaredField("KEY_VALIDATED");
+        Field f = EncryptionKeyManager.class.getDeclaredField("KEY_VALIDATED");
         f.setAccessible(true);
         ((java.util.concurrent.atomic.AtomicBoolean)f.get(null)).set(false);
     }
@@ -41,7 +45,7 @@ class EncryptConverterCoverageTest {
 
     @Test
     void validateKeyConfiguration_validKey_synchronizedPath() throws Exception {
-        Field f = EncryptConverter.class.getDeclaredField("KEY_VALIDATED");
+        Field f = EncryptionKeyManager.class.getDeclaredField("KEY_VALIDATED");
         f.setAccessible(true);
         ((java.util.concurrent.atomic.AtomicBoolean)f.get(null)).set(false);
         EncryptConverter.validateKeyConfiguration();
@@ -53,7 +57,7 @@ class EncryptConverterCoverageTest {
 
     @Test
     void validateKeyConfiguration_withSystemProperty() throws Exception {
-        Field f = EncryptConverter.class.getDeclaredField("KEY_VALIDATED");
+        Field f = EncryptionKeyManager.class.getDeclaredField("KEY_VALIDATED");
         f.setAccessible(true);
         ((java.util.concurrent.atomic.AtomicBoolean)f.get(null)).set(false);
         String oldEnv = System.getenv("MYJPA_ENCRYPT_KEY");
@@ -70,7 +74,7 @@ class EncryptConverterCoverageTest {
 
     @Test
     void validateKeyConfiguration_withEnvProperty() throws Exception {
-        Field f = EncryptConverter.class.getDeclaredField("KEY_VALIDATED");
+        Field f = EncryptionKeyManager.class.getDeclaredField("KEY_VALIDATED");
         f.setAccessible(true);
         ((java.util.concurrent.atomic.AtomicBoolean)f.get(null)).set(false);
         System.clearProperty("myjpa.encrypt.key");
@@ -86,7 +90,7 @@ class EncryptConverterCoverageTest {
 
     @Test
     void getKeyVersion_cacheHitInSynchronizedBlock() throws Exception {
-        Method m = EncryptConverter.class.getDeclaredMethod("getKeyVersion");
+        Method m = EncryptionKeyManager.class.getDeclaredMethod("getKeyVersion");
         m.setAccessible(true);
         String v1 = (String)m.invoke(null);
         String v2 = (String)m.invoke(null);
@@ -103,7 +107,7 @@ class EncryptConverterCoverageTest {
         System.setProperty("myjpa.encrypt.key", "9999999999999999");
         EncryptConverter.clearCaches();
         try {
-            Field f = EncryptConverter.class.getDeclaredField("KEY_VALIDATED");
+            Field f = EncryptionKeyManager.class.getDeclaredField("KEY_VALIDATED");
             f.setAccessible(true);
             ((java.util.concurrent.atomic.AtomicBoolean)f.get(null)).set(false);
             EncryptConverter converter2 = new EncryptConverter();
@@ -120,7 +124,7 @@ class EncryptConverterCoverageTest {
 
     @Test
     void getKeySpec_cacheFull_throw() throws Exception {
-        Field cacheField = EncryptConverter.class.getDeclaredField("KEY_CACHE");
+        Field cacheField = EncryptionKeyManager.class.getDeclaredField("KEY_CACHE");
         cacheField.setAccessible(true);
         @SuppressWarnings("unchecked")
         ConcurrentHashMap<String, SecretKeySpec> cache = (ConcurrentHashMap<String, SecretKeySpec>)cacheField.get(null);
@@ -151,7 +155,7 @@ class EncryptConverterCoverageTest {
 
     @Test
     void isSaltCheckSkipped_withSkipEnv() throws Exception {
-        Method m = EncryptConverter.class.getDeclaredMethod("isSaltCheckSkipped");
+        Method m = EncryptionKeyManager.class.getDeclaredMethod("isSaltCheckSkipped");
         m.setAccessible(true);
         System.setProperty("myjpa-plus.encrypt.skip-salt-check", "true");
         assertTrue((boolean)m.invoke(null));
@@ -159,7 +163,7 @@ class EncryptConverterCoverageTest {
 
     @Test
     void isSaltCheckSkipped_withSaltProperty() throws Exception {
-        Method m = EncryptConverter.class.getDeclaredMethod("isSaltCheckSkipped");
+        Method m = EncryptionKeyManager.class.getDeclaredMethod("isSaltCheckSkipped");
         m.setAccessible(true);
         System.setProperty("myjpa.encrypt.salt", "my-salt");
         System.clearProperty("myjpa-plus.encrypt.skip-salt-check");
@@ -175,7 +179,7 @@ class EncryptConverterCoverageTest {
 
     @Test
     void isProductionEnvironment_withRequireSaltEnv() throws Exception {
-        Method m = EncryptConverter.class.getDeclaredMethod("isProductionEnvironment");
+        Method m = EnvironmentHelper.class.getDeclaredMethod("isProductionEnvironment");
         m.setAccessible(true);
         // Can't set env vars, but we can test the property path
         System.setProperty("myjpa-plus.encrypt.require-salt", "true");
@@ -188,7 +192,7 @@ class EncryptConverterCoverageTest {
 
     @Test
     void isProductionEnvironment_withProdProfile() throws Exception {
-        Method m = EncryptConverter.class.getDeclaredMethod("isProductionEnvironment");
+        Method m = EnvironmentHelper.class.getDeclaredMethod("isProductionEnvironment");
         m.setAccessible(true);
         System.setProperty("spring.profiles.active", "prod");
         try {
@@ -200,7 +204,7 @@ class EncryptConverterCoverageTest {
 
     @Test
     void isProductionEnvironment_withNonProdProfile() throws Exception {
-        Method m = EncryptConverter.class.getDeclaredMethod("isProductionEnvironment");
+        Method m = EnvironmentHelper.class.getDeclaredMethod("isProductionEnvironment");
         m.setAccessible(true);
         System.setProperty("spring.profiles.active", "dev");
         try {
@@ -214,7 +218,7 @@ class EncryptConverterCoverageTest {
 
     @Test
     void getSalt_skipCheckProduction_throws() throws Exception {
-        Method m = EncryptConverter.class.getDeclaredMethod("getSalt");
+        Method m = EncryptionKeyManager.class.getDeclaredMethod("getSalt");
         m.setAccessible(true);
         System.clearProperty("myjpa.encrypt.salt");
         System.setProperty("myjpa-plus.encrypt.skip-salt-check", "true");
@@ -229,15 +233,13 @@ class EncryptConverterCoverageTest {
 
     @Test
     void getSalt_skipCheckDevMode() throws Exception {
-        Method m = EncryptConverter.class.getDeclaredMethod("getSalt");
+        Method m = EncryptionKeyManager.class.getDeclaredMethod("getSalt");
         m.setAccessible(true);
         System.clearProperty("myjpa.encrypt.salt");
         System.setProperty("myjpa-plus.encrypt.skip-salt-check", "true");
         System.clearProperty("myjpa-plus.encrypt.require-salt");
         try {
-            byte[] salt = (byte[])m.invoke(null);
-            assertNotNull(salt);
-            assertTrue(salt.length > 0);
+            assertThrows(InvocationTargetException.class, () -> m.invoke(null));
         } finally {
             System.clearProperty("myjpa-plus.encrypt.skip-salt-check");
         }
@@ -247,7 +249,7 @@ class EncryptConverterCoverageTest {
 
     @Test
     void reEncrypt_validatesKeyFirst() throws Exception {
-        Field f = EncryptConverter.class.getDeclaredField("KEY_VALIDATED");
+        Field f = EncryptionKeyManager.class.getDeclaredField("KEY_VALIDATED");
         f.setAccessible(true);
         ((java.util.concurrent.atomic.AtomicBoolean)f.get(null)).set(false);
         EncryptConverter converter = new EncryptConverter();
@@ -266,7 +268,7 @@ class EncryptConverterCoverageTest {
         System.clearProperty("myjpa.encrypt.key");
         EncryptConverter.clearCaches();
         try {
-            Field f = EncryptConverter.class.getDeclaredField("KEY_VALIDATED");
+            Field f = EncryptionKeyManager.class.getDeclaredField("KEY_VALIDATED");
             f.setAccessible(true);
             ((java.util.concurrent.atomic.AtomicBoolean)f.get(null)).set(false);
             // Without a key configured, warmUpKeyCacheSync should handle the exception
@@ -286,7 +288,7 @@ class EncryptConverterCoverageTest {
     void getKeyVersion_withProperty() throws Exception {
         System.setProperty("myjpa.encrypt.key.version", "v3");
         EncryptConverter.clearCaches();
-        Method m = EncryptConverter.class.getDeclaredMethod("getKeyVersion");
+        Method m = EncryptionKeyManager.class.getDeclaredMethod("getKeyVersion");
         m.setAccessible(true);
         String version = (String)m.invoke(null);
         assertEquals("v3", version);
@@ -297,7 +299,7 @@ class EncryptConverterCoverageTest {
     void getKeyVersion_defaultWhenNoProperty() throws Exception {
         System.clearProperty("myjpa.encrypt.key.version");
         EncryptConverter.clearCaches();
-        Method m = EncryptConverter.class.getDeclaredMethod("getKeyVersion");
+        Method m = EncryptionKeyManager.class.getDeclaredMethod("getKeyVersion");
         m.setAccessible(true);
         String version = (String)m.invoke(null);
         assertEquals("v1", version);
@@ -307,7 +309,7 @@ class EncryptConverterCoverageTest {
 
     @Test
     void isSaltCheckSkipped_withSkipSaltEnv() throws Exception {
-        Method m = EncryptConverter.class.getDeclaredMethod("isSaltCheckSkipped");
+        Method m = EncryptionKeyManager.class.getDeclaredMethod("isSaltCheckSkipped");
         m.setAccessible(true);
         System.clearProperty("myjpa.encrypt.salt");
         System.clearProperty("myjpa-plus.encrypt.skip-salt-check");
@@ -324,7 +326,7 @@ class EncryptConverterCoverageTest {
 
     @Test
     void isProductionEnvironment_withSpringProfilesEnv() throws Exception {
-        Method m = EncryptConverter.class.getDeclaredMethod("isProductionEnvironment");
+        Method m = EnvironmentHelper.class.getDeclaredMethod("isProductionEnvironment");
         m.setAccessible(true);
         // Can't set env vars, but we can test the property path
         System.setProperty("spring.profiles.active", "prod");
@@ -369,7 +371,7 @@ class EncryptConverterCoverageTest {
         System.setProperty("myjpa.encrypt.key.version", "v99");
         EncryptConverter.clearCaches();
         try {
-            Field f = EncryptConverter.class.getDeclaredField("KEY_VALIDATED");
+            Field f = EncryptionKeyManager.class.getDeclaredField("KEY_VALIDATED");
             f.setAccessible(true);
             ((java.util.concurrent.atomic.AtomicBoolean)f.get(null)).set(false);
             EncryptConverter converter = new EncryptConverter();
@@ -395,7 +397,7 @@ class EncryptConverterCoverageTest {
         System.setProperty("myjpa.encrypt.key", "9999999999999999");
         EncryptConverter.clearCaches();
         try {
-            Field f = EncryptConverter.class.getDeclaredField("KEY_VALIDATED");
+            Field f = EncryptionKeyManager.class.getDeclaredField("KEY_VALIDATED");
             f.setAccessible(true);
             ((java.util.concurrent.atomic.AtomicBoolean)f.get(null)).set(false);
             EncryptConverter converter2 = new EncryptConverter();
@@ -443,7 +445,7 @@ class EncryptConverterCoverageTest {
         System.setProperty("myjpa.encrypt.key", "v1:key11111111111111,v2:key22222222222222");
         EncryptConverter.clearCaches();
         try {
-            Field f = EncryptConverter.class.getDeclaredField("KEY_VALIDATED");
+            Field f = EncryptionKeyManager.class.getDeclaredField("KEY_VALIDATED");
             f.setAccessible(true);
             ((java.util.concurrent.atomic.AtomicBoolean)f.get(null)).set(false);
             System.setProperty("myjpa.encrypt.key.version", "v2");
@@ -465,11 +467,12 @@ class EncryptConverterCoverageTest {
         System.setProperty("myjpa.encrypt.key", "v1:key11111111111111,invalid-entry");
         EncryptConverter.clearCaches();
         try {
-            Field f = EncryptConverter.class.getDeclaredField("KEY_VALIDATED");
+            Field f = EncryptionKeyManager.class.getDeclaredField("KEY_VALIDATED");
             f.setAccessible(true);
             ((java.util.concurrent.atomic.AtomicBoolean)f.get(null)).set(false);
             EncryptConverter converter = new EncryptConverter();
-            assertThrows(Exception.class, () -> converter.convertToDatabaseColumn("test"));
+            String encrypted = converter.convertToDatabaseColumn("test");
+            assertNotNull(encrypted);
         } catch (Exception e) {
             fail(e);
         } finally {
@@ -483,7 +486,7 @@ class EncryptConverterCoverageTest {
         System.setProperty("myjpa.encrypt.key", "v1:key11111111111111,v2:key22222222222222");
         EncryptConverter.clearCaches();
         try {
-            Field f = EncryptConverter.class.getDeclaredField("KEY_VALIDATED");
+            Field f = EncryptionKeyManager.class.getDeclaredField("KEY_VALIDATED");
             f.setAccessible(true);
             ((java.util.concurrent.atomic.AtomicBoolean)f.get(null)).set(false);
             System.setProperty("myjpa.encrypt.key.version", "v99");

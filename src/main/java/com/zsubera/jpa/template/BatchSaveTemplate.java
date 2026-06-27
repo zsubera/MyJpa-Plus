@@ -4,8 +4,7 @@ import com.zsubera.jpa.util.SampledEvictionCache;
 import jakarta.persistence.EntityManager;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.transaction.support.TransactionSynchronizationManager;
-import org.springframework.transaction.support.TransactionTemplate;
+
 
 import java.util.ArrayList;
 import java.util.List;
@@ -44,37 +43,29 @@ class BatchSaveTemplate {
 
     private final EntityManager entityManager;
     private final jakarta.persistence.EntityManagerFactory entityManagerFactory;
-    private final TransactionTemplate requiredTxTemplate;
-    private final TransactionTemplate requiresNewTxTemplate;
 
     BatchSaveTemplate(EntityManager entityManager,
         org.springframework.transaction.PlatformTransactionManager txManager) {
         this.entityManager = entityManager;
         this.entityManagerFactory = entityManager.getEntityManagerFactory();
-        this.requiredTxTemplate = new TransactionTemplate(txManager);
-        this.requiredTxTemplate.setPropagationBehavior(
-            org.springframework.transaction.TransactionDefinition.PROPAGATION_REQUIRED);
-        this.requiresNewTxTemplate = new TransactionTemplate(txManager);
-        this.requiresNewTxTemplate.setPropagationBehavior(
-            org.springframework.transaction.TransactionDefinition.PROPAGATION_REQUIRES_NEW);
     }
 
     private <R> R executeInNewTransaction(java.util.function.Function<EntityManager, R> operation) {
-        TransactionTemplate template = TransactionSynchronizationManager.isActualTransactionActive()
-            ? requiresNewTxTemplate : requiredTxTemplate;
-        return template.execute(status -> {
-            EntityManager em = entityManagerFactory.createEntityManager();
-            try {
-                R r = operation.apply(em);
-                if (status.isRollbackOnly()) {
-                    throw new org.springframework.transaction.UnexpectedRollbackException(
-                        "Transaction was unexpectedly rolled back.");
-                }
-                return r;
-            } finally {
-                em.close();
+        EntityManager em = entityManagerFactory.createEntityManager();
+        jakarta.persistence.EntityTransaction tx = em.getTransaction();
+        tx.begin();
+        try {
+            R r = operation.apply(em);
+            tx.commit();
+            return r;
+        } catch (RuntimeException e) {
+            if (tx.isActive()) {
+                tx.rollback();
             }
-        });
+            throw e;
+        } finally {
+            em.close();
+        }
     }
 
     /**

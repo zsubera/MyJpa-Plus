@@ -299,6 +299,6 @@ boolean deleted = SoftDeleteHelper.isSoftDeleted(User.class, user);
 
 见 [`docs/architecture.md`](docs/architecture.md) — 模块地图、数据流图（Lambda 查询执行、UPSERT 执行）、七层安全防御体系、线程安全性汇总表。
 
-## License
+## 许可证
 
-Apache 2.0. See [`LICENSE`](LICENSE).
+Apache 2.0。详见 [`LICENSE`](LICENSE)。

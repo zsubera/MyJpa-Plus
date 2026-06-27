@@ -7,8 +7,6 @@ import jakarta.persistence.EntityManager;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.transaction.PlatformTransactionManager;
-import org.springframework.transaction.support.TransactionSynchronizationManager;
-import org.springframework.transaction.support.TransactionTemplate;
 
 /**
  * 批量操作执行模板，封装 {@link UpdateSpec}、{@link DeleteSpec} 和 {@link MergeSpec} 的批量执行逻辑。
@@ -50,8 +48,6 @@ class BulkOperationTemplate {
     private final EntityManager entityManager;
     private final jakarta.persistence.EntityManagerFactory entityManagerFactory;
     private volatile int maxBulkOperationRows;
-    private final TransactionTemplate requiredTxTemplate;
-    private final TransactionTemplate requiresNewTxTemplate;
 
     /**
      * 创建 BulkOperationTemplate 实例。
@@ -65,12 +61,6 @@ class BulkOperationTemplate {
         this.entityManager = entityManager;
         this.entityManagerFactory = entityManager.getEntityManagerFactory();
         this.maxBulkOperationRows = maxBulkOperationRows;
-        this.requiredTxTemplate = new TransactionTemplate(txManager);
-        this.requiredTxTemplate.setPropagationBehavior(
-            org.springframework.transaction.TransactionDefinition.PROPAGATION_REQUIRED);
-        this.requiresNewTxTemplate = new TransactionTemplate(txManager);
-        this.requiresNewTxTemplate.setPropagationBehavior(
-            org.springframework.transaction.TransactionDefinition.PROPAGATION_REQUIRES_NEW);
     }
 
     /**
@@ -86,21 +76,21 @@ class BulkOperationTemplate {
      * 避免 REQUIRES_NEW 事务中使用外层 persistence context 的 EM。
      */
     private <R> R executeInNewTransaction(java.util.function.Function<EntityManager, R> operation) {
-        TransactionTemplate template = TransactionSynchronizationManager.isActualTransactionActive()
-            ? requiresNewTxTemplate : requiredTxTemplate;
-        return template.execute(status -> {
-            EntityManager em = entityManagerFactory.createEntityManager();
-            try {
-                R r = operation.apply(em);
-                if (status.isRollbackOnly()) {
-                    throw new org.springframework.transaction.UnexpectedRollbackException(
-                        "Transaction was unexpectedly rolled back.");
-                }
-                return r;
-            } finally {
-                em.close();
+        EntityManager em = entityManagerFactory.createEntityManager();
+        jakarta.persistence.EntityTransaction tx = em.getTransaction();
+        tx.begin();
+        try {
+            R r = operation.apply(em);
+            tx.commit();
+            return r;
+        } catch (RuntimeException e) {
+            if (tx.isActive()) {
+                tx.rollback();
             }
-        });
+            throw e;
+        } finally {
+            em.close();
+        }
     }
 
     /**

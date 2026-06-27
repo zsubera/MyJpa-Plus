@@ -44,7 +44,7 @@ class MyJpaPlusAutoConfigurationTest {
     @Test
     void properties_query_setMaxResults_negative_throwsException() {
         MyJpaPlusProperties properties = new MyJpaPlusProperties();
-        assertThrows(IllegalArgumentException.class, () -> properties.getQuery().setMaxResults(-1));
+        assertThrows(IllegalArgumentException.class, () -> properties.getQuery().setMaxResults(-2));
     }
 
     @Test

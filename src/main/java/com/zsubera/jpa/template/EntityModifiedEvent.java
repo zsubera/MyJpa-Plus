@@ -39,7 +39,7 @@ public class EntityModifiedEvent extends ApplicationEvent {
      */
     public EntityModifiedEvent(Class<?> entityClass, int affectedRows) {
         super(entityClass);
-        this.entityName = entityClass.getName();
+        this.entityName = entityClass.getSimpleName();
         this.affectedRows = affectedRows;
     }
 

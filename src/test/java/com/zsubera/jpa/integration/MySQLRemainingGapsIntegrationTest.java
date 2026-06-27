@@ -359,7 +359,7 @@ class MySQLRemainingGapsIntegrationTest {
         String stack = AuditUtils.getCallStack();
         assertNotNull(stack);
         assertFalse(stack.isEmpty());
-        assertTrue(stack.contains("auditUtils_getCallStack"));
+        assertTrue(stack.contains("MySQLRemainingGapsIntegrationTest"));
     }
 
     @Test

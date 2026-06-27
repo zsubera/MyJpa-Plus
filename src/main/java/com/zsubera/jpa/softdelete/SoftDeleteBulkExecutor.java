@@ -123,7 +123,12 @@ public final class SoftDeleteBulkExecutor {
             + " rows, exceeding the pre-check limit of " + maxRows
             + ". This indicates a race condition between COUNT and UPDATE. "
             + "Consider using a transaction with pessimistic locking or softDeleteByIds() with explicit ID lists.");
-        if (updated > 0) { UpdateSpec.evictEntityCache(em, entityClass); publishEvent(entityClass, updated); }
+        if (updated > 0) {
+            em.flush();
+            em.clear();
+            UpdateSpec.evictEntityCache(em, entityClass);
+            publishEvent(entityClass, updated);
+        }
         return updated;
     }
 
@@ -153,6 +158,9 @@ public final class SoftDeleteBulkExecutor {
 
         String setClause = escapedColumn + " = :deletedValue"
             + (timestampColumn != null ? ", " + timestampColumn + " = CURRENT_TIMESTAMP" : "");
+        String whereClause = resolved.booleanField()
+            ? "(" + escapedColumn + " = FALSE OR " + escapedColumn + " IS NULL)"
+            : "(" + escapedColumn + " != :deletedValue OR " + escapedColumn + " IS NULL)";
         int batchSize = com.zsubera.jpa.util.InClauseBuilder.getMaxInClauseSize();
         int total = 0;
         for (int i = 0; i < ids.size(); i += batchSize) {
@@ -162,12 +170,18 @@ public final class SoftDeleteBulkExecutor {
                 if (j > 0) placeholders.append(", ");
                 placeholders.append(":id").append(j);
             }
-            var query = em.createNativeQuery("UPDATE " + escapedTable + " SET " + setClause + " WHERE " + escapedIdColumn + " IN (" + placeholders + ")");
+            var query = em.createNativeQuery("UPDATE " + escapedTable + " SET " + setClause
+                + " WHERE " + escapedIdColumn + " IN (" + placeholders + ") AND " + whereClause);
             query.setParameter("deletedValue", resolved.booleanField() ? Boolean.TRUE : resolved.dbValue());
             for (int j = 0; j < batch.size(); j++) query.setParameter("id" + j, batch.get(j));
             total += query.executeUpdate();
         }
-        if (total > 0) { UpdateSpec.evictEntityCache(em, entityClass); publishEvent(entityClass, total); }
+        if (total > 0) {
+            em.flush();
+            em.clear();
+            UpdateSpec.evictEntityCache(em, entityClass);
+            publishEvent(entityClass, total);
+        }
         return total;
     }
 

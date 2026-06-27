@@ -83,7 +83,7 @@ com.zsubera.jpa
 │   ├── QueryBuildException / BulkOperationException / DataAccessException
 │   └── SecurityViolationException / TimeoutException
 │
-└── util/              # 共享工具类
+    └── util/             # 共享工具类
     ├── LambdaUtils        — SerializedLambda → 属性名提取
     ├── IdentifierValidator — SQL 标识符验证 + Unicode 同形字符检测
     ├── InClauseBuilder    — IN/NOT IN 子句自动分批

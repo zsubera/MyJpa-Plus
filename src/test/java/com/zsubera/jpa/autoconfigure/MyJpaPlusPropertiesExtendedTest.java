@@ -97,7 +97,7 @@ class MyJpaPlusPropertiesExtendedTest {
     void query_setMaxResults_invalid() {
         MyJpaPlusProperties.Query q = new MyJpaPlusProperties.Query();
         assertThrows(IllegalArgumentException.class, () -> q.setMaxResults(0));
-        assertThrows(IllegalArgumentException.class, () -> q.setMaxResults(-1));
+        assertThrows(IllegalArgumentException.class, () -> q.setMaxResults(-2));
     }
 
     @Test

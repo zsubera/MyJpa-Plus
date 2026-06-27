@@ -74,7 +74,7 @@
 - `MyJpaPlusGlobalConfig.setAutoFilterEnabled()` — 请使用 `setSoftDeleteAutoFilter()`
 - `SoftDeleteContext.captureAndReset()` — 请使用 `captureAndResetForAsync()` / `withIgnore()`
 
-### Bug 修复
+### 缺陷修复
 
 - **BulkOperationTemplate 迭代计数**：修复 `executeBatchInSeparateTransactionsWithResult` 中失败批次 iteration 双重递增
 - **MergeSpec 事务管理**：提取 `safeRollback()` 方法消除重复 rollback 逻辑，防止递归风险

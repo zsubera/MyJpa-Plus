@@ -125,8 +125,8 @@ class AutoconfigureMonitoringTest {
         DataSource proxy = (DataSource)Proxy.newProxyInstance(getClass().getClassLoader(),
             new Class<?>[] {DataSource.class}, (p, m, args) -> null);
         Object result = processor.postProcessAfterInitialization(proxy, "ds");
-        // Non-DataSourceProxyHandler proxy is wrapped (not already wrapped by SlowQueryDataSourceProxy)
-        assertNotSame(proxy, result, "Should wrap non-SlowQueryDataSourceProxy JDK proxy DataSource");
+        // JDK proxy is not wrapped (skip all JDK proxies to avoid double-wrapping)
+        assertSame(proxy, result, "Should not wrap any JDK proxy DataSource");
     }
 
     @Test
