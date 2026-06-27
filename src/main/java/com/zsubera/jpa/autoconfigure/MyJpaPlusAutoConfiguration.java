@@ -312,6 +312,7 @@ public class MyJpaPlusAutoConfiguration {
         private static volatile java.lang.reflect.Method getAuthenticationMethod;
         private static volatile java.lang.reflect.Method isAuthenticatedMethod;
         private static volatile java.lang.reflect.Method getNameMethod;
+        private static volatile Class<?> anonymousAuthenticationTokenClass;
         private static volatile boolean securityChecked;
 
         @Override
@@ -327,8 +328,12 @@ public class MyJpaPlusAutoConfiguration {
                 Object auth = getAuthenticationMethod != null ? getAuthenticationMethod.invoke(context) : null;
                 if (auth != null && isAuthenticatedMethod != null) {
                     Boolean authenticated = (Boolean)isAuthenticatedMethod.invoke(auth);
-                    if (Boolean.TRUE.equals(authenticated) && getNameMethod != null) {
-                        return java.util.Optional.of((String)getNameMethod.invoke(auth));
+                    if (Boolean.TRUE.equals(authenticated) && !isAnonymousAuthentication(auth) && getNameMethod != null) {
+                        String principalName = (String)getNameMethod.invoke(auth);
+                        if (principalName != null && !principalName.isBlank()
+                            && !"anonymousUser".equalsIgnoreCase(principalName)) {
+                            return java.util.Optional.of(principalName);
+                        }
                     }
                 }
             } catch (Exception e) {
@@ -349,11 +354,22 @@ public class MyJpaPlusAutoConfiguration {
                 Class<?> authClass = Class.forName("org.springframework.security.core.Authentication");
                 isAuthenticatedMethod = authClass.getMethod("isAuthenticated");
                 getNameMethod = authClass.getMethod("getName");
+                try {
+                    anonymousAuthenticationTokenClass =
+                        Class.forName("org.springframework.security.authentication.AnonymousAuthenticationToken");
+                } catch (ClassNotFoundException ignored) {
+                    anonymousAuthenticationTokenClass = null;
+                }
                 secLog.info("Spring Security detected — AuditorAware will use SecurityContext");
             } catch (Exception e) {
                 secLog.debug("Spring Security not available on classpath");
             }
             securityChecked = true;
+        }
+
+        private static boolean isAnonymousAuthentication(Object auth) {
+            Class<?> anonymousType = anonymousAuthenticationTokenClass;
+            return anonymousType != null && anonymousType.isInstance(auth);
         }
     }
 

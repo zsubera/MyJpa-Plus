@@ -32,10 +32,12 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
  * 或 {@code entityManager.merge(entity)} 触发回调，然后 flush。或使用 JPA 标准 {@code merge()} 作为替代。
  *
  * <p>
- * 支持两种数据库方言：
+ * 支持四种数据库方言：
  * <ul>
  * <li>PostgreSQL: {@code INSERT ... ON CONFLICT (...) DO UPDATE SET ...}</li>
  * <li>MySQL: {@code INSERT ... ON DUPLICATE KEY UPDATE ...}</li>
+ * <li>Oracle: {@code MERGE INTO ... USING dual ...}</li>
+ * <li>SQL Server: {@code MERGE INTO ... USING (...) AS source ...}</li>
  * </ul>
  *
  * <p>
@@ -209,6 +211,44 @@ public class MergeSpec<T> {
         return executeWith(em, entitySnapshot);
     }
 
+    /**
+     * 执行 UPSERT 操作前先 flush 持久化上下文，触发实体上的 JPA 生命周期回调
+     * （{@code @PrePersist}、{@code @PreUpdate}、{@code @Version} 自动递增等），
+     * 然后再执行原生 UPSERT SQL。
+     *
+     * <p>
+     * 此方法解决了 {@link #execute(EntityManager)} 绕过 JPA 回调的问题。
+     * 如果实体已与持久化上下文关联（托管状态），flush 会同步所有待定的更改，
+     * 包括通过回调设置的时间戳、业务编号等字段。flush 后 UPSERT 使用更新后的字段值。
+     *
+     * <p>
+     * 如果实体是游离状态（不在持久化上下文中），则先执行 {@code em.merge(entity)}
+     * 使其变为托管状态再 flush，确保所有回调已触发。merge 后再用托管实体的最新
+     * 字段值执行原生 UPSERT。
+     *
+     * @param em 实体管理器
+     * @return 受影响的行数
+     * @throws IllegalStateException 如果未指定实体
+     */
+    public int executeWithCallbacks(EntityManager em) {
+        if (em == null) {
+            throw new IllegalArgumentException("em must not be null");
+        }
+        if (entity == null) {
+            throw new IllegalStateException("Entity must be specified via withEntity() before executing");
+        }
+        warnIdentityGeneration();
+        T entitySnapshot = this.entity;
+        // Step 1: merge if detached to make managed, then flush to trigger callbacks
+        if (!em.contains(entitySnapshot)) {
+            entitySnapshot = em.merge(entitySnapshot);
+        }
+        em.flush();
+        // Step 2: re-extract field values from the managed entity after callbacks have run
+        // so that @PrePersist/@PreUpdate-set fields (e.g. createdAt, updatedAt) are included
+        return executeWith(em, entitySnapshot);
+    }
+
     private DialectStrategy resolveDialectStrategy(EntityManager em) {
         if (customDialect != null) {
             return customDialect;
@@ -338,6 +378,10 @@ public class MergeSpec<T> {
     /**
      * 批量执行 UPSERT 操作，指定批次大小。
      *
+     * <p>
+     * 优先尝试多行 UPSERT（{@link DialectStrategy#buildBatchUpsertSql}），
+     * 如果方言不支持（抛出 {@link UnsupportedOperationException}），则回退到逐行 UPSERT。
+     *
      * @param entities 要 upsert 的实体列表
      * @param em 实体管理器
      * @param batchSize 每批处理的实体数量
@@ -354,7 +398,6 @@ public class MergeSpec<T> {
             throw new IllegalArgumentException("batchSize must be positive");
         }
         if (!TransactionSynchronizationManager.isActualTransactionActive()) {
-            // 纯 JPA 环境：回退到直接检查 EntityTransaction
             if (!isEntityTransactionActive(em)) {
                 throw new MyJpaPlusException(
                     "executeBatch requires an active transaction. Use executeBatchInTransaction() for auto-managed transactions, "
@@ -362,6 +405,15 @@ public class MergeSpec<T> {
             }
         }
         DialectStrategy cachedStrategy = resolveDialectStrategy(em);
+        if (cachedStrategy.supportsBatchUpsert()) {
+            return doBatchMultiRow(entities, em, batchSize, cachedStrategy);
+        }
+        log.debug("Dialect '{}' does not support multi-row batch UPSERT, using single-row",
+            cachedStrategy.name());
+        return doBatchSingleRow(entities, em, batchSize, cachedStrategy);
+    }
+
+    private int doBatchSingleRow(List<T> entities, EntityManager em, int batchSize, DialectStrategy strategy) {
         int total = 0;
         try {
             for (int i = 0; i < entities.size(); i++) {
@@ -373,9 +425,55 @@ public class MergeSpec<T> {
                     em.flush();
                     em.clear();
                 }
-                total += executeWith(em, entity, cachedStrategy);
+                total += executeWith(em, entity, strategy);
             }
             em.flush();
+        } catch (RuntimeException e) {
+            em.clear();
+            throw e;
+        }
+        return total;
+    }
+
+    private int doBatchMultiRow(List<T> entities, EntityManager em, int batchSize, DialectStrategy strategy) {
+        List<String> effectiveConflictFields =
+            conflictFields.isEmpty() ? fieldExtractor.resolveIdColumnNames() : new ArrayList<>(conflictFields);
+        Set<String> conflictSet = new LinkedHashSet<>(effectiveConflictFields);
+        String tableName = resolveTableName();
+        List<String> effectiveUpdateFields =
+            explicitUpdateFields ? updateFields
+                : allNonConflictColumns(fieldExtractor.extractFieldValues(entities.get(0)), conflictSet);
+        int total = 0;
+        try {
+            for (int i = 0; i < entities.size(); i += batchSize) {
+                int end = Math.min(i + batchSize, entities.size());
+                List<List<EntityFieldExtractor.EntityFieldValue>> batchFieldValues = new ArrayList<>();
+                List<String> insertColumns = null;
+                for (int j = i; j < end; j++) {
+                    T entity = entities.get(j);
+                    if (entity == null) {
+                        throw new IllegalArgumentException("entities[" + j + "] must not be null");
+                    }
+                    List<EntityFieldExtractor.EntityFieldValue> allFvs = fieldExtractor.extractFieldValues(entity);
+                    List<EntityFieldExtractor.EntityFieldValue> insertFvs = new ArrayList<>();
+                    List<String> cols = new ArrayList<>();
+                    for (EntityFieldExtractor.EntityFieldValue fv : allFvs) {
+                        if (fv.value() != null || !fieldExtractor.isAutoGeneratedId(fv.fieldName())) {
+                            cols.add(fv.columnName());
+                            insertFvs.add(fv);
+                        }
+                    }
+                    if (insertColumns == null) {
+                        insertColumns = cols;
+                    }
+                    batchFieldValues.add(insertFvs);
+                }
+                SqlWithParams batchSql = strategy.buildBatchUpsertSql(
+                    tableName, insertColumns, batchFieldValues, effectiveConflictFields, effectiveUpdateFields);
+                total += executeNativeQuery(em, batchSql.sql(), batchSql.params());
+                em.flush();
+                em.clear();
+            }
         } catch (RuntimeException e) {
             em.clear();
             throw e;
@@ -433,14 +531,19 @@ public class MergeSpec<T> {
         }
         tx.begin();
         try {
-            int batchTotal = 0;
-            for (int i = batchStart; i < batchEnd; i++) {
-                T ent = entities.get(i);
-                if (ent == null) {
-                    throw new IllegalArgumentException("entities[" + i + "] must not be null");
+            int batchTotal;
+            if (strategy.supportsBatchUpsert()) {
+                batchTotal = doBatchMultiRow(entities.subList(batchStart, batchEnd), em, batchEnd - batchStart, strategy);
+            } else {
+                batchTotal = 0;
+                for (int i = batchStart; i < batchEnd; i++) {
+                    T ent = entities.get(i);
+                    if (ent == null) {
+                        throw new IllegalArgumentException("entities[" + i + "] must not be null");
+                    }
+                    SqlWithParams sqlWithParams = buildSqlFor(em, ent, strategy);
+                    batchTotal += executeNativeQuery(em, sqlWithParams.sql(), sqlWithParams.params());
                 }
-                SqlWithParams sqlWithParams = buildSqlFor(em, ent, strategy);
-                batchTotal += executeNativeQuery(em, sqlWithParams.sql(), sqlWithParams.params());
             }
             em.flush();
             tx.commit();

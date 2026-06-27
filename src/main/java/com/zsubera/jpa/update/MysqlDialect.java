@@ -110,4 +110,51 @@ final class MysqlDialect extends AbstractDialectStrategy {
         sql.append(")");
         return new SqlWithParams(sql.toString(), params);
     }
+
+    @Override
+    public boolean supportsBatchUpsert() {
+        return true;
+    }
+
+    @Override
+    public SqlWithParams buildBatchUpsertSql(String tableName, List<String> insertColumns,
+        List<List<EntityFieldValue>> batchFieldValues, List<String> conflictColumns, List<String> updateColumns) {
+        String escapedTable = escapeIdentifier(tableName);
+        List<String> escapedCols = new ArrayList<>(insertColumns.size());
+        for (String col : insertColumns) {
+            escapedCols.add(escapeIdentifier(col));
+        }
+        StringBuilder sql = new StringBuilder("INSERT INTO ").append(escapedTable).append(" (");
+        sql.append(String.join(", ", escapedCols));
+        sql.append(") VALUES ");
+        List<Object> allParams = new ArrayList<>();
+        for (int row = 0; row < batchFieldValues.size(); row++) {
+            if (row > 0) {
+                sql.append(", ");
+            }
+            sql.append("(");
+            List<EntityFieldValue> values = batchFieldValues.get(row);
+            for (int i = 0; i < values.size(); i++) {
+                if (i > 0) {
+                    sql.append(", ");
+                }
+                sql.append("?");
+                allParams.add(values.get(i).value());
+            }
+            sql.append(")");
+        }
+        if (updateColumns.isEmpty()) {
+            String idCol = escapeIdentifier(insertColumns.get(0));
+            sql.append(" ON DUPLICATE KEY UPDATE ").append(idCol).append(" = VALUES(").append(idCol).append(")");
+        } else {
+            sql.append(" ON DUPLICATE KEY UPDATE ");
+            List<String> setClauses = new ArrayList<>();
+            for (String col : updateColumns) {
+                String escaped = escapeIdentifier(col);
+                setClauses.add(escaped + " = VALUES(" + escaped + ")");
+            }
+            sql.append(String.join(", ", setClauses));
+        }
+        return new SqlWithParams(sql.toString(), allParams);
+    }
 }

@@ -432,7 +432,7 @@ public class CteSpec {
      * @deprecated 此方法返回的 Stream 需要调用方手动关闭，容易导致资源泄漏。
      *   请使用 {@link #getResultStream(EntityManager, java.util.function.Consumer)} 替代，它会自动管理资源关闭。
      */
-    @Deprecated
+    @Deprecated(forRemoval = true)
     public java.util.stream.Stream<Object[]> getResultStream(EntityManager em) {
         if (em == null) {
             throw new IllegalArgumentException("em must not be null");

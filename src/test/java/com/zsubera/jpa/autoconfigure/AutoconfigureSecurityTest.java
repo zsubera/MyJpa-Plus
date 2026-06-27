@@ -17,6 +17,7 @@ import org.junit.jupiter.api.Test;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.security.authentication.AnonymousAuthenticationToken;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContext;
@@ -59,6 +60,25 @@ class AutoconfigureSecurityTest {
         SecurityContext secCtx = SecurityContextHolder.createEmptyContext();
         // 2-arg constructor creates unauthenticated token
         Authentication auth = new UsernamePasswordAuthenticationToken("testuser", null);
+        secCtx.setAuthentication(auth);
+        SecurityContextHolder.setContext(secCtx);
+
+        try {
+            java.util.Optional<String> user = provider.getCurrentAuditor();
+            assertEquals("SYSTEM", user.get());
+        } finally {
+            SecurityContextHolder.clearContext();
+        }
+    }
+
+    @Test
+    void SecurityContextAuditorAware_anonymousUser() {
+        MyJpaPlusAutoConfiguration.SecurityContextAuditorAware provider =
+            new MyJpaPlusAutoConfiguration.SecurityContextAuditorAware();
+
+        SecurityContext secCtx = SecurityContextHolder.createEmptyContext();
+        Authentication auth = new AnonymousAuthenticationToken("key", "anonymousUser",
+            org.springframework.security.core.authority.AuthorityUtils.createAuthorityList("ROLE_ANONYMOUS"));
         secCtx.setAuthentication(auth);
         SecurityContextHolder.setContext(secCtx);
 

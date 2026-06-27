@@ -78,7 +78,7 @@ public final class SoftDeleteContext {
      * @param count 最大忽略计数（1-1024）
      * @deprecated 此方法已弃用——maxIgnoreCount 应通过系统属性配置，避免运行时被任意代码绕过安全上限。
      */
-    @Deprecated
+    @Deprecated(forRemoval = true)
     public static void setMaxIgnoreCount(int count) {
         if (count > 0 && count <= 1024) {
             maxIgnoreCount = count;

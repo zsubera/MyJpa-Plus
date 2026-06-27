@@ -44,7 +44,7 @@ final class QueryBuildHelper {
         }
         applySort(cq, root, cb, sort);
         TypedQuery<T> query = entityManager.createQuery(cq);
-        if (maxResults != null) {
+        if (maxResults != null && maxResults >= 0) {
             query.setMaxResults(maxResults);
         }
         return query;

@@ -1386,6 +1386,24 @@ class MyJpaTemplateTest {
     }
 
     @Test
+    void testInitWithoutTransactionManagerStillAllowsQueries() throws Exception {
+        MyJpaTemplate custom = new MyJpaTemplate();
+        org.springframework.test.util.ReflectionTestUtils.setField(custom, "entityManager", entityManager);
+
+        java.lang.reflect.Method init = MyJpaTemplate.class.getDeclaredMethod("initBulkOperationTemplate");
+        init.setAccessible(true);
+        assertDoesNotThrow(() -> init.invoke(custom));
+
+        TestEntity entity = new TestEntity();
+        entity.setName("query-only");
+        entity.setStatus(7);
+        repository.save(entity);
+
+        List<TestEntity> result = custom.findAll(TestEntity.class, new QuerySpec<>());
+        assertEquals(1, result.size());
+    }
+
+    @Test
     void testExecuteMergeSpecNull() {
         assertThrows(IllegalArgumentException.class,
             () -> template.execute((com.zsubera.jpa.update.MergeSpec<TestEntity>)null));

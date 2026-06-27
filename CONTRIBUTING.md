@@ -36,20 +36,20 @@ cd myjpa-plus
 ## 包结构
 
 | 包 | 职责 |
-|---|---|
+|---|---|---|
 | `com.zsubera.jpa.spec` | 核心查询构建：QuerySpec、ConditionBuilder（含子接口）、ConditionNode、NodeResolver、CteSpec、QueryAggregates |
-| `com.zsubera.jpa.update` | 批量操作：UpdateSpec、DeleteSpec、MergeSpec、DialectDetector、DialectStrategy |
+| `com.zsubera.jpa.update` | 批量操作：UpdateSpec、DeleteSpec、MergeSpec、DialectDetector、DialectStrategy、EntityFieldExtractor、MysqlDialect、PostgresDialect、OracleDialect、SqlServerDialect |
 | `com.zsubera.jpa.repository` | 扩展 Repository：MyJpaRepository、DefaultMyJpaRepository、SoftDeleteContext、EntityManagerHelper、EntityManagerResolver、OptimisticLockRetryAdvisor、IgnoreSoftDeleteAdvisor |
 | `com.zsubera.jpa.projection` | 投影查询：ProjectionSpec |
-| `com.zsubera.jpa.template` | 模板与缓存：MyJpaTemplate、BulkOperationTemplate、BatchSaveTemplate、KeysetPaginationHelper、QueryCacheManager |
+| `com.zsubera.jpa.template` | 模板与缓存：MyJpaTemplate、BulkOperationTemplate、BatchSaveTemplate、KeysetPaginationHelper、QueryCacheManager、CacheAdapter |
 | `com.zsubera.jpa.converter` | 枚举转换与序列化：@CodeEnum、@CodeEnumValue、CodeEnumType、EncryptConverter、MaskSerializer |
 | `com.zsubera.jpa.annotation` | 注解：@SoftDelete、@IgnoreSoftDelete、@Encrypt、@Mask、@RetryOnOptimisticLock、@CodeEnumValue |
 | `com.zsubera.jpa.autoconfigure` | 自动配置：GlobalConfigHolder、MyJpaPlusAutoConfiguration、SoftDeleteFilterBean、MyJpaPlusProperties |
 | `com.zsubera.jpa.monitor` | SQL 监控：SqlSlowQueryInterceptor、QueryMetricsCollector |
 | `com.zsubera.jpa.codegen` | 代码生成：EntityCodeGenerator |
 | `com.zsubera.jpa.exception` | 异常类：MyJpaPlusException、QueryBuildException、BulkOperationException、DataAccessException、SecurityViolationException、TimeoutException |
-| `com.zsubera.jpa.softdelete` | 软删除：SoftDeleteHelper |
-| `com.zsubera.jpa.util` | 工具类：LambdaUtils、IdentifierValidator、InClauseBuilder、EntityClassResolver、EntityGraphHelper |
+| `com.zsubera.jpa.softdelete` | 软删除：SoftDeleteHelper、SoftDeleteBulkExecutor |
+| `com.zsubera.jpa.util` | 工具类：LambdaUtils、IdentifierValidator、InClauseBuilder、EntityClassResolver、EntityGraphHelper、SampledEvictionCache |
 
 ## 代码风格
 

@@ -85,6 +85,10 @@ final class DialectDetector {
     /** DIALECT_CACHE 最大条目数，防止动态 EMF 导致无限增长。 */
     private static final int MAX_DIALECT_CACHE_SIZE = 32;
 
+    /** 回退键计数器，避免 identityHashCode 碰撞导致缓存误命中。 */
+    private static final java.util.concurrent.atomic.AtomicLong emfCounter =
+        new java.util.concurrent.atomic.AtomicLong(0);
+
     private DialectDetector() {}
 
     /**
@@ -270,6 +274,6 @@ final class DialectDetector {
         } catch (Exception ignored) {
             // 回退到基于 identity 的键
         }
-        return emf.getClass().getName() + "@" + System.identityHashCode(emf);
+        return emf.getClass().getName() + "#" + emfCounter.incrementAndGet();
     }
 }

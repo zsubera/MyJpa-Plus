@@ -52,6 +52,49 @@ final class PostgresDialect extends AbstractDialectStrategy {
         SqlWithParams insertPart =
             DialectStrategy.buildInsertPart(escapedTable, this, insertColumns, insertFieldValues);
         StringBuilder sql = new StringBuilder(insertPart.sql());
+        appendConflictClause(sql, conflictColumns);
+        appendUpdateOrDoNothing(sql, updateColumns);
+        return new SqlWithParams(sql.toString(), insertPart.params());
+    }
+
+    @Override
+    public boolean supportsBatchUpsert() {
+        return true;
+    }
+
+    @Override
+    public SqlWithParams buildBatchUpsertSql(String tableName, List<String> insertColumns,
+        List<List<EntityFieldValue>> batchFieldValues, List<String> conflictColumns, List<String> updateColumns) {
+        String escapedTable = escapeIdentifier(tableName);
+        List<String> escapedCols = new ArrayList<>(insertColumns.size());
+        for (String col : insertColumns) {
+            escapedCols.add(escapeIdentifier(col));
+        }
+        StringBuilder sql = new StringBuilder("INSERT INTO ").append(escapedTable).append(" (");
+        sql.append(String.join(", ", escapedCols));
+        sql.append(") VALUES ");
+        List<Object> allParams = new ArrayList<>();
+        for (int row = 0; row < batchFieldValues.size(); row++) {
+            if (row > 0) {
+                sql.append(", ");
+            }
+            sql.append("(");
+            List<EntityFieldValue> values = batchFieldValues.get(row);
+            for (int i = 0; i < values.size(); i++) {
+                if (i > 0) {
+                    sql.append(", ");
+                }
+                sql.append("?");
+                allParams.add(values.get(i).value());
+            }
+            sql.append(")");
+        }
+        appendConflictClause(sql, conflictColumns);
+        appendUpdateOrDoNothing(sql, updateColumns);
+        return new SqlWithParams(sql.toString(), allParams);
+    }
+
+    private void appendConflictClause(StringBuilder sql, List<String> conflictColumns) {
         sql.append(" ON CONFLICT (");
         List<String> escapedConflict = new ArrayList<>();
         for (String col : conflictColumns) {
@@ -59,6 +102,9 @@ final class PostgresDialect extends AbstractDialectStrategy {
         }
         sql.append(String.join(", ", escapedConflict));
         sql.append(") ");
+    }
+
+    private void appendUpdateOrDoNothing(StringBuilder sql, List<String> updateColumns) {
         if (updateColumns.isEmpty()) {
             sql.append("DO NOTHING");
         } else {
@@ -70,6 +116,5 @@ final class PostgresDialect extends AbstractDialectStrategy {
             }
             sql.append(String.join(", ", setClauses));
         }
-        return new SqlWithParams(sql.toString(), insertPart.params());
     }
 }

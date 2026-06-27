@@ -37,7 +37,7 @@ import org.slf4j.LoggerFactory;
  * public void updateUser(User user) {
  *     userRepository.save(user);
  *     // 事务提交后清除相关缓存
- *     cache.evictByPrefix("User:");
+ *     cache.evictByPrefix("com.example.User:");
  * }
  * }</pre>
  *
@@ -339,17 +339,19 @@ public class QueryCacheManager implements CacheAdapter {
             cleanupDrift(drift > maxEntries / 2);
         }
         // CAS-based eviction: find oldest entry by timestamp, CAS remove(key, value).
-        // 这避免并发 put 替换值后误删新条目。CAS 失败时保留条目（条目仍有效，只是值已更新）。
+        // 避免并发 put 替换值后误删新条目。CAS 失败说明条目被并发替换，跳过即可。
+        // ponytail: 驱逐到 maxEntries*3/4 留出头部空间，防止竞争写入下缓存超标。
+        //           如果 CAS 持续失败（高竞争），attempts 仍递增确保有穷。
+        long targetSize = Math.max(1, (long)maxEntries * 3 / 4);
         int maxAttempts = Math.max(MIN_CAS_EVICTION_ATTEMPTS, maxEntries / 10);
         int attempts = 0;
-        while (store.size() > maxEntries && attempts < maxAttempts) {
+        while (store.size() > targetSize && attempts < maxAttempts) {
             String oldest = findOldestKey();
             if (oldest == null) {
                 break;
             }
             CachedQueryResult<?> val = store.get(oldest);
             if (val == null) {
-                // 陈旧条目（已从 store 移除），清理
                 insertionTimestamps.remove(oldest);
                 removeFromPrefixIndex(oldest);
                 attempts++;
@@ -359,9 +361,6 @@ public class QueryCacheManager implements CacheAdapter {
                 insertionTimestamps.remove(oldest);
                 removeFromPrefixIndex(oldest);
                 log.debug("Post-put evicted oldest cache entry: {}", oldest);
-            } else {
-                // CAS 失败：条目被并发替换或移除，保留条目避免漂移
-                break;
             }
             attempts++;
         }
@@ -612,7 +611,7 @@ public class QueryCacheManager implements CacheAdapter {
      *
      * <pre>{@code
      * // User 实体更新后，清除所有以 "User:" 开头的缓存
-     * cache.evictByPrefix("User:");
+     * cache.evictByPrefix("com.example.User:");
      * }</pre>
      *
      * @param keyPrefix 缓存键前缀
@@ -680,7 +679,7 @@ public class QueryCacheManager implements CacheAdapter {
      * public void updateUser(User user) {
      *     userRepository.save(user);
      *     // 事务提交后清除相关缓存
-     *     cacheManager.evictByPrefixAfterTransactionCommit("User:");
+     *     cacheManager.evictByPrefixAfterTransactionCommit("com.example.User:");
      * }
      * }</pre>
      *

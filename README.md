@@ -15,7 +15,7 @@
 
 **专为 Spring Data JPA 设计，提供查询构建、批量操作、UPSERT/MERGE、CTE、投影查询、字段加密/脱敏、SQL 慢查询监控、乐观锁自动重试、聚合查询、查询缓存和代码生成。**
 
-[快速开始](#快速开始) · [特性概览](#特性) · [API 文档](#api-一览) · [迁移指南](./MIGRATION.md)
+[快速开始](#快速开始) · [特性概览](#特性) · [扩展点](#扩展点) · [架构](docs/architecture.md) · [迁移指南](./MIGRATION.md)
 
 </div>
 
@@ -85,7 +85,7 @@ List<Product> products = productRepository.findAll(s ->
     s.multiLike("搜索词", "name", "description")
 );
 
-// 独立创建 QuerySpec 实例（需要多次使用同一查询条件时）
+// 独立创建 QuerySpec 实例
 QuerySpec<User> spec = QuerySpec.of(s -> s.eq(User::getStatus, "ACTIVE"));
 repository.findAll(spec);
 repository.count(spec);
@@ -97,7 +97,6 @@ repository.count(spec);
 // 方式 1：直接在 Repository 上调用（Lambda 模式，推荐）
 repository.update(s -> s.set(User::getStatus, "INACTIVE").eq(User::getStatus, "ACTIVE"));
 repository.delete(s -> s.lt(User::getCreatedAt, cutoffDate));
-repository.merge(s -> s.withEntity(user).onConflict(User::getEmail).updateOnConflict(User::getName));
 
 // 方式 2：通过 MyJpaTemplate
 @Autowired
@@ -138,6 +137,25 @@ int affected = new MergeSpec<>(User.class)
     .onConflict(User::getEmail)
     .updateOnConflict(User::getName, User::getAge)
     .execute(em);
+
+// 触发 JPA 生命周期回调后再执行 UPSERT
+int affected = new MergeSpec<>(User.class)
+    .withEntity(user)
+    .onConflict(User::getEmail)
+    .updateOnConflict(User::getName)
+    .executeWithCallbacks(em);
+
+// 批量 UPSERT（自动使用多行 UPSERT 优化）
+List<User> users = List.of(user1, user2, user3);
+int total = new MergeSpec<>(User.class)
+    .onConflict(User::getEmail)
+    .executeBatch(users, em);
+
+// 事务内执行
+int affected = new MergeSpec<>(User.class)
+    .withEntity(user)
+    .onConflict(User::getEmail)
+    .executeInTransaction(em);
 ```
 
 ### 字段加密
@@ -150,10 +168,94 @@ public class User {
     private String idCard;
 }
 
-// 读写自动加解密
-user.setIdCard("310101199001011234");
+// 读写自动加解密，数据库存储密文
+user.setIdCard("110101199001011234");
 userRepository.save(user);
-// 数据库存储: Base64 编码的密文
+// 数据库：AES-GCM 密文
+
+String idCard = userRepository.findById(1L).getIdCard();
+// 返回明文："110101199001011234"
+```
+
+### 字段脱敏
+
+```java
+@Entity
+public class User {
+    @Mask(type = MaskType.PHONE)
+    private String phone;
+    
+    @Mask(type = MaskType.EMAIL)
+    private String email;
+}
+
+// JSON 输出时自动脱敏
+// phone: "138****1234"
+// email: "u***@example.com"
+```
+
+### 乐观锁重试
+
+```java
+@RetryOnOptimisticLock(maxRetries = 5, maxTotalTimeoutMs = 10000)
+public void updateBalance(Long userId, BigDecimal amount) {
+    Account account = accountRepository.findById(userId).orElseThrow();
+    account.setBalance(account.getBalance().add(amount));
+    accountRepository.save(account);
+}
+// 重试策略：指数退避，最多重试 5 次，总超时 10 秒
+```
+
+### CTE 查询
+
+```java
+// 递归 CTE：查询组织树
+CteSpec cte = CteSpec.recursive("org_tree")
+    .as("SELECT id, name, parent_id FROM organizations WHERE parent_id IS NULL " +
+        "UNION ALL " +
+        "SELECT o.id, o.name, o.parent_id FROM organizations o " +
+        "INNER JOIN org_tree t ON o.parent_id = t.id")
+    .mainQuery("SELECT * FROM org_tree");
+
+List<Object[]> result = cte.getResultList(em);
+```
+
+### 聚合查询
+
+```java
+// 按状态统计用户数
+List<Object[]> result = repository.findAll(s ->
+    s.select(User::getStatus, s.count(User::getId))
+     .groupBy(User::getStatus)
+     .having(s.gt(s.count(User::getId), 10))
+);
+
+// DTO 投影
+record UserStats(String status, long count) {}
+List<UserStats> stats = repository.findAll(s ->
+    s.select(User::getStatus, s.count(User::getId))
+     .groupBy(User::getStatus)
+     .projectTo(UserStats.class)
+);
+```
+
+### 查询缓存
+
+```java
+@Autowired
+private QueryCacheManager cache;
+
+// 写入缓存（TTL 60 秒）
+cache.put("user-list", users, 60);
+
+// 读取缓存
+List<User> cached = cache.get("user-list");
+
+// 前缀驱逐（实体更新后清除相关缓存）
+cache.evictByPrefix("com.example.User:");
+
+// 事务提交后自动清除
+cache.evictByPrefixAfterTransactionCommit("com.example.User:");
 ```
 
 ### 软删除
@@ -162,382 +264,41 @@ userRepository.save(user);
 @Entity
 public class User {
     @SoftDelete
-    private Boolean deleted = false;
+    private Boolean deleted;
 }
 
-// 自动过滤已删除记录
-List<User> activeUsers = userRepository.findNotDeletedAll();
+// 查询自动过滤已删除记录（无需额外条件）
+List<User> activeUsers = userRepository.findAll();
 
-// 临时禁用软删除过滤
-@IgnoreSoftDelete
-Optional<User> findByIdIncludingDeleted(@Param("id") Long id);
+// Specification API
+Specification<User> notDeleted = SoftDeleteHelper.isNotDeleted(User.class);
+List<User> activeUsers = repository.findAll(notDeleted.and(otherSpec));
+
+// 批量软删除
+SoftDeleteHelper.softDeleteAll(em, User.class, true);
+SoftDeleteHelper.softDeleteByIds(em, User.class, List.of(1L, 2L, 3L));
+
+// 检查实体是否已软删除
+boolean deleted = SoftDeleteHelper.isSoftDeleted(User.class, user);
 ```
 
 ---
 
-## 数据库兼容性
+## 扩展点
 
-| 数据库 | 版本要求 | 查询构建 | UPSERT/MERGE | 备注 |
-|:---|:---:|:---:|:---:|:---|
-| MySQL | 5.7+ | ✅ | ✅ | `ON DUPLICATE KEY UPDATE` |
-| PostgreSQL | 9.5+ | ✅ | ✅ | `ON CONFLICT DO UPDATE` |
-| Oracle | 12c+ | ✅ | ✅ | `MERGE INTO ... USING` |
-| SQL Server | 2008+ | ✅ | ✅ | `MERGE INTO` |
-
----
-
-## ⚠️ Java 17+ 模块系统兼容性（重要）
-
-MyJpa-Plus 使用反射访问 `SerializedLambda.writeReplace()` 来提取 Lambda 方法引用的属性名。在 Java 17+ 的模块系统下，需要添加 JVM 参数才能正常工作。
-
-**如果未配置，所有 Lambda 查询（如 `User::getName`）将在运行时抛出异常。**
-
-### 快速修复
-
-在启动命令中添加：
-
-```bash
-java --add-opens java.base/java.lang.invoke=ALL-UNNAMED -jar your-app.jar
-```
-
-### 构建工具配置
-
-**Maven**（`spring-boot-maven-plugin`）：
-
-```xml
-<plugin>
-    <groupId>org.springframework.boot</groupId>
-    <artifactId>spring-boot-maven-plugin</artifactId>
-    <configuration>
-        <jvmArguments>
-            --add-opens java.base/java.lang.invoke=ALL-UNNAMED
-        </jvmArguments>
-    </configuration>
-</plugin>
-```
-
-**Gradle**：
-
-```groovy
-bootRun {
-    jvmArgs '--add-opens java.base/java.lang.invoke=ALL-UNNAMED'
-}
-```
-
-**环境变量**（适用于所有启动方式）：
-
-```bash
-export JAVA_TOOL_OPTIONS="--add-opens java.base/java.lang.invoke=ALL-UNNAMED"
-```
-
-> **提示：** 应用启动时如果缺少此参数，MyJpa-Plus 会在日志中输出完整的修复命令。
-
----
-
-## 虚拟线程兼容性
-
-MyJpa-Plus 完全兼容 Java 21+ 虚拟线程（Virtual Threads）：
-
-- `SoftDeleteContext` 的 ThreadLocal 在虚拟线程中行为与平台线程一致
-- 推荐使用 `SoftDeleteContext.withIgnore()` 便捷方法自动管理生命周期
-- 跨虚拟线程的状态传递请使用 `captureAndResetForAsync()` / `restoreForAsync()`
-
----
-
-## 环境要求
-
-- **Java**: 17+
-- **Spring Boot**: 3.2+（推荐 3.3.5）
-- **Spring Data JPA**: 3.x
-- **JPA 实现**: Hibernate 6.x（推荐）
-
-### 兼容性说明
-
-| JPA 实现 | 状态 | 说明 |
-|:---|:---:|:---|
-| Hibernate 6.x | ✅ 完全支持 | CI 全面测试，推荐使用 |
-| EclipseLink 4.x | ⚠️ 部分支持 | JPA Criteria API 标准功能可用，`From.fetch()` 行为可能有差异 |
-| Hibernate 5.x | ❌ 不支持 | 需要 Spring Boot 2.x |
-
-> **注意**：当前 CI 仅验证 Hibernate + MySQL/PostgreSQL。Oracle/SQL Server 方言通过 Testcontainers 验证。
-
----
-
-## 配置
-
-```yaml
-myjpa-plus:
-  query:
-    max-results: 10000                    # 查询最大返回行数
-    deep-pagination-offset-threshold: 100000  # 深度分页警告阈值
-    deep-pagination-offset-limit: -1      # 深度分页硬限制（-1 禁用）
-    in-clause-max-size: 1000              # IN 子句最大参数数量
-    in-clause-hard-limit: 5000            # IN 子句硬限制
-    max-bulk-operation-rows: 10000        # 批量操作最大影响行数（0 禁用）
-    lambda-cache-size: 4096               # Lambda 属性名缓存大小
-    extra-safe-functions:                 # 扩展安全函数白名单
-      - ARRAY_TO_STRING
-      - REGEXP_REPLACE
-    extra-boolean-functions:              # 扩展布尔函数白名单
-      - MY_CUSTOM_CHECK
-  soft-delete:
-    auto-filter: true                     # 自动应用软删除过滤器
-    block-unconditional-delete: true      # 阻断无条件硬删除
-  monitoring:
-    enabled: true                         # 启用 SQL 慢查询监控
-    slow-query-threshold-ms: 1000         # 慢查询阈值（毫秒）
-  cache:
-    auto-invalidation-enabled: true       # 缓存自动失效
-
-# 字段加密配置
-# 环境变量: MYJPA_ENCRYPT_KEY=<密钥>  MYJPA_ENCRYPT_SALT=<盐值>
-# 系统属性: -Dmyjpa.encrypt.key=<密钥>  -Dmyjpa.encrypt.salt=<盐值>
-```
-
----
-
-## API 一览
-
-<details>
-<summary><b>QuerySpec（查询条件）</b></summary>
-
-| 分类 | 方法 |
+| SPI / 接口 | 用途 |
 |:---|:---|
-| 比较 | `eq`, `ne`, `gt`, `ge`, `lt`, `le` |
-| 不区分大小写 | `eqIgnoreCase`, `neIgnoreCase`, `likeIgnoreCase` |
-| 字符串 | `like`, `notLike`, `startsWith`, `endsWith`, `contains` |
-| 集合 | `in`, `notIn`, `between`, `isEmpty`, `isNotEmpty` |
-| 空值 | `isNull`, `isNotNull` |
-| 搜索 | `multiLike(keyword, fields...)` |
-| 连接 | `join(field, config)`, `leftJoin(field, config)`, `fetchJoin(field, config)`, `leftFetchJoin(field, config)` |
-| 子查询 | `exists`, `notExists`, `inSubQuery` |
-| 逻辑 | `or(consumer)`, `not(consumer)` |
-| 聚合 | `groupBy(field1, field2, ...)`, `having(predicate)` |
-| 函数 | `func(field, functionName, params...)` |
-| 输出 | `toSpecification()`, `toSpecification(external)` |
-
-</details>
-
-<details>
-<summary><b>ProjectionSpec（投影查询）</b></summary>
-
-| 分类 | 方法 |
-|:---|:---|
-| 字段选择 | `select(field)` |
-| 聚合 | `selectCount()`, `selectCountDistinct()`, `selectSum(field)`, `selectAvg(field)`, `selectMax(field)`, `selectMin(field)` |
-| DTO 投影 | `asDto(DtoClass.class)` |
-| 连接 | `join(field, consumer)`, `leftJoin(field, consumer)` |
-| 排序 | `orderByAsc(field)`, `orderByDesc(field)` |
-| 输出 | `toTupleQuery(em)`, `toDtoQuery(em)`, `findPage(em, pageable)` |
-
-</details>
-
-<details>
-<summary><b>UpdateSpec / DeleteSpec（批量操作）</b></summary>
-
-| 分类 | 方法 |
-|:---|:---|
-| SET | `set(field, value)`, `setExpr(field, exprFn)` |
-| 条件 | 继承 QuerySpec 的所有条件方法 |
-| 执行 | `execute(em)`, `executeInTransaction(em)`, `executeLimited(em, maxRows)` |
-| 无条件 | `allowUnconditional(true)` → `updateAll(em)` / `deleteAll(em)` |
-
-</details>
-
-<details>
-<summary><b>MergeSpec（UPSERT）</b></summary>
-
-| 分类 | 方法 |
-|:---|:---|
-| 实体 | `withEntity(entity)` |
-| 冲突 | `onConflict(fields...)` |
-| 更新 | `updateOnConflict(fields...)` |
-| 执行 | `execute(em)`, `executeInTransaction(em)` |
-
-</details>
-
-<details>
-<summary><b>MyJpaTemplate（查询模板）</b></summary>
-
-| 分类 | 方法 |
-|:---|:---|
-| 查询 | `findAll`, `findOne`, `findById`, `findPage`, `count` |
-| 查询（Lambda） | `findAll(entityClass, consumer)`, `findOne(entityClass, consumer)`, `count(entityClass, consumer)` |
-| 流式 | `findAllStream(entityClass, spec, consumer)` |
-| 创建 | `update(entityClass)`, `delete(entityClass)` |
-| 执行 | `execute(spec)`, `executeWithMaxRows(spec, maxRows)` |
-| 分批 | `executeBatch(spec, batchSize)`, `executeBatchInSeparateTransactions(spec, batchSize)` |
-| 保存 | `saveAllBatched(entities, batchSize)` |
-
-</details>
-
-<details>
-<summary><b>QueryAggregates（聚合工具）</b></summary>
-
-| 方法 | 说明 |
-|:---|:---|
-| `count(root)` | COUNT(*) |
-| `count(root, field)` | COUNT(field) |
-| `countDistinct(root, field)` | COUNT(DISTINCT field) |
-| `sum(root, field)` | SUM(field) |
-| `avg(root, field)` | AVG(field) |
-| `max(root, field)` | MAX(field) |
-| `min(root, field)` | MIN(field) |
-
-</details>
+| `DialectStrategy` | 注册自定义 UPSERT SQL 方言，通过 `DialectDetector.registerDialect()` 注册 |
+| `CacheAdapter` | 可插拔查询缓存后端，默认基于 ConcurrentHashMap，可替换为 Redis/Caffeine |
+| `SoftDeleteBulkExecutor.EventPublisher` | 批量软删除后的缓存失效回调，由自动配置在启动时注册 |
+| `OptimisticLockRetryAdvisor` | 重试策略配置：`maxRetries`、`maxTotalTimeoutMs`（系统属性） |
 
 ---
 
-## 高级用法
+## 架构
 
-### CTE（公共表表达式）
+见 [`docs/architecture.md`](docs/architecture.md) — 模块地图、数据流图（Lambda 查询执行、UPSERT 执行）、七层安全防御体系、线程安全性汇总表。
 
-```java
-// 非递归 CTE：查询活跃用户
-List<Object[]> results = CteSpec
-    .with("active_users").columns("id", "name")
-    .as("SELECT id, name FROM users WHERE active = true")
-    .select("SELECT * FROM active_users WHERE name LIKE :name")
-    .setParameter("name", "%John%")
-    .getResultList(em);
+## License
 
-// 递归 CTE：查询分类树
-List<Object[]> tree = CteSpec
-    .withRecursive("category_tree").columns("id", "name", "parent_id", "depth")
-    .as("SELECT id, name, parent_id, 0 FROM categories WHERE parent_id IS NULL"
-        + " UNION ALL "
-        + "SELECT c.id, c.name, c.parent_id, ct.depth + 1 FROM categories c "
-        + "JOIN category_tree ct ON c.parent_id = ct.id")
-    .select("SELECT * FROM category_tree ORDER BY depth")
-    .getResultList(em);
-```
-
-### 投影查询
-
-```java
-// 选择特定字段，返回 Tuple
-List<Tuple> results = new ProjectionSpec<>(User.class)
-    .select(User::getName)
-    .select(User::getEmail)
-    .join(User::getDepartment, j -> j.eq(Department::getName, "Engineering"))
-    .orderByAsc(User::getName)
-    .where(q -> q.eq(User::getStatus, "ACTIVE"))
-    .toTupleQuery(entityManager)
-    .getResultList();
-
-// DTO 投影（自动构造函数映射）
-public record UserNameEmail(String name, String email) {}
-
-List<UserNameEmail> dtos = new ProjectionSpec<>(User.class)
-    .select(User::getName)
-    .select(User::getEmail)
-    .where(q -> q.eq(User::getStatus, "ACTIVE"))
-    .asDto(UserNameEmail.class)
-    .toDtoQuery(entityManager)
-    .getResultList();
-
-// 聚合投影（别名：count, sum_amount, max_amount）
-List<Tuple> stats = new ProjectionSpec<>(Order.class)
-    .selectCount()
-    .selectSum(Order::getAmount)
-    .selectMax(Order::getAmount)
-    .groupBy(Order::getStatus)
-    .toTupleQuery(entityManager)
-    .getResultList();
-```
-
-### 字段脱敏
-
-```java
-// 定义 DTO，使用 @Mask 注解
-public class UserDto {
-    private String name;
-
-    @Mask(type = MaskType.PHONE)
-    private String phone;    // 输出: 138****1234
-
-    @Mask(type = MaskType.EMAIL)
-    private String email;    // 输出: j***@example.com
-
-    @Mask(type = MaskType.ID_CARD)
-    private String idCard;   // 输出: 110***********1234
-}
-
-// 注册 Jackson 模块
-@Configuration
-public class JacksonConfig {
-    @Bean
-    public ObjectMapper objectMapper() {
-        ObjectMapper mapper = new ObjectMapper();
-        mapper.registerModule(new MaskSerializer.MaskModule());
-        return mapper;
-    }
-}
-```
-
-支持的脱敏类型：`PHONE`、`EMAIL`、`ID_CARD`、`NAME`、`BANK_CARD`、`ADDRESS`、`LICENSE_PLATE`
-
-### 乐观锁自动重试
-
-```java
-@Service
-public class ProductService {
-
-    @RetryOnOptimisticLock(maxRetries = 5, backoffMs = 200)
-    @Transactional
-    public void updateProduct(Long id, String newName) {
-        Product p = repository.findById(id).orElseThrow();
-        p.setName(newName);
-        repository.save(p);  // 如果版本冲突，自动重试
-    }
-}
-```
-
-重试策略：首次等待 200ms，之后指数退避（200ms → 400ms → 800ms → 1600ms → 3200ms），最多重试 5 次。
-
-### 查询缓存
-
-```java
-// 使用 MyJpaTemplate 的缓存查询
-List<User> users = jpa.findAllCached(User.class,
-    new QuerySpec<User>().eq(User::getStatus, "ACTIVE"),
-    60);  // TTL 60 秒
-
-// 手动管理缓存
-QueryCacheManager cache = new QueryCacheManager();
-cache.put("active-users", userList, 60);
-List<User> cached = cache.get("active-users");
-
-// 事务提交后自动清除缓存
-cache.evictByPrefixAfterTransactionCommit("User:");
-```
-
-### Keyset 分页（游标分页）
-
-```java
-// 第一页
-MyJpaTemplateOperations.KeysetPage<User> page1 = jpa.findKeysetPage(
-    User.class, spec, Sort.by("id"), 20, (Object[]) null);
-
-// 下一页：使用上一页的 lastSortValues
-MyJpaTemplateOperations.KeysetPage<User> page2 = jpa.findKeysetPage(
-    User.class, spec, Sort.by("id"), 20, page1.lastSortValues());
-```
-
-### 函数调用
-
-```java
-// 使用数据库函数进行条件判断
-qs.func(User::getMetadata, "jsonb_exists", "key")
-  // 生成: jsonb_exists(user.metadata, 'key') = true
-
-// 使用空间函数
-qs.func(Location::getGeom, "ST_Contains", polygonWkt)
-  // 生成: ST_Contains(location.geom, ?) = true
-```
-
----
-
-## 协议
-
-Apache 2.0 — 详见 [LICENSE](./LICENSE)
+Apache 2.0. See [`LICENSE`](LICENSE).

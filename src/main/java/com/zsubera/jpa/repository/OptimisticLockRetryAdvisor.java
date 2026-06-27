@@ -19,7 +19,6 @@ import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.TransactionStatus;
 import org.springframework.transaction.support.DefaultTransactionDefinition;
-import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 /**
  * AOP 通知器，拦截带有 {@link RetryOnOptimisticLock} 注解的方法，在遇到 {@link OptimisticLockException} 时使用指数退避策略进行重试。
@@ -126,11 +125,13 @@ public class OptimisticLockRetryAdvisor {
     }
 
     /**
-     * 在新事务中执行连接点，确保上一次失败事务已回滚且 L1 缓存已清除。
-     * 如果事务管理器不可用或无活动事务，直接执行。
+     * 在新事务中执行重试，确保上一次失败事务已回滚且 L1 缓存已清除。
+     * 当 transactionManager 可用时始终使用 REQUIRES_NEW，即使当前无活动事务——这样即使
+     * 第一次尝试在无事务上下文中执行，重试也能获得干净的持久化上下文。
+     * 当 transactionManager 不可用时直接执行（降级路径）。
      */
     private Object executeInNewTransaction(ProceedingJoinPoint pjp) throws Throwable {
-        if (transactionManager != null && TransactionSynchronizationManager.isActualTransactionActive()) {
+        if (transactionManager != null) {
             DefaultTransactionDefinition def = new DefaultTransactionDefinition();
             def.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
             TransactionStatus status = transactionManager.getTransaction(def);

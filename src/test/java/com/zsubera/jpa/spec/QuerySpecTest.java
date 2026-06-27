@@ -1048,6 +1048,28 @@ public class QuerySpecTest {
     }
 
     @Test
+    void testRepeatedLeftJoinPathKeepsLeftJoinSemantics() {
+        ParentEntity parent = new ParentEntity();
+        parent.setCategory("admin");
+        parent.setLevel(10);
+        em.persist(parent);
+
+        TestEntity matched = newEntity("matched", 1);
+        matched.setParent(parent);
+        repository.save(matched);
+
+        TestEntity withoutParent = newEntity("without-parent", 2);
+        repository.save(withoutParent);
+
+        QuerySpec<TestEntity> qs = new QuerySpec<>();
+        qs.<ParentEntity>leftJoin(TestEntity::getParent, j -> j.eq(ParentEntity::getCategory, "admin"));
+        qs.<ParentEntity>leftJoin(TestEntity::getParent, j -> j.gt(ParentEntity::getLevel, 0));
+
+        List<TestEntity> result = repository.findAll(qs.toSpecification());
+        assertEquals(2, result.size(), "Repeated LEFT JOIN predicates should stay on the ON clause");
+    }
+
+    @Test
     void testNotBetween() {
         for (int i = 1; i <= 10; i++) {
             repository.save(newEntity("item" + i, i));

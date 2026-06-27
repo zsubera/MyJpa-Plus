@@ -52,6 +52,35 @@ public interface DialectStrategy {
         List<String> conflictColumns, List<String> updateColumns);
 
     /**
+     * 此方言是否支持多行 UPSERT（批量合并模式）。
+     * <p>
+     * 默认返回 {@code false}。MySQL 和 PostgreSQL 重写此方法返回 {@code true}。
+     */
+    default boolean supportsBatchUpsert() {
+        return false;
+    }
+
+    /**
+     * 构建多行 UPSERT SQL 语句，将多个实体合并到一条 INSERT ... ON CONFLICT / ON DUPLICATE KEY 语句中。
+     *
+     * <p>
+     * 调用前应通过 {@link #supportsBatchUpsert()} 检查能力，而非依赖异常处理。
+     *
+     * @param tableName 表名
+     * @param insertColumns 插入列名列表
+     * @param batchFieldValues 每个实体的字段值列表（外层列表 = 实体数，内层列表 = 字段值）
+     * @param conflictColumns 冲突列名列表
+     * @param updateColumns 更新列名列表
+     * @return SQL 和参数
+     * @throws UnsupportedOperationException 如果该方言不支持多行 UPSERT
+     */
+    default SqlWithParams buildBatchUpsertSql(String tableName, List<String> insertColumns,
+        List<List<EntityFieldValue>> batchFieldValues, List<String> conflictColumns, List<String> updateColumns) {
+        throw new UnsupportedOperationException(
+            "Multi-row batch UPSERT not supported for dialect: " + name());
+    }
+
+    /**
      * 构建 INSERT 部分的 SQL（PostgresDialect 共用，MysqlDialect 自行实现）。
      *
      * @param escapedTable 转义后的表名

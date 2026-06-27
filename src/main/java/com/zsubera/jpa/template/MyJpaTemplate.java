@@ -5,6 +5,9 @@ import com.zsubera.jpa.spec.QuerySpec;
 import com.zsubera.jpa.update.DeleteSpec;
 import com.zsubera.jpa.update.UpdateSpec;
 import com.zsubera.jpa.util.EntityGraphHelper;
+import com.zsubera.jpa.autoconfigure.GlobalConfigHolder;
+import com.zsubera.jpa.repository.SoftDeleteContext;
+import com.zsubera.jpa.softdelete.SoftDeleteHelper;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.EntityManagerFactory;
 import jakarta.persistence.PersistenceContext;
@@ -139,6 +142,8 @@ public class MyJpaTemplate implements MyJpaTemplateOperations {
 
     /** Keyset 分页辅助类，封装游标分页的核心逻辑。 */
     private volatile KeysetPaginationHelper keysetPaginationHelper;
+
+    private final Object helperInitMonitor = new Object();
 
     /** 创建 MyJpaTemplate 实例，使用默认配置。 */
     public MyJpaTemplate() {
@@ -304,16 +309,7 @@ public class MyJpaTemplate implements MyJpaTemplateOperations {
      */
     @PostConstruct
     private void initBulkOperationTemplate() {
-        PlatformTransactionManager txManager = resolveTransactionManager();
-        if (txManager == null) {
-            throw new IllegalStateException(
-                "PlatformTransactionManager not available. Cannot initialize batch operation templates. "
-                    + "Ensure @Transactional support is enabled or configure a PlatformTransactionManager bean.");
-        }
-        this.bulkOperationTemplate =
-            new BulkOperationTemplate(entityManager, maxBulkOperationRows, txManager);
-        this.batchSaveTemplate = new BatchSaveTemplate(entityManager, txManager);
-        this.keysetPaginationHelper = new KeysetPaginationHelper(entityManager);
+        initializeHelpers(false);
     }
 
     private PlatformTransactionManager resolveTransactionManager() {
@@ -335,6 +331,7 @@ public class MyJpaTemplate implements MyJpaTemplateOperations {
      * @throws IllegalStateException 如果 MyJpaTemplate 未完全初始化
      */
     private BulkOperationTemplate getBulkOperationTemplate() {
+        initializeHelpers(true);
         return requireInitialized(bulkOperationTemplate, "BulkOperationTemplate");
     }
 
@@ -345,6 +342,7 @@ public class MyJpaTemplate implements MyJpaTemplateOperations {
      * @throws IllegalStateException 如果 MyJpaTemplate 未完全初始化
      */
     private BatchSaveTemplate getBatchSaveTemplate() {
+        initializeHelpers(true);
         return requireInitialized(batchSaveTemplate, "BatchSaveTemplate");
     }
 
@@ -355,6 +353,7 @@ public class MyJpaTemplate implements MyJpaTemplateOperations {
      * @throws IllegalStateException 如果 MyJpaTemplate 未完全初始化
      */
     private KeysetPaginationHelper getKeysetPaginationHelper() {
+        initializeHelpers(false);
         return requireInitialized(keysetPaginationHelper, "KeysetPaginationHelper");
     }
 
@@ -362,7 +361,7 @@ public class MyJpaTemplate implements MyJpaTemplateOperations {
      * 带缓存的查询方法。如果缓存命中则直接返回，否则执行查询并将结果缓存。
      *
      * <p>
-     * 缓存键格式：{@code entityClassSimpleName:specHashCode}。如果需要更精确的缓存控制，请使用 {@link QueryCacheManager} 直接管理。
+     * 缓存键格式：{@code entityClassFqcn:specCacheKey:sort}。如果需要更精确的缓存控制，请使用 {@link QueryCacheManager} 直接管理。
      *
      * @param entityClass 实体类
      * @param spec 查询规范
@@ -388,11 +387,11 @@ public class MyJpaTemplate implements MyJpaTemplateOperations {
         List<T> cached = cacheAdapter.get(cacheKey);
         if (cached != null) {
             log.debug("Cache hit for key: {}", cacheKey);
-            return cached;
+            return new ArrayList<>(cached);
         }
         log.debug("Cache miss for key: {}", cacheKey);
         List<T> result = findAll(entityClass, spec);
-        List<T> immutableResult = Collections.unmodifiableList(result);
+        List<T> immutableResult = List.copyOf(result);
         if (org.springframework.transaction.support.TransactionSynchronizationManager.isActualTransactionActive()) {
             org.springframework.transaction.support.TransactionSynchronizationManager
                 .registerSynchronization(new org.springframework.transaction.support.TransactionSynchronization() {
@@ -405,7 +404,7 @@ public class MyJpaTemplate implements MyJpaTemplateOperations {
         } else {
             cacheAdapter.put(cacheKey, immutableResult, ttlSeconds);
         }
-        return immutableResult;
+        return new ArrayList<>(immutableResult);
     }
 
     /**
@@ -537,14 +536,13 @@ public class MyJpaTemplate implements MyJpaTemplateOperations {
         if (id == null) {
             throw new IllegalArgumentException("id must not be null");
         }
-        // 非软删除场景：直接使用 entityManager.find()，性能最优
-        if (com.zsubera.jpa.softdelete.SoftDeleteHelper.findSoftDeleteField(entityClass) == null) {
+        String softDeleteFieldName = SoftDeleteHelper.findSoftDeleteField(entityClass);
+        if (softDeleteFieldName == null || !shouldApplySoftDeleteFilter()) {
             return Optional.ofNullable(entityManager.find(entityClass, id));
         }
-        // 软删除场景：使用 Specification 查询以自动过滤已删除记录
         String idFieldName = EntityClassResolver.resolveIdFieldName(entityClass);
         Specification<T> idSpec = (root, query, cb) -> cb.equal(root.get(idFieldName), id);
-        Specification<T> softDeleteSpec = com.zsubera.jpa.softdelete.SoftDeleteHelper.isNotDeleted(entityClass);
+        Specification<T> softDeleteSpec = SoftDeleteHelper.isNotDeleted(entityClass);
         Specification<T> combinedSpec = idSpec.and(softDeleteSpec);
         CriteriaBuilder cb = entityManager.getCriteriaBuilder();
         CriteriaQuery<T> cq = cb.createQuery(entityClass);
@@ -557,6 +555,35 @@ public class MyJpaTemplate implements MyJpaTemplateOperations {
         query.setMaxResults(1);
         List<T> results = query.getResultList();
         return results.isEmpty() ? Optional.empty() : Optional.of(results.get(0));
+    }
+
+    private boolean shouldApplySoftDeleteFilter() {
+        return GlobalConfigHolder.getConfig().isSoftDeleteAutoFilter() && !SoftDeleteContext.isIgnoreSoftDelete();
+    }
+
+    private void initializeHelpers(boolean requireTransactionalHelpers) {
+        if (keysetPaginationHelper != null && (!requireTransactionalHelpers || bulkOperationTemplate != null && batchSaveTemplate != null)) {
+            return;
+        }
+        synchronized (helperInitMonitor) {
+            if (keysetPaginationHelper == null) {
+                keysetPaginationHelper = new KeysetPaginationHelper(entityManager);
+            }
+            if (bulkOperationTemplate != null && batchSaveTemplate != null) {
+                return;
+            }
+            PlatformTransactionManager txManager = resolveTransactionManager();
+            if (txManager == null) {
+                if (requireTransactionalHelpers) {
+                    throw new IllegalStateException(
+                        "PlatformTransactionManager not available. Batch operations require a PlatformTransactionManager bean.");
+                }
+                log.debug("PlatformTransactionManager bean not found. Batch helpers will initialize lazily when needed.");
+                return;
+            }
+            bulkOperationTemplate = new BulkOperationTemplate(entityManager, maxBulkOperationRows, txManager);
+            batchSaveTemplate = new BatchSaveTemplate(entityManager, txManager);
+        }
     }
 
     /**

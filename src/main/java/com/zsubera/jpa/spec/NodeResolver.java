@@ -239,12 +239,13 @@ final class NodeResolver {
             }
         }
 
-        // ponytail: For non-fetch joins, apply predicates as ON clause to prevent LEFT JOIN from
-        // silently converting to INNER JOIN via WHERE - on(),
-        // soft-delete filters and user conditions go to ON.
-        // Cache-hit joins fall through to WHERE to avoid overriding prior ON clauses.
-        if (!isFetch && isNewJoin && !innerPredicates.isEmpty()) {
-            join.on(cb.and(innerPredicates.toArray(new Predicate[0])));
+        // ponytail: For non-fetch joins, keep join-scoped predicates on the ON clause so LEFT JOIN
+        // does not silently degrade into INNER JOIN. Cache hits must merge with the existing ON
+        // predicate instead of falling back to WHERE.
+        if (!isFetch && !innerPredicates.isEmpty()) {
+            Predicate newOnPredicate = cb.and(innerPredicates.toArray(new Predicate[0]));
+            Predicate existingOnPredicate = join.getOn();
+            join.on(existingOnPredicate == null ? newOnPredicate : cb.and(existingOnPredicate, newOnPredicate));
             return cb.conjunction();
         }
         return innerPredicates.isEmpty() ? cb.conjunction() : cb.and(innerPredicates.toArray(new Predicate[0]));

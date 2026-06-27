@@ -2,6 +2,7 @@ package com.zsubera.jpa.repository;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+import com.zsubera.jpa.template.MyJpaTemplate;
 import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.AfterEach;
@@ -25,13 +26,21 @@ class DefaultMyJpaRepositoryIntegrationTest {
     @EntityScan(basePackageClasses = {SoftDeleteRepoTestEntity.class, SimpleTestEntity.class})
     @EnableJpaRepositories(basePackages = "com.zsubera.jpa.repository",
         repositoryBaseClass = DefaultMyJpaRepository.class)
-    static class TestConfig {}
+    static class TestConfig {
+        @org.springframework.context.annotation.Bean
+        MyJpaTemplate myJpaTemplate() {
+            return new MyJpaTemplate();
+        }
+    }
 
     @Autowired
     private SoftDeleteRepoTestRepository repository;
 
     @Autowired
     private SimpleTestRepository simpleRepository;
+
+    @Autowired
+    private MyJpaTemplate template;
 
     private Object proxy;
 
@@ -208,6 +217,28 @@ class DefaultMyJpaRepositoryIntegrationTest {
     }
 
     // ---- findById: autoFilter disabled ----
+
+    @Test
+    void templateFindById_autoFilterDisabled_returnsSoftDeletedEntity() {
+        SoftDeleteRepoTestEntity deleted = saveDeleted("deleted");
+        com.zsubera.jpa.autoconfigure.GlobalConfigHolder.getConfig().setSoftDeleteAutoFilter(false);
+
+        Optional<SoftDeleteRepoTestEntity> result = template.findById(SoftDeleteRepoTestEntity.class, deleted.getId());
+
+        assertTrue(result.isPresent());
+        assertEquals("deleted", result.get().getName());
+    }
+
+    @Test
+    void templateFindById_withIgnoreContext_returnsSoftDeletedEntity() {
+        SoftDeleteRepoTestEntity deleted = saveDeleted("deleted");
+
+        Optional<SoftDeleteRepoTestEntity> result =
+            SoftDeleteContext.withIgnore(() -> template.findById(SoftDeleteRepoTestEntity.class, deleted.getId()));
+
+        assertTrue(result.isPresent());
+        assertEquals("deleted", result.get().getName());
+    }
 
     // ---- Helper methods ----
 

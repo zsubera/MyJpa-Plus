@@ -31,31 +31,6 @@ final class EntityFieldExtractor<T> {
 
     private static final Logger log = LoggerFactory.getLogger(EntityFieldExtractor.class);
 
-    /** 缓存 Spring PhysicalNamingStrategy 实例，避免每次 resolveColumnName 都通过反射创建。 */
-    private static final Object CACHED_NAMING_STRATEGY;
-    private static final java.lang.reflect.Method CACHED_TO_PHYSICAL_METHOD;
-
-    static {
-        Object strategy = null;
-        java.lang.reflect.Method method = null;
-        // Spring Boot 3.x moved the class; try both old and new locations
-        String[] candidates = {"org.springframework.boot.orm.jpa.hibernate.SpringPhysicalNamingStrategy",
-            "org.springframework.boot.orm.jpa.SpringPhysicalNamingStrategy"};
-        for (String className : candidates) {
-            try {
-                Class<?> strategyClass = Class.forName(className);
-                strategy = strategyClass.getDeclaredConstructor().newInstance();
-                method = strategyClass.getMethod("toPhysicalColumnName", String.class, java.util.Locale.class);
-                break;
-            } catch (ClassNotFoundException | NoSuchMethodException | InstantiationException | IllegalAccessException
-                | java.lang.reflect.InvocationTargetException ignored) {
-                // try next candidate
-            }
-        }
-        CACHED_NAMING_STRATEGY = strategy;
-        CACHED_TO_PHYSICAL_METHOD = method;
-    }
-
     /** 缓存实体类的持久化字段列表，避免每次反射遍历。使用弱引用键防止类加载器泄漏。 */
     private static final ConcurrentReferenceHashMap<Class<?>, List<Field>> FIELD_CACHE =
         new ConcurrentReferenceHashMap<>(16, ConcurrentReferenceHashMap.ReferenceType.WEAK);
@@ -358,8 +333,12 @@ final class EntityFieldExtractor<T> {
     }
 
     /**
-     * 解析字段对应的数据库列名。优先使用 {@code @Column(name)} 注解，否则使用 Spring Boot 命名策略
-     * （camelCase → snake_case）。命名策略实例在类加载时缓存，避免重复反射创建。
+     * 解析字段对应的数据库列名。优先使用 {@code @Column(name)} 注解，否则回退到
+     * {@code camelCase -> snake_case} 的保守转换。
+     *
+     * <p>
+     * 如果项目使用了自定义 PhysicalNamingStrategy，请为涉及原生 SQL/批量操作的字段显式声明
+     * {@code @Column(name = "...")}，避免列名推断偏差。
      *
      * @param field 实体字段
      * @return 数据库列名
@@ -371,15 +350,6 @@ final class EntityFieldExtractor<T> {
             // 校验注解中的列名以防止注入
             IdentifierValidator.validateColumnName(name);
             return name;
-        }
-        // 使用缓存的 Spring 命名策略实例（camelCase → snake_case）
-        if (CACHED_NAMING_STRATEGY != null && CACHED_TO_PHYSICAL_METHOD != null) {
-            try {
-                return (String)CACHED_TO_PHYSICAL_METHOD.invoke(CACHED_NAMING_STRATEGY, field.getName(),
-                    java.util.Locale.ROOT);
-            } catch (Exception e) {
-                log.debug("Failed to apply Spring naming strategy for field {}: {}", field.getName(), e.getMessage());
-            }
         }
         // 回退到 snake_case 转换
         String name = com.zsubera.jpa.util.StringHelper.camelToSnake(field.getName());
