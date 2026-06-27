@@ -92,11 +92,16 @@ public final class SqlSanitizer {
      * @param sql 原始 SQL 语句
      * @return 脱敏后的 SQL 语句，如果输入为 null 则返回 "null"
      */
+    private static final int MAX_SANITIZE_LENGTH = 100_000;
+
     public static String sanitize(String sql) {
         if (sql == null) {
             return "null";
         }
 
+        if (sql.length() > MAX_SANITIZE_LENGTH) {
+            sql = sql.substring(0, MAX_SANITIZE_LENGTH) + "...[truncated]";
+        }
         String result = sql;
 
         // 替换各种字符串字面量（顺序重要：必须在注释移除之前，防止 -- 跨引号匹配）

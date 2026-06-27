@@ -563,7 +563,7 @@ public class UpdateSpec<T> extends AbstractBulkOperationSpec<T, UpdateSpec<T>> {
      * 选择性驱逐实体类型的 L1 缓存。优先使用 Hibernate 的 SessionFactory 缓存驱逐（仅影响指定实体类型），
      * 非 Hibernate 环境回退到 {@code em.clear()}（会影响所有托管实体）。
      */
-    static void evictEntityCache(EntityManager em, Class<?> entityClass) {
+    public static void evictEntityCache(EntityManager em, Class<?> entityClass) {
         if (entityClass == null) {
             em.clear();
             return;

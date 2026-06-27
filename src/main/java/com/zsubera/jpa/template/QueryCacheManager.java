@@ -539,6 +539,10 @@ public class QueryCacheManager implements CacheAdapter {
      * 同时清理 insertionTimestamps 中对应的陈旧条目。
      */
     // ponytail: sample scales with store size — probes 20% (vs old 10%) for 10k+ entries
+    /** ponytail: 旋转偏移量，每次过期检查前进 sampleSize，避免反复检查同一批条目 */
+    private final java.util.concurrent.atomic.AtomicInteger evictionCursor =
+        new java.util.concurrent.atomic.AtomicInteger(0);
+
     private void evictExpiredEntries() {
         int storeSize = store.size();
         int sampleSize = storeSize > MIN_EXPIRY_SAMPLE_COUNT_SMALL
@@ -546,8 +550,14 @@ public class QueryCacheManager implements CacheAdapter {
         if (sampleSize == 0) {
             return;
         }
+        int skip = evictionCursor.getAndAccumulate(sampleSize, (prev, add) ->
+            prev + add < storeSize ? prev + add : 0);
         int count = 0;
         for (Map.Entry<String, CachedQueryResult<?>> entry : store.entrySet()) {
+            if (skip > 0) {
+                skip--;
+                continue;
+            }
             if (count++ >= sampleSize) {
                 break;
             }
@@ -622,17 +632,19 @@ public class QueryCacheManager implements CacheAdapter {
         if (keyPrefix == null || keyPrefix.isEmpty()) {
             return 0;
         }
-        int count = 0;
-        // 从前缀索引中获取匹配的键集合
+        // 规范化前缀：无冒号时自动追加，确保 startsWith 匹配不会越界到其他前缀
+        String normalizedPrefix = keyPrefix.endsWith(":") ? keyPrefix : keyPrefix + ":";
         String prefix = keyPrefix.endsWith(":") ? keyPrefix.substring(0, keyPrefix.length() - 1) : keyPrefix;
         java.util.Set<String> indexedKeys = prefixIndex.get(prefix);
+        int count = 0;
         if (indexedKeys != null) {
             // 复制集合避免 ConcurrentModificationException
             for (String key : new java.util.ArrayList<>(indexedKeys)) {
-                if (key.startsWith(keyPrefix)) {
+                if (key.startsWith(normalizedPrefix)) {
                     store.remove(key);
                     insertionTimestamps.remove(key);
                     indexedKeys.remove(key);
+                    removeFromPrefixIndex(key);
                     count++;
                 }
             }
@@ -642,9 +654,10 @@ public class QueryCacheManager implements CacheAdapter {
         } else {
             // ponytail: 前缀索引只存储第一级前缀，多段前缀需回退到全量扫描
             for (java.util.Map.Entry<String, CachedQueryResult<?>> entry : store.entrySet()) {
-                if (entry.getKey().startsWith(keyPrefix)) {
+                if (entry.getKey().startsWith(normalizedPrefix)) {
                     store.remove(entry.getKey());
                     insertionTimestamps.remove(entry.getKey());
+                    removeFromPrefixIndex(entry.getKey());
                     count++;
                 }
             }

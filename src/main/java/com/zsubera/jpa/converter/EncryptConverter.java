@@ -191,12 +191,9 @@ public class EncryptConverter implements AttributeConverter<String, String> {
         if (!EncryptionKeyManager.KEY_VALIDATED.get()) {
             validateKeyConfiguration();
         }
-        if (EncryptionKeyManager.getDevSaltWarningLogged().compareAndSet(false, true)
-            && EncryptionKeyManager.isSaltCheckSkipped()) {
-            log.warn("SECURITY: PBKDF2 salt check is skipped via configuration. "
-                + "Encrypted data may not be secure without a proper salt. "
-                + "Set environment variable MYJPA_ENCRYPT_SALT or system property myjpa.encrypt.salt for production.");
-        }
+        // ponytail: getSalt() now throws when no persistent salt is configured,
+        // preventing silent data-loss. The warning previously logged here is
+        // unreachable — deriveKey() -> getSalt() throws first.
         try {
             SecretKeySpec keySpec = EncryptionKeyManager.getKeySpec();
             Cipher cipher = createCipher();

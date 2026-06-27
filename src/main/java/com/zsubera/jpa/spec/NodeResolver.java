@@ -156,8 +156,19 @@ final class NodeResolver {
         Expression<?>[] args = new Expression[node.params.length];
         for (int i = 0; i < node.params.length; i++) {
             Object param = node.params[i];
-            if (param instanceof String fieldName && i == 0) {
-                args[i] = path.get(fieldName);
+            if (i == 0) {
+                if (!(param instanceof String fieldName)) {
+                    throw new QueryBuildException(
+                        "First parameter of function '" + node.functionName + "' must be a field name (String), "
+                            + "but got " + (param != null ? param.getClass().getSimpleName() + ": " + param : "null")
+                            + ". Use a field reference like entity::getFieldName as the first argument.");
+                }
+                try {
+                    args[i] = path.get(fieldName);
+                } catch (IllegalArgumentException e) {
+                    throw new QueryBuildException("Failed to resolve field '" + fieldName
+                        + "' for function '" + node.functionName + "': " + e.getMessage(), e);
+                }
             } else {
                 args[i] = param != null ? cb.literal(param) : cb.nullLiteral(Object.class);
             }

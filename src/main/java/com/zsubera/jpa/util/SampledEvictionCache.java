@@ -97,13 +97,9 @@ public class SampledEvictionCache<K, V> {
         this.maxSize = maxSize;
     }
 
+    // ponytail: ConcurrentHashMap.clear() is thread-safe, no lock needed
     public void clear() {
-        evictionLock.lock();
-        try {
-            store.clear();
-        } finally {
-            evictionLock.unlock();
-        }
+        store.clear();
     }
 
     private void samplingEvict() {

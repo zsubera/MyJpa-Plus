@@ -14,6 +14,7 @@ import org.slf4j.LoggerFactory;
  * 从 EntityManager 自动检测数据库类型（PostgreSQL、MySQL），支持多级回退策略：
  * <ol>
  * <li>JDBC URL 属性检测</li>
+ * <li>hibernate.dialect 属性检测</li>
  * <li>JDBC Connection.getMetaData() 检测</li>
  * <li>Hibernate Session 反射检测</li>
  * <li>手动系统属性配置</li>
@@ -140,7 +141,27 @@ final class DialectDetector {
             log.debug("Failed to detect dialect from properties: {}", ex.getMessage());
         }
 
-        // 优先级 2：通过 EntityManager.unwrap() 的 JDBC Connection.getMetaData() 检测
+        // 优先级 2：从 hibernate.dialect 属性直接读取方言（避免反射 Connection）
+        try {
+            Object dialectProp = emf.getProperties().get("hibernate.dialect");
+            if (dialectProp != null) {
+                String dialectStr = dialectProp.toString().toLowerCase();
+                // Check known Hibernate dialect prefixes first
+                if (dialectStr.contains("postgresql")) {
+                    cacheDialect(factoryKey, "postgresql");
+                    return "postgresql";
+                }
+                if (dialectStr.contains("mysql")) {
+                    cacheDialect(factoryKey, "mysql");
+                    return "mysql";
+                }
+                // Unknown dialect, fall through to other detection strategies
+            }
+        } catch (Exception ex) {
+            log.debug("Failed to detect dialect from hibernate.dialect property: {}", ex.getMessage());
+        }
+
+        // 优先级 3：通过 EntityManager.unwrap() 的 JDBC Connection.getMetaData() 检测
         try {
             java.sql.Connection conn = em.unwrap(java.sql.Connection.class);
             // ponytail: Some connection pools (HikariCP proxy) wrap the Connection.
@@ -161,7 +182,7 @@ final class DialectDetector {
             log.debug("Failed to detect dialect via JDBC Connection.unwrap(): {}", e.getMessage());
         }
 
-        // 优先级 3：Hibernate 回退（仅当 Hibernate 在 classpath 上时）
+        // 优先级 4：Hibernate 回退（仅当 Hibernate 在 classpath 上时）
         try {
             Class<?> sessionClass = Class.forName("org.hibernate.Session");
             Object session = em.unwrap(sessionClass);
@@ -206,7 +227,7 @@ final class DialectDetector {
             log.debug("Hibernate dialect detection failed: {}", e.getMessage());
         }
 
-        // 优先级 4：手动配置
+        // 优先级 5：手动配置
         log.warn("Failed to detect database dialect automatically. "
             + "Set system property 'myjpa-plus.dialect' to 'postgresql', 'mysql', 'oracle', or 'sqlserver' "
             + "to specify manually, or register a custom dialect via DialectDetector.registerDialect().");

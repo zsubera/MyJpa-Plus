@@ -65,7 +65,7 @@ final class EncryptionKeyManager {
     }
 
     private static final java.util.regex.Pattern MULTI_KEY_PATTERN =
-        java.util.regex.Pattern.compile(".*v\\d+:.*,.+");
+        java.util.regex.Pattern.compile("^v\\d+:.*(?:,\\s*v\\d+:.*)+$");
     private static final java.util.regex.Pattern SINGLE_ENTRY_PATTERN =
         java.util.regex.Pattern.compile("v\\d+:.+");
     private static final java.util.regex.Pattern VERSION_PATTERN =
@@ -83,7 +83,6 @@ final class EncryptionKeyManager {
 
     /** package-private for EncryptConverter access. */
     static final AtomicBoolean KEY_VALIDATED = new AtomicBoolean(false);
-    private static final AtomicBoolean DEV_SALT_WARNING_LOGGED = new AtomicBoolean(false);
     private static final java.security.SecureRandom DEV_SECURE_RANDOM = new java.security.SecureRandom();
 
     /** 密钥版本快照。 */
@@ -129,9 +128,8 @@ final class EncryptionKeyManager {
                 if (victim != null) {
                     KEY_CACHE.remove(victim);
                 } else {
-                    // 所有条目都是当前版本或 default，随机淘汰一个非 currentVersion 的
-                    String fallback = KEY_CACHE.keySet().iterator().next();
-                    KEY_CACHE.remove(fallback);
+                    // ponytail: 所有条目都是当前版本或 default，跳过淘汰以避免移除当前版本的密钥
+                    // 升级路径：使用 LRU 淘汰策略（如 Caffeine）
                 }
             }
             String rawKey = resolveRawKey(cacheKey);
@@ -274,13 +272,11 @@ final class EncryptionKeyManager {
                 throw new IllegalStateException("Cannot skip PBKDF2 salt check in production environment. "
                     + "Set environment variable " + SALT_ENV + " or system property " + SALT_PROPERTY + ".");
             }
-            log.warn("SECURITY: PBKDF2 salt check is skipped via configuration. "
-                + "A random salt will be generated per JVM startup — data encrypted in this session "
-                + "WILL NOT BE RECOVERABLE after restart. "
-                + "Set environment variable {} or system property {} for persistent salt.", SALT_ENV, SALT_PROPERTY);
-            byte[] randomSalt = new byte[16];
-            DEV_SECURE_RANDOM.nextBytes(randomSalt);
-            return randomSalt;
+            throw new IllegalStateException(
+                "PBKDF2 salt must be configured for encryption. Without a persistent salt (via "
+                + SALT_ENV + " or " + SALT_PROPERTY + "), encrypted data becomes unrecoverable "
+                + "after application restart. Encryption is BLOCKED until a salt is configured. "
+                + "To explicitly acknowledge this risk (development only), set " + SKIP_SALT_PROPERTY + "=true.");
         }
         throw new IllegalStateException("PBKDF2 salt must be configured. " + "Set environment variable " + SALT_ENV
             + " or system property " + SALT_PROPERTY + ". " + "Salt is required for PBKDF2 key derivation security. "
@@ -337,7 +333,6 @@ final class EncryptionKeyManager {
             KEY_CACHE.clear();
             keyVersionSnapshot = new KeyVersionSnapshot(null, 0);
             KEY_VALIDATED.set(false);
-            DEV_SALT_WARNING_LOGGED.set(false);
         } finally {
             KEY_SPEC_WRITE_LOCK.unlock();
         }
@@ -355,7 +350,4 @@ final class EncryptionKeyManager {
         log.info("Encryption key version cache refreshed");
     }
 
-    static AtomicBoolean getDevSaltWarningLogged() {
-        return DEV_SALT_WARNING_LOGGED;
-    }
 }

@@ -383,7 +383,19 @@ public class MyJpaTemplate implements MyJpaTemplateOperations {
             throw new IllegalArgumentException("ttlSeconds must not be negative");
         }
         // 使用 FQCN 作为缓存键，避免不同包下同名实体类的缓存冲突
-        String cacheKey = entityClass.getName() + ":" + spec.cacheKey() + ":" + spec.getSort();
+        // ponytail: Sort.toString() 可能很长（复杂排序），使用定长编码避免缓存键膨胀
+        String sortPart;
+        org.springframework.data.domain.Sort sort = spec.getSort();
+        if (sort.isSorted()) {
+            StringBuilder sb = new StringBuilder();
+            for (org.springframework.data.domain.Sort.Order o : sort) {
+                sb.append(o.getProperty()).append(o.isAscending() ? 'A' : 'D').append(',');
+            }
+            sortPart = sb.toString();
+        } else {
+            sortPart = "U"; // unsorted
+        }
+        String cacheKey = entityClass.getName() + ":" + spec.cacheKey() + ":" + sortPart;
         List<T> cached = cacheAdapter.get(cacheKey);
         if (cached != null) {
             log.debug("Cache hit for key: {}", cacheKey);
@@ -393,12 +405,15 @@ public class MyJpaTemplate implements MyJpaTemplateOperations {
         List<T> result = findAll(entityClass, spec);
         List<T> immutableResult = List.copyOf(result);
         if (org.springframework.transaction.support.TransactionSynchronizationManager.isActualTransactionActive()) {
+            // ponytail: 立即缓存以缓解并发缓存击穿（防止同一查询在事务提交前反复执行）。
+            // 如果事务回滚，缓存条目会在自然 TTL 后过期，不会导致数据不一致
+            // （未提交的数据不会被其他事务看到）。
+            cacheAdapter.put(cacheKey, immutableResult, ttlSeconds);
             org.springframework.transaction.support.TransactionSynchronizationManager
                 .registerSynchronization(new org.springframework.transaction.support.TransactionSynchronization() {
                     @Override
                     public void afterCommit() {
-                        cacheAdapter.put(cacheKey, immutableResult, ttlSeconds);
-                        log.debug("Cache populated after transaction commit for key: {}", cacheKey);
+                        log.debug("Cache confirmed after transaction commit for key: {}", cacheKey);
                     }
                 });
         } else {

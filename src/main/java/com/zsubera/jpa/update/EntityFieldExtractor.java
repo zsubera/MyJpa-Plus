@@ -224,6 +224,11 @@ final class EntityFieldExtractor<T> {
      */
     private Object getFieldValue(Object entity, Field field) throws Exception {
         Class<?> cls = entity.getClass();
+        String clsName = cls.getName();
+        int idx = clsName.indexOf("$$");
+        if (idx > 0) {
+            cls = cls.getSuperclass();
+        }
         String fieldName = field.getName();
         // 尝试 getXxx() getter 方法
         String getterName = "get" + Character.toUpperCase(fieldName.charAt(0)) + fieldName.substring(1);

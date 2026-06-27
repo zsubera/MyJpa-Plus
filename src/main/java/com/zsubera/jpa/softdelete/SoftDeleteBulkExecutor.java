@@ -3,6 +3,7 @@ package com.zsubera.jpa.softdelete;
 import com.zsubera.jpa.annotation.SoftDelete;
 import com.zsubera.jpa.exception.MyJpaPlusException;
 import com.zsubera.jpa.update.AuditUtils;
+import com.zsubera.jpa.update.UpdateSpec;
 import jakarta.persistence.EntityManager;
 import java.lang.reflect.Field;
 import java.util.List;
@@ -122,7 +123,7 @@ public final class SoftDeleteBulkExecutor {
             + " rows, exceeding the pre-check limit of " + maxRows
             + ". This indicates a race condition between COUNT and UPDATE. "
             + "Consider using a transaction with pessimistic locking or softDeleteByIds() with explicit ID lists.");
-        if (updated > 0) { em.clear(); publishEvent(entityClass, updated); }
+        if (updated > 0) { UpdateSpec.evictEntityCache(em, entityClass); publishEvent(entityClass, updated); }
         return updated;
     }
 
@@ -166,7 +167,7 @@ public final class SoftDeleteBulkExecutor {
             for (int j = 0; j < batch.size(); j++) query.setParameter("id" + j, batch.get(j));
             total += query.executeUpdate();
         }
-        if (total > 0) { em.clear(); publishEvent(entityClass, total); }
+        if (total > 0) { UpdateSpec.evictEntityCache(em, entityClass); publishEvent(entityClass, total); }
         return total;
     }
 
@@ -206,7 +207,7 @@ public final class SoftDeleteBulkExecutor {
         int updated = em.createQuery(update).executeUpdate();
         if (maxRows > 0 && updated > maxRows) throw new IllegalStateException("softDeleteAllUsingCriteriaUpdate affected " + updated
             + " rows, exceeding the limit of " + maxRows + ". Consider using softDeleteByIdsUsingEntityManager() with explicit ID lists.");
-        if (updated > 0) { em.clear(); publishEvent(entityClass, updated); }
+        if (updated > 0) { UpdateSpec.evictEntityCache(em, entityClass); publishEvent(entityClass, updated); }
         return updated;
     }
 
