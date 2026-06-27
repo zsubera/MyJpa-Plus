@@ -18,7 +18,6 @@ import jakarta.persistence.criteria.CriteriaQuery;
 import jakarta.persistence.criteria.Root;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 import java.util.function.Consumer;
@@ -183,7 +182,8 @@ public class MyJpaTemplate implements MyJpaTemplateOperations {
      * @param maxResults 最大返回行数，或 {@code -1} 表示禁用
      * @throws IllegalArgumentException 如果值不是正数且不等于 -1
      */
-    private static void syncToGlobalConfig(java.util.function.Consumer<com.zsubera.jpa.autoconfigure.MyJpaPlusGlobalConfig> setter) {
+    private static void
+        syncToGlobalConfig(java.util.function.Consumer<com.zsubera.jpa.autoconfigure.MyJpaPlusGlobalConfig> setter) {
         com.zsubera.jpa.autoconfigure.MyJpaPlusGlobalConfig config =
             com.zsubera.jpa.autoconfigure.GlobalConfigHolder.getConfig();
         if (config != null) {
@@ -577,7 +577,8 @@ public class MyJpaTemplate implements MyJpaTemplateOperations {
     }
 
     private void initializeHelpers(boolean requireTransactionalHelpers) {
-        if (keysetPaginationHelper != null && (!requireTransactionalHelpers || bulkOperationTemplate != null && batchSaveTemplate != null)) {
+        if (keysetPaginationHelper != null
+            && (!requireTransactionalHelpers || bulkOperationTemplate != null && batchSaveTemplate != null)) {
             return;
         }
         synchronized (helperInitMonitor) {
@@ -593,7 +594,8 @@ public class MyJpaTemplate implements MyJpaTemplateOperations {
                     throw new IllegalStateException(
                         "PlatformTransactionManager not available. Batch operations require a PlatformTransactionManager bean.");
                 }
-                log.debug("PlatformTransactionManager bean not found. Batch helpers will initialize lazily when needed.");
+                log.debug(
+                    "PlatformTransactionManager bean not found. Batch helpers will initialize lazily when needed.");
                 return;
             }
             bulkOperationTemplate = new BulkOperationTemplate(entityManager, maxBulkOperationRows, txManager);
@@ -976,7 +978,8 @@ public class MyJpaTemplate implements MyJpaTemplateOperations {
      * 从 GlobalConfigHolder 解析运行时配置值。优先使用 GlobalConfigHolder 中的值（来自 application.yml），
      * 回退到本地字段值（程序式配置）。
      */
-    private static int resolveConfigValue(java.util.function.Function<com.zsubera.jpa.autoconfigure.MyJpaPlusGlobalConfig, Integer> getter,
+    private static int resolveConfigValue(
+        java.util.function.Function<com.zsubera.jpa.autoconfigure.MyJpaPlusGlobalConfig, Integer> getter,
         int localFallback) {
         com.zsubera.jpa.autoconfigure.MyJpaPlusGlobalConfig config =
             com.zsubera.jpa.autoconfigure.GlobalConfigHolder.getConfig();
@@ -990,25 +993,22 @@ public class MyJpaTemplate implements MyJpaTemplateOperations {
     }
 
     private int resolveMaxResults() {
-        return resolveConfigValue(
-            com.zsubera.jpa.autoconfigure.MyJpaPlusGlobalConfig::getMaxResults, maxResults);
+        return resolveConfigValue(com.zsubera.jpa.autoconfigure.MyJpaPlusGlobalConfig::getMaxResults, maxResults);
     }
 
     private int resolveDeepPaginationOffsetThreshold() {
-        return resolveConfigValue(
-            com.zsubera.jpa.autoconfigure.MyJpaPlusGlobalConfig::getDeepPaginationOffsetThreshold,
+        return resolveConfigValue(com.zsubera.jpa.autoconfigure.MyJpaPlusGlobalConfig::getDeepPaginationOffsetThreshold,
             deepPaginationOffsetThreshold);
     }
 
     private int resolveDeepPaginationOffsetLimit() {
-        return resolveConfigValue(
-            com.zsubera.jpa.autoconfigure.MyJpaPlusGlobalConfig::getDeepPaginationOffsetLimit,
+        return resolveConfigValue(com.zsubera.jpa.autoconfigure.MyJpaPlusGlobalConfig::getDeepPaginationOffsetLimit,
             deepPaginationOffsetLimit);
     }
 
     private void checkDeepPagination(long offset) {
-        DeepPaginationGuard.check(offset, resolveDeepPaginationOffsetThreshold(),
-            resolveDeepPaginationOffsetLimit(), lastDeepPaginationWarnTime);
+        DeepPaginationGuard.check(offset, resolveDeepPaginationOffsetThreshold(), resolveDeepPaginationOffsetLimit(),
+            lastDeepPaginationWarnTime);
     }
 
     /**
@@ -1383,15 +1383,16 @@ public class MyJpaTemplate implements MyJpaTemplateOperations {
             // fetchLimit=maxResults, 结果集被截断到 maxResults 行
             // 如果 content.size() < fetchLimit，说明数据已取完 → 无下一页
             // 如果 content.size() == fetchLimit（==maxResults），可能还有更多，
-            //   但无法区分"正好 maxResults 行"和"被截断"，保守标记 hasNext=true
+            // 但无法区分"正好 maxResults 行"和"被截断"，保守标记 hasNext=true
             hasNext = content.size() >= effectiveMaxResults;
             if (hasNext && content.size() <= pageable.getPageSize()) {
                 // 当 maxResults <= pageSize 时，上面逻辑会误报
                 // 因为取到的行数永远 >= maxResults（等于 pageSize+1 截断后可能刚好等于 maxResults）
                 // 这种情况无法判断，保守返回 true
-                log.warn("findSlice with maxResultsLimited=true " +
-                    "(maxResults={}, pageSize={}) cannot accurately determine hasNext. " +
-                    "Consider increasing maxResults or reducing pageSize.",
+                log.warn(
+                    "findSlice with maxResultsLimited=true "
+                        + "(maxResults={}, pageSize={}) cannot accurately determine hasNext. "
+                        + "Consider increasing maxResults or reducing pageSize.",
                     effectiveMaxResults, pageable.getPageSize());
             }
         } else {

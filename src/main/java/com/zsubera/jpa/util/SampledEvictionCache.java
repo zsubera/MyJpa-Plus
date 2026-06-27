@@ -1,7 +1,6 @@
 package com.zsubera.jpa.util;
 
 import java.util.Iterator;
-import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -43,7 +42,8 @@ public class SampledEvictionCache<K, V> {
      * @param initialCapacity     ConcurrentHashMap 初始容量
      */
     public SampledEvictionCache(int maxSize, double evictionTargetRatio, int samplingInterval, int initialCapacity) {
-        if (maxSize <= 0) throw new IllegalArgumentException("maxSize must be positive, got: " + maxSize);
+        if (maxSize <= 0)
+            throw new IllegalArgumentException("maxSize must be positive, got: " + maxSize);
         if (evictionTargetRatio <= 0 || evictionTargetRatio >= 1)
             throw new IllegalArgumentException("evictionTargetRatio must be in (0, 1), got: " + evictionTargetRatio);
         if (samplingInterval <= 0)
@@ -93,7 +93,8 @@ public class SampledEvictionCache<K, V> {
      * 动态调整最大容量。驱逐触发门槛将在下一次采样检查时生效。
      */
     public void setMaxSize(int maxSize) {
-        if (maxSize <= 0) throw new IllegalArgumentException("maxSize must be positive, got: " + maxSize);
+        if (maxSize <= 0)
+            throw new IllegalArgumentException("maxSize must be positive, got: " + maxSize);
         this.maxSize = maxSize;
     }
 
@@ -115,7 +116,7 @@ public class SampledEvictionCache<K, V> {
         try {
             int currentSize = store.size();
             if (currentSize > maxSize) {
-                int target = Math.max(1, (int) (maxSize * evictionTargetRatio));
+                int target = Math.max(1, (int)(maxSize * evictionTargetRatio));
                 int toRemove = currentSize - target;
                 if (toRemove > 0) {
                     int removed = 0;

@@ -92,12 +92,13 @@ class EncryptConverterTest {
     }
 
     @Test
-    @DisplayName("missing key throws IllegalStateException at validation time")
+    @DisplayName("missing key throws MyJpaPlusException at validation time")
     void shouldThrowWhenKeyNotSet() {
         System.clearProperty("myjpa.encrypt.key");
         EncryptConverter.clearCaches();
         EncryptConverter noKeyConverter = new EncryptConverter();
-        assertThrows(IllegalStateException.class, () -> noKeyConverter.convertToDatabaseColumn("test"));
+        assertThrows(com.zsubera.jpa.exception.MyJpaPlusException.class,
+            () -> noKeyConverter.convertToDatabaseColumn("test"));
     }
 
     @Test

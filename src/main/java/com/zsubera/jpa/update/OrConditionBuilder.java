@@ -98,8 +98,7 @@ public class OrConditionBuilder<T, SELF extends AbstractBulkOperationSpec<T, SEL
                 fieldNames[i] = parent.property(fields[i]);
             }
             String pattern = com.zsubera.jpa.spec.ConditionalMethods.wrapLikePattern(keyword);
-            nodes.add(new BulkConditionNode.LeafNode(
-                AbstractBulkOperationSpec.buildMultiLikeFn(fieldNames, pattern)));
+            nodes.add(new BulkConditionNode.LeafNode(AbstractBulkOperationSpec.buildMultiLikeFn(fieldNames, pattern)));
         }
         return this;
     }

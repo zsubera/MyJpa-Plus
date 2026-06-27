@@ -53,48 +53,38 @@ public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> ext
     Pattern SAFE_NESTED_FIELD_NAME_PATTERN = Pattern.compile("^[a-zA-Z_][a-zA-Z0-9_]*(\\.[a-zA-Z_][a-zA-Z0-9_]*)*$");
 
     /** 字符串函数。 */
-    Set<String> STRING_FUNCTIONS = Set.of(
-        "LOWER", "UPPER", "TRIM", "LTRIM", "RTRIM", "LENGTH", "CHAR_LENGTH",
-        "CONCAT", "SUBSTRING", "SUBSTR", "REPLACE", "LEFT", "RIGHT",
-        "POSITION", "OVERLAY", "TRANSLATE", "REVERSE", "REPEAT", "SPACE",
-        "INITCAP", "LPAD", "RPAD", "ASCII", "CHR", "CONCAT_WS", "FORMAT", "INSERT", "LOCATE");
+    Set<String> STRING_FUNCTIONS = Set.of("LOWER", "UPPER", "TRIM", "LTRIM", "RTRIM", "LENGTH", "CHAR_LENGTH", "CONCAT",
+        "SUBSTRING", "SUBSTR", "REPLACE", "LEFT", "RIGHT", "POSITION", "OVERLAY", "TRANSLATE", "REVERSE", "REPEAT",
+        "SPACE", "INITCAP", "LPAD", "RPAD", "ASCII", "CHR", "CONCAT_WS", "FORMAT", "INSERT", "LOCATE");
 
     /** 数学函数。 */
-    Set<String> MATH_FUNCTIONS = Set.of(
-        "ABS", "ROUND", "CEIL", "FLOOR", "MOD", "SIGN", "POWER", "SQRT", "LOG", "LN", "EXP",
-        "PI", "RADIANS", "DEGREES", "SIN", "COS", "TAN", "ASIN", "ACOS", "ATAN", "ATAN2", "CBRT",
-        "FACTORIAL", "RANDOM", "RAND");
+    Set<String> MATH_FUNCTIONS =
+        Set.of("ABS", "ROUND", "CEIL", "FLOOR", "MOD", "SIGN", "POWER", "SQRT", "LOG", "LN", "EXP", "PI", "RADIANS",
+            "DEGREES", "SIN", "COS", "TAN", "ASIN", "ACOS", "ATAN", "ATAN2", "CBRT", "FACTORIAL", "RANDOM", "RAND");
 
     /** 日期/时间函数。 */
-    Set<String> DATE_FUNCTIONS = Set.of(
-        "NOW", "CURRENT_TIMESTAMP", "CURRENT_DATE", "CURRENT_TIME",
-        "EXTRACT", "DATE_FORMAT", "TO_CHAR", "TO_DATE", "TO_TIMESTAMP",
-        "YEAR", "MONTH", "DAY", "HOUR", "MINUTE", "SECOND",
-        "ADD_MONTHS", "ADD_DAYS", "DATE_DIFF", "DATEDIFF",
-        "TRUNCATE", "DATE_TRUNC", "DATE_TRUNCATE", "DATETRUNC");
+    Set<String> DATE_FUNCTIONS = Set.of("NOW", "CURRENT_TIMESTAMP", "CURRENT_DATE", "CURRENT_TIME", "EXTRACT",
+        "DATE_FORMAT", "TO_CHAR", "TO_DATE", "TO_TIMESTAMP", "YEAR", "MONTH", "DAY", "HOUR", "MINUTE", "SECOND",
+        "ADD_MONTHS", "ADD_DAYS", "DATE_DIFF", "DATEDIFF", "TRUNCATE", "DATE_TRUNC", "DATE_TRUNCATE", "DATETRUNC");
 
     /** 条件/逻辑函数。 */
-    Set<String> CONDITION_FUNCTIONS = Set.of(
-        "COALESCE", "NULLIF", "IFNULL", "IF", "NVL", "NVL2", "DECODE");
+    Set<String> CONDITION_FUNCTIONS = Set.of("COALESCE", "NULLIF", "IFNULL", "IF", "NVL", "NVL2", "DECODE");
 
     /** JSON 函数。 */
-    Set<String> JSON_FUNCTIONS = Set.of(
-        "JSONB_EXISTS", "JSONB_EXTRACT_PATH_TEXT", "JSON_VALUE",
-        "JSON_OBJECT", "JSON_ARRAY", "JSON_EXTRACT", "JSON_UNQUOTE");
+    Set<String> JSON_FUNCTIONS = Set.of("JSONB_EXISTS", "JSONB_EXTRACT_PATH_TEXT", "JSON_VALUE", "JSON_OBJECT",
+        "JSON_ARRAY", "JSON_EXTRACT", "JSON_UNQUOTE");
 
     /** 聚合/窗口函数。 */
-    Set<String> AGGREGATE_FUNCTIONS = Set.of(
-        "COUNT", "SUM", "AVG", "MIN", "MAX", "GROUP_CONCAT", "LISTAGG", "ARRAY_AGG",
-        "ROW_NUMBER", "RANK", "DENSE_RANK", "NTILE", "LAG", "LEAD", "FIRST_VALUE", "LAST_VALUE", "NTH_VALUE");
+    Set<String> AGGREGATE_FUNCTIONS =
+        Set.of("COUNT", "SUM", "AVG", "MIN", "MAX", "GROUP_CONCAT", "LISTAGG", "ARRAY_AGG", "ROW_NUMBER", "RANK",
+            "DENSE_RANK", "NTILE", "LAG", "LEAD", "FIRST_VALUE", "LAST_VALUE", "NTH_VALUE");
 
     /** 几何/数组函数。 */
-    Set<String> GEOMETRY_ARRAY_FUNCTIONS = Set.of(
-        "ST_CONTAINS", "ST_DISTANCE", "ST_WITHIN", "ST_INTERSECTS",
-        "ARRAY_LENGTH");
+    Set<String> GEOMETRY_ARRAY_FUNCTIONS =
+        Set.of("ST_CONTAINS", "ST_DISTANCE", "ST_WITHIN", "ST_INTERSECTS", "ARRAY_LENGTH");
 
     /** 类型/UUID 函数。 */
-    Set<String> TYPE_UUID_FUNCTIONS = Set.of(
-        "CAST", "TYPEOF", "UUID", "UUID_GENERATE_V4", "HEX", "UNHEX");
+    Set<String> TYPE_UUID_FUNCTIONS = Set.of("CAST", "TYPEOF", "UUID", "UUID_GENERATE_V4", "HEX", "UNHEX");
 
     /**
      * 安全数据库函数名白名单。仅允许调用以下常见安全函数。

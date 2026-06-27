@@ -177,8 +177,8 @@ final class NodeResolver {
                 try {
                     args[i] = path.get(fieldName);
                 } catch (IllegalArgumentException e) {
-                    throw new QueryBuildException("Failed to resolve field '" + fieldName
-                        + "' for function '" + node.functionName + "': " + e.getMessage(), e);
+                    throw new QueryBuildException("Failed to resolve field '" + fieldName + "' for function '"
+                        + node.functionName + "': " + e.getMessage(), e);
                 }
             } else {
                 args[i] = param != null ? cb.literal(param) : cb.nullLiteral(Object.class);

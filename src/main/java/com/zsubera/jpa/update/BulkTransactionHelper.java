@@ -35,7 +35,8 @@ final class BulkTransactionHelper {
      * @param action 要执行的操作（接收 EntityManager 并返回行数）
      * @return 操作结果
      */
-    static int executeInManagedTransaction(EntityManager em, java.util.function.Function<EntityManager, Integer> action) {
+    static int executeInManagedTransaction(EntityManager em,
+        java.util.function.Function<EntityManager, Integer> action) {
         return executeInManagedTransactionInternal(em, () -> action.apply(em));
     }
 

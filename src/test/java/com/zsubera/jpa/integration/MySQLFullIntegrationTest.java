@@ -1314,10 +1314,8 @@ class MySQLFullIntegrationTest {
     void repository_update_lambda() {
         save("alice", 1);
 
-        int affected = jpaTemplate.execute(
-            jpaTemplate.update(MySQLTestEntity.class)
-                .set(MySQLTestEntity::getStatus, 99)
-                .eq(MySQLTestEntity::getName, "alice"));
+        int affected = jpaTemplate.execute(jpaTemplate.update(MySQLTestEntity.class).set(MySQLTestEntity::getStatus, 99)
+            .eq(MySQLTestEntity::getName, "alice"));
         assertEquals(1, affected);
         em.flush();
         em.clear();
@@ -1330,9 +1328,8 @@ class MySQLFullIntegrationTest {
     void repository_delete_lambda() {
         save("alice", 1);
 
-        int affected = jpaTemplate.execute(
-            jpaTemplate.delete(MySQLTestEntity.class)
-                .eq(MySQLTestEntity::getName, "alice"));
+        int affected =
+            jpaTemplate.execute(jpaTemplate.delete(MySQLTestEntity.class).eq(MySQLTestEntity::getName, "alice"));
         assertEquals(1, affected);
         em.flush();
         em.clear();

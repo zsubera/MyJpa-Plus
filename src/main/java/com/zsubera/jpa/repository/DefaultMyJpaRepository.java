@@ -187,7 +187,10 @@ public class DefaultMyJpaRepository<T, ID> extends SimpleJpaRepository<T, ID> im
      * @param action 要执行的操作
      */
     public static void withAutoFilterOverride(Boolean value, Runnable action) {
-        runWithOverride(value, () -> { action.run(); return null; });
+        runWithOverride(value, () -> {
+            action.run();
+            return null;
+        });
     }
 
     /**
@@ -416,7 +419,8 @@ public class DefaultMyJpaRepository<T, ID> extends SimpleJpaRepository<T, ID> im
             return java.util.Collections.emptyList();
         }
         String idFieldName = EntityClassResolver.resolveIdFieldName(domainClass);
-        Specification<T> idSpec = Specification.where((root, query, cb) -> com.zsubera.jpa.util.InClauseBuilder.in(cb, root.get(idFieldName), idList));
+        Specification<T> idSpec = Specification
+            .where((root, query, cb) -> com.zsubera.jpa.util.InClauseBuilder.in(cb, root.get(idFieldName), idList));
         Specification<T> softDeleteSpec = SoftDeleteHelper.isNotDeleted(domainClass);
         if (softDeleteSpec == null) {
             return super.findAll(idSpec);

@@ -114,7 +114,7 @@ public class MyJpaPlusAutoConfiguration {
             if (globalConfig != null) {
                 DefaultMyJpaRepository.setGlobalConfigProvider(DefaultMyJpaRepository.createMutableConfigProvider(
                     globalConfig.isSoftDeleteAutoFilter(), globalConfig.isBlockUnconditionalDelete()));
-                    // 通过 GlobalConfigHolder 集中管理全局配置访问
+                // 通过 GlobalConfigHolder 集中管理全局配置访问
                 GlobalConfigHolder.setApplicationContext(applicationContext);
                 GlobalConfigHolder.setConfig(globalConfig);
             }
@@ -328,7 +328,8 @@ public class MyJpaPlusAutoConfiguration {
                 Object auth = getAuthenticationMethod != null ? getAuthenticationMethod.invoke(context) : null;
                 if (auth != null && isAuthenticatedMethod != null) {
                     Boolean authenticated = (Boolean)isAuthenticatedMethod.invoke(auth);
-                    if (Boolean.TRUE.equals(authenticated) && !isAnonymousAuthentication(auth) && getNameMethod != null) {
+                    if (Boolean.TRUE.equals(authenticated) && !isAnonymousAuthentication(auth)
+                        && getNameMethod != null) {
                         String principalName = (String)getNameMethod.invoke(auth);
                         if (principalName != null && !principalName.isBlank()
                             && !"anonymousUser".equalsIgnoreCase(principalName)) {
@@ -584,6 +585,5 @@ public class MyJpaPlusAutoConfiguration {
     @org.springframework.context.annotation.Configuration
     @EnableJpaAuditing
     @ConditionalOnMissingBean(name = "auditingHandler")
-    static class JpaAuditingConfig {
-    }
+    static class JpaAuditingConfig {}
 }

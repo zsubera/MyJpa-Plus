@@ -92,7 +92,8 @@ public final class GlobalConfigHolder {
                 cachedBean = bean;
                 return bean;
             } catch (Exception e) {
-                log.warn("Failed to lookup MyJpaPlusGlobalConfig from ApplicationContext, falling back to static config: {}",
+                log.warn(
+                    "Failed to lookup MyJpaPlusGlobalConfig from ApplicationContext, falling back to static config: {}",
                     e.getMessage());
                 cachedBean = null;
             }

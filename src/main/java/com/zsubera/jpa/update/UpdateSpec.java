@@ -57,7 +57,6 @@ public class UpdateSpec<T> extends AbstractBulkOperationSpec<T, UpdateSpec<T>> {
     private static final com.zsubera.jpa.util.SampledEvictionCache<String, Boolean> NO_VERSION_CACHE =
         new com.zsubera.jpa.util.SampledEvictionCache<>(MAX_CACHE_SIZE, 0.75, 100, 64);
 
-
     private final List<SetClause> setClauses = new ArrayList<>();
     private boolean allowUnconditional = false;
 
@@ -223,8 +222,8 @@ public class UpdateSpec<T> extends AbstractBulkOperationSpec<T, UpdateSpec<T>> {
         return executeWithLimitCheck(em, "UPDATE", e -> {
             CriteriaUpdate<T> update = toUpdate(e);
             if (log.isDebugEnabled()) {
-                log.debug("Executing UPDATE on {} with {} set clauses and {} conditions",
-                    entityClass.getSimpleName(), setClauses.size() + expressionSetClauses.size(), conditionNodes.size());
+                log.debug("Executing UPDATE on {} with {} set clauses and {} conditions", entityClass.getSimpleName(),
+                    setClauses.size() + expressionSetClauses.size(), conditionNodes.size());
             }
             return e.createQuery(update).executeUpdate();
         });
@@ -359,8 +358,8 @@ public class UpdateSpec<T> extends AbstractBulkOperationSpec<T, UpdateSpec<T>> {
         log.warn("AUDIT: Executing unconditional UPDATE on {} — this will affect ALL rows! Call stack: {}",
             entityClass.getSimpleName(), AuditUtils.getCallStack());
         if (log.isDebugEnabled()) {
-            log.debug("Executing unconditional UPDATE on {} with {} set clauses",
-                entityClass.getSimpleName(), setClauses.size() + expressionSetClauses.size());
+            log.debug("Executing unconditional UPDATE on {} with {} set clauses", entityClass.getSimpleName(),
+                setClauses.size() + expressionSetClauses.size());
         }
         CriteriaUpdate<T> update = buildCriteriaUpdate(em);
         var q = em.createQuery(update);
@@ -527,10 +526,9 @@ public class UpdateSpec<T> extends AbstractBulkOperationSpec<T, UpdateSpec<T>> {
                         + "Ensure the field exists as a direct class field (not a getter-only property). "
                         + "For computed expressions, use setExpr() instead.");
                 }
-                throw new IllegalArgumentException(
-                    operation + "() requires a numeric field, but field '" + fieldName + "' in "
-                        + entityClass.getSimpleName() + " has type: " + fieldType
-                        + ". Use set() for non-numeric fields.");
+                throw new IllegalArgumentException(operation + "() requires a numeric field, but field '" + fieldName
+                    + "' in " + entityClass.getSimpleName() + " has type: " + fieldType
+                    + ". Use set() for non-numeric fields.");
             }
             return;
         }

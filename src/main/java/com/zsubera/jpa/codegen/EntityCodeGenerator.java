@@ -329,8 +329,8 @@ public final class EntityCodeGenerator {
         "enum", "extends", "final", "finally", "float", "for", "goto", "if", "implements", "import", "instanceof",
         "int", "interface", "long", "native", "new", "package", "private", "protected", "public", "return", "short",
         "static", "strictfp", "super", "switch", "synchronized", "this", "throw", "throws", "transient", "try", "void",
-        "volatile", "while", "true", "false", "null", "var", "yield", "record", "sealed", "permits",
-        "exports", "module", "opens", "provides", "requires", "to", "transitive", "uses", "with", "_");
+        "volatile", "while", "true", "false", "null", "var", "yield", "record", "sealed", "permits", "exports",
+        "module", "opens", "provides", "requires", "to", "transitive", "uses", "with", "_");
 
     /**
      * 校验字段名是否为 Java 保留字，如果是则追加下划线后缀。

@@ -55,7 +55,8 @@ class EncryptConverterExtendedTest {
             Field f = EncryptionKeyManager.class.getDeclaredField("KEY_VALIDATED");
             f.setAccessible(true);
             ((java.util.concurrent.atomic.AtomicBoolean)f.get(null)).set(false);
-            assertThrows(IllegalStateException.class, () -> EncryptConverter.validateKeyConfiguration());
+            assertThrows(com.zsubera.jpa.exception.MyJpaPlusException.class,
+                () -> EncryptConverter.validateKeyConfiguration());
         } catch (Exception e) {
             fail(e);
         }
@@ -193,7 +194,8 @@ class EncryptConverterExtendedTest {
     void isProductionEnvironment_requireSaltProperty() throws Exception {
         System.setProperty("myjpa-plus.encrypt.require-salt", "true");
         try {
-            Method m = com.zsubera.jpa.autoconfigure.EnvironmentHelper.class.getDeclaredMethod("isProductionEnvironment");
+            Method m =
+                com.zsubera.jpa.autoconfigure.EnvironmentHelper.class.getDeclaredMethod("isProductionEnvironment");
             m.setAccessible(true);
             assertTrue((boolean)m.invoke(null));
         } finally {
@@ -205,7 +207,8 @@ class EncryptConverterExtendedTest {
     void isProductionEnvironment_prodProfile() throws Exception {
         System.setProperty("spring.profiles.active", "prod");
         try {
-            Method m = com.zsubera.jpa.autoconfigure.EnvironmentHelper.class.getDeclaredMethod("isProductionEnvironment");
+            Method m =
+                com.zsubera.jpa.autoconfigure.EnvironmentHelper.class.getDeclaredMethod("isProductionEnvironment");
             m.setAccessible(true);
             assertTrue((boolean)m.invoke(null));
         } finally {
@@ -217,7 +220,8 @@ class EncryptConverterExtendedTest {
     void isProductionEnvironment_notProd() throws Exception {
         System.setProperty("spring.profiles.active", "dev");
         try {
-            Method m = com.zsubera.jpa.autoconfigure.EnvironmentHelper.class.getDeclaredMethod("isProductionEnvironment");
+            Method m =
+                com.zsubera.jpa.autoconfigure.EnvironmentHelper.class.getDeclaredMethod("isProductionEnvironment");
             m.setAccessible(true);
             assertFalse((boolean)m.invoke(null));
         } finally {
@@ -260,7 +264,8 @@ class EncryptConverterExtendedTest {
         System.setProperty("myjpa-plus.encrypt.skip-salt-check", "true");
         EncryptConverter.clearCaches();
         EncryptConverter converter = new EncryptConverter();
-        assertThrows(IllegalStateException.class, () -> converter.convertToDatabaseColumn("test"));
+        assertThrows(com.zsubera.jpa.exception.MyJpaPlusException.class,
+            () -> converter.convertToDatabaseColumn("test"));
     }
 
     @Test

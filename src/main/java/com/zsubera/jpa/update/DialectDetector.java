@@ -128,14 +128,14 @@ final class DialectDetector {
             }
             if (jdbcUrl != null) {
                 String url = jdbcUrl.toString().toLowerCase();
-                    if (url.contains("postgresql")) {
-                        cacheDialect(factoryKey, "postgresql");
-                        return "postgresql";
-                    }
-                    if (url.contains("mysql")) {
-                        cacheDialect(factoryKey, "mysql");
-                        return "mysql";
-                    }
+                if (url.contains("postgresql")) {
+                    cacheDialect(factoryKey, "postgresql");
+                    return "postgresql";
+                }
+                if (url.contains("mysql")) {
+                    cacheDialect(factoryKey, "mysql");
+                    return "mysql";
+                }
             }
         } catch (Exception ex) {
             log.debug("Failed to detect dialect from properties: {}", ex.getMessage());

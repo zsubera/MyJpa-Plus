@@ -596,8 +596,7 @@ class MySQLFinalCoverageIntegrationTest {
     @Test
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
     void template_saveAllBatchedInSeparateTransactions_throwsOnNull() {
-        assertThrows(IllegalArgumentException.class,
-            () -> jpaTemplate.saveAllBatchedInSeparateTransactions(null, 10));
+        assertThrows(IllegalArgumentException.class, () -> jpaTemplate.saveAllBatchedInSeparateTransactions(null, 10));
     }
 
     // ==================== MyJpaTemplate.find with maxResults ====================

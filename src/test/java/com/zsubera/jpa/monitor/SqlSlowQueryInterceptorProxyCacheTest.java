@@ -61,16 +61,16 @@ class SqlSlowQueryInterceptorProxyCacheTest {
     }
 
     /**
-     * 测试代理类缓存驱逐使用 ReentrantLock 保证线程安全。
+     * 测试代理类缓存使用 SampledEvictionCache.computeIfAbsent 保证线程安全（无需显式锁）。
      */
     @Test
     void proxyClassCacheEvictionShouldUseLock() {
         try {
-            java.lang.reflect.Field lockField = SlowQueryDataSourceProxy.class.getDeclaredField("CACHE_LOCK");
-            lockField.setAccessible(true);
-            Object lock = lockField.get(null);
-            assertInstanceOf(java.util.concurrent.locks.ReentrantLock.class, lock,
-                "CACHE_LOCK should be a ReentrantLock");
+            java.lang.reflect.Field cacheField = SlowQueryDataSourceProxy.class.getDeclaredField("PROXY_CLASS_CACHE");
+            cacheField.setAccessible(true);
+            Object cache = cacheField.get(null);
+            assertInstanceOf(com.zsubera.jpa.util.SampledEvictionCache.class, cache,
+                "PROXY_CLASS_CACHE should be a SampledEvictionCache with internal thread safety");
         } catch (Exception e) {
             fail("Failed to verify eviction mechanism: " + e.getMessage());
         }

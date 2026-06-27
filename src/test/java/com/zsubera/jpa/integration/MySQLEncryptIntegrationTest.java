@@ -19,7 +19,8 @@ import org.springframework.test.context.TestPropertySource;
     "spring.datasource.username=root", "spring.datasource.password=1351.zhong",
     "spring.datasource.driver-class-name=com.mysql.cj.jdbc.Driver",
     "spring.jpa.database-platform=org.hibernate.dialect.MySQLDialect", "spring.jpa.hibernate.ddl-auto=create",
-    "myjpa.encrypt.key=1234567890123456", "myjpa.encrypt.salt=test-salt-value", "myjpa-plus.encrypt.skip-salt-check=true"})
+    "myjpa.encrypt.key=1234567890123456", "myjpa.encrypt.salt=test-salt-value",
+    "myjpa-plus.encrypt.skip-salt-check=true"})
 class MySQLEncryptIntegrationTest {
 
     static {

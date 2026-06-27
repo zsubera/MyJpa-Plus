@@ -14,7 +14,8 @@ import org.springframework.test.context.TestPropertySource;
 
 @Tag("integration")
 @SpringBootTest(classes = PgTestApplication.class)
-@TestPropertySource(properties = {"myjpa.encrypt.key=1234567890123456", "myjpa.encrypt.salt=test-salt-value", "myjpa-plus.encrypt.skip-salt-check=true"})
+@TestPropertySource(properties = {"myjpa.encrypt.key=1234567890123456", "myjpa.encrypt.salt=test-salt-value",
+    "myjpa-plus.encrypt.skip-salt-check=true"})
 class EncryptIntegrationTest {
 
     static {

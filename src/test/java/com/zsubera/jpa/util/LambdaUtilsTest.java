@@ -124,8 +124,7 @@ class LambdaUtilsTest {
 
             java.lang.reflect.Field cacheField = LambdaUtils.class.getDeclaredField("CACHE");
             cacheField.setAccessible(true);
-            SampledEvictionCache<String, String> cache =
-                (SampledEvictionCache<String, String>)cacheField.get(null);
+            SampledEvictionCache<String, String> cache = (SampledEvictionCache<String, String>)cacheField.get(null);
 
             // Fill cache beyond maxSize via put, which also triggers sampling evict
             // Sampling interval is 100, so we need enough puts to trigger check

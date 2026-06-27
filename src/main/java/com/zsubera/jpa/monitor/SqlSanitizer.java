@@ -65,14 +65,14 @@ public final class SqlSanitizer {
         Pattern.compile("(?i)(?:LIMIT|OFFSET|FETCH\\s+(?:FIRST|NEXT))\\s+\\d+(?:\\s+ROWS)?");
 
     /** PostgreSQL 美元引用字符串模式（$$...$$ 和 $tag$...$tag$，不支持嵌套）。 ponytail: {0,10000} 限制匹配内容长度防 ReDoS。 */
-    private static final Pattern DOLLAR_QUOTE_PATTERN =
-        Pattern.compile("\\$\\$(?:[^$]+|\\$(?!\\$)){0,10000}\\$\\$|\\$(\\w+)\\$(?:[^$]+|\\$(?!\\1\\$)){0,10000}\\$\\1\\$",
-            Pattern.CASE_INSENSITIVE);
+    private static final Pattern DOLLAR_QUOTE_PATTERN = Pattern.compile(
+        "\\$\\$(?:[^$]+|\\$(?!\\$)){0,10000}\\$\\$|\\$(\\w+)\\$(?:[^$]+|\\$(?!\\1\\$)){0,10000}\\$\\1\\$",
+        Pattern.CASE_INSENSITIVE);
 
     /** Oracle Q 引用模式：q'[...]', q'(...)', q'{...}', q'<...>', q'!...!' 等。 ponytail: 使用 {0,4000} 限制匹配长度防止 ReDoS。 */
-    private static final Pattern Q_QUOTE_BRACKET_PATTERN =
-        Pattern.compile("q'\\[[\\s\\S]{0,4000}?\\]'|q'\\([\\s\\S]{0,4000}?\\)'|q'\\{[\\s\\S]{0,4000}?\\}'|q'<[\\s\\S]{0,4000}?>'",
-            Pattern.CASE_INSENSITIVE);
+    private static final Pattern Q_QUOTE_BRACKET_PATTERN = Pattern.compile(
+        "q'\\[[\\s\\S]{0,4000}?\\]'|q'\\([\\s\\S]{0,4000}?\\)'|q'\\{[\\s\\S]{0,4000}?\\}'|q'<[\\s\\S]{0,4000}?>'",
+        Pattern.CASE_INSENSITIVE);
 
     /** Oracle Q 引用单字符分隔符模式：q'x...x' 等（排除 bracket、空白和引号），长度限制 4000 */
     private static final Pattern Q_QUOTE_CHAR_PATTERN =

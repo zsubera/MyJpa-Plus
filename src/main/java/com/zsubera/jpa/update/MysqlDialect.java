@@ -61,9 +61,8 @@ final class MysqlDialect extends AbstractDialectStrategy {
         String escapedTable = escapeIdentifier(tableName);
 
         if (insertColumns.isEmpty()) {
-            throw new com.zsubera.jpa.exception.MyJpaPlusException(
-                "No insertable columns found for UPSERT on " + tableName
-                    + ". Ensure at least one non-auto-generated field has a value.");
+            throw new com.zsubera.jpa.exception.MyJpaPlusException("No insertable columns found for UPSERT on "
+                + tableName + ". Ensure at least one non-auto-generated field has a value.");
         }
 
         if (updateColumns.isEmpty()) {

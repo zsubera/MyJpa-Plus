@@ -56,8 +56,7 @@ class BulkOperationTemplate {
      * @param maxBulkOperationRows 批量操作最大影响行数限制（-1 表示不限制）
      * @param txManager Spring 事务管理器
      */
-    BulkOperationTemplate(EntityManager entityManager, int maxBulkOperationRows,
-        PlatformTransactionManager txManager) {
+    BulkOperationTemplate(EntityManager entityManager, int maxBulkOperationRows, PlatformTransactionManager txManager) {
         this.entityManager = entityManager;
         this.entityManagerFactory = entityManager.getEntityManagerFactory();
         this.maxBulkOperationRows = maxBulkOperationRows;
@@ -432,8 +431,8 @@ class BulkOperationTemplate {
                 failedBatchIndex = batchCount - 1;
                 failureCause = e;
                 consecutiveFailures++;
-                log.error("Batch {} failed at batch index {} (consecutive failures: {}): {}",
-                    operationName, failedBatchIndex, consecutiveFailures, e.getMessage(), e);
+                log.error("Batch {} failed at batch index {} (consecutive failures: {}): {}", operationName,
+                    failedBatchIndex, consecutiveFailures, e.getMessage(), e);
                 if (failureStrategy == BatchFailureStrategy.ABORT || consecutiveFailures >= 3) {
                     shouldContinue = false;
                 }

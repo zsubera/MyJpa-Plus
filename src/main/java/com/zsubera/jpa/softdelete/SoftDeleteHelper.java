@@ -4,7 +4,6 @@ import com.zsubera.jpa.annotation.SoftDelete;
 import com.zsubera.jpa.exception.MyJpaPlusException;
 import com.zsubera.jpa.spec.ConditionNode;
 import com.zsubera.jpa.spec.QuerySpec;
-import com.zsubera.jpa.util.EntityClassResolver;
 import com.zsubera.jpa.util.IdentifierValidator;
 import com.zsubera.jpa.util.StringHelper;
 import jakarta.persistence.EnumType;
@@ -16,7 +15,6 @@ import jakarta.persistence.criteria.Predicate;
 import java.lang.reflect.Field;
 import java.lang.reflect.Modifier;
 import java.util.List;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import org.slf4j.Logger;
 import org.springframework.data.jpa.domain.Specification;
@@ -69,15 +67,14 @@ public final class SoftDeleteHelper {
     /**
      * SQL 保留字集合（MySQL + PostgreSQL 交集），用于表名验证。
      */
-    private static final java.util.Set<String> SQL_RESERVED_WORDS =
-        java.util.Set.of("SELECT", "INSERT", "UPDATE", "DELETE", "FROM", "WHERE", "INTO", "VALUES", "SET", "JOIN",
-            "LEFT", "RIGHT", "INNER", "OUTER", "CROSS", "ON", "USING", "AS", "DISTINCT", "ALL", "UNION", "EXCEPT",
-            "INTERSECT", "ORDER", "BY", "GROUP", "HAVING", "LIMIT", "OFFSET", "CREATE", "ALTER", "DROP", "TRUNCATE",
-            "RENAME", "INDEX", "TABLE", "VIEW", "SCHEMA", "DATABASE", "PRIMARY", "KEY", "FOREIGN", "REFERENCES",
-            "UNIQUE", "CHECK", "DEFAULT", "NULL", "NOT", "CONSTRAINT", "BEGIN", "COMMIT", "ROLLBACK", "SAVEPOINT",
-            "TRANSACTION", "TRUE", "FALSE", "AND", "OR", "IN", "EXISTS", "BETWEEN", "LIKE", "IS", "ANY", "SOME",
-            "COUNT", "SUM", "AVG", "MIN", "MAX", "COALESCE", "NULLIF", "CASE", "WHEN", "THEN", "ELSE", "END", "CAST",
-            "USER", "COLUMN", "ROW", "VALUE", "TYPE", "STATUS", "DATA", "TEXT", "DATE", "TIME");
+    private static final java.util.Set<String> SQL_RESERVED_WORDS = java.util.Set.of("SELECT", "INSERT", "UPDATE",
+        "DELETE", "FROM", "WHERE", "INTO", "VALUES", "SET", "JOIN", "LEFT", "RIGHT", "INNER", "OUTER", "CROSS", "ON",
+        "USING", "AS", "DISTINCT", "ALL", "UNION", "EXCEPT", "INTERSECT", "ORDER", "BY", "GROUP", "HAVING", "LIMIT",
+        "OFFSET", "CREATE", "ALTER", "DROP", "TRUNCATE", "RENAME", "INDEX", "TABLE", "VIEW", "SCHEMA", "DATABASE",
+        "PRIMARY", "KEY", "FOREIGN", "REFERENCES", "UNIQUE", "CHECK", "DEFAULT", "NULL", "NOT", "CONSTRAINT", "BEGIN",
+        "COMMIT", "ROLLBACK", "SAVEPOINT", "TRANSACTION", "TRUE", "FALSE", "AND", "OR", "IN", "EXISTS", "BETWEEN",
+        "LIKE", "IS", "ANY", "SOME", "COUNT", "SUM", "AVG", "MIN", "MAX", "COALESCE", "NULLIF", "CASE", "WHEN", "THEN",
+        "ELSE", "END", "CAST", "USER", "COLUMN", "ROW", "VALUE", "TYPE", "STATUS", "DATA", "TEXT", "DATE", "TIME");
 
     /** 采样缓存大小检查的计数器，减少开销。 */
     private static final java.util.concurrent.atomic.AtomicInteger CALL_COUNTER =
@@ -314,7 +311,8 @@ public final class SoftDeleteHelper {
     static String resolveColumnName(Class<?> entityClass, String fieldName) {
         String cacheKey = getEntityBaseName(entityClass) + "#" + fieldName;
         String result = COLUMN_NAME_CACHE.get(cacheKey);
-        if (result != null) return result;
+        if (result != null)
+            return result;
         result = doResolveColumnName(entityClass, fieldName);
         COLUMN_NAME_CACHE.put(cacheKey, result);
         return result;
@@ -346,8 +344,8 @@ public final class SoftDeleteHelper {
 
     private static String validateAndReturnColumnName(String name) {
         if (!IdentifierValidator.SAFE_IDENTIFIER_PATTERN.matcher(name).matches()) {
-            throw new IllegalArgumentException("Invalid @Column name: " + name
-                + ". Must contain only alphanumeric characters and underscores.");
+            throw new IllegalArgumentException(
+                "Invalid @Column name: " + name + ". Must contain only alphanumeric characters and underscores.");
         }
         return name;
     }
@@ -360,7 +358,8 @@ public final class SoftDeleteHelper {
     static String resolveIdColumnName(Class<?> entityClass) {
         String cacheKey = getEntityBaseName(entityClass);
         String result = ID_COLUMN_NAME_CACHE.get(cacheKey);
-        if (result != null) return result;
+        if (result != null)
+            return result;
         result = doResolveIdColumnName(entityClass);
         ID_COLUMN_NAME_CACHE.put(cacheKey, result);
         return result;
@@ -373,9 +372,11 @@ public final class SoftDeleteHelper {
     private static String getEntityBaseName(Class<?> entityClass) {
         String name = entityClass.getName();
         int idx = name.indexOf("_$$_");
-        if (idx > 0) return name.substring(0, idx);
+        if (idx > 0)
+            return name.substring(0, idx);
         idx = name.indexOf("$$EnhancerByCGLIB$$");
-        if (idx > 0) return name.substring(0, idx);
+        if (idx > 0)
+            return name.substring(0, idx);
         return name;
     }
 
@@ -389,8 +390,8 @@ public final class SoftDeleteHelper {
             }
             // 检查 getter 方法上的 @Id（属性访问模式）
             for (java.lang.reflect.Method m : c.getDeclaredMethods()) {
-                if (m.isAnnotationPresent(jakarta.persistence.Id.class)
-                    && m.getName().startsWith("get") && m.getParameterCount() == 0) {
+                if (m.isAnnotationPresent(jakarta.persistence.Id.class) && m.getName().startsWith("get")
+                    && m.getParameterCount() == 0) {
                     String methodName = m.getName();
                     String fieldName = Character.toLowerCase(methodName.charAt(3)) + methodName.substring(4);
                     jakarta.persistence.Column columnAnnotation = m.getAnnotation(jakarta.persistence.Column.class);
@@ -524,9 +525,8 @@ public final class SoftDeleteHelper {
         Class<?> entityClass, boolean isNotDeleted) {
         Field field = getField(entityClass, fieldName);
         if (field == null) {
-            throw new com.zsubera.jpa.exception.MyJpaPlusException(
-                "Cannot resolve @SoftDelete field '" + fieldName + "' in " + entityClass.getName()
-                    + ". Ensure the field exists and is accessible.");
+            throw new com.zsubera.jpa.exception.MyJpaPlusException("Cannot resolve @SoftDelete field '" + fieldName
+                + "' in " + entityClass.getName() + ". Ensure the field exists and is accessible.");
         }
         String cacheKey = getEntityBaseName(entityClass) + "#" + fieldName;
         ResolvedDeletedValue resolved = RESOLVED_VALUE_CACHE.computeIfAbsent(cacheKey, k -> {
@@ -701,10 +701,8 @@ public final class SoftDeleteHelper {
         } catch (ReflectiveOperationException e) {
             throw new MyJpaPlusException(String.format(
                 "Failed to read soft delete field '%s' from entity %s. "
-                    + "If using Java 17+ module system, add JVM argument: "
-                    + "--add-opens %s=ALL-UNNAMED",
-                fieldName, entity.getClass().getSimpleName(),
-                entity.getClass().getPackageName()), e);
+                    + "If using Java 17+ module system, add JVM argument: " + "--add-opens %s=ALL-UNNAMED",
+                fieldName, entity.getClass().getSimpleName(), entity.getClass().getPackageName()), e);
         }
     }
 

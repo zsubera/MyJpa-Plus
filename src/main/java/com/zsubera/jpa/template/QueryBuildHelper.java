@@ -53,11 +53,9 @@ final class QueryBuildHelper {
     /**
      * 将 Spring Data {@link Sort} 应用到 JPA CriteriaQuery。
      */
-    static <T> void applySort(CriteriaQuery<T> query, Root<T> root, CriteriaBuilder cb,
-        @Nullable Sort sort) {
+    static <T> void applySort(CriteriaQuery<T> query, Root<T> root, CriteriaBuilder cb, @Nullable Sort sort) {
         if (sort != null && sort.isSorted()) {
-            query.orderBy(sort.stream().map(order -> order.isAscending()
-                ? cb.asc(root.get(order.getProperty()))
+            query.orderBy(sort.stream().map(order -> order.isAscending() ? cb.asc(root.get(order.getProperty()))
                 : cb.desc(root.get(order.getProperty()))).toList());
         }
     }
@@ -65,8 +63,7 @@ final class QueryBuildHelper {
     /**
      * 执行计数查询。
      */
-    static <T> long executeCountQuery(EntityManager entityManager, Class<T> entityClass,
-        Specification<T> spec) {
+    static <T> long executeCountQuery(EntityManager entityManager, Class<T> entityClass, Specification<T> spec) {
         CriteriaBuilder cb = entityManager.getCriteriaBuilder();
         CriteriaQuery<Long> countCq = cb.createQuery(Long.class);
         Root<T> countRoot = countCq.from(entityClass);

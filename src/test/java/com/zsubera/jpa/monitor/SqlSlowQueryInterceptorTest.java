@@ -314,8 +314,7 @@ class SqlSlowQueryInterceptorTest {
         SqlSlowQueryInterceptor interceptor = new SqlSlowQueryInterceptor(1000);
 
         // Set micrometerCache to null (simulating not available) to skip re-checking
-        java.lang.reflect.Field cacheField =
-            getInnerClass("MicrometerMetrics").getDeclaredField("micrometerCache");
+        java.lang.reflect.Field cacheField = getInnerClass("MicrometerMetrics").getDeclaredField("micrometerCache");
         cacheField.setAccessible(true);
         Object previousCache = cacheField.get(null);
         cacheField.set(null, null);

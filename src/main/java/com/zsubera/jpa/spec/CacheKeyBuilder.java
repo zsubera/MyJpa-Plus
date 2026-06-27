@@ -1,8 +1,5 @@
 package com.zsubera.jpa.spec;
 
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.util.Collection;
 import java.util.List;
 
@@ -205,7 +202,8 @@ final class CacheKeyBuilder {
                 .append(java.util.Arrays.deepHashCode(new Object[] {value})).append("]");
         } else {
             String s = String.valueOf(value);
-            sb.append("N[").append(value.getClass().getName()).append(":").append(Long.toUnsignedString(hash64(s))).append("]");
+            sb.append("N[").append(value.getClass().getName()).append(":").append(Long.toUnsignedString(hash64(s)))
+                .append("]");
         }
     }
 

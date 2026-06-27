@@ -906,9 +906,8 @@ public class ProjectionSpec<T> {
         for (JoinSpec js : joins) {
             Boolean existingType = joinTypeMap.get(js.fieldName);
             if (existingType != null && existingType != js.left) {
-                throw new IllegalArgumentException(
-                    "Conflicting JOIN types for field '" + js.fieldName + "': "
-                        + (existingType ? "LEFT" : "INNER") + " vs " + (js.left ? "LEFT" : "INNER"));
+                throw new IllegalArgumentException("Conflicting JOIN types for field '" + js.fieldName + "': "
+                    + (existingType ? "LEFT" : "INNER") + " vs " + (js.left ? "LEFT" : "INNER"));
             }
             joinTypeMap.put(js.fieldName, js.left);
             Join<?, ?> join = joinMap.computeIfAbsent(js.fieldName, k -> js.left

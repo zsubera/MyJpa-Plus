@@ -66,16 +66,17 @@ final class EncryptionKeyManager {
 
     private static final java.util.regex.Pattern MULTI_KEY_PATTERN =
         java.util.regex.Pattern.compile("^v\\d+:.*(?:,\\s*v\\d+:.*)+$");
-    private static final java.util.regex.Pattern SINGLE_ENTRY_PATTERN =
-        java.util.regex.Pattern.compile("v\\d+:.+");
-    private static final java.util.regex.Pattern VERSION_PATTERN =
-        java.util.regex.Pattern.compile("v\\d+");
+    private static final java.util.regex.Pattern SINGLE_ENTRY_PATTERN = java.util.regex.Pattern.compile("v\\d+:.+");
+    private static final java.util.regex.Pattern VERSION_PATTERN = java.util.regex.Pattern.compile("v\\d+");
 
     private static final String SKIP_SALT_PROPERTY = "myjpa-plus.encrypt.skip-salt-check";
     private static final String SKIP_SALT_ENV = "MYJPA_ENCRYPT_SKIP_SALT_CHECK";
 
     /** 按版本缓存的密钥规范。 */
     private static final ConcurrentMap<String, SecretKeySpec> KEY_CACHE = new ConcurrentHashMap<>();
+
+    /** LRU 访问时间戳，用于淘汰最久未使用的密钥。 */
+    private static final ConcurrentMap<String, Long> KEY_ACCESS_TIMES = new ConcurrentHashMap<>();
 
     private static final ReentrantReadWriteLock KEY_SPEC_LOCK = new ReentrantReadWriteLock();
     private static final Lock KEY_SPEC_WRITE_LOCK = KEY_SPEC_LOCK.writeLock();
@@ -91,6 +92,7 @@ final class EncryptionKeyManager {
     private static final class KeyVersionSnapshot {
         final String version;
         final long refreshTimestamp;
+
         KeyVersionSnapshot(String version, long refreshTimestamp) {
             this.version = version;
             this.refreshTimestamp = refreshTimestamp;
@@ -107,41 +109,54 @@ final class EncryptionKeyManager {
         String cacheKey = version != null ? version : "default";
         SecretKeySpec existing = KEY_CACHE.get(cacheKey);
         if (existing != null) {
+            KEY_ACCESS_TIMES.put(cacheKey, System.nanoTime());
             return existing;
         }
         KEY_SPEC_WRITE_LOCK.lock();
         try {
             existing = KEY_CACHE.get(cacheKey);
             if (existing != null) {
+                KEY_ACCESS_TIMES.put(cacheKey, System.nanoTime());
                 return existing;
             }
             if (KEY_CACHE.size() >= MAX_KEY_CACHE_SIZE) {
-                // 保护当前版本的密钥不被淘汰
-                String currentVersion = getKeyVersion();
-                String victim = null;
-                for (String k : KEY_CACHE.keySet()) {
-                    if (!k.equals(currentVersion) && !k.equals("default")) {
-                        victim = k;
-                        break;
-                    }
-                }
-                if (victim != null) {
-                    KEY_CACHE.remove(victim);
-                } else {
-                    // ponytail: 所有条目都是当前版本或 default，跳过淘汰以避免移除当前版本的密钥
-                    // 升级路径：使用 LRU 淘汰策略（如 Caffeine）
-                }
+                evictLruKey();
             }
             char[] rawKey = resolveRawKey(cacheKey);
             try {
                 SecretKeySpec derived = deriveKey(rawKey);
                 KEY_CACHE.put(cacheKey, derived);
+                KEY_ACCESS_TIMES.put(cacheKey, System.nanoTime());
                 return derived;
             } finally {
                 java.util.Arrays.fill(rawKey, '\0');
             }
         } finally {
             KEY_SPEC_WRITE_LOCK.unlock();
+        }
+    }
+
+    /**
+     * LRU 淘汰：移除最久未使用的密钥条目，保护当前版本和 "default" 条目不被淘汰。
+     */
+    private static void evictLruKey() {
+        String currentVersion = getKeyVersion();
+        String victim = null;
+        long oldestTime = Long.MAX_VALUE;
+        for (var entry : KEY_ACCESS_TIMES.entrySet()) {
+            String k = entry.getKey();
+            if (k.equals(currentVersion) || k.equals("default")) {
+                continue;
+            }
+            Long time = entry.getValue();
+            if (time != null && time < oldestTime) {
+                oldestTime = time;
+                victim = k;
+            }
+        }
+        if (victim != null) {
+            KEY_CACHE.remove(victim);
+            KEY_ACCESS_TIMES.remove(victim);
         }
     }
 
@@ -257,7 +272,7 @@ final class EncryptionKeyManager {
         } finally {
             java.util.Arrays.fill(keyChars, '\0');
             if (derived != null) {
-                java.util.Arrays.fill(derived, (byte) 0);
+                java.util.Arrays.fill(derived, (byte)0);
             }
         }
     }
@@ -284,10 +299,10 @@ final class EncryptionKeyManager {
                     + "Set environment variable " + SALT_ENV + " or system property " + SALT_PROPERTY + ".");
             }
             throw new MyJpaPlusException(
-                "PBKDF2 salt must be configured for encryption. Without a persistent salt (via "
-                + SALT_ENV + " or " + SALT_PROPERTY + "), encrypted data becomes unrecoverable "
-                + "after application restart. Encryption is BLOCKED until a salt is configured. "
-                + "To explicitly acknowledge this risk (development only), set " + SKIP_SALT_PROPERTY + "=true.");
+                "PBKDF2 salt must be configured for encryption. Without a persistent salt (via " + SALT_ENV + " or "
+                    + SALT_PROPERTY + "), encrypted data becomes unrecoverable "
+                    + "after application restart. Encryption is BLOCKED until a salt is configured. "
+                    + "To explicitly acknowledge this risk (development only), set " + SKIP_SALT_PROPERTY + "=true.");
         }
         throw new MyJpaPlusException("PBKDF2 salt must be configured. " + "Set environment variable " + SALT_ENV
             + " or system property " + SALT_PROPERTY + ". " + "Salt is required for PBKDF2 key derivation security. "
@@ -302,8 +317,7 @@ final class EncryptionKeyManager {
         return "true".equalsIgnoreCase(skipCheck);
     }
 
-    @SuppressFBWarnings(value = "EI_EXPOSE_REP2",
-        justification = "Internal class not exposed to external callers")
+    @SuppressFBWarnings(value = "EI_EXPOSE_REP2", justification = "Internal class not exposed to external callers")
     static void validateKeyConfiguration() {
         if (KEY_VALIDATED.get()) {
             return;
@@ -342,6 +356,7 @@ final class EncryptionKeyManager {
         KEY_SPEC_WRITE_LOCK.lock();
         try {
             KEY_CACHE.clear();
+            KEY_ACCESS_TIMES.clear();
             keyVersionSnapshot = new KeyVersionSnapshot(null, 0);
             KEY_VALIDATED.set(false);
             cachedSalt = null;
@@ -354,6 +369,7 @@ final class EncryptionKeyManager {
         KEY_SPEC_WRITE_LOCK.lock();
         try {
             KEY_CACHE.clear();
+            KEY_ACCESS_TIMES.clear();
             keyVersionSnapshot = new KeyVersionSnapshot(null, 0);
             KEY_VALIDATED.set(false);
             cachedSalt = null;

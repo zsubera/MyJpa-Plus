@@ -411,8 +411,7 @@ public class MergeSpec<T> {
         if (cachedStrategy.supportsBatchUpsert()) {
             return doBatchMultiRow(entities, em, batchSize, cachedStrategy);
         }
-        log.debug("Dialect '{}' does not support multi-row batch UPSERT, using single-row",
-            cachedStrategy.name());
+        log.debug("Dialect '{}' does not support multi-row batch UPSERT, using single-row", cachedStrategy.name());
         return doBatchSingleRow(entities, em, batchSize, cachedStrategy);
     }
 
@@ -443,9 +442,8 @@ public class MergeSpec<T> {
             conflictFields.isEmpty() ? fieldExtractor.resolveIdColumnNames() : new ArrayList<>(conflictFields);
         Set<String> conflictSet = new LinkedHashSet<>(effectiveConflictFields);
         String tableName = resolveTableName();
-        List<String> effectiveUpdateFields =
-            explicitUpdateFields ? updateFields
-                : allNonConflictColumns(fieldExtractor.extractFieldValues(entities.get(0)), conflictSet);
+        List<String> effectiveUpdateFields = explicitUpdateFields ? updateFields
+            : allNonConflictColumns(fieldExtractor.extractFieldValues(entities.get(0)), conflictSet);
         int total = 0;
         try {
             for (int i = 0; i < entities.size(); i += batchSize) {
@@ -501,8 +499,8 @@ public class MergeSpec<T> {
                     }
                     batchFieldValues.add(insertFvs);
                 }
-                SqlWithParams batchSql = strategy.buildBatchUpsertSql(
-                    tableName, insertColumns, batchFieldValues, effectiveConflictFields, effectiveUpdateFields);
+                SqlWithParams batchSql = strategy.buildBatchUpsertSql(tableName, insertColumns, batchFieldValues,
+                    effectiveConflictFields, effectiveUpdateFields);
                 total += executeNativeQuery(em, batchSql.sql(), batchSql.params());
                 em.flush();
                 em.clear();
@@ -551,10 +549,9 @@ public class MergeSpec<T> {
         int maxIterations = 10000;
         while (batchStart < entities.size()) {
             if (++iterationCount > maxIterations) {
-                throw new MyJpaPlusException(
-                    "executeBatchInSeparateTransactions exceeded max iterations (" + maxIterations
-                        + ") with " + entities.size() + " entities at batchSize " + batchSize
-                        + ". This is likely due to an extremely large entity list.");
+                throw new MyJpaPlusException("executeBatchInSeparateTransactions exceeded max iterations ("
+                    + maxIterations + ") with " + entities.size() + " entities at batchSize " + batchSize
+                    + ". This is likely due to an extremely large entity list.");
             }
             int batchEnd = Math.min(batchStart + batchSize, entities.size());
             total += executeSingleBatchInTransaction(entities, em, cachedStrategy, batchStart, batchEnd);
@@ -575,7 +572,8 @@ public class MergeSpec<T> {
         try {
             int batchTotal;
             if (strategy.supportsBatchUpsert()) {
-                batchTotal = doBatchMultiRow(entities.subList(batchStart, batchEnd), em, batchEnd - batchStart, strategy);
+                batchTotal =
+                    doBatchMultiRow(entities.subList(batchStart, batchEnd), em, batchEnd - batchStart, strategy);
             } else {
                 batchTotal = 0;
                 for (int i = batchStart; i < batchEnd; i++) {
@@ -590,8 +588,8 @@ public class MergeSpec<T> {
             em.flush();
             tx.commit();
             if (log.isDebugEnabled()) {
-                log.debug("Batch UPSERT (separate tx): entities [{}-{}] committed (batch affected: {})",
-                    batchStart, batchEnd - 1, batchTotal);
+                log.debug("Batch UPSERT (separate tx): entities [{}-{}] committed (batch affected: {})", batchStart,
+                    batchEnd - 1, batchTotal);
             }
             return batchTotal;
         } catch (RuntimeException e) {

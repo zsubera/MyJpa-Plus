@@ -19,8 +19,7 @@ class AuditUtilsTest {
     @Test
     void getCallStack_containsCurrentMethod() {
         String stack = AuditUtils.getCallStack();
-        assertTrue(stack.contains("AuditUtilsTest"),
-            "Stack trace should contain the test class name");
+        assertTrue(stack.contains("AuditUtilsTest"), "Stack trace should contain the test class name");
     }
 
     @Test

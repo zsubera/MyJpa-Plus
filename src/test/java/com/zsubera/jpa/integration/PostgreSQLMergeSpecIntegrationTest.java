@@ -178,7 +178,8 @@ class PostgreSQLMergeSpecIntegrationTest {
         insert.setStatus(2);
         entities.add(insert);
 
-        int count = new MergeSpec<>(PgTestEntity.class).onConflict(PgTestEntity::getName).executeBatch(entities, em, 100);
+        int count =
+            new MergeSpec<>(PgTestEntity.class).onConflict(PgTestEntity::getName).executeBatch(entities, em, 100);
         em.flush();
         em.clear();
 

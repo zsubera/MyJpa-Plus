@@ -6,7 +6,6 @@ import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import com.zsubera.jpa.autoconfigure.EnvironmentHelper;
-import java.nio.charset.StandardCharsets;
 import java.util.Base64;
 import java.util.concurrent.ConcurrentHashMap;
 import javax.crypto.spec.SecretKeySpec;
@@ -80,7 +79,8 @@ class EncryptConverterCoverageTest {
         System.clearProperty("myjpa.encrypt.key");
         // Can't set env vars, but we can test the path where both are null
         try {
-            assertThrows(IllegalStateException.class, () -> EncryptConverter.validateKeyConfiguration());
+            assertThrows(com.zsubera.jpa.exception.MyJpaPlusException.class,
+                () -> EncryptConverter.validateKeyConfiguration());
         } finally {
             System.setProperty("myjpa.encrypt.key", TEST_KEY);
         }

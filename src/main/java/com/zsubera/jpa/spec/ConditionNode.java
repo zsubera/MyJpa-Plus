@@ -146,7 +146,8 @@ public sealed interface ConditionNode permits ConditionNode.SimpleNode, Conditio
 
         private static Predicate resolveInOrNotIn(Path<?> fieldPath, Object value, CriteriaBuilder cb, boolean negate) {
             if (value == null) {
-                throw new IllegalArgumentException((negate ? "NOT_IN" : "IN") + " operator requires non-null value, got null");
+                throw new IllegalArgumentException(
+                    (negate ? "NOT_IN" : "IN") + " operator requires non-null value, got null");
             }
             if (value instanceof Collection<?> col) {
                 if (col.isEmpty()) {
@@ -170,18 +171,19 @@ public sealed interface ConditionNode permits ConditionNode.SimpleNode, Conditio
                 }
                 return negate ? InClauseBuilder.notIn(cb, fieldPath, arr) : InClauseBuilder.in(cb, fieldPath, arr);
             }
-            throw new IllegalArgumentException(
-                (negate ? "NOT_IN" : "IN") + " operator requires Collection or array, got: " + value.getClass().getName());
+            throw new IllegalArgumentException((negate ? "NOT_IN" : "IN")
+                + " operator requires Collection or array, got: " + value.getClass().getName());
         }
 
         private static Predicate resolveBetweenOrNotBetween(Path<?> path, String fieldName, Object value,
             CriteriaBuilder cb, boolean negate) {
             if (value == null) {
-                throw new IllegalArgumentException((negate ? "NOT_BETWEEN" : "BETWEEN") + " operator requires non-null value");
+                throw new IllegalArgumentException(
+                    (negate ? "NOT_BETWEEN" : "BETWEEN") + " operator requires non-null value");
             }
             if (!(value instanceof Comparable<?>[])) {
-                throw new IllegalArgumentException(
-                    (negate ? "NOT_BETWEEN" : "BETWEEN") + " requires a Comparable[] value, got: " + value.getClass().getName());
+                throw new IllegalArgumentException((negate ? "NOT_BETWEEN" : "BETWEEN")
+                    + " requires a Comparable[] value, got: " + value.getClass().getName());
             }
             Comparable<?>[] range = (Comparable<?>[])value;
             if (range.length != 2) {

@@ -8,36 +8,27 @@ class SampledEvictionCacheTest {
 
     @Test
     void constructorRejectsNonPositiveMaxSize() {
-        assertThrows(IllegalArgumentException.class,
-            () -> new SampledEvictionCache<>(0, 0.75, 10));
-        assertThrows(IllegalArgumentException.class,
-            () -> new SampledEvictionCache<>(-1, 0.75, 10));
+        assertThrows(IllegalArgumentException.class, () -> new SampledEvictionCache<>(0, 0.75, 10));
+        assertThrows(IllegalArgumentException.class, () -> new SampledEvictionCache<>(-1, 0.75, 10));
     }
 
     @Test
     void constructorRejectsInvalidEvictionTargetRatio() {
-        assertThrows(IllegalArgumentException.class,
-            () -> new SampledEvictionCache<>(100, 0, 10));
-        assertThrows(IllegalArgumentException.class,
-            () -> new SampledEvictionCache<>(100, 1, 10));
-        assertThrows(IllegalArgumentException.class,
-            () -> new SampledEvictionCache<>(100, -0.1, 10));
+        assertThrows(IllegalArgumentException.class, () -> new SampledEvictionCache<>(100, 0, 10));
+        assertThrows(IllegalArgumentException.class, () -> new SampledEvictionCache<>(100, 1, 10));
+        assertThrows(IllegalArgumentException.class, () -> new SampledEvictionCache<>(100, -0.1, 10));
     }
 
     @Test
     void constructorRejectsNonPositiveSamplingInterval() {
-        assertThrows(IllegalArgumentException.class,
-            () -> new SampledEvictionCache<>(100, 0.75, 0));
-        assertThrows(IllegalArgumentException.class,
-            () -> new SampledEvictionCache<>(100, 0.75, -1));
+        assertThrows(IllegalArgumentException.class, () -> new SampledEvictionCache<>(100, 0.75, 0));
+        assertThrows(IllegalArgumentException.class, () -> new SampledEvictionCache<>(100, 0.75, -1));
     }
 
     @Test
     void constructorRejectsNonPositiveInitialCapacity() {
-        assertThrows(IllegalArgumentException.class,
-            () -> new SampledEvictionCache<>(100, 0.75, 10, 0));
-        assertThrows(IllegalArgumentException.class,
-            () -> new SampledEvictionCache<>(100, 0.75, 10, -1));
+        assertThrows(IllegalArgumentException.class, () -> new SampledEvictionCache<>(100, 0.75, 10, 0));
+        assertThrows(IllegalArgumentException.class, () -> new SampledEvictionCache<>(100, 0.75, 10, -1));
     }
 
     @Test
@@ -162,7 +153,7 @@ class SampledEvictionCacheTest {
         for (int i = 0; i < 50; i++) {
             cache.put("key" + i, "val" + i);
         }
-        int target = (int) (20 * ratio); // 5
+        int target = (int)(20 * ratio); // 5
         // After eviction, size should be at most maxSize (it could be between target and maxSize
         // if eviction runs concurrently or more puts happen). But with samplingInterval=1,
         // after each eviction down to target, the next put increases size by 1 until next eviction.
@@ -202,7 +193,8 @@ class SampledEvictionCacheTest {
         var cache = new SampledEvictionCache<String, String>(50, 0.75, 1, 64);
         int threadCount = 4;
         java.util.concurrent.CountDownLatch latch = new java.util.concurrent.CountDownLatch(threadCount);
-        java.util.concurrent.atomic.AtomicReference<Throwable> error = new java.util.concurrent.atomic.AtomicReference<>();
+        java.util.concurrent.atomic.AtomicReference<Throwable> error =
+            new java.util.concurrent.atomic.AtomicReference<>();
 
         for (int t = 0; t < threadCount; t++) {
             int threadId = t;

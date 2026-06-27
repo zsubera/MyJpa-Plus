@@ -6,7 +6,6 @@ import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeAll;
@@ -32,7 +31,7 @@ class DefaultMyJpaRepositoryVirtualThreadTest {
         }
         autoFilterOverrideField = DefaultMyJpaRepository.class.getDeclaredField("AUTO_FILTER_OVERRIDE");
         autoFilterOverrideField.setAccessible(true);
-        autoFilterOverride = (ThreadLocal<Boolean>) autoFilterOverrideField.get(null);
+        autoFilterOverride = (ThreadLocal<Boolean>)autoFilterOverrideField.get(null);
     }
 
     @AfterEach
@@ -43,16 +42,14 @@ class DefaultMyJpaRepositoryVirtualThreadTest {
     private ExecutorService newVirtualThreadExecutor() throws Exception {
         Assumptions.assumeTrue(virtualThreadsAvailable, "Virtual threads not available");
         Method newVirtualThreadPerTaskExecutor = Executors.class.getMethod("newVirtualThreadPerTaskExecutor");
-        return (ExecutorService) newVirtualThreadPerTaskExecutor.invoke(null);
+        return (ExecutorService)newVirtualThreadPerTaskExecutor.invoke(null);
     }
 
     @Test
     void autoFilterOverride_doesNotAffectVirtualThread() throws Exception {
         ExecutorService vExec = newVirtualThreadExecutor();
         try {
-            DefaultMyJpaRepository.withAutoFilterOverride(true, () ->
-                assertTrue(autoFilterOverride.get())
-            );
+            DefaultMyJpaRepository.withAutoFilterOverride(true, () -> assertTrue(autoFilterOverride.get()));
 
             Future<Boolean> childResult = vExec.submit(() -> autoFilterOverride.get());
             assertNull(childResult.get(5, TimeUnit.SECONDS));
@@ -65,9 +62,8 @@ class DefaultMyJpaRepositoryVirtualThreadTest {
     void autoFilterOverride_isIsolatedBetweenVirtualThreads() throws Exception {
         ExecutorService vExec = newVirtualThreadExecutor();
         try {
-            Future<?> f1 = vExec.submit(() ->
-                DefaultMyJpaRepository.withAutoFilterOverride(true, () -> {})
-            );
+            Future<?> f1 = vExec.submit(() -> DefaultMyJpaRepository.withAutoFilterOverride(true, () -> {
+            }));
             f1.get(5, TimeUnit.SECONDS);
 
             Future<Boolean> f2 = vExec.submit(() -> autoFilterOverride.get());
@@ -85,9 +81,7 @@ class DefaultMyJpaRepositoryVirtualThreadTest {
         try {
             Future<Boolean> result = vExec.submit(() -> {
                 AtomicBoolean inside = new AtomicBoolean(false);
-                DefaultMyJpaRepository.withAutoFilterOverride(true, () ->
-                    inside.set(autoFilterOverride.get())
-                );
+                DefaultMyJpaRepository.withAutoFilterOverride(true, () -> inside.set(autoFilterOverride.get()));
                 return inside.get() && autoFilterOverride.get() == null;
             });
             assertTrue(result.get(5, TimeUnit.SECONDS));
@@ -100,12 +94,10 @@ class DefaultMyJpaRepositoryVirtualThreadTest {
     void withAutoFilterOverride_supplier_worksInVirtualThread() throws Exception {
         ExecutorService vExec = newVirtualThreadExecutor();
         try {
-            Future<String> result = vExec.submit(() ->
-                DefaultMyJpaRepository.withAutoFilterOverride(true, () -> {
-                    assertTrue(autoFilterOverride.get());
-                    return "ok";
-                })
-            );
+            Future<String> result = vExec.submit(() -> DefaultMyJpaRepository.withAutoFilterOverride(true, () -> {
+                assertTrue(autoFilterOverride.get());
+                return "ok";
+            }));
             assertEquals("ok", result.get(5, TimeUnit.SECONDS));
             assertNull(autoFilterOverride.get());
         } finally {
@@ -118,7 +110,8 @@ class DefaultMyJpaRepositoryVirtualThreadTest {
         ExecutorService vExec = newVirtualThreadExecutor();
         try {
             Future<Boolean> result = vExec.submit(() -> {
-                DefaultMyJpaRepository.withAutoFilterOverride(true, () -> {});
+                DefaultMyJpaRepository.withAutoFilterOverride(true, () -> {
+                });
                 DefaultMyJpaRepository.clearThreadLocal();
                 return autoFilterOverride.get() == null;
             });
@@ -156,9 +149,7 @@ class DefaultMyJpaRepositoryVirtualThreadTest {
             java.util.List<Future<Boolean>> futures = new java.util.ArrayList<>();
             for (int i = 0; i < threadCount; i++) {
                 futures.add(vExec.submit(() -> {
-                    DefaultMyJpaRepository.withAutoFilterOverride(true, () ->
-                        assertTrue(autoFilterOverride.get())
-                    );
+                    DefaultMyJpaRepository.withAutoFilterOverride(true, () -> assertTrue(autoFilterOverride.get()));
                     return autoFilterOverride.get() == null;
                 }));
             }

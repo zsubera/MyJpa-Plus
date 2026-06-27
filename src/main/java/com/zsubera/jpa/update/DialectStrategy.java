@@ -76,8 +76,7 @@ public interface DialectStrategy {
      */
     default SqlWithParams buildBatchUpsertSql(String tableName, List<String> insertColumns,
         List<List<EntityFieldValue>> batchFieldValues, List<String> conflictColumns, List<String> updateColumns) {
-        throw new UnsupportedOperationException(
-            "Multi-row batch UPSERT not supported for dialect: " + name());
+        throw new UnsupportedOperationException("Multi-row batch UPSERT not supported for dialect: " + name());
     }
 
     /**

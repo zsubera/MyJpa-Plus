@@ -31,9 +31,8 @@ public class SlowQueryDataSourceProxyPostProcessor implements BeanPostProcessor 
     private static final Logger log = LoggerFactory.getLogger(SlowQueryDataSourceProxyPostProcessor.class);
 
     /** 自动排除的 DataSource Bean 名称前缀（迁移工具使用的 DataSource）。 */
-    private static final Set<String> EXCLUDED_BEAN_NAMES = Set.of(
-        "flywayDataSource", "liquibaseDataSource",
-        "migrationDataSource", "schemaInitializerDataSource");
+    private static final Set<String> EXCLUDED_BEAN_NAMES =
+        Set.of("flywayDataSource", "liquibaseDataSource", "migrationDataSource", "schemaInitializerDataSource");
 
     private final long slowQueryThresholdMs;
 
@@ -49,8 +48,7 @@ public class SlowQueryDataSourceProxyPostProcessor implements BeanPostProcessor 
     @Override
     public Object postProcessAfterInitialization(@NonNull Object bean, @NonNull String beanName) throws BeansException {
         if (bean instanceof DataSource ds && !SlowQueryDataSourceProxy.isWrapped(ds)
-            && !java.lang.reflect.Proxy.isProxyClass(ds.getClass())
-            && !EXCLUDED_BEAN_NAMES.contains(beanName)) {
+            && !java.lang.reflect.Proxy.isProxyClass(ds.getClass()) && !EXCLUDED_BEAN_NAMES.contains(beanName)) {
             log.info("Wrapping DataSource '{}' with slow query proxy (threshold={} ms)", beanName,
                 slowQueryThresholdMs);
             return SlowQueryDataSourceProxy.wrap(ds, slowQueryThresholdMs);

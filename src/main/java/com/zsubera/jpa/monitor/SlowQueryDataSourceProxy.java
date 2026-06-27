@@ -4,9 +4,6 @@ import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.Method;
 import java.lang.reflect.Proxy;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentMap;
-import java.util.concurrent.locks.ReentrantLock;
 import javax.sql.DataSource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -52,7 +49,6 @@ public final class SlowQueryDataSourceProxy {
     private static final int MAX_PROXY_CLASS_CACHE_SIZE = 512;
     private static final com.zsubera.jpa.util.SampledEvictionCache<Class<?>, Class<?>> PROXY_CLASS_CACHE =
         new com.zsubera.jpa.util.SampledEvictionCache<>(MAX_PROXY_CLASS_CACHE_SIZE, 0.75, 100, 64);
-    private static final ReentrantLock CACHE_LOCK = new ReentrantLock();
 
     private SlowQueryDataSourceProxy() {}
 
@@ -89,10 +85,6 @@ public final class SlowQueryDataSourceProxy {
         return false;
     }
 
-    private static void evictCacheIfNeeded() {
-        // ponytail: SampledEvictionCache handles eviction internally; this method is a no-op.
-    }
-
     @SuppressFBWarnings(value = "EI_EXPOSE_REP",
         justification = "Proxy class cache is intentionally shared across all proxy instances for performance")
     static com.zsubera.jpa.util.SampledEvictionCache<Class<?>, Class<?>> getProxyClassCache() {
@@ -114,8 +106,7 @@ public final class SlowQueryDataSourceProxy {
         @Override
         public Object invoke(Object proxy, Method method, Object[] args) throws Throwable {
             String methodName = method.getName();
-            if ("prepareStatement".equals(methodName)
-                || "prepareCall".equals(methodName)
+            if ("prepareStatement".equals(methodName) || "prepareCall".equals(methodName)
                 || "createStatement".equals(methodName)) {
                 String sql = extractSql(args);
                 Object stmt = method.invoke(target, args);
@@ -147,8 +138,7 @@ public final class SlowQueryDataSourceProxy {
         private Object wrapStatement(Object stmt, String sql) {
             Class<?> stmtClass = stmt.getClass();
             if (!hasInterfaces(stmtClass)) {
-                log.debug("Statement class {} implements no interfaces, skipping proxy wrapping",
-                    stmtClass.getName());
+                log.debug("Statement class {} implements no interfaces, skipping proxy wrapping", stmtClass.getName());
                 return stmt;
             }
             return createProxy(stmtClass, stmt, new StatementTimingHandler(stmt, sql, slowQueryThresholdMs));
@@ -156,26 +146,16 @@ public final class SlowQueryDataSourceProxy {
 
         private static boolean hasInterfaces(Class<?> clazz) {
             while (clazz != null && clazz != Object.class) {
-                if (clazz.getInterfaces().length > 0) return true;
+                if (clazz.getInterfaces().length > 0)
+                    return true;
                 clazz = clazz.getSuperclass();
             }
             return false;
         }
 
         private Object createProxy(Class<?> stmtClass, Object stmt, InvocationHandler handler) {
-            Class<?> proxyClass = PROXY_CLASS_CACHE.get(stmtClass);
-            if (proxyClass == null) {
-                CACHE_LOCK.lock();
-                try {
-                    if (PROXY_CLASS_CACHE.size() >= MAX_PROXY_CLASS_CACHE_SIZE) {
-                        evictCacheIfNeeded();
-                    }
-                    proxyClass = PROXY_CLASS_CACHE.computeIfAbsent(stmtClass,
-                        clz -> Proxy.getProxyClass(clz.getClassLoader(), clz.getInterfaces()));
-                } finally {
-                    CACHE_LOCK.unlock();
-                }
-            }
+            Class<?> proxyClass = PROXY_CLASS_CACHE.computeIfAbsent(stmtClass,
+                clz -> Proxy.getProxyClass(clz.getClassLoader(), clz.getInterfaces()));
             try {
                 return proxyClass.getConstructor(InvocationHandler.class).newInstance(handler);
             } catch (ReflectiveOperationException e) {
@@ -211,9 +191,8 @@ public final class SlowQueryDataSourceProxy {
                 return method.invoke(target, args);
             }
             if ("executeBatch".equals(name)) {
-                String batchSql = batchCount > 0
-                    ? sql + " [batch of " + batchCount + " statements]"
-                    : sql + " [batch (0)]";
+                String batchSql =
+                    batchCount > 0 ? sql + " [batch of " + batchCount + " statements]" : sql + " [batch (0)]";
                 return StatementTimingDelegate.invokeTimed(target, batchSql, slowQueryThresholdMs, method, args);
             }
             return StatementTimingDelegate.invokeTimed(target, sql, slowQueryThresholdMs, method, args);
@@ -257,7 +236,7 @@ public final class SlowQueryDataSourceProxy {
                         }
                     }
                 }
-                cache.summaryRecordMethod().invoke(summary, tags, (double) elapsedMs);
+                cache.summaryRecordMethod().invoke(summary, tags, (double)elapsedMs);
             } catch (ReflectiveOperationException e) {
                 log.debug("Failed to record Micrometer metrics", e);
             }
@@ -311,8 +290,8 @@ public final class SlowQueryDataSourceProxy {
             String name = method.getName();
             // capture SQL from execute(String), executeQuery(String), executeUpdate(String)
             // ponytail: createStatement() doesn't take SQL, so we capture it here
-            if (("execute".equals(name) || "executeQuery".equals(name) || "executeUpdate".equals(name))
-                && args != null && args.length > 0 && args[0] instanceof String s) {
+            if (("execute".equals(name) || "executeQuery".equals(name) || "executeUpdate".equals(name)) && args != null
+                && args.length > 0 && args[0] instanceof String s) {
                 this.sql = s;
             }
             if ("addBatch".equals(name) && args != null && args.length > 0 && args[0] instanceof String s) {
@@ -329,9 +308,8 @@ public final class SlowQueryDataSourceProxy {
                 return method.invoke(target, args);
             }
             if ("executeBatch".equals(name)) {
-                String batchSql = batchCount > 0
-                    ? sql + " [batch of " + batchCount + " statements]"
-                    : sql + " [batch (0)]";
+                String batchSql =
+                    batchCount > 0 ? sql + " [batch of " + batchCount + " statements]" : sql + " [batch (0)]";
                 return StatementTimingDelegate.invokeTimed(target, batchSql, slowQueryThresholdMs, method, args);
             }
             return StatementTimingDelegate.invokeTimed(target, sql, slowQueryThresholdMs, method, args);
@@ -345,8 +323,8 @@ public final class SlowQueryDataSourceProxy {
 
         private static final String SLOW_QUERY_MARKER = "[SLOW QUERY]";
 
-        static Object invokeTimed(Object target, String sql, long slowQueryThresholdMs, Method method,
-            Object[] args) throws Throwable {
+        static Object invokeTimed(Object target, String sql, long slowQueryThresholdMs, Method method, Object[] args)
+            throws Throwable {
             String name = method.getName();
             if ("executeQuery".equals(name) || "executeUpdate".equals(name) || "execute".equals(name)
                 || "executeBatch".equals(name)) {
@@ -358,8 +336,8 @@ public final class SlowQueryDataSourceProxy {
                     MicrometerMetrics.recordQueryDuration(name, elapsedMs);
                     if (elapsedMs >= slowQueryThresholdMs) {
                         String sanitizedSql = SqlSanitizer.sanitize(sql);
-                        log.warn("{} {} execution took {} ms (threshold: {} ms) - {}", SLOW_QUERY_MARKER,
-                            name, elapsedMs, slowQueryThresholdMs, sanitizedSql);
+                        log.warn("{} {} execution took {} ms (threshold: {} ms) - {}", SLOW_QUERY_MARKER, name,
+                            elapsedMs, slowQueryThresholdMs, sanitizedSql);
                     }
                 }
             }

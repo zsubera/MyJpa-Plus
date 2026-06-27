@@ -12,7 +12,6 @@ import java.lang.invoke.SerializedLambda;
 import java.lang.reflect.InaccessibleObjectException;
 import java.lang.reflect.Method;
 import java.util.Set;
-import java.util.concurrent.ConcurrentMap;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -172,7 +171,8 @@ public final class LambdaUtils {
         try {
             propertyName = resolveViaReflection(fn);
         } catch (InaccessibleObjectException | SecurityException e) {
-            log.debug("Reflection path for LambdaUtils failed (JPMS restricted), falling back to serialization path", e);
+            log.debug("Reflection path for LambdaUtils failed (JPMS restricted), falling back to serialization path",
+                e);
             propertyName = resolveViaSerialization(fn);
         } catch (ReflectiveOperationException e) {
             log.debug("Reflection path for LambdaUtils failed, falling back to serialization path", e);
@@ -297,17 +297,15 @@ public final class LambdaUtils {
                 return resolvePropertyFromLambda(lambda);
             }
         } catch (IOException | ClassNotFoundException e) {
-            throw new MyJpaPlusException(
-                "Failed to extract property name from method reference. "
-                    + "Both reflection and serialization paths failed.\n"
-                    + "Common causes:\n"
-                    + "  1. You passed a lambda expression (e -> e.getField()) instead of a method reference (Entity::getField)\n"
-                    + "  2. Java 17+ module system restriction — add JVM argument:\n"
-                    + "     --add-opens java.base/java.lang.invoke=ALL-UNNAMED\n"
-                    + "     Maven: <jvmArguments>--add-opens java.base/java.lang.invoke=ALL-UNNAMED</jvmArguments>\n"
-                    + "     Gradle: bootRun { jvmArgs '--add-opens java.base/java.lang.invoke=ALL-UNNAMED' }\n"
-                    + "  3. Custom serialization proxy or bytecode enhancement interfering with writeReplace()\n"
-                    + "Original error: " + e.getMessage(), e);
+            throw new MyJpaPlusException("Failed to extract property name from method reference. "
+                + "Both reflection and serialization paths failed.\n" + "Common causes:\n"
+                + "  1. You passed a lambda expression (e -> e.getField()) instead of a method reference (Entity::getField)\n"
+                + "  2. Java 17+ module system restriction — add JVM argument:\n"
+                + "     --add-opens java.base/java.lang.invoke=ALL-UNNAMED\n"
+                + "     Maven: <jvmArguments>--add-opens java.base/java.lang.invoke=ALL-UNNAMED</jvmArguments>\n"
+                + "     Gradle: bootRun { jvmArgs '--add-opens java.base/java.lang.invoke=ALL-UNNAMED' }\n"
+                + "  3. Custom serialization proxy or bytecode enhancement interfering with writeReplace()\n"
+                + "Original error: " + e.getMessage(), e);
         }
     }
 
@@ -328,12 +326,9 @@ public final class LambdaUtils {
         CACHE.clear();
     }
 
-
-
     /** 已知的 java.lang.Object 方法名集合，避免误识别为属性访问器。 */
-    private static final Set<String> OBJECT_METHODS =
-        Set.of("hashCode", "toString", "getClass", "notify", "notifyAll", "wait", "equals", "clone", "finalize",
-            "isEmpty", "isBlank", "isNaN", "isNull", "isPresent");
+    private static final Set<String> OBJECT_METHODS = Set.of("hashCode", "toString", "getClass", "notify", "notifyAll",
+        "wait", "equals", "clone", "finalize", "isEmpty", "isBlank", "isNaN", "isNull", "isPresent");
 
     /**
      * 将方法名转换为属性名。

@@ -7,7 +7,6 @@ import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
 import java.security.SecureRandom;
 import java.util.*;
-import java.util.concurrent.atomic.AtomicBoolean;
 import javax.crypto.Cipher;
 import javax.crypto.spec.GCMParameterSpec;
 import javax.crypto.spec.SecretKeySpec;
@@ -123,8 +122,7 @@ public class EncryptConverter implements AttributeConverter<String, String> {
      * @deprecated 此方法已无操作，保留仅为 API 兼容性。GCM 模式下每次操作新建 Cipher 实例，无需缓存清理。
      */
     @Deprecated(forRemoval = true)
-    public static void removeCipher() {
-    }
+    public static void removeCipher() {}
 
     /**
      * 清除所有缓存的密钥和版本信息。用于应用关闭时清理和测试环境重置。
@@ -209,7 +207,7 @@ public class EncryptConverter implements AttributeConverter<String, String> {
                 String version = EncryptionKeyManager.getKeyVersion();
                 return version + ":" + Base64.getEncoder().encodeToString(combined);
             } finally {
-                java.util.Arrays.fill(plaintextBytes, (byte) 0);
+                java.util.Arrays.fill(plaintextBytes, (byte)0);
             }
         } catch (GeneralSecurityException e) {
             log.error("Encryption failed", e);
@@ -266,7 +264,7 @@ public class EncryptConverter implements AttributeConverter<String, String> {
             try {
                 return new String(decrypted, StandardCharsets.UTF_8);
             } finally {
-                java.util.Arrays.fill(decrypted, (byte) 0);
+                java.util.Arrays.fill(decrypted, (byte)0);
             }
         } catch (GeneralSecurityException e) {
             log.error("Decryption failed", e);

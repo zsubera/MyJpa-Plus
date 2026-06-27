@@ -30,7 +30,8 @@ class KeysetPaginationHelperTest {
         }
 
         @Bean
-        public KeysetPaginationHelper keysetPaginationHelperNullsFirst(jakarta.persistence.EntityManager entityManager) {
+        public KeysetPaginationHelper
+            keysetPaginationHelperNullsFirst(jakarta.persistence.EntityManager entityManager) {
             return new KeysetPaginationHelper(entityManager, true);
         }
 
@@ -448,18 +449,18 @@ class KeysetPaginationHelperTest {
         Specification<TestEntity> spec = (root, query, cb) -> cb.conjunction();
         Sort sort = Sort.by(Sort.Direction.DESC, "id");
 
-        MyJpaTemplate.KeysetPage<TestEntity> page1 = keysetPaginationHelperNullsLast
-            .findKeysetPage(TestEntity.class, spec, sort, 2, null);
+        MyJpaTemplate.KeysetPage<TestEntity> page1 =
+            keysetPaginationHelperNullsLast.findKeysetPage(TestEntity.class, spec, sort, 2, null);
         assertEquals(2, page1.content().size());
         assertTrue(page1.hasNext());
 
-        MyJpaTemplate.KeysetPage<TestEntity> page2 = keysetPaginationHelperNullsLast
-            .findKeysetPage(TestEntity.class, spec, sort, 2, page1.lastSortValues());
+        MyJpaTemplate.KeysetPage<TestEntity> page2 =
+            keysetPaginationHelperNullsLast.findKeysetPage(TestEntity.class, spec, sort, 2, page1.lastSortValues());
         assertEquals(2, page2.content().size());
         assertTrue(page2.hasNext());
 
-        MyJpaTemplate.KeysetPage<TestEntity> page3 = keysetPaginationHelperNullsLast
-            .findKeysetPage(TestEntity.class, spec, sort, 2, page2.lastSortValues());
+        MyJpaTemplate.KeysetPage<TestEntity> page3 =
+            keysetPaginationHelperNullsLast.findKeysetPage(TestEntity.class, spec, sort, 2, page2.lastSortValues());
         assertEquals(1, page3.content().size());
         assertFalse(page3.hasNext());
 
@@ -484,8 +485,8 @@ class KeysetPaginationHelperTest {
         Specification<TestEntity> spec = (root, query, cb) -> cb.conjunction();
         Sort sort = Sort.by(Sort.Order.asc("status"), Sort.Order.desc("name"));
 
-        MyJpaTemplate.KeysetPage<TestEntity> page = keysetPaginationHelperNullsLast
-            .findKeysetPage(TestEntity.class, spec, sort, 10, null);
+        MyJpaTemplate.KeysetPage<TestEntity> page =
+            keysetPaginationHelperNullsLast.findKeysetPage(TestEntity.class, spec, sort, 10, null);
         assertEquals(3, page.content().size());
     }
 
@@ -664,8 +665,8 @@ class KeysetPaginationHelperTest {
         assertNull(page1.content().get(0).getName());
         assertTrue(page1.hasNext());
 
-        MyJpaTemplate.KeysetPage<TestEntity> page2 =
-            keysetPaginationHelperNullsFirst.findKeysetPage(TestEntity.class, spec, Sort.by("name"), 10, page1.lastSortValues());
+        MyJpaTemplate.KeysetPage<TestEntity> page2 = keysetPaginationHelperNullsFirst.findKeysetPage(TestEntity.class,
+            spec, Sort.by("name"), 10, page1.lastSortValues());
         assertEquals(1, page2.content().size());
         assertEquals("aaa", page2.content().get(0).getName());
     }

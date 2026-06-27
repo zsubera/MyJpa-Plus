@@ -80,8 +80,8 @@ public class DeleteSpec<T> extends AbstractBulkOperationSpec<T, DeleteSpec<T>> {
         return executeWithLimitCheck(em, "DELETE", e -> {
             CriteriaDelete<T> delete = toDelete(e);
             if (log.isDebugEnabled()) {
-                log.debug("Executing DELETE on {} with {} conditions",
-                    entityClass.getSimpleName(), conditionNodes.size());
+                log.debug("Executing DELETE on {} with {} conditions", entityClass.getSimpleName(),
+                    conditionNodes.size());
             }
             return e.createQuery(delete).executeUpdate();
         });

@@ -147,10 +147,9 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
     @SuppressWarnings("unchecked")
     public QuerySpec<T> copy() {
         if (!groupStack.isEmpty()) {
-            throw new QueryBuildException(
-                "Cannot copy QuerySpec inside or() or not() consumer. "
-                    + "The copy's groupStack is empty, so subsequent conditions would be added to the root (AND), "
-                    + "not to the current group. Complete the or()/not() group before copying.");
+            throw new QueryBuildException("Cannot copy QuerySpec inside or() or not() consumer. "
+                + "The copy's groupStack is empty, so subsequent conditions would be added to the root (AND), "
+                + "not to the current group. Complete the or()/not() group before copying.");
         }
         if (conditions.isEmpty() && orderBySupport.isEmpty() && groupByFields.isEmpty() && havingSupport.isEmpty()
             && queryTimeout == null && lockMode == null) {
@@ -694,7 +693,8 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
         }
         // ponytail: 预分配初始容量减少 HashMap/ArrayList 的 resize 开销，高频查询场景下可降低 GC 压力
         Map<String, Join<?, ?>> joinCache = new java.util.HashMap<>(INITIAL_JOIN_CACHE_CAPACITY);
-        java.util.Set<String> fetchPaths = java.util.Collections.newSetFromMap(new java.util.HashMap<>(INITIAL_JOIN_CACHE_CAPACITY));
+        java.util.Set<String> fetchPaths =
+            java.util.Collections.newSetFromMap(new java.util.HashMap<>(INITIAL_JOIN_CACHE_CAPACITY));
         List<Predicate> predicates = new java.util.ArrayList<>(Math.max(conditions.size(), INITIAL_PREDICATE_CAPACITY));
         for (ConditionNode node : conditions) {
             Predicate p = NodeResolver.resolveNode(node, root, root, query, cb, joinCache, null, fetchPaths);

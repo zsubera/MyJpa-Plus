@@ -338,9 +338,8 @@ public class SubQuerySpec<S> implements ConditionalMethods<S, SubQuerySpec<S>> {
         if (value == null) {
             throw new IllegalArgumentException("value must not be null");
         }
-        predicates.add(
-            PredicateHelper.like(root, LambdaUtils.property(field), ConditionalMethods.wrapLikePattern(value), cb,
-                PredicateHelper.LIKE_ESCAPE_CHAR));
+        predicates.add(PredicateHelper.like(root, LambdaUtils.property(field),
+            ConditionalMethods.wrapLikePattern(value), cb, PredicateHelper.LIKE_ESCAPE_CHAR));
         return this;
     }
 
@@ -359,9 +358,8 @@ public class SubQuerySpec<S> implements ConditionalMethods<S, SubQuerySpec<S>> {
         if (value == null) {
             throw new IllegalArgumentException("value must not be null");
         }
-        predicates.add(
-            PredicateHelper.notLike(root, LambdaUtils.property(field), ConditionalMethods.wrapLikePattern(value), cb,
-                PredicateHelper.LIKE_ESCAPE_CHAR));
+        predicates.add(PredicateHelper.notLike(root, LambdaUtils.property(field),
+            ConditionalMethods.wrapLikePattern(value), cb, PredicateHelper.LIKE_ESCAPE_CHAR));
         return this;
     }
 

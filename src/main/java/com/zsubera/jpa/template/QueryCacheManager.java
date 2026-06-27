@@ -133,7 +133,8 @@ public class QueryCacheManager implements CacheAdapter {
         new java.util.concurrent.ConcurrentHashMap<>();
 
     /** clear() 调用计数器，用于 put() 检测并发 clear() 后丢弃写入。 */
-    private final java.util.concurrent.atomic.AtomicLong clearGeneration = new java.util.concurrent.atomic.AtomicLong(0);
+    private final java.util.concurrent.atomic.AtomicLong clearGeneration =
+        new java.util.concurrent.atomic.AtomicLong(0);
 
     /**
      * 前缀索引，将键的前缀（冒号前部分）映射到该前缀下的所有缓存键集合。
@@ -345,7 +346,7 @@ public class QueryCacheManager implements CacheAdapter {
         // CAS-based eviction: find oldest entry by timestamp, CAS remove(key, value).
         // 避免并发 put 替换值后误删新条目。CAS 失败说明条目被并发替换，跳过即可。
         // ponytail: 驱逐到 maxEntries*3/4 留出头部空间，防止竞争写入下缓存超标。
-        //           如果 CAS 持续失败（高竞争），attempts 仍递增确保有穷。
+        // 如果 CAS 持续失败（高竞争），attempts 仍递增确保有穷。
         long targetSize = Math.max(1, (long)maxEntries * 3 / 4);
         int maxAttempts = Math.max(MIN_CAS_EVICTION_ATTEMPTS, maxEntries / 10);
         int attempts = 0;
@@ -396,7 +397,8 @@ public class QueryCacheManager implements CacheAdapter {
         if (cached != null) {
             return cached;
         }
-        java.util.concurrent.locks.ReentrantLock lock = loadLocks.computeIfAbsent(key, k -> new java.util.concurrent.locks.ReentrantLock());
+        java.util.concurrent.locks.ReentrantLock lock =
+            loadLocks.computeIfAbsent(key, k -> new java.util.concurrent.locks.ReentrantLock());
         lock.lock();
         try {
             cached = get(key);
@@ -603,8 +605,7 @@ public class QueryCacheManager implements CacheAdapter {
         if (sampleSize == 0) {
             return;
         }
-        int skip = evictionCursor.getAndAccumulate(sampleSize, (prev, add) ->
-            prev + add < storeSize ? prev + add : 0);
+        int skip = evictionCursor.getAndAccumulate(sampleSize, (prev, add) -> prev + add < storeSize ? prev + add : 0);
         int count = 0;
         for (Map.Entry<String, CachedQueryResult<?>> entry : store.entrySet()) {
             if (skip > 0) {
