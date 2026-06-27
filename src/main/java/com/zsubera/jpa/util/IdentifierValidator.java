@@ -135,15 +135,15 @@ public final class IdentifierValidator {
      */
     public static void validateColumnName(String columnName) {
         if (columnName == null || columnName.isEmpty()) {
-            throw new MyJpaPlusException("Column name must not be null or empty");
+            throw new SecurityViolationException("Column name must not be null or empty");
         }
         if (columnName.length() > MAX_IDENTIFIER_LENGTH) {
-            throw new MyJpaPlusException("Column name length (" + columnName.length() + ") exceeds maximum ("
+            throw new SecurityViolationException("Column name length (" + columnName.length() + ") exceeds maximum ("
                 + MAX_IDENTIFIER_LENGTH + "): '" + columnName.substring(0, 64) + "...'");
         }
         Pattern validationPattern = unicodeIdentifiers ? UNICODE_IDENTIFIER_PART_PATTERN : SAFE_IDENTIFIER_PATTERN;
         if (!validationPattern.matcher(columnName).matches()) {
-            throw new MyJpaPlusException("Invalid column name: '" + columnName
+            throw new SecurityViolationException("Invalid column name: '" + columnName
                 + "'. Must contain only alphanumeric characters and underscores."
                 + (unicodeIdentifiers ? "" : " Use myjpa-plus.merge.unicode-identifiers=true for Unicode support."));
         }

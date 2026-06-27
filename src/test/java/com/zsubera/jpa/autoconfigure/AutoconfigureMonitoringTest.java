@@ -2,7 +2,6 @@ package com.zsubera.jpa.autoconfigure;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-import com.zsubera.jpa.monitor.SqlSlowQueryInterceptor;
 import com.zsubera.jpa.monitor.SlowQueryDataSourceProxyPostProcessor;
 import com.zsubera.jpa.monitor.SlowQueryDataSourceProxy;
 import java.lang.reflect.Proxy;
@@ -21,12 +20,6 @@ class AutoconfigureMonitoringTest {
     private org.springframework.context.ApplicationContext context;
 
     @Test
-    void sqlSlowQueryInterceptor_beanExists() {
-        SqlSlowQueryInterceptor interceptor = context.getBean(SqlSlowQueryInterceptor.class);
-        assertNotNull(interceptor);
-    }
-
-    @Test
     void dataSourceSlowQueryProxyPostProcessor_beanExists() {
         SlowQueryDataSourceProxyPostProcessor processor = context.getBean(SlowQueryDataSourceProxyPostProcessor.class);
         assertNotNull(processor);
@@ -34,7 +27,6 @@ class AutoconfigureMonitoringTest {
 
     @Test
     void sqlSlowQueryInterceptor_wrapDataSource() {
-        SqlSlowQueryInterceptor interceptor = context.getBean(SqlSlowQueryInterceptor.class);
         DataSource realDataSource = context.getBean(DataSource.class);
         DataSource wrapped = SlowQueryDataSourceProxy.wrap(realDataSource, 1000L);
         assertNotNull(wrapped);
@@ -43,7 +35,6 @@ class AutoconfigureMonitoringTest {
 
     @Test
     void dataSourceProxy_isAlreadyWrapped_withProxyHandler() {
-        SqlSlowQueryInterceptor interceptor = context.getBean(SqlSlowQueryInterceptor.class);
         SlowQueryDataSourceProxyPostProcessor processor = new SlowQueryDataSourceProxyPostProcessor(1000L);
 
         DataSource realDataSource = context.getBean(DataSource.class);
@@ -55,7 +46,6 @@ class AutoconfigureMonitoringTest {
 
     @Test
     void isAlreadyWrapped_withDataSourceProxyHandler() throws Exception {
-        SqlSlowQueryInterceptor interceptor = context.getBean(SqlSlowQueryInterceptor.class);
         SlowQueryDataSourceProxyPostProcessor processor = new SlowQueryDataSourceProxyPostProcessor(1000L);
 
         // Create a proxy with DataSourceProxyHandler
@@ -130,7 +120,6 @@ class AutoconfigureMonitoringTest {
 
     @Test
     void dataSourceProxy_jdkProxy_skipsWrap() {
-        SqlSlowQueryInterceptor interceptor = context.getBean(SqlSlowQueryInterceptor.class);
         SlowQueryDataSourceProxyPostProcessor processor = new SlowQueryDataSourceProxyPostProcessor(1000L);
 
         DataSource proxy = (DataSource)Proxy.newProxyInstance(getClass().getClassLoader(),
@@ -142,7 +131,6 @@ class AutoconfigureMonitoringTest {
 
     @Test
     void dataSourceProxy_nonDataSource_returnsSame() {
-        SqlSlowQueryInterceptor interceptor = context.getBean(SqlSlowQueryInterceptor.class);
         SlowQueryDataSourceProxyPostProcessor processor = new SlowQueryDataSourceProxyPostProcessor(1000L);
 
         String notDataSource = "not a datasource";
@@ -151,7 +139,6 @@ class AutoconfigureMonitoringTest {
 
     @Test
     void dataSourceProxy_realDataSource_wrapsIt() {
-        SqlSlowQueryInterceptor interceptor = context.getBean(SqlSlowQueryInterceptor.class);
         SlowQueryDataSourceProxyPostProcessor processor = new SlowQueryDataSourceProxyPostProcessor(1000L);
 
         // Create a non-proxy DataSource to test wrapping

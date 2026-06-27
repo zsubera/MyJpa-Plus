@@ -15,7 +15,11 @@ import com.zsubera.jpa.update.EntityFieldExtractor.EntityFieldValue;
  * 使用 VALUES() 函数引用新插入值。VALUES() 在 MySQL 8.0.20 中被标记为弃用但仍可用。
  * MySQL 推荐使用行别名语法 {@code INSERT ... AS new_row ON DUPLICATE KEY UPDATE col = new_row.col}，
  * 但该语法仅在 MySQL 8.0.19+ 可用，且部分中间件/代理可能不兼容。因此当前使用 VALUES() 以确保广泛兼容性。
- * 待 MySQL 版本检测能力就绪后，将按版本自动切换语法。
+ *
+ * <p>
+ * ponytail: 行别名语法需要版本检测能力（通过 JDBC Connection.getMetaData().getDatabaseMajorVersion()），
+ * 但当前 DialectStrategy 接口未传递 EntityManager/Connection，且 MysqlDialect 是单例无法存储 per-connection 状态。
+ * 若 MySQL 未来版本移除 VALUES() 支持，需重构 DialectStrategy 接口增加版本参数，或使用 ThreadLocal 传递版本信息。
  *
  * <p>
  * 标识符使用反引号转义：{@code `identifier`}
@@ -56,6 +60,12 @@ final class MysqlDialect extends AbstractDialectStrategy {
         List<EntityFieldValue> insertFieldValues, List<String> conflictColumns, List<String> updateColumns) {
         String escapedTable = escapeIdentifier(tableName);
 
+        if (insertColumns.isEmpty()) {
+            throw new com.zsubera.jpa.exception.MyJpaPlusException(
+                "No insertable columns found for UPSERT on " + tableName
+                    + ". Ensure at least one non-auto-generated field has a value.");
+        }
+
         if (updateColumns.isEmpty()) {
             SqlWithParams insert = buildInsertClause(escapedTable, insertColumns, insertFieldValues);
             StringBuilder sql = new StringBuilder(insert.sql());
@@ -69,6 +79,7 @@ final class MysqlDialect extends AbstractDialectStrategy {
         StringBuilder sql = new StringBuilder(insert.sql());
 
         // ON DUPLICATE KEY UPDATE `col` = VALUES(`col`)
+        // ponytail: VALUES() deprecated in MySQL 8.0.20+ but still functional. See class Javadoc for upgrade path.
         sql.append(" ON DUPLICATE KEY UPDATE ");
         List<String> setClauses = new ArrayList<>();
         for (String col : updateColumns) {

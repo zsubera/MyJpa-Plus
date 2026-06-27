@@ -314,8 +314,11 @@ public final class EntityCodeGenerator {
             }
         }
         String result = sb.toString();
+        if (result.isEmpty()) {
+            throw new IllegalArgumentException("Cannot derive a class name from table name: " + tableName);
+        }
         // 处理以数字开头的表名
-        if (!result.isEmpty() && Character.isDigit(result.charAt(0))) {
+        if (Character.isDigit(result.charAt(0))) {
             result = "T" + result;
         }
         return result;
@@ -387,10 +390,19 @@ public final class EntityCodeGenerator {
         sb.append("    @GeneratedValue(strategy = GenerationType.IDENTITY)\n");
         sb.append("    private Long id;\n\n");
         for (ColumnDef col : columns) {
-            if (!col.isNullable()) {
-                sb.append("    @Column(nullable = false)\n");
-            }
             String safeName = sanitizeFieldName(col.getName());
+            boolean nameSanitized = !safeName.equals(col.getName());
+            if (!col.isNullable() || nameSanitized) {
+                sb.append("    @Column(");
+                java.util.List<String> attrs = new java.util.ArrayList<>();
+                if (nameSanitized) {
+                    attrs.add("name = \"" + col.getName() + "\"");
+                }
+                if (!col.isNullable()) {
+                    attrs.add("nullable = false");
+                }
+                sb.append(String.join(", ", attrs)).append(")\n");
+            }
             sb.append("    private ").append(col.getJavaType()).append(" ").append(safeName).append(";\n\n");
         }
         return sb.toString();

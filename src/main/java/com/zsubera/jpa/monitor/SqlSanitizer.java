@@ -99,10 +99,7 @@ public final class SqlSanitizer {
 
         String result = sql;
 
-        // 移除注释（可能包含敏感上下文信息）
-        result = COMMENT_PATTERN.matcher(result).replaceAll("");
-
-        // 替换各种字符串字面量（顺序重要：带前缀的模式必须在单引号模式之前）
+        // 替换各种字符串字面量（顺序重要：必须在注释移除之前，防止 -- 跨引号匹配）
         result = DOLLAR_QUOTE_PATTERN.matcher(result).replaceAll("?"); // PostgreSQL 美元引用字符串
         result = Q_QUOTE_BRACKET_PATTERN.matcher(result).replaceAll("?"); // Oracle q'[...]' 引用字符串
         result = Q_QUOTE_CHAR_PATTERN.matcher(result).replaceAll("?"); // Oracle q'x...x' 引用字符串
@@ -112,6 +109,9 @@ public final class SqlSanitizer {
         result = DOUBLE_QUOTE_PATTERN.matcher(result).replaceAll("?"); // 双引号字符串（MySQL ANSI_QUOTES）
         result = SINGLE_QUOTE_PATTERN.matcher(result).replaceAll("?"); // 单引号字符串
         result = DOLLAR_PARAM_PATTERN.matcher(result).replaceAll("?"); // PostgreSQL 美元参数
+
+        // 移除注释（字符串已被替换后，-- 不会跨引号匹配）
+        result = COMMENT_PATTERN.matcher(result).replaceAll("");
 
         // 保护 LIMIT/OFFSET/FETCH 数字，然后替换其他数字
         result = protectAndReplaceNumbers(result);

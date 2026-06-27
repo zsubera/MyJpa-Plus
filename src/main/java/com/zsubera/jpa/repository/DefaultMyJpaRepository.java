@@ -446,27 +446,10 @@ public class DefaultMyJpaRepository<T, ID> extends SimpleJpaRepository<T, ID> im
             }
             return false;
         }
-        String idFieldName = EntityClassResolver.resolveIdFieldName(domainClass);
-        jakarta.persistence.criteria.CriteriaBuilder cb = entityManager.getCriteriaBuilder();
-        jakarta.persistence.criteria.CriteriaQuery<Long> cq = cb.createQuery(Long.class);
-        jakarta.persistence.criteria.Root<T> root = cq.from(domainClass);
-        cq.select(cb.count(root));
-        jakarta.persistence.criteria.Predicate idPredicate = cb.equal(root.get(idFieldName), id);
-        if (softDeleteFieldName != null) {
-            jakarta.persistence.criteria.Predicate notDeleted =
-                com.zsubera.jpa.softdelete.SoftDeleteHelper.buildNotDeleted(cb, root, softDeleteFieldName, domainClass);
-            cq.where(idPredicate, notDeleted);
-        } else {
-            cq.where(idPredicate);
-        }
-        Long count = entityManager.createQuery(cq).getSingleResult();
-        if (count > 0) {
-            @SuppressWarnings("unchecked")
-            ID castId = id;
-            SoftDeleteHelper.softDeleteByIds(entityManager, domainClass, java.util.List.of(castId));
-            return true;
-        }
-        return false;
+        @SuppressWarnings("unchecked")
+        ID castId = id;
+        int updated = SoftDeleteHelper.softDeleteByIds(entityManager, domainClass, java.util.List.of(castId));
+        return updated > 0;
     }
 
     /**

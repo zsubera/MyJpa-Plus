@@ -311,6 +311,9 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
      * @return 包含参数值哈希的缓存键字符串
      */
     public String cacheKey() {
+        if (!groupStack.isEmpty()) {
+            throw new IllegalStateException("Cannot generate cache key while or()/not() groups are open");
+        }
         return CacheKeyBuilder.buildCacheKey(conditions, currentGroup(), groupStack, distinct, groupByFields,
             havingConditions, orderNodes, queryTimeout, lockMode);
     }
@@ -367,6 +370,9 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
     public QuerySpec<T> timeout(int seconds) {
         if (seconds <= 0) {
             throw new IllegalArgumentException("timeout must be positive, got: " + seconds);
+        }
+        if (seconds > 86400) {
+            throw new IllegalArgumentException("timeout must not exceed 86400 seconds (24h), got: " + seconds);
         }
         this.queryTimeout = seconds;
         return this;

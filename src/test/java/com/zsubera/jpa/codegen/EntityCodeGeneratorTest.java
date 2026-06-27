@@ -133,7 +133,7 @@ class EntityCodeGeneratorTest {
 
     @Test
     void toClassName_emptyString() {
-        assertEquals("", EntityCodeGenerator.toClassName(""));
+        assertThrows(IllegalArgumentException.class, () -> EntityCodeGenerator.toClassName(""));
     }
 
     @Test

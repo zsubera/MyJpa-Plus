@@ -109,25 +109,20 @@ public class CteSpec {
     private final boolean recursive;
 
     /**
-     * 严格模式开关。默认为 true（安全优先模式）。
+     * 严格模式开关。硬编码为 true（安全优先模式）。
      *
      * <p>
      * 设置为 true 时，检测到危险 SQL 关键字或未绑定参数会抛出异常。 但请注意：正则黑名单无法完备覆盖所有绕过方式，此检查仅作为辅助防护层。 安全责任在于使用者确保 CTE SQL 不包含用户输入。
      *
      * <p>
-     * 通过系统属性 {@code myjpa-plus.cte.strict-mode=false} 可禁用严格模式。
+     * 此值不可配置，始终启用以防止 SQL 注入攻击。如需绕过安全检查，请使用参数化查询 {@link #asSafe(String)} 替代。
      */
-    private static final boolean strictMode;
-
-    static {
-        String prop = System.getProperty("myjpa-plus.cte.strict-mode");
-        strictMode = !"false".equalsIgnoreCase(prop);
-    }
+    private static final boolean strictMode = true;
 
     /**
      * 获取严格模式状态。
      *
-     * @return 是否启用严格模式
+     * @return 始终返回 true（严格模式不可配置）
      */
     public static boolean isStrictMode() {
         return strictMode;
@@ -269,10 +264,10 @@ public class CteSpec {
         CteEntry current = currentCte();
         if (params != null && params.length > 0) {
             // 使用字面量替换（非正则），反向迭代避免 ?1 匹配 ?10 等多位数占位符
+            int cteIndex = cteEntries.size() - 1;
             String rewrittenSql = sqlTemplate;
             for (int i = params.length - 1; i >= 0; i--) {
-                String placeholder = "?" + (i + 1);
-                String namedParam = "_cte_param_" + i;
+                String namedParam = "_cte_" + cteIndex + "_param_" + i;
                 rewrittenSql = rewrittenSql.replace("?" + (i + 1), ":" + namedParam);
                 parameters.put(namedParam, params[i]);
             }
@@ -728,8 +723,8 @@ public class CteSpec {
         List<String> unboundParams = new ArrayList<>();
         while (matcher.find()) {
             String paramName = matcher.group(1);
-            // 跳过 asSafe() 内部管理的参数（如 :_cte_param_0）
-            if (paramName.startsWith("_cte_param_")) {
+            // 跳过 asSafe() 内部管理的参数（如 :_cte_0_param_0）
+            if (paramName.startsWith("_cte_") && paramName.contains("_param_")) {
                 continue;
             }
             if (!boundParams.containsKey(paramName)) {

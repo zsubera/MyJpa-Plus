@@ -197,7 +197,7 @@ public final class InClauseBuilder {
                 }
             }
             if (!hasNull) {
-                return new NullFilterResult(values instanceof List<?> l ? (List<Object>)(List<?>)l : List.copyOf(values), false);
+                return new NullFilterResult(values instanceof List<?> l ? List.copyOf(l) : List.copyOf(values), false);
             }
         }
         List<Object> nonNullValues = new ArrayList<>(values.size());

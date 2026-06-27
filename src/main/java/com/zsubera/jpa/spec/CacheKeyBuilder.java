@@ -70,14 +70,7 @@ final class CacheKeyBuilder {
             sb.append(")");
         }
         if (!havingConditions.isEmpty()) {
-            sb.append("#HAVING(");
-            for (int i = 0; i < havingConditions.size(); i++) {
-                if (i > 0) {
-                    sb.append(",");
-                }
-                sb.append(havingConditions.get(i).hashCode());
-            }
-            sb.append(")");
+            sb.append("#HAVING(").append(havingConditions.size()).append(")");
         }
         if (!orderNodes.isEmpty()) {
             sb.append("#ORDERBY(");

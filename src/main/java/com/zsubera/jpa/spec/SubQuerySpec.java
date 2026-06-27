@@ -856,8 +856,8 @@ public class SubQuerySpec<S> implements ConditionalMethods<S, SubQuerySpec<S>> {
                 + "Set the SELECT on the parent SubQuerySpec before calling or()/not().");
         }
         if (selectSet) {
-            // 已设置过 select（通过 presetSelectType），跳过重复设置
-            return this;
+            throw new IllegalStateException(
+                "select() called but SELECT already set to '" + selectFieldName + "'. Cannot override.");
         }
         String propName = LambdaUtils.getPropertyName(field);
         Path selectPath = root.get(propName);

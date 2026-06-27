@@ -117,8 +117,8 @@ final class EncryptionKeyManager {
                 return existing;
             }
             if (KEY_CACHE.size() >= MAX_KEY_CACHE_SIZE) {
-                throw new MyJpaPlusException("Encryption key cache is full (" + MAX_KEY_CACHE_SIZE + " entries). "
-                    + "Clear cache or increase MAX_KEY_CACHE_SIZE if this is legitimate key rotation.");
+                String victim = KEY_CACHE.keySet().iterator().next();
+                KEY_CACHE.remove(victim);
             }
             String rawKey = resolveRawKey(cacheKey);
             SecretKeySpec derived = deriveKey(rawKey);

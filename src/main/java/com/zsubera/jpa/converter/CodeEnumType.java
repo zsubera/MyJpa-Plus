@@ -102,11 +102,9 @@ public class CodeEnumType implements UserType<Object>, DynamicParameterizedType 
         } else if (fieldType == int.class || fieldType == Integer.class) {
             this.sqlType = Types.INTEGER;
         } else {
-            this.sqlType = Types.CHAR;
-            log.warn(
-                "Unsupported @CodeEnumValue field type '{}' in enum {}. Using Types.CHAR as fallback. "
-                    + "Supported types: String, int/Integer, long/Long.",
-                fieldType.getName(), enumClass.getSimpleName());
+            throw new HibernateException(
+                "Unsupported @CodeEnumValue field type '" + fieldType.getName() + "' in enum "
+                    + enumClass.getSimpleName() + ". Supported types: String, int/Integer, long/Long.");
         }
     }
 
@@ -264,7 +262,13 @@ public class CodeEnumType implements UserType<Object>, DynamicParameterizedType 
                 try {
                     Object codeValue = codeField.get(constant);
                     if (codeValue != null) {
-                        map.put(String.valueOf(codeValue).trim(), constant);
+                        Object existing = map.put(String.valueOf(codeValue).trim(), constant);
+                        if (existing != null) {
+                            throw new HibernateException(
+                                "Duplicate @CodeEnumValue '" + codeValue + "' in enum " + cls.getSimpleName()
+                                    + " — both " + ((Enum<?>)existing).name() + " and "
+                                    + ((Enum<?>)constant).name());
+                        }
                     }
                 } catch (IllegalAccessException e) {
                     log.warn("Failed to read @CodeEnumValue field for enum {}", cls.getSimpleName(), e);

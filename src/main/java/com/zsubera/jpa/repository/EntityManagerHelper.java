@@ -76,8 +76,6 @@ public final class EntityManagerHelper {
     public static void registerResolver(Class<?> entityType, EntityManagerResolver resolver) {
         Objects.requireNonNull(entityType, "entityType must not be null");
         Objects.requireNonNull(resolver, "resolver must not be null");
-        // ponytail: 将用户代码（resolver.resolve）移到锁外，避免阻塞器中 I/O 或慢操作导致锁竞争
-        resolvers.put(entityType, resolver);
         boolean usesNonDefault = true;
         EntityManagerFactory defaultEmf = defaultEntityManagerFactory;
         if (defaultEmf != null) {
@@ -88,6 +86,7 @@ public final class EntityManagerHelper {
             }
         }
         synchronized (resolverCheckLock) {
+            resolvers.put(entityType, resolver);
             if (usesNonDefault) {
                 allResolversUseDefault = false;
             }

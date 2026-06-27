@@ -31,6 +31,15 @@
  * repository.merge(s -> s.withEntity(user).onConflict(User::getEmail).updateOnConflict(User::getName));
  * }</pre>
  *
+ * <h2>Design Notes</h2>
+ * <p>
+ * <b>Raw type casts ({@code @SuppressWarnings("unchecked", "rawtypes")})</b>: The JPA Criteria API
+ * uses generic type parameters that are erased at runtime (e.g., {@code Root<T>}, {@code Path<R>},
+ * {@code CriteriaBuilder}). When building dynamic queries where the entity type and field types are
+ * known only at runtime, raw types are unavoidable. This is not a type-safety issue — all casts are
+ * validated at runtime by the JPA provider and by this library's identifier validation. Examples:
+ * {@code ConditionBuilder}, {@code SubQuerySpec}, {@code NodeResolver}, {@code PredicateHelper}.
+ *
  * @see com.zsubera.jpa.spec.QuerySpec
  * @see com.zsubera.jpa.template.MyJpaTemplate
  * @see com.zsubera.jpa.repository.MyJpaRepository

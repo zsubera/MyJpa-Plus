@@ -70,6 +70,9 @@ public final class PageableHelper {
         if (querySpec == null) {
             return pageable;
         }
+        if (!pageable.isPaged()) {
+            return pageable;
+        }
         Sort querySpecSort = querySpec.getSort();
         Sort pageableSort = pageable.getSort();
         Sort combined;

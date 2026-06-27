@@ -33,10 +33,10 @@ public class IgnoreSoftDeleteAdvisor {
     private static final Logger log = LoggerFactory.getLogger(IgnoreSoftDeleteAdvisor.class);
 
     /**
-     * 缓存注解检查结果，避免重复反射。使用 int hashCode 组合键。
+     * 缓存注解检查结果，避免重复反射。使用 Method 对象作为 key（identity-based），避免 hashCode 碰撞。
      * ponytail: 添加采样驱逐防止动态代理类名不断变化导致内存泄漏。
      */
-    private static final java.util.concurrent.ConcurrentMap<Integer, Boolean> ANNOTATION_CACHE =
+    private static final java.util.concurrent.ConcurrentMap<Method, Boolean> ANNOTATION_CACHE =
         new java.util.concurrent.ConcurrentHashMap<>();
 
     /** ANNOTATION_CACHE 最大条目数，超过时触发采样驱逐。 */
@@ -65,22 +65,14 @@ public class IgnoreSoftDeleteAdvisor {
         MethodSignature signature = (MethodSignature)pjp.getSignature();
         Method method = signature.getMethod();
 
-        // ponytail: 使用 hashCode 组合键代替 StringJoiner 拼接，避免每次调用都分配字符串
-        int paramHash = 17;
-        for (Class<?> paramType : method.getParameterTypes()) {
-            paramHash = 31 * paramHash + paramType.hashCode();
-        }
-        int cacheKey = method.getDeclaringClass().hashCode() * 31 + method.getName().hashCode();
-        cacheKey = cacheKey * 31 + paramHash;
-
         // ponytail: 采样驱逐——每 256 次调用检查缓存大小，超过上限时清空防止动态代理类名导致内存泄漏
         if ((EVICTION_COUNTER.incrementAndGet() & 255) == 0 && ANNOTATION_CACHE.size() > MAX_ANNOTATION_CACHE_SIZE) {
             ANNOTATION_CACHE.clear();
         }
 
-        Boolean hasAnnotation = ANNOTATION_CACHE.computeIfAbsent(cacheKey,
-            k -> AnnotationUtils.findAnnotation(method, IgnoreSoftDelete.class) != null
-                || AnnotationUtils.findAnnotation(method.getDeclaringClass(), IgnoreSoftDelete.class) != null);
+        Boolean hasAnnotation = ANNOTATION_CACHE.computeIfAbsent(method,
+            m -> AnnotationUtils.findAnnotation(m, IgnoreSoftDelete.class) != null
+                || AnnotationUtils.findAnnotation(m.getDeclaringClass(), IgnoreSoftDelete.class) != null);
 
         if (!hasAnnotation) {
             return pjp.proceed();

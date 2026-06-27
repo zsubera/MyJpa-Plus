@@ -222,8 +222,8 @@ public class MyJpaPlusProperties {
         }
 
         public void setMaxResults(int maxResults) {
-            if (maxResults <= 0) {
-                throw new IllegalArgumentException("maxResults must be positive");
+            if (maxResults <= 0 && maxResults != -1) {
+                throw new IllegalArgumentException("maxResults must be positive or -1 (disabled)");
             }
             this.maxResults = maxResults;
         }

@@ -231,7 +231,7 @@ public class EncryptConverter implements AttributeConverter<String, String> {
         try {
             String base64Data;
             String version = null;
-            if (dbData.contains(":")) {
+            if (dbData.contains(":") && dbData.length() > 30) {
                 int colonIndex = dbData.indexOf(':');
                 version = dbData.substring(0, colonIndex);
                 if (!VERSION_PATTERN.matcher(version).matches()) {

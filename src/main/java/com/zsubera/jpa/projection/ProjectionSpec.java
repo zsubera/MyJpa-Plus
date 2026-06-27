@@ -625,7 +625,7 @@ public class ProjectionSpec<T> {
             throw new IllegalArgumentException("em must not be null");
         }
         // ponytail: 无查询条件的流式查询容易 OOM，记录警告
-        log.warn("getResultStream() on {} has no row limit — consider adding a WHERE clause or using findPage().",
+        log.warn("getResultStream() on {} has no row limit — consider adding conditions or using findPage().",
             entityClass.getSimpleName());
         TypedQuery<Tuple> query = toTupleQuery(em, -1);
         // P-01：为流式查询设置 fetchSize 以启用服务端游标。
@@ -900,9 +900,17 @@ public class ProjectionSpec<T> {
      */
     private Map<String, Join<?, ?>> resolveJoins(Root<T> root, CriteriaBuilder cb) {
         Map<String, Join<?, ?>> joinMap = new LinkedHashMap<>();
+        Map<String, Boolean> joinTypeMap = new LinkedHashMap<>();
         // 按字段名收集所有条件，避免同名 join 的 ON 子句被覆盖
         Map<String, List<ConditionNode>> conditionsByField = new LinkedHashMap<>();
         for (JoinSpec js : joins) {
+            Boolean existingType = joinTypeMap.get(js.fieldName);
+            if (existingType != null && existingType != js.left) {
+                throw new IllegalArgumentException(
+                    "Conflicting JOIN types for field '" + js.fieldName + "': "
+                        + (existingType ? "LEFT" : "INNER") + " vs " + (js.left ? "LEFT" : "INNER"));
+            }
+            joinTypeMap.put(js.fieldName, js.left);
             Join<?, ?> join = joinMap.computeIfAbsent(js.fieldName, k -> js.left
                 ? root.join(js.fieldName, jakarta.persistence.criteria.JoinType.LEFT) : root.join(js.fieldName));
             conditionsByField.computeIfAbsent(js.fieldName, k -> new ArrayList<>()).addAll(js.getConditions());

@@ -1129,25 +1129,19 @@ public final class SoftDeleteHelper {
                 return Boolean.TRUE.equals(value);
             }
             // Integer 类型
-            if (value instanceof Integer intValue && field.isAnnotationPresent(SoftDelete.class)) {
+            if (value instanceof Integer intValue) {
                 SoftDelete annotation = field.getAnnotation(SoftDelete.class);
-                if (annotation != null) {
-                    return intValue.equals(annotation.deletedIntValue());
-                }
+                return intValue.equals(annotation.deletedIntValue());
             }
             // 枚举类型
-            if (value instanceof Enum enumValue && field.isAnnotationPresent(SoftDelete.class)) {
+            if (value instanceof Enum enumValue) {
                 SoftDelete annotation = field.getAnnotation(SoftDelete.class);
-                if (annotation != null && !annotation.deletedValue().isEmpty()) {
-                    return enumValue.name().equals(annotation.deletedValue());
-                }
+                return !annotation.deletedValue().isEmpty() && enumValue.name().equals(annotation.deletedValue());
             }
             // String 类型（支持 char(1) 等字符串软删除）
-            if (value instanceof String strValue && field.isAnnotationPresent(SoftDelete.class)) {
+            if (value instanceof String strValue) {
                 SoftDelete annotation = field.getAnnotation(SoftDelete.class);
-                if (annotation != null && !annotation.deletedStringValue().isEmpty()) {
-                    return strValue.equals(annotation.deletedStringValue());
-                }
+                return !annotation.deletedStringValue().isEmpty() && strValue.equals(annotation.deletedStringValue());
             }
             return false;
         } catch (ReflectiveOperationException e) {
