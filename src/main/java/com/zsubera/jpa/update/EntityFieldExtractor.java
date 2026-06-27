@@ -114,7 +114,9 @@ final class EntityFieldExtractor<T> {
                         && !f.isAnnotationPresent(jakarta.persistence.ManyToOne.class)
                         && !f.isAnnotationPresent(jakarta.persistence.ManyToMany.class)
                         && !f.isAnnotationPresent(jakarta.persistence.OneToOne.class)
-                        && !f.isAnnotationPresent(jakarta.persistence.EmbeddedId.class) && !isInsertableFalse(f)) {
+                        && !f.isAnnotationPresent(jakarta.persistence.EmbeddedId.class)
+                        && !f.isAnnotationPresent(jakarta.persistence.Version.class)
+                        && !isInsertableFalse(f)) {
                         fields.add(f);
                     }
                 }
@@ -227,6 +229,8 @@ final class EntityFieldExtractor<T> {
         String clsName = cls.getName();
         int idx = clsName.indexOf("$$");
         if (idx > 0) {
+            cls = cls.getSuperclass();
+        } else if (clsName.contains("_$$_jvst") || clsName.contains("_$$_bvcl")) {
             cls = cls.getSuperclass();
         }
         String fieldName = field.getName();

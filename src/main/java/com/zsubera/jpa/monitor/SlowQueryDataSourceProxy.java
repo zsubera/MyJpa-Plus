@@ -183,12 +183,14 @@ public final class SlowQueryDataSourceProxy {
         public Object invoke(Object proxy, Method method, Object[] args) throws Throwable {
             String name = method.getName();
             if ("addBatch".equals(name)) {
+                Object result = method.invoke(target, args);
                 batchCount++;
-                return method.invoke(target, args);
+                return result;
             }
             if ("clearBatch".equals(name)) {
+                Object result = method.invoke(target, args);
                 batchCount = 0;
-                return method.invoke(target, args);
+                return result;
             }
             if ("executeBatch".equals(name)) {
                 String batchSql =
@@ -296,16 +298,19 @@ public final class SlowQueryDataSourceProxy {
             }
             if ("addBatch".equals(name) && args != null && args.length > 0 && args[0] instanceof String s) {
                 this.sql = s;
+                Object result = method.invoke(target, args);
                 batchCount++;
-                return method.invoke(target, args);
+                return result;
             }
             if ("addBatch".equals(name)) {
+                Object result = method.invoke(target, args);
                 batchCount++;
-                return method.invoke(target, args);
+                return result;
             }
             if ("clearBatch".equals(name)) {
+                Object result = method.invoke(target, args);
                 batchCount = 0;
-                return method.invoke(target, args);
+                return result;
             }
             if ("executeBatch".equals(name)) {
                 String batchSql =

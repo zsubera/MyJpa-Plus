@@ -23,29 +23,29 @@ public class MyJpaPlusGlobalConfig {
     /** 是否阻断无条件硬删除。 */
     private volatile boolean blockUnconditionalDelete = true;
 
-    /** 查询最大返回行数。 */
-    private volatile int maxResults = MyJpaTemplate.DEFAULT_MAX_RESULTS;
+    /** 查询最大返回行数。null 表示未配置（使用 LocalFallback）。 */
+    private volatile Integer maxResults;
 
-    /** 批量操作最大影响行数。 */
-    private volatile int maxBulkOperationRows = MyJpaTemplate.DEFAULT_MAX_BULK_OPERATION_ROWS;
+    /** 批量操作最大影响行数。null 表示未配置。 */
+    private volatile Integer maxBulkOperationRows;
 
-    /** 深度分页警告阈值。 */
-    private volatile int deepPaginationOffsetThreshold = MyJpaTemplate.DEFAULT_DEEP_PAGINATION_OFFSET_THRESHOLD;
+    /** 深度分页警告阈值。null 表示未配置。 */
+    private volatile Integer deepPaginationOffsetThreshold;
 
-    /** 深度分页硬限制。 */
-    private volatile int deepPaginationOffsetLimit = MyJpaTemplate.DEFAULT_DEEP_PAGINATION_OFFSET_LIMIT;
+    /** 深度分页硬限制。null 表示未配置。 */
+    private volatile Integer deepPaginationOffsetLimit;
 
-    /** IN 子句最大参数数量。 */
-    private volatile int inClauseMaxSize = 1000;
+    /** IN 子句最大参数数量。null 表示未配置。 */
+    private volatile Integer inClauseMaxSize;
 
-    /** IN 子句硬限制。 */
-    private volatile int inClauseHardLimit = 5000;
+    /** IN 子句硬限制。null 表示未配置。 */
+    private volatile Integer inClauseHardLimit;
 
-    /** Lambda 属性名缓存大小。 */
-    private volatile int lambdaCacheSize = 4096;
+    /** Lambda 属性名缓存大小。null 表示未配置。 */
+    private volatile Integer lambdaCacheSize;
 
-    /** 缓存最大条目数。 */
-    private volatile int cacheMaxEntries = 10000;
+    /** 缓存最大条目数。null 表示未配置。 */
+    private volatile Integer cacheMaxEntries;
 
     // ---- Soft Delete ----
 
@@ -67,7 +67,7 @@ public class MyJpaPlusGlobalConfig {
 
     // ---- Query Limits ----
 
-    public int getMaxResults() {
+    public Integer getMaxResults() {
         return maxResults;
     }
 
@@ -78,7 +78,7 @@ public class MyJpaPlusGlobalConfig {
         this.maxResults = maxResults;
     }
 
-    public int getMaxBulkOperationRows() {
+    public Integer getMaxBulkOperationRows() {
         return maxBulkOperationRows;
     }
 
@@ -90,7 +90,7 @@ public class MyJpaPlusGlobalConfig {
         this.maxBulkOperationRows = maxBulkOperationRows;
     }
 
-    public int getDeepPaginationOffsetThreshold() {
+    public Integer getDeepPaginationOffsetThreshold() {
         return deepPaginationOffsetThreshold;
     }
 
@@ -102,21 +102,21 @@ public class MyJpaPlusGlobalConfig {
         this.deepPaginationOffsetThreshold = deepPaginationOffsetThreshold;
     }
 
-    public int getDeepPaginationOffsetLimit() {
+    public Integer getDeepPaginationOffsetLimit() {
         return deepPaginationOffsetLimit;
     }
 
     public void setDeepPaginationOffsetLimit(int deepPaginationOffsetLimit) {
-        if (deepPaginationOffsetLimit < -1) {
+        if (deepPaginationOffsetLimit <= 0 && deepPaginationOffsetLimit != -1) {
             throw new IllegalArgumentException(
-                "deepPaginationOffsetLimit must be -1 (unlimited) or non-negative, got: " + deepPaginationOffsetLimit);
+                "deepPaginationOffsetLimit must be -1 (unlimited) or positive, got: " + deepPaginationOffsetLimit);
         }
         this.deepPaginationOffsetLimit = deepPaginationOffsetLimit;
     }
 
     // ---- IN Clause ----
 
-    public int getInClauseMaxSize() {
+    public Integer getInClauseMaxSize() {
         return inClauseMaxSize;
     }
 
@@ -127,7 +127,7 @@ public class MyJpaPlusGlobalConfig {
         this.inClauseMaxSize = inClauseMaxSize;
     }
 
-    public int getInClauseHardLimit() {
+    public Integer getInClauseHardLimit() {
         return inClauseHardLimit;
     }
 
@@ -140,7 +140,7 @@ public class MyJpaPlusGlobalConfig {
 
     // ---- Lambda Cache ----
 
-    public int getLambdaCacheSize() {
+    public Integer getLambdaCacheSize() {
         return lambdaCacheSize;
     }
 
@@ -153,7 +153,7 @@ public class MyJpaPlusGlobalConfig {
 
     // ---- Cache ----
 
-    public int getCacheMaxEntries() {
+    public Integer getCacheMaxEntries() {
         return cacheMaxEntries;
     }
 

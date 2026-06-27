@@ -211,7 +211,7 @@ public final class PredicateHelper {
      */
     public static Predicate like(Path<?> path, String fieldName, String value, CriteriaBuilder cb) {
         if (value == null) {
-            return cb.conjunction();
+            return cb.disjunction();
         }
         return cb.like(path.get(fieldName).as(String.class), value, LIKE_ESCAPE_CHAR);
     }
@@ -228,7 +228,7 @@ public final class PredicateHelper {
      */
     public static Predicate like(Path<?> path, String fieldName, String value, CriteriaBuilder cb, char escapeChar) {
         if (value == null) {
-            return cb.conjunction();
+            return cb.disjunction();
         }
         return cb.like(path.get(fieldName).as(String.class), value, escapeChar);
     }
@@ -280,7 +280,7 @@ public final class PredicateHelper {
      */
     public static Predicate startsWith(Path<?> path, String fieldName, String value, CriteriaBuilder cb) {
         if (value == null) {
-            return cb.conjunction();
+            return cb.disjunction();
         }
         return cb.like(path.get(fieldName).as(String.class), escapeLikeWildcards(value) + "%", LIKE_ESCAPE_CHAR);
     }
@@ -299,7 +299,7 @@ public final class PredicateHelper {
      */
     public static Predicate endsWith(Path<?> path, String fieldName, String value, CriteriaBuilder cb) {
         if (value == null) {
-            return cb.conjunction();
+            return cb.disjunction();
         }
         return cb.like(path.get(fieldName).as(String.class), "%" + escapeLikeWildcards(value), LIKE_ESCAPE_CHAR);
     }
@@ -318,7 +318,7 @@ public final class PredicateHelper {
      */
     public static Predicate contains(Path<?> path, String fieldName, String value, CriteriaBuilder cb) {
         if (value == null) {
-            return cb.conjunction();
+            return cb.disjunction();
         }
         return cb.like(path.get(fieldName).as(String.class), "%" + escapeLikeWildcards(value) + "%", LIKE_ESCAPE_CHAR);
     }

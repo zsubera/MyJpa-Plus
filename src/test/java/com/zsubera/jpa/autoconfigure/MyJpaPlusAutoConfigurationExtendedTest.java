@@ -217,7 +217,8 @@ class MyJpaPlusAutoConfigurationExtendedTest {
                 new Class<?>[] {javax.sql.DataSource.class}, (p, m, args) -> null);
 
         Object result = processor.postProcessAfterInitialization(proxy, "ds");
-        assertSame(proxy, result);
+        assertNotSame(proxy, result);
+        assertTrue(com.zsubera.jpa.monitor.SlowQueryDataSourceProxy.isWrapped((javax.sql.DataSource)result));
     }
 
     @Test

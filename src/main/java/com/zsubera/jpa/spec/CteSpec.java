@@ -333,6 +333,7 @@ public class CteSpec {
             throw new IllegalArgumentException("sql must not be null or empty");
         }
         checkSqlSafety(sql, "main query");
+        validateSelectOnly(sql);
         this.mainSql = sql;
         return this;
     }

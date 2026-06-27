@@ -142,8 +142,8 @@ public final class GlobalConfigHolder {
         int defaultValue) {
         MyJpaPlusGlobalConfig cfg = getConfig();
         if (cfg != null) {
-            int value = getter.apply(cfg);
-            if (value != 0) {
+            Integer value = getter.apply(cfg);
+            if (value != null) {
                 return value;
             }
         }

@@ -282,7 +282,7 @@ final class EncryptionKeyManager {
     private static byte[] getSalt() {
         byte[] cached = cachedSalt;
         if (cached != null) {
-            return cached;
+            return cached.clone();
         }
         String salt = System.getenv(SALT_ENV);
         if (salt == null || salt.isEmpty()) {
@@ -291,7 +291,7 @@ final class EncryptionKeyManager {
         if (salt != null && !salt.isEmpty()) {
             byte[] bytes = salt.getBytes(StandardCharsets.UTF_8);
             cachedSalt = bytes;
-            return bytes;
+            return bytes.clone();
         }
         if (isSaltCheckSkipped()) {
             if (com.zsubera.jpa.autoconfigure.EnvironmentHelper.isProductionEnvironment()) {
@@ -355,10 +355,19 @@ final class EncryptionKeyManager {
     static void clearCaches() {
         KEY_SPEC_WRITE_LOCK.lock();
         try {
+            KEY_VERSION_LOCK.lock();
+            try {
+                keyVersionSnapshot = new KeyVersionSnapshot(null, 0);
+            } finally {
+                KEY_VERSION_LOCK.unlock();
+            }
             KEY_CACHE.clear();
             KEY_ACCESS_TIMES.clear();
-            keyVersionSnapshot = new KeyVersionSnapshot(null, 0);
             KEY_VALIDATED.set(false);
+            byte[] oldSalt = cachedSalt;
+            if (oldSalt != null) {
+                java.util.Arrays.fill(oldSalt, (byte) 0);
+            }
             cachedSalt = null;
         } finally {
             KEY_SPEC_WRITE_LOCK.unlock();
@@ -366,16 +375,7 @@ final class EncryptionKeyManager {
     }
 
     static void refreshKeyVersion() {
-        KEY_SPEC_WRITE_LOCK.lock();
-        try {
-            KEY_CACHE.clear();
-            KEY_ACCESS_TIMES.clear();
-            keyVersionSnapshot = new KeyVersionSnapshot(null, 0);
-            KEY_VALIDATED.set(false);
-            cachedSalt = null;
-        } finally {
-            KEY_SPEC_WRITE_LOCK.unlock();
-        }
+        clearCaches();
         log.info("Encryption key version cache refreshed");
     }
 

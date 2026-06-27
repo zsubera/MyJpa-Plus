@@ -306,6 +306,8 @@ public final class SoftDeleteBulkExecutor {
         }
         if (total > 0) {
             em.flush();
+            em.clear();
+            UpdateSpec.evictEntityCache(em, entityClass);
             publishEvent(entityClass, total);
         }
         return total;

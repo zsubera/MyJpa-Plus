@@ -32,8 +32,6 @@ public class SqlSlowQueryInterceptor implements StatementInspector {
 
     private final long slowQueryThresholdMs;
 
-    private final QueryMetricsCollector metricsCollector;
-
     /**
      * 创建慢查询拦截器。
      *
@@ -48,14 +46,13 @@ public class SqlSlowQueryInterceptor implements StatementInspector {
      * 创建慢查询拦截器，指定指标收集器。
      *
      * @param slowQueryThresholdMs 慢查询阈值（毫秒）
-     * @param metricsCollector     查询指标收集器
+     * @param metricsCollector     查询指标收集器（已废弃，保留参数以维持 API 兼容性）
      */
     SqlSlowQueryInterceptor(long slowQueryThresholdMs, QueryMetricsCollector metricsCollector) {
         if (slowQueryThresholdMs <= 0) {
             throw new IllegalArgumentException("slowQueryThresholdMs must be positive");
         }
         this.slowQueryThresholdMs = slowQueryThresholdMs;
-        this.metricsCollector = metricsCollector;
         log.warn("SqlSlowQueryInterceptor is disabled — timing is handled by SlowQueryDataSourceProxy at JDBC layer");
     }
 

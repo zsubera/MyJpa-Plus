@@ -58,10 +58,12 @@ public class CacheInvalidationListener {
     /**
      * 防止同一实体在同一事件中被双重驱逐的去重缓存。
      * key = 实体名, value = 事件发布的时间戳（纳秒）
+     * 上限 1024 条目，超出后跳过去重（允许重复驱逐，幂等安全）。
      */
     private final ConcurrentMap<String, Long> recentEvictions = new ConcurrentHashMap<>();
 
     private static final long DEDUP_WINDOW_NS = 1_000_000L; // 1ms
+    private static final int MAX_RECENT_EVICTIONS = 1024;
 
     /**
      * 创建缓存失效监听器（使用 CacheAdapter）。
@@ -97,12 +99,14 @@ public class CacheInvalidationListener {
 
     private void evictByEntity(String entityName, String reason) {
         long now = System.nanoTime();
-        Long lastEviction = recentEvictions.get(entityName);
-        if (lastEviction != null && (now - lastEviction) < DEDUP_WINDOW_NS) {
-            log.debug("Skipping duplicate cache invalidation for entity '{}' ({})", entityName, reason);
-            return;
+        if (recentEvictions.size() < MAX_RECENT_EVICTIONS) {
+            Long lastEviction = recentEvictions.get(entityName);
+            if (lastEviction != null && (now - lastEviction) < DEDUP_WINDOW_NS) {
+                log.debug("Skipping duplicate cache invalidation for entity '{}' ({})", entityName, reason);
+                return;
+            }
+            recentEvictions.put(entityName, now);
         }
-        recentEvictions.put(entityName, now);
         String prefix = entityName + ":";
         int evicted = cacheAdapter.evictByPrefix(prefix);
         if (evicted > 0) {

@@ -288,10 +288,10 @@ class BulkOperationTemplate {
      */
     private int executeBatchInternal(int batchSize, String operationName,
         java.util.function.IntUnaryOperator batchExecutor, boolean clearContext) {
-        int effectiveLimit = resolveMaxBulkOperationRows();
         int total = 0;
         int batchResult;
         int iteration = 0;
+        int effectiveLimit = resolveMaxBulkOperationRows();
         do {
             batchResult = batchExecutor.applyAsInt(batchSize);
             total += batchResult;
@@ -311,6 +311,7 @@ class BulkOperationTemplate {
                     operationName, maxBatchIterations, total);
                 break;
             }
+            effectiveLimit = resolveMaxBulkOperationRows();
         } while (batchResult > 0 && (effectiveLimit <= 0 || total < effectiveLimit));
         return total;
     }
@@ -507,6 +508,7 @@ class BulkOperationTemplate {
                     operationName, maxBatchIterations, total);
                 break;
             }
+            effectiveLimit = resolveMaxBulkOperationRows();
         } while (batchResult > 0 && (effectiveLimit <= 0 || total < effectiveLimit));
         return total;
     }

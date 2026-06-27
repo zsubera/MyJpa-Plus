@@ -151,11 +151,10 @@ class AutoconfigureCoverageGapTest {
             (javax.sql.DataSource)java.lang.reflect.Proxy.newProxyInstance(getClass().getClassLoader(),
                 new Class<?>[] {javax.sql.DataSource.class}, (proxy, method, args) -> null);
 
-        // When InvocationHandler is a DataSourceProxyHandler, isAlreadyWrapped returns true
-        // But we can't easily create a DataSourceProxyHandler, so test the non-wrapped proxy path
+        // JDK proxy from other libraries is now wrapped for slow query monitoring
         Object result = processor.postProcessAfterInitialization(wrappedProxy, "wrappedDs");
-        // JDK proxy is not wrapped (skip all JDK proxies to avoid double-wrapping)
-        assertSame(wrappedProxy, result);
+        assertNotSame(wrappedProxy, result);
+        assertTrue(com.zsubera.jpa.monitor.SlowQueryDataSourceProxy.isWrapped((javax.sql.DataSource)result));
     }
 
     @Test

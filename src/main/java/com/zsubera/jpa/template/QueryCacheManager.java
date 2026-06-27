@@ -174,13 +174,10 @@ public class QueryCacheManager implements CacheAdapter {
      */
     private void removeFromPrefixIndex(String key) {
         String prefix = extractPrefix(key);
-        java.util.Set<String> keys = prefixIndex.get(prefix);
-        if (keys != null) {
+        prefixIndex.computeIfPresent(prefix, (k, keys) -> {
             keys.remove(key);
-            if (keys.isEmpty()) {
-                prefixIndex.remove(prefix, keys);
-            }
-        }
+            return keys.isEmpty() ? null : keys;
+        });
     }
 
     /**
@@ -252,7 +249,13 @@ public class QueryCacheManager implements CacheAdapter {
             hitCount.addAndGet(localHits.getAndSet(0));
             missCount.addAndGet(localMisses.getAndSet(0));
         }
+        long genBefore = clearGeneration.get();
         CachedQueryResult<?> result = store.get(key);
+        // 如果 clear() 在 get 期间发生，丢弃可能过期的数据
+        if (clearGeneration.get() != genBefore) {
+            localMisses.incrementAndGet();
+            return null;
+        }
         if (result == null) {
             localMisses.incrementAndGet();
             return null;
@@ -707,11 +710,17 @@ public class QueryCacheManager implements CacheAdapter {
             }
         } else {
             // ponytail: 前缀索引只存储第一级前缀，多段前缀需回退到全量扫描
-            for (java.util.Map.Entry<String, CachedQueryResult<?>> entry : store.entrySet()) {
-                if (entry.getKey().startsWith(normalizedPrefix)) {
-                    store.remove(entry.getKey());
-                    insertionTimestamps.remove(entry.getKey());
-                    removeFromPrefixIndex(entry.getKey());
+            // ponytail: 先收集再删除，避免在 ConcurrentHashMap 迭代中修改
+            java.util.List<String> keysToRemove = new java.util.ArrayList<>();
+            for (String key : store.keySet()) {
+                if (key.startsWith(normalizedPrefix)) {
+                    keysToRemove.add(key);
+                }
+            }
+            for (String key : keysToRemove) {
+                if (store.remove(key) != null) {
+                    insertionTimestamps.remove(key);
+                    removeFromPrefixIndex(key);
                     count++;
                 }
             }

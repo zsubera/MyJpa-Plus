@@ -344,10 +344,9 @@ final class NodeResolver {
     private static <S> Predicate resolveExists(ConditionNode.ExistsNode<S> node, NodeContext ctx) {
         CriteriaQuery<?> query = ctx.query();
         if (query == null) {
-            log.debug("EXISTS subquery used in count query context (query=null). "
-                + "Creating temporary CriteriaQuery for subquery construction.");
-            CriteriaQuery<S> tempQuery = ctx.cb().createQuery(node.subEntity);
-            return resolveExistsInternal(node, ctx.rootPath(), tempQuery, ctx.cb());
+            throw new QueryBuildException(
+                "EXISTS subquery is not supported in count query context (query=null). "
+                    + "Use a separate count query without subqueries.");
         }
         return resolveExistsInternal(node, ctx.rootPath(), query, ctx.cb());
     }
@@ -379,10 +378,9 @@ final class NodeResolver {
     private static <S> Predicate resolveInSubQuery(ConditionNode.InSubQueryNode<S> node, NodeContext ctx) {
         CriteriaQuery<?> query = ctx.query();
         if (query == null) {
-            log.debug("IN subquery used in count query context (query=null). "
-                + "Creating temporary CriteriaQuery for subquery construction.");
-            CriteriaQuery<S> tempQuery = ctx.cb().createQuery(node.subEntity);
-            return resolveInSubQueryInternal(node, ctx.path(), tempQuery, ctx.cb());
+            throw new QueryBuildException(
+                "IN subquery is not supported in count query context (query=null). "
+                    + "Use a separate count query without subqueries.");
         }
         return resolveInSubQueryInternal(node, ctx.path(), query, ctx.cb());
     }

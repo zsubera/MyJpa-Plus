@@ -159,7 +159,7 @@ class MyJpaPlusAutoConfigurationBranchTest {
     }
 
     @Test
-    void dataSourceSlowQueryProxyPostProcessor_proxyDataSource_returnsSame() {
+    void dataSourceSlowQueryProxyPostProcessor_proxyDataSource_wrapsForMonitoring() {
         com.zsubera.jpa.monitor.SqlSlowQueryInterceptor interceptor =
             new com.zsubera.jpa.monitor.SqlSlowQueryInterceptor(1000);
         SlowQueryDataSourceProxyPostProcessor processor = new SlowQueryDataSourceProxyPostProcessor(1000L);
@@ -169,7 +169,8 @@ class MyJpaPlusAutoConfigurationBranchTest {
                 new Class<?>[] {javax.sql.DataSource.class}, (p, m, args) -> null);
 
         Object result = processor.postProcessAfterInitialization(proxy, "ds");
-        assertSame(proxy, result);
+        assertNotSame(proxy, result);
+        assertTrue(com.zsubera.jpa.monitor.SlowQueryDataSourceProxy.isWrapped((javax.sql.DataSource)result));
     }
 
     @Test

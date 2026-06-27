@@ -984,8 +984,8 @@ public class MyJpaTemplate implements MyJpaTemplateOperations {
         com.zsubera.jpa.autoconfigure.MyJpaPlusGlobalConfig config =
             com.zsubera.jpa.autoconfigure.GlobalConfigHolder.getConfig();
         if (config != null) {
-            int value = getter.apply(config);
-            if (value != 0) {
+            Integer value = getter.apply(config);
+            if (value != null) {
                 return value;
             }
         }

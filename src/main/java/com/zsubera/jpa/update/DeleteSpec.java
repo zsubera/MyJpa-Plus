@@ -186,8 +186,9 @@ public class DeleteSpec<T> extends AbstractBulkOperationSpec<T, DeleteSpec<T>> {
      * 此方法首先查询符合条件的实体 ID 列表（带限制），然后对这些实体执行删除操作。
      *
      * <p>
-     * <strong>重要副作用：</strong>{@code em.clear()} 会分离当前事务中<strong>所有</strong>托管实体，
-     * 包括调用方在同一事务中持有的其他实体。调用方应在 {@code executeLimited} 返回后重新查询需要的实体。
+     * <strong>重要副作用：</strong>默认回退到 {@code em.clear()} 会分离当前事务中<strong>所有</strong>托管实体，
+     * 包括调用方在同一事务中持有的其他实体。在 Hibernate 环境下会使用选择性缓存驱逐（仅影响指定实体类型）。
+     * 调用方应在 {@code executeLimited} 返回后重新查询需要的实体。
      *
      * <p>
      * <strong>并发风险警告：</strong>此方法分两步执行（先查询 ID，再删除），在高并发场景下存在竞态条件。 在查询ID和执行删除之间，其他事务可能修改或删除记录，导致数据不一致。

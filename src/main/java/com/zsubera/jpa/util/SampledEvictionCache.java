@@ -16,8 +16,9 @@ import java.util.function.Function;
  * 驱逐是幂等的，其他线程跳过不等待。
  *
  * <p>
- * <strong>驱逐策略：</strong>使用迭代器顺序驱逐（FIFO 语义），按 ConcurrentHashMap 内部哈希顺序
- * 从迭代器头部开始移除。这不是真正的 LRU 或随机采样，但对于大多数缓存场景已足够。
+ * <strong>驱逐策略：</strong>使用迭代器顺序驱逐（hash-order 近似 FIFO 语义），按 ConcurrentHashMap 内部哈希桶顺序
+ * 从迭代器头部开始移除。这不是真正的 LRU 或插入顺序 FIFO，但对于 LambdaUtils 和 KeysetPaginationHelper
+ * 等预热型缓存场景已足够。
  *
  * <p>
  * 此类型消除了 {@code keySet().toArray()} 分配（参考 {@code KeysetPaginationHelper} 的原实现），

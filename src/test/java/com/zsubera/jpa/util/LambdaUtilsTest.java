@@ -127,16 +127,14 @@ class LambdaUtilsTest {
             SampledEvictionCache<String, String> cache = (SampledEvictionCache<String, String>)cacheField.get(null);
 
             // Fill cache beyond maxSize via put, which also triggers sampling evict
-            // Sampling interval is 100, so we need enough puts to trigger check
-            for (int i = 0; i < 20; i++) {
+            // Put enough entries to guarantee we exceed maxSize regardless of counter state
+            for (int i = 0; i < 30; i++) {
                 cache.put("class" + i + "#method" + i, "prop" + i);
             }
-            int sizeAfterFill = cache.size();
-            assertTrue(sizeAfterFill > 10, "Cache should exceed maxSize, got " + sizeAfterFill);
 
-            // Continue putting until sampling eviction triggers
+            // Continue putting until sampling eviction triggers (counter state is shared across tests)
             int evictTriggerPuts = 0;
-            while (cache.size() > 10 && evictTriggerPuts < 200) {
+            while (cache.size() > 10 && evictTriggerPuts < 300) {
                 cache.put("evict_" + evictTriggerPuts++ + "#m", "v");
             }
             assertTrue(cache.size() <= 10, "Cache should be evicted, but size is " + cache.size());

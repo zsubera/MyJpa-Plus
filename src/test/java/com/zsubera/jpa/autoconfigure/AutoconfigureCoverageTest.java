@@ -101,8 +101,9 @@ class AutoconfigureCoverageTest {
                 new Class<?>[] {javax.sql.DataSource.class}, (p, m, args) -> null);
 
         Object result = processor.postProcessAfterInitialization(proxy, "ds");
-        // JDK proxy is not wrapped (skip all JDK proxies to avoid double-wrapping)
-        assertSame(proxy, result);
+        // JDK proxy from other libraries is now wrapped for slow query monitoring
+        assertNotSame(proxy, result);
+        assertTrue(com.zsubera.jpa.monitor.SlowQueryDataSourceProxy.isWrapped((javax.sql.DataSource)result));
     }
 
     @Test

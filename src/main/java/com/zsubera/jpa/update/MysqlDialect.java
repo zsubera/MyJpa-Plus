@@ -66,6 +66,10 @@ final class MysqlDialect extends AbstractDialectStrategy {
         }
 
         if (updateColumns.isEmpty()) {
+            org.slf4j.LoggerFactory.getLogger(MysqlDialect.class)
+                .warn("No update columns specified for UPSERT on {}. MySQL ON DUPLICATE KEY UPDATE "
+                    + "id = VALUES(id) is a no-op (MySQL reports 1 row affected but no data changed). "
+                    + "Consider using INSERT IGNORE or specifying update columns.", tableName);
             SqlWithParams insert = buildInsertClause(escapedTable, insertColumns, insertFieldValues);
             StringBuilder sql = new StringBuilder(insert.sql());
             sql.append(" ON DUPLICATE KEY UPDATE ");

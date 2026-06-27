@@ -532,18 +532,17 @@ public class UpdateSpec<T> extends AbstractBulkOperationSpec<T, UpdateSpec<T>> {
             }
             return;
         }
+        java.lang.reflect.Field resolvedField = resolveFieldFromClassHierarchy(fieldName);
         Boolean isNumeric = NUMERIC_FIELD_CACHE.computeIfAbsent(cacheKey, k -> {
-            java.lang.reflect.Field f = resolveFieldFromClassHierarchy(fieldName);
-            if (f == null) {
+            if (resolvedField == null) {
                 return false;
             }
-            Class<?> type = f.getType();
+            Class<?> type = resolvedField.getType();
             return Number.class.isAssignableFrom(type) || type == int.class || type == long.class
                 || type == double.class || type == float.class || type == short.class || type == byte.class;
         });
         if (!isNumeric) {
-            java.lang.reflect.Field f = resolveFieldFromClassHierarchy(fieldName);
-            String fieldType = f != null ? f.getType().getSimpleName() : "unknown";
+            String fieldType = resolvedField != null ? resolvedField.getType().getSimpleName() : "unknown";
             if ("unknown".equals(fieldType)) {
                 throw new IllegalArgumentException(operation + "() cannot validate field '" + fieldName + "' in "
                     + entityClass.getSimpleName() + ". Field not found via reflection. "
@@ -575,8 +574,11 @@ public class UpdateSpec<T> extends AbstractBulkOperationSpec<T, UpdateSpec<T>> {
                 cache.getClass().getMethod("evictEntityData", Class.class).invoke(cache, entityClass);
                 return;
             }
-        } catch (Exception ignored) {
-            // 非 Hibernate 环境或反射失败，回退到 em.clear()
+        } catch (ClassNotFoundException | NoSuchMethodException e) {
+            // 非 Hibernate 环境，回退到 em.clear()
+        } catch (Exception e) {
+            log.warn("Failed to evict entity cache selectively for {}, falling back to em.clear()",
+                entityClass.getSimpleName(), e);
         }
         em.clear();
     }

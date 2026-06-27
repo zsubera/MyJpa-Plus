@@ -15,6 +15,7 @@ import jakarta.persistence.criteria.Predicate;
 import java.lang.reflect.Field;
 import java.lang.reflect.Modifier;
 import java.util.List;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import org.slf4j.Logger;
 import org.springframework.data.jpa.domain.Specification;
@@ -104,9 +105,9 @@ public final class SoftDeleteHelper {
     private static final ConcurrentMap<Class<?>, Specification<?>> DELETED_SPEC_CACHE =
         new ConcurrentReferenceHashMap<>(16, ConcurrentReferenceHashMap.ReferenceType.WEAK);
 
-    /** 缓存: (entityClass, fieldName) -> Field 对象，避免重复反射查找。 */
-    private static final ConcurrentMap<String, Field> FIELD_OBJECT_CACHE =
-        new ConcurrentReferenceHashMap<>(64, ConcurrentReferenceHashMap.ReferenceType.WEAK);
+    /** 缓存: (entityClass, fieldName) -> Field 对象，避免重复反射查找。两层结构：Class<?> 提供强引用。 */
+    private static final ConcurrentHashMap<Class<?>, ConcurrentHashMap<String, Field>> FIELD_OBJECT_CACHE =
+        new ConcurrentHashMap<>();
 
     /** 缓存: entityClass -> SoftDelete annotation，避免每次查询重复反射查找。 */
     private static final ConcurrentMap<Class<?>, SoftDelete> ANNOTATION_CACHE =
@@ -612,8 +613,9 @@ public final class SoftDeleteHelper {
     }
 
     static Field getField(Class<?> entityClass, String fieldName) {
-        String cacheKey = entityClass.getName() + "#" + fieldName;
-        return FIELD_OBJECT_CACHE.computeIfAbsent(cacheKey, k -> {
+        ConcurrentHashMap<String, Field> innerCache =
+            FIELD_OBJECT_CACHE.computeIfAbsent(entityClass, k -> new ConcurrentHashMap<>());
+        return innerCache.computeIfAbsent(fieldName, k -> {
             Class<?> current = entityClass;
             while (current != null && current != Object.class) {
                 try {

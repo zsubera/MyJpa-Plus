@@ -144,8 +144,8 @@ public final class EntityManagerHelper {
      */
     public static void removeResolver(Class<?> entityType) {
         Objects.requireNonNull(entityType, "entityType must not be null");
-        resolvers.remove(entityType);
         synchronized (resolverCheckLock) {
+            resolvers.remove(entityType);
             recheckAllResolversUseDefault();
         }
     }

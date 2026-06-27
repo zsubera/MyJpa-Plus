@@ -72,7 +72,9 @@ public final class FunctionWhitelist {
                 EXTRA_SAFE_FUNCTION_NAMES.add(name.toUpperCase(java.util.Locale.ROOT));
             }
         }
-        freezeExtraFunctionNames();
+        synchronized (FunctionWhitelist.class) {
+            freezeExtraFunctionNames();
+        }
     }
 
     /**
@@ -94,7 +96,9 @@ public final class FunctionWhitelist {
                 EXTRA_BOOLEAN_FUNCTION_NAMES.add(name.toUpperCase(java.util.Locale.ROOT));
             }
         }
-        freezeExtraFunctionNames();
+        synchronized (FunctionWhitelist.class) {
+            freezeExtraFunctionNames();
+        }
     }
 
     /**
@@ -108,7 +112,7 @@ public final class FunctionWhitelist {
      * 冻结后的 {@code contains()} 调用基于 {@link AtomicReference} 实现无锁读取，
      * 线程安全且无竞态条件。
      */
-    public static void freezeExtraFunctionNames() {
+    public static synchronized void freezeExtraFunctionNames() {
         Set<String> safeSnapshot = Set.copyOf(EXTRA_SAFE_FUNCTION_NAMES);
         Set<String> boolSnapshot = Set.copyOf(EXTRA_BOOLEAN_FUNCTION_NAMES);
         FROZEN_EXTRA_SAFE_FUNCTION_NAMES.set(safeSnapshot);

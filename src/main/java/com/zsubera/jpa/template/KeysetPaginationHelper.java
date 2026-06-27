@@ -80,6 +80,9 @@ final class KeysetPaginationHelper {
         int pageSize, @Nullable Object[] lastSortValues) {
         List<Sort.Order> orders = sort.stream().toList();
 
+        // First page: no cursor values → skip keyset predicate
+        boolean isFirstPage = lastSortValues == null || lastSortValues.length == 0;
+
         CriteriaBuilder cb = entityManager.getCriteriaBuilder();
         CriteriaQuery<T> cq = cb.createQuery(entityClass);
         Root<T> root = cq.from(entityClass);
@@ -91,7 +94,7 @@ final class KeysetPaginationHelper {
         }
 
         // 应用 keyset 条件（游标定位）
-        if (lastSortValues != null) {
+        if (!isFirstPage) {
             jakarta.persistence.criteria.Predicate keysetPredicate =
                 buildKeysetPredicate(root, cb, orders, lastSortValues, nullsFirst);
             if (userPredicate != null) {
@@ -226,6 +229,14 @@ final class KeysetPaginationHelper {
                         return entity.getClass()
                             .getMethod("is" + Character.toUpperCase(property.charAt(0)) + property.substring(1));
                     } catch (NoSuchMethodException ex) {
+                        // Handle properties that already start with "is" (e.g., "isValid")
+                        if (property.length() > 2 && property.startsWith("is")
+                            && Character.isUpperCase(property.charAt(2))) {
+                            try {
+                                return entity.getClass().getMethod(property);
+                            } catch (NoSuchMethodException ignored) {
+                            }
+                        }
                         return NO_GETTER_SENTINEL;
                     }
                 }

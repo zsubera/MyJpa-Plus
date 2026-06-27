@@ -82,6 +82,11 @@ final class SqlServerDialect extends AbstractDialectStrategy {
                 setClauses.add("target." + escaped + " = source." + escaped);
             }
             sql.append(String.join(", ", setClauses));
+        } else {
+            org.slf4j.LoggerFactory.getLogger(SqlServerDialect.class)
+                .warn("No update columns specified for UPSERT on {}. SQL Server MERGE without "
+                    + "WHEN MATCHED silently ignores conflicting rows. Consider specifying update columns.",
+                    tableName);
         }
 
         // WHEN NOT MATCHED THEN INSERT

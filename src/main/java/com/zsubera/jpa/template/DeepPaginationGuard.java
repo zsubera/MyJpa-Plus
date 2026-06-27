@@ -29,7 +29,7 @@ public final class DeepPaginationGuard {
      * @param lastWarnTime 上次警告时间戳（用于限流）
      */
     public static void check(long offset, int threshold, int hardLimit, AtomicLong lastWarnTime) {
-        if (offset > threshold) {
+        if (offset >= threshold && threshold > 0) {
             long now = System.currentTimeMillis();
             long lastWarn = lastWarnTime.get();
             if (now - lastWarn > WARN_INTERVAL_MS && lastWarnTime.compareAndSet(lastWarn, now)) {

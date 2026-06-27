@@ -87,11 +87,6 @@ final class BulkTransactionHelper {
                 safeRollback(tx, e);
             }
             throw e;
-        } catch (Exception e) {
-            if (isNewTransaction) {
-                safeRollback(tx, e);
-            }
-            throw new MyJpaPlusException("Bulk operation failed: " + e.getClass().getSimpleName(), e);
         }
     }
 

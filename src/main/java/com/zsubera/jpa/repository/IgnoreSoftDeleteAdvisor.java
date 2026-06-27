@@ -62,7 +62,7 @@ public class IgnoreSoftDeleteAdvisor {
      * @return 方法执行结果
      * @throws Throwable 方法执行异常
      */
-    @Around("within(org.springframework.data.jpa.repository.JpaRepository+)")
+    @Around("within(org.springframework.data.jpa.repository.JpaRepository+) && (execution(* find*(..)) || execution(* get*(..)) || execution(* query*(..)) || execution(* stream*(..)) || execution(* count*(..)) || execution(* exists*(..)) || execution(* findAll*(..)) || execution(* findById*(..)) || execution(* findBy*(..)) || execution(* read*(..)) || execution(* search*(..)))")
     public Object aroundRepositoryMethod(ProceedingJoinPoint pjp) throws Throwable {
         MethodSignature signature = (MethodSignature)pjp.getSignature();
         Method method = signature.getMethod();

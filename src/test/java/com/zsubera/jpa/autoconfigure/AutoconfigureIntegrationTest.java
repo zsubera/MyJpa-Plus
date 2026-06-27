@@ -174,15 +174,16 @@ class AutoconfigureIntegrationTest {
     }
 
     @Test
-    void dataSourceProxy_jdkProxy_skipsWrap() {
+    void dataSourceProxy_jdkProxy_wrapsForMonitoring() {
         SqlSlowQueryInterceptor interceptor = new SqlSlowQueryInterceptor(1000);
         SlowQueryDataSourceProxyPostProcessor processor = new SlowQueryDataSourceProxyPostProcessor(1000L);
 
         DataSource proxy = (DataSource)java.lang.reflect.Proxy.newProxyInstance(getClass().getClassLoader(),
             new Class<?>[] {DataSource.class}, (p, m, args) -> null);
         Object result = processor.postProcessAfterInitialization(proxy, "ds");
-        // JDK proxy is not wrapped (skip all JDK proxies to avoid double-wrapping)
-        assertSame(proxy, result, "Should not wrap any JDK proxy DataSource");
+        // JDK proxy from other libraries is wrapped for slow query monitoring
+        assertNotSame(proxy, result, "JDK proxy DataSource should be wrapped for monitoring");
+        assertTrue(SlowQueryDataSourceProxy.isWrapped((DataSource)result));
     }
 
     // ---- SoftDeleteFilterBean: debug logging ----

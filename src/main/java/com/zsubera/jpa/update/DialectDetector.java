@@ -98,10 +98,13 @@ final class DialectDetector {
      */
     private static void cacheDialect(String factoryKey, String dialect) {
         DIALECT_CACHE.putIfAbsent(factoryKey, dialect);
-        if (DIALECT_CACHE.size() > MAX_DIALECT_CACHE_SIZE) {
+        while (DIALECT_CACHE.size() > MAX_DIALECT_CACHE_SIZE) {
             java.util.Iterator<String> it = DIALECT_CACHE.keySet().iterator();
             if (it.hasNext()) {
-                DIALECT_CACHE.remove(it.next());
+                it.next();
+                it.remove();
+            } else {
+                break;
             }
         }
     }

@@ -246,9 +246,9 @@ public class MergeSpec<T> {
             entitySnapshot = em.merge(entitySnapshot);
         }
         em.flush();
-        // Step 2: re-extract field values from the managed entity after callbacks have run
-        // so that @PrePersist/@PreUpdate-set fields (e.g. createdAt, updatedAt) are included
-        return executeWith(em, entitySnapshot);
+        // Step 2: after flush, entity is managed and persisted — skip native UPSERT
+        // since merge+flush already handled the persistence and lifecycle callbacks.
+        return 1;
     }
 
     private DialectStrategy resolveDialectStrategy(EntityManager em) {
@@ -338,7 +338,6 @@ public class MergeSpec<T> {
         if (entity == null) {
             throw new IllegalStateException("Entity must be specified via withEntity() before executing");
         }
-        warnIdentityGeneration();
         return executeInManagedTransaction(em, () -> execute(em));
     }
 

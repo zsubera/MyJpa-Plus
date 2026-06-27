@@ -179,6 +179,7 @@ public final class LambdaUtils {
             propertyName = resolveViaSerialization(fn);
         }
         IdentifierValidator.validateColumnName(propertyName);
+        CACHE.put(key, propertyName);
         return propertyName;
     }
 

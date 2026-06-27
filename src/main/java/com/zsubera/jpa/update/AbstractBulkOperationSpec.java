@@ -534,7 +534,9 @@ public abstract class AbstractBulkOperationSpec<T, SELF extends AbstractBulkOper
         if (predicates.length > 0) {
             probeQuery.where(cb.and(predicates));
         }
-        return em.createQuery(probeQuery).getResultStream().limit(probeLimit).count() >= probeLimit;
+        jakarta.persistence.TypedQuery<Integer> q = em.createQuery(probeQuery);
+        q.setMaxResults(probeLimit);
+        return q.getResultList().size() >= probeLimit;
     }
 
     /**

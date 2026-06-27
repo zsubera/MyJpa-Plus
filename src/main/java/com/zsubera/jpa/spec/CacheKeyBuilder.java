@@ -144,18 +144,18 @@ final class CacheKeyBuilder {
         } else if (node instanceof ConditionNode.ExistsNode<?> en) {
             sb.append(en.negate ? "NOTEXISTS(" : "EXISTS(");
             sb.append(en.subEntity.getSimpleName());
-            sb.append(",condHash=").append(en.config.hashCode()).append(")");
+            sb.append(",ref=").append(System.identityHashCode(en.config)).append(")");
         } else if (node instanceof ConditionNode.InSubQueryNode<?> isn) {
             sb.append(isn.negate ? "NOTINSUBQUERY(" : "INSUBQUERY(");
             sb.append(isn.outerFieldName).append(",").append(isn.subEntity.getSimpleName());
-            sb.append(",condHash=").append(isn.config.hashCode()).append(")");
+            sb.append(",ref=").append(System.identityHashCode(isn.config)).append(")");
         } else if (node instanceof ConditionNode.NegateNode nn) {
             sb.append("NOT(");
             appendCacheKey(sb, nn.inner(), nextDepth);
             sb.append(")");
         } else if (node instanceof ConditionNode.RawNode rn) {
             sb.append("RAW(").append(rn.fn.getClass().getName()).append("@")
-                .append(Integer.toHexString(rn.fn.hashCode())).append(")");
+                .append(System.identityHashCode(rn.fn)).append(")");
         } else {
             sb.append(node.getClass().getSimpleName()).append("@").append(node.hashCode());
         }

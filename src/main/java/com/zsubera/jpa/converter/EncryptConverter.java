@@ -248,10 +248,11 @@ public class EncryptConverter implements AttributeConverter<String, String> {
                 log.error("Invalid Base64 data in encrypted field", e);
                 throw new MyJpaPlusException("Failed to decrypt value: invalid Base64 encoding.", e);
             }
-            if (combined.length < GCM_IV_LENGTH) {
+            int minRequired = GCM_IV_LENGTH + (GCM_TAG_LENGTH / 8);
+            if (combined.length < minRequired) {
                 throw new MyJpaPlusException("Invalid encrypted data: decoded length (" + combined.length
-                    + ") is less than minimum required (" + GCM_IV_LENGTH + " bytes for IV). "
-                    + "Data may be corrupted or not encrypted with this converter.");
+                    + ") is less than minimum required (" + minRequired + " bytes = IV + tag). "
+                    + "Data may be truncated or corrupted.");
             }
             byte[] iv = new byte[GCM_IV_LENGTH];
             System.arraycopy(combined, 0, iv, 0, GCM_IV_LENGTH);

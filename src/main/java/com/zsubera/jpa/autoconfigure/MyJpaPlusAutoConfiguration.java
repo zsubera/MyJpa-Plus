@@ -491,7 +491,6 @@ public class MyJpaPlusAutoConfiguration {
         CleanupRegistry registry = new CleanupRegistry();
         registry.register("LambdaUtils", LambdaUtils::shutdown);
         registry.register("EncryptConverter cache", com.zsubera.jpa.converter.EncryptConverter::clearCaches);
-        registry.register("EncryptConverter cipher", com.zsubera.jpa.converter.EncryptConverter::removeCipher);
         registry.register("SoftDeleteHelper", com.zsubera.jpa.softdelete.SoftDeleteHelper::shutdown);
         registry.register("DefaultMyJpaRepository", DefaultMyJpaRepository::clearThreadLocal);
         registry.register("SoftDeleteContext", com.zsubera.jpa.repository.SoftDeleteContext::reset);
