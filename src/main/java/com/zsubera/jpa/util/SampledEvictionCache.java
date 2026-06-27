@@ -118,14 +118,12 @@ public class SampledEvictionCache<K, V> {
                 int target = Math.max(1, (int) (maxSize * evictionTargetRatio));
                 int toRemove = currentSize - target;
                 if (toRemove > 0) {
-                    // ponytail: 使用迭代器采样而非复制全部 key，避免 O(n) 分配
                     int removed = 0;
                     java.util.Iterator<K> it = store.keySet().iterator();
                     while (it.hasNext() && removed < toRemove) {
-                        K key = it.next();
-                        if (store.remove(key) != null) {
-                            removed++;
-                        }
+                        it.next();
+                        it.remove();
+                        removed++;
                     }
                 }
             }

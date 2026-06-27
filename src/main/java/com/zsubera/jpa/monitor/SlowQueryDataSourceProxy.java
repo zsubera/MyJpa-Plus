@@ -189,6 +189,7 @@ public final class SlowQueryDataSourceProxy {
         private final Object target;
         private final String sql;
         private final long slowQueryThresholdMs;
+        private int batchCount;
 
         @SuppressFBWarnings(value = "EI_EXPOSE_REP2",
             justification = "Internal timing handler stores JDBC proxy target for delegation")
@@ -200,6 +201,21 @@ public final class SlowQueryDataSourceProxy {
 
         @Override
         public Object invoke(Object proxy, Method method, Object[] args) throws Throwable {
+            String name = method.getName();
+            if ("addBatch".equals(name)) {
+                batchCount++;
+                return method.invoke(target, args);
+            }
+            if ("clearBatch".equals(name)) {
+                batchCount = 0;
+                return method.invoke(target, args);
+            }
+            if ("executeBatch".equals(name)) {
+                String batchSql = batchCount > 0
+                    ? sql + " [batch of " + batchCount + " statements]"
+                    : sql + " [batch (0)]";
+                return StatementTimingDelegate.invokeTimed(target, batchSql, slowQueryThresholdMs, method, args);
+            }
             return StatementTimingDelegate.invokeTimed(target, sql, slowQueryThresholdMs, method, args);
         }
     }
@@ -279,9 +295,10 @@ public final class SlowQueryDataSourceProxy {
      */
     private static class StatementTimingHandler implements InvocationHandler {
 
+        private String sql;
         private final Object target;
-        private final String sql;
         private final long slowQueryThresholdMs;
+        private int batchCount;
 
         StatementTimingHandler(Object target, String sql, long slowQueryThresholdMs) {
             this.target = target;
@@ -291,6 +308,32 @@ public final class SlowQueryDataSourceProxy {
 
         @Override
         public Object invoke(Object proxy, Method method, Object[] args) throws Throwable {
+            String name = method.getName();
+            // capture SQL from execute(String), executeQuery(String), executeUpdate(String)
+            // ponytail: createStatement() doesn't take SQL, so we capture it here
+            if (("execute".equals(name) || "executeQuery".equals(name) || "executeUpdate".equals(name))
+                && args != null && args.length > 0 && args[0] instanceof String s) {
+                this.sql = s;
+            }
+            if ("addBatch".equals(name) && args != null && args.length > 0 && args[0] instanceof String s) {
+                this.sql = s;
+                batchCount++;
+                return method.invoke(target, args);
+            }
+            if ("addBatch".equals(name)) {
+                batchCount++;
+                return method.invoke(target, args);
+            }
+            if ("clearBatch".equals(name)) {
+                batchCount = 0;
+                return method.invoke(target, args);
+            }
+            if ("executeBatch".equals(name)) {
+                String batchSql = batchCount > 0
+                    ? sql + " [batch of " + batchCount + " statements]"
+                    : sql + " [batch (0)]";
+                return StatementTimingDelegate.invokeTimed(target, batchSql, slowQueryThresholdMs, method, args);
+            }
             return StatementTimingDelegate.invokeTimed(target, sql, slowQueryThresholdMs, method, args);
         }
     }

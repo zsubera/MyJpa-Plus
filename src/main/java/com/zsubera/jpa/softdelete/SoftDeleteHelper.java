@@ -172,7 +172,9 @@ public final class SoftDeleteHelper {
     /**
      * 注册批量删除后缓存失效的事件发布回调。
      * 委托给 {@link SoftDeleteBulkExecutor#setEventPublisher}。
+     * @deprecated 直接使用 {@link SoftDeleteBulkExecutor#setEventPublisher(SoftDeleteBulkExecutor.EventPublisher)}
      */
+    @Deprecated(since = "2.6.0", forRemoval = true)
     public static void setEventPublisher(SoftDeleteBulkExecutor.EventPublisher publisher) {
         SoftDeleteBulkExecutor.setEventPublisher(publisher);
     }
@@ -247,52 +249,52 @@ public final class SoftDeleteHelper {
     }
 
     /**
-     * 使用单条 UPDATE 语句批量软删除给定类的所有实体。
-     * 委托给 {@link SoftDeleteBulkExecutor#softDeleteAll(EntityManager, Class, boolean)}。
+     * @deprecated 直接使用 {@link SoftDeleteBulkExecutor#softDeleteAll(EntityManager, Class, boolean)}
      */
+    @Deprecated(since = "2.6.0", forRemoval = true)
     public static <T> int softDeleteAll(EntityManager em, Class<T> entityClass, boolean allowUnconditional) {
         return SoftDeleteBulkExecutor.softDeleteAll(em, entityClass, allowUnconditional);
     }
 
     /**
-     * 使用单条 UPDATE 语句批量软删除给定类的所有实体，支持自定义行数限制。
-     * 委托给 {@link SoftDeleteBulkExecutor#softDeleteAll(EntityManager, Class, boolean, int)}。
+     * @deprecated 直接使用 {@link SoftDeleteBulkExecutor#softDeleteAll(EntityManager, Class, boolean, int)}
      */
+    @Deprecated(since = "2.6.0", forRemoval = true)
     public static <T> int softDeleteAll(EntityManager em, Class<T> entityClass, boolean allowUnconditional,
         int maxRows) {
         return SoftDeleteBulkExecutor.softDeleteAll(em, entityClass, allowUnconditional, maxRows);
     }
 
     /**
-     * 使用单条 UPDATE 语句按 ID 批量软删除实体。
-     * 委托给 {@link SoftDeleteBulkExecutor#softDeleteByIds(EntityManager, Class, List)}。
+     * @deprecated 直接使用 {@link SoftDeleteBulkExecutor#softDeleteByIds(EntityManager, Class, List)}
      */
+    @Deprecated(since = "2.6.0", forRemoval = true)
     public static <T, ID> int softDeleteByIds(EntityManager em, Class<T> entityClass, List<ID> ids) {
         return SoftDeleteBulkExecutor.softDeleteByIds(em, entityClass, ids);
     }
 
     /**
-     * 使用 CriteriaUpdate 批量软删除实体，支持 @Version 乐观锁检查。
-     * 委托给 {@link SoftDeleteBulkExecutor#softDeleteAllUsingCriteriaUpdate(EntityManager, Class, boolean)}。
+     * @deprecated 直接使用 {@link SoftDeleteBulkExecutor#softDeleteAllUsingCriteriaUpdate(EntityManager, Class, boolean)}
      */
+    @Deprecated(since = "2.6.0", forRemoval = true)
     public static <T> int softDeleteAllUsingCriteriaUpdate(EntityManager em, Class<T> entityClass,
         boolean allowUnconditional) {
         return SoftDeleteBulkExecutor.softDeleteAllUsingCriteriaUpdate(em, entityClass, allowUnconditional);
     }
 
     /**
-     * 使用 CriteriaUpdate 批量软删除实体，支持自定义行数限制。
-     * 委托给 {@link SoftDeleteBulkExecutor#softDeleteAllUsingCriteriaUpdate(EntityManager, Class, boolean, int)}。
+     * @deprecated 直接使用 {@link SoftDeleteBulkExecutor#softDeleteAllUsingCriteriaUpdate(EntityManager, Class, boolean, int)}
      */
+    @Deprecated(since = "2.6.0", forRemoval = true)
     public static <T> int softDeleteAllUsingCriteriaUpdate(EntityManager em, Class<T> entityClass,
         boolean allowUnconditional, int maxRows) {
         return SoftDeleteBulkExecutor.softDeleteAllUsingCriteriaUpdate(em, entityClass, allowUnconditional, maxRows);
     }
 
     /**
-     * 使用 CriteriaUpdate 按 ID 批量软删除实体。
-     * 委托给 {@link SoftDeleteBulkExecutor#softDeleteByIdsUsingEntityManager(EntityManager, Class, List)}。
+     * @deprecated 直接使用 {@link SoftDeleteBulkExecutor#softDeleteByIdsUsingEntityManager(EntityManager, Class, List)}
      */
+    @Deprecated(since = "2.6.0", forRemoval = true)
     public static <T, ID> int softDeleteByIdsUsingEntityManager(EntityManager em, Class<T> entityClass, List<ID> ids) {
         return SoftDeleteBulkExecutor.softDeleteByIdsUsingEntityManager(em, entityClass, ids);
     }
@@ -365,14 +367,16 @@ public final class SoftDeleteHelper {
     }
 
     /**
-     * 获取实体的基类名称，剥离 Hibernate 动态代理后缀（如 {@code _$$_javassist_1}）。
+     * 获取实体的基类名称，剥离 Hibernate 动态代理后缀（如 {@code _$$_javassist_1}）和 Spring CGLIB 后缀（{@code $$EnhancerByCGLIB$$}）。
      * 确保缓存键不因代理类而产生爆炸。
-     * ponytail: 只处理已知的 Hibernate 代理模式（_$$_），其他 AOP 框架（如 Spring AOP CGLIB）不在本方法覆盖范围内。
      */
     private static String getEntityBaseName(Class<?> entityClass) {
         String name = entityClass.getName();
         int idx = name.indexOf("_$$_");
-        return idx > 0 ? name.substring(0, idx) : name;
+        if (idx > 0) return name.substring(0, idx);
+        idx = name.indexOf("$$EnhancerByCGLIB$$");
+        if (idx > 0) return name.substring(0, idx);
+        return name;
     }
 
     private static String doResolveIdColumnName(Class<?> entityClass) {

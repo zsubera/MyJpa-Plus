@@ -1,5 +1,6 @@
 package com.zsubera.jpa.repository;
 
+import com.zsubera.jpa.softdelete.SoftDeleteBulkExecutor;
 import com.zsubera.jpa.softdelete.SoftDeleteHelper;
 import com.zsubera.jpa.update.AuditUtils;
 import com.zsubera.jpa.util.EntityClassResolver;
@@ -448,7 +449,7 @@ public class DefaultMyJpaRepository<T, ID> extends SimpleJpaRepository<T, ID> im
         }
         @SuppressWarnings("unchecked")
         ID castId = id;
-        int updated = SoftDeleteHelper.softDeleteByIds(entityManager, domainClass, java.util.List.of(castId));
+        int updated = SoftDeleteBulkExecutor.softDeleteByIds(entityManager, domainClass, java.util.List.of(castId));
         return updated > 0;
     }
 
@@ -495,7 +496,7 @@ public class DefaultMyJpaRepository<T, ID> extends SimpleJpaRepository<T, ID> im
                 log.warn("AUDIT: Executing soft DELETE ALL on {} (autoFilter enabled). Call stack: {}",
                     domainClass.getSimpleName(), AuditUtils.getCallStack());
             }
-            SoftDeleteHelper.softDeleteAll(entityManager, domainClass, true);
+            SoftDeleteBulkExecutor.softDeleteAll(entityManager, domainClass, true);
         }, super::deleteAll);
     }
 
@@ -514,7 +515,7 @@ public class DefaultMyJpaRepository<T, ID> extends SimpleJpaRepository<T, ID> im
         if (idList.isEmpty()) {
             return;
         }
-        executeDeleteOrBlock(() -> SoftDeleteHelper.softDeleteByIds(entityManager, domainClass, idList),
+        executeDeleteOrBlock(() -> SoftDeleteBulkExecutor.softDeleteByIds(entityManager, domainClass, idList),
             () -> super.deleteAllById(idList));
     }
 
@@ -544,7 +545,7 @@ public class DefaultMyJpaRepository<T, ID> extends SimpleJpaRepository<T, ID> im
                 }
             }
             if (!idList.isEmpty()) {
-                SoftDeleteHelper.softDeleteByIds(entityManager, domainClass, idList);
+                SoftDeleteBulkExecutor.softDeleteByIds(entityManager, domainClass, idList);
             }
         }, () -> super.deleteInBatch(entities));
     }
@@ -559,7 +560,7 @@ public class DefaultMyJpaRepository<T, ID> extends SimpleJpaRepository<T, ID> im
                 log.warn("AUDIT: Executing soft DELETE ALL IN BATCH on {} (autoFilter enabled). Call stack: {}",
                     domainClass.getSimpleName(), AuditUtils.getCallStack());
             }
-            SoftDeleteHelper.softDeleteAll(entityManager, domainClass, true);
+            SoftDeleteBulkExecutor.softDeleteAll(entityManager, domainClass, true);
         }, super::deleteAllInBatch);
     }
 
@@ -578,7 +579,7 @@ public class DefaultMyJpaRepository<T, ID> extends SimpleJpaRepository<T, ID> im
             throw new IllegalArgumentException("ID must not be null");
         }
         executeDeleteOrBlock(
-            () -> SoftDeleteHelper.softDeleteByIds(entityManager, domainClass, java.util.List.of(id)),
+            () -> SoftDeleteBulkExecutor.softDeleteByIds(entityManager, domainClass, java.util.List.of(id)),
             () -> super.deleteById(id));
     }
 }

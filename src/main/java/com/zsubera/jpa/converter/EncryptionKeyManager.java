@@ -132,10 +132,14 @@ final class EncryptionKeyManager {
                     // 升级路径：使用 LRU 淘汰策略（如 Caffeine）
                 }
             }
-            String rawKey = resolveRawKey(cacheKey);
-            SecretKeySpec derived = deriveKey(rawKey);
-            KEY_CACHE.put(cacheKey, derived);
-            return derived;
+            char[] rawKey = resolveRawKey(cacheKey);
+            try {
+                SecretKeySpec derived = deriveKey(rawKey);
+                KEY_CACHE.put(cacheKey, derived);
+                return derived;
+            } finally {
+                java.util.Arrays.fill(rawKey, '\0');
+            }
         } finally {
             KEY_SPEC_WRITE_LOCK.unlock();
         }
@@ -166,7 +170,7 @@ final class EncryptionKeyManager {
         }
     }
 
-    private static String resolveRawKey(String version) {
+    private static char[] resolveRawKey(String version) {
         String keyEnv = System.getenv(KEY_ENV);
         String keyProp = System.getProperty(KEY_PROPERTY);
         String allKeys = keyEnv;
@@ -199,7 +203,7 @@ final class EncryptionKeyManager {
                     String entryKey = trimmed.substring(colonIdx + 1).trim();
                     if (entryVersion.equals(version)) {
                         validateKeyLength(entryKey);
-                        return entryKey;
+                        return entryKey.toCharArray();
                     }
                 }
             }
@@ -219,7 +223,7 @@ final class EncryptionKeyManager {
             logVersionMismatch(version);
         }
         validateKeyLength(allKeys);
-        return allKeys;
+        return allKeys.toCharArray();
     }
 
     private static void validateKeyLength(String key) {
@@ -240,8 +244,7 @@ final class EncryptionKeyManager {
             version);
     }
 
-    private static SecretKeySpec deriveKey(String rawKeyMaterial) {
-        char[] keyChars = rawKeyMaterial.toCharArray();
+    private static SecretKeySpec deriveKey(char[] keyChars) {
         byte[] derived = null;
         try {
             byte[] salt = getSalt();
@@ -259,26 +262,34 @@ final class EncryptionKeyManager {
         }
     }
 
+    private static volatile byte[] cachedSalt;
+
     private static byte[] getSalt() {
+        byte[] cached = cachedSalt;
+        if (cached != null) {
+            return cached;
+        }
         String salt = System.getenv(SALT_ENV);
         if (salt == null || salt.isEmpty()) {
             salt = System.getProperty(SALT_PROPERTY);
         }
         if (salt != null && !salt.isEmpty()) {
-            return salt.getBytes(StandardCharsets.UTF_8);
+            byte[] bytes = salt.getBytes(StandardCharsets.UTF_8);
+            cachedSalt = bytes;
+            return bytes;
         }
         if (isSaltCheckSkipped()) {
             if (com.zsubera.jpa.autoconfigure.EnvironmentHelper.isProductionEnvironment()) {
-                throw new IllegalStateException("Cannot skip PBKDF2 salt check in production environment. "
+                throw new MyJpaPlusException("Cannot skip PBKDF2 salt check in production environment. "
                     + "Set environment variable " + SALT_ENV + " or system property " + SALT_PROPERTY + ".");
             }
-            throw new IllegalStateException(
+            throw new MyJpaPlusException(
                 "PBKDF2 salt must be configured for encryption. Without a persistent salt (via "
                 + SALT_ENV + " or " + SALT_PROPERTY + "), encrypted data becomes unrecoverable "
                 + "after application restart. Encryption is BLOCKED until a salt is configured. "
                 + "To explicitly acknowledge this risk (development only), set " + SKIP_SALT_PROPERTY + "=true.");
         }
-        throw new IllegalStateException("PBKDF2 salt must be configured. " + "Set environment variable " + SALT_ENV
+        throw new MyJpaPlusException("PBKDF2 salt must be configured. " + "Set environment variable " + SALT_ENV
             + " or system property " + SALT_PROPERTY + ". " + "Salt is required for PBKDF2 key derivation security. "
             + "To skip this check (development only), set " + SKIP_SALT_PROPERTY + "=true.");
     }
@@ -304,7 +315,7 @@ final class EncryptionKeyManager {
             String keyEnv = System.getenv(KEY_ENV);
             String keyProp = System.getProperty(KEY_PROPERTY);
             if ((keyEnv == null || keyEnv.isEmpty()) && (keyProp == null || keyProp.isEmpty())) {
-                throw new IllegalStateException("Encryption key not configured. Set environment variable " + KEY_ENV
+                throw new MyJpaPlusException("Encryption key not configured. Set environment variable " + KEY_ENV
                     + " or system property " + KEY_PROPERTY + " before starting the application. "
                     + "EncryptConverter requires a key to function.");
             } else {
@@ -333,6 +344,7 @@ final class EncryptionKeyManager {
             KEY_CACHE.clear();
             keyVersionSnapshot = new KeyVersionSnapshot(null, 0);
             KEY_VALIDATED.set(false);
+            cachedSalt = null;
         } finally {
             KEY_SPEC_WRITE_LOCK.unlock();
         }
@@ -344,6 +356,7 @@ final class EncryptionKeyManager {
             KEY_CACHE.clear();
             keyVersionSnapshot = new KeyVersionSnapshot(null, 0);
             KEY_VALIDATED.set(false);
+            cachedSalt = null;
         } finally {
             KEY_SPEC_WRITE_LOCK.unlock();
         }

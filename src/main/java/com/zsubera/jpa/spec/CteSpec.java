@@ -217,8 +217,9 @@ public class CteSpec {
      * 设置当前 CTE 的查询 SQL。
      *
      * <p>
-     * <strong>安全警告：</strong>SQL 字符串不应包含用户输入。CTE 名称和列名已通过正则校验防止注入， 但 SQL
-     * 本身由开发者负责安全。请使用参数化查询（{@link #setParameter}）绑定用户输入值。
+     * <strong>安全警告：</strong>SQL 字符串<b>绝不</b>应包含用户输入——此方法<b>不接受</b>用户输入。
+     * CTE 名称和列名已通过正则校验防止注入，但 SQL 本身由开发者负责安全。
+     * 如需用户输入的参数化查询，请使用 {@link #asSafe(String, Object...)}。
      *
      * <p>
      * <strong>SQL 注入防护：</strong>此方法会检测 SQL 中是否包含危险关键字（DROP、TRUNCATE、GRANT、REVOKE、EXEC），

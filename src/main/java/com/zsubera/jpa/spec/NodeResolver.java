@@ -90,6 +90,17 @@ final class NodeResolver {
 
     private NodeResolver() {}
 
+    /** ponytail: 将软删除自动过滤与全局配置及 IgnoreSoftDelete 上下文联动。 */
+    private static boolean shouldApplySoftDeleteAutoFilter() {
+        com.zsubera.jpa.autoconfigure.MyJpaPlusGlobalConfig config =
+            com.zsubera.jpa.autoconfigure.GlobalConfigHolder.getConfig();
+        if (config != null && !config.isSoftDeleteAutoFilter()) {
+            return false;
+        }
+        // 升级路径：后续可在此加入 SoftDeleteContext.isIgnoreSoftDelete() 检查
+        return true;
+    }
+
     /**
      * 解析条件节点并转换为 Predicate。
      *
@@ -226,7 +237,7 @@ final class NodeResolver {
         }
         List<Predicate> innerPredicates = new ArrayList<>();
 
-        if (!isFetch) {
+        if (!isFetch && shouldApplySoftDeleteAutoFilter()) {
             Class<?> joinEntityType = join.getJavaType();
             if (joinEntityType != null) {
                 String softDeleteFieldName =

@@ -255,7 +255,7 @@ final class DialectDetector {
         if (productName.contains("postgresql")) {
             return "postgresql";
         }
-        if (productName.contains("mysql")) {
+        if (productName.contains("mysql") || productName.contains("mariadb")) {
             return "mysql";
         }
         if (productName.contains("oracle")) {

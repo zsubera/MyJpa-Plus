@@ -77,17 +77,19 @@ class BulkOperationTemplate {
      */
     private <R> R executeInNewTransaction(java.util.function.Function<EntityManager, R> operation) {
         EntityManager em = entityManagerFactory.createEntityManager();
-        jakarta.persistence.EntityTransaction tx = em.getTransaction();
-        tx.begin();
         try {
-            R r = operation.apply(em);
-            tx.commit();
-            return r;
-        } catch (RuntimeException e) {
-            if (tx.isActive()) {
-                tx.rollback();
+            jakarta.persistence.EntityTransaction tx = em.getTransaction();
+            tx.begin();
+            try {
+                R r = operation.apply(em);
+                tx.commit();
+                return r;
+            } catch (RuntimeException e) {
+                if (tx.isActive()) {
+                    tx.rollback();
+                }
+                throw e;
             }
-            throw e;
         } finally {
             em.close();
         }

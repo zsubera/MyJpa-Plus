@@ -182,4 +182,59 @@ class SampledEvictionCacheTest {
         var cache = new SampledEvictionCache<String, String>(100, 0.75, 100);
         assertThrows(NullPointerException.class, () -> cache.put(null, "val"));
     }
+
+    // ---- P0-2: 验证迭代器驱逐使用 it.remove() 而非 store.remove(key) ----
+
+    @Test
+    void evictionUsesIteratorRemove() {
+        var cache = new SampledEvictionCache<String, String>(10, 0.75, 1, 16);
+        for (int i = 0; i < 20; i++) {
+            cache.put("k" + i, "v" + i);
+        }
+        // samplingInterval=1, 每次 put 都会触发的采样
+        // evictionTargetRatio=0.75 → max=10*0.75=7.5 → target=7
+        // 20 个条目应驱逐到约 7 个
+        assertTrue(cache.size() <= 10, "size=" + cache.size() + " should be <= maxSize=10 after eviction");
+    }
+
+    @Test
+    void concurrentEvictionDoesNotCorruptCache() throws Exception {
+        var cache = new SampledEvictionCache<String, String>(50, 0.75, 1, 64);
+        int threadCount = 4;
+        java.util.concurrent.CountDownLatch latch = new java.util.concurrent.CountDownLatch(threadCount);
+        java.util.concurrent.atomic.AtomicReference<Throwable> error = new java.util.concurrent.atomic.AtomicReference<>();
+
+        for (int t = 0; t < threadCount; t++) {
+            int threadId = t;
+            new Thread(() -> {
+                try {
+                    for (int i = 0; i < 100; i++) {
+                        cache.put("t" + threadId + "-k" + i, "v");
+                    }
+                } catch (Throwable e) {
+                    error.set(e);
+                } finally {
+                    latch.countDown();
+                }
+            }).start();
+        }
+        latch.await();
+        assertNull(error.get(), "Concurrent eviction should not throw");
+        // 所有条目总数最多为 400，驱逐后 size 应 <= maxSize 附近
+        assertTrue(cache.size() <= 60, "size=" + cache.size() + " should be near maxSize=50 after concurrent eviction");
+    }
+
+    @Test
+    void setMaxSizeTriggersEvictionOnNextAccess() {
+        var cache = new SampledEvictionCache<String, String>(10, 0.75, 1, 16);
+        for (int i = 0; i < 15; i++) {
+            cache.put("k" + i, "v" + i);
+        }
+        int sizeAfterLarge = cache.size();
+        // 缩小 maxSize
+        cache.setMaxSize(5);
+        // 下一次 put 应触发驱逐
+        cache.put("trigger", "eviction");
+        assertTrue(cache.size() <= 8, "size=" + cache.size() + " should shrink after maxSize reduction");
+    }
 }

@@ -128,6 +128,10 @@ public class QueryCacheManager implements CacheAdapter {
      */
     private final ReentrantLock evictionLock = new ReentrantLock();
 
+    /** 加载锁缓存，用于 computeIfAbsent 的缓存击穿保护。键在加载完毕后延迟清理。 */
+    private final java.util.concurrent.ConcurrentMap<String, java.util.concurrent.locks.ReentrantLock> loadLocks =
+        new java.util.concurrent.ConcurrentHashMap<>();
+
     /** clear() 调用计数器，用于 put() 检测并发 clear() 后丢弃写入。 */
     private final java.util.concurrent.atomic.AtomicLong clearGeneration = new java.util.concurrent.atomic.AtomicLong(0);
 
@@ -366,6 +370,50 @@ public class QueryCacheManager implements CacheAdapter {
         }
         log.debug("Cache put for key: {} (ttl={}s)", key, ttlSeconds);
         return true;
+    }
+
+    /**
+     * 原子性地获取或计算缓存值，提供缓存击穿保护。
+     *
+     * <p>
+     * 当多个线程并发请求同一个未缓存的键时，仅一个线程执行 {@code loader}，
+     * 其余线程等待其结果。适用于回源计算开销大的场景（如数据库查询）。
+     *
+     * <p>
+     * ponytail: 使用 per-key {@link java.util.concurrent.locks.ReentrantLock} 实现细粒度锁定，
+     * 避免全局锁竞争。负载键在加载完成后不会主动清理，而是作为轻量级条纹锁长期存在；
+     * 若 {@code loadLocks} 数量超过最大缓存条目数触发懒惰清理。
+     *
+     * @param key 缓存键
+     * @param loader 值加载函数，在缓存未命中时调用
+     * @param ttlSeconds 生存时间（秒）
+     * @param <T> 值类型
+     * @return 已缓存或新加载的值
+     */
+    @SuppressWarnings("unchecked")
+    public <T> T computeIfAbsent(String key, java.util.function.Supplier<T> loader, long ttlSeconds) {
+        T cached = get(key);
+        if (cached != null) {
+            return cached;
+        }
+        java.util.concurrent.locks.ReentrantLock lock = loadLocks.computeIfAbsent(key, k -> new java.util.concurrent.locks.ReentrantLock());
+        lock.lock();
+        try {
+            cached = get(key);
+            if (cached != null) {
+                return cached;
+            }
+            T value = loader.get();
+            if (value != null) {
+                put(key, value, ttlSeconds);
+            }
+            return value;
+        } finally {
+            lock.unlock();
+            // ponytail: 用后即清理，防止 loadLocks 无上限增长。
+            // 下次同一 key 的 computeIfAbsent 会创建新锁，开销远小于 loader（典型为 DB 查询）。
+            loadLocks.remove(key, lock);
+        }
     }
 
     /**

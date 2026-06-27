@@ -121,7 +121,7 @@ public class MyJpaPlusAutoConfiguration {
 
             // 注册 SoftDeleteHelper 事件发布回调，支持批量软删除操作后的缓存自动失效
             if (applicationContext != null) {
-                com.zsubera.jpa.softdelete.SoftDeleteHelper.setEventPublisher((entityClass, affectedRows) -> {
+                com.zsubera.jpa.softdelete.SoftDeleteBulkExecutor.setEventPublisher((entityClass, affectedRows) -> {
                     applicationContext
                         .publishEvent(new com.zsubera.jpa.template.EntityModifiedEvent(entityClass, affectedRows));
                 });
@@ -496,7 +496,7 @@ public class MyJpaPlusAutoConfiguration {
         registry.register("SoftDeleteContext", com.zsubera.jpa.repository.SoftDeleteContext::reset);
         registry.register("EntityManagerHelper", com.zsubera.jpa.repository.EntityManagerHelper::reset);
         registry.register("SoftDeleteHelper event publisher",
-            () -> com.zsubera.jpa.softdelete.SoftDeleteHelper.setEventPublisher(null));
+            () -> com.zsubera.jpa.softdelete.SoftDeleteBulkExecutor.setEventPublisher(null));
         if (applicationContext != null) {
             registry.register("CacheAdapter", () -> {
                 CacheAdapter cacheAdapter = applicationContext.getBean(CacheAdapter.class);

@@ -108,9 +108,7 @@ public class OptimisticLockRetryAdvisor {
         long startTime = System.currentTimeMillis();
         while (true) {
             try {
-                if (attempt == 0) {
-                    return pjp.proceed();
-                }
+                // ponytail: 所有尝试统一在 REQUIRES_NEW 中执行，避免首次失败污染调用方事务
                 return executeInNewTransaction(pjp);
             } catch (OptimisticLockException | ObjectOptimisticLockingFailureException ex) {
                 attempt = handleRetry(ex, attempt, maxRetries, backoffMs, startTime, method, "");

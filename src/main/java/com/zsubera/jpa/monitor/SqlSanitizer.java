@@ -64,9 +64,9 @@ public final class SqlSanitizer {
     private static final Pattern LIMIT_OFFSET_PATTERN =
         Pattern.compile("(?i)(?:LIMIT|OFFSET|FETCH\\s+(?:FIRST|NEXT))\\s+\\d+(?:\\s+ROWS)?");
 
-    /** PostgreSQL 美元引用字符串模式（$$...$$ 和 $tag$...$tag$，不支持嵌套）。 ponytail: 使用 [^$]+ 而非 [\\s\\S]*? 避免 ReDoS 风险。 */
+    /** PostgreSQL 美元引用字符串模式（$$...$$ 和 $tag$...$tag$，不支持嵌套）。 ponytail: {0,10000} 限制匹配内容长度防 ReDoS。 */
     private static final Pattern DOLLAR_QUOTE_PATTERN =
-        Pattern.compile("\\$\\$(?:[^$]+|\\$(?!\\$))*\\$\\$|\\$(\\w+)\\$(?:[^$]+|\\$(?!\\1\\$))*\\$\\1\\$",
+        Pattern.compile("\\$\\$(?:[^$]+|\\$(?!\\$)){0,10000}\\$\\$|\\$(\\w+)\\$(?:[^$]+|\\$(?!\\1\\$)){0,10000}\\$\\1\\$",
             Pattern.CASE_INSENSITIVE);
 
     /** Oracle Q 引用模式：q'[...]', q'(...)', q'{...}', q'<...>', q'!...!' 等。 ponytail: 使用 {0,4000} 限制匹配长度防止 ReDoS。 */

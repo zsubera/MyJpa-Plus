@@ -51,20 +51,19 @@ class BatchSaveTemplate {
     }
 
     private <R> R executeInNewTransaction(java.util.function.Function<EntityManager, R> operation) {
-        EntityManager em = entityManagerFactory.createEntityManager();
-        jakarta.persistence.EntityTransaction tx = em.getTransaction();
-        tx.begin();
-        try {
-            R r = operation.apply(em);
-            tx.commit();
-            return r;
-        } catch (RuntimeException e) {
-            if (tx.isActive()) {
-                tx.rollback();
+        try (EntityManager em = entityManagerFactory.createEntityManager()) {
+            jakarta.persistence.EntityTransaction tx = em.getTransaction();
+            tx.begin();
+            try {
+                R r = operation.apply(em);
+                tx.commit();
+                return r;
+            } catch (RuntimeException e) {
+                if (tx.isActive()) {
+                    tx.rollback();
+                }
+                throw e;
             }
-            throw e;
-        } finally {
-            em.close();
         }
     }
 
@@ -73,6 +72,11 @@ class BatchSaveTemplate {
      *
      * <p>
      * 对新实体（ID 为 null）使用 {@code persist()}，对已存在的实体使用 {@code merge()}。
+     *
+     * <p>
+     * <strong>关于手动分配 ID：</strong>使用 {@code @GeneratedValue} 但手动设置 ID 值时，
+     * {@code PersistenceUnitUtil.getIdentifier()} 返回非 null，会误判为已有实体并使用 {@code merge()}。
+     * merge() 会额外发送 SELECT 确认实体是否存在。如需完全避免此开销，请使用 {@link #saveAllBatchedPure}。
      *
      * @param entities 要保存的实体列表
      * @param batchSize 每批大小，建议值为 50-200
@@ -182,10 +186,7 @@ class BatchSaveTemplate {
             jakarta.persistence.PersistenceUnitUtil puu =
                 entityManager.getEntityManagerFactory().getPersistenceUnitUtil();
             Object id = puu.getIdentifier(entity);
-            if (id == null) {
-                return true;
-            }
-            return false;
+            return id == null;
         } catch (RuntimeException e) {
             log.warn("PersistenceUnitUtil.getIdentifier() failed for {}, falling back to getId(): {}",
                 entity.getClass().getSimpleName(), e.getMessage());

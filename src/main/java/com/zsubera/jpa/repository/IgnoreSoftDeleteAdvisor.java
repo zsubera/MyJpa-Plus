@@ -46,6 +46,9 @@ public class IgnoreSoftDeleteAdvisor {
     private static final java.util.concurrent.atomic.AtomicInteger EVICTION_COUNTER =
         new java.util.concurrent.atomic.AtomicInteger(0);
 
+    /** 缓存驱逐锁，防止多线程并发驱逐导致驱逐过量。 */
+    private static final java.util.concurrent.locks.Lock EVICTION_LOCK = new java.util.concurrent.locks.ReentrantLock();
+
     /**
      * 拦截所有 Spring Data JPA Repository 方法调用。
      *
@@ -65,14 +68,21 @@ public class IgnoreSoftDeleteAdvisor {
         MethodSignature signature = (MethodSignature)pjp.getSignature();
         Method method = signature.getMethod();
 
-        // ponytail: 采样驱逐——每 256 次调用检查缓存大小，超过上限时淘汰约 25% 条目防止内存泄漏
         if ((EVICTION_COUNTER.incrementAndGet() & 255) == 0 && ANNOTATION_CACHE.size() > MAX_ANNOTATION_CACHE_SIZE) {
-            int toEvict = MAX_ANNOTATION_CACHE_SIZE / 4;
-            java.util.Iterator<Method> it = ANNOTATION_CACHE.keySet().iterator();
-            while (it.hasNext() && toEvict > 0) {
-                it.next();
-                it.remove();
-                toEvict--;
+            if (EVICTION_LOCK.tryLock()) {
+                try {
+                    if (ANNOTATION_CACHE.size() > MAX_ANNOTATION_CACHE_SIZE) {
+                        int toEvict = MAX_ANNOTATION_CACHE_SIZE / 4;
+                        java.util.Iterator<Method> it = ANNOTATION_CACHE.keySet().iterator();
+                        while (it.hasNext() && toEvict > 0) {
+                            it.next();
+                            it.remove();
+                            toEvict--;
+                        }
+                    }
+                } finally {
+                    EVICTION_LOCK.unlock();
+                }
             }
         }
 

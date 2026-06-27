@@ -225,6 +225,9 @@ public class EncryptConverter implements AttributeConverter<String, String> {
         if (dbData == null) {
             return null;
         }
+        if (!EncryptionKeyManager.KEY_VALIDATED.get()) {
+            validateKeyConfiguration();
+        }
         try {
             String base64Data;
             String version = null;
