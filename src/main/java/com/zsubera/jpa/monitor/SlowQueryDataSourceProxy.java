@@ -136,7 +136,7 @@ public final class SlowQueryDataSourceProxy {
 
         private Object wrapPreparedStatement(Object stmt, String sql) {
             Class<?> stmtClass = stmt.getClass();
-            if (stmtClass.getInterfaces().length == 0) {
+            if (!hasInterfaces(stmtClass)) {
                 log.debug("PreparedStatement class {} implements no interfaces, skipping proxy wrapping",
                     stmtClass.getName());
                 return stmt;
@@ -146,12 +146,20 @@ public final class SlowQueryDataSourceProxy {
 
         private Object wrapStatement(Object stmt, String sql) {
             Class<?> stmtClass = stmt.getClass();
-            if (stmtClass.getInterfaces().length == 0) {
+            if (!hasInterfaces(stmtClass)) {
                 log.debug("Statement class {} implements no interfaces, skipping proxy wrapping",
                     stmtClass.getName());
                 return stmt;
             }
             return createProxy(stmtClass, stmt, new StatementTimingHandler(stmt, sql, slowQueryThresholdMs));
+        }
+
+        private static boolean hasInterfaces(Class<?> clazz) {
+            while (clazz != null && clazz != Object.class) {
+                if (clazz.getInterfaces().length > 0) return true;
+                clazz = clazz.getSuperclass();
+            }
+            return false;
         }
 
         private Object createProxy(Class<?> stmtClass, Object stmt, InvocationHandler handler) {

@@ -425,16 +425,23 @@ public abstract class AbstractBulkOperationSpec<T, SELF extends AbstractBulkOper
                 fieldNames[i] = property(fields[i]);
             }
             String pattern = wrapLikePattern(keyword);
-            BiFunction<Root<?>, CriteriaBuilder, Predicate> multiLikeFn = (root, cb) -> {
-                List<Predicate> likes = new java.util.ArrayList<>();
-                for (String fieldName : fieldNames) {
-                    likes.add(PredicateHelper.like(root, fieldName, pattern, cb, PredicateHelper.LIKE_ESCAPE_CHAR));
-                }
-                return cb.or(likes.toArray(new Predicate[0]));
-            };
-            conditionNodes.add(new BulkConditionNode.LeafNode((BiFunction)multiLikeFn));
+            conditionNodes.add(new BulkConditionNode.LeafNode(buildMultiLikeFn(fieldNames, pattern)));
         }
         return self();
+    }
+
+    /**
+     * 构建多字段 LIKE OR 谓词的共享逻辑。
+     */
+    static java.util.function.BiFunction<jakarta.persistence.criteria.Root<?>, CriteriaBuilder, Predicate>
+        buildMultiLikeFn(String[] fieldNames, String pattern) {
+        return (root, cb) -> {
+            List<Predicate> likes = new java.util.ArrayList<>();
+            for (String fieldName : fieldNames) {
+                likes.add(PredicateHelper.like(root, fieldName, pattern, cb, PredicateHelper.LIKE_ESCAPE_CHAR));
+            }
+            return cb.or(likes.toArray(new Predicate[0]));
+        };
     }
 
     /**

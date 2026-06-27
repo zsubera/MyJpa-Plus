@@ -64,18 +64,19 @@ public final class SqlSanitizer {
     private static final Pattern LIMIT_OFFSET_PATTERN =
         Pattern.compile("(?i)(?:LIMIT|OFFSET|FETCH\\s+(?:FIRST|NEXT))\\s+\\d+(?:\\s+ROWS)?");
 
-    /** PostgreSQL 美元引用字符串模式（$$...$$ 和 $tag$...$tag$，支持嵌套和内容中的 $） */
+    /** PostgreSQL 美元引用字符串模式（$$...$$ 和 $tag$...$tag$，不支持嵌套）。 ponytail: 使用 [^$]+ 而非 [\\s\\S]*? 避免 ReDoS 风险。 */
     private static final Pattern DOLLAR_QUOTE_PATTERN =
-        Pattern.compile("\\$\\$(?:(?!\\$\\$)[\\s\\S])*\\$\\$|\\$(\\w+)\\$(?:(?!\\$\\1\\$)[\\s\\S])*\\$\\1\\$",
+        Pattern.compile("\\$\\$(?:[^$]+|\\$(?!\\$))*\\$\\$|\\$(\\w+)\\$(?:[^$]+|\\$(?!\\1\\$))*\\$\\1\\$",
             Pattern.CASE_INSENSITIVE);
 
-    /** Oracle Q 引用 bracket 对分隔符模式：q'[...]', q'(...)', q'{...}', q'<...>' */
+    /** Oracle Q 引用模式：q'[...]', q'(...)', q'{...}', q'<...>', q'!...!' 等。 ponytail: 使用独立模式避免 backreference 兼容性问题。 */
     private static final Pattern Q_QUOTE_BRACKET_PATTERN =
-        Pattern.compile("q'([\\[({<])[\\s\\S]*?\\1'", Pattern.CASE_INSENSITIVE);
+        Pattern.compile("q'\\[[\\s\\S]*?\\]'|q'\\([\\s\\S]*?\\)'|q'\\{[\\s\\S]*?\\}'|q'<[\\s\\S]*?>'",
+            Pattern.CASE_INSENSITIVE);
 
-    /** Oracle Q 引用单字符分隔符模式：q'!...!' 等（排除 bracket 和空白） */
+    /** Oracle Q 引用单字符分隔符模式：q'x...x' 等（排除 bracket、空白和引号） */
     private static final Pattern Q_QUOTE_CHAR_PATTERN =
-        Pattern.compile("q'([^\\[({<\\s])[\\s\\S]*?\\1'", Pattern.CASE_INSENSITIVE);
+        Pattern.compile("q'([^\\[({<\\s'])[\\s\\S]*?\\1'", Pattern.CASE_INSENSITIVE);
 
     /**
      * 对 SQL 语句进行脱敏处理，移除可能包含敏感数据的字符串字面量和数字字面量。

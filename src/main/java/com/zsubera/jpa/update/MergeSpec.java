@@ -39,7 +39,13 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
  * </ul>
  *
  * <p>
- * <strong>并发安全说明：</strong>UPSERT 操作在高并发场景下存在竞态条件。 两个并发事务可能同时检测到"不存在"并尝试插入，导致唯一约束冲突。 建议在高并发场景下：
+ * <strong>线程安全说明：</strong>此构建器非线程安全。不要在多个线程间共享同一个 {@code MergeSpec} 实例。
+ * {@code entity} 字段使用 {@code volatile} 修饰以支持与 {@code withEntity()} 的可见性保证，
+ * 但 {@code conflictFields} 和 {@code updateFields} 列表不是线程安全的。
+ * 如果需要在多线程环境下使用，请为每个线程创建独立的实例。
+ *
+ * <p>
+ * <strong>并发 UPSERT 说明：</strong>UPSERT 操作在高并发场景下存在竞态条件。 两个并发事务可能同时检测到"不存在"并尝试插入，导致唯一约束冲突。 建议在高并发场景下：
  * <ul>
  * <li>使用数据库级别的唯一约束保护冲突键</li>
  * <li>在 UPSERT 前使用悲观锁（{@code SELECT ... FOR UPDATE}）</li>
@@ -359,16 +365,21 @@ public class MergeSpec<T> {
         }
         DialectStrategy cachedStrategy = resolveDialectStrategy(em);
         int total = 0;
-        for (int i = 0; i < entities.size(); i++) {
-            T entity = entities.get(i);
-            if (entity == null) {
-                throw new IllegalArgumentException("entities[" + i + "] must not be null");
+        try {
+            for (int i = 0; i < entities.size(); i++) {
+                T entity = entities.get(i);
+                if (entity == null) {
+                    throw new IllegalArgumentException("entities[" + i + "] must not be null");
+                }
+                if (i > 0 && i % batchSize == 0) {
+                    em.flush();
+                    em.clear();
+                }
+                total += executeWith(em, entity, cachedStrategy);
             }
-            if (i > 0 && i % batchSize == 0) {
-                em.flush();
-                em.clear();
-            }
-            total += executeWith(em, entity, cachedStrategy);
+            em.flush();
+        } finally {
+            em.clear();
         }
         return total;
     }

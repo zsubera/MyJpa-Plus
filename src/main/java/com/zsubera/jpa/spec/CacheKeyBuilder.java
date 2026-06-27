@@ -144,7 +144,7 @@ final class CacheKeyBuilder {
         } else if (node instanceof ConditionNode.MultiLikeNode mln) {
             sb.append("MULTILIKE(");
             // 转义关键字中的分隔符防止缓存键结构被破坏
-            sb.append(mln.keyword.replace(")", "\\)").replace(",", "\\,"));
+            sb.append(mln.keyword.replace("\\", "\\\\").replace("(", "\\(").replace(")", "\\)").replace(",", "\\,"));
             for (String f : mln.fieldNames) {
                 sb.append(",").append(f);
             }

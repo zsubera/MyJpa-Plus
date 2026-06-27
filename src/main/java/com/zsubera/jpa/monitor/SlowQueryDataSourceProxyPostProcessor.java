@@ -39,8 +39,7 @@ public class SlowQueryDataSourceProxyPostProcessor implements BeanPostProcessor 
 
     @Override
     public Object postProcessAfterInitialization(@NonNull Object bean, @NonNull String beanName) throws BeansException {
-        if (bean instanceof DataSource ds && !java.lang.reflect.Proxy.isProxyClass(ds.getClass())
-            && !SlowQueryDataSourceProxy.isWrapped(ds)) {
+        if (bean instanceof DataSource ds && !SlowQueryDataSourceProxy.isWrapped(ds)) {
             log.info("Wrapping DataSource '{}' with slow query proxy (threshold={} ms)", beanName,
                 slowQueryThresholdMs);
             return SlowQueryDataSourceProxy.wrap(ds, slowQueryThresholdMs);

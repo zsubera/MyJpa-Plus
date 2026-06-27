@@ -36,7 +36,8 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  * </ul>
  */
 @ConfigurationProperties(prefix = "myjpa-plus")
-@SuppressFBWarnings("EI_EXPOSE_REP")
+@SuppressFBWarnings(value = "EI_EXPOSE_REP",
+    justification = "Spring Boot auto-binds mutable properties; defensive copy impractical for config beans")
 public class MyJpaPlusProperties {
 
     /** 软删除相关配置。 */
@@ -60,42 +61,50 @@ public class MyJpaPlusProperties {
         monitoring.validate();
     }
 
-    @SuppressFBWarnings("EI_EXPOSE_REP")
+    @SuppressFBWarnings(value = "EI_EXPOSE_REP",
+        justification = "Spring Boot auto-binds mutable properties; getter exposes Spring-managed config bean")
     public SoftDelete getSoftDelete() {
         return softDelete;
     }
 
-    @SuppressFBWarnings("EI_EXPOSE_REP2")
+    @SuppressFBWarnings(value = "EI_EXPOSE_REP2",
+        justification = "Spring Boot setter accepts mutable config bean; lifecycle managed by Spring container")
     public void setSoftDelete(SoftDelete softDelete) {
         this.softDelete = softDelete;
     }
 
-    @SuppressFBWarnings("EI_EXPOSE_REP")
+    @SuppressFBWarnings(value = "EI_EXPOSE_REP",
+        justification = "Spring Boot auto-binds mutable properties; getter exposes Spring-managed config bean")
     public Query getQuery() {
         return query;
     }
 
-    @SuppressFBWarnings("EI_EXPOSE_REP2")
+    @SuppressFBWarnings(value = "EI_EXPOSE_REP2",
+        justification = "Spring Boot setter accepts mutable config bean; lifecycle managed by Spring container")
     public void setQuery(Query query) {
         this.query = query;
     }
 
-    @SuppressFBWarnings("EI_EXPOSE_REP")
+    @SuppressFBWarnings(value = "EI_EXPOSE_REP",
+        justification = "Spring Boot auto-binds mutable properties; getter exposes Spring-managed config bean")
     public Monitoring getMonitoring() {
         return monitoring;
     }
 
-    @SuppressFBWarnings("EI_EXPOSE_REP2")
+    @SuppressFBWarnings(value = "EI_EXPOSE_REP2",
+        justification = "Spring Boot setter accepts mutable config bean; lifecycle managed by Spring container")
     public void setMonitoring(Monitoring monitoring) {
         this.monitoring = monitoring;
     }
 
-    @SuppressFBWarnings("EI_EXPOSE_REP")
+    @SuppressFBWarnings(value = "EI_EXPOSE_REP",
+        justification = "Spring Boot auto-binds mutable properties; getter exposes Spring-managed config bean")
     public Cache getCache() {
         return cache;
     }
 
-    @SuppressFBWarnings("EI_EXPOSE_REP2")
+    @SuppressFBWarnings(value = "EI_EXPOSE_REP2",
+        justification = "Spring Boot setter accepts mutable config bean; lifecycle managed by Spring container")
     public void setCache(Cache cache) {
         this.cache = cache;
     }

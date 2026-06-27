@@ -1,6 +1,7 @@
 package com.zsubera.jpa.util;
 
 import com.zsubera.jpa.exception.MyJpaPlusException;
+import com.zsubera.jpa.exception.SecurityViolationException;
 import java.util.regex.Pattern;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -101,14 +102,14 @@ public final class IdentifierValidator {
      */
     public static void validate(String identifier) {
         if (identifier == null || identifier.isEmpty()) {
-            throw new MyJpaPlusException("Identifier must not be null or empty");
+            throw new SecurityViolationException("Identifier must not be null or empty");
         }
         if (identifier.length() > MAX_IDENTIFIER_LENGTH) {
-            throw new MyJpaPlusException("Identifier length (" + identifier.length() + ") exceeds maximum ("
+            throw new SecurityViolationException("Identifier length (" + identifier.length() + ") exceeds maximum ("
                 + MAX_IDENTIFIER_LENGTH + "): '" + identifier.substring(0, 64) + "...'");
         }
         if (identifier.endsWith(".")) {
-            throw new MyJpaPlusException("Identifier must not end with '.': '" + identifier + "'");
+            throw new SecurityViolationException("Identifier must not end with '.': '" + identifier + "'");
         }
         String[] parts = identifier.split("\\.");
         for (String part : parts) {
@@ -199,7 +200,7 @@ public final class IdentifierValidator {
     private static void validatePart(String part, String fullIdentifier) {
         Pattern validationPattern = unicodeIdentifiers ? UNICODE_IDENTIFIER_PART_PATTERN : SAFE_IDENTIFIER_PATTERN;
         if (!validationPattern.matcher(part).matches()) {
-            throw new MyJpaPlusException("Invalid SQL identifier: '" + fullIdentifier
+            throw new SecurityViolationException("Invalid SQL identifier: '" + fullIdentifier
                 + "'. Each part must contain only alphanumeric characters and underscores."
                 + (unicodeIdentifiers ? "" : " Use myjpa-plus.merge.unicode-identifiers=true for Unicode support."));
         }

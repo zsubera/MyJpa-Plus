@@ -120,6 +120,35 @@ public interface CacheAdapter {
     void resetStats();
 
     /**
+     * 批量存入缓存条目。
+     *
+     * <p>
+     * 默认实现逐个调用 {@link #put(String, Object, long)}。需要批量优化的实现（如 Redis pipeline）应覆盖此方法。
+     *
+     * @param entries 要缓存的条目映射（键 -> 值），TTL 使用默认值
+     * @param defaultTtlSeconds 默认生存时间（秒）
+     */
+    default void putAll(java.util.Map<String, Object> entries, long defaultTtlSeconds) {
+        for (java.util.Map.Entry<String, Object> entry : entries.entrySet()) {
+            put(entry.getKey(), entry.getValue(), defaultTtlSeconds);
+        }
+    }
+
+    /**
+     * 批量驱逐缓存条目。
+     *
+     * <p>
+     * 默认实现逐个调用 {@link #evict(String)}。需要批量优化的实现应覆盖此方法。
+     *
+     * @param keys 要驱逐的缓存键集合
+     */
+    default void evictAll(java.util.Collection<String> keys) {
+        for (String key : keys) {
+            evict(key);
+        }
+    }
+
+    /**
      * 关闭缓存适配器，释放底层资源。
      *
      * <p>

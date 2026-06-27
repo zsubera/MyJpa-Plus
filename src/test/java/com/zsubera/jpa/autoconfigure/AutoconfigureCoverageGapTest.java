@@ -154,8 +154,8 @@ class AutoconfigureCoverageGapTest {
         // When InvocationHandler is a DataSourceProxyHandler, isAlreadyWrapped returns true
         // But we can't easily create a DataSourceProxyHandler, so test the non-wrapped proxy path
         Object result = processor.postProcessAfterInitialization(wrappedProxy, "wrappedDs");
-        // Non-DataSourceProxyHandler proxy returns the original bean
-        assertSame(wrappedProxy, result);
+        // Non-DataSourceProxyHandler proxy is wrapped (not already wrapped by SlowQueryDataSourceProxy)
+        assertNotSame(wrappedProxy, result);
     }
 
     @Test

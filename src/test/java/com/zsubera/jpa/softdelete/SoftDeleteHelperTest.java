@@ -392,6 +392,14 @@ class SoftDeleteHelperTest {
         org.mockito.Mockito.when(mockEm.createNativeQuery(org.mockito.ArgumentMatchers.contains("SELECT COUNT")))
             .thenReturn(mockQuery);
         org.mockito.Mockito.when(mockQuery.getSingleResult()).thenReturn(2L);
+        // Mock probe query (SELECT 1 WHERE ... LIMIT) that triggers the COUNT path
+        jakarta.persistence.Query mockProbeQuery = org.mockito.Mockito.mock(jakarta.persistence.Query.class);
+        org.mockito.Mockito.when(mockEm.createNativeQuery(org.mockito.ArgumentMatchers.contains("SELECT 1")))
+            .thenReturn(mockProbeQuery);
+        org.mockito.Mockito.when(mockProbeQuery.setMaxResults(org.mockito.ArgumentMatchers.anyInt()))
+            .thenReturn(mockProbeQuery);
+        java.util.List<Object> probeResults = java.util.List.of(new Object(), new Object());
+        org.mockito.Mockito.when(mockProbeQuery.getResultList()).thenReturn(probeResults);
 
         assertThrows(IllegalStateException.class,
             () -> SoftDeleteHelper.softDeleteAll(mockEm, SoftDeleteTestEntity.class, true, 1));
@@ -418,6 +426,14 @@ class SoftDeleteHelperTest {
         jakarta.persistence.EntityManager mockEm = org.mockito.Mockito.mock(jakarta.persistence.EntityManager.class);
         jakarta.persistence.Query mockCountQuery = org.mockito.Mockito.mock(jakarta.persistence.Query.class);
         jakarta.persistence.Query mockUpdateQuery = org.mockito.Mockito.mock(jakarta.persistence.Query.class);
+        // Mock probe query (SELECT 1 WHERE ... LIMIT) — returns 3 results to trigger COUNT path
+        jakarta.persistence.Query mockProbeQuery = org.mockito.Mockito.mock(jakarta.persistence.Query.class);
+        org.mockito.Mockito.when(mockEm.createNativeQuery(org.mockito.ArgumentMatchers.contains("SELECT 1")))
+            .thenReturn(mockProbeQuery);
+        org.mockito.Mockito.when(mockProbeQuery.setMaxResults(org.mockito.ArgumentMatchers.anyInt()))
+            .thenReturn(mockProbeQuery);
+        java.util.List<Object> probeResults = java.util.List.of(new Object(), new Object(), new Object());
+        org.mockito.Mockito.when(mockProbeQuery.getResultList()).thenReturn(probeResults);
         org.mockito.Mockito.when(mockEm.createNativeQuery(org.mockito.ArgumentMatchers.contains("SELECT COUNT")))
             .thenReturn(mockCountQuery);
         org.mockito.Mockito.when(mockCountQuery.getSingleResult()).thenReturn(3L);

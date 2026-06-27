@@ -2,7 +2,6 @@ package com.zsubera.jpa.repository;
 
 import com.zsubera.jpa.annotation.IgnoreSoftDelete;
 import java.lang.reflect.Method;
-import java.util.StringJoiner;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.aspectj.lang.ProceedingJoinPoint;
 import org.aspectj.lang.annotation.Around;
@@ -34,10 +33,10 @@ public class IgnoreSoftDeleteAdvisor {
     private static final Logger log = LoggerFactory.getLogger(IgnoreSoftDeleteAdvisor.class);
 
     /**
-     * 缓存注解检查结果，避免重复反射。使用复合键（类名+方法名+参数类型）确保跨代理类的缓存一致性。
-     * ponytail: 添加采样驱逐防止 CGLIB/ByteBuddy 动态代理类名不断变化导致内存泄漏。
+     * 缓存注解检查结果，避免重复反射。使用 int hashCode 组合键。
+     * ponytail: 添加采样驱逐防止动态代理类名不断变化导致内存泄漏。
      */
-    private static final java.util.concurrent.ConcurrentMap<String, Boolean> ANNOTATION_CACHE =
+    private static final java.util.concurrent.ConcurrentMap<Integer, Boolean> ANNOTATION_CACHE =
         new java.util.concurrent.ConcurrentHashMap<>();
 
     /** ANNOTATION_CACHE 最大条目数，超过时触发采样驱逐。 */
@@ -66,13 +65,13 @@ public class IgnoreSoftDeleteAdvisor {
         MethodSignature signature = (MethodSignature)pjp.getSignature();
         Method method = signature.getMethod();
 
-        // 使用复合缓存键（类名+方法名+参数类型）确保跨代理类的缓存一致性和重载方法区分
-        // CGLIB/ByteBuddy 生成的代理类方法与原始接口方法不共享同一 Method 实例
-        StringJoiner paramJoiner = new StringJoiner(",", "(", ")");
+        // ponytail: 使用 hashCode 组合键代替 StringJoiner 拼接，避免每次调用都分配字符串
+        int paramHash = 17;
         for (Class<?> paramType : method.getParameterTypes()) {
-            paramJoiner.add(paramType.getName());
+            paramHash = 31 * paramHash + paramType.hashCode();
         }
-        String cacheKey = method.getDeclaringClass().getName() + "#" + method.getName() + paramJoiner;
+        int cacheKey = method.getDeclaringClass().hashCode() * 31 + method.getName().hashCode();
+        cacheKey = cacheKey * 31 + paramHash;
 
         // ponytail: 采样驱逐——每 256 次调用检查缓存大小，超过上限时清空防止动态代理类名导致内存泄漏
         if ((EVICTION_COUNTER.incrementAndGet() & 255) == 0 && ANNOTATION_CACHE.size() > MAX_ANNOTATION_CACHE_SIZE) {

@@ -884,15 +884,6 @@ public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> ext
         if (params == null) {
             throw new IllegalArgumentException("params must not be null");
         }
-        // 提前验证函数名白名单，避免创建不必要的数组和对象
-        // 注意：仅检查动态扩展白名单，SAFE_FUNCTION_NAMES 已包含所有默认函数
-        String upperName = functionName.toUpperCase(java.util.Locale.ROOT);
-        if (!SAFE_FUNCTION_NAMES.contains(upperName)
-            && !com.zsubera.jpa.spec.FunctionWhitelist.containsSafeFunction(upperName)) {
-            throw new com.zsubera.jpa.exception.SecurityViolationException(
-                "Function not in whitelist: '" + functionName + "'. " + "Only whitelisted functions are allowed. "
-                    + "Use myjpa-plus.query.extra-safe-functions to add custom functions.");
-        }
         String name = resolveProperty(field);
         Object[] allParams = new Object[params.length + 1];
         allParams[0] = name;

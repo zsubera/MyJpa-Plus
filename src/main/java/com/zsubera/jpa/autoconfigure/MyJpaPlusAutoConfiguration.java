@@ -1,7 +1,6 @@
 package com.zsubera.jpa.autoconfigure;
 
 import com.zsubera.jpa.monitor.SlowQueryDataSourceProxyPostProcessor;
-import com.zsubera.jpa.monitor.SqlSlowQueryInterceptor;
 import com.zsubera.jpa.repository.DefaultMyJpaRepository;
 import com.zsubera.jpa.repository.MyJpaRepositoryFactoryBean;
 import com.zsubera.jpa.template.CacheAdapter;
@@ -207,7 +206,8 @@ public class MyJpaPlusAutoConfiguration {
             }
 
             // 开发/测试环境 — 记录警告但不阻止启动
-            log.warn("SECURITY: PBKDF2 salt not configured. " + "Encrypted data will use a fixed development salt. "
+            log.warn("SECURITY: PBKDF2 salt not configured. "
+                + "Encrypted data will use a random salt per JVM startup — data WILL NOT BE RECOVERABLE after restart. "
                 + "Set environment variable MYJPA_ENCRYPT_SALT or system property myjpa.encrypt.salt for production.");
         }
 
@@ -432,26 +432,6 @@ public class MyJpaPlusAutoConfiguration {
     }
 
     /**
-     * 创建 SQL 慢查询拦截器 Bean（仅 Hibernate 环境）。
-     *
-     * <p>
-     * 此 Bean 仅在 Hibernate 环境中注册，用于通过 {@code StatementInspector} 接口拦截 SQL 日志。
-     * 实际的 DataSource 代理计时由 {@link SlowQueryDataSourceProxyPostProcessor} 提供，不依赖 Hibernate。
-     *
-     * @param properties 配置属性
-     * @return SqlSlowQueryInterceptor 实例
-     */
-    @Bean
-    @ConditionalOnMissingBean(SqlSlowQueryInterceptor.class)
-    @ConditionalOnProperty(prefix = "myjpa-plus.monitoring", name = "enabled", havingValue = "true")
-    @ConditionalOnClass(name = "org.hibernate.resource.jdbc.spi.StatementInspector")
-    public SqlSlowQueryInterceptor sqlSlowQueryInterceptor(MyJpaPlusProperties properties) {
-        long threshold = properties.getMonitoring().getSlowQueryThresholdMs();
-        log.info("SqlSlowQueryInterceptor enabled for Hibernate (threshold={} ms)", threshold);
-        return new SqlSlowQueryInterceptor(threshold);
-    }
-
-    /**
      * 用于在监控启用时将 DataSource 包装为慢查询代理的 BeanPostProcessor。
      *
      * <p>
@@ -485,62 +465,55 @@ public class MyJpaPlusAutoConfiguration {
     }
 
     /**
-     * 应用关闭时清理 LambdaUtils 后台缓存清理线程，防止在 OSGi 或热部署环境中导致类加载器泄漏。
+     * 应用关闭时清理所有组件资源，防止在 OSGi 或热部署环境中导致类加载器泄漏。
+     *
+     * <p>
+     * 每个组件的清理操作独立注册，单个清理失败不影响其他组件。
      *
      * @param event 上下文关闭事件
      */
     @EventListener(ContextClosedEvent.class)
     public void onContextClosed(ContextClosedEvent event) {
-        try {
-            LambdaUtils.shutdown();
-        } catch (Exception e) {
-            log.warn("LambdaUtils shutdown failed", e);
-        }
-        try {
-            com.zsubera.jpa.converter.EncryptConverter.clearCaches();
-        } catch (Exception e) {
-            log.warn("EncryptConverter cache cleanup failed", e);
-        }
-        try {
-            com.zsubera.jpa.converter.EncryptConverter.removeCipher();
-        } catch (Exception e) {
-            log.warn("EncryptConverter cipher cleanup failed", e);
-        }
-        try {
-            com.zsubera.jpa.softdelete.SoftDeleteHelper.shutdown();
-        } catch (Exception e) {
-            log.warn("SoftDeleteHelper shutdown failed", e);
-        }
-        try {
-            DefaultMyJpaRepository.clearThreadLocal();
-        } catch (Exception e) {
-            log.warn("DefaultMyJpaRepository cleanup failed", e);
-        }
-        try {
-            com.zsubera.jpa.repository.SoftDeleteContext.reset();
-        } catch (Exception e) {
-            log.warn("SoftDeleteContext reset failed", e);
-        }
-        try {
-            com.zsubera.jpa.repository.EntityManagerHelper.reset();
-        } catch (Exception e) {
-            log.warn("EntityManagerHelper reset failed", e);
-        }
-        try {
-            com.zsubera.jpa.softdelete.SoftDeleteHelper.setEventPublisher(null);
-        } catch (Exception e) {
-            log.warn("SoftDeleteHelper event publisher cleanup failed", e);
-        }
+        CleanupRegistry registry = new CleanupRegistry();
+        registry.register("LambdaUtils", LambdaUtils::shutdown);
+        registry.register("EncryptConverter cache", com.zsubera.jpa.converter.EncryptConverter::clearCaches);
+        registry.register("EncryptConverter cipher", com.zsubera.jpa.converter.EncryptConverter::removeCipher);
+        registry.register("SoftDeleteHelper", com.zsubera.jpa.softdelete.SoftDeleteHelper::shutdown);
+        registry.register("DefaultMyJpaRepository", DefaultMyJpaRepository::clearThreadLocal);
+        registry.register("SoftDeleteContext", com.zsubera.jpa.repository.SoftDeleteContext::reset);
+        registry.register("EntityManagerHelper", com.zsubera.jpa.repository.EntityManagerHelper::reset);
+        registry.register("SoftDeleteHelper event publisher",
+            () -> com.zsubera.jpa.softdelete.SoftDeleteHelper.setEventPublisher(null));
         if (applicationContext != null) {
-            try {
+            registry.register("CacheAdapter", () -> {
                 CacheAdapter cacheAdapter = applicationContext.getBean(CacheAdapter.class);
                 cacheAdapter.close();
-            } catch (Exception e) {
-                // CacheAdapter might not be available or already destroyed by Spring
-                log.debug("CacheAdapter close skipped: {}", e.getMessage());
+            });
+        }
+        registry.executeAll();
+        log.info("MyJpa-Plus context closed, caches cleaned");
+    }
+
+    /**
+     * 组件清理注册表，收集多个清理操作并逐一执行。
+     * 单个清理失败不会阻止其他清理操作执行。
+     */
+    private static class CleanupRegistry {
+        private final java.util.List<java.util.Map.Entry<String, Runnable>> actions = new java.util.ArrayList<>();
+
+        void register(String name, Runnable action) {
+            actions.add(java.util.Map.entry(name, action));
+        }
+
+        void executeAll() {
+            for (var entry : actions) {
+                try {
+                    entry.getValue().run();
+                } catch (Exception e) {
+                    log.warn("{} cleanup failed", entry.getKey(), e);
+                }
             }
         }
-        log.info("MyJpa-Plus context closed, caches cleaned");
     }
 
     /**

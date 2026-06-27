@@ -13,8 +13,9 @@ import com.zsubera.jpa.update.EntityFieldExtractor.EntityFieldValue;
  *
  * <p>
  * 使用 VALUES() 函数引用新插入值。VALUES() 在 MySQL 8.0.20 中被标记为弃用但仍可用。
- * MySQL 尚未提供完全替代 VALUES() 的语法（行别名语法 {@code INSERT ... AS new_row ON DUPLICATE KEY UPDATE col = new_row.col}
- * 在某些 MySQL 版本中不被支持），因此当前使用 VALUES() 以确保兼容性。
+ * MySQL 推荐使用行别名语法 {@code INSERT ... AS new_row ON DUPLICATE KEY UPDATE col = new_row.col}，
+ * 但该语法仅在 MySQL 8.0.19+ 可用，且部分中间件/代理可能不兼容。因此当前使用 VALUES() 以确保广泛兼容性。
+ * 待 MySQL 版本检测能力就绪后，将按版本自动切换语法。
  *
  * <p>
  * 标识符使用反引号转义：{@code `identifier`}
@@ -47,7 +48,7 @@ final class MysqlDialect extends AbstractDialectStrategy {
      * <p>生成 MySQL UPSERT SQL：
      * <ul>
      * <li>有更新列时：{@code INSERT INTO t (...) VALUES (...) ON DUPLICATE KEY UPDATE col = VALUES(col)}</li>
-     * <li>无更新列时：{@code INSERT IGNORE INTO t (...) VALUES (...)}</li>
+     * <li>无更新列时：{@code INSERT INTO t (...) VALUES (...) ON DUPLICATE KEY UPDATE id = VALUES(id)}</li>
      * </ul>
      */
     @Override
@@ -56,12 +57,14 @@ final class MysqlDialect extends AbstractDialectStrategy {
         String escapedTable = escapeIdentifier(tableName);
 
         if (updateColumns.isEmpty()) {
-            // 无更新字段时使用 INSERT IGNORE 语义：忽略冲突，不执行任何更新
             SqlWithParams insert = buildInsertClause(escapedTable, insertColumns, insertFieldValues);
-            return new SqlWithParams("INSERT IGNORE INTO " + insert.sql(), insert.params());
+            StringBuilder sql = new StringBuilder(insert.sql());
+            sql.append(" ON DUPLICATE KEY UPDATE ");
+            String idCol = escapeIdentifier(insertColumns.get(0));
+            sql.append(idCol).append(" = VALUES(").append(idCol).append(")");
+            return new SqlWithParams(sql.toString(), insert.params());
         }
 
-        // INSERT INTO `table` (`col1`, `col2`) VALUES (?, ?)
         SqlWithParams insert = buildInsertClause(escapedTable, insertColumns, insertFieldValues);
         StringBuilder sql = new StringBuilder(insert.sql());
 

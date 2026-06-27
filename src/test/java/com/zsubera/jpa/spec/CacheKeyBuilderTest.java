@@ -204,6 +204,32 @@ class CacheKeyBuilderTest {
     }
 
     @Test
+    void multiLikeNode_keywordWithEscapingChars_producesDifferentKeys() {
+        ConditionNode.MultiLikeNode mln1 = new ConditionNode.MultiLikeNode("a,b", new String[] {"name"});
+        ConditionNode.MultiLikeNode mln2 = new ConditionNode.MultiLikeNode("a\\b", new String[] {"name"});
+        ConditionNode.MultiLikeNode mln3 = new ConditionNode.MultiLikeNode("a(b", new String[] {"name"});
+        ConditionNode.MultiLikeNode mln4 = new ConditionNode.MultiLikeNode("a)b", new String[] {"name"});
+
+        StringBuilder sb1 = new StringBuilder();
+        CacheKeyBuilder.appendCacheKey(sb1, mln1);
+        StringBuilder sb2 = new StringBuilder();
+        CacheKeyBuilder.appendCacheKey(sb2, mln2);
+        StringBuilder sb3 = new StringBuilder();
+        CacheKeyBuilder.appendCacheKey(sb3, mln3);
+        StringBuilder sb4 = new StringBuilder();
+        CacheKeyBuilder.appendCacheKey(sb4, mln4);
+
+        String key1 = sb1.toString();
+        String key2 = sb2.toString();
+        String key3 = sb3.toString();
+        String key4 = sb4.toString();
+        assertNotEquals(key1, key2, "Comma and backslash keywords must differ");
+        assertNotEquals(key2, key3, "Backslash and open-paren keywords must differ");
+        assertNotEquals(key3, key4, "Open-paren and close-paren keywords must differ");
+        assertNotEquals(key1, key3, "Comma and open-paren keywords must differ");
+    }
+
+    @Test
     void stringHashCodeCollision_differentStringsProduceDifferentKeys() {
         List<ConditionNode> c1 = new ArrayList<>();
         c1.add(new ConditionNode.SimpleNode("name", "Aa", ConditionNode.Op.EQ));

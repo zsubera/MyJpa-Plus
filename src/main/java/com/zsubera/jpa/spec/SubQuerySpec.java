@@ -338,10 +338,9 @@ public class SubQuerySpec<S> implements ConditionalMethods<S, SubQuerySpec<S>> {
         if (value == null) {
             throw new IllegalArgumentException("value must not be null");
         }
-        String escaped = PredicateHelper.escapeLikeWildcards(value);
-        String pattern = "%" + escaped + "%";
         predicates.add(
-            PredicateHelper.like(root, LambdaUtils.property(field), pattern, cb, PredicateHelper.LIKE_ESCAPE_CHAR));
+            PredicateHelper.like(root, LambdaUtils.property(field), ConditionalMethods.wrapLikePattern(value), cb,
+                PredicateHelper.LIKE_ESCAPE_CHAR));
         return this;
     }
 
@@ -360,10 +359,9 @@ public class SubQuerySpec<S> implements ConditionalMethods<S, SubQuerySpec<S>> {
         if (value == null) {
             throw new IllegalArgumentException("value must not be null");
         }
-        String escaped = PredicateHelper.escapeLikeWildcards(value);
-        String pattern = "%" + escaped + "%";
         predicates.add(
-            PredicateHelper.notLike(root, LambdaUtils.property(field), pattern, cb, PredicateHelper.LIKE_ESCAPE_CHAR));
+            PredicateHelper.notLike(root, LambdaUtils.property(field), ConditionalMethods.wrapLikePattern(value), cb,
+                PredicateHelper.LIKE_ESCAPE_CHAR));
         return this;
     }
 
@@ -639,9 +637,8 @@ public class SubQuerySpec<S> implements ConditionalMethods<S, SubQuerySpec<S>> {
         if (value == null) {
             throw new IllegalArgumentException("value must not be null");
         }
-        String escaped = PredicateHelper.escapeLikeWildcards(value);
-        predicates.add(PredicateHelper.likeIgnoreCase(root, LambdaUtils.property(field), "%" + escaped + "%", cb,
-            PredicateHelper.LIKE_ESCAPE_CHAR));
+        predicates.add(PredicateHelper.likeIgnoreCase(root, LambdaUtils.property(field),
+            ConditionalMethods.wrapLikePattern(value), cb, PredicateHelper.LIKE_ESCAPE_CHAR));
         return this;
     }
 

@@ -57,12 +57,6 @@ public class UpdateSpec<T> extends AbstractBulkOperationSpec<T, UpdateSpec<T>> {
     private static final com.zsubera.jpa.util.SampledEvictionCache<String, Boolean> NO_VERSION_CACHE =
         new com.zsubera.jpa.util.SampledEvictionCache<>(MAX_CACHE_SIZE, 0.75, 100, 64);
 
-    /**
-     * 缓存驱逐辅助方法：采样驱逐缓存自带容量控制，此方法保留为兼容调用点。
-     */
-    private static void evictCacheIfNeeded(java.util.concurrent.ConcurrentMap<?, ?> cache) {
-        // ponytail: SampledEvictionCache handles eviction internally; this method is a no-op.
-    }
 
     private final List<SetClause> setClauses = new ArrayList<>();
     private boolean allowUnconditional = false;
@@ -524,37 +518,33 @@ public class UpdateSpec<T> extends AbstractBulkOperationSpec<T, UpdateSpec<T>> {
         Boolean cachedResult = NUMERIC_FIELD_CACHE.get(cacheKey);
         if (cachedResult != null) {
             if (!cachedResult) {
+                java.lang.reflect.Field f = resolveFieldFromClassHierarchy(fieldName);
+                String fieldType = f != null ? f.getType().getSimpleName() : "unknown";
+                if ("unknown".equals(fieldType)) {
+                    throw new IllegalArgumentException(operation + "() cannot validate field '" + fieldName + "' in "
+                        + entityClass.getSimpleName() + ". Field not found via reflection. "
+                        + "Ensure the field exists as a direct class field (not a getter-only property). "
+                        + "For computed expressions, use setExpr() instead.");
+                }
                 throw new IllegalArgumentException(
                     operation + "() requires a numeric field, but field '" + fieldName + "' in "
-                        + entityClass.getSimpleName() + " is not numeric." + " Use set() for non-numeric fields.");
+                        + entityClass.getSimpleName() + " has type: " + fieldType
+                        + ". Use set() for non-numeric fields.");
             }
             return;
         }
         Boolean isNumeric = NUMERIC_FIELD_CACHE.computeIfAbsent(cacheKey, k -> {
-            for (Class<?> c = entityClass; c != null && c != Object.class; c = c.getSuperclass()) {
-                try {
-                    java.lang.reflect.Field f = c.getDeclaredField(fieldName);
-                    Class<?> type = f.getType();
-                    return Number.class.isAssignableFrom(type) || type == int.class || type == long.class
-                        || type == double.class || type == float.class || type == short.class || type == byte.class;
-                } catch (NoSuchFieldException e) {
-                    // 继续检查父类
-                }
+            java.lang.reflect.Field f = resolveFieldFromClassHierarchy(fieldName);
+            if (f == null) {
+                return false;
             }
-            return false;
+            Class<?> type = f.getType();
+            return Number.class.isAssignableFrom(type) || type == int.class || type == long.class
+                || type == double.class || type == float.class || type == short.class || type == byte.class;
         });
         if (!isNumeric) {
-            // 尝试获取字段类型用于错误消息
-            String fieldType = "unknown";
-            for (Class<?> c = entityClass; c != null && c != Object.class; c = c.getSuperclass()) {
-                try {
-                    java.lang.reflect.Field f = c.getDeclaredField(fieldName);
-                    fieldType = f.getType().getSimpleName();
-                    break;
-                } catch (NoSuchFieldException e) {
-                    // 继续检查父类
-                }
-            }
+            java.lang.reflect.Field f = resolveFieldFromClassHierarchy(fieldName);
+            String fieldType = f != null ? f.getType().getSimpleName() : "unknown";
             if ("unknown".equals(fieldType)) {
                 throw new IllegalArgumentException(operation + "() cannot validate field '" + fieldName + "' in "
                     + entityClass.getSimpleName() + ". Field not found via reflection. "
@@ -566,6 +556,17 @@ public class UpdateSpec<T> extends AbstractBulkOperationSpec<T, UpdateSpec<T>> {
                     + ". Use set() for non-numeric fields.");
             }
         }
+    }
+
+    private java.lang.reflect.Field resolveFieldFromClassHierarchy(String fieldName) {
+        for (Class<?> c = entityClass; c != null && c != Object.class; c = c.getSuperclass()) {
+            try {
+                return c.getDeclaredField(fieldName);
+            } catch (NoSuchFieldException e) {
+                // 继续检查父类
+            }
+        }
+        return null;
     }
 
 }

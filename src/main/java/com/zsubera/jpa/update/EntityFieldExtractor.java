@@ -9,7 +9,7 @@ import java.lang.reflect.InaccessibleObjectException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
-import java.util.concurrent.atomic.AtomicBoolean;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.util.ConcurrentReferenceHashMap;
@@ -69,12 +69,9 @@ final class EntityFieldExtractor<T> {
     /** 采样概率分母——每 1024 次调用检查一次缓存大小 */
     private static final int CACHE_CHECK_SAMPLING = 1024;
 
-    /** 自动生成 ID 字段检测结果的缓存。使用弱引用键防止类加载器泄漏。值使用强引用避免被立即 GC。 */
-    private static final java.util.concurrent.ConcurrentMap<String, Boolean> AUTO_GENERATED_ID_CACHE =
-        new java.util.concurrent.ConcurrentHashMap<>(16);
-
-    /** AUTO_GENERATED_ID_CACHE 最大容量 */
-    private static final int AUTO_ID_CACHE_MAX_SIZE = 256;
+    /** 自动生成 ID 字段检测结果的缓存。使用弱引用键防止类加载器泄漏。 */
+    private static final ConcurrentReferenceHashMap<String, Boolean> AUTO_GENERATED_ID_CACHE =
+        new ConcurrentReferenceHashMap<>(16, ConcurrentReferenceHashMap.ReferenceType.WEAK);
 
     /** 缓存 resolveIdColumnNames 的结果，避免每次 MergeSpec 调用时重复反射扫描 */
     private static final java.util.concurrent.ConcurrentMap<String, List<String>> ID_COLUMN_CACHE =
@@ -312,30 +309,7 @@ final class EntityFieldExtractor<T> {
             }
             return false;
         });
-        if (AUTO_GENERATED_ID_CACHE.size() > AUTO_ID_CACHE_MAX_SIZE) {
-            evictAutoIdCache();
-        }
         return result;
-    }
-
-    private static final AtomicBoolean AUTO_ID_EVICTING = new AtomicBoolean();
-
-    private static void evictAutoIdCache() {
-        if (AUTO_GENERATED_ID_CACHE.size() <= AUTO_ID_CACHE_MAX_SIZE || !AUTO_ID_EVICTING.compareAndSet(false, true)) {
-            return;
-        }
-        try {
-            int toRemove = AUTO_GENERATED_ID_CACHE.size() / 2;
-            int removed = 0;
-            java.util.Iterator<String> it = AUTO_GENERATED_ID_CACHE.keySet().iterator();
-            while (it.hasNext() && removed < toRemove) {
-                it.next();
-                it.remove();
-                removed++;
-            }
-        } finally {
-            AUTO_ID_EVICTING.set(false);
-        }
     }
 
     /**
@@ -407,8 +381,8 @@ final class EntityFieldExtractor<T> {
                 log.debug("Failed to apply Spring naming strategy for field {}: {}", field.getName(), e.getMessage());
             }
         }
-        // 回退到字段名
-        String name = field.getName();
+        // 回退到 snake_case 转换
+        String name = com.zsubera.jpa.util.StringHelper.camelToSnake(field.getName());
         IdentifierValidator.validateColumnName(name);
         return name;
     }

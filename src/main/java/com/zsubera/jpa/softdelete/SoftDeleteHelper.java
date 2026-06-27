@@ -78,7 +78,7 @@ public final class SoftDeleteHelper {
             "UNIQUE", "CHECK", "DEFAULT", "NULL", "NOT", "CONSTRAINT", "BEGIN", "COMMIT", "ROLLBACK", "SAVEPOINT",
             "TRANSACTION", "TRUE", "FALSE", "AND", "OR", "IN", "EXISTS", "BETWEEN", "LIKE", "IS", "ANY", "SOME",
             "COUNT", "SUM", "AVG", "MIN", "MAX", "COALESCE", "NULLIF", "CASE", "WHEN", "THEN", "ELSE", "END", "CAST",
-            "USER", "COLUMN", "ROW", "VALUE", "TYPE", "STATUS", "NAME", "ID", "DATA", "TEXT", "DATE", "TIME");
+            "USER", "COLUMN", "ROW", "VALUE", "TYPE", "STATUS", "DATA", "TEXT", "DATE", "TIME");
 
     /** 采样缓存大小检查的计数器，减少开销。 */
     private static final java.util.concurrent.atomic.AtomicInteger CALL_COUNTER =
@@ -190,7 +190,7 @@ public final class SoftDeleteHelper {
         eventPublisher = publisher;
     }
 
-    private static void publishEvent(Class<?> entityClass, int affectedRows) {
+    static void publishEvent(Class<?> entityClass, int affectedRows) {
         EventPublisher publisher = eventPublisher;
         if (publisher != null && affectedRows > 0) {
             try {
@@ -210,7 +210,7 @@ public final class SoftDeleteHelper {
      * @param booleanField 是否为 Boolean 类型（无需参数绑定，直接使用字面量 true）
      * @param dbValue 需要绑定到参数的数据库值（Boolean 类型时为 null）
      */
-    private record ResolvedDeletedValue(boolean booleanField, Object dbValue) {
+    record ResolvedDeletedValue(boolean booleanField, Object dbValue) {
     }
 
     /**
@@ -222,7 +222,7 @@ public final class SoftDeleteHelper {
      * @return 解析后的删除值
      * @throws MyJpaPlusException 如果字段类型不支持或枚举缺少 deletedValue
      */
-    private static ResolvedDeletedValue resolveDeletedValue(Class<?> entityClass, Field field, SoftDelete annotation) {
+    static ResolvedDeletedValue resolveDeletedValue(Class<?> entityClass, Field field, SoftDelete annotation) {
         if (field.getType() == Boolean.class || field.getType() == boolean.class) {
             return new ResolvedDeletedValue(true, null);
         }
@@ -353,38 +353,62 @@ public final class SoftDeleteHelper {
         String escapedTable = validateIdentifier(tableName);
         String escapedColumn = validateIdentifier(columnName);
         ResolvedDeletedValue resolved = resolveDeletedValue(entityClass, field, annotation);
-        // 行数保护：先 COUNT 再执行（仅计数实际会被更新的行，即未软删除的行）
-        // TOCTOU 说明：COUNT 和 UPDATE 是两条独立的原生 SQL，无法使用 JPA 悲观锁（H2 不支持 FOR UPDATE + COUNT）。
+        // 解析时间戳字段
+        String timestampColumn = resolveTimestampColumn(entityClass, annotation);
+        // 行数保护：使用轻量预检（SELECT 1 WHERE ... LIMIT maxRows+1）快速探测是否超限，
+        // 仅在预检未触发时执行精确 COUNT，避免全表扫描开销。
+        // TOCTOU 说明：预检和 UPDATE 是两条独立的原生 SQL，无法使用 JPA 悲观锁。
         // 竞态窗口内并发 INSERT 可能导致 UPDATE 影响行数超过 maxRows。
         // 安全网：UPDATE 执行后检查 updated > maxRows，超出时抛出 IllegalStateException。
         // 由于此方法在 @Transactional 上下文中调用，异常会传播到事务边界并触发回滚。
         if (maxRows > 0) {
-            var countQuery = em.createNativeQuery("SELECT COUNT(*) FROM " + escapedTable + " WHERE "
-                + (resolved.booleanField() ? "(" + escapedColumn + " = ?1 OR " + escapedColumn + " IS NULL)"
-                    : "(" + escapedColumn + " != ?1 OR " + escapedColumn + " IS NULL)"));
+            String wherePart = resolved.booleanField()
+                ? "(" + escapedColumn + " = ?1 OR " + escapedColumn + " IS NULL)"
+                : "(" + escapedColumn + " != ?1 OR " + escapedColumn + " IS NULL)";
+            // 轻量预检：SELECT 1 WHERE ... LIMIT maxRows+1
+            var probeQuery = em.createNativeQuery("SELECT 1 FROM " + escapedTable + " WHERE " + wherePart);
             if (resolved.booleanField()) {
-                countQuery.setParameter(1, Boolean.FALSE);
+                probeQuery.setParameter(1, Boolean.FALSE);
             } else {
-                countQuery.setParameter(1, resolved.dbValue());
+                probeQuery.setParameter(1, resolved.dbValue());
             }
-            long rowCount = ((Number)countQuery.getSingleResult()).longValue();
-            if (rowCount > maxRows) {
-                throw new IllegalStateException(
-                    "softDeleteAll would affect " + rowCount + " rows, which exceeds the limit of " + maxRows
-                        + ". Use softDeleteByIds() with explicit ID lists, or increase the limit.");
+            probeQuery.setMaxResults(maxRows + 1);
+            java.util.List<?> probeResults = probeQuery.getResultList();
+            if (probeResults.size() > maxRows) {
+                // 预检命中上限：执行精确 COUNT 确认
+                var countQuery = em.createNativeQuery("SELECT COUNT(*) FROM " + escapedTable + " WHERE " + wherePart);
+                if (resolved.booleanField()) {
+                    countQuery.setParameter(1, Boolean.FALSE);
+                } else {
+                    countQuery.setParameter(1, resolved.dbValue());
+                }
+                long rowCount = ((Number)countQuery.getSingleResult()).longValue();
+                if (rowCount > maxRows) {
+                    throw new IllegalStateException(
+                        "softDeleteAll would affect " + rowCount + " rows, which exceeds the limit of " + maxRows
+                            + ". Use softDeleteByIds() with explicit ID lists, or increase the limit.");
+                }
             }
         }
         int updated;
         if (resolved.booleanField()) {
+            String setClause = escapedColumn + " = ?1";
+            if (timestampColumn != null) {
+                setClause += ", " + timestampColumn + " = CURRENT_TIMESTAMP";
+            }
             var q = em
-                .createNativeQuery("UPDATE " + escapedTable + " SET " + escapedColumn + " = ?1 WHERE " + escapedColumn
+                .createNativeQuery("UPDATE " + escapedTable + " SET " + setClause + " WHERE " + escapedColumn
                     + " = ?2 OR " + escapedColumn + " IS NULL")
                 .setParameter(1, Boolean.TRUE)                .setParameter(2, Boolean.FALSE);
             updated = q.executeUpdate();
         } else {
+            String setClause = escapedColumn + " = ?1";
+            if (timestampColumn != null) {
+                setClause += ", " + timestampColumn + " = CURRENT_TIMESTAMP";
+            }
             String whereClause = escapedColumn + " != ?1 OR " + escapedColumn + " IS NULL";
             var q =
-                em.createNativeQuery("UPDATE " + escapedTable + " SET " + escapedColumn + " = ?1 WHERE " + whereClause)
+                em.createNativeQuery("UPDATE " + escapedTable + " SET " + setClause + " WHERE " + whereClause)
                     .setParameter(1, resolved.dbValue());
             updated = q.executeUpdate();
         }
@@ -461,6 +485,8 @@ public final class SoftDeleteHelper {
         String escapedColumn = validateIdentifier(columnName);
         String escapedIdColumn = validateIdentifier(idFieldName);
         ResolvedDeletedValue resolved = resolveDeletedValue(entityClass, field, annotation);
+        // 解析时间戳字段
+        String timestampColumn = resolveTimestampColumn(entityClass, annotation);
         // 使用命名参数替代位置参数以避免某些 JPA 实现中的索引冲突
         String setParamName = "deletedValue";
         String setClause;
@@ -474,6 +500,9 @@ public final class SoftDeleteHelper {
             setClause = escapedColumn + " = :" + setParamName;
             useParamBinding = true;
             deletedParamValue = resolved.dbValue();
+        }
+        if (timestampColumn != null) {
+            setClause += ", " + timestampColumn + " = CURRENT_TIMESTAMP";
         }
         // 使用 InClauseBuilder.getMaxInClauseSize() 替代硬编码的 1000
         int batchSize = com.zsubera.jpa.util.InClauseBuilder.getMaxInClauseSize();
@@ -641,6 +670,8 @@ public final class SoftDeleteHelper {
         }
         SoftDelete annotation = field.getAnnotation(SoftDelete.class);
         ResolvedDeletedValue resolved = resolveDeletedValue(entityClass, field, annotation);
+        // 解析时间戳字段
+        Field timestampField = resolveTimestampField(entityClass, annotation);
         int total = 0;
         for (ID id : ids) {
             if (id == null) {
@@ -656,13 +687,16 @@ public final class SoftDeleteHelper {
                 } else {
                     field.set(entity, resolved.dbValue());
                 }
-                em.merge(entity);
+                if (timestampField != null) {
+                    setTimestampValue(entity, timestampField);
+                }
                 total++;
             } catch (IllegalAccessException e) {
                 throw new MyJpaPlusException("Failed to set soft delete field '" + fieldName + "' on " + entityClass.getName(), e);
             }
         }
         if (total > 0) {
+            em.flush();
             publishEvent(entityClass, total);
         }
         return total;
@@ -671,8 +705,67 @@ public final class SoftDeleteHelper {
     /**
      * 解析实体类对应的数据库表名。
      */
-    private static String resolveTableName(Class<?> entityClass) {
+    static String resolveTableName(Class<?> entityClass) {
         return IdentifierValidator.resolveTableName(entityClass);
+    }
+
+    /**
+     * 解析 @SoftDelete 注解中指定的时间戳字段对应的数据库列名。
+     *
+     * @param entityClass 实体类
+     * @param annotation SoftDelete 注解
+     * @return 列名，如果未指定时间戳字段则返回 null
+     */
+    static String resolveTimestampColumn(Class<?> entityClass, SoftDelete annotation) {
+        if (annotation == null || annotation.deletedTimestampField().isEmpty()) {
+            return null;
+        }
+        String fieldName = annotation.deletedTimestampField();
+        return validateIdentifier(resolveColumnName(entityClass, fieldName));
+    }
+
+    /**
+     * 解析 @SoftDelete 注解中指定的时间戳字段的 Field 对象。
+     *
+     * @param entityClass 实体类
+     * @param annotation SoftDelete 注解
+     * @return Field 对象，如果未指定时间戳字段或字段不存在则返回 null
+     */
+    static Field resolveTimestampField(Class<?> entityClass, SoftDelete annotation) {
+        if (annotation == null || annotation.deletedTimestampField().isEmpty()) {
+            return null;
+        }
+        String fieldName = annotation.deletedTimestampField();
+        Field f = getField(entityClass, fieldName);
+        if (f == null) {
+            log.warn("SoftDelete deletedTimestampField '{}' not found in {}. Ignoring timestamp.",
+                fieldName, entityClass.getName());
+        }
+        return f;
+    }
+
+    /**
+     * 设置实体的时间戳字段为当前时间。支持 LocalDateTime、Instant、Date、Timestamp 类型。
+     *
+     * @param entity 实体实例
+     * @param timestampField 时间戳字段
+     * @throws IllegalAccessException 如果字段不可访问
+     */
+    static void setTimestampValue(Object entity, Field timestampField) throws IllegalAccessException {
+        Class<?> type = timestampField.getType();
+        if (type == java.time.LocalDateTime.class) {
+            timestampField.set(entity, java.time.LocalDateTime.now());
+        } else if (type == java.time.Instant.class) {
+            timestampField.set(entity, java.time.Instant.now());
+        } else if (type == java.util.Date.class) {
+            timestampField.set(entity, new java.util.Date());
+        } else if (type == java.sql.Timestamp.class) {
+            timestampField.set(entity, java.sql.Timestamp.from(java.time.Instant.now()));
+        } else {
+            log.warn("SoftDelete deletedTimestampField type {} is not supported. "
+                + "Supported types: LocalDateTime, Instant, Date, Timestamp. Ignoring timestamp.",
+                type.getName());
+        }
     }
 
     /**
@@ -680,7 +773,7 @@ public final class SoftDeleteHelper {
      *
      * <p>支持字段访问和属性访问两种模式。先查字段上的 @Column，再查 getter 上的 @Column。</p>
      */
-    private static String resolveColumnName(Class<?> entityClass, String fieldName) {
+    static String resolveColumnName(Class<?> entityClass, String fieldName) {
         String cacheKey = getEntityBaseName(entityClass) + "#" + fieldName;
         String result = COLUMN_NAME_CACHE.get(cacheKey);
         if (result != null) return result;
@@ -726,7 +819,7 @@ public final class SoftDeleteHelper {
      *
      * <p>支持字段访问和属性访问两种模式（@Id 可能在字段上也可能在 getter 方法上）。</p>
      */
-    private static String resolveIdColumnName(Class<?> entityClass) {
+    static String resolveIdColumnName(Class<?> entityClass) {
         String cacheKey = getEntityBaseName(entityClass);
         String result = ID_COLUMN_NAME_CACHE.get(cacheKey);
         if (result != null) return result;
@@ -895,7 +988,7 @@ public final class SoftDeleteHelper {
                 "Cannot resolve @SoftDelete field '" + fieldName + "' in " + entityClass.getName()
                     + ". Ensure the field exists and is accessible.");
         }
-        String cacheKey = entityClass.getName() + "#" + fieldName;
+        String cacheKey = getEntityBaseName(entityClass) + "#" + fieldName;
         ResolvedDeletedValue resolved = RESOLVED_VALUE_CACHE.computeIfAbsent(cacheKey, k -> {
             SoftDelete annotation = ANNOTATION_CACHE.computeIfAbsent(entityClass, cls -> {
                 Field f = getField(cls, fieldName);
@@ -978,7 +1071,7 @@ public final class SoftDeleteHelper {
         return NO_FIELD_SENTINEL.equals(result) ? null : result;
     }
 
-    private static Field getField(Class<?> entityClass, String fieldName) {
+    static Field getField(Class<?> entityClass, String fieldName) {
         String cacheKey = entityClass.getName() + "#" + fieldName;
         return FIELD_OBJECT_CACHE.computeIfAbsent(cacheKey, k -> {
             Class<?> current = entityClass;
@@ -1101,5 +1194,6 @@ public final class SoftDeleteHelper {
         FIELDS_CACHE.clear();
         COLUMN_NAME_CACHE.clear();
         ID_COLUMN_NAME_CACHE.clear();
+        RESOLVED_VALUE_CACHE.clear();
     }
 }

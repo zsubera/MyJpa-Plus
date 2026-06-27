@@ -29,6 +29,8 @@ public final class GlobalConfigHolder {
 
     private GlobalConfigHolder() {}
 
+    private static final MyJpaPlusGlobalConfig DEFAULT_CONFIG = new MyJpaPlusGlobalConfig();
+
     /**
      * 当前全局配置引用。volatile 保证多线程可见性。
      */
@@ -93,7 +95,7 @@ public final class GlobalConfigHolder {
         }
         // 回退到静态持有实例
         MyJpaPlusGlobalConfig c = config;
-        return c != null ? c : new MyJpaPlusGlobalConfig();
+        return c != null ? c : DEFAULT_CONFIG;
     }
 
     /**

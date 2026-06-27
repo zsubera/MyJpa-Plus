@@ -139,7 +139,7 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
      *
      * <p>
      * <strong>注意：</strong>不能在 or() 或 not() 消费者内部调用此方法，因为 groupStack 是可变状态，
-     * 拷贝会导致后续条件添加到根节点而非当前条件组。此时会抛出 {@link QueryBuildException}。
+     * 拷贝会导致后续条件添加到根节点而非当前条件组。
      *
      * @return QuerySpec 的独立副本
      * @throws QueryBuildException 如果在 or()/not() 消费者内部调用
@@ -258,6 +258,9 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
         } else if (node instanceof ConditionNode.MultiLikeNode mln) {
             return new ConditionNode.MultiLikeNode(mln.keyword, mln.fieldNames.clone());
         } else if (node instanceof ConditionNode.FuncNode fn) {
+            // ponytail: FuncNode constructor already clones params — the .clone() here is
+            // redundant but harmless; keeping both because FuncNode is package-private
+            // and the constructor's clone is a defensive invariant we don't want to relax.
             return new ConditionNode.FuncNode(fn.functionName, fn.params.clone());
         }
         // ponytail: CollectionNode、ExistsNode、InSubQueryNode、RawNode 为不可变/共享节点，按引用返回

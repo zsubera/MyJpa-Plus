@@ -121,4 +121,37 @@ public @interface SoftDelete {
      * @return 表示"已删除"的字符串值，默认为 "1"
      */
     String deletedStringValue() default "1";
+
+    /**
+     * 指定用于存储软删除时间戳的字段名。
+     *
+     * <p>
+     * 当此属性非空时，软删除操作会自动将指定字段设置为当前时间戳。
+     * 支持的字段类型：
+     * <ul>
+     * <li>{@code java.time.LocalDateTime}</li>
+     * <li>{@code java.time.Instant}</li>
+     * <li>{@code java.util.Date}</li>
+     * <li>{@code java.sql.Timestamp}</li>
+     * </ul>
+     *
+     * <p>
+     * 如果指定的字段不存在或类型不兼容，软删除操作仍将正常执行（仅忽略时间戳设置）。
+     *
+     * <p>
+     * 使用示例：
+     *
+     * <pre>{@code
+     * @Entity
+     * public class User {
+     *     @SoftDelete(deletedTimestampField = "deletedAt")
+     *     private Boolean deleted = false;
+     *
+     *     private LocalDateTime deletedAt;
+     * }
+     * }</pre>
+     *
+     * @return 软删除时间戳字段名，默认为空字符串（不自动设置时间戳）
+     */
+    String deletedTimestampField() default "";
 }

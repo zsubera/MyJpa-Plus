@@ -387,7 +387,7 @@ class EntityFieldExtractorTest {
     void resolveJavaFieldToDbColumn_parentClassField() {
         EntityFieldExtractor<SubClassEntity> extractor = new EntityFieldExtractor<>(SubClassEntity.class);
         String col = extractor.resolveJavaFieldToDbColumn("inheritedField");
-        assertEquals("inheritedField", col);
+        assertEquals("inherited_field", col);
     }
 
     @Test

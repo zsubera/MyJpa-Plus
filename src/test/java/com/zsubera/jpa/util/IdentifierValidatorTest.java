@@ -3,6 +3,7 @@ package com.zsubera.jpa.util;
 import static org.junit.jupiter.api.Assertions.*;
 
 import com.zsubera.jpa.exception.MyJpaPlusException;
+import com.zsubera.jpa.exception.SecurityViolationException;
 import org.junit.jupiter.api.Test;
 
 class IdentifierValidatorTest {
@@ -38,39 +39,39 @@ class IdentifierValidatorTest {
     }
 
     @Test
-    void validate_null_throwsException() {
-        assertThrows(MyJpaPlusException.class, () -> IdentifierValidator.validate(null));
+    void validate_null_throwsSecurityViolationException() {
+        assertThrows(SecurityViolationException.class, () -> IdentifierValidator.validate(null));
     }
 
     @Test
-    void validate_empty_throwsException() {
-        assertThrows(MyJpaPlusException.class, () -> IdentifierValidator.validate(""));
+    void validate_empty_throwsSecurityViolationException() {
+        assertThrows(SecurityViolationException.class, () -> IdentifierValidator.validate(""));
     }
 
     @Test
-    void validate_identifierWithSpaces_throwsException() {
-        assertThrows(MyJpaPlusException.class, () -> IdentifierValidator.validate("user name"));
+    void validate_identifierWithSpaces_throwsSecurityViolationException() {
+        assertThrows(SecurityViolationException.class, () -> IdentifierValidator.validate("user name"));
     }
 
     @Test
-    void validate_identifierWithSpecialChars_throwsException() {
-        assertThrows(MyJpaPlusException.class, () -> IdentifierValidator.validate("user@name"));
+    void validate_identifierWithSpecialChars_throwsSecurityViolationException() {
+        assertThrows(SecurityViolationException.class, () -> IdentifierValidator.validate("user@name"));
     }
 
     @Test
-    void validate_identifierWithSemicolon_throwsException() {
-        assertThrows(MyJpaPlusException.class, () -> IdentifierValidator.validate("users; DROP TABLE"));
+    void validate_identifierWithSemicolon_throwsSecurityViolationException() {
+        assertThrows(SecurityViolationException.class, () -> IdentifierValidator.validate("users; DROP TABLE"));
     }
 
     @Test
-    void validate_identifierWithSingleQuote_throwsException() {
-        assertThrows(MyJpaPlusException.class, () -> IdentifierValidator.validate("user's"));
+    void validate_identifierWithSingleQuote_throwsSecurityViolationException() {
+        assertThrows(SecurityViolationException.class, () -> IdentifierValidator.validate("user's"));
     }
 
     @Test
-    void validate_identifierTooLong_throwsException() {
+    void validate_identifierTooLong_throwsSecurityViolationException() {
         String longIdentifier = "a".repeat(129);
-        assertThrows(MyJpaPlusException.class, () -> IdentifierValidator.validate(longIdentifier));
+        assertThrows(SecurityViolationException.class, () -> IdentifierValidator.validate(longIdentifier));
     }
 
     @Test

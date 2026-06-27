@@ -51,13 +51,23 @@ public class OptimisticLockRetryAdvisor {
         // method.getAnnotation() 在代理接口方法上可能返回 null
         RetryOnOptimisticLock annotation = AnnotationUtils.findAnnotation(method, RetryOnOptimisticLock.class);
         if (annotation == null) {
-            // 回退：从目标方法查找（代理接口方法上可能返回 null）
+            // 回退：从目标类及其实现的接口查找（CGLIB 代理场景下接口注解可能丢失）
             try {
                 Method targetMethod =
                     pjp.getTarget().getClass().getMethod(method.getName(), method.getParameterTypes());
                 annotation = AnnotationUtils.findAnnotation(targetMethod, RetryOnOptimisticLock.class);
             } catch (NoSuchMethodException e) {
-                // 目标方法未找到，按无注解处理
+                // 目标方法未找到，尝试遍历接口
+                for (Class<?> iface : pjp.getTarget().getClass().getInterfaces()) {
+                    try {
+                        Method ifaceMethod = iface.getMethod(method.getName(), method.getParameterTypes());
+                        annotation = AnnotationUtils.findAnnotation(ifaceMethod, RetryOnOptimisticLock.class);
+                        if (annotation != null) {
+                            break;
+                        }
+                    } catch (NoSuchMethodException ignored) {
+                    }
+                }
             }
         }
         if (annotation == null) {

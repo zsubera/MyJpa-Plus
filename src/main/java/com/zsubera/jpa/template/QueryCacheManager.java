@@ -131,7 +131,52 @@ public class QueryCacheManager implements CacheAdapter {
     /** clear() 调用计数器，用于 put() 检测并发 clear() 后丢弃写入。 */
     private final java.util.concurrent.atomic.AtomicLong clearGeneration = new java.util.concurrent.atomic.AtomicLong(0);
 
+    /**
+     * 前缀索引，将键的前缀（冒号前部分）映射到该前缀下的所有缓存键集合。
+     * 用于将 {@link #evictByPrefix(String)} 从 O(n) 降低到 O(k)（k 为匹配条目数）。
+     *
+     * <p>
+     * 使用 {@link java.util.concurrent.CopyOnWriteArraySet} 因为前缀集合通常较小（<100），
+     * 且写操作（put/evict）远少于读操作（evictByPrefix）。
+     */
+    private final java.util.concurrent.ConcurrentMap<String, java.util.Set<String>> prefixIndex =
+        new java.util.concurrent.ConcurrentHashMap<>();
+
     private volatile int maxEntries;
+
+    /**
+     * 从缓存键中提取前缀（冒号前的部分）。例如 {@code "User:abc123:Sort"} 返回 {@code "User"}。
+     * 如果键不包含冒号，返回整个键。
+     *
+     * @param key 缓存键
+     * @return 键的前缀
+     */
+    private static String extractPrefix(String key) {
+        int colonIdx = key.indexOf(':');
+        return colonIdx > 0 ? key.substring(0, colonIdx) : key;
+    }
+
+    /**
+     * 向前缀索引中添加一个键。
+     */
+    private void addToPrefixIndex(String key) {
+        String prefix = extractPrefix(key);
+        prefixIndex.computeIfAbsent(prefix, k -> new java.util.concurrent.CopyOnWriteArraySet<>()).add(key);
+    }
+
+    /**
+     * 从前缀索引中移除一个键。
+     */
+    private void removeFromPrefixIndex(String key) {
+        String prefix = extractPrefix(key);
+        java.util.Set<String> keys = prefixIndex.get(prefix);
+        if (keys != null) {
+            keys.remove(key);
+            if (keys.isEmpty()) {
+                prefixIndex.remove(prefix, keys);
+            }
+        }
+    }
 
     /**
      * 创建使用默认最大条目数的 QueryCacheManager。
@@ -157,6 +202,9 @@ public class QueryCacheManager implements CacheAdapter {
     /**
      * 设置最大缓存条目数。
      *
+     * <p>
+     * 如果新值小于当前缓存条目数，将立即触发驱逐以将缓存缩减到新容量。
+     *
      * @param maxEntries 最大缓存条目数
      * @throws IllegalArgumentException 如果 maxEntries 不是正数
      */
@@ -165,6 +213,9 @@ public class QueryCacheManager implements CacheAdapter {
             throw new IllegalArgumentException("maxEntries must be positive");
         }
         this.maxEntries = maxEntries;
+        if (store.size() > maxEntries) {
+            evictIfNeeded();
+        }
     }
 
     /**
@@ -206,6 +257,7 @@ public class QueryCacheManager implements CacheAdapter {
             boolean removed = store.remove(key, result);
             if (removed) {
                 insertionTimestamps.remove(key);
+                removeFromPrefixIndex(key);
                 log.debug("Cache expired for key: {}", key);
             }
             return null;
@@ -266,12 +318,14 @@ public class QueryCacheManager implements CacheAdapter {
             insertionTimestamps.put(key, System.nanoTime());
         } else {
             insertionTimestamps.put(key, System.nanoTime());
+            addToPrefixIndex(key);
         }
 
         // 如果 clear() 在 put 期间发生，丢弃本次写入
         if (clearGeneration.get() != genBefore) {
             store.remove(key);
             insertionTimestamps.remove(key);
+            removeFromPrefixIndex(key);
             return false;
         }
 
@@ -294,11 +348,13 @@ public class QueryCacheManager implements CacheAdapter {
             if (val == null) {
                 // 陈旧条目（已从 store 移除），清理
                 insertionTimestamps.remove(oldest);
+                removeFromPrefixIndex(oldest);
                 attempts++;
                 continue;
             }
             if (store.remove(oldest, val)) {
                 insertionTimestamps.remove(oldest);
+                removeFromPrefixIndex(oldest);
                 log.debug("Post-put evicted oldest cache entry: {}", oldest);
             } else {
                 // CAS 失败：条目被并发替换或移除，保留条目避免漂移
@@ -348,10 +404,12 @@ public class QueryCacheManager implements CacheAdapter {
             CachedQueryResult<?> val = store.get(oldest);
             if (val == null) {
                 insertionTimestamps.remove(oldest);
+                removeFromPrefixIndex(oldest);
                 continue;
             }
             if (store.remove(oldest, val)) {
                 insertionTimestamps.remove(oldest);
+                removeFromPrefixIndex(oldest);
                 log.debug("Evicted oldest cache entry: {}", oldest);
                 return;
             }
@@ -404,6 +462,7 @@ public class QueryCacheManager implements CacheAdapter {
                 String k = it.next();
                 if (!store.containsKey(k)) {
                     it.remove();
+                    removeFromPrefixIndex(k);
                     cleaned++;
                 }
             }
@@ -419,6 +478,7 @@ public class QueryCacheManager implements CacheAdapter {
                 String k = it.next();
                 if (!store.containsKey(k)) {
                     it.remove();
+                    removeFromPrefixIndex(k);
                     cleaned++;
                 }
             }
@@ -465,6 +525,8 @@ public class QueryCacheManager implements CacheAdapter {
     public void resetStats() {
         hitCount.set(0);
         missCount.set(0);
+        localHits.set(0);
+        localMisses.set(0);
     }
 
     /**
@@ -487,6 +549,7 @@ public class QueryCacheManager implements CacheAdapter {
             if (entry.getValue().isExpired()) {
                 if (store.remove(entry.getKey(), entry.getValue())) {
                     insertionTimestamps.remove(entry.getKey());
+                    removeFromPrefixIndex(entry.getKey());
                     log.debug("Cache expired for key: {}", entry.getKey());
                 }
             }
@@ -504,6 +567,7 @@ public class QueryCacheManager implements CacheAdapter {
         CachedQueryResult<?> val = store.remove(key);
         if (val != null) {
             insertionTimestamps.remove(key);
+            removeFromPrefixIndex(key);
         }
         log.debug("Cache evicted for key: {}", key);
     }
@@ -519,9 +583,11 @@ public class QueryCacheManager implements CacheAdapter {
     public void clear() {
         evictionLock.lock();
         try {
-            insertionTimestamps.clear();
-            store.clear();
+            // ponytail: 先递增 generation，让并发 put() 看到新 generation 后丢弃写入，消除僵尸条目窗口
             clearGeneration.incrementAndGet();
+            insertionTimestamps.clear();
+            prefixIndex.clear();
+            store.clear();
         } finally {
             evictionLock.unlock();
         }
@@ -532,9 +598,8 @@ public class QueryCacheManager implements CacheAdapter {
      * 按键前缀批量驱逐缓存条目。适用于实体变更后清除相关查询缓存。
      *
      * <p>
-     * <strong>性能说明：</strong>此方法遍历整个缓存，时间复杂度为 O(n)。由于该方法在事务提交后调用（非热路径），
-     * 默认 10000 条目下的遍历开销可接受（约 0.1ms）。如果缓存条目数极大（>100000）且前缀驱逐频繁，
-     * 建议使用独立的缓存实例按实体类型隔离，或替换为支持前缀索引的分布式缓存实现。
+     * <strong>性能说明：</strong>使用前缀索引将复杂度从 O(n) 降低到 O(k)（k 为匹配条目数）。
+     * 前缀索引在 {@link #put} 时自动维护，索引条目数等于实体类型数（通常 <100），开销极小。
      *
      * <p>
      * 示例：
@@ -553,13 +618,30 @@ public class QueryCacheManager implements CacheAdapter {
             return 0;
         }
         int count = 0;
-        java.util.Iterator<Map.Entry<String, CachedQueryResult<?>>> it = store.entrySet().iterator();
-        while (it.hasNext()) {
-            Map.Entry<String, CachedQueryResult<?>> entry = it.next();
-            if (entry.getKey().startsWith(keyPrefix)) {
-                it.remove();
-                insertionTimestamps.remove(entry.getKey());
-                count++;
+        // 从前缀索引中获取匹配的键集合
+        String prefix = keyPrefix.endsWith(":") ? keyPrefix.substring(0, keyPrefix.length() - 1) : keyPrefix;
+        java.util.Set<String> indexedKeys = prefixIndex.get(prefix);
+        if (indexedKeys != null) {
+            // 复制集合避免 ConcurrentModificationException
+            for (String key : new java.util.ArrayList<>(indexedKeys)) {
+                if (key.startsWith(keyPrefix)) {
+                    store.remove(key);
+                    insertionTimestamps.remove(key);
+                    indexedKeys.remove(key);
+                    count++;
+                }
+            }
+            if (indexedKeys.isEmpty()) {
+                prefixIndex.remove(prefix, indexedKeys);
+            }
+        } else {
+            // ponytail: 前缀索引只存储第一级前缀，多段前缀需回退到全量扫描
+            for (java.util.Map.Entry<String, CachedQueryResult<?>> entry : store.entrySet()) {
+                if (entry.getKey().startsWith(keyPrefix)) {
+                    store.remove(entry.getKey());
+                    insertionTimestamps.remove(entry.getKey());
+                    count++;
+                }
             }
         }
         if (count > 0) {

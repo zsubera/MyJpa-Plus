@@ -147,7 +147,8 @@ public class ProjectionSpec<T> {
         }
 
         @Override
-        @SuppressFBWarnings("EI_EXPOSE_REP")
+        @SuppressFBWarnings(value = "EI_EXPOSE_REP",
+            justification = "ConditionBuilder interface requires mutable list return; callers own the lifecycle")
         public List<ConditionNode> conditions() {
             return conditions;
         }
@@ -165,28 +166,31 @@ public class ProjectionSpec<T> {
     /**
      * 创建投影查询构建器实例。
      *
+     * <p>
+     * 如果实体有 {@code @SoftDelete} 字段，软删除过滤将自动启用。
+     * 使用 {@link #withSoftDeleteFilter()} 显式启用，或 {@link #withoutSoftDeleteFilter()} 禁用。
+     *
      * @param entityClass 要查询的实体类
      */
     public ProjectionSpec(Class<T> entityClass) {
         this.entityClass = entityClass;
+        if (SoftDeleteHelper.findSoftDeleteField(entityClass) != null) {
+            this.softDeleteEnabled = true;
+        }
     }
 
     /**
      * 创建默认启用软删除过滤的 ProjectionSpec 实例。
      *
      * <p>
-     * 使用此工厂方法可避免手动调用 {@link #withSoftDeleteFilter()}， 减少开发者遗忘启用安全过滤的风险。软删除过滤仅在实体有 {@code @SoftDelete} 字段时启用。
+     * 等价于 {@code new ProjectionSpec<>(entityClass)}，因为默认构造函数现已自动检测并启用软删除过滤。
+     * 保留此方法仅为向后兼容。
      *
      * @param entityClass 要查询的实体类
      * @return 配置好的 ProjectionSpec 实例
      */
     public static <T> ProjectionSpec<T> withDefaults(Class<T> entityClass) {
-        ProjectionSpec<T> spec = new ProjectionSpec<>(entityClass);
-        // 如果实体有 @SoftDelete 字段则自动启用软删除过滤
-        if (SoftDeleteHelper.findSoftDeleteField(entityClass) != null) {
-            spec.softDeleteEnabled = true;
-        }
-        return spec;
+        return new ProjectionSpec<>(entityClass);
     }
 
     /**
@@ -686,6 +690,10 @@ public class ProjectionSpec<T> {
      * <p>
      * <strong>计数说明：</strong>使用 {@code countDistinct(root)} 进行精确计数，避免 JOIN 产生重复行。 对于一对多 JOIN 和复杂主键的场景，考虑使用
      * {@code QuerySpec} 直接进行子查询计数。
+     *
+     * <p>
+     * <strong>HAVING 语义：</strong>多次调用此方法时，之前通过 {@link #having(BiFunction)} 添加的 HAVING 谓词会累积（AND 语义）。
+     * 如需独立查询，请创建新的 {@code ProjectionSpec} 实例。
      *
      * @param em JPA 实体管理器
      * @param pageable 分页信息

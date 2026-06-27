@@ -159,19 +159,12 @@ public final class LambdaUtils {
      * @throws IllegalArgumentException 如果 fn 为 null
      * @throws MyJpaPlusException 如果无法从方法引用中提取属性名称
      */
-    /**
-     * ponytail: 缓存 SerializedLambda 解析结果，避免每次调用都反射。
-     * key = lambda 类名 + 方法名，value = 属性名。使用采样驱逐防止内存泄漏。
-     */
-    private static final com.zsubera.jpa.util.SampledEvictionCache<String, String> PROPERTY_CACHE =
-        new com.zsubera.jpa.util.SampledEvictionCache<>(4096, 0.75, 100, 256);
-
     public static <T> String getPropertyName(SFunction<T, ?> fn) {
         if (fn == null) {
             throw new IllegalArgumentException("SFunction must not be null");
         }
         String key = resolveLambdaKey(fn);
-        String cached = PROPERTY_CACHE.get(key);
+        String cached = CACHE.get(key);
         if (cached != null) {
             return cached;
         }
@@ -186,7 +179,7 @@ public final class LambdaUtils {
             propertyName = resolveViaSerialization(fn);
         }
         IdentifierValidator.validateColumnName(propertyName);
-        PROPERTY_CACHE.put(key, propertyName);
+        CACHE.put(key, propertyName);
         return propertyName;
     }
 
@@ -334,7 +327,6 @@ public final class LambdaUtils {
 
     static void clearCache() {
         CACHE.clear();
-        PROPERTY_CACHE.clear();
     }
 
 

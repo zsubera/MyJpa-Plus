@@ -208,7 +208,10 @@ public class DefaultMyJpaRepository<T, ID> extends SimpleJpaRepository<T, ID> im
         } else {
             AUTO_FILTER_OVERRIDE.set(value);
             // ponytail: 注册事务完成后清理，作为 try/finally 的安全网
-            registerTransactionCleanup();
+            // 仅在没有外层 withAutoFilterOverride 时注册，避免嵌套场景下 afterCompletion 清除外层值
+            if (previous == null) {
+                registerTransactionCleanup();
+            }
         }
         try {
             return supplier.get();

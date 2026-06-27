@@ -133,7 +133,7 @@ public final class PageableHelper {
                 urlObj = em.getEntityManagerFactory().getProperties().get("hibernate.connection.url");
             }
             if (urlObj != null) {
-                String lower = urlObj.toString().toLowerCase();
+                String lower = urlObj.toString().toLowerCase(java.util.Locale.ROOT);
                 if (lower.contains("postgresql")) {
                     return 100;
                 }

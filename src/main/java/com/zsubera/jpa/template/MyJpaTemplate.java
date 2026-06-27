@@ -373,8 +373,8 @@ public class MyJpaTemplate implements MyJpaTemplateOperations {
         if (ttlSeconds < 0) {
             throw new IllegalArgumentException("ttlSeconds must not be negative");
         }
-        // ponytail: 使用 simpleName + ":" 格式，与 CacheInvalidationListener 的 evictByPrefix 匹配
-        String cacheKey = entityClass.getSimpleName() + ":" + spec.cacheKey() + ":" + spec.getSort();
+        // 使用 FQCN 作为缓存键，避免不同包下同名实体类的缓存冲突
+        String cacheKey = entityClass.getName() + ":" + spec.cacheKey() + ":" + spec.getSort();
         List<T> cached = cacheAdapter.get(cacheKey);
         if (cached != null) {
             log.debug("Cache hit for key: {}", cacheKey);

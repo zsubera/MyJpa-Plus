@@ -203,17 +203,16 @@ public class QueryMetricsCollector {
      * 使用迭代器直接采样而非 {@code keySet().toArray()}，避免数组分配。
      */
     private void evictRandomEntry() {
-        int currentSize = metricsMap.size();
-        if (currentSize == 0) {
+        if (metricsMap.isEmpty()) {
             return;
         }
-        int toEvict = Math.max(1, currentSize / 10);
+        int toEvict = Math.max(1, metricsMap.size() / 10);
         java.util.Iterator<String> it = metricsMap.keySet().iterator();
         int evicted = 0;
         java.util.concurrent.ThreadLocalRandom rnd = java.util.concurrent.ThreadLocalRandom.current();
         while (it.hasNext() && evicted < toEvict) {
             it.next();
-            if (rnd.nextInt(currentSize) < toEvict) {
+            if (rnd.nextInt(10) < 1) {
                 it.remove();
                 evicted++;
             }

@@ -417,12 +417,14 @@ class BulkOperationTemplate {
         Throwable failureCause = null;
         boolean shouldContinue = true;
         int iteration = 0;
+        int consecutiveFailures = 0;
         while (shouldContinue) {
             int batchResult;
             batchCount++;
             try {
                 batchResult = batchExecutor.applyAsInt(batchSize);
                 total += batchResult;
+                consecutiveFailures = 0;
                 if (batchResult > 0 && log.isDebugEnabled()) {
                     log.debug("Batch {} committed: {} rows {}ed in this batch (total: {})", operationName, batchResult,
                         operationName, total);
@@ -437,8 +439,10 @@ class BulkOperationTemplate {
             } catch (RuntimeException e) {
                 failedBatchIndex = batchCount;
                 failureCause = e;
-                log.error("Batch {} failed at batch index {}: {}", operationName, failedBatchIndex, e.getMessage(), e);
-                if (failureStrategy == BatchFailureStrategy.ABORT) {
+                consecutiveFailures++;
+                log.error("Batch {} failed at batch index {} (consecutive failures: {}): {}",
+                    operationName, failedBatchIndex, consecutiveFailures, e.getMessage(), e);
+                if (failureStrategy == BatchFailureStrategy.ABORT || consecutiveFailures >= 3) {
                     shouldContinue = false;
                 }
             }
@@ -498,6 +502,7 @@ class BulkOperationTemplate {
         int total = 0;
         int batchResult;
         int iteration = 0;
+        int effectiveLimit = resolveMaxBulkOperationRows();
         do {
             batchResult = batchExecutor.applyAsInt(batchSize);
             total += batchResult;
@@ -511,7 +516,7 @@ class BulkOperationTemplate {
                     operationName, maxBatchIterations, total);
                 break;
             }
-        } while (batchResult > 0 && (maxBulkOperationRows <= 0 || total < maxBulkOperationRows));
+        } while (batchResult > 0 && (effectiveLimit <= 0 || total < effectiveLimit));
         return total;
     }
 }

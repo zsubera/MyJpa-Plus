@@ -57,8 +57,9 @@ class MysqlDialectTest {
 
         SqlWithParams result = dialect.buildUpsertSql("users", insertCols, fieldValues, conflictCols, updateCols);
 
-        assertTrue(result.sql().contains("INSERT IGNORE INTO"));
-        assertFalse(result.sql().contains("ON DUPLICATE KEY UPDATE"));
+        assertFalse(result.sql().contains("INSERT IGNORE"));
+        assertTrue(result.sql().contains("ON DUPLICATE KEY UPDATE"));
+        assertTrue(result.sql().contains("`id` = VALUES(`id`)"));
     }
 
     @Test

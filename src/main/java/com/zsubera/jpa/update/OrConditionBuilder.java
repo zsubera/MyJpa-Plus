@@ -1,7 +1,6 @@
 package com.zsubera.jpa.update;
 
 import com.zsubera.jpa.spec.BulkConditionSupport;
-import com.zsubera.jpa.spec.PredicateHelper;
 import com.zsubera.jpa.spec.SFunction;
 import com.zsubera.jpa.update.AbstractBulkOperationSpec.BulkConditionNode;
 import jakarta.persistence.criteria.CriteriaBuilder;
@@ -99,13 +98,8 @@ public class OrConditionBuilder<T, SELF extends AbstractBulkOperationSpec<T, SEL
                 fieldNames[i] = parent.property(fields[i]);
             }
             String pattern = com.zsubera.jpa.spec.ConditionalMethods.wrapLikePattern(keyword);
-            nodes.add(new BulkConditionNode.LeafNode((root, cb) -> {
-                List<Predicate> likes = new java.util.ArrayList<>();
-                for (String fieldName : fieldNames) {
-                    likes.add(PredicateHelper.like(root, fieldName, pattern, cb, PredicateHelper.LIKE_ESCAPE_CHAR));
-                }
-                return cb.or(likes.toArray(new Predicate[0]));
-            }));
+            nodes.add(new BulkConditionNode.LeafNode(
+                AbstractBulkOperationSpec.buildMultiLikeFn(fieldNames, pattern)));
         }
         return this;
     }

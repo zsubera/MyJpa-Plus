@@ -38,6 +38,7 @@ import org.slf4j.LoggerFactory;
  * @see SlowQueryDataSourceProxy
  * @see SlowQueryDataSourceProxyPostProcessor
  */
+@Deprecated(forRemoval = true)
 public class SqlSlowQueryInterceptor implements StatementInspector {
 
     private static final long serialVersionUID = 1L;
@@ -71,6 +72,7 @@ public class SqlSlowQueryInterceptor implements StatementInspector {
         }
         this.slowQueryThresholdMs = slowQueryThresholdMs;
         this.metricsCollector = metricsCollector;
+        log.warn("SqlSlowQueryInterceptor is disabled — timing is handled by SlowQueryDataSourceProxy at JDBC layer");
     }
 
     /**
