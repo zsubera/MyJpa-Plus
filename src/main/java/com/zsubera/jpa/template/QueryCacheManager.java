@@ -492,11 +492,14 @@ public class QueryCacheManager implements CacheAdapter {
      *
      * @return 命中率（0.0-1.0），如果没有 get 操作则返回 0.0
      */
-    @Override
-    public double getHitRate() {
-        // 刷新本地计数器确保数据最新
+    private void syncCounters() {
         hitCount.addAndGet(localHits.getAndSet(0));
         missCount.addAndGet(localMisses.getAndSet(0));
+    }
+
+    @Override
+    public double getHitRate() {
+        syncCounters();
         long hits = hitCount.get();
         long misses = missCount.get();
         long total = hits + misses;
@@ -510,6 +513,7 @@ public class QueryCacheManager implements CacheAdapter {
      */
     @Override
     public long getHitCount() {
+        syncCounters();
         return hitCount.get();
     }
 
@@ -520,6 +524,7 @@ public class QueryCacheManager implements CacheAdapter {
      */
     @Override
     public long getMissCount() {
+        syncCounters();
         return missCount.get();
     }
 

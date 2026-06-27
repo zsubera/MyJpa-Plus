@@ -15,16 +15,15 @@ class EncryptConverterWarmUpTest {
 
     @BeforeEach
     void setup() {
-        // 设置测试密钥
         System.setProperty("myjpa.encrypt.key", "test-encryption-key-for-warmup-test!");
-        System.setProperty("myjpa-plus.encrypt.skip-salt-check", "true");
+        System.setProperty("myjpa.encrypt.salt", "test-salt-value");
     }
 
     @AfterEach
     void cleanup() {
         EncryptConverter.clearCaches();
         System.clearProperty("myjpa.encrypt.key");
-        System.clearProperty("myjpa-plus.encrypt.skip-salt-check");
+        System.clearProperty("myjpa.encrypt.salt");
     }
 
     /**

@@ -135,7 +135,7 @@ class EncryptConverterExtendedTest {
 
     @Test
     void getKeySpec_cacheFull_throws() throws Exception {
-        Field cacheField = EncryptConverter.class.getDeclaredField("KEY_CACHE");
+        Field cacheField = EncryptionKeyManager.class.getDeclaredField("KEY_CACHE");
         cacheField.setAccessible(true);
         @SuppressWarnings("unchecked")
         ConcurrentHashMap<String, SecretKeySpec> cache = (ConcurrentHashMap<String, SecretKeySpec>)cacheField.get(null);
@@ -245,7 +245,7 @@ class EncryptConverterExtendedTest {
     void getKeyVersion_cachesValue() throws Exception {
         System.setProperty("myjpa.encrypt.key.version", "v2");
         EncryptConverter.clearCaches();
-        Method m = EncryptConverter.class.getDeclaredMethod("getKeyVersion");
+        Method m = EncryptionKeyManager.class.getDeclaredMethod("getKeyVersion");
         m.setAccessible(true);
         String v1 = (String)m.invoke(null);
         String v2 = (String)m.invoke(null);
@@ -256,7 +256,7 @@ class EncryptConverterExtendedTest {
 
     @Test
     void convertToDatabaseColumn_devSaltWarning() {
-        System.clearProperty("myjpa-plus.encrypt.salt");
+        System.clearProperty("myjpa.encrypt.salt");
         System.setProperty("myjpa-plus.encrypt.skip-salt-check", "true");
         EncryptConverter.clearCaches();
         EncryptConverter converter = new EncryptConverter();
@@ -313,8 +313,11 @@ class EncryptConverterExtendedTest {
             Field f = EncryptionKeyManager.class.getDeclaredField("KEY_VALIDATED");
             f.setAccessible(true);
             ((java.util.concurrent.atomic.AtomicBoolean)f.get(null)).set(false);
+            // ponytail: 修正后的 MULTI_KEY_PATTERN 不再将 'invalid-entry' 匹配为多键格式，
+            // 而是将其视为单键 'v1:key11111111111111,invalid-entry'（有效）
             EncryptConverter converter = new EncryptConverter();
-            assertThrows(Exception.class, () -> converter.convertToDatabaseColumn("test"));
+            String encrypted = converter.convertToDatabaseColumn("test");
+            assertNotNull(encrypted);
         } catch (Exception e) {
             fail(e);
         } finally {
