@@ -8,35 +8,19 @@ import org.slf4j.LoggerFactory;
  * Hibernate SQL 慢查询拦截器，实现了 Hibernate {@link StatementInspector} 接口。
  *
  * <p>
- * 通过 Hibernate 的 StatementInspector SPI，在每次 SQL 执行前后注入计时逻辑，
- * 检测慢查询并记录警告日志。计时结果通过 {@link ThreadLocal} 传递给 inspect() 方法，
- * 由 StatementInspector 的实际调用方（hibernate statement executor）配合完成。
+ * <strong>⚠️ 此类已废弃，将在下一个主版本中移除。</strong>
+ * 慢查询监控已迁移至 {@link SlowQueryDataSourceProxy}（JDBC DataSource 代理层），提供更完整的计时覆盖且不依赖 Hibernate。
  *
  * <p>
- * <strong>Hibernate 专有：</strong>此类实现了 {@code org.hibernate.resource.jdbc.spi.StatementInspector}，
- * 仅在 Hibernate 作为 JPA Provider 时可用。由自动配置中的
- * {@code @ConditionalOnClass(name = "org.hibernate.resource.jdbc.spi.StatementInspector")} 条件控制注册。
- *
- * <p>
- * <strong>与非 Hibernate 环境的 Watch 关系：</strong>慢查询监控有两层互补机制：
+ * <strong>迁移指南：</strong>
  * <ul>
- * <li>本类（Hibernate StatementInspector）：在 Hibernate 层面拦截所有 SQL，包括 JPQL/HQL 生成的 SQL</li>
- * <li>{@link SlowQueryDataSourceProxy}（JDBC DataSource 代理）：在 JDBC 层面拦截，覆盖所有 JDBC 访问</li>
+ * <li>如果您使用 Spring Boot 自动配置，无需任何操作 — {@link SlowQueryDataSourceProxyPostProcessor} 会自动注册 {@link SlowQueryDataSourceProxy}</li>
+ * <li>如果您手动注册了 {@code SqlSlowQueryInterceptor}，请移除该 Bean 并确保 {@code myjpa-plus.monitoring.enabled=true}</li>
  * </ul>
- * 两者独立运行，在 Hibernate 环境中同时生效提供冗余监控。
- *
- * <p>
- * 使用方式：
- *
- * <pre>{@code
- * myjpa-plus:
- *   monitoring:
- *     slow-query-threshold-ms: 1000
- *     enabled: true
- * }</pre>
  *
  * @see SlowQueryDataSourceProxy
  * @see SlowQueryDataSourceProxyPostProcessor
+ * @deprecated 已废弃。计时逻辑已迁移至 {@link SlowQueryDataSourceProxy}。此类将在未来版本中移除。
  */
 @Deprecated(forRemoval = true)
 public class SqlSlowQueryInterceptor implements StatementInspector {

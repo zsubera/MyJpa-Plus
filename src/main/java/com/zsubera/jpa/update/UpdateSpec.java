@@ -501,8 +501,9 @@ public class UpdateSpec<T> extends AbstractBulkOperationSpec<T, UpdateSpec<T>> {
         // 有效序列化 SELECT 和 UPDATE 操作。当 pessimisticLock=false 时无此保护，
         // 并发事务可能在 SELECT 和 UPDATE 之间修改/删除行。
         int updated = uq.executeUpdate();
-        // 在 UPDATE 执行后再清除持久化上下文，保留悲观锁直到操作完成
-        em.clear();
+        // 选择性失效 L1 缓存：仅驱逐当前实体类型的缓存数据，
+        // 避免 em.clear() 脱管同一事务中调用方持有的其他实体。
+        evictEntityCache(em, entityClass);
         return updated;
     }
 
@@ -556,6 +557,30 @@ public class UpdateSpec<T> extends AbstractBulkOperationSpec<T, UpdateSpec<T>> {
                     + ". Use set() for non-numeric fields.");
             }
         }
+    }
+
+    /**
+     * 选择性驱逐实体类型的 L1 缓存。优先使用 Hibernate 的 SessionFactory 缓存驱逐（仅影响指定实体类型），
+     * 非 Hibernate 环境回退到 {@code em.clear()}（会影响所有托管实体）。
+     */
+    static void evictEntityCache(EntityManager em, Class<?> entityClass) {
+        if (entityClass == null) {
+            em.clear();
+            return;
+        }
+        try {
+            Class<?> sessionClass = Class.forName("org.hibernate.Session");
+            if (sessionClass.isInstance(em.getDelegate())) {
+                Object session = em.unwrap(sessionClass);
+                Object factory = session.getClass().getMethod("getSessionFactory").invoke(session);
+                Object cache = factory.getClass().getMethod("getCache").invoke(factory);
+                cache.getClass().getMethod("evictEntityData", Class.class).invoke(cache, entityClass);
+                return;
+            }
+        } catch (Exception ignored) {
+            // 非 Hibernate 环境或反射失败，回退到 em.clear()
+        }
+        em.clear();
     }
 
     private java.lang.reflect.Field resolveFieldFromClassHierarchy(String fieldName) {

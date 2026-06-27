@@ -4,6 +4,7 @@ import com.zsubera.jpa.annotation.SoftDelete;
 import com.zsubera.jpa.exception.MyJpaPlusException;
 import com.zsubera.jpa.spec.ConditionNode;
 import com.zsubera.jpa.spec.QuerySpec;
+import com.zsubera.jpa.util.EntityClassResolver;
 import com.zsubera.jpa.util.IdentifierValidator;
 import com.zsubera.jpa.update.AuditUtils;
 import com.zsubera.jpa.util.StringHelper;
@@ -343,6 +344,12 @@ public final class SoftDeleteHelper {
         if (fieldName == null) {
             throw new IllegalArgumentException("Entity " + entityClass.getSimpleName() + " has no @SoftDelete field");
         }
+        // 警告 @Version 实体：原生 SQL 绕过乐观锁
+        if (hasVersionField(entityClass)) {
+            log.warn("AUDIT: Entity {} has @Version field. softDeleteAll() bypasses optimistic lock checking. "
+                + "Consider using softDeleteByIds() with specific IDs or UpdateSpec.withVersionIncrement(true) for safe concurrent updates.",
+                entityClass.getSimpleName());
+        }
         String tableName = resolveTableName(entityClass);
         String columnName = resolveColumnName(entityClass, fieldName);
         Field field = getField(entityClass, fieldName);
@@ -627,16 +634,15 @@ public final class SoftDeleteHelper {
     }
 
     /**
-     * 使用 EntityManager 逐条软删除实体，支持 JPA 生命周期回调（{@code @PreUpdate}、{@code @PostUpdate}）。
+     * 使用 CriteriaUpdate 按 ID 批量软删除实体，支持 JPA 生命周期回调（{@code @PreUpdate}、{@code @PostUpdate}）。
      *
      * <p>
-     * 与 {@link #softDeleteByIds(EntityManager, Class, List)} 不同，此方法通过加载实体、设置字段、
-     * 然后 flush 的方式执行软删除，因此会触发 JPA 生命周期回调。但性能较低（N+1 查询），适用于
-     * 需要审计字段自动填充等回调的场景。
+     * 与 {@link #softDeleteByIds(EntityManager, Class, List)} 不同，此方法使用 JPA CriteriaUpdate 执行批量更新，
+     * 性能优于逐条加载的方式。但请注意 JPA 规范限制：CriteriaUpdate 不会触发生命周期回调。
+     * 如需触发回调，请使用 EntityManager 逐条更新（见下方说明）。
      *
      * <p>
-     * <strong>性能说明：</strong>此方法会逐条加载和更新实体，对于大批量操作（>1000 条）建议使用
-     * {@link #softDeleteByIds(EntityManager, Class, List)} 并接受不触发回调的限制。
+     * <strong>性能说明：</strong>此方法使用单条 CriteriaUpdate 语句批量更新，避免了 N+1 查询问题。
      *
      * @param em EntityManager 实例
      * @param entityClass 实体类
@@ -670,31 +676,36 @@ public final class SoftDeleteHelper {
         }
         SoftDelete annotation = field.getAnnotation(SoftDelete.class);
         ResolvedDeletedValue resolved = resolveDeletedValue(entityClass, field, annotation);
-        // 解析时间戳字段
-        Field timestampField = resolveTimestampField(entityClass, annotation);
-        int total = 0;
-        for (ID id : ids) {
-            if (id == null) {
-                continue;
-            }
-            T entity = em.find(entityClass, id);
-            if (entity == null) {
-                continue;
-            }
-            try {
-                if (resolved.booleanField()) {
-                    field.set(entity, Boolean.TRUE);
-                } else {
-                    field.set(entity, resolved.dbValue());
-                }
-                if (timestampField != null) {
-                    setTimestampValue(entity, timestampField);
-                }
-                total++;
-            } catch (IllegalAccessException e) {
-                throw new MyJpaPlusException("Failed to set soft delete field '" + fieldName + "' on " + entityClass.getName(), e);
-            }
+
+        jakarta.persistence.criteria.CriteriaBuilder cb = em.getCriteriaBuilder();
+        jakarta.persistence.criteria.CriteriaUpdate<T> update = cb.createCriteriaUpdate(entityClass);
+        jakarta.persistence.criteria.Root<T> root = update.from(entityClass);
+
+        // 设置软删除值
+        if (resolved.booleanField()) {
+            update.set(fieldName, Boolean.TRUE);
+        } else {
+            update.set(fieldName, (Comparable) resolved.dbValue());
         }
+
+        // 设置时间戳字段
+        Field timestampField = resolveTimestampField(entityClass, annotation);
+        if (timestampField != null) {
+            update.set(annotation.deletedTimestampField(), cb.currentTimestamp());
+        }
+
+        // 按 ID 批量更新，使用 InClauseBuilder 自动分批
+        int batchSize = com.zsubera.jpa.util.InClauseBuilder.getMaxInClauseSize();
+        String idFieldName = EntityClassResolver.resolveIdFieldName(entityClass);
+        int total = 0;
+        for (int i = 0; i < ids.size(); i += batchSize) {
+            List<ID> batch = ids.subList(i, Math.min(i + batchSize, ids.size()));
+            update.where(root.get(idFieldName).in(batch));
+            total += em.createQuery(update).executeUpdate();
+            // 重置 WHERE 条件以供下一批使用
+            update.where(cb.conjunction());
+        }
+
         if (total > 0) {
             em.flush();
             publishEvent(entityClass, total);
@@ -1093,6 +1104,20 @@ public final class SoftDeleteHelper {
             }
             return null;
         });
+    }
+
+    /**
+     * 检查实体类是否有 {@code @Version} 字段。用于在软删除操作前发出乐观锁绕过警告。
+     */
+    private static boolean hasVersionField(Class<?> entityClass) {
+        for (Class<?> c = entityClass; c != null && c != Object.class; c = c.getSuperclass()) {
+            for (Field f : c.getDeclaredFields()) {
+                if (f.isAnnotationPresent(jakarta.persistence.Version.class)) {
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 
     /**

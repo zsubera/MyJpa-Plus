@@ -266,8 +266,9 @@ public class DeleteSpec<T> extends AbstractBulkOperationSpec<T, DeleteSpec<T>> {
         delete.where(InClauseBuilder.in(cb, deleteRoot.get(idFieldName), ids));
         var dq = em.createQuery(delete);
         int deleted = dq.executeUpdate();
-        // 在 DELETE 执行后再清除持久化上下文，保留悲观锁直到操作完成
-        em.clear();
+        // 选择性失效 L1 缓存：仅驱逐当前实体类型的缓存数据，
+        // 避免 em.clear() 脱管同一事务中调用方持有的其他实体。
+        UpdateSpec.evictEntityCache(em, entityClass);
         return deleted;
     }
 

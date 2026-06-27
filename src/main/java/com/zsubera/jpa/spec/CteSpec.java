@@ -426,7 +426,10 @@ public class CteSpec {
      * @return 查询结果的 Stream（必须由调用方关闭）
      * @throws IllegalStateException 如果 CTE 或主查询未完整配置
      * @throws IllegalArgumentException 如果 em 为 null
+     * @deprecated 此方法返回的 Stream 需要调用方手动关闭，容易导致资源泄漏。
+     *   请使用 {@link #getResultStream(EntityManager, java.util.function.Consumer)} 替代，它会自动管理资源关闭。
      */
+    @Deprecated
     public java.util.stream.Stream<Object[]> getResultStream(EntityManager em) {
         if (em == null) {
             throw new IllegalArgumentException("em must not be null");
