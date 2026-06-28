@@ -270,9 +270,12 @@ public class User {
 // 查询自动过滤已删除记录（无需额外条件）
 List<User> activeUsers = userRepository.findAll();
 
-// Specification API
-Specification<User> notDeleted = SoftDeleteHelper.isNotDeleted(User.class);
-List<User> activeUsers = repository.findAll(notDeleted.and(otherSpec));
+// 查询所有记录（包括已删除的）— 方式一：注解
+@IgnoreSoftDelete
+List<User> allUsers = repository.findAllIncludingDeleted();
+
+// 查询所有记录（包括已删除的）— 方式二：编程式
+List<User> allUsers = SoftDeleteContext.withIgnore(() -> repository.findAll());
 
 // 批量软删除
 SoftDeleteHelper.softDeleteAll(em, User.class, true);

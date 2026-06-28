@@ -18,6 +18,10 @@
   - `CacheInvalidationListener(QueryCacheManager)` → `CacheInvalidationListener(CacheAdapter)`
   - `MyJpaPlusGlobalConfig.setAutoFilterEnabled()` → `setSoftDeleteAutoFilter()`
   - `SoftDeleteContext.captureAndReset()` → `captureAndResetForAsync()` / `withIgnore()`
+  - `MyJpaRepository.findNotDeletedAll(...)` → `findAll(...)` （自动过滤已应用）
+  - `MyJpaRepository.findNotDeletedOne(...)` → `findOne(...)` （自动过滤已应用）
+  - `MyJpaRepository.findNotDeletedById(...)` → `findById(...)` （自动过滤已应用）
+  - `MyJpaRepository.countNotDeleted(...)` → `count(...)` （自动过滤已应用）
 
 - **QuerySpec 拆分**：QuerySpec 内部方法已提取到辅助类，公共 API 不变
 - **@since/@deprecated 注解清理**：移除所有 `@since` 注解
@@ -26,7 +30,6 @@
 
 - **查询 Lambda 便捷重载**：`MyJpaRepository` 和 `MyJpaTemplate` 新增 `Consumer<QuerySpec<T>>` Lambda 重载，无需 `new QuerySpec<>()`
   - `findAll(consumer)`, `findOne(consumer)`, `count(consumer)`, `exists(consumer)`
-  - `findNotDeletedAll(consumer)`, `findNotDeletedOne(consumer)`, `countNotDeleted(consumer)`
   - **注意**：`Consumer<QuerySpec<T>>` 和 `Specification<T>` 都是函数式接口，传 `null` 时需显式转型避免歧义
 - **QuerySpec.of() 工厂方法**：`QuerySpec.of(consumer)` 创建并配置实例，替代 `new QuerySpec<>() + accept()` 两步
 - **虚拟线程支持**：`SoftDeleteContext.withIgnore()` 便捷方法，推荐替代手动 `pushIgnore()`/`popIgnore()`

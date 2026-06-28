@@ -5,6 +5,16 @@
 
 ## [未发布]
 
+### 优化
+- **CteSpec 数据库检测缓存** — 添加 `cachedProductName` 静态缓存，避免每次流式查询都执行反射创建 JDK 动态代理
+- **EntityFieldExtractor getter 缓存** — 添加 `GETTER_CACHE`（ConcurrentReferenceHashMap + 哨兵对象），避免批量操作时每个实体每个字段都执行 `cls.getMethod()` 反射查找
+- **deleteByIdIfExists TOCTOU 修复** — 非软删除路径从 `findById` + `delete` 两步操作改为 `CriteriaDelete` 原子操作
+- **OrJoinGroup 死参数注释** — 添加 ponytail 注释说明 `root`/`joinNode` 参数保留以维持构造函数签名稳定性
+- **EncryptionKeyManager.getSalt 竞态注释** — 添加 ponytail 注释说明 volatile 写入的良性竞态行为
+
+### 移除
+- **移除冗余软删除方法** — `MyJpaRepository` 中的 `findNotDeletedAll`/`findNotDeletedOne`/`findNotDeletedById`/`countNotDeleted` 方法已移除。这些方法与 `DefaultMyJpaRepository` 的自动过滤功能完全重复，直接使用 `findAll`/`findOne`/`findById`/`count` 即可。如需查询包含已删除记录，使用 `@IgnoreSoftDelete` 注解或 `SoftDeleteContext.withIgnore()`
+
 ## [1.3.0] - 2026-06-28
 
 ### 新增
@@ -16,7 +26,6 @@
 - **SoftDeleteBulkExecutor** — 从 `SoftDeleteHelper` 提取批量软删除操作（~450 行），Helper 降至 ~740 行，保留所有公共 API 委托保持向后兼容
 - **查询 Lambda 便捷重载** — `MyJpaRepository` 和 `MyJpaTemplate` 新增 `Consumer<QuerySpec<T>>` Lambda 重载，无需 `new QuerySpec<>()`
   - `findAll(consumer)`, `findOne(consumer)`, `count(consumer)`, `exists(consumer)`
-  - `findNotDeletedAll(consumer)`, `findNotDeletedOne(consumer)`, `countNotDeleted(consumer)`
   - `MyJpaTemplate` 同步新增对应 Lambda 重载
 - **QuerySpec.of() 工厂方法** — 新增 `QuerySpec.of(consumer)` 静态工厂方法，将 3 行创建代码简化为 1 行
 - **虚拟线程兼容性** — `SoftDeleteContext` 和 `DefaultMyJpaRepository` 完全兼容 Java 21+ 虚拟线程
