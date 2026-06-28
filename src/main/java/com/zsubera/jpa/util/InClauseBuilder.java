@@ -308,10 +308,9 @@ public final class InClauseBuilder {
         List<Object> nonNullValues = filtered.nonNullValues();
         boolean hasNull = filtered.hasNull();
         if (nonNullValues.isEmpty()) {
-            log.warn("NOT IN clause has only NULL values. Returning TRUE (no rows filtered). "
-                + "This differs from SQL semantics where NOT IN (NULL) returns no rows. "
-                + "If you need SQL semantics, add an explicit IS NOT NULL condition.");
-            return cb.conjunction();
+            log.warn("NOT IN clause has only NULL values. Per SQL semantics, NOT IN (NULL) "
+                + "returns UNKNOWN for every row, so no rows match. Returning FALSE.");
+            return cb.disjunction();
         }
         Config config = cfg();
         Predicate notInPredicate;
@@ -346,10 +345,9 @@ public final class InClauseBuilder {
         List<Object> nonNullValues = filtered.nonNullValues();
         boolean hasNull = filtered.hasNull();
         if (nonNullValues.isEmpty()) {
-            log.warn("NOT IN clause has only NULL values. Returning TRUE (no rows filtered). "
-                + "This differs from SQL semantics where NOT IN (NULL) returns no rows. "
-                + "If you need SQL semantics, add an explicit IS NOT NULL condition.");
-            return cb.conjunction();
+            log.warn("NOT IN clause has only NULL values. Per SQL semantics, NOT IN (NULL) "
+                + "returns UNKNOWN for every row, so no rows match. Returning FALSE.");
+            return cb.disjunction();
         }
         Config config = cfg();
         Predicate notInPredicate;

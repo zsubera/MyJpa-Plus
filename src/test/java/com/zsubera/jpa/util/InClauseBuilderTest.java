@@ -205,20 +205,20 @@ class InClauseBuilderTest {
     }
 
     @Test
-    void notIn_array_allNullValues_returnsConjunction() {
+    void notIn_array_allNullValues_returnsDisjunction() {
         persistEntity("a", 1);
         CriteriaBuilder cb = em.getCriteriaBuilder();
         CriteriaQuery<TestEntity> cq = cb.createQuery(TestEntity.class);
         Root<TestEntity> root = cq.from(TestEntity.class);
-        // notIn with only NULL values returns conjunction (TRUE) — all rows match
+        // notIn with only NULL values returns disjunction (FALSE) — per SQL semantics, NOT IN (NULL) matches no rows
         Predicate predicate = InClauseBuilder.notIn(cb, root.get("status"), (Object[])null, null, null);
         cq.where(predicate);
         List<TestEntity> result = em.createQuery(cq).getResultList();
-        assertEquals(1, result.size());
+        assertEquals(0, result.size());
     }
 
     @Test
-    void notIn_collection_allNullValues_returnsConjunction() {
+    void notIn_collection_allNullValues_returnsDisjunction() {
         persistEntity("a", 1);
         CriteriaBuilder cb = em.getCriteriaBuilder();
         CriteriaQuery<TestEntity> cq = cb.createQuery(TestEntity.class);
@@ -226,7 +226,7 @@ class InClauseBuilderTest {
         Predicate predicate = InClauseBuilder.notIn(cb, root.get("status"), Arrays.asList(null, null));
         cq.where(predicate);
         List<TestEntity> result = em.createQuery(cq).getResultList();
-        assertEquals(1, result.size());
+        assertEquals(0, result.size());
     }
 
     @Test

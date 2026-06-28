@@ -85,7 +85,7 @@ class BulkOperationTemplate {
                 R r = operation.apply(em);
                 tx.commit();
                 return r;
-            } catch (RuntimeException e) {
+            } catch (RuntimeException | Error e) {
                 if (tx.isActive()) {
                     tx.rollback();
                 }
@@ -438,7 +438,7 @@ class BulkOperationTemplate {
                     log.warn("Batch {} reached safety limit ({} rows). Stopping.", operationName, ABSOLUTE_MAX_BATCH_ROWS);
                     shouldContinue = false;
                 }
-            } catch (RuntimeException e) {
+            } catch (RuntimeException | Error e) {
                 failedBatchIndex = batchCount - 1;
                 failureCause = e;
                 consecutiveFailures++;

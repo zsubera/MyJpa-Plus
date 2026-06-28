@@ -35,9 +35,9 @@ class MaskSerializerTest {
     }
 
     @Test
-    @DisplayName("EMAIL mask: no @ returns as-is")
+    @DisplayName("EMAIL mask: no @ returns fully masked")
     void shouldNotMaskInvalidEmail() {
-        assertEquals("invalid", MaskSerializer.mask("invalid", MaskType.EMAIL));
+        assertEquals("*******", MaskSerializer.mask("invalid", MaskType.EMAIL));
     }
 
     @Test
@@ -72,9 +72,9 @@ class MaskSerializerTest {
     }
 
     @Test
-    @DisplayName("NAME mask: single-char name returns as-is")
+    @DisplayName("NAME mask: single-char name returns masked")
     void shouldNotMaskSingleCharName() {
-        assertEquals("\u5f20", MaskSerializer.mask("\u5f20", MaskType.NAME));
+        assertEquals("*", MaskSerializer.mask("\u5f20", MaskType.NAME));
     }
 
     @Test
@@ -190,9 +190,9 @@ class MaskSerializerTest {
     }
 
     @Test
-    @DisplayName("ADDRESS mask: short address (<=2 chars)")
+    @DisplayName("ADDRESS mask: short address (<=2 chars) returns fully masked")
     void shouldNotMaskShortAddress() {
-        assertEquals("AB", MaskSerializer.mask("AB", MaskType.ADDRESS));
+        assertEquals("**", MaskSerializer.mask("AB", MaskType.ADDRESS));
     }
 
     @Test
@@ -208,9 +208,9 @@ class MaskSerializerTest {
     }
 
     @Test
-    @DisplayName("LICENSE_PLATE mask: single char")
+    @DisplayName("LICENSE_PLATE mask: single char returns masked")
     void shouldNotMaskSingleCharPlate() {
-        assertEquals("A", MaskSerializer.mask("A", MaskType.LICENSE_PLATE));
+        assertEquals("*", MaskSerializer.mask("A", MaskType.LICENSE_PLATE));
     }
 
     @Test

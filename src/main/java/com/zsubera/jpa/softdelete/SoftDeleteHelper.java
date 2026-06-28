@@ -185,7 +185,7 @@ public final class SoftDeleteHelper {
      * @param booleanField 是否为 Boolean 类型（无需参数绑定，直接使用字面量 true）
      * @param dbValue 需要绑定到参数的数据库值（Boolean 类型时为 null）
      */
-    record ResolvedDeletedValue(boolean booleanField, Object dbValue) {
+    public record ResolvedDeletedValue(boolean booleanField, Object dbValue) {
     }
 
     /**
@@ -197,7 +197,7 @@ public final class SoftDeleteHelper {
      * @return 解析后的删除值
      * @throws MyJpaPlusException 如果字段类型不支持或枚举缺少 deletedValue
      */
-    static ResolvedDeletedValue resolveDeletedValue(Class<?> entityClass, Field field, SoftDelete annotation) {
+    public static ResolvedDeletedValue resolveDeletedValue(Class<?> entityClass, Field field, SoftDelete annotation) {
         if (field.getType() == Boolean.class || field.getType() == boolean.class) {
             return new ResolvedDeletedValue(true, null);
         }
@@ -615,7 +615,7 @@ public final class SoftDeleteHelper {
         return NO_FIELD_SENTINEL.equals(result) ? null : result;
     }
 
-    static Field getField(Class<?> entityClass, String fieldName) {
+    public static Field getField(Class<?> entityClass, String fieldName) {
         ConcurrentHashMap<String, Field> innerCache =
             FIELD_OBJECT_CACHE.computeIfAbsent(entityClass, k -> new ConcurrentHashMap<>());
         return innerCache.computeIfAbsent(fieldName, k -> {

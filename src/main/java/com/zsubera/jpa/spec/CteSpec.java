@@ -275,6 +275,7 @@ public class CteSpec {
         if (strictMode) {
             validateSelectOnly(sqlTemplate);
         }
+        checkSqlSafety(sqlTemplate, "CTE");
         CteEntry current = currentCte();
         if (params != null && params.length > 0) {
             int cteIndex = cteEntries.size() - 1;

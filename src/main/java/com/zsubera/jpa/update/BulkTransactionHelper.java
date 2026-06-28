@@ -82,7 +82,7 @@ final class BulkTransactionHelper {
                 tx.commit();
             }
             return result;
-        } catch (RuntimeException e) {
+        } catch (RuntimeException | Error e) {
             if (isNewTransaction) {
                 safeRollback(tx, e);
             }
@@ -96,7 +96,7 @@ final class BulkTransactionHelper {
      * @param tx 实体事务
      * @param original 原始异常
      */
-    static void safeRollback(EntityTransaction tx, Exception original) {
+    static void safeRollback(EntityTransaction tx, Throwable original) {
         if (tx != null && tx.isActive()) {
             try {
                 tx.rollback();

@@ -93,8 +93,8 @@ public class MaskSerializer extends JsonSerializer<String> {
     private static String maskEmail(String email) {
         int atIndex = email.lastIndexOf('@');
         if (atIndex <= 0) {
-            // ponytail: no '@' found → not a valid email, return unchanged
-            return email;
+            // ponytail: no '@' found → mask entire value to prevent data leakage
+            return "*".repeat(email.codePointCount(0, email.length()));
         }
         String localPart = email.substring(0, atIndex);
         String domain = email.substring(atIndex);
@@ -125,7 +125,7 @@ public class MaskSerializer extends JsonSerializer<String> {
         // 使用codePointCount正确处理Unicode
         int codePointCount = name.codePointCount(0, name.length());
         if (codePointCount <= 1) {
-            return name;
+            return "*".repeat(codePointCount);
         }
         if (codePointCount == 2) {
             return new String(Character.toChars(name.codePointAt(0))) + "*";
@@ -158,7 +158,7 @@ public class MaskSerializer extends JsonSerializer<String> {
     private static String maskAddress(String address) {
         int len = address.codePointCount(0, address.length());
         if (len <= 2) {
-            return address;
+            return "*".repeat(len);
         }
         if (len <= 6) {
             int prefixEnd = address.offsetByCodePoints(0, 2);
@@ -171,7 +171,7 @@ public class MaskSerializer extends JsonSerializer<String> {
     private static String maskLicensePlate(String plate) {
         int len = plate.codePointCount(0, plate.length());
         if (len < 2) {
-            return plate;
+            return "*".repeat(len);
         }
         if (len == 2) {
             int firstEnd = plate.offsetByCodePoints(0, 1);

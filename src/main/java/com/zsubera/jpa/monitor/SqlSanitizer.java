@@ -64,18 +64,18 @@ public final class SqlSanitizer {
     private static final Pattern LIMIT_OFFSET_PATTERN =
         Pattern.compile("(?i)(?:LIMIT|OFFSET|FETCH\\s+(?:FIRST|NEXT))\\s+\\d+(?:\\s+ROWS)?");
 
-    /** PostgreSQL 美元引用字符串模式（支持 $$...$$ 和 $tag$...$tag$）。 ponytail: 使用捕获组 + 反向引用匹配标签，{0,10000} 限制内容长度防 ReDoS。 */
+    /** PostgreSQL 美元引用字符串模式（支持 $$...$$ 和 $tag$...$tag$）。 ponytail: 使用捕获组 + 反向引用匹配标签。 */
     private static final Pattern DOLLAR_QUOTE_PATTERN =
-        Pattern.compile("\\$(\\w*)\\$(?s:.{0,10000}?)\\$\\1\\$");
+        Pattern.compile("\\$(\\w*)\\$(?s:.+?)\\$\\1\\$");
 
-    /** Oracle Q 引用模式：q'[...]', q'(...)', q'{...}', q'<...>', q'!...!' 等。 ponytail: 使用 {0,4000} 限制匹配长度防止 ReDoS。 */
+    /** Oracle Q 引用模式：q'[...]', q'(...)', q'{...}', q'<...>', q'!...!' 等。 ponytail: 贪婪匹配到对应闭合分隔符。 */
     private static final Pattern Q_QUOTE_BRACKET_PATTERN = Pattern.compile(
-        "q'\\[[\\s\\S]{0,4000}?\\]'|q'\\([\\s\\S]{0,4000}?\\)'|q'\\{[\\s\\S]{0,4000}?\\}'|q'<[\\s\\S]{0,4000}?>'",
+        "q'\\[[\\s\\S]+?\\]'|q'\\([\\s\\S]+?\\)'|q'\\{[\\s\\S]+?\\}'|q'<[\\s\\S]+?>'",
         Pattern.CASE_INSENSITIVE);
 
-    /** Oracle Q 引用单字符分隔符模式：q'x...x' 等（排除 bracket、空白、引号和反斜杠），长度限制 4000。Oracle 不使用反斜杠作为分隔符。 ponytail: {0,4000}? 限制匹配长度，回溯上限为 4000 次字符比较（每次 O(1)），总开销可控。 */
+    /** Oracle Q 引用单字符分隔符模式：q'x...x' 等（排除 bracket、空白、引号和反斜杠）。 ponytail: 贪婪匹配到对应闭合分隔符。 */
     private static final Pattern Q_QUOTE_CHAR_PATTERN =
-        Pattern.compile("q'([^\\[({<\\s'\\\\])[\\s\\S]{0,4000}?\\1'", Pattern.CASE_INSENSITIVE);
+        Pattern.compile("q'([^\\[({<\\s'\\\\])[\\s\\S]+?\\1'", Pattern.CASE_INSENSITIVE);
 
     /**
      * 对 SQL 语句进行脱敏处理，移除可能包含敏感数据的字符串字面量和数字字面量。

@@ -124,6 +124,35 @@ public class DeleteSpec<T> extends AbstractBulkOperationSpec<T, DeleteSpec<T>> {
     }
 
     /**
+     * 将已构建的 DELETE 条件转换为软删除 UPDATE 执行。
+     *
+     * <p>
+     * 复用 {@link #buildPredicates(Root, CriteriaBuilder)} 构建的 WHERE 条件，
+     * 构建 {@link CriteriaUpdate} 设置软删除字段值，而非物理删除行。
+     *
+     * @param em 实体管理器
+     * @param fieldName 软删除字段名
+     * @param deletedValue 软删除字段值
+     * @return 受影响的行数
+     */
+    public int executeAsSoftDelete(EntityManager em, String fieldName, Object deletedValue) {
+        jakarta.persistence.criteria.CriteriaBuilder cb = em.getCriteriaBuilder();
+        jakarta.persistence.criteria.CriteriaUpdate<T> update = cb.createCriteriaUpdate(entityClass);
+        jakarta.persistence.criteria.Root<T> root = update.from(entityClass);
+        Predicate[] predicates = buildPredicates(root, cb);
+        if (predicates.length > 0) {
+            update.where(cb.and(predicates));
+        }
+        update.set(fieldName, (java.lang.Comparable) deletedValue);
+        int affected = em.createQuery(update).executeUpdate();
+        if (affected > 0) {
+            em.flush();
+            em.clear();
+        }
+        return affected;
+    }
+
+    /**
      * 执行无条件删除，删除该实体的所有行。
      *
      * <p>

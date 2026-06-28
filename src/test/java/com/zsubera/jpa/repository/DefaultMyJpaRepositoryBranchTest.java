@@ -27,7 +27,8 @@ class DefaultMyJpaRepositoryBranchTest {
     @SpringBootApplication
     @EntityScan(basePackageClasses = SoftDeleteRepoTestEntity.class)
     @EnableJpaRepositories(basePackages = "com.zsubera.jpa.repository",
-        repositoryBaseClass = DefaultMyJpaRepository.class)
+        repositoryBaseClass = DefaultMyJpaRepository.class,
+        repositoryFactoryBeanClass = MyJpaRepositoryFactoryBean.class)
     static class TestConfig {}
 
     @Autowired
@@ -336,6 +337,58 @@ class DefaultMyJpaRepositoryBranchTest {
             List<SoftDeleteRepoTestEntity> result = repository.findAll();
             assertEquals(2, result.size());
         });
+    }
+
+    @Test
+    void deleteWithConsumer_softDeletesWhenAutoFilterEnabled() {
+        saveEntity("a", false);
+        saveEntity("b", false);
+        int affected = repository.delete(s -> s.eq(SoftDeleteRepoTestEntity::getName, "a"));
+        assertEquals(1, affected);
+        SoftDeleteContext.pushIgnore();
+        try {
+            List<SoftDeleteRepoTestEntity> all = repository.findAll();
+            assertEquals(2, all.size());
+            SoftDeleteRepoTestEntity deleted = all.stream().filter(e -> "a".equals(e.getName())).findFirst().orElseThrow();
+            assertTrue(deleted.getDeleted());
+        } finally {
+            SoftDeleteContext.popIgnore();
+        }
+    }
+
+    @Test
+    void deleteWithConsumer_hardDeletesWhenAutoFilterDisabled() {
+        com.zsubera.jpa.autoconfigure.GlobalConfigHolder.getConfig().setSoftDeleteAutoFilter(false);
+        com.zsubera.jpa.autoconfigure.GlobalConfigHolder.getConfig().setBlockUnconditionalDelete(false);
+        try {
+            saveEntity("a", false);
+            saveEntity("b", false);
+            int affected = repository.delete(s -> s.eq(SoftDeleteRepoTestEntity::getName, "a"));
+            assertEquals(1, affected);
+            assertEquals(1, repository.count());
+        } finally {
+            com.zsubera.jpa.autoconfigure.GlobalConfigHolder.getConfig().setSoftDeleteAutoFilter(true);
+            com.zsubera.jpa.autoconfigure.GlobalConfigHolder.getConfig().setBlockUnconditionalDelete(true);
+        }
+    }
+
+    @Test
+    void updateWithConsumer_skipsSoftDeletedRows() {
+        saveEntity("active", false);
+        saveEntity("deleted", true);
+        int affected = repository.update(s -> s.set(SoftDeleteRepoTestEntity::getName, "changed"));
+        assertEquals(1, affected);
+        SoftDeleteContext.pushIgnore();
+        try {
+            List<SoftDeleteRepoTestEntity> all = repository.findAll();
+            assertEquals(2, all.size());
+            SoftDeleteRepoTestEntity active = all.stream().filter(e -> e.getDeleted() == null || !e.getDeleted()).findFirst().orElseThrow();
+            assertEquals("changed", active.getName());
+            SoftDeleteRepoTestEntity deleted = all.stream().filter(e -> e.getDeleted() != null && e.getDeleted()).findFirst().orElseThrow();
+            assertEquals("deleted", deleted.getName());
+        } finally {
+            SoftDeleteContext.popIgnore();
+        }
     }
 
     private SoftDeleteRepoTestEntity saveEntity(String name, boolean deleted) {

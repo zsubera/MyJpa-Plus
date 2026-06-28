@@ -406,7 +406,7 @@ class MySQLRemainingGapsIntegrationTest {
     // ==================== Edge Cases: notIn with null values ====================
 
     @Test
-    void notIn_allNull_returnsConjunction() {
+    void notIn_allNull_returnsNoRows() {
         save("a", 1);
         save("b", 2);
 
@@ -415,7 +415,7 @@ class MySQLRemainingGapsIntegrationTest {
         nullList.add(null);
         qs.notIn(MySQLTestEntity::getStatus, nullList);
         List<MySQLTestEntity> result = repository.findAll(qs);
-        assertEquals(2, result.size());
+        assertEquals(0, result.size());
     }
 
     // ==================== Edge Cases: UpdateSpec setNull ====================
