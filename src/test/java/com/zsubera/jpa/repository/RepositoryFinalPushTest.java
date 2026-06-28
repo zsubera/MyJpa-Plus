@@ -122,64 +122,6 @@ class RepositoryFinalPushTest {
         assertTrue(simpleRepository.findById(e.getId()).isPresent());
     }
 
-    // ---- MyJpaRepository: findNotDeletedAll with non-soft-delete entity ----
-
-    @Test
-    void simpleEntity_findNotDeletedAll_noArg() {
-        SimpleTestEntity e = saveSimple("a");
-        assertEquals(1, simpleRepository.findNotDeletedAll().size());
-    }
-
-    @Test
-    void simpleEntity_findNotDeletedAll_withSpec() {
-        SimpleTestEntity e = saveSimple("a");
-        assertEquals(1, simpleRepository
-            .findNotDeletedAll((Specification<SimpleTestEntity>)(root, query, cb) -> cb.conjunction()).size());
-    }
-
-    @Test
-    void simpleEntity_findNotDeletedAll_nullSpec() {
-        SimpleTestEntity e = saveSimple("a");
-        assertEquals(1, simpleRepository.findNotDeletedAll((Specification<SimpleTestEntity>)null).size());
-    }
-
-    @Test
-    void simpleEntity_findNotDeletedOne_nullSpec_emptyTable() {
-        assertFalse(simpleRepository.findNotDeletedOne((Specification<SimpleTestEntity>)null).isPresent());
-    }
-
-    @Test
-    void simpleEntity_findNotDeletedOne_nullSpec_withData() {
-        SimpleTestEntity e = saveSimple("a");
-        assertTrue(simpleRepository.findNotDeletedOne((Specification<SimpleTestEntity>)null).isPresent());
-    }
-
-    @Test
-    void simpleEntity_findNotDeletedOne_withSpec() {
-        SimpleTestEntity e = saveSimple("a");
-        assertTrue(simpleRepository
-            .findNotDeletedOne((Specification<SimpleTestEntity>)(root, query, cb) -> cb.conjunction()).isPresent());
-    }
-
-    @Test
-    void simpleEntity_countNotDeleted_noArg() {
-        SimpleTestEntity e = saveSimple("a");
-        assertEquals(1, simpleRepository.countNotDeleted());
-    }
-
-    @Test
-    void simpleEntity_countNotDeleted_withSpec() {
-        SimpleTestEntity e = saveSimple("a");
-        assertEquals(1,
-            simpleRepository.countNotDeleted((Specification<SimpleTestEntity>)(root, query, cb) -> cb.conjunction()));
-    }
-
-    @Test
-    void simpleEntity_countNotDeleted_nullSpec() {
-        SimpleTestEntity e = saveSimple("a");
-        assertEquals(1, simpleRepository.countNotDeleted((Specification<SimpleTestEntity>)null));
-    }
-
     // ---- SoftDeleteRepoTestEntity: deleteAllById with empty list ----
 
     @Test

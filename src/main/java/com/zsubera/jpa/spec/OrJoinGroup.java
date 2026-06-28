@@ -32,6 +32,7 @@ public class OrJoinGroup<T, J> implements ConditionBuilder<J, OrJoinGroup<T, J>>
         if (orNode == null)
             throw new IllegalArgumentException("orNode must not be null");
         this.orNode = orNode;
+        // ponytail: root 和 joinNode 参数保留以维持构造函数签名稳定性，实际仅 orNode 被使用
     }
 
     @Override

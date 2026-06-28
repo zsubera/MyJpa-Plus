@@ -48,6 +48,21 @@ final class EntityFieldExtractor<T> {
     private static final ConcurrentReferenceHashMap<String, Boolean> AUTO_GENERATED_ID_CACHE =
         new ConcurrentReferenceHashMap<>(16, ConcurrentReferenceHashMap.ReferenceType.WEAK);
 
+    /**
+     * getter 方法缓存，避免每次字段提取都执行 getMethod() 反射查找。
+     * key: "className#fieldName"，value: Method 或 NO_GETTER_SENTINEL。
+     */
+    private static final ConcurrentReferenceHashMap<String, java.lang.reflect.Method> GETTER_CACHE =
+        new ConcurrentReferenceHashMap<>(64, ConcurrentReferenceHashMap.ReferenceType.WEAK);
+    private static final java.lang.reflect.Method NO_GETTER_SENTINEL;
+    static {
+        try {
+            NO_GETTER_SENTINEL = Object.class.getDeclaredMethod("toString");
+        } catch (NoSuchMethodException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
     /** 缓存 resolveIdColumnNames 的结果，避免每次 MergeSpec 调用时重复反射扫描 */
     private static final java.util.concurrent.ConcurrentMap<String, List<String>> ID_COLUMN_CACHE =
         new java.util.concurrent.ConcurrentHashMap<>(16);
@@ -234,26 +249,44 @@ final class EntityFieldExtractor<T> {
             cls = cls.getSuperclass();
         }
         String fieldName = field.getName();
-        // 尝试 getXxx() getter 方法
+        // 尝试 getXxx() getter 方法（带缓存）
         String getterName = "get" + Character.toUpperCase(fieldName.charAt(0)) + fieldName.substring(1);
-        try {
-            java.lang.reflect.Method getter = cls.getMethod(getterName);
-            return getter.invoke(entity);
-        } catch (NoSuchMethodException ignored) {
-            // getter 不可用
-        } catch (java.lang.reflect.InvocationTargetException e) {
-            throw e.getTargetException() != null ? new Exception(e.getTargetException()) : e;
-        }
-        // 尝试 isXxx() getter（boolean 类型）
-        if (field.getType() == boolean.class || field.getType() == Boolean.class) {
-            String isGetterName = "is" + Character.toUpperCase(fieldName.charAt(0)) + fieldName.substring(1);
+        String cacheKey = cls.getName() + "#" + getterName;
+        java.lang.reflect.Method cached = GETTER_CACHE.get(cacheKey);
+        if (cached == NO_GETTER_SENTINEL) {
+            // skip
+        } else if (cached != null) {
+            return cached.invoke(entity);
+        } else {
             try {
-                java.lang.reflect.Method isGetter = cls.getMethod(isGetterName);
-                return isGetter.invoke(entity);
+                java.lang.reflect.Method getter = cls.getMethod(getterName);
+                GETTER_CACHE.put(cacheKey, getter);
+                return getter.invoke(entity);
             } catch (NoSuchMethodException ignored) {
-                // is-getter 不可用
+                GETTER_CACHE.put(cacheKey, NO_GETTER_SENTINEL);
             } catch (java.lang.reflect.InvocationTargetException e) {
                 throw e.getTargetException() != null ? new Exception(e.getTargetException()) : e;
+            }
+        }
+        // 尝试 isXxx() getter（boolean 类型，带缓存）
+        if (field.getType() == boolean.class || field.getType() == Boolean.class) {
+            String isGetterName = "is" + Character.toUpperCase(fieldName.charAt(0)) + fieldName.substring(1);
+            String isCacheKey = cls.getName() + "#" + isGetterName;
+            java.lang.reflect.Method cachedIs = GETTER_CACHE.get(isCacheKey);
+            if (cachedIs == NO_GETTER_SENTINEL) {
+                // skip
+            } else if (cachedIs != null) {
+                return cachedIs.invoke(entity);
+            } else {
+                try {
+                    java.lang.reflect.Method isGetter = cls.getMethod(isGetterName);
+                    GETTER_CACHE.put(isCacheKey, isGetter);
+                    return isGetter.invoke(entity);
+                } catch (NoSuchMethodException ignored) {
+                    GETTER_CACHE.put(isCacheKey, NO_GETTER_SENTINEL);
+                } catch (java.lang.reflect.InvocationTargetException e) {
+                    throw e.getTargetException() != null ? new Exception(e.getTargetException()) : e;
+                }
             }
         }
         // 回退到字段反射

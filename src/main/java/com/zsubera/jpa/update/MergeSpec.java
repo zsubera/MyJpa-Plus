@@ -228,8 +228,12 @@ public class MergeSpec<T> {
      * 使其变为托管状态再 flush，确保所有回调已触发。merge 后再用托管实体的最新
      * 字段值执行原生 UPSERT。
      *
+     * <p>
+     * <strong>注意：</strong>返回值始终为 1，因为 JPA {@code merge()} + {@code flush()} 无法获取实际影响行数。
+     * 此方法适用于需要触发 JPA 生命周期回调的场景，如果需要精确的影响行数，请使用 {@link #execute(EntityManager)}。
+     *
      * @param em 实体管理器
-     * @return 受影响的行数
+     * @return 始终返回 1（JPA merge+flush 无法获取实际影响行数）
      * @throws IllegalStateException 如果未指定实体
      */
     public int executeWithCallbacks(EntityManager em) {

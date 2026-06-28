@@ -103,6 +103,15 @@ public class CteSpec {
         HIBERNATE_SESSION_CLASS = sessionCls;
         HIBERNATE_WORK_CLASS = workCls;
     }
+    /** 流式查询默认 fetchSize，避免 PostgreSQL/MySQL 驱动将整个结果集加载到内存。 */
+    private static final int DEFAULT_STREAM_FETCH_SIZE = 100;
+
+    /**
+     * 数据库产品名缓存。首次检测后直接返回，避免每次流式查询都执行反射创建代理。
+     * 使用 volatile 保证可见性，无需加锁（最坏情况是重复检测一次）。
+     */
+    private static volatile String cachedProductName;
+
     private final List<CteEntry> cteEntries = new ArrayList<>();
     private String mainSql;
     private final Map<String, Object> parameters = new LinkedHashMap<>();
@@ -492,19 +501,22 @@ public class CteSpec {
      * @param query JPA Query 实例
      */
     private void applyFetchSize(EntityManager em, Query query) {
-        String productName = null;
-        // 优先使用 Hibernate 路径
-        if (HIBERNATE_SESSION_CLASS != null && HIBERNATE_WORK_CLASS != null) {
-            productName = detectProductViaHibernate(em);
-        }
-        // Hibernate 不可用时，尝试通过直接 unwrap Connection（兼容 EclipseLink）
+        String productName = cachedProductName;
         if (productName == null) {
-            productName = detectProductViaConnection(em);
+            // 优先使用 Hibernate 路径
+            if (HIBERNATE_SESSION_CLASS != null && HIBERNATE_WORK_CLASS != null) {
+                productName = detectProductViaHibernate(em);
+            }
+            // Hibernate 不可用时，尝试通过直接 unwrap Connection（兼容 EclipseLink）
+            if (productName == null) {
+                productName = detectProductViaConnection(em);
+            }
+            cachedProductName = productName;
         }
         if (productName != null) {
             String lower = productName.toLowerCase();
             if (lower.contains("postgresql") || lower.contains("mysql")) {
-                setNativeQueryFetchSize(query, 100);
+                setNativeQueryFetchSize(query, DEFAULT_STREAM_FETCH_SIZE);
             }
         }
     }

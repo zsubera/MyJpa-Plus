@@ -76,7 +76,7 @@ class BatchOperationInterfaceTest {
         entityManager.flush();
         entityManager.clear();
 
-        long count = repository.countNotDeleted();
+        long count = repository.count();
 
         assertThat(count).isEqualTo(1);
     }

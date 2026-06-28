@@ -439,12 +439,13 @@ public class DefaultMyJpaRepository<T, ID> extends SimpleJpaRepository<T, ID> im
                     + " is blocked because the entity has a @SoftDelete field. "
                     + "Set DefaultMyJpaRepository.setBlockUnconditionalDelete(false) to allow this operation.");
             }
-            Optional<T> entity = findById(id);
-            if (entity.isPresent()) {
-                delete(entity.get());
-                return true;
-            }
-            return false;
+            String idFieldName = EntityClassResolver.resolveIdFieldName(domainClass);
+            jakarta.persistence.criteria.CriteriaBuilder cb = entityManager.getCriteriaBuilder();
+            jakarta.persistence.criteria.CriteriaDelete<T> delete = cb.createCriteriaDelete(domainClass);
+            jakarta.persistence.criteria.Root<T> root = delete.from(domainClass);
+            delete.where(cb.equal(root.get(idFieldName), id));
+            int deleted = entityManager.createQuery(delete).executeUpdate();
+            return deleted > 0;
         }
         @SuppressWarnings("unchecked")
         ID castId = id;

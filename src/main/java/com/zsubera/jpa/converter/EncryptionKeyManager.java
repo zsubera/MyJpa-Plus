@@ -290,6 +290,7 @@ final class EncryptionKeyManager {
         }
         if (salt != null && !salt.isEmpty()) {
             byte[] bytes = salt.getBytes(StandardCharsets.UTF_8);
+            // ponytail: 使用 volatile 写入而非 compareAndSet，最坏情况是多一次无害的重复计算
             cachedSalt = bytes;
             return bytes.clone();
         }
