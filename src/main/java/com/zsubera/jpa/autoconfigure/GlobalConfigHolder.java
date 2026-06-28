@@ -111,8 +111,10 @@ public final class GlobalConfigHolder {
                 log.warn(
                     "Failed to lookup MyJpaPlusGlobalConfig from ApplicationContext, falling back to static config: {}",
                     e.getMessage());
-                cachedBean = null;
-                lastLookupFailureTime = now;
+                // ponytail: 仅在 bean 仍为 null 时设置退避时间，避免其他线程已成功缓存时干扰
+                if (cachedBean == null) {
+                    lastLookupFailureTime = now;
+                }
             }
         }
         // 回退到静态持有实例

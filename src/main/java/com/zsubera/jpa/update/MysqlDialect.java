@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 import com.zsubera.jpa.update.EntityFieldExtractor.EntityFieldValue;
+import com.zsubera.jpa.exception.MyJpaPlusException;
 
 /**
  * MySQL 方言实现。
@@ -132,11 +133,15 @@ final class MysqlDialect extends AbstractDialectStrategy {
         sql.append(") VALUES ");
         List<Object> allParams = new ArrayList<>();
         for (int row = 0; row < batchFieldValues.size(); row++) {
+            List<EntityFieldValue> values = batchFieldValues.get(row);
+            if (values.size() != insertColumns.size()) {
+                throw new MyJpaPlusException("Column count (" + insertColumns.size()
+                    + ") does not match value count (" + values.size() + ") at batch row " + row);
+            }
             if (row > 0) {
                 sql.append(", ");
             }
             sql.append("(");
-            List<EntityFieldValue> values = batchFieldValues.get(row);
             for (int i = 0; i < values.size(); i++) {
                 if (i > 0) {
                     sql.append(", ");

@@ -386,11 +386,12 @@ final class EncryptionKeyManager {
             KEY_CACHE.clear();
             KEY_ACCESS_TIMES.clear();
             KEY_VALIDATED.set(false);
+            // ponytail: 先移除引用再清零，避免并发线程读到全零 salt
             byte[] oldSalt = cachedSalt;
+            cachedSalt = null;
             if (oldSalt != null) {
                 java.util.Arrays.fill(oldSalt, (byte) 0);
             }
-            cachedSalt = null;
         } finally {
             KEY_SPEC_WRITE_LOCK.unlock();
         }

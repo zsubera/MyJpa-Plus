@@ -248,6 +248,7 @@ public class MergeSpec<T> {
         // Step 1: merge if detached to make managed, then flush to trigger callbacks
         if (!em.contains(entitySnapshot)) {
             entitySnapshot = em.merge(entitySnapshot);
+            this.entity = entitySnapshot;
         }
         em.flush();
         // Step 2: after flush, entity is managed and persisted — skip native UPSERT

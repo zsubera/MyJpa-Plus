@@ -208,11 +208,16 @@ public class QueryMetricsCollector {
             return;
         }
         int toEvict = Math.max(1, metricsMap.size() / 10);
-        java.util.List<String> keys = new java.util.ArrayList<>(metricsMap.keySet());
-        java.util.Collections.shuffle(keys, java.util.concurrent.ThreadLocalRandom.current());
+        int skip = java.util.concurrent.ThreadLocalRandom.current().nextInt(Math.max(1, metricsMap.size()));
         int evicted = 0;
-        for (int i = 0; i < keys.size() && evicted < toEvict; i++) {
-            if (metricsMap.remove(keys.get(i)) != null) {
+        java.util.Iterator<String> it = metricsMap.keySet().iterator();
+        while (it.hasNext() && evicted < toEvict) {
+            String key = it.next();
+            if (skip > 0) {
+                skip--;
+                continue;
+            }
+            if (metricsMap.remove(key) != null) {
                 evicted++;
             }
         }

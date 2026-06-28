@@ -75,8 +75,7 @@ class BulkOperationTemplate {
      * 避免 REQUIRES_NEW 事务中使用外层 persistence context 的 EM。
      */
     private <R> R executeInNewTransaction(java.util.function.Function<EntityManager, R> operation) {
-        EntityManager em = entityManagerFactory.createEntityManager();
-        try {
+        try (EntityManager em = entityManagerFactory.createEntityManager()) {
             jakarta.persistence.EntityTransaction tx = em.getTransaction();
             tx.begin();
             try {
@@ -89,8 +88,6 @@ class BulkOperationTemplate {
                 }
                 throw e;
             }
-        } finally {
-            em.close();
         }
     }
 

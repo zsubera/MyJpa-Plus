@@ -580,6 +580,8 @@ public class UpdateSpec<T> extends AbstractBulkOperationSpec<T, UpdateSpec<T>> {
             log.warn("Failed to evict entity cache selectively for {}, falling back to em.clear()",
                 entityClass.getSimpleName(), e);
         }
+        log.warn("Non-selective em.clear() fallback for {} — all managed entities will be detached",
+            entityClass.getSimpleName());
         em.clear();
     }
 

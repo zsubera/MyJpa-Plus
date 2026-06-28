@@ -488,7 +488,7 @@ public class MyJpaPlusAutoConfiguration {
                     log.info("Registered SlowQueryListener: {}", listener.getClass().getSimpleName());
                 }
             } catch (Exception e) {
-                log.debug("No SlowQueryListener beans found", e.getMessage());
+                log.debug("No SlowQueryListener beans found: {}", e.getMessage());
             }
         }
     }

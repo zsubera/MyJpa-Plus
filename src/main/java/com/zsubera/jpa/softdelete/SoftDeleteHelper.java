@@ -594,7 +594,7 @@ public final class SoftDeleteHelper {
                     try {
                         field.setAccessible(true);
                     } catch (SecurityException e) {
-
+                        // ponytail: 缓存失败结果，避免每次调用重复扫描
                         String moduleName = cls.getModule() != null ? cls.getModule().getName() : "unnamed";
                         String pkg = cls.getPackageName();
                         throw new IllegalStateException(String.format(
@@ -680,23 +680,22 @@ public final class SoftDeleteHelper {
             if (value == null) {
                 return false;
             }
+            // ponytail: 缓存 SoftDelete 注解，避免高频率调用时重复反射
+            SoftDelete annotation = ANNOTATION_CACHE.computeIfAbsent(entity.getClass(), cls -> field.getAnnotation(SoftDelete.class));
             // Boolean 类型
             if (value instanceof Boolean) {
                 return Boolean.TRUE.equals(value);
             }
             // Integer 类型
             if (value instanceof Integer intValue) {
-                SoftDelete annotation = field.getAnnotation(SoftDelete.class);
                 return intValue.equals(annotation.deletedIntValue());
             }
             // 枚举类型
             if (value instanceof Enum enumValue) {
-                SoftDelete annotation = field.getAnnotation(SoftDelete.class);
                 return !annotation.deletedValue().isEmpty() && enumValue.name().equals(annotation.deletedValue());
             }
             // String 类型（支持 char(1) 等字符串软删除）
             if (value instanceof String strValue) {
-                SoftDelete annotation = field.getAnnotation(SoftDelete.class);
                 return !annotation.deletedStringValue().isEmpty() && strValue.equals(annotation.deletedStringValue());
             }
             return false;

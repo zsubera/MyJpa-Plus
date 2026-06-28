@@ -200,6 +200,7 @@ public final class EntityCodeGenerator {
         String imports = buildExtraImports(columns);
         String fields = buildFields(columns);
         String gettersSetters = buildGettersSetters(columns);
+        // ponytail: template 参数必须是受信任的模板字符串，不要接受用户输入
         return template.replace("${package}", entityPackage).replace("${className}", className)
             .replace("${tableName}", tableName).replace("${imports}", imports).replace("${fields}", fields)
             .replace("${gettersSetters}", gettersSetters);

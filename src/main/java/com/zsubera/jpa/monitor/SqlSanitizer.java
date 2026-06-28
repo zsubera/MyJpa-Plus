@@ -73,7 +73,7 @@ public final class SqlSanitizer {
         "q'\\[[\\s\\S]{0,4000}?\\]'|q'\\([\\s\\S]{0,4000}?\\)'|q'\\{[\\s\\S]{0,4000}?\\}'|q'<[\\s\\S]{0,4000}?>'",
         Pattern.CASE_INSENSITIVE);
 
-    /** Oracle Q 引用单字符分隔符模式：q'x...x' 等（排除 bracket、空白、引号和反斜杠），长度限制 4000。Oracle 不使用反斜杠作为分隔符。 */
+    /** Oracle Q 引用单字符分隔符模式：q'x...x' 等（排除 bracket、空白、引号和反斜杠），长度限制 4000。Oracle 不使用反斜杠作为分隔符。 ponytail: {0,4000}? 限制匹配长度，回溯上限为 4000 次字符比较（每次 O(1)），总开销可控。 */
     private static final Pattern Q_QUOTE_CHAR_PATTERN =
         Pattern.compile("q'([^\\[({<\\s'\\\\])[\\s\\S]{0,4000}?\\1'", Pattern.CASE_INSENSITIVE);
 

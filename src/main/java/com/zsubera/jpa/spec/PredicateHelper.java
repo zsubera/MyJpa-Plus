@@ -395,7 +395,7 @@ public final class PredicateHelper {
     public static Predicate likeIgnoreCase(Path<?> path, String fieldName, String value, CriteriaBuilder cb,
         char escapeChar) {
         if (value == null) {
-            return cb.conjunction();
+            return cb.disjunction();
         }
         if (escapeChar != '\0') {
             return cb.like(cb.upper(path.get(fieldName).as(String.class)), value.toUpperCase(java.util.Locale.ROOT),

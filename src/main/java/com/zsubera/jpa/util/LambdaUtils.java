@@ -8,6 +8,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
+import java.io.ObjectInputFilter;
 import java.lang.invoke.SerializedLambda;
 import java.lang.reflect.InaccessibleObjectException;
 import java.lang.reflect.Method;
@@ -243,6 +244,15 @@ public final class LambdaUtils {
             oos.writeObject(fn);
         }
         try (ObjectInputStream ois = new ObjectInputStream(new ByteArrayInputStream(baos.toByteArray()))) {
+            // ponytail: 与 resolveViaSerialization() 保持一致，限制反序列化仅允许 SerializedLambda 类
+            ois.setObjectInputFilter(info -> {
+                if (info.serialClass() == null) {
+                    return ObjectInputFilter.Status.ALLOWED;
+                }
+                return info.serialClass().getName().equals("java.lang.invoke.SerializedLambda")
+                    ? ObjectInputFilter.Status.ALLOWED
+                    : ObjectInputFilter.Status.REJECTED;
+            });
             return (SerializedLambda)ois.readObject();
         }
     }
@@ -294,6 +304,15 @@ public final class LambdaUtils {
                 oos.writeObject(fn);
             }
             try (ObjectInputStream ois = new ObjectInputStream(new ByteArrayInputStream(baos.toByteArray()))) {
+                // ponytail: 限制反序列化仅允许 SerializedLambda 类，防止反序列化攻击
+                ois.setObjectInputFilter(info -> {
+                    if (info.serialClass() == null) {
+                        return ObjectInputFilter.Status.ALLOWED;
+                    }
+                    return info.serialClass().getName().equals("java.lang.invoke.SerializedLambda")
+                        ? ObjectInputFilter.Status.ALLOWED
+                        : ObjectInputFilter.Status.REJECTED;
+                });
                 SerializedLambda lambda = (SerializedLambda)ois.readObject();
                 return resolvePropertyFromLambda(lambda);
             }
