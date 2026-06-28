@@ -214,6 +214,10 @@ public final class SoftDeleteBulkExecutor {
                 entityClass.getSimpleName(), AuditUtils.getCallStack());
 
         ExecContext ctx = resolveExecContext(entityClass);
+        if (hasVersionField(entityClass))
+            log.warn("AUDIT: Entity {} has @Version field. softDeleteAllUsingCriteriaUpdate() bypasses optimistic lock checking. "
+                + "Consider using softDeleteByIdsUsingEntityManager() with specific IDs.",
+                entityClass.getSimpleName());
         jakarta.persistence.criteria.CriteriaBuilder cb = em.getCriteriaBuilder();
         jakarta.persistence.criteria.CriteriaUpdate<T> update = cb.createCriteriaUpdate(entityClass);
         jakarta.persistence.criteria.Root<T> root = update.from(entityClass);
@@ -225,11 +229,23 @@ public final class SoftDeleteBulkExecutor {
             update.where(cb.or(cb.isNull(root.get(ctx.fieldName())),
                 cb.notEqual(root.get(ctx.fieldName()), ctx.resolved().dbValue())));
         }
+        Field timestampField = resolveTimestampField(entityClass, ctx.annotation());
+        if (timestampField != null)
+            update.set(ctx.annotation().deletedTimestampField(), cb.currentTimestamp());
+        Field versionField = resolveVersionField(entityClass);
+        if (versionField != null)
+            update.set(versionField.getName(), cb.sum(root.get(versionField.getName()), 1));
         int updated = em.createQuery(update).executeUpdate();
-        if (maxRows > 0 && updated > maxRows)
+        if (maxRows > 0 && updated > maxRows) {
+            jakarta.persistence.EntityTransaction tx = em.getTransaction();
+            if (tx.isActive()) {
+                tx.setRollbackOnly();
+            }
             throw new IllegalStateException(
                 "softDeleteAllUsingCriteriaUpdate affected " + updated + " rows, exceeding the limit of " + maxRows
-                    + ". Consider using softDeleteByIdsUsingEntityManager() with explicit ID lists.");
+                    + ". Transaction has been marked for rollback. "
+                    + "Consider using softDeleteByIdsUsingEntityManager() with explicit ID lists.");
+        }
         publishAfterUpdate(em, entityClass, updated);
         return updated;
     }
@@ -240,6 +256,10 @@ public final class SoftDeleteBulkExecutor {
         if (ids == null || ids.isEmpty())
             return 0;
         requireActiveTransaction();
+        int hardLimit = com.zsubera.jpa.util.InClauseBuilder.getHardLimit();
+        if (ids.size() > hardLimit)
+            throw new IllegalArgumentException("ID list size (" + ids.size() + ") exceeds the hard limit (" + hardLimit
+                + "). " + "Consider processing in smaller batches or using a temporary table.");
 
         ExecContext ctx = resolveExecContext(entityClass);
         jakarta.persistence.criteria.CriteriaBuilder cb = em.getCriteriaBuilder();
@@ -260,7 +280,18 @@ public final class SoftDeleteBulkExecutor {
                 batchUpdate.set(ctx.annotation().deletedTimestampField(), cb.currentTimestamp());
             if (versionField != null)
                 batchUpdate.set(versionField.getName(), cb.sum(batchRoot.get(versionField.getName()), 1));
-            batchUpdate.where(batchRoot.get(idFieldName).in(batch));
+            jakarta.persistence.criteria.Predicate idPredicate = batchRoot.get(idFieldName).in(batch);
+            jakarta.persistence.criteria.Predicate notDeletedPredicate;
+            if (ctx.resolved().booleanField()) {
+                notDeletedPredicate = cb.or(
+                    cb.isNull(batchRoot.get(ctx.fieldName())),
+                    cb.equal(batchRoot.get(ctx.fieldName()), false));
+            } else {
+                notDeletedPredicate = cb.or(
+                    cb.isNull(batchRoot.get(ctx.fieldName())),
+                    cb.notEqual(batchRoot.get(ctx.fieldName()), ctx.resolved().dbValue()));
+            }
+            batchUpdate.where(cb.and(idPredicate, notDeletedPredicate));
             total += em.createQuery(batchUpdate).executeUpdate();
         }
         publishAfterUpdate(em, entityClass, total);
