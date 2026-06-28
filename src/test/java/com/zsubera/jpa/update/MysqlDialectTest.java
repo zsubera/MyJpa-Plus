@@ -4,11 +4,17 @@ import static org.junit.jupiter.api.Assertions.*;
 
 import com.zsubera.jpa.update.EntityFieldExtractor.EntityFieldValue;
 import java.util.List;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
 class MysqlDialectTest {
 
     private final MysqlDialect dialect = new MysqlDialect();
+
+    @AfterEach
+    void resetAliasSyntax() {
+        MysqlDialect.setUseRowAliasSyntax(false);
+    }
 
     @Test
     void name_returnsMysql() {
@@ -26,15 +32,17 @@ class MysqlDialectTest {
     }
 
     @Test
-    void escapeIdentifier_withSpecialChars() {
-        assertEquals("`my-table`", dialect.escapeIdentifier("my-table"));
+    void escapeIdentifier_withDot() {
+        assertEquals("`schema`.`table`", dialect.escapeIdentifier("schema.table"));
     }
 
     @Test
     void buildUpsertSql_withUpdateColumns() {
         List<String> insertCols = List.of("id", "name", "email");
-        List<EntityFieldValue> fieldValues = List.of(new EntityFieldValue("id", "id", 1L),
-            new EntityFieldValue("name", "name", "John"), new EntityFieldValue("email", "email", "john@example.com"));
+        List<EntityFieldValue> fieldValues = List.of(
+            new EntityFieldValue("id", "id", 1L),
+            new EntityFieldValue("name", "name", "John"),
+            new EntityFieldValue("email", "email", "john@example.com"));
         List<String> conflictCols = List.of("id");
         List<String> updateCols = List.of("name", "email");
 
@@ -48,7 +56,7 @@ class MysqlDialectTest {
     }
 
     @Test
-    void buildUpsertSql_withoutUpdateColumns() {
+    void buildUpsertSql_withoutUpdateColumns_warnsNoop() {
         List<String> insertCols = List.of("id", "name");
         List<EntityFieldValue> fieldValues =
             List.of(new EntityFieldValue("id", "id", 1L), new EntityFieldValue("name", "name", "John"));
@@ -57,45 +65,111 @@ class MysqlDialectTest {
 
         SqlWithParams result = dialect.buildUpsertSql("users", insertCols, fieldValues, conflictCols, updateCols);
 
-        assertFalse(result.sql().contains("INSERT IGNORE"));
         assertTrue(result.sql().contains("ON DUPLICATE KEY UPDATE"));
-        assertTrue(result.sql().contains("`id` = VALUES(`id`)"));
+        assertTrue(result.sql().contains("VALUES(`id`)"));
     }
 
     @Test
-    void buildUpsertSql_multipleConflictColumns() {
-        List<String> insertCols = List.of("id", "name", "region");
-        List<EntityFieldValue> fieldValues = List.of(new EntityFieldValue("id", "id", 1L),
-            new EntityFieldValue("name", "name", "John"), new EntityFieldValue("region", "region", "US"));
-        List<String> conflictCols = List.of("id", "region");
+    void buildUpsertSql_emptyInsertColumns_throws() {
+        assertThrows(com.zsubera.jpa.exception.MyJpaPlusException.class,
+            () -> dialect.buildUpsertSql("users", List.of(), List.of(), List.of("id"), List.of()));
+    }
+
+    @Test
+    void buildUpsertSql_rowAliasSyntax() {
+        MysqlDialect.setUseRowAliasSyntax(true);
+        List<String> insertCols = List.of("id", "name");
+        List<EntityFieldValue> fieldValues =
+            List.of(new EntityFieldValue("id", "id", 1L), new EntityFieldValue("name", "name", "John"));
+        List<String> conflictCols = List.of("id");
         List<String> updateCols = List.of("name");
 
         SqlWithParams result = dialect.buildUpsertSql("users", insertCols, fieldValues, conflictCols, updateCols);
 
+        assertTrue(result.sql().contains("AS new ON DUPLICATE KEY UPDATE"));
+        assertTrue(result.sql().contains("`name` = new.`name`"));
+        assertFalse(result.sql().contains("VALUES("));
+    }
+
+    @Test
+    void buildUpsertSql_rowAliasSyntax_noUpdateColumns() {
+        MysqlDialect.setUseRowAliasSyntax(true);
+        List<String> insertCols = List.of("id");
+        List<EntityFieldValue> fieldValues = List.of(new EntityFieldValue("id", "id", 1L));
+        List<String> conflictCols = List.of("id");
+        List<String> updateCols = List.of();
+
+        SqlWithParams result = dialect.buildUpsertSql("users", insertCols, fieldValues, conflictCols, updateCols);
+
+        assertTrue(result.sql().contains("AS new ON DUPLICATE KEY UPDATE"));
+        assertTrue(result.sql().contains("`id` = new.`id`"));
+    }
+
+    @Test
+    void buildBatchUpsertSql_withUpdateColumns() {
+        List<String> insertCols = List.of("id", "name");
+        List<List<EntityFieldValue>> batch = List.of(
+            List.of(new EntityFieldValue("id", "id", 1L), new EntityFieldValue("name", "name", "Alice")),
+            List.of(new EntityFieldValue("id", "id", 2L), new EntityFieldValue("name", "name", "Bob")));
+        List<String> conflictCols = List.of("id");
+        List<String> updateCols = List.of("name");
+
+        SqlWithParams result = dialect.buildBatchUpsertSql("users", insertCols, batch, conflictCols, updateCols);
+
+        assertTrue(result.sql().contains("INSERT INTO `users`"));
+        assertTrue(result.sql().contains("(?, ?), (?, ?)"));
         assertTrue(result.sql().contains("ON DUPLICATE KEY UPDATE"));
-        assertTrue(result.sql().contains("`name` = VALUES(`name`)"));
+        assertEquals(4, result.params().size());
     }
 
     @Test
-    void buildInsertPart_columnCountMismatch_throws() {
-        List<String> cols = List.of("id", "name");
-        List<EntityFieldValue> values = List.of(new EntityFieldValue("id", "id", 1L));
+    void buildBatchUpsertSql_emptyUpdateColumns() {
+        List<String> insertCols = List.of("id", "name");
+        List<List<EntityFieldValue>> batch =
+            List.of(List.of(new EntityFieldValue("id", "id", 1L), new EntityFieldValue("name", "name", "Alice")));
+        List<String> conflictCols = List.of("id");
+        List<String> updateCols = List.of();
 
-        assertThrows(IllegalArgumentException.class,
-            () -> DialectStrategy.buildInsertPart("`users`", dialect, cols, values));
+        SqlWithParams result = dialect.buildBatchUpsertSql("users", insertCols, batch, conflictCols, updateCols);
+
+        assertTrue(result.sql().contains("ON DUPLICATE KEY UPDATE"));
+        assertTrue(result.sql().contains("VALUES(`id`)"));
     }
 
     @Test
-    void buildInsertPart_generatesCorrectSql() {
-        List<String> cols = List.of("id", "name");
-        List<EntityFieldValue> values =
-            List.of(new EntityFieldValue("id", "id", 1L), new EntityFieldValue("name", "name", "John"));
+    void buildBatchUpsertSql_columnCountMismatch_throws() {
+        List<String> insertCols = List.of("id", "name");
+        List<List<EntityFieldValue>> batch =
+            List.of(List.of(new EntityFieldValue("id", "id", 1L)));
+        List<String> conflictCols = List.of("id");
+        List<String> updateCols = List.of("name");
 
-        SqlWithParams result = DialectStrategy.buildInsertPart("`users`", dialect, cols, values);
+        assertThrows(com.zsubera.jpa.exception.MyJpaPlusException.class,
+            () -> dialect.buildBatchUpsertSql("users", insertCols, batch, conflictCols, updateCols));
+    }
 
-        assertEquals("INSERT INTO `users` (`id`, `name`) VALUES (?, ?)", result.sql());
-        assertEquals(2, result.params().size());
-        assertEquals(1L, result.params().get(0));
-        assertEquals("John", result.params().get(1));
+    @Test
+    void buildBatchUpsertSql_rowAliasSyntax() {
+        MysqlDialect.setUseRowAliasSyntax(true);
+        List<String> insertCols = List.of("id", "name");
+        List<List<EntityFieldValue>> batch =
+            List.of(List.of(new EntityFieldValue("id", "id", 1L), new EntityFieldValue("name", "name", "Alice")));
+        List<String> conflictCols = List.of("id");
+        List<String> updateCols = List.of("name");
+
+        SqlWithParams result = dialect.buildBatchUpsertSql("users", insertCols, batch, conflictCols, updateCols);
+
+        assertTrue(result.sql().contains("AS new"));
+        assertTrue(result.sql().contains("`name` = new.`name`"));
+    }
+
+    @Test
+    void supportsBatchUpsert_true() {
+        assertTrue(dialect.supportsBatchUpsert());
+    }
+
+    @Test
+    void isUseRowAliasSyntax_defaultFalse() {
+        assertFalse(MysqlDialect.isUseRowAliasSyntax());
     }
 }

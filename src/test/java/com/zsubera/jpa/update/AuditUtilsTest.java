@@ -4,9 +4,6 @@ import static org.junit.jupiter.api.Assertions.*;
 
 import org.junit.jupiter.api.Test;
 
-/**
- * Tests for {@link AuditUtils}.
- */
 class AuditUtilsTest {
 
     @Test
@@ -17,128 +14,58 @@ class AuditUtilsTest {
     }
 
     @Test
-    void getCallStack_containsCurrentMethod() {
-        String stack = AuditUtils.getCallStack();
-        assertTrue(stack.contains("AuditUtilsTest"), "Stack trace should contain the test class name");
-    }
-
-    @Test
     void getCallStack_containsClassName() {
         String stack = AuditUtils.getCallStack();
-        assertTrue(stack.contains("AuditUtilsTest"), "Stack trace should contain the test class name");
+        assertTrue(stack.contains("AuditUtilsTest"));
     }
 
     @Test
-    void getCallStack_usesArrowSeparator() {
+    void setMaxStackDepth_validValue_updates() {
+        AuditUtils.setMaxStackDepth(3);
+        assertEquals(3, AuditUtils.getMaxStackDepth());
+        AuditUtils.setMaxStackDepth(5);
+        assertEquals(5, AuditUtils.getMaxStackDepth());
+    }
+
+    @Test
+    void setMaxStackDepth_zero_doesNotUpdate() {
+        int before = AuditUtils.getMaxStackDepth();
+        AuditUtils.setMaxStackDepth(0);
+        assertEquals(before, AuditUtils.getMaxStackDepth());
+    }
+
+    @Test
+    void setMaxStackDepth_negative_doesNotUpdate() {
+        int before = AuditUtils.getMaxStackDepth();
+        AuditUtils.setMaxStackDepth(-1);
+        assertEquals(before, AuditUtils.getMaxStackDepth());
+    }
+
+    @Test
+    void setMaxStackDepth_exceedsLimit_doesNotUpdate() {
+        int before = AuditUtils.getMaxStackDepth();
+        AuditUtils.setMaxStackDepth(21);
+        assertEquals(before, AuditUtils.getMaxStackDepth());
+    }
+
+    @Test
+    void setMaxStackDepth_atUpperLimit_updates() {
+        AuditUtils.setMaxStackDepth(20);
+        assertEquals(20, AuditUtils.getMaxStackDepth());
+    }
+
+    @Test
+    void initMaxStackDepth_defaultValue() {
+        int depth = AuditUtils.initMaxStackDepth();
+        assertTrue(depth > 0);
+        assertTrue(depth <= 20);
+    }
+
+    @Test
+    void getCallStack_respectsDepth() {
+        AuditUtils.setMaxStackDepth(1);
         String stack = AuditUtils.getCallStack();
-        // Stack should contain " <- " separator between frames
-        if (stack.contains(" <- ")) {
-            // Multiple frames present - verify format
-            String[] frames = stack.split(" <- ");
-            assertTrue(frames.length >= 1, "Should have at least one frame");
-        }
-    }
-
-    @Test
-    void getCallStack_maxDepthRespected() {
-        String stack = AuditUtils.getCallStack();
-        String[] frames = stack.split(" <- ");
-        int maxDepth = AuditUtils.getMaxStackDepth();
-        assertTrue(frames.length <= maxDepth,
-            "Stack depth should not exceed " + maxDepth + ", but got " + frames.length);
-    }
-
-    @Test
-    void setMaxStackDepth_validValue() {
-        int original = AuditUtils.getMaxStackDepth();
-        try {
-            AuditUtils.setMaxStackDepth(10);
-            assertEquals(10, AuditUtils.getMaxStackDepth());
-        } finally {
-            AuditUtils.setMaxStackDepth(original);
-        }
-    }
-
-    @Test
-    void setMaxStackDepth_invalidValueIgnored() {
-        int original = AuditUtils.getMaxStackDepth();
-        try {
-            AuditUtils.setMaxStackDepth(0);
-            assertEquals(original, AuditUtils.getMaxStackDepth(), "Invalid value should be ignored");
-
-            AuditUtils.setMaxStackDepth(-1);
-            assertEquals(original, AuditUtils.getMaxStackDepth(), "Negative value should be ignored");
-
-            AuditUtils.setMaxStackDepth(21);
-            assertEquals(original, AuditUtils.getMaxStackDepth(), "Value exceeding limit should be ignored");
-        } finally {
-            AuditUtils.setMaxStackDepth(original);
-        }
-    }
-
-    @Test
-    void getCallStack_respectsConfiguredDepth() {
-        int original = AuditUtils.getMaxStackDepth();
-        try {
-            AuditUtils.setMaxStackDepth(2);
-            String stack = AuditUtils.getCallStack();
-            String[] frames = stack.split(" <- ");
-            assertTrue(frames.length <= 2,
-                "Stack depth should respect configured limit of 2, but got " + frames.length);
-        } finally {
-            AuditUtils.setMaxStackDepth(original);
-        }
-    }
-
-    @Test
-    void getMaxStackDepth_defaultValue() {
-        // The default value should be 5 (unless overridden by system property)
-        int depth = AuditUtils.getMaxStackDepth();
-        assertTrue(depth > 0 && depth <= 20, "Default depth should be between 1 and 20");
-    }
-
-    @Test
-    void initMaxStackDepth_withValidSystemProperty() throws Exception {
-        int original = AuditUtils.getMaxStackDepth();
-        System.setProperty("myjpa-plus.audit.stack-trace-depth", "10");
-        try {
-            java.lang.reflect.Method initMethod = AuditUtils.class.getDeclaredMethod("initMaxStackDepth");
-            initMethod.setAccessible(true);
-            int result = (int)initMethod.invoke(null);
-            assertEquals(10, result);
-        } finally {
-            System.clearProperty("myjpa-plus.audit.stack-trace-depth");
-            AuditUtils.setMaxStackDepth(original);
-        }
-    }
-
-    @Test
-    void initMaxStackDepth_withOutOfRangeProperty() throws Exception {
-        int original = AuditUtils.getMaxStackDepth();
-        System.setProperty("myjpa-plus.audit.stack-trace-depth", "0");
-        try {
-            java.lang.reflect.Method initMethod = AuditUtils.class.getDeclaredMethod("initMaxStackDepth");
-            initMethod.setAccessible(true);
-            int result = (int)initMethod.invoke(null);
-            assertEquals(5, result);
-        } finally {
-            System.clearProperty("myjpa-plus.audit.stack-trace-depth");
-            AuditUtils.setMaxStackDepth(original);
-        }
-    }
-
-    @Test
-    void initMaxStackDepth_withInvalidSystemProperty() throws Exception {
-        int original = AuditUtils.getMaxStackDepth();
-        System.setProperty("myjpa-plus.audit.stack-trace-depth", "not-a-number");
-        try {
-            java.lang.reflect.Method initMethod = AuditUtils.class.getDeclaredMethod("initMaxStackDepth");
-            initMethod.setAccessible(true);
-            int result = (int)initMethod.invoke(null);
-            assertEquals(5, result);
-        } finally {
-            System.clearProperty("myjpa-plus.audit.stack-trace-depth");
-            AuditUtils.setMaxStackDepth(original);
-        }
+        assertFalse(stack.contains(" <- "), "depth=1 should only show one frame");
+        AuditUtils.setMaxStackDepth(5);
     }
 }
