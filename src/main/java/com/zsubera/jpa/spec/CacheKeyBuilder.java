@@ -56,7 +56,7 @@ final class CacheKeyBuilder {
         if (distinct) {
             sb.append("#DISTINCT");
         }
-        if (!groupByFields.isEmpty()) {
+        if (groupByFields != null && !groupByFields.isEmpty()) {
             sb.append("#GROUPBY(");
             for (int i = 0; i < groupByFields.size(); i++) {
                 if (i > 0) {
@@ -66,8 +66,20 @@ final class CacheKeyBuilder {
             }
             sb.append(")");
         }
-        if (!havingConditions.isEmpty()) {
-            sb.append("#HAVING(").append(havingConditions.size()).append(")");
+        if (havingConditions != null && !havingConditions.isEmpty()) {
+            sb.append("#HAVING(");
+            for (int i = 0; i < havingConditions.size(); i++) {
+                if (i > 0) {
+                    sb.append(",");
+                }
+                Object hc = havingConditions.get(i);
+                if (hc instanceof ConditionNode cn) {
+                    appendCacheKey(sb, cn);
+                } else {
+                    sb.append(hc.hashCode());
+                }
+            }
+            sb.append(")");
         }
         if (!orderNodes.isEmpty()) {
             sb.append("#ORDERBY(");

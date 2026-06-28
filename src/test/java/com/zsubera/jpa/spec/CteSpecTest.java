@@ -213,4 +213,24 @@ class CteSpecTest {
     void testAndNullCteNameThrows() {
         assertThrows(IllegalArgumentException.class, () -> CteSpec.with("x").and(null));
     }
+
+    @Test
+    void testColonInStringLiteral_notFlaggedAsUnboundParam() {
+        // Verify :test inside a string literal does not trigger unbound parameter error
+        // SQL: SELECT * FROM t WHERE url = 'http://example.com:test'
+        String sql = "SELECT * FROM t WHERE url = 'http://example.com:test'";
+        CteSpec spec = CteSpec.with("cte").as(sql).select("SELECT * FROM cte");
+        // Should not throw - the :test is inside a string literal, not a named parameter
+        String built = spec.buildSql();
+        assertTrue(built.contains("http://example.com:test"), "String literal should be preserved in SQL");
+    }
+
+    @Test
+    void testColonInEscapedStringLiteral_notFlagged() {
+        // Verify escaped single quotes ('') don't break the string-stripping logic
+        String sql = "SELECT * FROM t WHERE val = 'it''s a :test'";
+        CteSpec spec = CteSpec.with("cte").as(sql).select("SELECT * FROM cte");
+        String built = spec.buildSql();
+        assertTrue(built.contains("it''s a :test"), "Escaped string literal should be preserved");
+    }
 }

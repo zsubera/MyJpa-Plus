@@ -6,6 +6,7 @@ import com.zsubera.jpa.update.DeleteSpec;
 import com.zsubera.jpa.update.UpdateSpec;
 import com.zsubera.jpa.util.EntityGraphHelper;
 import com.zsubera.jpa.autoconfigure.GlobalConfigHolder;
+import com.zsubera.jpa.autoconfigure.MyJpaPlusGlobalConfig;
 import com.zsubera.jpa.repository.SoftDeleteContext;
 import com.zsubera.jpa.softdelete.SoftDeleteHelper;
 import jakarta.persistence.EntityManager;
@@ -573,7 +574,8 @@ public class MyJpaTemplate implements MyJpaTemplateOperations {
     }
 
     private boolean shouldApplySoftDeleteFilter() {
-        return GlobalConfigHolder.getConfig().isSoftDeleteAutoFilter() && !SoftDeleteContext.isIgnoreSoftDelete();
+        MyJpaPlusGlobalConfig cfg = GlobalConfigHolder.getConfig();
+        return cfg != null && cfg.isSoftDeleteAutoFilter() && !SoftDeleteContext.isIgnoreSoftDelete();
     }
 
     private void initializeHelpers(boolean requireTransactionalHelpers) {

@@ -298,4 +298,26 @@ class MyJpaPlusAutoConfigurationTest {
             GlobalConfigHolder.setConfig(null);
         }
     }
+
+    @Test
+    void globalConfigHolder_backoffAfterLookupFailure() {
+        org.springframework.context.ApplicationContext failingCtx =
+            org.mockito.Mockito.mock(org.springframework.context.ApplicationContext.class);
+        org.mockito.Mockito.when(failingCtx.getBean(MyJpaPlusGlobalConfig.class))
+            .thenThrow(new org.springframework.beans.factory.NoSuchBeanDefinitionException("not found"));
+
+        GlobalConfigHolder.reset();
+        GlobalConfigHolder.setApplicationContext(failingCtx);
+        // First call triggers lookup failure
+        MyJpaPlusGlobalConfig result1 = GlobalConfigHolder.getConfig();
+        assertNotNull(result1, "Should fall back to default config");
+
+        // Second call should use backoff (not retry immediately)
+        MyJpaPlusGlobalConfig result2 = GlobalConfigHolder.getConfig();
+        assertNotNull(result2, "Should still return config during backoff");
+        // Verify the mock was only called once (backoff prevents second lookup)
+        org.mockito.Mockito.verify(failingCtx, org.mockito.Mockito.times(1))
+            .getBean(MyJpaPlusGlobalConfig.class);
+        GlobalConfigHolder.reset();
+    }
 }

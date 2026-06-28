@@ -139,6 +139,14 @@ final class DialectDetector {
                     cacheDialect(factoryKey, "mysql");
                     return "mysql";
                 }
+                if (url.contains("oracle")) {
+                    cacheDialect(factoryKey, "oracle");
+                    return "oracle";
+                }
+                if (url.contains("sqlserver") || url.contains("microsoft")) {
+                    cacheDialect(factoryKey, "sqlserver");
+                    return "sqlserver";
+                }
             }
         } catch (Exception ex) {
             log.debug("Failed to detect dialect from properties: {}", ex.getMessage());
@@ -157,6 +165,14 @@ final class DialectDetector {
                 if (dialectStr.contains("mysql")) {
                     cacheDialect(factoryKey, "mysql");
                     return "mysql";
+                }
+                if (dialectStr.contains("oracle")) {
+                    cacheDialect(factoryKey, "oracle");
+                    return "oracle";
+                }
+                if (dialectStr.contains("sqlserver") || dialectStr.contains("microsoft")) {
+                    cacheDialect(factoryKey, "sqlserver");
+                    return "sqlserver";
                 }
                 // Unknown dialect, fall through to other detection strategies
             }

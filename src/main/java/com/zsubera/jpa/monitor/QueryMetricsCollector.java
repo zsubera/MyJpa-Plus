@@ -120,9 +120,10 @@ public class QueryMetricsCollector {
         }
 
         // 防止指标存储无限增长：超过上限时淘汰执行次数最少的条目
+        // ponytail: 使用 single-check pattern 减少 TOCTOU 竞态窗口
         if (metricsMap.size() >= MAX_METRICS_ENTRIES && !metricsMap.containsKey(queryName)) {
             evictRandomEntry();
-            // 淘汰后仍然满了则跳过
+            // 淘汰后仍然满了则跳过（最坏情况：其他线程同时填满）
             if (metricsMap.size() >= MAX_METRICS_ENTRIES) {
                 log.warn("QueryMetricsCollector: max entries ({}) reached after eviction, skipping metrics for '{}'. "
                     + "This may indicate high-cardinality query names (e.g., dynamic queries with parameter values).",

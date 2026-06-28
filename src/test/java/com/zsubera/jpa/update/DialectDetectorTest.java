@@ -243,6 +243,45 @@ class DialectDetectorTest {
     }
 
     @Test
+    void detectDialect_fromJdbcUrlOracle() {
+        EntityManager em = mock(EntityManager.class);
+        EntityManagerFactory emf = mock(EntityManagerFactory.class);
+        Map<String, Object> props = new HashMap<>();
+        props.put("jakarta.persistence.jdbc.url", "jdbc:oracle:thin:@localhost:1521:ORCL");
+        when(emf.getProperties()).thenReturn(props);
+        when(em.getEntityManagerFactory()).thenReturn(emf);
+
+        String dialect = DialectDetector.detectDialect(em);
+        assertEquals("oracle", dialect);
+    }
+
+    @Test
+    void detectDialect_fromJdbcUrlSqlServer() {
+        EntityManager em = mock(EntityManager.class);
+        EntityManagerFactory emf = mock(EntityManagerFactory.class);
+        Map<String, Object> props = new HashMap<>();
+        props.put("jakarta.persistence.jdbc.url", "jdbc:sqlserver://localhost:1433;databaseName=test");
+        when(emf.getProperties()).thenReturn(props);
+        when(em.getEntityManagerFactory()).thenReturn(emf);
+
+        String dialect = DialectDetector.detectDialect(em);
+        assertEquals("sqlserver", dialect);
+    }
+
+    @Test
+    void detectDialect_fromHibernateDialectPropertyOracle() {
+        EntityManager em = mock(EntityManager.class);
+        EntityManagerFactory emf = mock(EntityManagerFactory.class);
+        Map<String, Object> props = new HashMap<>();
+        props.put("hibernate.dialect", "org.hibernate.dialect.OracleDialect");
+        when(emf.getProperties()).thenReturn(props);
+        when(em.getEntityManagerFactory()).thenReturn(emf);
+
+        String dialect = DialectDetector.detectDialect(em);
+        assertEquals("oracle", dialect);
+    }
+
+    @Test
     void detectDialect_connectionReturnsNull() throws Exception {
         EntityManager em = mock(EntityManager.class);
         EntityManagerFactory emf = mock(EntityManagerFactory.class);

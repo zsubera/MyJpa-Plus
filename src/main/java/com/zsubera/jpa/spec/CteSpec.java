@@ -503,15 +503,20 @@ public class CteSpec {
     private void applyFetchSize(EntityManager em, Query query) {
         String productName = cachedProductName;
         if (productName == null) {
-            // 优先使用 Hibernate 路径
-            if (HIBERNATE_SESSION_CLASS != null && HIBERNATE_WORK_CLASS != null) {
-                productName = detectProductViaHibernate(em);
+            synchronized (CteSpec.class) {
+                productName = cachedProductName;
+                if (productName == null) {
+                    // 优先使用 Hibernate 路径
+                    if (HIBERNATE_SESSION_CLASS != null && HIBERNATE_WORK_CLASS != null) {
+                        productName = detectProductViaHibernate(em);
+                    }
+                    // Hibernate 不可用时，尝试通过直接 unwrap Connection（兼容 EclipseLink）
+                    if (productName == null) {
+                        productName = detectProductViaConnection(em);
+                    }
+                    cachedProductName = productName;
+                }
             }
-            // Hibernate 不可用时，尝试通过直接 unwrap Connection（兼容 EclipseLink）
-            if (productName == null) {
-                productName = detectProductViaConnection(em);
-            }
-            cachedProductName = productName;
         }
         if (productName != null) {
             String lower = productName.toLowerCase();
@@ -739,7 +744,9 @@ public class CteSpec {
      * @param boundParams 已绑定的参数映射
      */
     private static void checkUnboundParameters(String sql, Map<String, Object> boundParams) {
-        java.util.regex.Matcher matcher = UNBOUND_PARAM_PATTERN.matcher(sql);
+        // 先移除单引号字符串字面量，避免 :param 在字符串内被误报
+        String stripped = sql.replaceAll("'(?:[^'\\\\]|\\\\.|'')*", "''");
+        java.util.regex.Matcher matcher = UNBOUND_PARAM_PATTERN.matcher(stripped);
         List<String> unboundParams = new ArrayList<>();
         while (matcher.find()) {
             String paramName = matcher.group(1);

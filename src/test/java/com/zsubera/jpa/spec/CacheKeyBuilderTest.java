@@ -258,4 +258,32 @@ class CacheKeyBuilderTest {
         assertNotEquals(key1, key2,
             "Different non-String values with same String.valueOf length must produce different cache keys");
     }
+
+    @Test
+    void nullGroupByFields_doesNotThrowNPE() {
+        String key = CacheKeyBuilder.buildCacheKey(emptyConditions(), emptyConditions(), emptyGroupStack(), false,
+            null, List.of(), List.of(), null, null);
+        assertNotNull(key);
+        assertFalse(key.contains("#GROUPBY"), "null groupByFields should not produce GROUPBY section");
+    }
+
+    @Test
+    void nullHavingConditions_doesNotThrowNPE() {
+        String key = CacheKeyBuilder.buildCacheKey(emptyConditions(), emptyConditions(), emptyGroupStack(), false,
+            List.of(), null, List.of(), null, null);
+        assertNotNull(key);
+        assertFalse(key.contains("#HAVING"), "null havingConditions should not produce HAVING section");
+    }
+
+    @Test
+    void havingConditions_differentContent_producesDifferentKeys() {
+        List<ConditionNode> having1 = List.of(new ConditionNode.SimpleNode("cnt", 5, ConditionNode.Op.GT));
+        List<ConditionNode> having2 = List.of(new ConditionNode.SimpleNode("total", 10, ConditionNode.Op.GT));
+
+        String key1 = CacheKeyBuilder.buildCacheKey(emptyConditions(), emptyConditions(), emptyGroupStack(), false,
+            List.of(), having1, List.of(), null, null);
+        String key2 = CacheKeyBuilder.buildCacheKey(emptyConditions(), emptyConditions(), emptyGroupStack(), false,
+            List.of(), having2, List.of(), null, null);
+        assertNotEquals(key1, key2, "Different HAVING conditions must produce different cache keys");
+    }
 }

@@ -435,6 +435,11 @@ class BulkOperationTemplate {
                 log.error("Batch {} failed at batch index {} (consecutive failures: {}): {}", operationName,
                     failedBatchIndex, consecutiveFailures, e.getMessage(), e);
                 if (failureStrategy == BatchFailureStrategy.ABORT || consecutiveFailures >= 3) {
+                    if (failureStrategy == BatchFailureStrategy.CONTINUE && consecutiveFailures >= 3) {
+                        log.warn("Batch {} aborting after {} consecutive failures despite CONTINUE strategy "
+                            + "(safety limit). Set failureStrategy to ABORT for immediate halt, "
+                            + "or investigate root cause of repeated failures.", operationName, consecutiveFailures);
+                    }
                     shouldContinue = false;
                 }
             }
