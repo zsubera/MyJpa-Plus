@@ -138,41 +138,21 @@ class AutoconfigureSecurityTest {
 
     @Test
     void configInitializer_encryptKeyRejectedExecution() throws Exception {
-        // Get the WARM_UP_EXECUTOR field from EncryptConverter (now AtomicReference<ExecutorService>)
-        Field executorField = EncryptConverter.class.getDeclaredField("WARM_UP_EXECUTOR");
-        executorField.setAccessible(true);
-        @SuppressWarnings("unchecked")
-        java.util.concurrent.atomic.AtomicReference<java.util.concurrent.ExecutorService> executorRef =
-            (java.util.concurrent.atomic.AtomicReference<java.util.concurrent.ExecutorService>)executorField.get(null);
-        java.util.concurrent.ExecutorService originalExecutor = executorRef.get();
+        // Shut down the executor to cause RejectedExecutionException
+        EncryptConverter.shutdownWarmUpExecutor();
 
-        if (originalExecutor == null) {
-            // Executor not initialized (encryption key not configured) — test not applicable
-            return;
-        }
-
+        // Set a valid encrypt key to trigger the warmUpKeyCache path
+        String oldProp = System.getProperty("myjpa.encrypt.key");
         try {
-            // Shut down the executor to cause RejectedExecutionException
-            originalExecutor.shutdownNow();
-            originalExecutor.awaitTermination(1, TimeUnit.SECONDS);
-
-            // Set a valid encrypt key to trigger the warmUpKeyCache path
-            String oldProp = System.getProperty("myjpa.encrypt.key");
-            try {
-                System.setProperty("myjpa.encrypt.key", "test-key-12345678");
-                MyJpaPlusProperties props = new MyJpaPlusProperties();
-                // This should trigger RejectedExecutionException in warmUpKeyCache
-                assertDoesNotThrow(() -> new MyJpaPlusAutoConfiguration.MyJpaPlusConfigInitializer(props, null, null));
-            } finally {
-                if (oldProp != null) {
-                    System.setProperty("myjpa.encrypt.key", oldProp);
-                } else {
-                    System.clearProperty("myjpa.encrypt.key");
-                }
-            }
+            System.setProperty("myjpa.encrypt.key", "test-key-12345678");
+            MyJpaPlusProperties props = new MyJpaPlusProperties();
+            assertDoesNotThrow(() -> new MyJpaPlusAutoConfiguration.MyJpaPlusConfigInitializer(props, null, null));
         } finally {
-            // Restore the executor
-            executorRef.set(originalExecutor);
+            if (oldProp != null) {
+                System.setProperty("myjpa.encrypt.key", oldProp);
+            } else {
+                System.clearProperty("myjpa.encrypt.key");
+            }
         }
     }
 

@@ -222,8 +222,11 @@ public final class SoftDeleteHelper {
                     com.zsubera.jpa.converter.CodeEnumType.resolveCodeField(field.getType());
                 if (codeField != null) {
                     try {
+                        codeField.setAccessible(true);
                         dbValue = codeField.get(deletedEnumValue);
                     } catch (IllegalAccessException e) {
+                        log.warn("Cannot access @CodeEnumValue field '{}' on enum {}; falling back to name()",
+                            codeField.getName(), field.getType().getSimpleName());
                         dbValue = deletedEnumValue.name();
                     }
                 } else {
@@ -635,20 +638,6 @@ public final class SoftDeleteHelper {
             }
             return null;
         });
-    }
-
-    /**
-     * 检查实体类是否有 {@code @Version} 字段。用于在软删除操作前发出乐观锁绕过警告。
-     */
-    private static boolean hasVersionField(Class<?> entityClass) {
-        for (Class<?> c = entityClass; c != null && c != Object.class; c = c.getSuperclass()) {
-            for (Field f : c.getDeclaredFields()) {
-                if (f.isAnnotationPresent(jakarta.persistence.Version.class)) {
-                    return true;
-                }
-            }
-        }
-        return false;
     }
 
     /**

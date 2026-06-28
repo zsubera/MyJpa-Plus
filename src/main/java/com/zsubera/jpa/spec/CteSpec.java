@@ -9,6 +9,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.regex.Pattern;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -108,9 +109,9 @@ public class CteSpec {
 
     /**
      * 数据库产品名缓存。首次检测后直接返回，避免每次流式查询都执行反射创建代理。
-     * 使用 volatile 保证可见性，无需加锁（最坏情况是重复检测一次）。
+     * 使用 AtomicReference 保证线程安全的单次检测。
      */
-    private static volatile String cachedProductName;
+    private static final AtomicReference<String> cachedProductName = new AtomicReference<>();
 
     private final List<CteEntry> cteEntries = new ArrayList<>();
     private String mainSql;
@@ -515,22 +516,22 @@ public class CteSpec {
      * @param query JPA Query 实例
      */
     private void applyFetchSize(EntityManager em, Query query) {
-        String productName = cachedProductName;
+        String productName = cachedProductName.get();
         if (productName == null) {
-            synchronized (CteSpec.class) {
-                productName = cachedProductName;
-                if (productName == null) {
-                    // 优先使用 Hibernate 路径
-                    if (HIBERNATE_SESSION_CLASS != null && HIBERNATE_WORK_CLASS != null) {
-                        productName = detectProductViaHibernate(em);
-                    }
-                    // Hibernate 不可用时，尝试通过直接 unwrap Connection（兼容 EclipseLink）
-                    if (productName == null) {
-                        productName = detectProductViaConnection(em);
-                    }
-                    cachedProductName = productName;
-                }
+            // 优先使用 Hibernate 路径
+            String detected = null;
+            if (HIBERNATE_SESSION_CLASS != null && HIBERNATE_WORK_CLASS != null) {
+                detected = detectProductViaHibernate(em);
             }
+            // Hibernate 不可用时，尝试通过直接 unwrap Connection（兼容 EclipseLink）
+            if (detected == null) {
+                detected = detectProductViaConnection(em);
+            }
+            if (detected != null) {
+                // ponytail: compareAndSet 保证单次写入；最坏情况重复检测一次
+                cachedProductName.compareAndSet(null, detected);
+            }
+            productName = cachedProductName.get();
         }
         if (productName != null) {
             String lower = productName.toLowerCase();
@@ -758,8 +759,8 @@ public class CteSpec {
      * @param boundParams 已绑定的参数映射
      */
     private static void checkUnboundParameters(String sql, Map<String, Object> boundParams) {
-        // 先移除单引号字符串字面量，避免 :param 在字符串内被误报
-        String stripped = sql.replaceAll("'(?:[^'\\\\]|\\\\.|'')*", "''");
+        // ponytail: 原子组 (?>...) 防止非匹配输入上的灾难性回溯
+        String stripped = sql.replaceAll("'(?>[^'\\\\]|\\\\.|'')*", "''");
         java.util.regex.Matcher matcher = UNBOUND_PARAM_PATTERN.matcher(stripped);
         List<String> unboundParams = new ArrayList<>();
         while (matcher.find()) {

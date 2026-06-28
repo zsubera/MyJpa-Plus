@@ -20,7 +20,7 @@ import org.springframework.data.repository.NoRepositoryBean;
 import org.springframework.lang.Nullable;
 
 /**
- * 支持软删除自动过滤的 {@link SimpleJpaRepository} 实现。
+ * {@link MyJpaRepository} 接口的默认实现。配合 Spring Data 的自动仓储扫描自动注册为仓库基类。
  *
  * <p>
  * 当实体有 {@link com.zsubera.jpa.annotation.SoftDelete @SoftDelete} 字段时，查询会自动追加过滤条件。 使用
@@ -362,6 +362,41 @@ public class DefaultMyJpaRepository<T, ID> extends SimpleJpaRepository<T, ID> im
      * @param id 实体 ID
      * @return 合并后的 Specification
      */
+    /**
+     * 覆写 getReferenceById() 以支持软删除过滤。
+     *
+     * <p>
+     * 默认的 {@link SimpleJpaRepository#getReferenceById(Object)} 直接返回 JPA 代理，
+     * 绕过软删除过滤。调用者可能在已删除实体上执行操作（如级联关联），导致数据不一致。
+     *
+     * <p>
+     * 此实现先尝试 {@link #findById(ID)} 进行软删除过滤，找到实体后通过
+     * {@link EntityManager#getReference(Class, Object)} 返回代理。
+     * 如果实体不存在或已软删除，抛出 {@link jakarta.persistence.EntityNotFoundException}。
+     *
+     * @param id 实体 ID，不能为 {@code null}
+     * @return 实体的 JPA 代理引用
+     * @throws jakarta.persistence.EntityNotFoundException 如果实体不存在或已软删除
+     */
+    @Override
+    public T getReferenceById(ID id) {
+        if (id == null) {
+            throw new IllegalArgumentException("ID must not be null");
+        }
+        // ponytail: 使用 count 查询验证存在性，避免将整个实体加载到 PC 中。
+        // count 仅传输一行计数，不加载实体数据，保留 getReference 返回代理的轻量语义。
+        if (shouldApplySoftDeleteFilter()) {
+            if (!exists(withIdAndSoftDelete(id))) {
+                throw new jakarta.persistence.EntityNotFoundException(
+                    "Entity " + domainClass.getSimpleName() + " with id " + id + " not found or soft-deleted");
+            }
+        } else if (!super.existsById(id)) {
+            throw new jakarta.persistence.EntityNotFoundException(
+                "Entity " + domainClass.getSimpleName() + " with id " + id + " not found");
+        }
+        return entityManager.getReference(domainClass, id);
+    }
+
     private Specification<T> withIdAndSoftDelete(ID id) {
         String idFieldName = EntityClassResolver.resolveIdFieldName(domainClass);
         Specification<T> idSpec = Specification.where((root, query, cb) -> cb.equal(root.get(idFieldName), id));

@@ -1,6 +1,5 @@
 package com.zsubera.jpa.util;
 
-import com.zsubera.jpa.exception.MyJpaPlusException;
 import jakarta.persistence.criteria.CriteriaBuilder;
 import jakarta.persistence.criteria.Path;
 import jakarta.persistence.criteria.Predicate;
@@ -22,6 +21,12 @@ import org.slf4j.LoggerFactory;
  * <p>
  * <strong>大型 IN 子句处理：</strong>大多数数据库对 IN 子句中的参数数量有限制 （Oracle: 1000, SQL Server: 2100）。此类会自动将大型 IN 子句拆分为多个 OR 连接的批次，
  * 以避免超出这些限制。
+ *
+ * <p>
+ * <strong>执行计划影响：</strong>将单条 {@code IN (large list)} 拆分为 {@code IN (small) OR IN (small)}
+ * 可能改变数据库优化器的执行计划（如从索引扫描变为全表扫描）。部分数据库（PostgreSQL、MySQL）
+ * 对大 IN 列表和小 IN 列表使用不同的索引策略。如果查询性能关键，建议在数据库端创建临时表替代大 IN。
+ * 批次大小可通过 {@code myjpa-plus.in-clause.max-size} 配置。
  *
  * <p>
  * <strong>配置优先级：</strong>Spring Boot 配置 &gt; 系统属性 &gt; 默认值
@@ -377,7 +382,7 @@ public final class InClauseBuilder {
 
     private static Predicate buildBatchedIn(CriteriaBuilder cb, Path<?> path, Collection<?> values, Config config) {
         if (values.size() > config.hardLimit()) {
-            throw new MyJpaPlusException("IN clause size " + values.size() + " exceeds hard limit " + config.hardLimit()
+            throw new IllegalArgumentException("IN clause size " + values.size() + " exceeds hard limit " + config.hardLimit()
                 + ". Consider using temporary tables or subqueries for better performance. "
                 + "You can adjust the limit via -Dmyjpa-plus.in-clause-hard-limit=<value>.");
         }
@@ -408,7 +413,7 @@ public final class InClauseBuilder {
 
     private static Predicate buildBatchedNotIn(CriteriaBuilder cb, Path<?> path, Collection<?> values, Config config) {
         if (values.size() > config.hardLimit()) {
-            throw new MyJpaPlusException("NOT IN clause size " + values.size() + " exceeds hard limit "
+            throw new IllegalArgumentException("NOT IN clause size " + values.size() + " exceeds hard limit "
                 + config.hardLimit() + ". Consider using temporary tables or subqueries for better performance. "
                 + "You can adjust the limit via -Dmyjpa-plus.in-clause-hard-limit=<value>.");
         }

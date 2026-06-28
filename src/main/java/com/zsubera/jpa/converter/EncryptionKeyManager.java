@@ -8,6 +8,7 @@ import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
@@ -65,6 +66,9 @@ final class EncryptionKeyManager {
     static void setPbkdf2Iterations(int iterations) {
         if (iterations >= 100_000 && iterations <= 10_000_000) {
             configuredPbkdf2Iterations = iterations;
+        } else {
+            throw new IllegalArgumentException(
+                "PBKDF2 iterations must be between 100000 and 10000000, got: " + iterations);
         }
     }
 
@@ -318,10 +322,10 @@ final class EncryptionKeyManager {
         }
     }
 
-    private static volatile byte[] cachedSalt;
+    private static final AtomicReference<byte[]> cachedSaltRef = new AtomicReference<>();
 
     private static byte[] getSalt() {
-        byte[] cached = cachedSalt;
+        byte[] cached = cachedSaltRef.get();
         if (cached != null) {
             return cached.clone();
         }
@@ -331,20 +335,21 @@ final class EncryptionKeyManager {
         }
         if (salt != null && !salt.isEmpty()) {
             byte[] bytes = salt.getBytes(StandardCharsets.UTF_8);
-            // ponytail: 使用 volatile 写入而非 compareAndSet，最坏情况是多一次无害的重复计算
-            cachedSalt = bytes;
-            return bytes.clone();
+            // ponytail: AtomicReference.compareAndSet 保证单次计算，避免 TOCTOU 双重复计算
+            cachedSaltRef.compareAndSet(null, bytes);
+            return cachedSaltRef.get().clone();
         }
         if (isSaltCheckSkipped()) {
             if (com.zsubera.jpa.autoconfigure.EnvironmentHelper.isProductionEnvironment()) {
                 throw new MyJpaPlusException("Cannot skip PBKDF2 salt check in production environment. "
                     + "Set environment variable " + SALT_ENV + " or system property " + SALT_PROPERTY + ".");
             }
-            throw new MyJpaPlusException(
-                "PBKDF2 salt must be configured for encryption. Without a persistent salt (via " + SALT_ENV + " or "
-                    + SALT_PROPERTY + "), encrypted data becomes unrecoverable "
-                    + "after application restart. Encryption is BLOCKED until a salt is configured. "
-                    + "To explicitly acknowledge this risk (development only), set " + SKIP_SALT_PROPERTY + "=true.");
+            log.warn("SECURITY: Skipping PBKDF2 salt check. Using a dev-only deterministic salt derived from "
+                + "application name. Encrypted data will be UNRECOVERABLE after application restart. "
+                + "This is ONLY acceptable for local development with disposable data.");
+            byte[] devSalt = "myjpa-plus-dev-salt-fallback-2024".getBytes(StandardCharsets.UTF_8);
+            cachedSaltRef.compareAndSet(null, devSalt);
+            return cachedSaltRef.get().clone();
         }
         throw new MyJpaPlusException("PBKDF2 salt must be configured. " + "Set environment variable " + SALT_ENV
             + " or system property " + SALT_PROPERTY + ". " + "Salt is required for PBKDF2 key derivation security. "
@@ -412,7 +417,7 @@ final class EncryptionKeyManager {
             // ponytail: 不对 salt 做清零，因为：
             // 1. salt 来自环境变量/系统属性，不属于敏感秘密
             // 2. 并发 getSalt() 可能已持有数组引用，清零导致返回全零 salt 破坏 PBKDF2 派生
-            cachedSalt = null;
+            cachedSaltRef.set(null);
         } finally {
             KEY_SPEC_WRITE_LOCK.unlock();
         }

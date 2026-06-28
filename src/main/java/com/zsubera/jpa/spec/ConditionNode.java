@@ -299,6 +299,18 @@ public sealed interface ConditionNode permits ConditionNode.SimpleNode, Conditio
         public String toString() {
             return "JoinNode[" + joinType + " " + fieldName + " conditions=" + innerConditions + "]";
         }
+
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) return true;
+            if (!(o instanceof JoinNode joinNode)) return false;
+            return fieldName.equals(joinNode.fieldName) && joinType == joinNode.joinType;
+        }
+
+        @Override
+        public int hashCode() {
+            return 31 * fieldName.hashCode() + joinType.hashCode();
+        }
     }
 
     /** 条件的 OR 组。 */

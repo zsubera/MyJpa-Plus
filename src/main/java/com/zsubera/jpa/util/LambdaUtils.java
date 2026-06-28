@@ -118,6 +118,13 @@ public final class LambdaUtils {
     private static final SampledEvictionCache<Class<?>, Method> METHOD_CACHE =
         new SampledEvictionCache<>(4096, 0.75, 100, 4096);
 
+    /**
+     * SerializedLambda 缓存，避免每个缓存未命中时重复提取（resolveLambdaKey + resolveViaReflection 各提取一次）。
+     * 提取 SerializedLambda 涉及反射 writeReplace() 调用，约 5-10μs/次。
+     */
+    private static final SampledEvictionCache<String, SerializedLambda> LAMBDA_CACHE =
+        new SampledEvictionCache<>(4096, 0.75, 100, 4096);
+
     public static void shutdown() {
         CACHE.clear();
         METHOD_CACHE.clear();
@@ -168,17 +175,21 @@ public final class LambdaUtils {
         if (cached != null) {
             return cached;
         }
-        String propertyName;
-        try {
-            propertyName = resolveViaReflection(fn);
-        } catch (InaccessibleObjectException | SecurityException e) {
-            log.debug("Reflection path for LambdaUtils failed (JPMS restricted), falling back to serialization path",
-                e);
-            propertyName = resolveViaSerialization(fn);
-        } catch (ReflectiveOperationException e) {
-            log.debug("Reflection path for LambdaUtils failed, falling back to serialization path", e);
-            propertyName = resolveViaSerialization(fn);
+        // ponytail: 先尝试从 LAMBDA_CACHE 获取 SerializedLambda，避免 resolveViaReflection 重复提取
+        SerializedLambda lambda = LAMBDA_CACHE.get(key);
+        if (lambda == null) {
+            lambda = extractSerializedLambda(fn);
+            if (lambda != null) {
+                LAMBDA_CACHE.put(key, lambda);
+            }
         }
+        if (lambda != null) {
+            String propertyName = methodToProperty(lambda.getImplMethodName());
+            IdentifierValidator.validateColumnName(propertyName);
+            return CACHE.computeIfAbsent(key, k -> propertyName);
+        }
+        // ponytail: 降级到 resolveViaSerialization（仅当 lambda 提取完全失败时）
+        String propertyName = resolveViaSerialization(fn);
         IdentifierValidator.validateColumnName(propertyName);
         return propertyName;
     }

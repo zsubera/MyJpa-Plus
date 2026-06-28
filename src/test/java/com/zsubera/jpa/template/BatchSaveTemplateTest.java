@@ -442,4 +442,40 @@ class BatchSaveTemplateTest {
         List<TestEntity> result = batchSaveTemplate.saveAllBatchedInSeparateTransactions(entities, 10);
         assertEquals(2, result.size());
     }
+
+    // ---- Primitive ID type tests ----
+
+    @Test
+    void isDefaultPrimitiveValue_returnsTrueForPrimitiveDefaults() throws Exception {
+        java.lang.reflect.Method isDefault =
+            BatchSaveTemplate.class.getDeclaredMethod("isDefaultPrimitiveValue", Object.class);
+        isDefault.setAccessible(true);
+
+        assertTrue((boolean)isDefault.invoke(null, 0L));
+        assertTrue((boolean)isDefault.invoke(null, 0));
+        assertTrue((boolean)isDefault.invoke(null, (short)0));
+        assertTrue((boolean)isDefault.invoke(null, (byte)0));
+    }
+
+    @Test
+    void isDefaultPrimitiveValue_returnsFalseForNonNullObjectTypes() throws Exception {
+        java.lang.reflect.Method isDefault =
+            BatchSaveTemplate.class.getDeclaredMethod("isDefaultPrimitiveValue", Object.class);
+        isDefault.setAccessible(true);
+
+        assertFalse((boolean)isDefault.invoke(null, 1L));
+        assertFalse((boolean)isDefault.invoke(null, 42));
+        assertFalse((boolean)isDefault.invoke(null, "0"));
+        assertFalse((boolean)isDefault.invoke(null, (Object)null));
+    }
+
+    @Test
+    void isDefaultPrimitiveValue_returnsFalseForNonDefaultPrimitives() throws Exception {
+        java.lang.reflect.Method isDefault =
+            BatchSaveTemplate.class.getDeclaredMethod("isDefaultPrimitiveValue", Object.class);
+        isDefault.setAccessible(true);
+
+        assertFalse((boolean)isDefault.invoke(null, Long.valueOf(100L)));
+        assertFalse((boolean)isDefault.invoke(null, Integer.valueOf(999)));
+    }
 }

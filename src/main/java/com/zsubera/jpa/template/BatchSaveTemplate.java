@@ -179,17 +179,62 @@ class BatchSaveTemplate {
             return batchRes;
         });
     }
+    private static final com.zsubera.jpa.util.SampledEvictionCache<Class<?>, java.lang.reflect.Method> VERSION_METHOD_CACHE =
+        new com.zsubera.jpa.util.SampledEvictionCache<>(256, 0.75, 100, 64);
+
+    /**
+     * 尝试提取 @Version 字段的值。用于辅助判断手动赋 ID 的实体是否为新建。
+     * null 返回值意味着无 @Version 字段或获取失败（统一视为"无版本信息"）。
+     */
+    private static Object extractVersionField(Object entity) {
+        java.lang.reflect.Method getVersion = VERSION_METHOD_CACHE.computeIfAbsent(entity.getClass(), clazz -> {
+            for (Class<?> c = clazz; c != null && c != Object.class; c = c.getSuperclass()) {
+                for (java.lang.reflect.Field f : c.getDeclaredFields()) {
+                    if (f.isAnnotationPresent(jakarta.persistence.Version.class)) {
+                        String name = f.getName();
+                        String getter = "get" + Character.toUpperCase(name.charAt(0)) + name.substring(1);
+                        try {
+                            return clazz.getMethod(getter);
+                        } catch (NoSuchMethodException ignored) {
+                        }
+                    }
+                }
+            }
+            return null;
+        });
+        if (getVersion == null) {
+            return null;
+        }
+        try {
+            return getVersion.invoke(entity);
+        } catch (ReflectiveOperationException e) {
+            return null;
+        }
+    }
 
     private boolean isNewEntity(Object entity) {
         try {
             jakarta.persistence.PersistenceUnitUtil puu =
                 entityManager.getEntityManagerFactory().getPersistenceUnitUtil();
             Object id = puu.getIdentifier(entity);
+            // ponytail: ID != null does not guarantee persistence for manually-assigned @GeneratedValue.
+            // Check @Version field as secondary signal: non-null version + non-null ID → definite existing.
+            // Primitive types (long/int) always return non-null auto-boxed value (0L/0), so check default value.
+            if (id != null) {
+                if (isDefaultPrimitiveValue(id)) {
+                    return true;
+                }
+                Object version = extractVersionField(entity);
+                if (version != null) {
+                    return false;
+                }
+            }
             return id == null;
         } catch (RuntimeException e) {
             log.warn("PersistenceUnitUtil.getIdentifier() failed for {}, falling back to getId(): {}",
                 entity.getClass().getSimpleName(), e.getMessage());
         }
+
         try {
             java.lang.reflect.Method getId = ID_METHOD_CACHE.computeIfAbsent(entity.getClass(), clazz -> {
                 try {
@@ -222,6 +267,17 @@ class BatchSaveTemplate {
                     + "Use saveAllBatchedPure() for new entities, or implement getId().",
                 e);
         }
+    }
+
+    /**
+     * 检查 ID 值是否为对应原始类型的默认值（0L, 0），
+     * 此类值来自 PersistenceUnitUtil.getIdentifier() 对原始类型 ID 字段的自动装箱返回。
+     */
+    private static boolean isDefaultPrimitiveValue(Object id) {
+        return id instanceof Long l && l == 0L
+            || id instanceof Integer i && i == 0
+            || id instanceof Short s && s == 0
+            || id instanceof Byte b && b == 0;
     }
 
     /**

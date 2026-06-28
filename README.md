@@ -163,7 +163,7 @@ int affected = new MergeSpec<>(User.class)
 ```java
 @Entity
 public class User {
-    @Encrypt(algorithm = "AES")
+    @Encrypt
     @Column(name = "id_card")
     private String idCard;
 }
@@ -197,13 +197,13 @@ public class User {
 ### 乐观锁重试
 
 ```java
-@RetryOnOptimisticLock(maxRetries = 5, maxTotalTimeoutMs = 10000)
+@RetryOnOptimisticLock(maxRetries = 5, backoffMs = 200)
 public void updateBalance(Long userId, BigDecimal amount) {
     Account account = accountRepository.findById(userId).orElseThrow();
     account.setBalance(account.getBalance().add(amount));
     accountRepository.save(account);
 }
-// 重试策略：指数退避，最多重试 5 次，总超时 10 秒
+// 重试策略：指数退避，最多重试 5 次，首次退避 200ms
 ```
 
 ### CTE 查询
@@ -294,7 +294,7 @@ boolean deleted = SoftDeleteHelper.isSoftDeleted(User.class, user);
 | `DialectStrategy` | 注册自定义 UPSERT SQL 方言，通过 `DialectDetector.registerDialect()` 注册 |
 | `CacheAdapter` | 可插拔查询缓存后端，默认基于 ConcurrentHashMap，可替换为 Redis/Caffeine |
 | `SoftDeleteBulkExecutor.EventPublisher` | 批量软删除后的缓存失效回调，由自动配置在启动时注册 |
-| `OptimisticLockRetryAdvisor` | 重试策略配置：`maxRetries`、`maxTotalTimeoutMs`（系统属性） |
+| `OptimisticLockRetryAdvisor` | 重试策略配置：`maxRetries`、`backoffMs`（系统属性） |
 
 ---
 

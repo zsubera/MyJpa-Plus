@@ -117,9 +117,9 @@ final class BulkTransactionHelper {
      */
     static boolean isJtaTransactionActive(EntityManager em) {
         try {
-            em.getTransaction(); // 探测性调用：JTA 环境下会抛出 IllegalStateException
-            return false; // 未抛出 IllegalStateException → 非 JTA
-        } catch (IllegalStateException e) {
+            em.getTransaction();
+            return false;
+        } catch (Exception e) {
             return TransactionSynchronizationManager.isActualTransactionActive();
         }
     }

@@ -264,8 +264,18 @@ class EncryptConverterExtendedTest {
         System.setProperty("myjpa-plus.encrypt.skip-salt-check", "true");
         EncryptConverter.clearCaches();
         EncryptConverter converter = new EncryptConverter();
-        assertThrows(com.zsubera.jpa.exception.MyJpaPlusException.class,
-            () -> converter.convertToDatabaseColumn("test"));
+        // ponytail: skipSaltCheck=true now allows encryption with dev fallback salt
+        // Set a key so that the dev salt can be used for derivation
+        System.setProperty("myjpa.encrypt.key", "test-key-16-bytes!");
+        try {
+            String result = converter.convertToDatabaseColumn("test");
+            assertNotNull(result);
+            assertTrue(result.startsWith("v1:"));
+        } finally {
+            System.clearProperty("myjpa.encrypt.key");
+            System.clearProperty("myjpa-plus.encrypt.skip-salt-check");
+            EncryptConverter.clearCaches();
+        }
     }
 
     @Test

@@ -267,7 +267,14 @@ final class EntityFieldExtractor<T> {
             } catch (NoSuchMethodException ignored) {
                 GETTER_CACHE.put(cacheKey, NO_GETTER_SENTINEL);
             } catch (java.lang.reflect.InvocationTargetException e) {
-                throw e.getTargetException() != null ? new Exception(e.getTargetException()) : e;
+                Throwable cause = e.getCause();
+                if (cause instanceof RuntimeException re) {
+                    throw re;
+                }
+                if (cause instanceof Error err) {
+                    throw err;
+                }
+                throw new RuntimeException("Getter invocation failed for " + cls.getName() + "#" + getterName, cause);
             }
         }
         // 尝试 isXxx() getter（boolean 类型，带缓存）
@@ -287,7 +294,14 @@ final class EntityFieldExtractor<T> {
                 } catch (NoSuchMethodException ignored) {
                     GETTER_CACHE.put(isCacheKey, NO_GETTER_SENTINEL);
                 } catch (java.lang.reflect.InvocationTargetException e) {
-                    throw e.getTargetException() != null ? new Exception(e.getTargetException()) : e;
+                    Throwable cause = e.getCause();
+                    if (cause instanceof RuntimeException re) {
+                        throw re;
+                    }
+                    if (cause instanceof Error err) {
+                        throw err;
+                    }
+                    throw new RuntimeException("Getter invocation failed for " + cls.getName() + "#" + isGetterName, cause);
                 }
             }
         }

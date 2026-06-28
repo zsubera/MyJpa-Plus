@@ -4,6 +4,8 @@ import com.zsubera.jpa.annotation.RetryOnOptimisticLock;
 import jakarta.persistence.OptimisticLockException;
 import jakarta.persistence.PersistenceException;
 import java.lang.reflect.Method;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.ThreadLocalRandom;
 import org.aspectj.lang.ProceedingJoinPoint;
 import org.aspectj.lang.annotation.Around;
@@ -45,6 +47,9 @@ public class OptimisticLockRetryAdvisor {
     /** 所有重试的总超时限制（60 秒）。 */
     private static final long MAX_TOTAL_TIMEOUT_MS = 60_000;
 
+    /** ponytail: 缓存注解查找结果，避免每次 AOP 调用反射扫描类层次。 */
+    private static final ConcurrentMap<Method, RetryOnOptimisticLock> ANNOTATION_CACHE = new ConcurrentHashMap<>();
+
     @Autowired(required = false)
     private PlatformTransactionManager transactionManager;
 
@@ -59,29 +64,28 @@ public class OptimisticLockRetryAdvisor {
     public Object retryOnOptimisticLock(ProceedingJoinPoint pjp) throws Throwable {
         MethodSignature signature = (MethodSignature)pjp.getSignature();
         Method method = signature.getMethod();
-        // 使用 AnnotationUtils.findAnnotation 处理 Spring 代理场景
-        // method.getAnnotation() 在代理接口方法上可能返回 null
-        RetryOnOptimisticLock annotation = AnnotationUtils.findAnnotation(method, RetryOnOptimisticLock.class);
-        if (annotation == null) {
-            // 回退：从目标类及其实现的接口查找（CGLIB 代理场景下接口注解可能丢失）
-            try {
-                Method targetMethod =
-                    pjp.getTarget().getClass().getMethod(method.getName(), method.getParameterTypes());
-                annotation = AnnotationUtils.findAnnotation(targetMethod, RetryOnOptimisticLock.class);
-            } catch (NoSuchMethodException e) {
-                // 目标方法未找到，尝试遍历接口
-                for (Class<?> iface : pjp.getTarget().getClass().getInterfaces()) {
-                    try {
-                        Method ifaceMethod = iface.getMethod(method.getName(), method.getParameterTypes());
-                        annotation = AnnotationUtils.findAnnotation(ifaceMethod, RetryOnOptimisticLock.class);
-                        if (annotation != null) {
-                            break;
+        // ponytail: 缓存注解查找结果避免重复反射扫描类层次
+        RetryOnOptimisticLock annotation = ANNOTATION_CACHE.computeIfAbsent(method, m -> {
+            RetryOnOptimisticLock found = AnnotationUtils.findAnnotation(m, RetryOnOptimisticLock.class);
+            if (found == null) {
+                // 回退：从目标类及其实现的接口查找（CGLIB 代理场景下接口注解可能丢失）
+                try {
+                    Method targetMethod =
+                        pjp.getTarget().getClass().getMethod(m.getName(), m.getParameterTypes());
+                    found = AnnotationUtils.findAnnotation(targetMethod, RetryOnOptimisticLock.class);
+                } catch (NoSuchMethodException e) {
+                    for (Class<?> iface : pjp.getTarget().getClass().getInterfaces()) {
+                        try {
+                            Method ifaceMethod = iface.getMethod(m.getName(), m.getParameterTypes());
+                            found = AnnotationUtils.findAnnotation(ifaceMethod, RetryOnOptimisticLock.class);
+                            if (found != null) break;
+                        } catch (NoSuchMethodException ignored) {
                         }
-                    } catch (NoSuchMethodException ignored) {
                     }
                 }
             }
-        }
+            return found;
+        });
         if (annotation == null) {
             return pjp.proceed();
         }
@@ -137,11 +141,15 @@ public class OptimisticLockRetryAdvisor {
                 Object result = pjp.proceed();
                 transactionManager.commit(status);
                 return result;
-            } catch (RuntimeException e) {
-                transactionManager.rollback(status);
-                throw e;
             } catch (Exception e) {
-                transactionManager.rollback(status);
+                if (!status.isCompleted()) {
+                    try {
+                        transactionManager.rollback(status);
+                    } catch (Exception rollbackEx) {
+                        log.warn("Failed to rollback transaction after exception: {}",
+                            rollbackEx.getMessage());
+                    }
+                }
                 throw e;
             }
         }

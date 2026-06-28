@@ -1417,4 +1417,60 @@ class UpdateSpecTest {
         assertEquals(1, count);
         assertEquals("beta", repository.findAll().stream().filter(e -> e.getStatus() == 2).findFirst().get().getName());
     }
+
+    @Test
+    void execute_clearsL1CacheSoFindHitsDatabase() {
+        TestEntity entity = repository.save(newEntity("old", 1));
+        Long id = entity.getId();
+        em.clear();
+
+        TestEntity loaded = em.find(TestEntity.class, id);
+        assertEquals("old", loaded.getName());
+
+        int count = new UpdateSpec<>(TestEntity.class)
+            .set(TestEntity::getName, "new")
+            .eq(TestEntity::getId, id)
+            .execute(em);
+        assertEquals(1, count);
+
+        TestEntity reloaded = em.find(TestEntity.class, id);
+        assertEquals("new", reloaded.getName());
+    }
+
+    @Test
+    void executeLimited_clearsL1CacheSoFindHitsDatabase() {
+        TestEntity entity = repository.save(newEntity("limited", 1));
+        Long id = entity.getId();
+        em.clear();
+
+        TestEntity loaded = em.find(TestEntity.class, id);
+        assertEquals("limited", loaded.getName());
+
+        int count = new UpdateSpec<>(TestEntity.class)
+            .set(TestEntity::getName, "updated")
+            .eq(TestEntity::getId, id)
+            .executeLimited(em, 100);
+        assertEquals(1, count);
+
+        TestEntity reloaded = em.find(TestEntity.class, id);
+        assertEquals("updated", reloaded.getName());
+    }
+
+    @Test
+    void updateAll_clearsL1CacheSoFindHitsDatabase() {
+        repository.save(newEntity("all", 1));
+        em.clear();
+
+        assertFalse(em.createQuery("SELECT COUNT(e) FROM testEntity e WHERE e.name = 'all'", Long.class)
+            .getSingleResult() == 0);
+
+        int count = new UpdateSpec<>(TestEntity.class)
+            .set(TestEntity::getName, "batch")
+            .allowUnconditional(true)
+            .updateAll(em);
+        assertTrue(count > 0);
+
+        List<TestEntity> all = repository.findAll();
+        assertTrue(all.stream().allMatch(e -> "batch".equals(e.getName())));
+    }
 }

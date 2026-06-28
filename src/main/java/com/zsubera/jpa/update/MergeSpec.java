@@ -556,10 +556,13 @@ public class MergeSpec<T> {
                     + "Use executeBatch() to run within the existing transaction, "
                     + "or call from a non-transactional context for true batch isolation.");
         }
-        EntityTransaction probeTx = em.getTransaction();
-        if (probeTx == null) {
-            throw new MyJpaPlusException("Cannot manage transactions in JTA environment. "
-                + "Use @Transactional annotation or MyJpaTemplate.executeBatch() instead.");
+        EntityTransaction probeTx;
+        try {
+            probeTx = em.getTransaction();
+        } catch (IllegalStateException e) {
+            throw new MyJpaPlusException("JTA environment detected. "
+                + "executeBatchInSeparateTransactions requires RESOURCE_LOCAL transaction manager. "
+                + "Use @Transactional annotation or MyJpaTemplate.executeBatch() instead.", e);
         }
         DialectStrategy cachedStrategy = resolveDialectStrategy(em);
         int total = 0;
@@ -670,7 +673,11 @@ public class MergeSpec<T> {
         return columns;
     }
 
-    private static boolean isJtaTransactionActive(EntityManager em) {
+    /**
+     * @deprecated 保留用于测试兼容性。直接使用 {@link BulkTransactionHelper#isJtaTransactionActive(EntityManager)}。
+     */
+    @Deprecated
+    static boolean isJtaTransactionActive(EntityManager em) {
         return BulkTransactionHelper.isJtaTransactionActive(em);
     }
 

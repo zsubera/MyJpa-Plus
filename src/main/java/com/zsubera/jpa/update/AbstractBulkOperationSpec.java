@@ -394,22 +394,9 @@ public abstract class AbstractBulkOperationSpec<T, SELF extends AbstractBulkOper
      */
     @SafeVarargs
     public final SELF multiLike(String keyword, SFunction<T, ?>... fields) {
-        if (keyword == null) {
-            throw new IllegalArgumentException("keyword must not be null");
-        }
-        if (fields == null) {
-            throw new IllegalArgumentException("fields must not be null");
-        }
-        if (!keyword.isEmpty() && fields.length > 0) {
-            String[] fieldNames = new String[fields.length];
-            for (int i = 0; i < fields.length; i++) {
-                if (fields[i] == null) {
-                    throw new IllegalArgumentException("fields[" + i + "] must not be null");
-                }
-                fieldNames[i] = property(fields[i]);
-            }
-            String pattern = wrapLikePattern(keyword);
-            conditionNodes.add(new BulkConditionNode.LeafNode(buildMultiLikeFn(fieldNames, pattern)));
+        BulkMultiLikeResult result = resolveMultiLike(keyword, fields, this::property);
+        if (result != null) {
+            conditionNodes.add(new BulkConditionNode.LeafNode(buildMultiLikeFn(result.fieldNames, result.pattern)));
         }
         return self();
     }
@@ -425,6 +412,49 @@ public abstract class AbstractBulkOperationSpec<T, SELF extends AbstractBulkOper
     @SafeVarargs
     public final SELF multiLike(boolean condition, String keyword, SFunction<T, ?>... fields) {
         return condition ? multiLike(keyword, fields) : self();
+    }
+
+    /**
+     * 共享的 multiLike 校验和创建逻辑，供 {@link com.zsubera.jpa.update.OrConditionBuilder} 复用。
+     * ponytail: 消除 AbstractBulkOperationSpec.multiLike 与 OrConditionBuilder.multiLike 的代码重复。
+     *
+     * @param keyword 搜索关键字
+     * @param fields 字段方法引用
+     * @param fieldResolver 字段名解析器
+     * @param <T> 实体类型
+     * @return 包含字段名数组和 LIKE 模式的 pair，如果无需添加条件则返回 null
+     * @throws IllegalArgumentException 如果 keyword 为 null，或 fields 为 null，或 fields 包含 null 元素
+     */
+    static <T> BulkMultiLikeResult resolveMultiLike(String keyword, SFunction<T, ?>[] fields,
+        java.util.function.Function<SFunction<T, ?>, String> fieldResolver) {
+        if (keyword == null) {
+            throw new IllegalArgumentException("keyword must not be null");
+        }
+        if (fields == null) {
+            throw new IllegalArgumentException("fields must not be null");
+        }
+        if (keyword.isEmpty() || fields.length == 0) {
+            return null;
+        }
+        String[] fieldNames = new String[fields.length];
+        for (int i = 0; i < fields.length; i++) {
+            if (fields[i] == null) {
+                throw new IllegalArgumentException("fields[" + i + "] must not be null");
+            }
+            fieldNames[i] = fieldResolver.apply(fields[i]);
+        }
+        String pattern = wrapLikePattern(keyword);
+        return new BulkMultiLikeResult(fieldNames, pattern);
+    }
+
+    static final class BulkMultiLikeResult {
+        final String[] fieldNames;
+        final String pattern;
+
+        BulkMultiLikeResult(String[] fieldNames, String pattern) {
+            this.fieldNames = fieldNames;
+            this.pattern = pattern;
+        }
     }
 
     /**

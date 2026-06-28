@@ -43,6 +43,9 @@ class BulkOperationTemplate {
     /** 批量执行最大迭代次数保护，防止无限循环。 */
     private static final int DEFAULT_MAX_BATCH_ITERATIONS = 10000;
 
+    /** 无限制模式下的绝对安全行数上限。即使 effectiveLimit <= 0，也不会超过此值。 */
+    private static final int ABSOLUTE_MAX_BATCH_ROWS = 1_000_000;
+
     private volatile int maxBatchIterations = DEFAULT_MAX_BATCH_ITERATIONS;
 
     private final EntityManager entityManager;
@@ -309,8 +312,15 @@ class BulkOperationTemplate {
                 break;
             }
             effectiveLimit = resolveMaxBulkOperationRows();
-        } while (batchResult > 0 && (effectiveLimit <= 0 || total < effectiveLimit));
+        } while (batchResult > 0 && isWithinLimit(total, effectiveLimit));
         return total;
+    }
+
+    private static boolean isWithinLimit(int total, int effectiveLimit) {
+        if (effectiveLimit > 0) {
+            return total < effectiveLimit;
+        }
+        return total < ABSOLUTE_MAX_BATCH_ROWS;
     }
 
     // ---- 独立事务分批执行 ----
@@ -424,6 +434,9 @@ class BulkOperationTemplate {
                 int effectiveLimit = resolveMaxBulkOperationRows();
                 if (effectiveLimit > 0 && total >= effectiveLimit) {
                     shouldContinue = false;
+                } else if (!isWithinLimit(total, effectiveLimit)) {
+                    log.warn("Batch {} reached safety limit ({} rows). Stopping.", operationName, ABSOLUTE_MAX_BATCH_ROWS);
+                    shouldContinue = false;
                 }
             } catch (RuntimeException e) {
                 failedBatchIndex = batchCount - 1;
@@ -511,7 +524,7 @@ class BulkOperationTemplate {
                 break;
             }
             effectiveLimit = resolveMaxBulkOperationRows();
-        } while (batchResult > 0 && (effectiveLimit <= 0 || total < effectiveLimit));
+        } while (batchResult > 0 && isWithinLimit(total, effectiveLimit));
         return total;
     }
 }

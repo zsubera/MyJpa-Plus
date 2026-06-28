@@ -13,25 +13,33 @@ import com.zsubera.jpa.exception.MyJpaPlusException;
  * UPSERT 语法：{@code INSERT INTO t (...) VALUES (...) ON DUPLICATE KEY UPDATE col = VALUES(col)}
  *
  * <p>
- * 使用 VALUES() 函数引用新插入值。VALUES() 在 MySQL 8.0.20 中被标记为弃用但仍可用。
- * MySQL 推荐使用行别名语法 {@code INSERT ... AS new_row ON DUPLICATE KEY UPDATE col = new_row.col}，
- * 但该语法仅在 MySQL 8.0.19+ 可用，且部分中间件/代理可能不兼容。因此当前使用 VALUES() 以确保广泛兼容性。
- *
- * <p>
- * ponytail: 行别名语法需要版本检测能力（通过 JDBC Connection.getMetaData().getDatabaseMajorVersion()），
- * 但当前 DialectStrategy 接口未传递 EntityManager/Connection，且 MysqlDialect 是单例无法存储 per-connection 状态。
- * 若 MySQL 未来版本移除 VALUES() 支持，需重构 DialectStrategy 接口增加版本参数，或使用 ThreadLocal 传递版本信息。
+ * VALUES() 函数在 MySQL 8.0.20 被标记为弃用，但当前仍可正常工作。
+ * 设置系统属性 {@code myjpa-plus.mysql.use-row-alias=true} 或调用
+ * {@link #setUseRowAliasSyntax(boolean)} 可启用 MySQL 8.0.19+
+ * 的行别名语法 {@code AS new}。
  *
  * <p>
  * 标识符使用反引号转义：{@code `identifier`}
  */
 final class MysqlDialect extends AbstractDialectStrategy {
 
-    /**
-     * {@inheritDoc}
-     *
-     * <p>返回 "mysql"。
-     */
+    private static volatile boolean useRowAliasSyntax = false;
+
+    static {
+        String prop = System.getProperty("myjpa-plus.mysql.use-row-alias");
+        if ("true".equalsIgnoreCase(prop)) {
+            useRowAliasSyntax = true;
+        }
+    }
+
+    static void setUseRowAliasSyntax(boolean enabled) {
+        useRowAliasSyntax = enabled;
+    }
+
+    static boolean isUseRowAliasSyntax() {
+        return useRowAliasSyntax;
+    }
+
     @Override
     public String name() {
         return "mysql";
@@ -47,15 +55,6 @@ final class MysqlDialect extends AbstractDialectStrategy {
         return "``";
     }
 
-    /**
-     * {@inheritDoc}
-     *
-     * <p>生成 MySQL UPSERT SQL：
-     * <ul>
-     * <li>有更新列时：{@code INSERT INTO t (...) VALUES (...) ON DUPLICATE KEY UPDATE col = VALUES(col)}</li>
-     * <li>无更新列时：{@code INSERT INTO t (...) VALUES (...) ON DUPLICATE KEY UPDATE id = VALUES(id)}</li>
-     * </ul>
-     */
     @Override
     public SqlWithParams buildUpsertSql(String tableName, List<String> insertColumns,
         List<EntityFieldValue> insertFieldValues, List<String> conflictColumns, List<String> updateColumns) {
@@ -73,22 +72,31 @@ final class MysqlDialect extends AbstractDialectStrategy {
                     + "Consider using INSERT IGNORE or specifying update columns.", tableName);
             SqlWithParams insert = buildInsertClause(escapedTable, insertColumns, insertFieldValues);
             StringBuilder sql = new StringBuilder(insert.sql());
-            sql.append(" ON DUPLICATE KEY UPDATE ");
             String idCol = escapeIdentifier(insertColumns.get(0));
-            sql.append(idCol).append(" = VALUES(").append(idCol).append(")");
+            if (useRowAliasSyntax) {
+                sql.append(" AS new ON DUPLICATE KEY UPDATE ").append(idCol).append(" = new.").append(idCol);
+            } else {
+                sql.append(" ON DUPLICATE KEY UPDATE ").append(idCol).append(" = VALUES(").append(idCol).append(")");
+            }
             return new SqlWithParams(sql.toString(), insert.params());
         }
 
         SqlWithParams insert = buildInsertClause(escapedTable, insertColumns, insertFieldValues);
         StringBuilder sql = new StringBuilder(insert.sql());
 
-        // ON DUPLICATE KEY UPDATE `col` = VALUES(`col`)
-        // ponytail: VALUES() deprecated in MySQL 8.0.20+ but still functional. See class Javadoc for upgrade path.
-        sql.append(" ON DUPLICATE KEY UPDATE ");
+        if (useRowAliasSyntax) {
+            sql.append(" AS new ON DUPLICATE KEY UPDATE ");
+        } else {
+            sql.append(" ON DUPLICATE KEY UPDATE ");
+        }
         List<String> setClauses = new ArrayList<>();
         for (String col : updateColumns) {
             String escaped = escapeIdentifier(col);
-            setClauses.add(escaped + " = VALUES(" + escaped + ")");
+            if (useRowAliasSyntax) {
+                setClauses.add(escaped + " = new." + escaped);
+            } else {
+                setClauses.add(escaped + " = VALUES(" + escaped + ")");
+            }
         }
         sql.append(String.join(", ", setClauses));
         return new SqlWithParams(sql.toString(), insert.params());
@@ -151,15 +159,26 @@ final class MysqlDialect extends AbstractDialectStrategy {
             }
             sql.append(")");
         }
+        if (useRowAliasSyntax) {
+            sql.append(" AS new");
+        }
         if (updateColumns.isEmpty()) {
             String idCol = escapeIdentifier(insertColumns.get(0));
-            sql.append(" ON DUPLICATE KEY UPDATE ").append(idCol).append(" = VALUES(").append(idCol).append(")");
+            if (useRowAliasSyntax) {
+                sql.append(" ON DUPLICATE KEY UPDATE ").append(idCol).append(" = new.").append(idCol);
+            } else {
+                sql.append(" ON DUPLICATE KEY UPDATE ").append(idCol).append(" = VALUES(").append(idCol).append(")");
+            }
         } else {
             sql.append(" ON DUPLICATE KEY UPDATE ");
             List<String> setClauses = new ArrayList<>();
             for (String col : updateColumns) {
                 String escaped = escapeIdentifier(col);
-                setClauses.add(escaped + " = VALUES(" + escaped + ")");
+                if (useRowAliasSyntax) {
+                    setClauses.add(escaped + " = new." + escaped);
+                } else {
+                    setClauses.add(escaped + " = VALUES(" + escaped + ")");
+                }
             }
             sql.append(String.join(", ", setClauses));
         }

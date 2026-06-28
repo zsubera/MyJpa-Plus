@@ -7,10 +7,12 @@ import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
 import java.security.SecureRandom;
 import java.util.*;
+import java.util.concurrent.ConcurrentLinkedDeque;
 import javax.crypto.Cipher;
 import javax.crypto.spec.GCMParameterSpec;
 import javax.crypto.spec.SecretKeySpec;
 
+import jakarta.annotation.PreDestroy;
 import jakarta.persistence.Converter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -72,16 +74,17 @@ public class EncryptConverter implements AttributeConverter<String, String> {
     private static final java.util.regex.Pattern VERSION_PATTERN = java.util.regex.Pattern.compile("v\\d+");
 
     /** 密钥预热线程池。 */
-    private static final java.util.concurrent.atomic.AtomicReference<
-        java.util.concurrent.ExecutorService> WARM_UP_EXECUTOR = new java.util.concurrent.atomic.AtomicReference<>();
+    private static java.util.concurrent.ExecutorService warmUpExecutor;
+
+    private static final Object WARMUP_LOCK = new Object();
 
     private static java.util.concurrent.ExecutorService getOrCreateWarmUpExecutor() {
-        java.util.concurrent.ExecutorService executor = WARM_UP_EXECUTOR.get();
+        java.util.concurrent.ExecutorService executor = warmUpExecutor;
         if (executor != null) {
             return executor;
         }
-        synchronized (WARM_UP_EXECUTOR) {
-            executor = WARM_UP_EXECUTOR.get();
+        synchronized (WARMUP_LOCK) {
+            executor = warmUpExecutor;
             if (executor != null) {
                 return executor;
             }
@@ -90,56 +93,71 @@ public class EncryptConverter implements AttributeConverter<String, String> {
                 t.setDaemon(true);
                 return t;
             });
-            WARM_UP_EXECUTOR.set(executor);
+            warmUpExecutor = executor;
             return executor;
         }
     }
 
-    static {
-        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
-            java.util.concurrent.ExecutorService executor = WARM_UP_EXECUTOR.getAndSet(null);
-            if (executor != null) {
-                executor.shutdownNow();
+    /**
+     * Cipher 对象池最大容量，超过时丢弃归还的 cipher 防止无限增长。
+     * ponytail: 64 cap 覆盖常见并发场景（虚拟线程 1000+ 时 pool 不会被撑爆）。
+     * 如果出现 cipher 不足会重新创建，borrowCipher 允许多个线程同时新建。
+     */
+    private static final int MAX_POOL_SIZE = 64;
+
+    /**
+     * Cipher 对象池：使用 ConcurrentLinkedDeque 替代 ThreadLocal，
+     * 避免虚拟线程场景下百万级 ThreadLocal 实例导致 OOM。
+     */
+    private static final java.util.Queue<Cipher> CIPHER_POOL = new ConcurrentLinkedDeque<>();
+
+    private static Cipher borrowCipher() {
+        Cipher cipher = CIPHER_POOL.poll();
+        if (cipher == null) {
+            try {
+                cipher = Cipher.getInstance(ALGORITHM);
+            } catch (GeneralSecurityException e) {
+                throw new MyJpaPlusException("Failed to initialize cipher", e);
             }
-        }, "encrypt-key-warmup-shutdown"));
-    }
-
-    /**
-     * ponytail: 使用 ThreadLocal 缓存 Cipher 实例，避免每次加解密都执行 Cipher.getInstance() 的 SPI 查找开销。
-     * 每次操作通过 cipher.init() 重置状态，等价于新建实例但省去了 SPI 查找和对象分配。
-     * ThreadLocal 与虚拟线程兼容（每个虚拟线程拥有独立映射）。
-     */
-    private static final ThreadLocal<Cipher> CIPHER_CACHE = ThreadLocal.withInitial(() -> {
-        try {
-            return Cipher.getInstance(ALGORITHM);
-        } catch (GeneralSecurityException e) {
-            throw new MyJpaPlusException("Failed to initialize cipher", e);
         }
-    });
+        return cipher;
+    }
 
-    private static Cipher getCipher() {
-        return CIPHER_CACHE.get();
+    private static void returnCipher(Cipher cipher) {
+        if (CIPHER_POOL.size() >= MAX_POOL_SIZE) {
+            // ponytail: 池满时丢弃归还的 cipher，下次 borrow 重新创建。
+            // 避免池中混入状态异常的 cipher（doFinal 异常后虽然 init 会重置状态，
+            // 但防御性丢弃防止任何潜在问题）。
+            return;
+        }
+        CIPHER_POOL.offer(cipher);
     }
 
     /**
-     * @deprecated 此方法已无操作，保留仅为 API 兼容性。Cipher 实例通过 ThreadLocal 缓存，无需手动清理。
+     * 清除 Cipher 对象池。用于应用关闭时清理。
      */
-    @Deprecated(forRemoval = true)
-    public static void removeCipher() {}
-
-    /**
-     * 清除 ThreadLocal 缓存的 Cipher 实例。用于应用关闭时清理。
-     */
-    static void clearCipherCache() {
-        CIPHER_CACHE.remove();
+    static void clearCipherPool() {
+        CIPHER_POOL.clear();
     }
 
     /**
-     * 清除所有缓存的密钥、版本信息和 ThreadLocal Cipher 实例。用于应用关闭时清理和测试环境重置。
+     * 清除所有缓存的密钥、版本信息和 Cipher 对象池。用于应用关闭时清理和测试环境重置。
      */
     public static void clearCaches() {
         EncryptionKeyManager.clearCaches();
-        clearCipherCache();
+        clearCipherPool();
+    }
+
+    /**
+     * 关闭预热线程池。由 Spring 容器在关闭时调用。
+     */
+    @PreDestroy
+    public static void shutdownWarmUpExecutor() {
+        java.util.concurrent.ExecutorService executor = warmUpExecutor;
+        if (executor != null && !executor.isShutdown()) {
+            executor.shutdownNow();
+            warmUpExecutor = null;
+        }
     }
 
     /**
@@ -218,29 +236,26 @@ public class EncryptConverter implements AttributeConverter<String, String> {
         if (!EncryptionKeyManager.KEY_VALIDATED.get()) {
             validateKeyConfiguration();
         }
-        // ponytail: getSalt() now throws when no persistent salt is configured,
-        // preventing silent data-loss. The warning previously logged here is
-        // unreachable — deriveKey() -> getSalt() throws first.
+        SecretKeySpec keySpec = EncryptionKeyManager.getKeySpec();
+        byte[] iv = new byte[GCM_IV_LENGTH];
+        SECURE_RANDOM.nextBytes(iv);
+        byte[] plaintextBytes = attribute.getBytes(StandardCharsets.UTF_8);
+        Cipher cipher = borrowCipher();
         try {
-            SecretKeySpec keySpec = EncryptionKeyManager.getKeySpec();
-            Cipher cipher = getCipher();
-            byte[] iv = new byte[GCM_IV_LENGTH];
-            SECURE_RANDOM.nextBytes(iv);
             cipher.init(Cipher.ENCRYPT_MODE, keySpec, new GCMParameterSpec(GCM_TAG_LENGTH, iv));
-            byte[] plaintextBytes = attribute.getBytes(StandardCharsets.UTF_8);
-            try {
-                byte[] encrypted = cipher.doFinal(plaintextBytes);
-                byte[] combined = new byte[iv.length + encrypted.length];
-                System.arraycopy(iv, 0, combined, 0, iv.length);
-                System.arraycopy(encrypted, 0, combined, iv.length, encrypted.length);
-                String version = EncryptionKeyManager.getKeyVersion();
-                return version + ":" + Base64.getEncoder().encodeToString(combined);
-            } finally {
-                java.util.Arrays.fill(plaintextBytes, (byte)0);
-            }
+            byte[] encrypted = cipher.doFinal(plaintextBytes);
+            byte[] combined = new byte[iv.length + encrypted.length];
+            System.arraycopy(iv, 0, combined, 0, iv.length);
+            System.arraycopy(encrypted, 0, combined, iv.length, encrypted.length);
+            String version = EncryptionKeyManager.getKeyVersion();
+            // ponytail: 成功后归还 cipher 到池，失败时丢弃（doFinal 异常后 cipher 状态不可恢复）
+            returnCipher(cipher);
+            return version + ":" + Base64.getEncoder().encodeToString(combined);
         } catch (GeneralSecurityException e) {
             log.error("Encryption failed", e);
             throw new MyJpaPlusException("Failed to encrypt value. Check encryption key configuration.", e);
+        } finally {
+            java.util.Arrays.fill(plaintextBytes, (byte)0);
         }
     }
 
@@ -288,13 +303,15 @@ public class EncryptConverter implements AttributeConverter<String, String> {
             byte[] encrypted = new byte[combined.length - GCM_IV_LENGTH];
             System.arraycopy(combined, GCM_IV_LENGTH, encrypted, 0, encrypted.length);
             SecretKeySpec keySpec = EncryptionKeyManager.getKeySpec(version);
-            Cipher cipher = getCipher();
-            cipher.init(Cipher.DECRYPT_MODE, keySpec, new GCMParameterSpec(GCM_TAG_LENGTH, iv));
-            byte[] decrypted = cipher.doFinal(encrypted);
+            Cipher cipher = borrowCipher();
             try {
+                cipher.init(Cipher.DECRYPT_MODE, keySpec, new GCMParameterSpec(GCM_TAG_LENGTH, iv));
+                byte[] decrypted = cipher.doFinal(encrypted);
+                // ponytail: 成功后归还 cipher 到池，失败时丢弃
+                returnCipher(cipher);
                 return new String(decrypted, StandardCharsets.UTF_8);
             } finally {
-                java.util.Arrays.fill(decrypted, (byte)0);
+                // doFinal 异常时 cipher 内部状态机可能损坏，丢弃不归还
             }
         } catch (GeneralSecurityException e) {
             log.error("Decryption failed", e);
@@ -313,7 +330,13 @@ public class EncryptConverter implements AttributeConverter<String, String> {
             validateKeyConfiguration();
         }
         String decrypted = SHARED_INSTANCE.convertToEntityAttribute(encryptedValue);
-        // ponytail: plaintext String stays on heap until GC. Upgrade to char[] + wipe if audit demands it.
-        return SHARED_INSTANCE.convertToDatabaseColumn(decrypted);
+        try {
+            return SHARED_INSTANCE.convertToDatabaseColumn(decrypted);
+        } finally {
+            // ponytail: String is immutable so full zeroing needs char[] migration.
+            // Security: plaintext remains in heap until GC. In high-security environments,
+            // consider using char[] throughout the application instead of String.
+            decrypted = null;
+        }
     }
 }

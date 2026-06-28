@@ -36,8 +36,8 @@ class SqlSlowQueryInterceptorProxyCacheTest {
             maxCacheSizeField.setAccessible(true);
             int maxCacheSize = maxCacheSizeField.getInt(null);
 
-            assertTrue(maxCacheSize > 0 && maxCacheSize <= 1024,
-                "MAX_PROXY_CLASS_CACHE_SIZE should be between 1 and 1024, got: " + maxCacheSize);
+            assertTrue(maxCacheSize > 0 && maxCacheSize <= 8192,
+                "MAX_PROXY_CLASS_CACHE_SIZE should be between 1 and 8192, got: " + maxCacheSize);
         } catch (Exception e) {
             fail("Failed to access MAX_PROXY_CLASS_CACHE_SIZE: " + e.getMessage());
         }

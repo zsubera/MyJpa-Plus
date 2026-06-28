@@ -90,6 +90,27 @@ public final class SoftDeleteContext {
     private SoftDeleteContext() {}
 
     /**
+     * 使用 try-with-resources 在范围内跳过软删除过滤。自动管理 push/pop 生命周期，异常安全。
+     *
+     * <pre>{@code
+     * try (var ignored = SoftDeleteContext.ignoreScope()) {
+     *     repository.findAll();
+     * }
+     * }</pre>
+     *
+     * @return 可关闭的 AutoCloseable，关闭时自动调用 popIgnore()
+     */
+    public static AutoCloseable ignoreScope() {
+        pushIgnore();
+        return new AutoCloseable() {
+            @Override
+            public void close() {
+                popIgnore();
+            }
+        };
+    }
+
+    /**
      * 在软删除过滤被跳过的范围内执行操作。自动管理 push/pop 生命周期，异常安全。
      *
      * <p>

@@ -239,7 +239,10 @@ class EncryptConverterCoverageTest {
         System.setProperty("myjpa-plus.encrypt.skip-salt-check", "true");
         System.clearProperty("myjpa-plus.encrypt.require-salt");
         try {
-            assertThrows(InvocationTargetException.class, () -> m.invoke(null));
+            // ponytail: skipSaltCheck=true now returns dev fallback salt instead of throwing
+            byte[] salt = (byte[])m.invoke(null);
+            assertNotNull(salt);
+            assertTrue(salt.length > 0);
         } finally {
             System.clearProperty("myjpa-plus.encrypt.skip-salt-check");
         }

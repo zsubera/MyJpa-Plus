@@ -140,10 +140,10 @@ class EncryptConverterTest {
     }
 
     @Test
-    @DisplayName("removeCipher clears ThreadLocal")
-    void shouldClearCipherThreadLocal() {
+    @DisplayName("clearCipherPool clears CIPHER_POOL")
+    void shouldClearCipherPool() {
         converter.convertToDatabaseColumn("test");
-        EncryptConverter.removeCipher();
+        EncryptConverter.clearCaches();
         assertDoesNotThrow(() -> converter.convertToDatabaseColumn("after-clear"));
     }
 

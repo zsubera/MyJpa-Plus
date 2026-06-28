@@ -67,22 +67,11 @@ public class OrConditionBuilder<T, SELF extends AbstractBulkOperationSpec<T, SEL
      */
     @SafeVarargs
     public final OrConditionBuilder<T, SELF> multiLike(String keyword, SFunction<T, ?>... fields) {
-        if (keyword == null) {
-            throw new IllegalArgumentException("keyword must not be null");
-        }
-        if (fields == null) {
-            throw new IllegalArgumentException("fields must not be null");
-        }
-        if (!keyword.isEmpty() && fields.length > 0) {
-            String[] fieldNames = new String[fields.length];
-            for (int i = 0; i < fields.length; i++) {
-                if (fields[i] == null) {
-                    throw new IllegalArgumentException("fields[" + i + "] must not be null");
-                }
-                fieldNames[i] = parent.property(fields[i]);
-            }
-            String pattern = com.zsubera.jpa.spec.ConditionalMethods.wrapLikePattern(keyword);
-            nodes.add(new BulkConditionNode.LeafNode(AbstractBulkOperationSpec.buildMultiLikeFn(fieldNames, pattern)));
+        AbstractBulkOperationSpec.BulkMultiLikeResult result =
+            AbstractBulkOperationSpec.resolveMultiLike(keyword, fields, parent::property);
+        if (result != null) {
+            nodes.add(new BulkConditionNode.LeafNode(
+                AbstractBulkOperationSpec.buildMultiLikeFn(result.fieldNames, result.pattern)));
         }
         return this;
     }

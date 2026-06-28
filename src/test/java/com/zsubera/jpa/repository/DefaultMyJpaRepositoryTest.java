@@ -554,4 +554,26 @@ class DefaultMyJpaRepositoryTest {
         boolean result = (boolean)method.invoke(target, id);
         assertFalse(result);
     }
+
+    // ---- getReferenceById soft-delete filtering ----
+
+    @Test
+    void getReferenceById_returnsEntityForActiveEntity() {
+        SoftDeleteRepoTestEntity entity = saveEntity("activeForRef", false);
+        SoftDeleteRepoTestEntity ref = repository.getReferenceById(entity.getId());
+        assertNotNull(ref);
+        assertEquals("activeForRef", ref.getName());
+    }
+
+    @Test
+    void getReferenceById_throwsEntityNotFoundExceptionForDeletedEntity() {
+        SoftDeleteRepoTestEntity entity = saveEntity("deletedForRef", true);
+        Long id = entity.getId();
+        // ponytail: Spring @Repository proxy wraps EntityNotFoundException into
+        // JpaObjectRetrievalFailureException via PersistenceExceptionTranslationInterceptor
+        org.springframework.orm.jpa.JpaObjectRetrievalFailureException ex =
+            assertThrows(org.springframework.orm.jpa.JpaObjectRetrievalFailureException.class,
+                () -> repository.getReferenceById(id));
+        assertInstanceOf(jakarta.persistence.EntityNotFoundException.class, ex.getCause());
+    }
 }

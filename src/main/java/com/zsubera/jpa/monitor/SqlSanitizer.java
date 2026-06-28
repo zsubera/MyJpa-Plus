@@ -37,19 +37,19 @@ public final class SqlSanitizer {
     private SqlSanitizer() {}
 
     /** 十六进制字面量模式（X'...'）— 必须在单引号模式之前匹配 */
-    private static final Pattern HEX_LITERAL_PATTERN = Pattern.compile("X'(?:[^'\\\\]|\\\\.|'')*'");
+    private static final Pattern HEX_LITERAL_PATTERN = Pattern.compile("X'(?>[^'\\\\]|\\\\.|'')*'");
 
     /** Unicode 字符串模式（N'...'）— 必须在单引号模式之前匹配 */
-    private static final Pattern UNICODE_STRING_PATTERN = Pattern.compile("N'(?:[^'\\\\]|\\\\.|'')*'");
+    private static final Pattern UNICODE_STRING_PATTERN = Pattern.compile("N'(?>[^'\\\\]|\\\\.|'')*'");
 
     /** PostgreSQL E-字符串模式（E'...'）— 必须在单引号模式之前匹配 */
-    private static final Pattern PG_ESTRING_PATTERN = Pattern.compile("E'(?:[^'\\\\]|\\\\.|'')*'");
+    private static final Pattern PG_ESTRING_PATTERN = Pattern.compile("E'(?>[^'\\\\]|\\\\.|'')*'");
 
     /** 双引号字符串模式（MySQL ANSI_QUOTES / SQLite）— 必须在单引号模式之前匹配 */
-    private static final Pattern DOUBLE_QUOTE_PATTERN = Pattern.compile("\"(?:[^\"\\\\]|\\\\.|\"\")*\"");
+    private static final Pattern DOUBLE_QUOTE_PATTERN = Pattern.compile("\"(?>[^\"\\\\]|\\\\.|\"\")*\"");
 
     /** 单引号字符串模式，支持转义 '' 和反斜杠转义 \' */
-    private static final Pattern SINGLE_QUOTE_PATTERN = Pattern.compile("'(?:[^'\\\\]|\\\\.|'')*'");
+    private static final Pattern SINGLE_QUOTE_PATTERN = Pattern.compile("'(?>[^'\\\\]|\\\\.|'')*'");
 
     /** PostgreSQL 美元参数模式（$1, $2 等） */
     private static final Pattern DOLLAR_PARAM_PATTERN = Pattern.compile("\\$\\d+");
@@ -91,16 +91,11 @@ public final class SqlSanitizer {
      * @param sql 原始 SQL 语句
      * @return 脱敏后的 SQL 语句，如果输入为 null 则返回 "null"
      */
-    private static final int MAX_SANITIZE_LENGTH = 100_000;
-
     public static String sanitize(String sql) {
         if (sql == null) {
             return "null";
         }
 
-        if (sql.length() > MAX_SANITIZE_LENGTH) {
-            sql = sql.substring(0, MAX_SANITIZE_LENGTH) + "...[truncated]";
-        }
         String result = sql;
 
         // 替换各种字符串字面量（顺序重要：必须在注释移除之前，防止 -- 跨引号匹配）

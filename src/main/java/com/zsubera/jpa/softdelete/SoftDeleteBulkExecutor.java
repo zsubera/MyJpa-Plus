@@ -9,7 +9,7 @@ import java.lang.reflect.Field;
 import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.transaction.support.TransactionSynchronizationManager;
+
 
 /**
  * 批量软删除操作的执行器。从 {@link SoftDeleteHelper} 中提取，聚焦于
@@ -26,6 +26,8 @@ public final class SoftDeleteBulkExecutor {
     private static final Logger log = LoggerFactory.getLogger(SoftDeleteBulkExecutor.class);
 
     static final int DEFAULT_MAX_ROWS = 10000;
+
+    record VersionFieldInfo(String columnName, Field field) {}
 
     @FunctionalInterface
     public interface EventPublisher {
@@ -56,139 +58,125 @@ public final class SoftDeleteBulkExecutor {
 
     private SoftDeleteBulkExecutor() {}
 
-    public static <T> int softDeleteAll(EntityManager em, Class<T> entityClass, boolean allowUnconditional) {
-        return softDeleteAll(em, entityClass, allowUnconditional, DEFAULT_MAX_ROWS);
-    }
+    private record ExecContext(String fieldName, Field field, SoftDelete annotation,
+        SoftDeleteHelper.ResolvedDeletedValue resolved) {}
 
-    public static <T> int softDeleteAll(EntityManager em, Class<T> entityClass, boolean allowUnconditional,
-        int maxRows) {
-        if (em == null)
-            throw new IllegalArgumentException("em must not be null");
-        if (entityClass == null)
-            throw new IllegalArgumentException("entityClass must not be null");
-        if (!allowUnconditional)
-            throw new IllegalStateException(
-                "softDeleteAll without conditions is dangerous. Pass allowUnconditional=true to confirm.");
-        if (!TransactionSynchronizationManager.isActualTransactionActive())
-            throw new MyJpaPlusException(
-                "softDeleteAll requires an active transaction. Ensure the calling method is annotated with @Transactional.");
-        if (log.isWarnEnabled())
-            log.warn("AUDIT: Executing unconditional soft DELETE on {} — this will affect ALL rows! Call stack: {}",
-                entityClass.getSimpleName(), AuditUtils.getCallStack());
-
+    private static ExecContext resolveExecContext(Class<?> entityClass) {
         String fieldName = SoftDeleteHelper.findSoftDeleteField(entityClass);
         if (fieldName == null)
             throw new IllegalArgumentException("Entity " + entityClass.getSimpleName() + " has no @SoftDelete field");
-        if (hasVersionField(entityClass))
-            log.warn("AUDIT: Entity {} has @Version field. softDeleteAll() bypasses optimistic lock checking. "
-                + "Consider using softDeleteByIds() with specific IDs or UpdateSpec.withVersionIncrement(true) for safe concurrent updates.",
-                entityClass.getSimpleName());
-
-        String tableName = SoftDeleteHelper.resolveTableName(entityClass);
-        String columnName = SoftDeleteHelper.resolveColumnName(entityClass, fieldName);
         Field field = SoftDeleteHelper.getField(entityClass, fieldName);
         if (field == null)
             throw new IllegalArgumentException("Cannot resolve @SoftDelete field: " + fieldName);
-        jakarta.persistence.Column colAnn = field.getAnnotation(jakarta.persistence.Column.class);
         SoftDelete annotation = field.getAnnotation(SoftDelete.class);
-        String escapedTable = SoftDeleteHelper.validateIdentifier(tableName);
-        String escapedColumn = SoftDeleteHelper.validateIdentifier(columnName);
         SoftDeleteHelper.ResolvedDeletedValue resolved =
             SoftDeleteHelper.resolveDeletedValue(entityClass, field, annotation);
-        String timestampColumn = resolveTimestampColumn(entityClass, annotation);
+        return new ExecContext(fieldName, field, annotation, resolved);
+    }
 
-        if (maxRows > 0) {
-            String wherePart = resolved.booleanField() ? "(" + escapedColumn + " = ?1 OR " + escapedColumn + " IS NULL)"
-                : "(" + escapedColumn + " != ?1 OR " + escapedColumn + " IS NULL)";
-            var probeQuery = em.createNativeQuery("SELECT 1 FROM " + escapedTable + " WHERE " + wherePart);
-            if (resolved.booleanField())
-                probeQuery.setParameter(1, Boolean.FALSE);
-            else
-                probeQuery.setParameter(1, resolved.dbValue());
-            probeQuery.setMaxResults(maxRows + 1);
-            List<?> probeResults = probeQuery.getResultList();
-            if (probeResults.size() > maxRows) {
-                var countQuery = em.createNativeQuery("SELECT COUNT(*) FROM " + escapedTable + " WHERE " + wherePart);
-                if (resolved.booleanField())
-                    countQuery.setParameter(1, Boolean.FALSE);
-                else
-                    countQuery.setParameter(1, resolved.dbValue());
-                long rowCount = ((Number)countQuery.getSingleResult()).longValue();
-                if (rowCount > maxRows)
-                    throw new IllegalStateException(
-                        "softDeleteAll would affect " + rowCount + " rows, which exceeds the limit of " + maxRows
-                            + ". Use softDeleteByIds() with explicit ID lists, or increase the limit.");
-            }
-        }
-
-        int updated;
-        if (resolved.booleanField()) {
-            String setClause = escapedColumn + " = ?1"
-                + (timestampColumn != null ? ", " + timestampColumn + " = CURRENT_TIMESTAMP" : "");
-            updated = em
-                .createNativeQuery("UPDATE " + escapedTable + " SET " + setClause + " WHERE " + escapedColumn
-                    + " = ?2 OR " + escapedColumn + " IS NULL")
-                .setParameter(1, Boolean.TRUE).setParameter(2, Boolean.FALSE).executeUpdate();
-        } else {
-            String setClause = escapedColumn + " = ?1"
-                + (timestampColumn != null ? ", " + timestampColumn + " = CURRENT_TIMESTAMP" : "");
-            updated = em.createNativeQuery("UPDATE " + escapedTable + " SET " + setClause + " WHERE " + escapedColumn
-                + " != ?1 OR " + escapedColumn + " IS NULL").setParameter(1, resolved.dbValue()).executeUpdate();
-        }
-
-        if (maxRows > 0 && updated > maxRows)
-            throw new IllegalStateException("softDeleteAll affected " + updated
-                + " rows, exceeding the pre-check limit of " + maxRows
-                + ". This indicates a race condition between COUNT and UPDATE. "
-                + "Consider using a transaction with pessimistic locking or softDeleteByIds() with explicit ID lists.");
+    private static void publishAfterUpdate(EntityManager em, Class<?> entityClass, int updated) {
         if (updated > 0) {
             em.flush();
             em.clear();
             com.zsubera.jpa.util.CacheEvictionHelper.evictEntityCache(em, entityClass);
             publishEvent(entityClass, updated);
         }
+    }
+
+    // ponytail: 两个 validate 方法消除重复的 null/事务检查
+    private static void requireActiveTransaction() {
+        if (!org.springframework.transaction.support.TransactionSynchronizationManager.isActualTransactionActive())
+            throw new MyJpaPlusException("Operation requires an active transaction. "
+                + "Ensure the calling method is annotated with @Transactional.");
+    }
+
+    private static void requireNonNull(Object obj, String name) {
+        if (obj == null)
+            throw new IllegalArgumentException(name + " must not be null");
+    }
+
+    public static <T> int softDeleteAll(EntityManager em, Class<T> entityClass, boolean allowUnconditional) {
+        return softDeleteAll(em, entityClass, allowUnconditional, DEFAULT_MAX_ROWS);
+    }
+
+    public static <T> int softDeleteAll(EntityManager em, Class<T> entityClass, boolean allowUnconditional,
+        int maxRows) {
+        requireNonNull(em, "em");
+        requireNonNull(entityClass, "entityClass");
+        if (!allowUnconditional)
+            throw new IllegalStateException(
+                "softDeleteAll without conditions is dangerous. Pass allowUnconditional=true to confirm.");
+        requireActiveTransaction();
+        if (log.isWarnEnabled())
+            log.warn("AUDIT: Executing unconditional soft DELETE on {} — this will affect ALL rows! Call stack: {}",
+                entityClass.getSimpleName(), AuditUtils.getCallStack());
+
+        ExecContext ctx = resolveExecContext(entityClass);
+        if (hasVersionField(entityClass))
+            log.warn("AUDIT: Entity {} has @Version field. softDeleteAll() bypasses optimistic lock checking. "
+                + "Consider using softDeleteByIds() with specific IDs or UpdateSpec.withVersionIncrement(true) for safe concurrent updates.",
+                entityClass.getSimpleName());
+
+        String escapedTable = SoftDeleteHelper.validateIdentifier(SoftDeleteHelper.resolveTableName(entityClass));
+        String escapedColumn = SoftDeleteHelper.validateIdentifier(SoftDeleteHelper.resolveColumnName(entityClass, ctx.fieldName()));
+        String timestampColumn = resolveTimestampColumn(entityClass, ctx.annotation());
+        String versionColumn = resolveVersionColumn(entityClass);
+
+        String setClause = escapedColumn + " = ?1"
+            + (timestampColumn != null ? ", " + timestampColumn + " = CURRENT_TIMESTAMP" : "")
+            + (versionColumn != null ? ", " + versionColumn + " = " + versionColumn + " + 1" : "");
+        int updated;
+        if (ctx.resolved().booleanField()) {
+            updated = em
+                .createNativeQuery("UPDATE " + escapedTable + " SET " + setClause + " WHERE " + escapedColumn
+                    + " = ?2 OR " + escapedColumn + " IS NULL")
+                .setParameter(1, Boolean.TRUE).setParameter(2, Boolean.FALSE).executeUpdate();
+        } else {
+            Object dv = ctx.resolved().dbValue();
+            updated = em.createNativeQuery("UPDATE " + escapedTable + " SET " + setClause + " WHERE " + escapedColumn
+                + " != ?1 OR " + escapedColumn + " IS NULL").setParameter(1, dv).executeUpdate();
+        }
+
+        if (maxRows > 0 && updated > maxRows) {
+            jakarta.persistence.EntityTransaction tx = em.getTransaction();
+            if (tx.isActive()) {
+                tx.setRollbackOnly();
+            }
+            throw new IllegalStateException("softDeleteAll affected " + updated
+                + " rows, exceeding the limit of " + maxRows
+                + ". Transaction has been marked for rollback. "
+                + "Use softDeleteByIds() with explicit ID lists, or increase the limit.");
+        }
+        publishAfterUpdate(em, entityClass, updated);
         return updated;
     }
 
     public static <T, ID> int softDeleteByIds(EntityManager em, Class<T> entityClass, List<ID> ids) {
-        if (em == null)
-            throw new IllegalArgumentException("em must not be null");
-        if (entityClass == null)
-            throw new IllegalArgumentException("entityClass must not be null");
+        requireNonNull(em, "em");
+        requireNonNull(entityClass, "entityClass");
         if (ids == null || ids.isEmpty())
             return 0;
-        if (!TransactionSynchronizationManager.isActualTransactionActive())
-            throw new MyJpaPlusException(
-                "softDeleteByIds requires an active transaction. Use @Transactional on the calling method.");
+        requireActiveTransaction();
         int hardLimit = com.zsubera.jpa.util.InClauseBuilder.getHardLimit();
         if (ids.size() > hardLimit)
             throw new IllegalArgumentException("ID list size (" + ids.size() + ") exceeds the hard limit (" + hardLimit
                 + "). " + "Consider processing in smaller batches or using a temporary table.");
 
-        String fieldName = SoftDeleteHelper.findSoftDeleteField(entityClass);
-        if (fieldName == null)
-            throw new IllegalArgumentException("Entity " + entityClass.getSimpleName() + " has no @SoftDelete field");
-        String tableName = SoftDeleteHelper.resolveTableName(entityClass);
-        String columnName = SoftDeleteHelper.resolveColumnName(entityClass, fieldName);
-        String idFieldName = SoftDeleteHelper.resolveIdColumnName(entityClass);
-        Field field = SoftDeleteHelper.getField(entityClass, fieldName);
-        if (field == null)
-            throw new IllegalArgumentException("Cannot resolve @SoftDelete field: " + fieldName);
-        SoftDelete annotation = field.getAnnotation(SoftDelete.class);
-        String escapedTable = SoftDeleteHelper.validateIdentifier(tableName);
-        String escapedColumn = SoftDeleteHelper.validateIdentifier(columnName);
-        String escapedIdColumn = SoftDeleteHelper.validateIdentifier(idFieldName);
-        SoftDeleteHelper.ResolvedDeletedValue resolved =
-            SoftDeleteHelper.resolveDeletedValue(entityClass, field, annotation);
-        String timestampColumn = resolveTimestampColumn(entityClass, annotation);
-
+        ExecContext ctx = resolveExecContext(entityClass);
+        String escapedTable = SoftDeleteHelper.validateIdentifier(SoftDeleteHelper.resolveTableName(entityClass));
+        String escapedColumn = SoftDeleteHelper.validateIdentifier(SoftDeleteHelper.resolveColumnName(entityClass, ctx.fieldName()));
+        String escapedIdColumn = SoftDeleteHelper.validateIdentifier(SoftDeleteHelper.resolveIdColumnName(entityClass));
+        String timestampColumn = resolveTimestampColumn(entityClass, ctx.annotation());
+        String versionColumn = resolveVersionColumn(entityClass);
         String setClause = escapedColumn + " = :deletedValue"
-            + (timestampColumn != null ? ", " + timestampColumn + " = CURRENT_TIMESTAMP" : "");
-        String whereClause =
-            resolved.booleanField() ? "(" + escapedColumn + " = FALSE OR " + escapedColumn + " IS NULL)"
-                : "(" + escapedColumn + " != :deletedValue OR " + escapedColumn + " IS NULL)";
+            + (timestampColumn != null ? ", " + timestampColumn + " = CURRENT_TIMESTAMP" : "")
+            + (versionColumn != null ? ", " + versionColumn + " = " + versionColumn + " + 1" : "");
+        String whereClause = ctx.resolved().booleanField()
+            ? "(" + escapedColumn + " = FALSE OR " + escapedColumn + " IS NULL)"
+            : "(" + escapedColumn + " != :deletedValue OR " + escapedColumn + " IS NULL)";
         int batchSize = com.zsubera.jpa.util.InClauseBuilder.getMaxInClauseSize();
         int total = 0;
+        Object deletedValue = ctx.resolved().booleanField() ? Boolean.TRUE : ctx.resolved().dbValue();
         for (int i = 0; i < ids.size(); i += batchSize) {
             List<ID> batch = ids.subList(i, Math.min(i + batchSize, ids.size()));
             StringBuilder placeholders = new StringBuilder();
@@ -199,17 +187,12 @@ public final class SoftDeleteBulkExecutor {
             }
             var query = em.createNativeQuery("UPDATE " + escapedTable + " SET " + setClause + " WHERE "
                 + escapedIdColumn + " IN (" + placeholders + ") AND " + whereClause);
-            query.setParameter("deletedValue", resolved.booleanField() ? Boolean.TRUE : resolved.dbValue());
+            query.setParameter("deletedValue", deletedValue);
             for (int j = 0; j < batch.size(); j++)
                 query.setParameter("id" + j, batch.get(j));
             total += query.executeUpdate();
         }
-        if (total > 0) {
-            em.flush();
-            em.clear();
-            com.zsubera.jpa.util.CacheEvictionHelper.evictEntityCache(em, entityClass);
-            publishEvent(entityClass, total);
-        }
+        publishAfterUpdate(em, entityClass, total);
         return total;
     }
 
@@ -220,74 +203,48 @@ public final class SoftDeleteBulkExecutor {
 
     public static <T> int softDeleteAllUsingCriteriaUpdate(EntityManager em, Class<T> entityClass,
         boolean allowUnconditional, int maxRows) {
-        if (em == null)
-            throw new IllegalArgumentException("em must not be null");
-        if (entityClass == null)
-            throw new IllegalArgumentException("entityClass must not be null");
+        requireNonNull(em, "em");
+        requireNonNull(entityClass, "entityClass");
         if (!allowUnconditional)
             throw new IllegalStateException(
                 "softDeleteAllUsingCriteriaUpdate without conditions is dangerous. Pass allowUnconditional=true to confirm.");
-        if (!TransactionSynchronizationManager.isActualTransactionActive())
-            throw new MyJpaPlusException(
-                "softDeleteAllUsingCriteriaUpdate requires an active transaction. Ensure the calling method is annotated with @Transactional.");
-
-        String fieldName = SoftDeleteHelper.findSoftDeleteField(entityClass);
-        if (fieldName == null)
-            throw new IllegalArgumentException("Entity " + entityClass.getSimpleName() + " has no @SoftDelete field");
+        requireActiveTransaction();
         if (log.isWarnEnabled())
             log.warn("AUDIT: Executing CriteriaUpdate soft DELETE on {} — this will affect ALL rows! Call stack: {}",
                 entityClass.getSimpleName(), AuditUtils.getCallStack());
 
-        Field field = SoftDeleteHelper.getField(entityClass, fieldName);
-        if (field == null)
-            throw new IllegalArgumentException("Cannot resolve @SoftDelete field: " + fieldName);
-        SoftDelete annotation = field.getAnnotation(SoftDelete.class);
-        SoftDeleteHelper.ResolvedDeletedValue resolved =
-            SoftDeleteHelper.resolveDeletedValue(entityClass, field, annotation);
+        ExecContext ctx = resolveExecContext(entityClass);
         jakarta.persistence.criteria.CriteriaBuilder cb = em.getCriteriaBuilder();
         jakarta.persistence.criteria.CriteriaUpdate<T> update = cb.createCriteriaUpdate(entityClass);
         jakarta.persistence.criteria.Root<T> root = update.from(entityClass);
-        if (resolved.booleanField()) {
-            update.set(fieldName, Boolean.TRUE);
-            update.where(cb.or(cb.isNull(root.get(fieldName)), cb.equal(root.get(fieldName), false)));
+        if (ctx.resolved().booleanField()) {
+            update.set(ctx.fieldName(), Boolean.TRUE);
+            update.where(cb.or(cb.isNull(root.get(ctx.fieldName())), cb.equal(root.get(ctx.fieldName()), false)));
         } else {
-            update.set(fieldName, (Comparable)resolved.dbValue());
-            update.where(cb.or(cb.isNull(root.get(fieldName)), cb.notEqual(root.get(fieldName), resolved.dbValue())));
+            update.set(ctx.fieldName(), (Comparable)ctx.resolved().dbValue());
+            update.where(cb.or(cb.isNull(root.get(ctx.fieldName())),
+                cb.notEqual(root.get(ctx.fieldName()), ctx.resolved().dbValue())));
         }
         int updated = em.createQuery(update).executeUpdate();
         if (maxRows > 0 && updated > maxRows)
             throw new IllegalStateException(
                 "softDeleteAllUsingCriteriaUpdate affected " + updated + " rows, exceeding the limit of " + maxRows
                     + ". Consider using softDeleteByIdsUsingEntityManager() with explicit ID lists.");
-        if (updated > 0) {
-            com.zsubera.jpa.util.CacheEvictionHelper.evictEntityCache(em, entityClass);
-            publishEvent(entityClass, updated);
-        }
+        publishAfterUpdate(em, entityClass, updated);
         return updated;
     }
 
     public static <T, ID> int softDeleteByIdsUsingEntityManager(EntityManager em, Class<T> entityClass, List<ID> ids) {
-        if (em == null)
-            throw new IllegalArgumentException("em must not be null");
-        if (entityClass == null)
-            throw new IllegalArgumentException("entityClass must not be null");
+        requireNonNull(em, "em");
+        requireNonNull(entityClass, "entityClass");
         if (ids == null || ids.isEmpty())
             return 0;
-        if (!TransactionSynchronizationManager.isActualTransactionActive())
-            throw new MyJpaPlusException(
-                "softDeleteByIdsUsingEntityManager requires an active transaction. Use @Transactional on the calling method.");
+        requireActiveTransaction();
 
-        String fieldName = SoftDeleteHelper.findSoftDeleteField(entityClass);
-        if (fieldName == null)
-            throw new IllegalArgumentException("Entity " + entityClass.getSimpleName() + " has no @SoftDelete field");
-        Field field = SoftDeleteHelper.getField(entityClass, fieldName);
-        if (field == null)
-            throw new IllegalArgumentException("Cannot resolve @SoftDelete field: " + fieldName);
-        SoftDelete annotation = field.getAnnotation(SoftDelete.class);
-        SoftDeleteHelper.ResolvedDeletedValue resolved =
-            SoftDeleteHelper.resolveDeletedValue(entityClass, field, annotation);
+        ExecContext ctx = resolveExecContext(entityClass);
         jakarta.persistence.criteria.CriteriaBuilder cb = em.getCriteriaBuilder();
-        Field timestampField = resolveTimestampField(entityClass, annotation);
+        Field timestampField = resolveTimestampField(entityClass, ctx.annotation());
+        Field versionField = resolveVersionField(entityClass);
         int batchSize = com.zsubera.jpa.util.InClauseBuilder.getMaxInClauseSize();
         String idFieldName = com.zsubera.jpa.util.EntityClassResolver.resolveIdFieldName(entityClass);
         int total = 0;
@@ -295,21 +252,18 @@ public final class SoftDeleteBulkExecutor {
             List<ID> batch = ids.subList(i, Math.min(i + batchSize, ids.size()));
             jakarta.persistence.criteria.CriteriaUpdate<T> batchUpdate = cb.createCriteriaUpdate(entityClass);
             jakarta.persistence.criteria.Root<T> batchRoot = batchUpdate.from(entityClass);
-            if (resolved.booleanField())
-                batchUpdate.set(fieldName, Boolean.TRUE);
+            if (ctx.resolved().booleanField())
+                batchUpdate.set(ctx.fieldName(), Boolean.TRUE);
             else
-                batchUpdate.set(fieldName, (Comparable)resolved.dbValue());
+                batchUpdate.set(ctx.fieldName(), (Comparable)ctx.resolved().dbValue());
             if (timestampField != null)
-                batchUpdate.set(annotation.deletedTimestampField(), cb.currentTimestamp());
+                batchUpdate.set(ctx.annotation().deletedTimestampField(), cb.currentTimestamp());
+            if (versionField != null)
+                batchUpdate.set(versionField.getName(), cb.sum(batchRoot.get(versionField.getName()), 1));
             batchUpdate.where(batchRoot.get(idFieldName).in(batch));
             total += em.createQuery(batchUpdate).executeUpdate();
         }
-        if (total > 0) {
-            em.flush();
-            em.clear();
-            com.zsubera.jpa.util.CacheEvictionHelper.evictEntityCache(em, entityClass);
-            publishEvent(entityClass, total);
-        }
+        publishAfterUpdate(em, entityClass, total);
         return total;
     }
 
@@ -330,13 +284,35 @@ public final class SoftDeleteBulkExecutor {
         return f;
     }
 
-    private static boolean hasVersionField(Class<?> entityClass) {
+    static VersionFieldInfo resolveVersionFieldInfo(Class<?> entityClass) {
         for (Class<?> c = entityClass; c != null && c != Object.class; c = c.getSuperclass()) {
             for (Field f : c.getDeclaredFields()) {
-                if (f.isAnnotationPresent(jakarta.persistence.Version.class))
-                    return true;
+                if (f.isAnnotationPresent(jakarta.persistence.Version.class)) {
+                    jakarta.persistence.Column colAnn = f.getAnnotation(jakarta.persistence.Column.class);
+                    String colName;
+                    if (colAnn != null && !colAnn.name().isEmpty()) {
+                        colName = SoftDeleteHelper.validateIdentifier(colAnn.name());
+                    } else {
+                        colName = SoftDeleteHelper.resolveColumnName(entityClass, f.getName());
+                    }
+                    return new VersionFieldInfo(colName, f);
+                }
             }
         }
-        return false;
+        return null;
+    }
+
+    static String resolveVersionColumn(Class<?> entityClass) {
+        VersionFieldInfo info = resolveVersionFieldInfo(entityClass);
+        return info != null ? info.columnName : null;
+    }
+
+    static Field resolveVersionField(Class<?> entityClass) {
+        VersionFieldInfo info = resolveVersionFieldInfo(entityClass);
+        return info != null ? info.field : null;
+    }
+
+    private static boolean hasVersionField(Class<?> entityClass) {
+        return resolveVersionFieldInfo(entityClass) != null;
     }
 }

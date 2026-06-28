@@ -908,4 +908,49 @@ class DeleteSpecTest {
         em.clear();
         assertEquals(0, repository.count());
     }
+
+    @Test
+    void execute_clearsL1CacheSoFindReturnsNull() {
+        TestEntity entity = repository.save(newEntity("deleteMe", 1));
+        Long id = entity.getId();
+        em.clear();
+
+        assertNotNull(em.find(TestEntity.class, id));
+
+        int count = new DeleteSpec<>(TestEntity.class)
+            .eq(TestEntity::getId, id)
+            .execute(em);
+        assertEquals(1, count);
+
+        assertNull(em.find(TestEntity.class, id));
+    }
+
+    @Test
+    void executeLimited_clearsL1CacheSoFindReturnsNull() {
+        TestEntity entity = repository.save(newEntity("delLimited", 1));
+        Long id = entity.getId();
+        em.clear();
+
+        assertNotNull(em.find(TestEntity.class, id));
+
+        int count = new DeleteSpec<>(TestEntity.class)
+            .eq(TestEntity::getId, id)
+            .executeLimited(em, 100);
+        assertEquals(1, count);
+
+        assertNull(em.find(TestEntity.class, id));
+    }
+
+    @Test
+    void deleteAll_clearsL1Cache() {
+        repository.save(newEntity("delAll", 1));
+        em.clear();
+
+        int count = new DeleteSpec<>(TestEntity.class)
+            .allowUnconditional(true)
+            .deleteAll(em);
+        assertTrue(count > 0);
+
+        assertEquals(0, repository.count());
+    }
 }

@@ -225,7 +225,13 @@ public class UpdateSpec<T> extends AbstractBulkOperationSpec<T, UpdateSpec<T>> {
                 log.debug("Executing UPDATE on {} with {} set clauses and {} conditions", entityClass.getSimpleName(),
                     setClauses.size() + expressionSetClauses.size(), conditionNodes.size());
             }
-            return e.createQuery(update).executeUpdate();
+            int affected = e.createQuery(update).executeUpdate();
+            if (affected > 0) {
+                e.flush();
+                e.clear();
+                com.zsubera.jpa.util.CacheEvictionHelper.evictEntityCache(e, entityClass);
+            }
+            return affected;
         });
     }
 
@@ -363,7 +369,13 @@ public class UpdateSpec<T> extends AbstractBulkOperationSpec<T, UpdateSpec<T>> {
         }
         CriteriaUpdate<T> update = buildCriteriaUpdate(em);
         var q = em.createQuery(update);
-        return q.executeUpdate();
+        int affected = q.executeUpdate();
+        if (affected > 0) {
+            em.flush();
+            em.clear();
+            com.zsubera.jpa.util.CacheEvictionHelper.evictEntityCache(em, entityClass);
+        }
+        return affected;
     }
 
     /**
@@ -505,9 +517,11 @@ public class UpdateSpec<T> extends AbstractBulkOperationSpec<T, UpdateSpec<T>> {
         // 有效序列化 SELECT 和 UPDATE 操作。当 pessimisticLock=false 时无此保护，
         // 并发事务可能在 SELECT 和 UPDATE 之间修改/删除行。
         int updated = uq.executeUpdate();
-        // 选择性失效 L1 缓存：仅驱逐当前实体类型的缓存数据，
-        // 避免 em.clear() 脱管同一事务中调用方持有的其他实体。
-        com.zsubera.jpa.util.CacheEvictionHelper.evictEntityCache(em, entityClass);
+        if (updated > 0) {
+            em.flush();
+            em.clear();
+            com.zsubera.jpa.util.CacheEvictionHelper.evictEntityCache(em, entityClass);
+        }
         return updated;
     }
 

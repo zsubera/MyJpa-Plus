@@ -27,16 +27,15 @@ public final class AuditUtils {
 
     /** 当前配置的最大调用栈深度（保留为 fallback，优先从 GlobalConfig 读取）。 */
     private static volatile int maxStackDepth;
+    private static volatile boolean maxStackDepthInitialized;
 
     /** 缓存 StackWalker 实例，避免每次调用都创建新实例 */
     private static final StackWalker STACK_WALKER = StackWalker.getInstance();
 
-    static {
-        maxStackDepth = initMaxStackDepth();
-    }
-
     /**
-     * 初始化最大调用栈深度。从系统属性读取，供静态初始化和测试使用。
+     * 初始化最大调用栈深度。从系统属性读取，供测试使用。
+     * ponytail: 使用延迟初始化而非 static init，防止 Spring auto-config 先调用 setMaxStackDepth()
+     * 后被 static init 覆盖（class loading 时序导致配置丢失）。
      *
      * @return 配置的最大调用栈深度
      */
@@ -50,10 +49,21 @@ public final class AuditUtils {
                     configured = val;
                 }
             } catch (NumberFormatException ignored) {
-                // 使用默认值
             }
         }
         return configured;
+    }
+
+    /**
+     * 延迟初始化最大调用栈深度。
+     * 首次调用 getMaxStackDepth() 时从系统属性读取初始值。
+     * ponytail: 不调用 initMaxStackDepth() 以避免通过反射测试覆盖 Spring 配置值的问题。
+     */
+    private static void ensureInitialized() {
+        if (!maxStackDepthInitialized) {
+            maxStackDepth = initMaxStackDepth();
+            maxStackDepthInitialized = true;
+        }
     }
 
     private AuditUtils() {}
@@ -64,6 +74,7 @@ public final class AuditUtils {
      * @param depth 最大调用栈深度，有效范围 1-20
      */
     public static void setMaxStackDepth(int depth) {
+        ensureInitialized();
         if (depth > 0 && depth <= MAX_STACK_DEPTH_LIMIT) {
             maxStackDepth = depth;
         }
@@ -75,6 +86,7 @@ public final class AuditUtils {
      * @return 最大调用栈深度
      */
     public static int getMaxStackDepth() {
+        ensureInitialized();
         return maxStackDepth;
     }
 
@@ -92,6 +104,7 @@ public final class AuditUtils {
      * @return 格式化的调用栈字符串
      */
     public static String getCallStack() {
+        ensureInitialized();
         int depth = maxStackDepth;
         StringBuilder sb = new StringBuilder();
         STACK_WALKER.walk(frames -> {

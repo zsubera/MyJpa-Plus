@@ -51,6 +51,21 @@ class OptimisticLockRetryAdvisorMockTest {
     }
 
     @Test
+    void retryOnOptimisticLock_errorPath_rollsBackTransaction() throws Throwable {
+        ProceedingJoinPoint pjp = mock(ProceedingJoinPoint.class);
+        MethodSignature signature = mock(MethodSignature.class);
+        Method method = RetryableService.class.getMethod("retry");
+        when(pjp.getSignature()).thenReturn(signature);
+        when(signature.getMethod()).thenReturn(method);
+        when(pjp.getTarget()).thenReturn(new RetryableService());
+        when(pjp.proceed()).thenThrow(new OutOfMemoryError("simulated OOM"));
+
+        // ponytail: Error thrown should not leave a dangling transaction
+        assertThrows(OutOfMemoryError.class, () -> advisor.retryOnOptimisticLock(pjp));
+        verify(pjp, times(1)).proceed();
+    }
+
+    @Test
     void retryOnOptimisticLock_succeedsAfterRetries() throws Throwable {
         ProceedingJoinPoint pjp = mock(ProceedingJoinPoint.class);
         MethodSignature signature = mock(MethodSignature.class);

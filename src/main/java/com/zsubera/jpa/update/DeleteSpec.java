@@ -83,7 +83,13 @@ public class DeleteSpec<T> extends AbstractBulkOperationSpec<T, DeleteSpec<T>> {
                 log.debug("Executing DELETE on {} with {} conditions", entityClass.getSimpleName(),
                     conditionNodes.size());
             }
-            return e.createQuery(delete).executeUpdate();
+            int affected = e.createQuery(delete).executeUpdate();
+            if (affected > 0) {
+                e.flush();
+                e.clear();
+                com.zsubera.jpa.util.CacheEvictionHelper.evictEntityCache(e, entityClass);
+            }
+            return affected;
         });
     }
 
@@ -149,7 +155,13 @@ public class DeleteSpec<T> extends AbstractBulkOperationSpec<T, DeleteSpec<T>> {
         CriteriaDelete<T> delete = cb.createCriteriaDelete(entityClass);
         delete.from(entityClass);
         var q = em.createQuery(delete);
-        return q.executeUpdate();
+        int affected = q.executeUpdate();
+        if (affected > 0) {
+            em.flush();
+            em.clear();
+            com.zsubera.jpa.util.CacheEvictionHelper.evictEntityCache(em, entityClass);
+        }
+        return affected;
     }
 
     /**
@@ -281,9 +293,11 @@ public class DeleteSpec<T> extends AbstractBulkOperationSpec<T, DeleteSpec<T>> {
         delete.where(InClauseBuilder.in(cb, deleteRoot.get(idFieldName), ids));
         var dq = em.createQuery(delete);
         int deleted = dq.executeUpdate();
-        // 选择性失效 L1 缓存：仅驱逐当前实体类型的缓存数据，
-        // 避免 em.clear() 脱管同一事务中调用方持有的其他实体。
-        com.zsubera.jpa.util.CacheEvictionHelper.evictEntityCache(em, entityClass);
+        if (deleted > 0) {
+            em.flush();
+            em.clear();
+            com.zsubera.jpa.util.CacheEvictionHelper.evictEntityCache(em, entityClass);
+        }
         return deleted;
     }
 

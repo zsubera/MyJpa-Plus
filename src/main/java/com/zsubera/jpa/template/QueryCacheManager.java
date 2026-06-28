@@ -143,8 +143,8 @@ public class QueryCacheManager implements CacheAdapter {
      * 用于将 {@link #evictByPrefix(String)} 从 O(n) 降低到 O(k)（k 为匹配条目数）。
      *
      * <p>
-     * 使用 {@link java.util.concurrent.CopyOnWriteArraySet} 因为前缀集合通常较小（<100），
-     * 且写操作（put/evict）远少于读操作（evictByPrefix）。
+     * 使用 {@link java.util.concurrent.ConcurrentHashMap#newKeySet()} 替代 CopyOnWriteArraySet，
+     * 避免 evictByPrefix 中大量 remove() 调用导致的 O(n²) 数组复制。
      */
     private final java.util.concurrent.ConcurrentMap<String, java.util.Set<String>> prefixIndex =
         new java.util.concurrent.ConcurrentHashMap<>();
@@ -167,8 +167,17 @@ public class QueryCacheManager implements CacheAdapter {
      * 向前缀索引中添加一个键。
      */
     private void addToPrefixIndex(String key) {
+        // ponytail: 先检查 store 中是否仍有该 key，避免 evictByPrefix 并发竞争导致索引脏条目
         String prefix = extractPrefix(key);
-        prefixIndex.computeIfAbsent(prefix, k -> new java.util.concurrent.CopyOnWriteArraySet<>()).add(key);
+        prefixIndex.compute(prefix, (k, set) -> {
+            if (set == null) {
+                set = java.util.concurrent.ConcurrentHashMap.newKeySet();
+            }
+            if (store.containsKey(key)) {
+                set.add(key);
+            }
+            return set.isEmpty() ? null : set;
+        });
     }
 
     /**
@@ -709,12 +718,16 @@ public class QueryCacheManager implements CacheAdapter {
                     store.remove(key);
                     insertionTimestamps.remove(key);
                     indexedKeys.remove(key);
-                    removeFromPrefixIndex(key);
                     count++;
                 }
             }
             if (indexedKeys.isEmpty()) {
-                prefixIndex.remove(prefix, indexedKeys);
+                prefixIndex.computeIfPresent(prefix, (k, v) -> v.isEmpty() ? null : v);
+            } else {
+                // ponytail: 清理当前前缀下已被 store.remove 但索引残留的 key
+                // 数据竞争: put() 先成功 store.putIfAbsent, 然后被并发 evict
+                // 导致 store 无 key 但索引仍残留
+                indexedKeys.removeIf(k -> !store.containsKey(k));
             }
         } else {
             // ponytail: 前缀索引只存储第一级前缀，多段前缀需回退到全量扫描
@@ -732,6 +745,14 @@ public class QueryCacheManager implements CacheAdapter {
                     count++;
                 }
             }
+        }
+        // ponytail: 清理 prefixIndex 中可能残留的脏 key（put -> store 成功，addToPrefixIndex 被并发 evict 打断）
+        if (count > 0) {
+            prefixIndex.forEach((p, keys) -> {
+                if (keys != null) {
+                    keys.removeIf(k -> !store.containsKey(k));
+                }
+            });
         }
         if (count > 0) {
             log.debug("Cache evicted {} entries with prefix '{}'", count, keyPrefix);

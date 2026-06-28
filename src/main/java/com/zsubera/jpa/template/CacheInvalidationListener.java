@@ -99,14 +99,17 @@ public class CacheInvalidationListener {
 
     private void evictByEntity(String entityName, String reason) {
         long now = System.nanoTime();
-        if (recentEvictions.size() < MAX_RECENT_EVICTIONS) {
-            Long lastEviction = recentEvictions.get(entityName);
-            if (lastEviction != null && (now - lastEviction) < DEDUP_WINDOW_NS) {
-                log.debug("Skipping duplicate cache invalidation for entity '{}' ({})", entityName, reason);
-                return;
-            }
-            recentEvictions.put(entityName, now);
+        Long lastEviction = recentEvictions.get(entityName);
+        if (lastEviction != null && (now - lastEviction) < DEDUP_WINDOW_NS) {
+            log.debug("Skipping duplicate cache invalidation for entity '{}' ({})", entityName, reason);
+            return;
         }
+        if (recentEvictions.size() >= MAX_RECENT_EVICTIONS) {
+            // ponytail: Map is full — purge stale entries (>10ms old) to make room.
+            long cutoff = now - DEDUP_WINDOW_NS * 10;
+            recentEvictions.values().removeIf(v -> v < cutoff);
+        }
+        recentEvictions.put(entityName, now);
         String prefix = entityName + ":";
         int evicted = cacheAdapter.evictByPrefix(prefix);
         if (evicted > 0) {

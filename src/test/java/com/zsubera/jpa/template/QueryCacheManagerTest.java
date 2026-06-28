@@ -497,4 +497,41 @@ class QueryCacheManagerTest {
         }
         assertTrue(cache.size() <= 10);
     }
+
+    // ---- evictByPrefix prefixIndex race condition ----
+
+    @Test
+    void evictByPrefix_concurrentAdd_doesNotLeakPrefixEntry() {
+        cache = new QueryCacheManager(100);
+        cache.put("TestEntity:a", "v1", 60);
+        cache.put("TestEntity:b", "v2", 60);
+
+        // 模拟并发 addToPrefixIndex：前缀下的所有 key 被 evict 后并发添加新 key
+        cache.evictByPrefix("TestEntity:");
+        assertEquals(0, cache.size(),
+            "All keys under prefix should be evicted");
+
+        // 并发添加应能创建新的 prefixIndex 条目
+        cache.put("TestEntity:c", "v3", 60);
+        cache.put("TestEntity:d", "v4", 60);
+
+        // 再次 evict 应正常工作
+        int evicted = cache.evictByPrefix("TestEntity:");
+        assertEquals(2, evicted,
+            "Should evict entries added after first evict");
+    }
+
+    @Test
+    void evictByPrefix_multiLevelPrefix_worksCorrectly() {
+        cache = new QueryCacheManager(100);
+        cache.put("com.example.User:1:name", "v1", 60);
+        cache.put("com.example.User:1:email", "v2", 60);
+        cache.put("com.example.Order:1", "v3", 60);
+
+        int evicted = cache.evictByPrefix("com.example.User");
+        assertEquals(2, evicted,
+            "Should evict all User entries despite multi-level prefix");
+        assertEquals(1, cache.size(),
+            "Order entry should remain");
+    }
 }

@@ -245,9 +245,11 @@ final class NodeResolver {
                 String softDeleteFieldName =
                     com.zsubera.jpa.softdelete.SoftDeleteHelper.findSoftDeleteField(joinEntityType);
                 if (softDeleteFieldName != null) {
-                    jakarta.persistence.criteria.Path<?> deletedPath = join.get(softDeleteFieldName);
+                    // ponytail: pass join (not join.get(softDeleteFieldName)) to buildNotDeleted,
+                    // which internally calls path.get(fieldName). Passing a pre-resolved path would
+                    // cause double resolution: join.get("deleted").get("deleted").
                     Predicate softDeleteFilter = com.zsubera.jpa.softdelete.SoftDeleteHelper.buildNotDeleted(cb,
-                        deletedPath, softDeleteFieldName, joinEntityType);
+                        join, softDeleteFieldName, joinEntityType);
                     if (softDeleteFilter != null) {
                         innerPredicates.add(softDeleteFilter);
                     }

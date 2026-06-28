@@ -68,12 +68,22 @@ public final class IdentifierValidator {
 
     private static volatile boolean strictMode = false;
 
-    static {
-        String prop = System.getProperty("myjpa-plus.merge.unicode-identifiers");
-        if ("true".equalsIgnoreCase(prop)) {
-            unicodeIdentifiers = true;
+    private static volatile boolean propsLoaded = false;
+
+    private static void ensurePropsLoaded() {
+        if (!propsLoaded) {
+            synchronized (IdentifierValidator.class) {
+                if (!propsLoaded) {
+                    String prop = System.getProperty("myjpa-plus.merge.unicode-identifiers");
+                    if ("true".equalsIgnoreCase(prop)) {
+                        unicodeIdentifiers = true;
+                    }
+                    strictMode = "true".equalsIgnoreCase(
+                        System.getProperty("myjpa-plus.merge.strict-mode", "false"));
+                    propsLoaded = true;
+                }
+            }
         }
-        strictMode = "true".equalsIgnoreCase(System.getProperty("myjpa-plus.merge.strict-mode", "false"));
     }
 
     /**
@@ -82,6 +92,7 @@ public final class IdentifierValidator {
      * @param enabled 是否启用
      */
     public static void setUnicodeIdentifiers(boolean enabled) {
+        ensurePropsLoaded();
         unicodeIdentifiers = enabled;
     }
 
@@ -91,6 +102,7 @@ public final class IdentifierValidator {
      * @return 如果启用返回 true
      */
     public static boolean isUnicodeIdentifiersEnabled() {
+        ensurePropsLoaded();
         return unicodeIdentifiers;
     }
 
@@ -214,6 +226,7 @@ public final class IdentifierValidator {
      * @throws MyJpaPlusException 如果启用严格模式且检测到同形字符
      */
     public static void setStrictMode(boolean enabled) {
+        ensurePropsLoaded();
         strictMode = enabled;
     }
 

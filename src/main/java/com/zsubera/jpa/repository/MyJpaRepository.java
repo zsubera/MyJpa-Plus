@@ -19,7 +19,8 @@ import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.repository.NoRepositoryBean;
 
 /**
- * 基础仓库接口，结合了 {@link JpaRepository} 和 {@link JpaSpecificationExecutor}， 使消费者只需扩展单个接口即可使用。
+ * 用户面向的仓库接口，结合了 {@link JpaRepository} 和 {@link JpaSpecificationExecutor}，
+ * 实现类为 {@code DefaultMyJpaRepository}。
  *
  * <p>
  * 查询用法（Lambda 模式，推荐）：
@@ -322,15 +323,12 @@ public interface MyJpaRepository<T, ID> extends JpaRepository<T, ID>, JpaSpecifi
     @SuppressWarnings("unchecked")
     private Class<T> getEntityClass() {
         Class<?> repoClass = getClass();
-        Class<?> cached = ENTITY_CLASS_CACHE.get(repoClass);
-        if (cached != null) {
-            return (Class<T>)cached;
-        }
-        Class<T> entityClass = EntityClassResolver.resolve(repoClass);
-        if (entityClass == null) {
-            throw new IllegalStateException("Cannot resolve entity class for repository: " + repoClass.getName());
-        }
-        ENTITY_CLASS_CACHE.put(repoClass, entityClass);
-        return entityClass;
+        return (Class<T>)ENTITY_CLASS_CACHE.computeIfAbsent(repoClass, c -> {
+            Class<T> entityClass = EntityClassResolver.resolve(c);
+            if (entityClass == null) {
+                throw new IllegalStateException("Cannot resolve entity class for repository: " + c.getName());
+            }
+            return entityClass;
+        });
     }
 }

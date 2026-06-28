@@ -46,7 +46,7 @@ public final class SlowQueryDataSourceProxy {
 
     private static final Logger log = LoggerFactory.getLogger(SlowQueryDataSourceProxy.class);
 
-    private static final int MAX_PROXY_CLASS_CACHE_SIZE = 512;
+    private static final int MAX_PROXY_CLASS_CACHE_SIZE = 4096;
     private static final com.zsubera.jpa.util.SampledEvictionCache<Class<?>, Class<?>> PROXY_CLASS_CACHE =
         new com.zsubera.jpa.util.SampledEvictionCache<>(MAX_PROXY_CLASS_CACHE_SIZE, 0.75, 100, 64);
 
