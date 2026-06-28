@@ -276,12 +276,26 @@ public class CteSpec {
         }
         CteEntry current = currentCte();
         if (params != null && params.length > 0) {
-            // 使用字面量替换（非正则），反向迭代避免 ?1 匹配 ?10 等多位数占位符
             int cteIndex = cteEntries.size() - 1;
             String rewrittenSql = sqlTemplate;
             for (int i = params.length - 1; i >= 0; i--) {
+                String paramStr = "?" + (i + 1);
                 String namedParam = "_cte_" + cteIndex + "_param_" + i;
-                rewrittenSql = rewrittenSql.replace("?" + (i + 1), ":" + namedParam);
+                StringBuilder sb = new StringBuilder(rewrittenSql.length());
+                boolean inString = false;
+                for (int j = 0; j < rewrittenSql.length(); j++) {
+                    char c = rewrittenSql.charAt(j);
+                    if (c == '\'') {
+                        inString = !inString;
+                    }
+                    if (!inString && c == '?' && rewrittenSql.regionMatches(j, paramStr, 0, paramStr.length())) {
+                        sb.append(':').append(namedParam);
+                        j += paramStr.length() - 1;
+                    } else {
+                        sb.append(c);
+                    }
+                }
+                rewrittenSql = sb.toString();
                 parameters.put(namedParam, params[i]);
             }
             current.sql = rewrittenSql;

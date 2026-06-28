@@ -327,22 +327,6 @@ public abstract class AbstractBulkOperationSpec<T, SELF extends AbstractBulkOper
 
     // ---- 条件方法由 BulkConditionSupport 默认实现提供 ----
 
-    @Override
-    public SELF eqStrict(SFunction<T, ?> field, Object value) {
-        if (value == null) {
-            throw new IllegalArgumentException("value must not be null. Use isNull() for null comparisons.");
-        }
-        return eq(field, value);
-    }
-
-    @Override
-    public SELF neStrict(SFunction<T, ?> field, Object value) {
-        if (value == null) {
-            throw new IllegalArgumentException("value must not be null. Use isNotNull() for null comparisons.");
-        }
-        return ne(field, value);
-    }
-
     /**
      * 添加 EXISTS 子查询条件。
      *
@@ -431,6 +415,19 @@ public abstract class AbstractBulkOperationSpec<T, SELF extends AbstractBulkOper
     }
 
     /**
+     * 仅在 {@code condition} 为 true 时添加多字段 LIKE 搜索条件。
+     *
+     * @param condition 是否添加条件的标志
+     * @param keyword 搜索关键字
+     * @param fields 一个或多个字符串属性的方法引用
+     * @return 当前构建器实例
+     */
+    @SafeVarargs
+    public final SELF multiLike(boolean condition, String keyword, SFunction<T, ?>... fields) {
+        return condition ? multiLike(keyword, fields) : self();
+    }
+
+    /**
      * 构建多字段 LIKE OR 谓词的共享逻辑。
      */
     static java.util.function.BiFunction<jakarta.persistence.criteria.Root<?>, CriteriaBuilder, Predicate>
@@ -442,43 +439,6 @@ public abstract class AbstractBulkOperationSpec<T, SELF extends AbstractBulkOper
             }
             return cb.or(likes.toArray(new Predicate[0]));
         };
-    }
-
-    /**
-     * 仅在 {@code condition} 为 true 时添加严格等值条件。
-     *
-     * @param condition 是否添加条件的标志
-     * @param field 实体属性引用
-     * @param value 比较值
-     * @return 当前构建器实例
-     */
-    public SELF eqStrict(boolean condition, SFunction<T, ?> field, Object value) {
-        return condition ? eqStrict(field, value) : self();
-    }
-
-    /**
-     * 仅在 {@code condition} 为 true 时添加严格不等于条件。
-     *
-     * @param condition 是否添加条件的标志
-     * @param field 实体属性引用
-     * @param value 比较值
-     * @return 当前构建器实例
-     */
-    public SELF neStrict(boolean condition, SFunction<T, ?> field, Object value) {
-        return condition ? neStrict(field, value) : self();
-    }
-
-    /**
-     * 仅在 {@code condition} 为 true 时添加多字段 LIKE 搜索条件。
-     *
-     * @param condition 是否添加条件的标志
-     * @param keyword 搜索关键字
-     * @param fields 一个或多个字符串属性的方法引用
-     * @return 当前构建器实例
-     */
-    @SafeVarargs
-    public final SELF multiLike(boolean condition, String keyword, SFunction<T, ?>... fields) {
-        return condition ? multiLike(keyword, fields) : self();
     }
 
     /**

@@ -7,6 +7,8 @@ import com.zsubera.jpa.update.UpdateSpec;
 import com.zsubera.jpa.util.EntityClassResolver;
 import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 import java.util.function.Consumer;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -58,6 +60,9 @@ import org.springframework.data.repository.NoRepositoryBean;
  */
 @NoRepositoryBean
 public interface MyJpaRepository<T, ID> extends JpaRepository<T, ID>, JpaSpecificationExecutor<T> {
+
+    /** 缓存 getEntityClass() 的结果，避免每次调用都执行 EntityClassResolver.resolve()。 */
+    ConcurrentMap<Class<?>, Class<?>> ENTITY_CLASS_CACHE = new ConcurrentHashMap<>();
 
     /**
      * 使用 Lambda 表达式查找所有匹配的实体。
@@ -314,11 +319,18 @@ public interface MyJpaRepository<T, ID> extends JpaRepository<T, ID>, JpaSpecifi
      * @return 实体类
      * @throws IllegalStateException 如果无法解析实体类
      */
+    @SuppressWarnings("unchecked")
     private Class<T> getEntityClass() {
-        Class<T> entityClass = EntityClassResolver.resolve(getClass());
-        if (entityClass == null) {
-            throw new IllegalStateException("Cannot resolve entity class for repository: " + getClass().getName());
+        Class<?> repoClass = getClass();
+        Class<?> cached = ENTITY_CLASS_CACHE.get(repoClass);
+        if (cached != null) {
+            return (Class<T>)cached;
         }
+        Class<T> entityClass = EntityClassResolver.resolve(repoClass);
+        if (entityClass == null) {
+            throw new IllegalStateException("Cannot resolve entity class for repository: " + repoClass.getName());
+        }
+        ENTITY_CLASS_CACHE.put(repoClass, entityClass);
         return entityClass;
     }
 }

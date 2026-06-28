@@ -416,7 +416,8 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
      */
     public void applyQuerySettings(TypedQuery<?> query) {
         if (queryTimeout != null) {
-            // 使用 Math.toIntExact() 防止大超时值的整数溢出
+            // ponytail: Math.toIntExact throws on overflow (>2.1B ms ≈ 24 days timeout).
+            // Acceptable since queryTimeout is capped at 86400s (24h) by the timeout() setter.
             query.setHint("jakarta.persistence.query.timeout",
                 Math.toIntExact(java.util.concurrent.TimeUnit.SECONDS.toMillis(queryTimeout)));
         }

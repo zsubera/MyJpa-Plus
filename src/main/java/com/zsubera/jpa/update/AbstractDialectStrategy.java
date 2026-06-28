@@ -52,6 +52,9 @@ abstract class AbstractDialectStrategy implements DialectStrategy {
      */
     @Override
     public String escapeIdentifier(String identifier) {
+        if (identifier == null) {
+            throw new IllegalArgumentException("identifier must not be null");
+        }
         char openQuote = getQuoteChar();
         char closeQuote = getClosingQuoteChar();
         String escapeSeq = getEscapeSequence();

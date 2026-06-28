@@ -23,6 +23,14 @@ import org.slf4j.LoggerFactory;
  * <p>
  * 从 {@link EncryptConverter} 提取，遵循单一职责原则。 加密算法（AES/GCM）仍由 {@link EncryptConverter} 处理。
  *
+ * <p>
+ * <strong>锁顺序约束：</strong>当需要同时获取 {@link #KEY_SPEC_WRITE_LOCK} 和 {@link #KEY_VERSION_LOCK}
+ * 时，必须按照以下固定顺序获取以避免死锁：
+ * <pre>
+ * KEY_SPEC_WRITE_LOCK → KEY_VERSION_LOCK
+ * </pre>
+ * 当前仅在 {@link #clearCaches()} 中同时获取两把锁。如果未来新增方法需要同时获取，请遵守此顺序。
+ *
  * @see EncryptConverter
  */
 final class EncryptionKeyManager {
@@ -46,6 +54,9 @@ final class EncryptionKeyManager {
      */
     private static volatile int configuredPbkdf2Iterations = -1;
 
+    /** ponytail: 由自动配置通过 setSkipSaltCheck() 注入，优先级高于系统属性/环境变量。 */
+    private static volatile boolean skipSaltCheck = false;
+
     /**
      * 设置 PBKDF2 迭代次数。由自动配置类在启动时调用。
      *
@@ -55,6 +66,11 @@ final class EncryptionKeyManager {
         if (iterations >= 100_000 && iterations <= 10_000_000) {
             configuredPbkdf2Iterations = iterations;
         }
+    }
+
+    static void setSkipSaltCheck(boolean skip) {
+        skipSaltCheck = skip;
+        log.info("PBKDF2 salt check skip set to: {}", skip);
     }
 
     private static int getPbkdf2Iterations() {
@@ -86,7 +102,7 @@ final class EncryptionKeyManager {
     }
 
     private static final java.util.regex.Pattern MULTI_KEY_PATTERN =
-        java.util.regex.Pattern.compile("^v\\d+:.*(?:,\\s*v\\d+:.*)+$");
+        java.util.regex.Pattern.compile("^v\\d+:.*(?:,\\s*v\\d+:.*)++$");
     private static final java.util.regex.Pattern SINGLE_ENTRY_PATTERN = java.util.regex.Pattern.compile("v\\d+:.+");
     private static final java.util.regex.Pattern VERSION_PATTERN = java.util.regex.Pattern.compile("v\\d+");
 
@@ -282,15 +298,19 @@ final class EncryptionKeyManager {
 
     private static SecretKeySpec deriveKey(char[] keyChars) {
         byte[] derived = null;
+        PBEKeySpec spec = null;
         try {
             byte[] salt = getSalt();
-            PBEKeySpec spec = new PBEKeySpec(keyChars, salt, getPbkdf2Iterations(), PBKDF2_KEY_LENGTH);
+            spec = new PBEKeySpec(keyChars, salt, getPbkdf2Iterations(), PBKDF2_KEY_LENGTH);
             SecretKeyFactory factory = SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256");
             derived = factory.generateSecret(spec).getEncoded();
             return new SecretKeySpec(derived, "AES");
         } catch (GeneralSecurityException e) {
             throw new MyJpaPlusException("Failed to derive encryption key via PBKDF2", e);
         } finally {
+            if (spec != null) {
+                spec.clearPassword();
+            }
             java.util.Arrays.fill(keyChars, '\0');
             if (derived != null) {
                 java.util.Arrays.fill(derived, (byte)0);
@@ -332,6 +352,9 @@ final class EncryptionKeyManager {
     }
 
     static boolean isSaltCheckSkipped() {
+        if (skipSaltCheck) {
+            return true;
+        }
         String skipCheck = System.getProperty(SKIP_SALT_PROPERTY);
         if (!"true".equalsIgnoreCase(skipCheck)) {
             skipCheck = System.getenv(SKIP_SALT_ENV);
@@ -386,12 +409,10 @@ final class EncryptionKeyManager {
             KEY_CACHE.clear();
             KEY_ACCESS_TIMES.clear();
             KEY_VALIDATED.set(false);
-            // ponytail: 先移除引用再清零，避免并发线程读到全零 salt
-            byte[] oldSalt = cachedSalt;
+            // ponytail: 不对 salt 做清零，因为：
+            // 1. salt 来自环境变量/系统属性，不属于敏感秘密
+            // 2. 并发 getSalt() 可能已持有数组引用，清零导致返回全零 salt 破坏 PBKDF2 派生
             cachedSalt = null;
-            if (oldSalt != null) {
-                java.util.Arrays.fill(oldSalt, (byte) 0);
-            }
         } finally {
             KEY_SPEC_WRITE_LOCK.unlock();
         }

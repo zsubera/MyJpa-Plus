@@ -210,6 +210,11 @@ public class MyJpaPlusProperties {
         private java.util.List<String> extraBooleanFunctions = new java.util.ArrayList<>();
 
         /**
+         * Upsert 批量独立事务最大迭代次数。超过此限制时抛出异常，防止输入过大耗尽资源。 默认值：{@code 10000}
+         */
+        private int maxUpsertBatchIterations = 10000;
+
+        /**
          * 验证所有查询配置的跨字段关系。
          *
          * <p>
@@ -326,6 +331,17 @@ public class MyJpaPlusProperties {
         public void setExtraBooleanFunctions(java.util.List<String> extraBooleanFunctions) {
             this.extraBooleanFunctions =
                 extraBooleanFunctions != null ? extraBooleanFunctions : new java.util.ArrayList<>();
+        }
+
+        public int getMaxUpsertBatchIterations() {
+            return maxUpsertBatchIterations;
+        }
+
+        public void setMaxUpsertBatchIterations(int maxUpsertBatchIterations) {
+            if (maxUpsertBatchIterations <= 0) {
+                throw new IllegalArgumentException("maxUpsertBatchIterations must be positive");
+            }
+            this.maxUpsertBatchIterations = maxUpsertBatchIterations;
         }
     }
 

@@ -144,7 +144,7 @@ public final class SoftDeleteBulkExecutor {
         if (updated > 0) {
             em.flush();
             em.clear();
-            UpdateSpec.evictEntityCache(em, entityClass);
+            com.zsubera.jpa.util.CacheEvictionHelper.evictEntityCache(em, entityClass);
             publishEvent(entityClass, updated);
         }
         return updated;
@@ -207,7 +207,7 @@ public final class SoftDeleteBulkExecutor {
         if (total > 0) {
             em.flush();
             em.clear();
-            UpdateSpec.evictEntityCache(em, entityClass);
+            com.zsubera.jpa.util.CacheEvictionHelper.evictEntityCache(em, entityClass);
             publishEvent(entityClass, total);
         }
         return total;
@@ -260,7 +260,7 @@ public final class SoftDeleteBulkExecutor {
                 "softDeleteAllUsingCriteriaUpdate affected " + updated + " rows, exceeding the limit of " + maxRows
                     + ". Consider using softDeleteByIdsUsingEntityManager() with explicit ID lists.");
         if (updated > 0) {
-            UpdateSpec.evictEntityCache(em, entityClass);
+            com.zsubera.jpa.util.CacheEvictionHelper.evictEntityCache(em, entityClass);
             publishEvent(entityClass, updated);
         }
         return updated;
@@ -307,7 +307,7 @@ public final class SoftDeleteBulkExecutor {
         if (total > 0) {
             em.flush();
             em.clear();
-            UpdateSpec.evictEntityCache(em, entityClass);
+            com.zsubera.jpa.util.CacheEvictionHelper.evictEntityCache(em, entityClass);
             publishEvent(entityClass, total);
         }
         return total;

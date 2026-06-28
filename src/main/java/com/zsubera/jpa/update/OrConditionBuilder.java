@@ -54,22 +54,6 @@ public class OrConditionBuilder<T, SELF extends AbstractBulkOperationSpec<T, SEL
 
     // ---- 条件方法由 BulkConditionSupport 默认实现提供 ----
 
-    @Override
-    public OrConditionBuilder<T, SELF> eqStrict(SFunction<T, ?> field, Object value) {
-        if (value == null) {
-            throw new IllegalArgumentException("value must not be null. Use isNull() for null comparisons.");
-        }
-        return eq(field, value);
-    }
-
-    @Override
-    public OrConditionBuilder<T, SELF> neStrict(SFunction<T, ?> field, Object value) {
-        if (value == null) {
-            throw new IllegalArgumentException("value must not be null. Use isNotNull() for null comparisons.");
-        }
-        return ne(field, value);
-    }
-
     /**
      * 添加多字段 LIKE 搜索条件。关键字被包装为 {@code %keyword%} 并与每个给定字段匹配，使用 OR 连接。
      *

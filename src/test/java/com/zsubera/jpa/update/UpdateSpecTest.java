@@ -1268,7 +1268,7 @@ class UpdateSpecTest {
     void testCheckRowCountBeforeExecuteWithinLimit() {
         com.zsubera.jpa.autoconfigure.MyJpaPlusGlobalConfig config =
             com.zsubera.jpa.autoconfigure.GlobalConfigHolder.getConfig();
-        int oldLimit = config.getMaxBulkOperationRows();
+        Integer oldLimit = config.getMaxBulkOperationRows();
         try {
             config.setMaxBulkOperationRows(10);
 
@@ -1280,7 +1280,9 @@ class UpdateSpecTest {
                 .execute(em);
             assertEquals(1, count);
         } finally {
-            config.setMaxBulkOperationRows(oldLimit);
+            if (oldLimit != null) {
+                config.setMaxBulkOperationRows(oldLimit);
+            }
         }
     }
 
@@ -1288,7 +1290,7 @@ class UpdateSpecTest {
     void testCheckRowCountSkipsWhenLimitIsMaxValue() {
         com.zsubera.jpa.autoconfigure.MyJpaPlusGlobalConfig config =
             com.zsubera.jpa.autoconfigure.GlobalConfigHolder.getConfig();
-        int oldLimit = config.getMaxBulkOperationRows();
+        Integer oldLimit = config.getMaxBulkOperationRows();
         try {
             config.setMaxBulkOperationRows(Integer.MAX_VALUE);
 
@@ -1300,7 +1302,9 @@ class UpdateSpecTest {
                 .execute(em);
             assertEquals(1, count);
         } finally {
-            config.setMaxBulkOperationRows(oldLimit);
+            if (oldLimit != null) {
+                config.setMaxBulkOperationRows(oldLimit);
+            }
         }
     }
 

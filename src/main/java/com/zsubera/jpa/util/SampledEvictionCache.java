@@ -104,6 +104,8 @@ public class SampledEvictionCache<K, V> {
         store.clear();
     }
 
+    // ponytail: unsynchronized eviction — cache may grow beyond maxSize under high concurrency.
+    // Upgrade to Caffeine if strict size bounds are required.
     private void samplingEvict() {
         if (Math.floorMod(counter.getAndIncrement(), samplingInterval) != 0) {
             return;

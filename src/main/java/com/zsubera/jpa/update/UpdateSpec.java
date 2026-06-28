@@ -445,6 +445,11 @@ public class UpdateSpec<T> extends AbstractBulkOperationSpec<T, UpdateSpec<T>> {
         if (limit <= 0) {
             throw new IllegalArgumentException("limit must be positive");
         }
+        int globalMax = resolveMaxBulkOperationRows();
+        if (globalMax > 0 && limit > globalMax) {
+            throw new IllegalArgumentException("limit (" + limit + ") exceeds global max (" + globalMax
+                + "). Adjust myjpa-plus.query.max-bulk-operation-rows or use a smaller limit.");
+        }
         if (EntityClassResolver.hasCompositeKey(entityClass)) {
             throw new UnsupportedOperationException(
                 "executeLimited() does not support entities with composite primary keys (@EmbeddedId or @IdClass). "
@@ -502,7 +507,7 @@ public class UpdateSpec<T> extends AbstractBulkOperationSpec<T, UpdateSpec<T>> {
         int updated = uq.executeUpdate();
         // 选择性失效 L1 缓存：仅驱逐当前实体类型的缓存数据，
         // 避免 em.clear() 脱管同一事务中调用方持有的其他实体。
-        evictEntityCache(em, entityClass);
+        com.zsubera.jpa.util.CacheEvictionHelper.evictEntityCache(em, entityClass);
         return updated;
     }
 
@@ -519,15 +524,13 @@ public class UpdateSpec<T> extends AbstractBulkOperationSpec<T, UpdateSpec<T>> {
         if (cachedResult != null) {
             if (!cachedResult) {
                 java.lang.reflect.Field f = resolveFieldFromClassHierarchy(fieldName);
-                String fieldType = f != null ? f.getType().getSimpleName() : "unknown";
-                if ("unknown".equals(fieldType)) {
-                    throw new IllegalArgumentException(operation + "() cannot validate field '" + fieldName + "' in "
-                        + entityClass.getSimpleName() + ". Field not found via reflection. "
-                        + "Ensure the field exists as a direct class field (not a getter-only property). "
-                        + "For computed expressions, use setExpr() instead.");
+                if (f == null) {
+                    throw new IllegalArgumentException(operation + "() cannot resolve field '" + fieldName + "' in "
+                        + entityClass.getSimpleName() + ". The field does not exist as a declared class field. "
+                        + "Check the field name spelling or ensure it is declared (not inherited via getter-only).");
                 }
                 throw new IllegalArgumentException(operation + "() requires a numeric field, but field '" + fieldName
-                    + "' in " + entityClass.getSimpleName() + " has type: " + fieldType
+                    + "' in " + entityClass.getSimpleName() + " has type: " + f.getType().getSimpleName()
                     + ". Use set() for non-numeric fields.");
             }
             return;
@@ -542,15 +545,13 @@ public class UpdateSpec<T> extends AbstractBulkOperationSpec<T, UpdateSpec<T>> {
                 || type == double.class || type == float.class || type == short.class || type == byte.class;
         });
         if (!isNumeric) {
-            String fieldType = resolvedField != null ? resolvedField.getType().getSimpleName() : "unknown";
-            if ("unknown".equals(fieldType)) {
-                throw new IllegalArgumentException(operation + "() cannot validate field '" + fieldName + "' in "
-                    + entityClass.getSimpleName() + ". Field not found via reflection. "
-                    + "Ensure the field exists as a direct class field (not a getter-only property). "
-                    + "For computed expressions, use setExpr() instead.");
+            if (resolvedField == null) {
+                throw new IllegalArgumentException(operation + "() cannot resolve field '" + fieldName + "' in "
+                    + entityClass.getSimpleName() + ". The field does not exist as a declared class field. "
+                    + "Check the field name spelling or ensure it is declared (not inherited via getter-only).");
             } else {
                 throw new IllegalArgumentException(operation + "() requires a numeric field, but field '" + fieldName
-                    + "' in " + entityClass.getSimpleName() + " has type: " + fieldType
+                    + "' in " + entityClass.getSimpleName() + " has type: " + resolvedField.getType().getSimpleName()
                     + ". Use set() for non-numeric fields.");
             }
         }
@@ -561,28 +562,7 @@ public class UpdateSpec<T> extends AbstractBulkOperationSpec<T, UpdateSpec<T>> {
      * 非 Hibernate 环境回退到 {@code em.clear()}（会影响所有托管实体）。
      */
     public static void evictEntityCache(EntityManager em, Class<?> entityClass) {
-        if (entityClass == null) {
-            em.clear();
-            return;
-        }
-        try {
-            Class<?> sessionClass = Class.forName("org.hibernate.Session");
-            if (sessionClass.isInstance(em.getDelegate())) {
-                Object session = em.unwrap(sessionClass);
-                Object factory = session.getClass().getMethod("getSessionFactory").invoke(session);
-                Object cache = factory.getClass().getMethod("getCache").invoke(factory);
-                cache.getClass().getMethod("evictEntityData", Class.class).invoke(cache, entityClass);
-                return;
-            }
-        } catch (ClassNotFoundException | NoSuchMethodException e) {
-            // 非 Hibernate 环境，回退到 em.clear()
-        } catch (Exception e) {
-            log.warn("Failed to evict entity cache selectively for {}, falling back to em.clear()",
-                entityClass.getSimpleName(), e);
-        }
-        log.warn("Non-selective em.clear() fallback for {} — all managed entities will be detached",
-            entityClass.getSimpleName());
-        em.clear();
+        com.zsubera.jpa.util.CacheEvictionHelper.evictEntityCache(em, entityClass);
     }
 
     private java.lang.reflect.Field resolveFieldFromClassHierarchy(String fieldName) {

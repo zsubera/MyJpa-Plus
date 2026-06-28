@@ -116,7 +116,7 @@ public final class LambdaUtils {
      * 驱逐策略：超过 4096 时，每 100 次访问采样检查并驱逐至 75% 容量。
      */
     private static final SampledEvictionCache<Class<?>, Method> METHOD_CACHE =
-        new SampledEvictionCache<>(4096, 0.75, 100, 256);
+        new SampledEvictionCache<>(4096, 0.75, 100, 4096);
 
     public static void shutdown() {
         CACHE.clear();
@@ -180,13 +180,12 @@ public final class LambdaUtils {
             propertyName = resolveViaSerialization(fn);
         }
         IdentifierValidator.validateColumnName(propertyName);
-        CACHE.put(key, propertyName);
         return propertyName;
     }
 
     /**
      * 解析 lambda 的唯一缓存键。优先使用 SerializedLambda 的 implClass+implMethodName（确定性、无碰撞），
-     * 降级到 className+System.identityHashCode（仅在反射和序列化都失败时）。
+     * 降级到 className+（仅在反射和序列化都失败时）。
      */
     private static <T> String resolveLambdaKey(SFunction<T, ?> fn) {
         try {
@@ -197,7 +196,7 @@ public final class LambdaUtils {
         } catch (Exception ignored) {
             // fallback below
         }
-        return fn.getClass().getName() + "#" + System.identityHashCode(fn);
+        return fn.getClass().getName();
     }
 
     private static <T> SerializedLambda extractSerializedLambda(SFunction<T, ?> fn) {

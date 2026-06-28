@@ -97,7 +97,9 @@ final class NodeResolver {
         if (config != null && !config.isSoftDeleteAutoFilter()) {
             return false;
         }
-        // 升级路径：后续可在此加入 SoftDeleteContext.isIgnoreSoftDelete() 检查
+        if (com.zsubera.jpa.repository.SoftDeleteContext.isIgnoreSoftDelete()) {
+            return false;
+        }
         return true;
     }
 
@@ -270,6 +272,11 @@ final class NodeResolver {
             join.on(existingOnPredicate == null ? newOnPredicate : cb.and(existingOnPredicate, newOnPredicate));
             return cb.conjunction();
         }
+        if (isFetch && !innerPredicates.isEmpty()) {
+            log.warn("FETCH JOIN conditions for path '{}' will be applied to WHERE clause instead of ON clause. "
+                + "This may degrade LEFT JOIN to INNER JOIN if conditions filter out NULL rows.",
+                fullPath != null ? fullPath : node.fieldName);
+        }
         return innerPredicates.isEmpty() ? cb.conjunction() : cb.and(innerPredicates.toArray(new Predicate[0]));
     }
 
@@ -382,17 +389,18 @@ final class NodeResolver {
                 "IN subquery is not supported in count query context (query=null). "
                     + "Use a separate count query without subqueries.");
         }
-        return resolveInSubQueryInternal(node, ctx.path(), query, ctx.cb());
+        return resolveInSubQueryInternal(node, ctx.path(), ctx.rootPath(), query, ctx.cb());
     }
 
     @SuppressWarnings({"unchecked", "rawtypes"})
     private static <S> Predicate resolveInSubQueryInternal(ConditionNode.InSubQueryNode<S> node, Path<?> outerPath,
-        CriteriaQuery<?> query, CriteriaBuilder cb) {
+        Path<?> rootPath, CriteriaQuery<?> query, CriteriaBuilder cb) {
         Class<?> outerFieldType = outerPath.get(node.outerFieldName).getJavaType();
         jakarta.persistence.criteria.Subquery<?> subquery = query.subquery(outerFieldType);
         Root<S> subRoot = (Root<S>)subquery.from(node.subEntity);
 
-        SubQuerySpec<S> subSpec = SubQuerySpec.create((Subquery<S>)subquery, subRoot, subRoot, cb);
+        Root<?> correlatedOuter = resolveCorrelationRoot(subquery, rootPath);
+        SubQuerySpec<S> subSpec = SubQuerySpec.create((Subquery<S>)subquery, subRoot, correlatedOuter, cb);
         node.config.accept(subSpec);
         subSpec.applyWhere();
 
@@ -413,7 +421,7 @@ final class NodeResolver {
         Predicate inner = resolveNodeWithDepth(node.inner, ctx.path(), ctx.rootPath(), ctx.query(), ctx.cb(),
             ctx.joinCache(), ctx.pathPrefix(), ctx.depth() + 1, ctx.fetchPaths());
         if (inner == null) {
-            return ctx.cb().conjunction();
+            return ctx.cb().disjunction();
         }
         return ctx.cb().not(inner);
     }

@@ -32,10 +32,8 @@ class QueryCacheManagerTest {
     }
 
     @Test
-    void get_expiredEntry_returnsNull() throws InterruptedException {
+    void get_expiredEntry_returnsNull() {
         cache.put("key1", "value1", 0);
-
-        Thread.sleep(50);
 
         assertNull(cache.get("key1"));
     }
@@ -97,9 +95,8 @@ class QueryCacheManagerTest {
     }
 
     @Test
-    void expiredEntry_removedOnGet() throws InterruptedException {
+    void expiredEntry_removedOnGet() {
         cache.put("key1", "value1", 0);
-        Thread.sleep(50);
 
         assertNull(cache.get("key1"));
         assertEquals(0, cache.size());
@@ -153,16 +150,13 @@ class QueryCacheManagerTest {
     }
 
     @Test
-    void expiredEntries_shouldNotLeakInInsertionOrder() throws InterruptedException {
+    void expiredEntries_shouldNotLeakInInsertionOrder() {
         cache = new QueryCacheManager(100);
 
-        // 放入短 TTL 条目
+        // 放入短 TTL 条目（TTL=0 立即过期）
         for (int i = 0; i < 20; i++) {
-            cache.put("short-" + i, "val", 0); // 立即过期
+            cache.put("short-" + i, "val", 0);
         }
-
-        // 等待过期
-        Thread.sleep(50);
 
         // 通过 get 触发过期清理
         for (int i = 0; i < 20; i++) {

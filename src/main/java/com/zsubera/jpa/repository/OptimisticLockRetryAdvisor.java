@@ -140,7 +140,7 @@ public class OptimisticLockRetryAdvisor {
             } catch (RuntimeException e) {
                 transactionManager.rollback(status);
                 throw e;
-            } catch (Throwable e) {
+            } catch (Exception e) {
                 transactionManager.rollback(status);
                 throw e;
             }

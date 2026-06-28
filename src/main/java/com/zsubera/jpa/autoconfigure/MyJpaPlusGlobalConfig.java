@@ -47,6 +47,9 @@ public class MyJpaPlusGlobalConfig {
     /** 缓存最大条目数。null 表示未配置。 */
     private volatile Integer cacheMaxEntries;
 
+    /** Upsert 批量独立事务最大迭代次数。null 表示未配置（默认 10000）。 */
+    private volatile Integer maxUpsertBatchIterations;
+
     // ---- Soft Delete ----
 
     public boolean isSoftDeleteAutoFilter() {
@@ -162,5 +165,19 @@ public class MyJpaPlusGlobalConfig {
             throw new IllegalArgumentException("cacheMaxEntries must be positive, got: " + cacheMaxEntries);
         }
         this.cacheMaxEntries = cacheMaxEntries;
+    }
+
+    // ---- Upsert Batch ----
+
+    public Integer getMaxUpsertBatchIterations() {
+        return maxUpsertBatchIterations;
+    }
+
+    public void setMaxUpsertBatchIterations(int maxUpsertBatchIterations) {
+        if (maxUpsertBatchIterations <= 0) {
+            throw new IllegalArgumentException(
+                "maxUpsertBatchIterations must be positive, got: " + maxUpsertBatchIterations);
+        }
+        this.maxUpsertBatchIterations = maxUpsertBatchIterations;
     }
 }

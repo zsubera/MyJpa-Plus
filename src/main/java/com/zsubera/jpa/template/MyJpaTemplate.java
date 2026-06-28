@@ -406,15 +406,14 @@ public class MyJpaTemplate implements MyJpaTemplateOperations {
         List<T> result = findAll(entityClass, spec);
         List<T> immutableResult = List.copyOf(result);
         if (org.springframework.transaction.support.TransactionSynchronizationManager.isActualTransactionActive()) {
-            // ponytail: 立即缓存以缓解并发缓存击穿（防止同一查询在事务提交前反复执行）。
-            // 如果事务回滚，缓存条目会在自然 TTL 后过期，不会导致数据不一致
-            // （未提交的数据不会被其他事务看到）。
-            cacheAdapter.put(cacheKey, immutableResult, ttlSeconds);
+            // ponytail: 在事务提交后写入缓存，避免回滚时缓存残留脏数据。
+            // 如果事务回滚，缓存不会被写入，后续查询会重新执行。
             org.springframework.transaction.support.TransactionSynchronizationManager
                 .registerSynchronization(new org.springframework.transaction.support.TransactionSynchronization() {
                     @Override
                     public void afterCommit() {
-                        log.debug("Cache confirmed after transaction commit for key: {}", cacheKey);
+                        cacheAdapter.put(cacheKey, immutableResult, ttlSeconds);
+                        log.debug("Cache written after transaction commit for key: {}", cacheKey);
                     }
                 });
         } else {
@@ -1381,20 +1380,16 @@ public class MyJpaTemplate implements MyJpaTemplateOperations {
         List<T> content = query.getResultList();
         boolean hasNext;
         if (maxResultsLimited) {
-            // ponytail: maxResults 是硬限制，无法准确判断 hasNext
-            // fetchLimit=maxResults, 结果集被截断到 maxResults 行
-            // 如果 content.size() < fetchLimit，说明数据已取完 → 无下一页
-            // 如果 content.size() == fetchLimit（==maxResults），可能还有更多，
-            // 但无法区分"正好 maxResults 行"和"被截断"，保守标记 hasNext=true
-            hasNext = content.size() >= effectiveMaxResults;
-            if (hasNext && content.size() <= pageable.getPageSize()) {
-                // 当 maxResults <= pageSize 时，上面逻辑会误报
-                // 因为取到的行数永远 >= maxResults（等于 pageSize+1 截断后可能刚好等于 maxResults）
-                // 这种情况无法判断，保守返回 true
+            // ponytail: maxResults 是硬限制，无法获取下一页数据
+            // 当 maxResults < pageSize+1 时，即使有更多数据也无法通过 slice 分页获取
+            // 诚实返回 hasNext=false，避免调用方无限循环
+            hasNext = false;
+            if (content.size() >= effectiveMaxResults) {
                 log.warn(
                     "findSlice with maxResultsLimited=true "
-                        + "(maxResults={}, pageSize={}) cannot accurately determine hasNext. "
-                        + "Consider increasing maxResults or reducing pageSize.",
+                        + "(maxResults={}, pageSize={}) may have truncated results. "
+                        + "Slice pagination is broken when maxResults < pageSize+1. "
+                        + "Increase maxResults or reduce pageSize for correct pagination.",
                     effectiveMaxResults, pageable.getPageSize());
             }
         } else {
@@ -1578,7 +1573,12 @@ public class MyJpaTemplate implements MyJpaTemplateOperations {
      */
     private void publishEntityModifiedEvent(Class<?> entityClass, int affectedRows) {
         if (affectedRows > 0 && applicationContext != null) {
-            applicationContext.publishEvent(new EntityModifiedEvent(entityClass, affectedRows));
+            try {
+                applicationContext.publishEvent(new EntityModifiedEvent(entityClass, affectedRows));
+            } catch (Exception e) {
+                log.warn("EntityModifiedEvent publish failed for {} ({} rows), cache may be stale",
+                    entityClass.getSimpleName(), affectedRows, e);
+            }
         }
     }
 }

@@ -133,6 +133,15 @@ public class DeleteSpec<T> extends AbstractBulkOperationSpec<T, DeleteSpec<T>> {
             throw new IllegalStateException("Unconditional DELETE is not allowed. "
                 + "Call .allowUnconditional(true) to explicitly confirm this operation.");
         }
+        int limit = resolveMaxBulkOperationRows();
+        if (limit > 0) {
+            long count = countBeforeExecute(em);
+            if (count > limit) {
+                throw new IllegalStateException("Bulk DELETE would affect " + count
+                    + " rows, which exceeds the configured limit of " + limit + " rows. "
+                    + "Use executeLimited() with an explicit limit, or adjust myjpa-plus.query.max-bulk-operation-rows.");
+            }
+        }
         // 审计日志：记录无条件删除操作及调用栈，便于生产环境追踪危险操作
         log.warn("AUDIT: Executing unconditional DELETE on {} — this will affect ALL rows! Call stack: {}",
             entityClass.getSimpleName(), AuditUtils.getCallStack());
@@ -220,6 +229,11 @@ public class DeleteSpec<T> extends AbstractBulkOperationSpec<T, DeleteSpec<T>> {
         if (limit <= 0) {
             throw new IllegalArgumentException("limit must be positive");
         }
+        int globalMax = resolveMaxBulkOperationRows();
+        if (globalMax > 0 && limit > globalMax) {
+            throw new IllegalArgumentException("limit (" + limit + ") exceeds global max (" + globalMax
+                + "). Adjust myjpa-plus.query.max-bulk-operation-rows or use a smaller limit.");
+        }
         if (EntityClassResolver.hasCompositeKey(entityClass)) {
             throw new UnsupportedOperationException(
                 "executeLimited() does not support entities with composite primary keys (@EmbeddedId or @IdClass). "
@@ -269,7 +283,7 @@ public class DeleteSpec<T> extends AbstractBulkOperationSpec<T, DeleteSpec<T>> {
         int deleted = dq.executeUpdate();
         // 选择性失效 L1 缓存：仅驱逐当前实体类型的缓存数据，
         // 避免 em.clear() 脱管同一事务中调用方持有的其他实体。
-        UpdateSpec.evictEntityCache(em, entityClass);
+        com.zsubera.jpa.util.CacheEvictionHelper.evictEntityCache(em, entityClass);
         return deleted;
     }
 

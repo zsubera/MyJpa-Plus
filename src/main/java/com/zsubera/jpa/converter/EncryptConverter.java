@@ -152,6 +152,15 @@ public class EncryptConverter implements AttributeConverter<String, String> {
     }
 
     /**
+     * 设置是否跳过 PBKDF2 盐值检查（开发环境使用）。由自动配置类在启动时调用。
+     *
+     * @param skip true 跳过盐值检查
+     */
+    public static void setSkipSaltCheck(boolean skip) {
+        EncryptionKeyManager.setSkipSaltCheck(skip);
+    }
+
+    /**
      * 异步预热密钥缓存。在应用启动后调用此方法可避免首次请求的延迟。
      */
     public static void warmUpKeyCache() {
@@ -304,6 +313,7 @@ public class EncryptConverter implements AttributeConverter<String, String> {
             validateKeyConfiguration();
         }
         String decrypted = SHARED_INSTANCE.convertToEntityAttribute(encryptedValue);
+        // ponytail: plaintext String stays on heap until GC. Upgrade to char[] + wipe if audit demands it.
         return SHARED_INSTANCE.convertToDatabaseColumn(decrypted);
     }
 }

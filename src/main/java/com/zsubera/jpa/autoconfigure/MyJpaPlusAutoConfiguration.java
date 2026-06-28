@@ -99,6 +99,7 @@ public class MyJpaPlusAutoConfiguration {
         config.setInClauseHardLimit(properties.getQuery().getInClauseHardLimit());
         config.setLambdaCacheSize(properties.getQuery().getLambdaCacheSize());
         config.setCacheMaxEntries(properties.getCache().getMaxEntries());
+        config.setMaxUpsertBatchIterations(properties.getQuery().getMaxUpsertBatchIterations());
         return config;
     }
 
@@ -143,6 +144,15 @@ public class MyJpaPlusAutoConfiguration {
             // 应用 PBKDF2 迭代次数配置
             com.zsubera.jpa.converter.EncryptConverter.setPbkdf2Iterations(
                 properties.getQuery().getPbkdf2Iterations());
+
+            // 应用跳过盐值检查配置：从 Environment 读取（支持 application.yml）
+            if (applicationContext != null) {
+                String skipSalt = applicationContext.getEnvironment()
+                    .getProperty("myjpa-plus.encrypt.skip-salt-check");
+                if ("true".equalsIgnoreCase(skipSalt)) {
+                    com.zsubera.jpa.converter.EncryptConverter.setSkipSaltCheck(true);
+                }
+            }
 
             // 应用额外函数白名单配置
             java.util.List<String> extraSafe = properties.getQuery().getExtraSafeFunctions();

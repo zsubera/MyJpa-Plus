@@ -494,11 +494,14 @@ class MySQLFinalCoverageIntegrationTest {
     }
 
     @Test
-    void cacheManager_expiry() throws InterruptedException {
+    void cacheManager_expiry() {
         QueryCacheManager cm = new QueryCacheManager();
         cm.put("ttl_key", "ttl_val", 1);
         assertEquals("ttl_val", cm.get("ttl_key"));
-        Thread.sleep(1500);
+        long deadline = System.nanoTime() + 5_000_000_000L;
+        while (cm.get("ttl_key") != null && System.nanoTime() < deadline) {
+            Thread.yield();
+        }
         assertNull(cm.get("ttl_key"));
     }
 

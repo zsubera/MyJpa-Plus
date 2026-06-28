@@ -1,6 +1,8 @@
 package com.zsubera.jpa.template;
 
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.locks.ReentrantLock;
 import org.slf4j.Logger;
@@ -272,7 +274,13 @@ public class QueryCacheManager implements CacheAdapter {
         }
         localHits.incrementAndGet();
         try {
-            return (T)result.getValue();
+            T value = (T)result.getValue();
+            // ponytail: 返回 List 的防御性拷贝，防止调用者修改返回值破坏缓存数据一致性。
+            // 非 List 类型直接返回引用（调用者应自行防御）。
+            if (value instanceof List<?> list) {
+                return (T)new ArrayList<>(list);
+            }
+            return value;
         } catch (ClassCastException e) {
             throw new ClassCastException(String.format(
                 "Cache type mismatch for key '%s'. Cached type: %s. "

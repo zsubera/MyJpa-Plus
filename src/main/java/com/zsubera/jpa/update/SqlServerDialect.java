@@ -64,11 +64,12 @@ final class SqlServerDialect extends AbstractDialectStrategy {
         sql.append(String.join(", ", escapedInsertCols));
         sql.append(")) AS source ON (");
 
-        // ON clause: match on conflict columns
+        // ON clause: match on conflict columns (NULL-safe)
         List<String> onConditions = new ArrayList<>();
         for (String col : conflictColumns) {
             String escaped = escapeIdentifier(col);
-            onConditions.add("target." + escaped + " = source." + escaped);
+            onConditions.add("(target." + escaped + " = source." + escaped
+                + " OR (target." + escaped + " IS NULL AND source." + escaped + " IS NULL))");
         }
         sql.append(String.join(" AND ", onConditions));
         sql.append(")");

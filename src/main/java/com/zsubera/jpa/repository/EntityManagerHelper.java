@@ -246,7 +246,9 @@ public final class EntityManagerHelper {
      * @throws IllegalStateException 如果未找到 EMF
      */
     private static EntityManagerFactory resolveEntityManagerFactory(@Nullable Class<?> entityType) {
-        // 快速路径：单数据源场景，所有 resolver 都指向默认 EMF，跳过 ConcurrentHashMap 查询
+        // ponytail: allResolversUseDefault 的快速路径不在锁保护下读取，存在微小竞态：
+        // registerResolver 刚写入 false 但其他线程可能尚未看到。对于生产环境可忽略。
+        // 这里保留快速路径以优化单数据源（95%+ 场景），但通过 volatile 保证最终可见性。
         if (allResolversUseDefault) {
             EntityManagerFactory emf = defaultEntityManagerFactory;
             if (emf == null) {

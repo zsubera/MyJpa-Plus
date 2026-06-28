@@ -71,6 +71,9 @@ final class EntityFieldExtractor<T> {
     private static final java.util.concurrent.ConcurrentMap<String, String> JAVA_FIELD_TO_DB_COLUMN_CACHE =
         new java.util.concurrent.ConcurrentHashMap<>(64);
 
+    private static final int MAX_ID_COLUMN_CACHE_SIZE = 256;
+    private static final int MAX_JAVA_FIELD_CACHE_SIZE = 1024;
+
     private final Class<T> entityClass;
 
     EntityFieldExtractor(Class<T> entityClass) {
@@ -129,7 +132,6 @@ final class EntityFieldExtractor<T> {
                         && !f.isAnnotationPresent(jakarta.persistence.ManyToOne.class)
                         && !f.isAnnotationPresent(jakarta.persistence.ManyToMany.class)
                         && !f.isAnnotationPresent(jakarta.persistence.OneToOne.class)
-                        && !f.isAnnotationPresent(jakarta.persistence.EmbeddedId.class)
                         && !f.isAnnotationPresent(jakarta.persistence.Version.class)
                         && !isInsertableFalse(f)) {
                         fields.add(f);
@@ -140,7 +142,7 @@ final class EntityFieldExtractor<T> {
         });
         for (Field f : allFields) {
             try {
-                if (f.isAnnotationPresent(jakarta.persistence.Embedded.class)) {
+                if (f.isAnnotationPresent(jakarta.persistence.Embedded.class) || f.isAnnotationPresent(jakarta.persistence.EmbeddedId.class)) {
                     Object embeddedValue = getFieldValue(entity, f);
                     if (embeddedValue != null) {
                         jakarta.persistence.AttributeOverride[] overrides =
@@ -370,7 +372,14 @@ final class EntityFieldExtractor<T> {
                 + ". Ensure the entity has a field annotated with @jakarta.persistence.Id");
         }
         List<String> result = List.copyOf(idColumns);
-        ID_COLUMN_CACHE.put(cacheKey, result);
+        if (ID_COLUMN_CACHE.size() < MAX_ID_COLUMN_CACHE_SIZE || ID_COLUMN_CACHE.containsKey(cacheKey)) {
+            ID_COLUMN_CACHE.put(cacheKey, result);
+        } else if (java.util.concurrent.ThreadLocalRandom.current().nextInt(CACHE_CHECK_SAMPLING) == 0) {
+            log.warn("ID_COLUMN_CACHE size ({}) exceeds limit ({}). "
+                + "This may indicate a class loader leak or excessive entity classes.", ID_COLUMN_CACHE.size(),
+                MAX_ID_COLUMN_CACHE_SIZE);
+            ID_COLUMN_CACHE.put(cacheKey, result);
+        }
         return result;
     }
 
@@ -415,14 +424,20 @@ final class EntityFieldExtractor<T> {
             for (Field f : c.getDeclaredFields()) {
                 if (f.getName().equals(javaFieldName)) {
                     String result = resolveColumnName(f);
-                    JAVA_FIELD_TO_DB_COLUMN_CACHE.put(cacheKey, result);
+                    if (JAVA_FIELD_TO_DB_COLUMN_CACHE.size() < MAX_JAVA_FIELD_CACHE_SIZE
+                        || JAVA_FIELD_TO_DB_COLUMN_CACHE.containsKey(cacheKey)) {
+                        JAVA_FIELD_TO_DB_COLUMN_CACHE.put(cacheKey, result);
+                    }
                     return result;
                 }
             }
         }
         // 回退：未找到 Field，直接使用字段名（安全校验）
         IdentifierValidator.validateColumnName(javaFieldName);
-        JAVA_FIELD_TO_DB_COLUMN_CACHE.put(cacheKey, javaFieldName);
+        if (JAVA_FIELD_TO_DB_COLUMN_CACHE.size() < MAX_JAVA_FIELD_CACHE_SIZE
+            || JAVA_FIELD_TO_DB_COLUMN_CACHE.containsKey(cacheKey)) {
+            JAVA_FIELD_TO_DB_COLUMN_CACHE.put(cacheKey, javaFieldName);
+        }
         return javaFieldName;
     }
 }

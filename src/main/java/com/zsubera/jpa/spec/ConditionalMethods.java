@@ -38,6 +38,18 @@ public interface ConditionalMethods<E, SELF extends ConditionalMethods<E, SELF>>
     SELF eqStrict(SFunction<E, ?> field, Object value);
 
     /**
+     * 仅在 {@code condition} 为 true 时添加严格等值条件。
+     *
+     * @param condition 是否添加条件的标志
+     * @param field 实体属性的方法引用
+     * @param value 要比较的值
+     * @return 当前构建器以支持链式调用
+     */
+    default SELF eqStrict(boolean condition, SFunction<E, ?> field, Object value) {
+        return condition ? eqStrict(field, value) : self();
+    }
+
+    /**
      * 添加严格不等条件：{@code field != value}。如果 {@code value} 为 null，则抛出异常。
      *
      * @param field 实体属性的方法引用
@@ -45,6 +57,18 @@ public interface ConditionalMethods<E, SELF extends ConditionalMethods<E, SELF>>
      * @return 当前构建器实例
      */
     SELF neStrict(SFunction<E, ?> field, Object value);
+
+    /**
+     * 仅在 {@code condition} 为 true 时添加严格不等条件。
+     *
+     * @param condition 是否添加条件的标志
+     * @param field 实体属性的方法引用
+     * @param value 要比较的值
+     * @return 当前构建器以支持链式调用
+     */
+    default SELF neStrict(boolean condition, SFunction<E, ?> field, Object value) {
+        return condition ? neStrict(field, value) : self();
+    }
 
     /**
      * 添加等值条件。

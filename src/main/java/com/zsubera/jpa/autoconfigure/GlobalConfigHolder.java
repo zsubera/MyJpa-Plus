@@ -179,4 +179,8 @@ public final class GlobalConfigHolder {
     public static int resolveMaxBulkOperationRows(int localFallback) {
         return resolveConfigValue(MyJpaPlusGlobalConfig::getMaxBulkOperationRows, localFallback);
     }
+
+    public static int resolveMaxUpsertBatchIterations(int localFallback) {
+        return resolveConfigValue(MyJpaPlusGlobalConfig::getMaxUpsertBatchIterations, localFallback);
+    }
 }

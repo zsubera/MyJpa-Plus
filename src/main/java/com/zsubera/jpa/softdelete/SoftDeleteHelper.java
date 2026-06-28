@@ -681,7 +681,7 @@ public final class SoftDeleteHelper {
                 return false;
             }
             // ponytail: 缓存 SoftDelete 注解，避免高频率调用时重复反射
-            SoftDelete annotation = ANNOTATION_CACHE.computeIfAbsent(entity.getClass(), cls -> field.getAnnotation(SoftDelete.class));
+            SoftDelete annotation = ANNOTATION_CACHE.computeIfAbsent(entityClass, cls -> field.getAnnotation(SoftDelete.class));
             // Boolean 类型
             if (value instanceof Boolean) {
                 return Boolean.TRUE.equals(value);
