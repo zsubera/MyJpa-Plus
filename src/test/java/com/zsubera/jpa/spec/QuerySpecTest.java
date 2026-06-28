@@ -1439,7 +1439,7 @@ public class QuerySpecTest {
         orGroup.eq(TestEntity::getName, "test");
         // Don't call endOr() — group is unclosed
 
-        assertThrows(IllegalStateException.class, qs::toSpecification,
+        assertThrows(com.zsubera.jpa.exception.QueryBuildException.class, qs::toSpecification,
             "toSpecification() should validate unclosed or() groups");
     }
 

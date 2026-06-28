@@ -50,6 +50,47 @@ public final class SlowQueryDataSourceProxy {
     private static final com.zsubera.jpa.util.SampledEvictionCache<Class<?>, Class<?>> PROXY_CLASS_CACHE =
         new com.zsubera.jpa.util.SampledEvictionCache<>(MAX_PROXY_CLASS_CACHE_SIZE, 0.75, 100, 64);
 
+    /**
+     * ponytail: 慢查询监听器列表，支持多个监听器注册。通过 {@link #addListener} 注册。
+     */
+    private static final java.util.concurrent.CopyOnWriteArrayList<SlowQueryListener> LISTENERS =
+        new java.util.concurrent.CopyOnWriteArrayList<>();
+
+    /**
+     * 注册慢查询监听器。多个监听器可同时注册，按注册顺序调用。
+     *
+     * @param listener 要注册的监听器
+     * @throws IllegalArgumentException 如果 listener 为 null
+     */
+    public static void addListener(SlowQueryListener listener) {
+        if (listener == null) {
+            throw new IllegalArgumentException("listener must not be null");
+        }
+        LISTENERS.add(listener);
+    }
+
+    /**
+     * 移除已注册的慢查询监听器。
+     *
+     * @param listener 要移除的监听器
+     */
+    public static void removeListener(SlowQueryListener listener) {
+        LISTENERS.remove(listener);
+    }
+
+    /**
+     * 通知所有已注册的监听器。内部方法，由计时委托调用。
+     */
+    static void notifyListeners(String sql, long elapsedMs, long thresholdMs) {
+        for (SlowQueryListener listener : LISTENERS) {
+            try {
+                listener.onSlowQuery(sql, elapsedMs, thresholdMs);
+            } catch (Exception e) {
+                log.warn("SlowQueryListener threw exception", e);
+            }
+        }
+    }
+
     private SlowQueryDataSourceProxy() {}
 
     /**
@@ -343,6 +384,7 @@ public final class SlowQueryDataSourceProxy {
                         String sanitizedSql = SqlSanitizer.sanitize(sql);
                         log.warn("{} {} execution took {} ms (threshold: {} ms) - {}", SLOW_QUERY_MARKER, name,
                             elapsedMs, slowQueryThresholdMs, sanitizedSql);
+                        notifyListeners(sanitizedSql, elapsedMs, slowQueryThresholdMs);
                     }
                 }
             }

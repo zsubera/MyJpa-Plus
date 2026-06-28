@@ -54,7 +54,8 @@ import org.springframework.data.jpa.repository.config.EnableJpaAuditing;
 @ConditionalOnClass({EntityManager.class})
 @EnableConfigurationProperties(MyJpaPlusProperties.class)
 @Import({SoftDeleteFilterBean.class, MyJpaPlusAutoConfiguration.ModuleCompatibilityChecker.class,
-    MyJpaPlusAutoConfiguration.MyJpaPlusConfigInitializer.class, MyJpaPlusAutoConfiguration.JpaAuditingConfig.class})
+    MyJpaPlusAutoConfiguration.MyJpaPlusConfigInitializer.class, MyJpaPlusAutoConfiguration.JpaAuditingConfig.class,
+    MyJpaPlusAutoConfiguration.SlowQueryListenerRegistrar.class})
 @SuppressFBWarnings(value = "CT_CONSTRUCTOR_THROW",
     justification = "Constructor validates parameters before assignment")
 public class MyJpaPlusAutoConfiguration {
@@ -138,6 +139,10 @@ public class MyJpaPlusAutoConfiguration {
 
             // 应用 Lambda 缓存配置
             LambdaUtils.setMaxCacheSize(properties.getQuery().getLambdaCacheSize());
+
+            // 应用 PBKDF2 迭代次数配置
+            com.zsubera.jpa.converter.EncryptConverter.setPbkdf2Iterations(
+                properties.getQuery().getPbkdf2Iterations());
 
             // 应用额外函数白名单配置
             java.util.List<String> extraSafe = properties.getQuery().getExtraSafeFunctions();
@@ -459,6 +464,33 @@ public class MyJpaPlusAutoConfiguration {
         long threshold = properties.getMonitoring().getSlowQueryThresholdMs();
         log.info("SlowQueryDataSourceProxyPostProcessor enabled (threshold={} ms)", threshold);
         return new SlowQueryDataSourceProxyPostProcessor(threshold);
+    }
+
+    /**
+     * 自动将容器中所有 {@link com.zsubera.jpa.monitor.SlowQueryListener} Bean 注册到
+     * {@link com.zsubera.jpa.monitor.SlowQueryDataSourceProxy}。
+     */
+    @org.springframework.context.annotation.Lazy(false)
+    @org.springframework.stereotype.Component
+    static class SlowQueryListenerRegistrar {
+
+        SlowQueryListenerRegistrar(
+            @org.springframework.beans.factory.annotation.Autowired(
+                required = false) org.springframework.context.ApplicationContext ctx) {
+            if (ctx == null) {
+                return;
+            }
+            try {
+                java.util.Map<String, com.zsubera.jpa.monitor.SlowQueryListener> listeners =
+                    ctx.getBeansOfType(com.zsubera.jpa.monitor.SlowQueryListener.class);
+                for (com.zsubera.jpa.monitor.SlowQueryListener listener : listeners.values()) {
+                    com.zsubera.jpa.monitor.SlowQueryDataSourceProxy.addListener(listener);
+                    log.info("Registered SlowQueryListener: {}", listener.getClass().getSimpleName());
+                }
+            } catch (Exception e) {
+                log.debug("No SlowQueryListener beans found", e.getMessage());
+            }
+        }
     }
 
     /**

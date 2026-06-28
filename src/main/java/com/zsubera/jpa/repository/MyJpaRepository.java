@@ -193,12 +193,19 @@ public interface MyJpaRepository<T, ID> extends JpaRepository<T, ID>, JpaSpecifi
     /**
      * 批量更新实体。使用 Lambda 表达式配置更新条件和操作。
      *
+     * <p><strong>事务要求：</strong>调用方必须在 {@code @Transactional} 上下文中执行此方法，
+     * 否则会抛出 {@link IllegalStateException}。
+     *
      * <pre>{@code
-     * repository.update(s -> s.set(User::getStatus, "INACTIVE").eq(User::getStatus, "ACTIVE"));
+     * @Transactional
+     * public int deactivateUsers() {
+     *     return repository.update(s -> s.set(User::getStatus, "INACTIVE").eq(User::getStatus, "ACTIVE"));
+     * }
      * }</pre>
      *
      * @param config 更新配置
      * @return 受影响的行数
+     * @throws IllegalStateException 如果无活动事务
      */
     default int update(Consumer<UpdateSpec<T>> config) {
         Class<T> entityClass = getEntityClass();
@@ -210,12 +217,18 @@ public interface MyJpaRepository<T, ID> extends JpaRepository<T, ID>, JpaSpecifi
     /**
      * 批量删除实体。使用 Lambda 表达式配置删除条件。
      *
+     * <p><strong>事务要求：</strong>调用方必须在 {@code @Transactional} 上下文中执行此方法。
+     *
      * <pre>{@code
-     * repository.delete(s -> s.lt(User::getCreatedAt, cutoffDate));
+     * @Transactional
+     * public int deleteOldRecords() {
+     *     return repository.delete(s -> s.lt(User::getCreatedAt, cutoffDate));
+     * }
      * }</pre>
      *
      * @param config 删除配置
      * @return 受影响的行数
+     * @throws IllegalStateException 如果无活动事务
      */
     default int delete(Consumer<DeleteSpec<T>> config) {
         Class<T> entityClass = getEntityClass();
@@ -227,12 +240,18 @@ public interface MyJpaRepository<T, ID> extends JpaRepository<T, ID>, JpaSpecifi
     /**
      * 批量合并（upsert）实体。使用 Lambda 表达式配置合并策略。
      *
+     * <p><strong>事务要求：</strong>调用方必须在 {@code @Transactional} 上下文中执行此方法。
+     *
      * <pre>{@code
-     * repository.merge(s -> s.withEntity(user).onConflict(User::getEmail).updateOnConflict(User::getName));
+     * @Transactional
+     * public int upsertUser() {
+     *     return repository.merge(s -> s.withEntity(user).onConflict(User::getEmail).updateOnConflict(User::getName));
+     * }
      * }</pre>
      *
      * @param config 合并配置
      * @return 受影响的行数
+     * @throws IllegalStateException 如果无活动事务
      */
     default int merge(Consumer<MergeSpec<T>> config) {
         Class<T> entityClass = getEntityClass();
@@ -244,8 +263,11 @@ public interface MyJpaRepository<T, ID> extends JpaRepository<T, ID>, JpaSpecifi
     /**
      * 执行预构建的更新操作。
      *
+     * <p><strong>事务要求：</strong>调用方必须在 {@code @Transactional} 上下文中执行此方法。
+     *
      * @param spec 预构建的更新规格
      * @return 受影响的行数
+     * @throws IllegalStateException 如果无活动事务
      */
     default int execute(UpdateSpec<T> spec) {
         if (spec == null) {
@@ -257,8 +279,11 @@ public interface MyJpaRepository<T, ID> extends JpaRepository<T, ID>, JpaSpecifi
     /**
      * 执行预构建的删除操作。
      *
+     * <p><strong>事务要求：</strong>调用方必须在 {@code @Transactional} 上下文中执行此方法。
+     *
      * @param spec 预构建的删除规格
      * @return 受影响的行数
+     * @throws IllegalStateException 如果无活动事务
      */
     default int execute(DeleteSpec<T> spec) {
         if (spec == null) {
@@ -270,8 +295,11 @@ public interface MyJpaRepository<T, ID> extends JpaRepository<T, ID>, JpaSpecifi
     /**
      * 执行预构建的合并操作。
      *
+     * <p><strong>事务要求：</strong>调用方必须在 {@code @Transactional} 上下文中执行此方法。
+     *
      * @param spec 预构建的合并规格
      * @return 受影响的行数
+     * @throws IllegalStateException 如果无活动事务
      */
     default int execute(MergeSpec<T> spec) {
         if (spec == null) {

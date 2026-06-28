@@ -78,11 +78,12 @@ final class QueryCompositionSupport<T> {
     /**
      * 验证所有条件组已正确关闭。
      *
-     * @throws IllegalStateException 如果存在未关闭的 or() 组
+     * @throws com.zsubera.jpa.exception.QueryBuildException 如果存在未关闭的 or() 组
      */
     void validateCleanState() {
         if (!parent.getGroupStack().isEmpty()) {
-            throw new IllegalStateException("Not all or() groups were closed with endOr() before building the query");
+            throw new com.zsubera.jpa.exception.QueryBuildException(
+                "Not all or() groups were closed with endOr() before building the query");
         }
     }
 

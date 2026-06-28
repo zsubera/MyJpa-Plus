@@ -174,6 +174,11 @@ public class MyJpaPlusProperties {
         private int maxBulkOperationRows = 10000;
 
         /**
+         * PBKDF2 密钥派生迭代次数。更高值更安全但更慢。 默认值：{@code 600000}
+         */
+        private int pbkdf2Iterations = 600000;
+
+        /**
          * 额外的安全函数名列表。添加后这些函数可在 {@code func()} 方法中使用。
          * 函数名不区分大小写，会自动转换为大写。
          *
@@ -292,6 +297,18 @@ public class MyJpaPlusProperties {
                 throw new IllegalArgumentException("maxBulkOperationRows must be -1 (unlimited) or non-negative");
             }
             this.maxBulkOperationRows = maxBulkOperationRows;
+        }
+
+        public int getPbkdf2Iterations() {
+            return pbkdf2Iterations;
+        }
+
+        public void setPbkdf2Iterations(int pbkdf2Iterations) {
+            if (pbkdf2Iterations < 100_000 || pbkdf2Iterations > 10_000_000) {
+                throw new IllegalArgumentException(
+                    "pbkdf2Iterations must be between 100000 and 10000000, got: " + pbkdf2Iterations);
+            }
+            this.pbkdf2Iterations = pbkdf2Iterations;
         }
 
         public java.util.List<String> getExtraSafeFunctions() {

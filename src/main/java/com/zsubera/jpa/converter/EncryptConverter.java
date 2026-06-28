@@ -105,30 +105,50 @@ public class EncryptConverter implements AttributeConverter<String, String> {
     }
 
     /**
-     * GCM 模式下 Cipher 实例每次操作新建，不重用。
-     *
-     * <p>JDK 的 GCM Cipher 实现存在已知 bug（JDK-8201324）：doFinal() 失败后 Cipher
-     * 内部状态未完全重置，复用会导致后续加解密输出错误结果。每次调用创建新实例是最安全的模式。</p>
+     * ponytail: 使用 ThreadLocal 缓存 Cipher 实例，避免每次加解密都执行 Cipher.getInstance() 的 SPI 查找开销。
+     * 每次操作通过 cipher.init() 重置状态，等价于新建实例但省去了 SPI 查找和对象分配。
+     * ThreadLocal 与虚拟线程兼容（每个虚拟线程拥有独立映射）。
      */
-    private static Cipher createCipher() {
+    private static final ThreadLocal<Cipher> CIPHER_CACHE = ThreadLocal.withInitial(() -> {
         try {
             return Cipher.getInstance(ALGORITHM);
         } catch (GeneralSecurityException e) {
             throw new MyJpaPlusException("Failed to initialize cipher", e);
         }
+    });
+
+    private static Cipher getCipher() {
+        return CIPHER_CACHE.get();
     }
 
     /**
-     * @deprecated 此方法已无操作，保留仅为 API 兼容性。GCM 模式下每次操作新建 Cipher 实例，无需缓存清理。
+     * @deprecated 此方法已无操作，保留仅为 API 兼容性。Cipher 实例通过 ThreadLocal 缓存，无需手动清理。
      */
     @Deprecated(forRemoval = true)
     public static void removeCipher() {}
 
     /**
-     * 清除所有缓存的密钥和版本信息。用于应用关闭时清理和测试环境重置。
+     * 清除 ThreadLocal 缓存的 Cipher 实例。用于应用关闭时清理。
+     */
+    static void clearCipherCache() {
+        CIPHER_CACHE.remove();
+    }
+
+    /**
+     * 清除所有缓存的密钥、版本信息和 ThreadLocal Cipher 实例。用于应用关闭时清理和测试环境重置。
      */
     public static void clearCaches() {
         EncryptionKeyManager.clearCaches();
+        clearCipherCache();
+    }
+
+    /**
+     * 设置 PBKDF2 密钥派生迭代次数。由自动配置类在启动时调用。
+     *
+     * @param iterations 迭代次数（100,000 - 10,000,000）
+     */
+    public static void setPbkdf2Iterations(int iterations) {
+        EncryptionKeyManager.setPbkdf2Iterations(iterations);
     }
 
     /**
@@ -194,7 +214,7 @@ public class EncryptConverter implements AttributeConverter<String, String> {
         // unreachable — deriveKey() -> getSalt() throws first.
         try {
             SecretKeySpec keySpec = EncryptionKeyManager.getKeySpec();
-            Cipher cipher = createCipher();
+            Cipher cipher = getCipher();
             byte[] iv = new byte[GCM_IV_LENGTH];
             SECURE_RANDOM.nextBytes(iv);
             cipher.init(Cipher.ENCRYPT_MODE, keySpec, new GCMParameterSpec(GCM_TAG_LENGTH, iv));
@@ -259,7 +279,7 @@ public class EncryptConverter implements AttributeConverter<String, String> {
             byte[] encrypted = new byte[combined.length - GCM_IV_LENGTH];
             System.arraycopy(combined, GCM_IV_LENGTH, encrypted, 0, encrypted.length);
             SecretKeySpec keySpec = EncryptionKeyManager.getKeySpec(version);
-            Cipher cipher = createCipher();
+            Cipher cipher = getCipher();
             cipher.init(Cipher.DECRYPT_MODE, keySpec, new GCMParameterSpec(GCM_TAG_LENGTH, iv));
             byte[] decrypted = cipher.doFinal(encrypted);
             try {

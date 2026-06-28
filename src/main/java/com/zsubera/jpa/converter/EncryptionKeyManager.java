@@ -40,7 +40,28 @@ final class EncryptionKeyManager {
     private static final long KEY_VERSION_REFRESH_INTERVAL_MS = 300_000L;
     private static final int PBKDF2_KEY_LENGTH = 256;
 
+    /**
+     * ponytail: 通过 volatile 支持 Spring 属性注入，优先级高于系统属性/环境变量。
+     * 默认值 -1 表示未配置，回退到 getPbkdf2Iterations() 的系统属性/环境变量解析。
+     */
+    private static volatile int configuredPbkdf2Iterations = -1;
+
+    /**
+     * 设置 PBKDF2 迭代次数。由自动配置类在启动时调用。
+     *
+     * @param iterations PBKDF2 迭代次数（100,000 - 10,000,000）
+     */
+    static void setPbkdf2Iterations(int iterations) {
+        if (iterations >= 100_000 && iterations <= 10_000_000) {
+            configuredPbkdf2Iterations = iterations;
+        }
+    }
+
     private static int getPbkdf2Iterations() {
+        int configured = configuredPbkdf2Iterations;
+        if (configured > 0) {
+            return configured;
+        }
         String prop = System.getProperty("myjpa-plus.encrypt.pbkdf2-iterations");
         if (prop != null) {
             try {
