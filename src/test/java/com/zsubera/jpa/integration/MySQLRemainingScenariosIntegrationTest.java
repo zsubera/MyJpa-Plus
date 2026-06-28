@@ -102,16 +102,17 @@ class MySQLRemainingScenariosIntegrationTest {
     @Test
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
     void cacheInvalidation_viaEventPublisher_evictsCache() {
-        cacheManager.put("MySQLTestEntity:query1", "result1", 60);
-        cacheManager.put("MySQLTestEntity:query2", "result2", 60);
+        String fqcn = MySQLTestEntity.class.getName();
+        cacheManager.put(fqcn + ":query1", "result1", 60);
+        cacheManager.put(fqcn + ":query2", "result2", 60);
         cacheManager.put("OtherEntity:query3", "result3", 60);
         assertEquals(3, cacheManager.size());
 
         eventPublisher.publishEvent(new EntityModifiedEvent(MySQLTestEntity.class, 1));
 
         assertEquals(1, cacheManager.size());
-        assertNull(cacheManager.get("MySQLTestEntity:query1"));
-        assertNull(cacheManager.get("MySQLTestEntity:query2"));
+        assertNull(cacheManager.get(fqcn + ":query1"));
+        assertNull(cacheManager.get(fqcn + ":query2"));
         assertNotNull(cacheManager.get("OtherEntity:query3"));
     }
 
@@ -141,12 +142,13 @@ class MySQLRemainingScenariosIntegrationTest {
 
     @Test
     void cacheInvalidation_noEvictionInsideTransaction() {
-        cacheManager.put("MySQLTestEntity:txkey", "txval", 60);
+        String fqcn = MySQLTestEntity.class.getName();
+        cacheManager.put(fqcn + ":txkey", "txval", 60);
         assertEquals(1, cacheManager.size());
 
         eventPublisher.publishEvent(new EntityModifiedEvent(MySQLTestEntity.class, 1));
 
-        assertNotNull(cacheManager.get("MySQLTestEntity:txkey"),
+        assertNotNull(cacheManager.get(fqcn + ":txkey"),
             "Cache should NOT be evicted inside transaction (AFTER_COMMIT listener waits for commit)");
     }
 
@@ -215,14 +217,14 @@ class MySQLRemainingScenariosIntegrationTest {
     @Test
     void entityModifiedEvent_withClass() {
         EntityModifiedEvent event = new EntityModifiedEvent(MySQLTestEntity.class, 10);
-        assertEquals("MySQLTestEntity", event.getEntityName());
+        assertEquals("com.zsubera.jpa.integration.MySQLTestEntity", event.getEntityName());
         assertEquals(10, event.getAffectedRows());
     }
 
     @Test
     void entityModifiedEvent_zeroAffectedRows() {
         EntityModifiedEvent event = new EntityModifiedEvent(MySQLTestEntity.class, 0);
-        assertEquals("MySQLTestEntity", event.getEntityName());
+        assertEquals("com.zsubera.jpa.integration.MySQLTestEntity", event.getEntityName());
         assertEquals(0, event.getAffectedRows());
     }
 

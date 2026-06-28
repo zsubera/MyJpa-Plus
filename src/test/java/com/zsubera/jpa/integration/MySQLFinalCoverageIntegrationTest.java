@@ -548,7 +548,7 @@ class MySQLFinalCoverageIntegrationTest {
     void entityModifiedEvent_creation() {
         com.zsubera.jpa.template.EntityModifiedEvent event =
             new com.zsubera.jpa.template.EntityModifiedEvent(MySQLTestEntity.class, 5);
-        assertEquals("MySQLTestEntity", event.getEntityName());
+        assertEquals("com.zsubera.jpa.integration.MySQLTestEntity", event.getEntityName());
         assertEquals(5, event.getAffectedRows());
     }
 

@@ -18,6 +18,7 @@ import org.springframework.data.jpa.repository.support.JpaEntityInformation;
 import org.springframework.data.jpa.repository.support.SimpleJpaRepository;
 import org.springframework.data.repository.NoRepositoryBean;
 import org.springframework.lang.Nullable;
+import org.springframework.util.Assert;
 
 /**
  * {@link MyJpaRepository} 接口的默认实现。配合 Spring Data 的自动仓储扫描自动注册为仓库基类。
@@ -616,5 +617,77 @@ public class DefaultMyJpaRepository<T, ID> extends SimpleJpaRepository<T, ID> im
         executeDeleteOrBlock(
             () -> SoftDeleteBulkExecutor.softDeleteByIds(entityManager, domainClass, java.util.List.of(id)),
             () -> super.deleteById(id));
+    }
+
+    /**
+     * 覆写 delete(T entity) 以支持软删除。
+     *
+     * <p>
+     * 默认的 {@link SimpleJpaRepository#delete(Object)} 直接调用 {@code entityManager.remove()},
+     * 绕过软删除逻辑和硬删除阻断。此实现提取实体 ID 后通过
+     * {@link #executeDeleteOrBlock(Runnable, Runnable)} 统一处理三路分支。
+     *
+     * <p>
+     * 注意：硬删除路径直接使用 {@link EntityManager#remove} 而非委托给
+     * {@code super.deleteById()}，因为后者内部会回调 {@code this.delete(T entity)} 导致无限递归。
+     *
+     * @param entity 要删除的实体
+     */
+    @Override
+    public void delete(T entity) {
+        org.springframework.util.Assert.notNull(entity, "Entity must not be null");
+        jakarta.persistence.PersistenceUnitUtil util =
+            entityManager.getEntityManagerFactory().getPersistenceUnitUtil();
+        @SuppressWarnings("unchecked")
+        ID id = (ID) util.getIdentifier(entity);
+        if (id == null) {
+            throw new IllegalArgumentException(
+                "Cannot delete transient entity: " + entity.getClass().getSimpleName());
+        }
+        executeDeleteOrBlock(
+            () -> SoftDeleteBulkExecutor.softDeleteByIds(entityManager, domainClass, java.util.List.of(id)),
+            () -> entityManager.remove(entity));
+    }
+
+    /**
+     * 覆写 deleteAll(Iterable) 以支持软删除。
+     *
+     * <p>
+     * 默认实现逐条调用 {@code delete(T entity)} → {@code entityManager.remove()},
+     * 绕过软删除逻辑。此实现提取所有实体 ID 后通过
+     * {@link #executeDeleteOrBlock(Runnable, Runnable)} 统一处理三路分支。
+     *
+     * <p>
+     * 注意：硬删除路径使用 CriteriaDelete 批量操作而非委托 {@code super.deleteAllById()},
+     * 因为后者内部会回调 {@code this.delete(T entity)} 导致无限递归。
+     *
+     * @param entities 要删除的实体集合
+     */
+    @Override
+    public void deleteAll(Iterable<? extends T> entities) {
+        org.springframework.util.Assert.notNull(entities, "Entities must not be null");
+        java.util.List<ID> ids = new java.util.ArrayList<>();
+        jakarta.persistence.PersistenceUnitUtil util =
+            entityManager.getEntityManagerFactory().getPersistenceUnitUtil();
+        for (T entity : entities) {
+            @SuppressWarnings("unchecked")
+            ID id = (ID) util.getIdentifier(entity);
+            if (id != null) {
+                ids.add(id);
+            }
+        }
+        if (ids.isEmpty()) {
+            return;
+        }
+        executeDeleteOrBlock(
+            () -> SoftDeleteBulkExecutor.softDeleteByIds(entityManager, domainClass, ids),
+            () -> {
+                String idFieldName = EntityClassResolver.resolveIdFieldName(domainClass);
+                jakarta.persistence.criteria.CriteriaBuilder cb = entityManager.getCriteriaBuilder();
+                jakarta.persistence.criteria.CriteriaDelete<T> delete = cb.createCriteriaDelete(domainClass);
+                jakarta.persistence.criteria.Root<T> root = delete.from(domainClass);
+                delete.where(root.get(idFieldName).in(ids));
+                entityManager.createQuery(delete).executeUpdate();
+            });
     }
 }

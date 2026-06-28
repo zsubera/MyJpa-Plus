@@ -236,7 +236,8 @@ public class EncryptConverter implements AttributeConverter<String, String> {
         if (!EncryptionKeyManager.KEY_VALIDATED.get()) {
             validateKeyConfiguration();
         }
-        SecretKeySpec keySpec = EncryptionKeyManager.getKeySpec();
+        String version = EncryptionKeyManager.getKeyVersion();
+        SecretKeySpec keySpec = EncryptionKeyManager.getKeySpec(version);
         byte[] iv = new byte[GCM_IV_LENGTH];
         SECURE_RANDOM.nextBytes(iv);
         byte[] plaintextBytes = attribute.getBytes(StandardCharsets.UTF_8);
@@ -247,7 +248,6 @@ public class EncryptConverter implements AttributeConverter<String, String> {
             byte[] combined = new byte[iv.length + encrypted.length];
             System.arraycopy(iv, 0, combined, 0, iv.length);
             System.arraycopy(encrypted, 0, combined, iv.length, encrypted.length);
-            String version = EncryptionKeyManager.getKeyVersion();
             // ponytail: 成功后归还 cipher 到池，失败时丢弃（doFinal 异常后 cipher 状态不可恢复）
             returnCipher(cipher);
             return version + ":" + Base64.getEncoder().encodeToString(combined);

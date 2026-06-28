@@ -1369,7 +1369,8 @@ public class MyJpaTemplate implements MyJpaTemplateOperations {
         // 总是请求 pageSize+1 行以检测是否有下一页。
         // maxResults 仅作为安全上限：当 maxResults > 0 且小于 pageSize+1 时，
         // 无法准确判断是否有下一页，此时保守地认为有下一页（除非结果集为空或不足一页）。
-        int fetchLimit = pageable.getPageSize() + 1;
+        int pageSize = pageable.getPageSize();
+        int fetchLimit = pageSize == Integer.MAX_VALUE ? Integer.MAX_VALUE : pageSize + 1;
         boolean maxResultsLimited = false;
         int effectiveMaxResults = resolveMaxResults();
         if (effectiveMaxResults > 0 && effectiveMaxResults < fetchLimit) {
@@ -1430,6 +1431,10 @@ public class MyJpaTemplate implements MyJpaTemplateOperations {
         // 直接传递 ids Collection 以避免不必要的 toArray() 转换
         cq.where(com.zsubera.jpa.util.InClauseBuilder.in(cb, root.get(idFieldName), ids));
         TypedQuery<T> query = entityManager.createQuery(cq);
+        int max = resolveMaxResults();
+        if (max > 0) {
+            query.setMaxResults(max);
+        }
         return query.getResultList();
     }
 
@@ -1469,6 +1474,10 @@ public class MyJpaTemplate implements MyJpaTemplateOperations {
             cq.where(predicate);
         }
         TypedQuery<T> query = entityManager.createQuery(cq);
+        int max = resolveMaxResults();
+        if (max > 0) {
+            query.setMaxResults(max);
+        }
         return query.getResultList();
     }
 
