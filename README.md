@@ -15,7 +15,7 @@
 
 **专为 Spring Data JPA 设计，提供查询构建、批量操作、UPSERT/MERGE、CTE、投影查询、字段加密/脱敏、SQL 慢查询监控、乐观锁自动重试、聚合查询、查询缓存和代码生成。**
 
-[快速开始](#快速开始) · [特性概览](#特性) · [扩展点](#扩展点) · [架构](docs/architecture.md) · [迁移指南](./MIGRATION.md)
+[快速开始](#快速开始) · [特性概览](#特性) · [扩展点](#扩展点) · [架构](docs/architecture.md) · [迁移指南](./MIGRATION.md) · [常见问题](docs/FAQ.md) · [数据库兼容性](docs/database-compatibility.md)
 
 </div>
 
