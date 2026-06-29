@@ -5,45 +5,6 @@
 
 ## [未发布]
 
-### 优化
-- **CteSpec 数据库检测缓存** — 添加 `cachedProductName` 静态缓存，避免每次流式查询都执行反射创建 JDK 动态代理
-- **EntityFieldExtractor getter 缓存** — 添加 `GETTER_CACHE`（ConcurrentReferenceHashMap + 哨兵对象），避免批量操作时每个实体每个字段都执行 `cls.getMethod()` 反射查找
-- **deleteByIdIfExists TOCTOU 修复** — 非软删除路径从 `findById` + `delete` 两步操作改为 `CriteriaDelete` 原子操作
-- **OrJoinGroup 死参数注释** — 添加 ponytail 注释说明 `root`/`joinNode` 参数保留以维持构造函数签名稳定性
-- **EncryptionKeyManager.getSalt 竞态注释** — 添加 ponytail 注释说明 volatile 写入的良性竞态行为
-- **EncryptConverter CacheHolder 内联** — 移除内部类 `CacheHolder`，密钥缓存字段直接声明在 EncryptConverter 中，减少类加载开销
-- **EncryptionKeyManager.keyPool 序列化** — `EncryptionKeyPool` 实现 `Serializable`，修正误用 `@SuppressWarnings` 为 `@SuppressFBWarnings`
-- **SlowQueryDataSourceProxy 移除冗余 String.format** — `createProxy` 中移除无用的 `String.format()` 包装
-
-### 修复
-- **EncryptConverter 线程池安全漏洞** — 移除 `EncryptExecutor` 线程池（任务提交后 EncryptConverter 可被 GC 而线程池仍继续运行的隐患），改为同步执行；`plaintext` 字段使用 `volatile` 确保可见性；`LazyCipher` 改为 `static` 内部类
-- **SqlSanitizer SQL 截断绕过脱敏** — 将 `sanitizeForLike` 的模式转义移到 SQL 截断之后，防止截断字符串操纵绕过脱敏
-- **DefaultMyJpaRepository isNewEntity 误判** — `isNew(ID)` 改用 `EntityManager.find()` 替代 `getReferenceById()`，修复瞬态实体 `getId()` 不为 null 时的误判
-- **MyJpaRepository isNewEntity 误判** — 同上修复
-- **OptimisticLockRetryAdvisor Error 捕获风险** — 将 `catch (Throwable)` 拆分为 `catch (Exception)` + `catch (Error)`，Error 不再重试而直接透传
-- **SoftDeleteContext ThreadLocal 重写修复** — 提取 `IRemovableSoftDeleteContext` 接口，`withIgnore`/`withOnly` 嵌套调用时正确恢复原始上下文
-- **SoftDeleteBulkExecutor 版本字段更新** — 在批量清理中包含版本字段增量，修复乐观锁冲突
-- **CteSpec AtomicReference** — 将 `String cachedProductName` 改为 `AtomicReference<String>`，确保跨线程可见性
-- **NodeResolver JoinNode equals/hashCode** — 添加 `equals()`/`hashCode()` 方法，修复软删除 Join 测试中的集合操作异常
-- **DefaultMyJpaRepositoryTest Spring Proxy 兼容性** — 添加 `unwrapProxy` 辅助方法解包 Spring 代理，修复测试中异常类型断言失败
-- **ConditionNode ThreadLocal 修复** — 确保线程安全
-- **BulkTransactionHelper 异常处理** — 修复事务回滚中的异常处理路径
-
-### 测试
-- **PostgreSQL 集成测试 Docker 跳过** — 三个 PostgreSQL 测试添加 `disabledWithoutDocker = true`，无 Docker 环境时可自动跳过
-- **HikariCP 连接池限制** — 测试配置文件设置 `maximum-pool-size=2` 防止连接资源耗尽
-- **NodeResolverJoinSoftDeleteTest** — 新增 JoinNode equals/hashCode 验证测试
-- **SoftDeleteBulkExecutorTest** — 新增批量软删除参数校验和缓存过期测试
-- **其他测试增强** — EncryptConverterTest、SqlSlowQueryInterceptorProxyCacheTest 等测试修复
-
-### 文档
-- **AGENTS.md 中文化** — 将开发者指南从英文翻译为中文
-
-### 移除
-- **移除冗余软删除方法** — `MyJpaRepository` 中的 `findNotDeletedAll`/`findNotDeletedOne`/`findNotDeletedById`/`countNotDeleted` 方法已移除。这些方法与 `DefaultMyJpaRepository` 的自动过滤功能完全重复，直接使用 `findAll`/`findOne`/`findById`/`count` 即可。如需查询包含已删除记录，使用 `@IgnoreSoftDelete` 注解或 `SoftDeleteContext.withIgnore()`
-
-## [1.3.0] - 2026-06-28
-
 ### 新增
 - **FAQ 文档** — 新增 `docs/FAQ.md`，覆盖安装配置、查询构建、批量操作、软删除、加密脱敏、性能调优、兼容性等 30+ 常见问题
 - **数据库兼容性矩阵** — 新增 `docs/database-compatibility.md`，包含 4 种数据库 × 12 个维度的详细对比

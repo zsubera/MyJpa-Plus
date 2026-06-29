@@ -33,8 +33,8 @@ class PostgresDialectTest {
     @Test
     void buildUpsertSql_withUpdateColumns() {
         List<String> insertCols = List.of("id", "name", "email");
-        List<EntityFieldValue> fieldValues = List.of(new EntityFieldValue("id", "id", 1L),
-            new EntityFieldValue("name", "name", "John"), new EntityFieldValue("email", "email", "john@example.com"));
+        List<EntityFieldValue> fieldValues = List.of(new EntityFieldValue("id", "id", 1L, true),
+            new EntityFieldValue("name", "name", "John", true), new EntityFieldValue("email", "email", "john@example.com", true));
         List<String> conflictCols = List.of("id");
         List<String> updateCols = List.of("name", "email");
 
@@ -52,7 +52,7 @@ class PostgresDialectTest {
     void buildUpsertSql_withoutUpdateColumns() {
         List<String> insertCols = List.of("id", "name");
         List<EntityFieldValue> fieldValues =
-            List.of(new EntityFieldValue("id", "id", 1L), new EntityFieldValue("name", "name", "John"));
+            List.of(new EntityFieldValue("id", "id", 1L, true), new EntityFieldValue("name", "name", "John", true));
         List<String> conflictCols = List.of("id");
         List<String> updateCols = List.of();
 
@@ -65,8 +65,8 @@ class PostgresDialectTest {
     @Test
     void buildUpsertSql_multipleConflictColumns() {
         List<String> insertCols = List.of("id", "name", "region");
-        List<EntityFieldValue> fieldValues = List.of(new EntityFieldValue("id", "id", 1L),
-            new EntityFieldValue("name", "name", "John"), new EntityFieldValue("region", "region", "US"));
+        List<EntityFieldValue> fieldValues = List.of(new EntityFieldValue("id", "id", 1L, true),
+            new EntityFieldValue("name", "name", "John", true), new EntityFieldValue("region", "region", "US", true));
         List<String> conflictCols = List.of("id", "region");
         List<String> updateCols = List.of("name");
 
@@ -78,7 +78,7 @@ class PostgresDialectTest {
     @Test
     void buildInsertPart_columnCountMismatch_throws() {
         List<String> cols = List.of("id", "name");
-        List<EntityFieldValue> values = List.of(new EntityFieldValue("id", "id", 1L));
+        List<EntityFieldValue> values = List.of(new EntityFieldValue("id", "id", 1L, true));
 
         assertThrows(IllegalArgumentException.class,
             () -> DialectStrategy.buildInsertPart("\"users\"", dialect, cols, values));
@@ -88,7 +88,7 @@ class PostgresDialectTest {
     void buildInsertPart_generatesCorrectSql() {
         List<String> cols = List.of("id", "name");
         List<EntityFieldValue> values =
-            List.of(new EntityFieldValue("id", "id", 1L), new EntityFieldValue("name", "name", "John"));
+            List.of(new EntityFieldValue("id", "id", 1L, true), new EntityFieldValue("name", "name", "John", true));
 
         SqlWithParams result = DialectStrategy.buildInsertPart("\"users\"", dialect, cols, values);
 

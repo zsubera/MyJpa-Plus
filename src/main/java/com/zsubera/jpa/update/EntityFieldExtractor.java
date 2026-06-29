@@ -87,7 +87,7 @@ final class EntityFieldExtractor<T> {
      * @param columnName 数据库列名
      * @param value 字段值
      */
-    record EntityFieldValue(String fieldName, String columnName, Object value) {
+    record EntityFieldValue(String fieldName, String columnName, Object value, boolean updatable) {
     }
 
     /**
@@ -156,7 +156,7 @@ final class EntityFieldExtractor<T> {
                 } else {
                     Object value = getFieldValue(entity, f);
                     String columnName = resolveColumnName(f);
-                    fieldValues.add(new EntityFieldValue(f.getName(), columnName, value));
+                    fieldValues.add(new EntityFieldValue(f.getName(), columnName, value, !isUpdatableFalse(f)));
                 }
             } catch (MyJpaPlusException e) {
                 throw e;
@@ -201,7 +201,7 @@ final class EntityFieldExtractor<T> {
             } else {
                 Object subValue = getFieldValue(embeddedValue, subField);
                 String columnName = overrideMap.getOrDefault(subField.getName(), resolveColumnName(subField));
-                fieldValues.add(new EntityFieldValue(prefix + "." + subField.getName(), columnName, subValue));
+                fieldValues.add(new EntityFieldValue(prefix + "." + subField.getName(), columnName, subValue, !isUpdatableFalse(subField)));
             }
         }
     }
@@ -351,6 +351,14 @@ final class EntityFieldExtractor<T> {
     private static boolean isInsertableFalse(Field f) {
         Column column = f.getAnnotation(Column.class);
         return column != null && !column.insertable();
+    }
+
+    /**
+     * 检查字段是否标注了 {@code @Column(updatable = false)}。
+     */
+    private static boolean isUpdatableFalse(Field f) {
+        Column column = f.getAnnotation(Column.class);
+        return column != null && !column.updatable();
     }
 
     /**

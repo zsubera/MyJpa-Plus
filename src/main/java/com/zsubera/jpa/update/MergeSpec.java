@@ -515,7 +515,7 @@ public class MergeSpec<T> {
                     List<EntityFieldExtractor.EntityFieldValue> insertFvs = new ArrayList<>();
                     for (String col : insertColumns) {
                         EntityFieldExtractor.EntityFieldValue fv = colMap.get(col);
-                        insertFvs.add(fv != null ? fv : new EntityFieldExtractor.EntityFieldValue(col, col, null));
+                        insertFvs.add(fv != null ? fv : new EntityFieldExtractor.EntityFieldValue(col, col, null, true));
                     }
                     batchFieldValues.add(insertFvs);
                 }
@@ -666,7 +666,7 @@ public class MergeSpec<T> {
         Set<String> conflictSet) {
         List<String> columns = new ArrayList<>();
         for (EntityFieldExtractor.EntityFieldValue fv : allFieldValues) {
-            if (!conflictSet.contains(fv.columnName())) {
+            if (!conflictSet.contains(fv.columnName()) && fv.updatable()) {
                 columns.add(fv.columnName());
             }
         }

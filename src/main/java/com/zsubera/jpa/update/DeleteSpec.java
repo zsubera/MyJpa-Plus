@@ -140,7 +140,15 @@ public class DeleteSpec<T> extends AbstractBulkOperationSpec<T, DeleteSpec<T>> {
         jakarta.persistence.criteria.CriteriaUpdate<T> update = cb.createCriteriaUpdate(entityClass);
         jakarta.persistence.criteria.Root<T> root = update.from(entityClass);
         Predicate[] predicates = buildPredicates(root, cb);
-        if (predicates.length > 0) {
+        if (predicates.length == 0) {
+            if (!allowUnconditional) {
+                throw new IllegalStateException("No WHERE conditions specified for soft-delete operation. "
+                    + "This would soft-delete ALL rows in the table. "
+                    + "If unconditional soft-delete is intended, use allowUnconditional(true).");
+            }
+            log.warn("AUDIT: Executing unconditional soft-delete on {} — this will affect ALL rows! Call stack: {}",
+                entityClass.getSimpleName(), AuditUtils.getCallStack());
+        } else {
             update.where(cb.and(predicates));
         }
         update.set(fieldName, (java.lang.Comparable) deletedValue);

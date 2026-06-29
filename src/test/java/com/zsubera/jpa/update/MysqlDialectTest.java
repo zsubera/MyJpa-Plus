@@ -40,9 +40,9 @@ class MysqlDialectTest {
     void buildUpsertSql_withUpdateColumns() {
         List<String> insertCols = List.of("id", "name", "email");
         List<EntityFieldValue> fieldValues = List.of(
-            new EntityFieldValue("id", "id", 1L),
-            new EntityFieldValue("name", "name", "John"),
-            new EntityFieldValue("email", "email", "john@example.com"));
+            new EntityFieldValue("id", "id", 1L, true),
+            new EntityFieldValue("name", "name", "John", true),
+            new EntityFieldValue("email", "email", "john@example.com", true));
         List<String> conflictCols = List.of("id");
         List<String> updateCols = List.of("name", "email");
 
@@ -59,7 +59,7 @@ class MysqlDialectTest {
     void buildUpsertSql_withoutUpdateColumns_warnsNoop() {
         List<String> insertCols = List.of("id", "name");
         List<EntityFieldValue> fieldValues =
-            List.of(new EntityFieldValue("id", "id", 1L), new EntityFieldValue("name", "name", "John"));
+            List.of(new EntityFieldValue("id", "id", 1L, true), new EntityFieldValue("name", "name", "John", true));
         List<String> conflictCols = List.of("id");
         List<String> updateCols = List.of();
 
@@ -80,7 +80,7 @@ class MysqlDialectTest {
         MysqlDialect.setUseRowAliasSyntax(true);
         List<String> insertCols = List.of("id", "name");
         List<EntityFieldValue> fieldValues =
-            List.of(new EntityFieldValue("id", "id", 1L), new EntityFieldValue("name", "name", "John"));
+            List.of(new EntityFieldValue("id", "id", 1L, true), new EntityFieldValue("name", "name", "John", true));
         List<String> conflictCols = List.of("id");
         List<String> updateCols = List.of("name");
 
@@ -95,7 +95,7 @@ class MysqlDialectTest {
     void buildUpsertSql_rowAliasSyntax_noUpdateColumns() {
         MysqlDialect.setUseRowAliasSyntax(true);
         List<String> insertCols = List.of("id");
-        List<EntityFieldValue> fieldValues = List.of(new EntityFieldValue("id", "id", 1L));
+        List<EntityFieldValue> fieldValues = List.of(new EntityFieldValue("id", "id", 1L, true));
         List<String> conflictCols = List.of("id");
         List<String> updateCols = List.of();
 
@@ -109,8 +109,8 @@ class MysqlDialectTest {
     void buildBatchUpsertSql_withUpdateColumns() {
         List<String> insertCols = List.of("id", "name");
         List<List<EntityFieldValue>> batch = List.of(
-            List.of(new EntityFieldValue("id", "id", 1L), new EntityFieldValue("name", "name", "Alice")),
-            List.of(new EntityFieldValue("id", "id", 2L), new EntityFieldValue("name", "name", "Bob")));
+            List.of(new EntityFieldValue("id", "id", 1L, true), new EntityFieldValue("name", "name", "Alice", true)),
+            List.of(new EntityFieldValue("id", "id", 2L, true), new EntityFieldValue("name", "name", "Bob", true)));
         List<String> conflictCols = List.of("id");
         List<String> updateCols = List.of("name");
 
@@ -126,7 +126,7 @@ class MysqlDialectTest {
     void buildBatchUpsertSql_emptyUpdateColumns() {
         List<String> insertCols = List.of("id", "name");
         List<List<EntityFieldValue>> batch =
-            List.of(List.of(new EntityFieldValue("id", "id", 1L), new EntityFieldValue("name", "name", "Alice")));
+            List.of(List.of(new EntityFieldValue("id", "id", 1L, true), new EntityFieldValue("name", "name", "Alice", true)));
         List<String> conflictCols = List.of("id");
         List<String> updateCols = List.of();
 
@@ -140,7 +140,7 @@ class MysqlDialectTest {
     void buildBatchUpsertSql_columnCountMismatch_throws() {
         List<String> insertCols = List.of("id", "name");
         List<List<EntityFieldValue>> batch =
-            List.of(List.of(new EntityFieldValue("id", "id", 1L)));
+            List.of(List.of(new EntityFieldValue("id", "id", 1L, true)));
         List<String> conflictCols = List.of("id");
         List<String> updateCols = List.of("name");
 
@@ -153,7 +153,7 @@ class MysqlDialectTest {
         MysqlDialect.setUseRowAliasSyntax(true);
         List<String> insertCols = List.of("id", "name");
         List<List<EntityFieldValue>> batch =
-            List.of(List.of(new EntityFieldValue("id", "id", 1L), new EntityFieldValue("name", "name", "Alice")));
+            List.of(List.of(new EntityFieldValue("id", "id", 1L, true), new EntityFieldValue("name", "name", "Alice", true)));
         List<String> conflictCols = List.of("id");
         List<String> updateCols = List.of("name");
 

@@ -236,6 +236,84 @@ public class DefaultMyJpaRepository<T, ID> extends SimpleJpaRepository<T, ID> im
     }
 
     /**
+     * 在异步边界前捕获并重置 AUTO_FILTER_OVERRIDE 状态，返回原始覆盖值用于后续恢复。
+     *
+     * <p>
+     * 此方法用于 {@code @Async}、{@code CompletableFuture}、响应式流等异步机制。
+     * 在异步任务提交前调用此方法捕获状态，然后在异步任务中调用
+     * {@link #restoreForAsync(Boolean)} 恢复状态。
+     *
+     * <p>
+     * 配合 {@link #createTaskDecorator()} 可自动管理异步任务的生命周期：
+     *
+     * <pre>{@code
+     * @Bean
+     * public TaskDecorator myTaskDecorator() {
+     *     return DefaultMyJpaRepository.createTaskDecorator();
+     * }
+     * }</pre>
+     *
+     * @return 当前线程的 AUTO_FILTER_OVERRIDE 值（null 表示未设置）
+     */
+    public static Boolean captureAndResetForAsync() {
+        Boolean value = AUTO_FILTER_OVERRIDE.get();
+        if (value != null) {
+            AUTO_FILTER_OVERRIDE.remove();
+        }
+        return value;
+    }
+
+    /**
+     * 在异步任务中恢复之前捕获的 AUTO_FILTER_OVERRIDE 状态。
+     *
+     * <p>
+     * 配合 {@link #captureAndResetForAsync()} 使用，确保异步任务继承父线程的覆盖状态。
+     *
+     * @param capturedValue 之前通过 {@link #captureAndResetForAsync()} 捕获的覆盖值
+     */
+    public static void restoreForAsync(Boolean capturedValue) {
+        if (capturedValue != null) {
+            AUTO_FILTER_OVERRIDE.set(capturedValue);
+        }
+    }
+
+    /**
+     * 创建 {@link org.springframework.core.task.TaskDecorator}，自动在异步任务前后
+     * 捕获和恢复 AUTO_FILTER_OVERRIDE 状态。
+     *
+     * <p>
+     * 使用方式：
+     * <pre>{@code
+     * @Bean
+     * public AsyncTaskExecutor asyncTaskExecutor() {
+     *     ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
+     *     executor.setTaskDecorator(DefaultMyJpaRepository.createTaskDecorator());
+     *     return executor;
+     * }
+     * }</pre>
+     *
+     * @return TaskDecorator 实例
+     */
+    public static org.springframework.core.task.TaskDecorator createTaskDecorator() {
+        return runnable -> {
+            Boolean captured = captureAndResetForAsync();
+            try {
+                return () -> {
+                    try {
+                        restoreForAsync(captured);
+                        runnable.run();
+                    } finally {
+                        AUTO_FILTER_OVERRIDE.remove();
+                    }
+                };
+            } catch (RuntimeException e) {
+                restoreForAsync(captured);
+                throw e;
+            }
+        };
+    }
+
+    /**
      * ponytail: 在事务完成后自动清理 AUTO_FILTER_OVERRIDE ThreadLocal，防止泄漏。
      * 当使用 withAutoFilterOverride() 时，try/finally 已保证清理。
      * 此方法作为安全网，处理直接设置 ThreadLocal 但忘记清理的场景。

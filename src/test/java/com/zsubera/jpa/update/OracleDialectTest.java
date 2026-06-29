@@ -34,9 +34,9 @@ class OracleDialectTest {
     void buildUpsertSql_withUpdateColumns() {
         List<String> insertCols = List.of("id", "name", "email");
         List<EntityFieldValue> fieldValues = List.of(
-            new EntityFieldValue("id", "id", 1L),
-            new EntityFieldValue("name", "name", "John"),
-            new EntityFieldValue("email", "email", "john@example.com"));
+            new EntityFieldValue("id", "id", 1L, true),
+            new EntityFieldValue("name", "name", "John", true),
+            new EntityFieldValue("email", "email", "john@example.com", true));
         List<String> conflictCols = List.of("id");
         List<String> updateCols = List.of("name", "email");
 
@@ -55,7 +55,7 @@ class OracleDialectTest {
     void buildUpsertSql_withoutUpdateColumns() {
         List<String> insertCols = List.of("id", "name");
         List<EntityFieldValue> fieldValues =
-            List.of(new EntityFieldValue("id", "id", 1L), new EntityFieldValue("name", "name", "John"));
+            List.of(new EntityFieldValue("id", "id", 1L, true), new EntityFieldValue("name", "name", "John", true));
         List<String> conflictCols = List.of("id");
         List<String> updateCols = List.of();
 
@@ -70,9 +70,9 @@ class OracleDialectTest {
     void buildUpsertSql_multipleConflictColumns() {
         List<String> insertCols = List.of("id", "region", "name");
         List<EntityFieldValue> fieldValues = List.of(
-            new EntityFieldValue("id", "id", 1L),
-            new EntityFieldValue("region", "region", "US"),
-            new EntityFieldValue("name", "name", "John"));
+            new EntityFieldValue("id", "id", 1L, true),
+            new EntityFieldValue("region", "region", "US", true),
+            new EntityFieldValue("name", "name", "John", true));
         List<String> conflictCols = List.of("id", "region");
         List<String> updateCols = List.of("name");
 
@@ -87,7 +87,7 @@ class OracleDialectTest {
     @Test
     void buildUpsertSql_nullSafeOnClause() {
         List<String> insertCols = List.of("id");
-        List<EntityFieldValue> fieldValues = List.of(new EntityFieldValue("id", "id", 1L));
+        List<EntityFieldValue> fieldValues = List.of(new EntityFieldValue("id", "id", 1L, true));
         List<String> conflictCols = List.of("id");
         List<String> updateCols = List.of();
 

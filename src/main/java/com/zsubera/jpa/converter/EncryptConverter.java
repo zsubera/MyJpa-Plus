@@ -73,8 +73,8 @@ public class EncryptConverter implements AttributeConverter<String, String> {
     /** 加密数据版本前缀匹配模式。 */
     private static final java.util.regex.Pattern VERSION_PATTERN = java.util.regex.Pattern.compile("v\\d+");
 
-    /** 密钥预热线程池。 */
-    private static java.util.concurrent.ExecutorService warmUpExecutor;
+    /** 密钥预热线程池。volatile 保证 DCL 可见性。 */
+    private static volatile java.util.concurrent.ExecutorService warmUpExecutor;
 
     private static final Object WARMUP_LOCK = new Object();
 
@@ -153,10 +153,15 @@ public class EncryptConverter implements AttributeConverter<String, String> {
      */
     @PreDestroy
     public static void shutdownWarmUpExecutor() {
-        java.util.concurrent.ExecutorService executor = warmUpExecutor;
+        java.util.concurrent.ExecutorService executor;
+        synchronized (WARMUP_LOCK) {
+            executor = warmUpExecutor;
+            if (executor != null) {
+                warmUpExecutor = null;
+            }
+        }
         if (executor != null && !executor.isShutdown()) {
             executor.shutdownNow();
-            warmUpExecutor = null;
         }
     }
 
@@ -242,13 +247,14 @@ public class EncryptConverter implements AttributeConverter<String, String> {
         SECURE_RANDOM.nextBytes(iv);
         byte[] plaintextBytes = attribute.getBytes(StandardCharsets.UTF_8);
         Cipher cipher = borrowCipher();
+        boolean initialized = false;
         try {
             cipher.init(Cipher.ENCRYPT_MODE, keySpec, new GCMParameterSpec(GCM_TAG_LENGTH, iv));
+            initialized = true;
             byte[] encrypted = cipher.doFinal(plaintextBytes);
             byte[] combined = new byte[iv.length + encrypted.length];
             System.arraycopy(iv, 0, combined, 0, iv.length);
             System.arraycopy(encrypted, 0, combined, iv.length, encrypted.length);
-            // ponytail: 成功后归还 cipher 到池，失败时丢弃（doFinal 异常后 cipher 状态不可恢复）
             returnCipher(cipher);
             return version + ":" + Base64.getEncoder().encodeToString(combined);
         } catch (GeneralSecurityException e) {
@@ -256,6 +262,10 @@ public class EncryptConverter implements AttributeConverter<String, String> {
             throw new MyJpaPlusException("Failed to encrypt value. Check encryption key configuration.", e);
         } finally {
             java.util.Arrays.fill(plaintextBytes, (byte)0);
+            // init() 失败时 cipher 未使用，归还池避免泄漏；doFinal() 失败时丢弃
+            if (!initialized) {
+                returnCipher(cipher);
+            }
         }
     }
 
@@ -304,14 +314,21 @@ public class EncryptConverter implements AttributeConverter<String, String> {
             System.arraycopy(combined, GCM_IV_LENGTH, encrypted, 0, encrypted.length);
             SecretKeySpec keySpec = EncryptionKeyManager.getKeySpec(version);
             Cipher cipher = borrowCipher();
+            boolean initialized = false;
+            byte[] decrypted = null;
             try {
                 cipher.init(Cipher.DECRYPT_MODE, keySpec, new GCMParameterSpec(GCM_TAG_LENGTH, iv));
-                byte[] decrypted = cipher.doFinal(encrypted);
-                // ponytail: 成功后归还 cipher 到池，失败时丢弃
+                initialized = true;
+                decrypted = cipher.doFinal(encrypted);
                 returnCipher(cipher);
                 return new String(decrypted, StandardCharsets.UTF_8);
             } finally {
-                // doFinal 异常时 cipher 内部状态机可能损坏，丢弃不归还
+                if (!initialized) {
+                    returnCipher(cipher);
+                }
+                if (decrypted != null) {
+                    java.util.Arrays.fill(decrypted, (byte)0);
+                }
             }
         } catch (GeneralSecurityException e) {
             log.error("Decryption failed", e);
