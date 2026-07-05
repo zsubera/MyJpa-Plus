@@ -319,7 +319,7 @@ public final class SoftDeleteBulkExecutor {
         new com.zsubera.jpa.util.SampledEvictionCache<>(256, 0.75, 100, 64);
 
     static VersionFieldInfo resolveVersionFieldInfo(Class<?> entityClass) {
-        String cacheKey = entityClass.getName();
+        String cacheKey = SoftDeleteHelper.getEntityBaseName(entityClass);
         VersionFieldInfo cached = VERSION_FIELD_INFO_CACHE.get(cacheKey);
         if (cached != null) {
             return cached;

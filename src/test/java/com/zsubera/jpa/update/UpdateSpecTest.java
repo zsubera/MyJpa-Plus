@@ -460,6 +460,13 @@ class UpdateSpecTest {
     }
 
     @Test
+    void testExecuteLimitedNonComparableLastIdThrows() {
+        repository.save(newEntity("a", 1));
+        assertThrows(IllegalArgumentException.class, () -> new UpdateSpec<>(TestEntity.class)
+            .set(TestEntity::getStatus, 1).eq(TestEntity::getStatus, 0).executeLimitedCursor(em, 10, new Object()));
+    }
+
+    @Test
     void testUpdateExecuteInTransaction() {
         repository.save(newEntity("tx1", 1));
         int count = new UpdateSpec<>(TestEntity.class).set(TestEntity::getStatus, 99).eq(TestEntity::getStatus, 1)

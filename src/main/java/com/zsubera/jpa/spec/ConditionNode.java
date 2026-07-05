@@ -127,20 +127,35 @@ public sealed interface ConditionNode permits ConditionNode.SimpleNode, Conditio
                     }
                     return PredicateHelper.le(path, fieldName, (Comparable)value, cb);
                 case LIKE:
+                    if (value == null) {
+                        throw new IllegalArgumentException("LIKE operator requires non-null value");
+                    }
                     if (escapeChar != '\0') {
                         return PredicateHelper.like(path, fieldName, (String)value, cb, escapeChar);
                     }
                     return PredicateHelper.like(path, fieldName, (String)value, cb);
                 case NOT_LIKE:
+                    if (value == null) {
+                        throw new IllegalArgumentException("NOT_LIKE operator requires non-null value");
+                    }
                     if (escapeChar != '\0') {
                         return PredicateHelper.notLike(path, fieldName, (String)value, cb, escapeChar);
                     }
                     return PredicateHelper.notLike(path, fieldName, (String)value, cb);
                 case EQ_IGNORE_CASE:
+                    if (value == null) {
+                        throw new IllegalArgumentException("EQ_IGNORE_CASE operator requires non-null value");
+                    }
                     return PredicateHelper.eqIgnoreCase(path, fieldName, (String)value, cb);
                 case NE_IGNORE_CASE:
+                    if (value == null) {
+                        throw new IllegalArgumentException("NE_IGNORE_CASE operator requires non-null value");
+                    }
                     return PredicateHelper.neIgnoreCase(path, fieldName, (String)value, cb);
                 case LIKE_IGNORE_CASE:
+                    if (value == null) {
+                        throw new IllegalArgumentException("LIKE_IGNORE_CASE operator requires non-null value");
+                    }
                     char esc = escapeChar != '\0' ? escapeChar : LIKE_ESCAPE;
                     return PredicateHelper.likeIgnoreCase(path, fieldName, (String)value, cb, esc);
                 case IS_NULL:

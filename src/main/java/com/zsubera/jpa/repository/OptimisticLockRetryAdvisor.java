@@ -112,8 +112,7 @@ public class OptimisticLockRetryAdvisor {
         long startTime = System.currentTimeMillis();
         while (true) {
             try {
-                // ponytail: 所有尝试统一在 REQUIRES_NEW 中执行，避免首次失败污染调用方事务
-                return executeInNewTransaction(pjp);
+                return executeInNewTransaction(pjp, attempt);
             } catch (OptimisticLockException | ObjectOptimisticLockingFailureException ex) {
                 attempt = handleRetry(ex, attempt, maxRetries, backoffMs, startTime, method, "");
             } catch (PersistenceException ex) {
@@ -128,14 +127,19 @@ public class OptimisticLockRetryAdvisor {
 
     /**
      * 在新事务中执行重试，确保上一次失败事务已回滚且 L1 缓存已清除。
-     * 当 transactionManager 可用时始终使用 REQUIRES_NEW，即使当前无活动事务——这样即使
-     * 第一次尝试在无事务上下文中执行，重试也能获得干净的持久化上下文。
-     * 当 transactionManager 不可用时直接执行（降级路径）。
+     *
+     * <p>
+     * 首次尝试使用 {@code PROPAGATION_REQUIRED}（加入现有事务），重试时使用
+     * {@code PROPAGATION_REQUIRES_NEW}（挂起现有事务）。这样既避免了首次尝试不必要地
+     * 挂起调用方事务，又确保重试时获得干净的持久化上下文。
      */
-    private Object executeInNewTransaction(ProceedingJoinPoint pjp) throws Throwable {
+    private Object executeInNewTransaction(ProceedingJoinPoint pjp, int attempt) throws Throwable {
         if (transactionManager != null) {
             DefaultTransactionDefinition def = new DefaultTransactionDefinition();
-            def.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+            // 首次尝试加入现有事务，重试时创建新事务
+            def.setPropagationBehavior(attempt == 0
+                ? TransactionDefinition.PROPAGATION_REQUIRED
+                : TransactionDefinition.PROPAGATION_REQUIRES_NEW);
             TransactionStatus status = transactionManager.getTransaction(def);
             try {
                 Object result = pjp.proceed();

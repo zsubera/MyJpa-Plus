@@ -216,7 +216,7 @@ public final class SlowQueryDataSourceProxy {
         private final Object target;
         private final String sql;
         private final long slowQueryThresholdMs;
-        private final AtomicInteger batchCount = new AtomicInteger();
+        private int batchCount;
 
         PreparedStatementTimingHandler(Object target, String sql, long slowQueryThresholdMs) {
             this.target = target;
@@ -229,16 +229,16 @@ public final class SlowQueryDataSourceProxy {
             String name = method.getName();
             if ("addBatch".equals(name)) {
                 Object result = method.invoke(target, args);
-                batchCount.incrementAndGet();
+                batchCount++;
                 return result;
             }
             if ("clearBatch".equals(name)) {
                 Object result = method.invoke(target, args);
-                batchCount.set(0);
+                batchCount = 0;
                 return result;
             }
             if ("executeBatch".equals(name)) {
-                String batchSql = batchCount.get() > 0 ? sql + " [batch of " + batchCount.get() + " statements]"
+                String batchSql = batchCount > 0 ? sql + " [batch of " + batchCount + " statements]"
                     : sql + " [batch (0)]";
                 return StatementTimingDelegate.invokeTimed(target, batchSql, slowQueryThresholdMs, method, args);
             }
@@ -323,10 +323,10 @@ public final class SlowQueryDataSourceProxy {
      */
     private static class StatementTimingHandler implements InvocationHandler {
 
-        private volatile String sql;
+        private String sql;
         private final Object target;
         private final long slowQueryThresholdMs;
-        private final AtomicInteger batchCount = new AtomicInteger();
+        private int batchCount;
 
         StatementTimingHandler(Object target, String sql, long slowQueryThresholdMs) {
             this.target = target;
@@ -346,21 +346,21 @@ public final class SlowQueryDataSourceProxy {
             if ("addBatch".equals(name) && args != null && args.length > 0 && args[0] instanceof String s) {
                 this.sql = s;
                 Object result = method.invoke(target, args);
-                batchCount.incrementAndGet();
+                batchCount++;
                 return result;
             }
             if ("addBatch".equals(name)) {
                 Object result = method.invoke(target, args);
-                batchCount.incrementAndGet();
+                batchCount++;
                 return result;
             }
             if ("clearBatch".equals(name)) {
                 Object result = method.invoke(target, args);
-                batchCount.set(0);
+                batchCount = 0;
                 return result;
             }
             if ("executeBatch".equals(name)) {
-                String batchSql = batchCount.get() > 0 ? sql + " [batch of " + batchCount.get() + " statements]"
+                String batchSql = batchCount > 0 ? sql + " [batch of " + batchCount + " statements]"
                     : sql + " [batch (0)]";
                 return StatementTimingDelegate.invokeTimed(target, batchSql, slowQueryThresholdMs, method, args);
             }

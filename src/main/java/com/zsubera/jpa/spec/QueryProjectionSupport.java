@@ -82,7 +82,7 @@ public final class QueryProjectionSupport<T> {
         List<Selection<?>> selections = buildSelectionList(root, cb);
         cq.multiselect(selections);
 
-        cq.where(getCombinedPredicate(root, cb));
+        cq.where(getCombinedPredicate(root, cq, cb));
         spec.applyDistinctAndGroupBy(root, cq, cb);
         spec.applyOrderBy(root, cq, cb);
 
@@ -104,7 +104,7 @@ public final class QueryProjectionSupport<T> {
         Selection<R> construct = (Selection<R>)cb.construct(dtoClass, ordered);
         cq.select(construct);
 
-        cq.where(getCombinedPredicate(root, cb));
+        cq.where(getCombinedPredicate(root, cq, cb));
         spec.applyDistinctAndGroupBy(root, cq, cb);
         spec.applyOrderBy(root, cq, cb);
 
@@ -189,7 +189,7 @@ public final class QueryProjectionSupport<T> {
         List<Selection<?>> selections = buildSelectionList(dataRoot, cb);
         dataQuery.multiselect(selections);
 
-        dataQuery.where(spec.toPredicate(dataRoot, null, cb));
+        dataQuery.where(getCombinedPredicate(dataRoot, dataQuery, cb));
         spec.applyDistinctAndGroupBy(dataRoot, dataQuery, cb);
         spec.applyOrderBy(dataRoot, dataQuery, cb);
 
@@ -227,10 +227,10 @@ public final class QueryProjectionSupport<T> {
         return selections;
     }
 
-    private Predicate getCombinedPredicate(Root<T> root, CriteriaBuilder cb) {
-        Predicate predicate = spec.toPredicate(root, null, cb);
+    private Predicate getCombinedPredicate(Root<T> root, CriteriaQuery<?> query, CriteriaBuilder cb) {
+        Predicate predicate = spec.toPredicate(root, query, cb);
         if (softDeleteSpec != null) {
-            Predicate sdPredicate = softDeleteSpec.toPredicate(root, null, cb);
+            Predicate sdPredicate = softDeleteSpec.toPredicate(root, query, cb);
             if (sdPredicate != null) {
                 predicate = predicate != null ? cb.and(predicate, sdPredicate) : sdPredicate;
             }
@@ -242,7 +242,7 @@ public final class QueryProjectionSupport<T> {
         CriteriaQuery<Long> countQuery = cb.createQuery(Long.class);
         Root<T> countRoot = countQuery.from(entityClass);
         countQuery.select(cb.count(countRoot));
-        Predicate predicate = getCombinedPredicate(countRoot, cb);
+        Predicate predicate = getCombinedPredicate(countRoot, countQuery, cb);
         if (predicate != null) {
             countQuery.where(predicate);
         }

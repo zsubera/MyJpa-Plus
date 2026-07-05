@@ -65,6 +65,7 @@ final class DialectDetector {
             throw new IllegalArgumentException("strategy must not be null");
         }
         DIALECT_STRATEGIES.put(dialectName.toLowerCase(), strategy);
+        DIALECT_CACHE.invalidateAll();
         log.info("Registered custom dialect: {}", dialectName);
     }
 
@@ -78,7 +79,11 @@ final class DialectDetector {
         if (dialectName == null || dialectName.isBlank()) {
             return false;
         }
-        return DIALECT_STRATEGIES.remove(dialectName.toLowerCase()) != null;
+        boolean removed = DIALECT_STRATEGIES.remove(dialectName.toLowerCase()) != null;
+        if (removed) {
+            DIALECT_CACHE.invalidateAll();
+        }
+        return removed;
     }
 
     /** 每个 EntityManagerFactory 缓存的方言，避免重复检测。Caffeine 内置 LRU 驱逐。 */

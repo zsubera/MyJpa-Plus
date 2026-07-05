@@ -43,8 +43,7 @@ class BatchSaveTemplate {
     private final EntityManager entityManager;
     private final jakarta.persistence.EntityManagerFactory entityManagerFactory;
 
-    BatchSaveTemplate(EntityManager entityManager,
-        org.springframework.transaction.PlatformTransactionManager txManager) {
+    BatchSaveTemplate(EntityManager entityManager) {
         this.entityManager = entityManager;
         this.entityManagerFactory = entityManager.getEntityManagerFactory();
     }

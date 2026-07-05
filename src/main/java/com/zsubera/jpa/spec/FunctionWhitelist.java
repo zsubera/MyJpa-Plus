@@ -168,9 +168,11 @@ public final class FunctionWhitelist {
      * 调用此方法后，所有扩展函数名和冻结快照都被清除。
      */
     public static void reset() {
-        EXTRA_SAFE_FUNCTION_NAMES.clear();
-        EXTRA_BOOLEAN_FUNCTION_NAMES.clear();
-        FROZEN_EXTRA_SAFE_FUNCTION_NAMES.set(Set.of());
-        FROZEN_EXTRA_BOOLEAN_FUNCTION_NAMES.set(Set.of());
+        synchronized (FunctionWhitelist.class) {
+            EXTRA_SAFE_FUNCTION_NAMES.clear();
+            EXTRA_BOOLEAN_FUNCTION_NAMES.clear();
+            FROZEN_EXTRA_SAFE_FUNCTION_NAMES.set(Set.of());
+            FROZEN_EXTRA_BOOLEAN_FUNCTION_NAMES.set(Set.of());
+        }
     }
 }

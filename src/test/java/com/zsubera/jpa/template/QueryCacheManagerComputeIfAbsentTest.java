@@ -87,6 +87,37 @@ class QueryCacheManagerComputeIfAbsentTest {
     }
 
     @Test
+    void nullValueShouldExpireAfterTtl() throws Exception {
+        cache = new QueryCacheManager(100);
+        AtomicInteger loaderCalls = new AtomicInteger(0);
+
+        // First call: loader runs, returns null, should be cached with TTL
+        String r1 = cache.computeIfAbsent("k", () -> {
+            loaderCalls.incrementAndGet();
+            return null;
+        }, 2);
+        assertNull(r1);
+        assertEquals(1, loaderCalls.get());
+
+        // Within TTL: loader should NOT run again (null is cached)
+        String r2 = cache.computeIfAbsent("k", () -> {
+            loaderCalls.incrementAndGet();
+            return null;
+        }, 2);
+        assertNull(r2);
+        assertEquals(1, loaderCalls.get());
+
+        // After TTL expires: loader should run again
+        Thread.sleep(2500);
+        String r3 = cache.computeIfAbsent("k", () -> {
+            loaderCalls.incrementAndGet();
+            return "now-present";
+        }, 60);
+        assertEquals("now-present", r3);
+        assertEquals(2, loaderCalls.get());
+    }
+
+    @Test
     void computeIfAbsentLoaderExceptionPropagates() {
         cache = new QueryCacheManager(100);
         assertThrows(RuntimeException.class, () -> {

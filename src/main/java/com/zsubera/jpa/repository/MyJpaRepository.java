@@ -252,6 +252,11 @@ public interface MyJpaRepository<T, ID> extends JpaRepository<T, ID>, JpaSpecifi
             && !com.zsubera.jpa.repository.SoftDeleteContext.isIgnoreSoftDelete()) {
             java.lang.reflect.Field field =
                 com.zsubera.jpa.softdelete.SoftDeleteHelper.getField(entityClass, softDeleteField);
+            if (field == null) {
+                throw new IllegalStateException(
+                    "SoftDelete field '" + softDeleteField + "' not found on " + entityClass.getName()
+                        + ". The field may have been removed or renamed.");
+            }
             com.zsubera.jpa.annotation.SoftDelete annotation =
                 field.getAnnotation(com.zsubera.jpa.annotation.SoftDelete.class);
             com.zsubera.jpa.softdelete.SoftDeleteHelper.ResolvedDeletedValue resolved =
@@ -347,15 +352,11 @@ public interface MyJpaRepository<T, ID> extends JpaRepository<T, ID>, JpaSpecifi
     }
 
     private static boolean isSoftDeleteAutoFilterEnabled() {
-        com.zsubera.jpa.autoconfigure.MyJpaPlusGlobalConfig config =
-            com.zsubera.jpa.autoconfigure.GlobalConfigHolder.getConfig();
-        return config == null || config.isSoftDeleteAutoFilter();
+        return DefaultMyJpaRepository.isAutoFilterEnabled();
     }
 
     private static boolean isBlockUnconditionalDelete() {
-        com.zsubera.jpa.autoconfigure.MyJpaPlusGlobalConfig config =
-            com.zsubera.jpa.autoconfigure.GlobalConfigHolder.getConfig();
-        return config == null || config.isBlockUnconditionalDelete();
+        return DefaultMyJpaRepository.isBlockUnconditionalDelete();
     }
 
     /**

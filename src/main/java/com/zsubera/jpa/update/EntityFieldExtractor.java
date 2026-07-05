@@ -46,16 +46,16 @@ final class EntityFieldExtractor<T> {
     /** 采样概率分母——每 1024 次调用检查一次缓存大小 */
     private static final int CACHE_CHECK_SAMPLING = 1024;
 
-    /** 自动生成 ID 字段检测结果的缓存。使用弱引用键防止类加载器泄漏。 */
+    /** 自动生成 ID 字段检测结果的缓存。String 键无法被弱引用回收，使用 maximumSize 限制容量。 */
     private static final Cache<String, Boolean> AUTO_GENERATED_ID_CACHE =
-        Caffeine.newBuilder().weakKeys().build();
+        Caffeine.newBuilder().maximumSize(MAX_FIELD_CACHE_SIZE).build();
 
     /**
      * getter 方法缓存，避免每次字段提取都执行 getMethod() 反射查找。
      * key: "className#fieldName"，value: Method 或 NO_GETTER_SENTINEL。
      */
     private static final Cache<String, java.lang.reflect.Method> GETTER_CACHE =
-        Caffeine.newBuilder().weakKeys().build();
+        Caffeine.newBuilder().maximumSize(MAX_FIELD_CACHE_SIZE).build();
     private static final java.lang.reflect.Method NO_GETTER_SENTINEL;
     static {
         try {

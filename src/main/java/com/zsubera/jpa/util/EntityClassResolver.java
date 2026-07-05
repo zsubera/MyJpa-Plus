@@ -166,6 +166,11 @@ public final class EntityClassResolver {
                     queue.add(iface);
                 }
             }
+            // Traverse superclass hierarchy so interfaces on abstract base classes are discovered
+            Class<?> superClass = current.getSuperclass();
+            if (superClass != null && superClass != Object.class && seen.add(superClass)) {
+                queue.add(superClass);
+            }
         }
         return seen.toArray(new Class<?>[0]);
     }

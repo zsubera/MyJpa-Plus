@@ -89,11 +89,11 @@ public final class SqlSanitizer {
      * </ul>
      *
      * @param sql 原始 SQL 语句
-     * @return 脱敏后的 SQL 语句，如果输入为 null 则返回 "null"
+     * @return 脱敏后的 SQL 语句，如果输入为 null 则返回 "<null>"
      */
     public static String sanitize(String sql) {
         if (sql == null) {
-            return "null";
+            return "<null>";
         }
 
         String result = sql;

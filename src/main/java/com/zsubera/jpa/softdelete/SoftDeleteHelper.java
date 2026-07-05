@@ -312,7 +312,7 @@ public final class SoftDeleteHelper {
      * 获取实体的基类名称，剥离 Hibernate 动态代理后缀（如 {@code _$$_javassist_1}）和 Spring CGLIB 后缀（{@code $$EnhancerByCGLIB$$}）。
      * 确保缓存键不因代理类而产生爆炸。
      */
-    private static String getEntityBaseName(Class<?> entityClass) {
+    static String getEntityBaseName(Class<?> entityClass) {
         String name = entityClass.getName();
         int idx = name.indexOf("_$$_");
         if (idx > 0)

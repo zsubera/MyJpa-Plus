@@ -64,17 +64,14 @@ class IdentifierValidatorAdditional2Test {
     }
 
     @Test
-    void validate_homoglyphWithStrictMode_throws() {
+    void validate_homoglyphWithUnicodeEnabled_throws() {
         boolean originalUnicode = IdentifierValidator.isUnicodeIdentifiersEnabled();
-        IdentifierValidator.setStrictMode(false);
         try {
             IdentifierValidator.setUnicodeIdentifiers(true);
-            IdentifierValidator.setStrictMode(true);
             String homoglyph = "\u0430bc";
             assertThrows(MyJpaPlusException.class, () -> IdentifierValidator.validate(homoglyph));
         } finally {
             IdentifierValidator.setUnicodeIdentifiers(originalUnicode);
-            IdentifierValidator.setStrictMode(false);
         }
     }
 }

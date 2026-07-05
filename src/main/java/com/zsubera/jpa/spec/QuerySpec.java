@@ -852,7 +852,9 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
             }
         }
         Predicate result = predicates.isEmpty() ? cb.conjunction() : cb.and(predicates.toArray(new Predicate[0]));
-        log.debug("QuerySpec: predicate built with {} conditions", predicates.size());
+        if (log.isDebugEnabled()) {
+            log.debug("QuerySpec: predicate built with {} conditions", predicates.size());
+        }
         return result;
     }
 

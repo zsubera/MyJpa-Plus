@@ -272,6 +272,10 @@ public class DeleteSpec<T> extends AbstractBulkOperationSpec<T, DeleteSpec<T>> {
         if (limit <= 0) {
             throw new IllegalArgumentException("limit must be positive");
         }
+        if (lastId != null && !(lastId instanceof Comparable)) {
+            throw new IllegalArgumentException(
+                "lastId must implement Comparable for cursor-based pagination. Type: " + lastId.getClass().getName());
+        }
         if (EntityClassResolver.hasCompositeKey(entityClass)) {
             throw new UnsupportedOperationException(
                 "executeLimited() does not support entities with composite primary keys.");
@@ -315,6 +319,10 @@ public class DeleteSpec<T> extends AbstractBulkOperationSpec<T, DeleteSpec<T>> {
         @Nullable Object lastId) {
         if (limit <= 0) {
             throw new IllegalArgumentException("limit must be positive");
+        }
+        if (lastId != null && !(lastId instanceof Comparable)) {
+            throw new IllegalArgumentException(
+                "lastId must implement Comparable for cursor-based pagination. Type: " + lastId.getClass().getName());
         }
         int globalMax = resolveMaxBulkOperationRows();
         if (globalMax > 0 && limit > globalMax) {

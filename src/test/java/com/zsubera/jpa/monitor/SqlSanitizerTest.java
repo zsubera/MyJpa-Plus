@@ -8,7 +8,7 @@ class SqlSanitizerTest {
 
     @Test
     void sanitize_null_returnsNullString() {
-        assertEquals("null", SqlSanitizer.sanitize(null));
+        assertEquals("<null>", SqlSanitizer.sanitize(null));
     }
 
     @Test

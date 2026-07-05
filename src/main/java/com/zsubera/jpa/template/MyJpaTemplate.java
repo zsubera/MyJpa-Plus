@@ -605,7 +605,7 @@ public class MyJpaTemplate implements MyJpaTemplateOperations {
                 return;
             }
             bulkOperationTemplate = new BulkOperationTemplate(entityManager, maxBulkOperationRows, txManager);
-            batchSaveTemplate = new BatchSaveTemplate(entityManager, txManager);
+            batchSaveTemplate = new BatchSaveTemplate(entityManager);
         }
     }
 

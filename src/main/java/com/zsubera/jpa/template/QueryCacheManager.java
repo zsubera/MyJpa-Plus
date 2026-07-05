@@ -92,14 +92,18 @@ public class QueryCacheManager implements CacheAdapter {
 
     @SuppressWarnings("unchecked")
     private <T> T unpackIfPresent(Object cached) {
-        if (cached == NULL_SENTINEL) {
+        if (cached == null) {
             return null;
         }
         if (cached instanceof CachedValue cv) {
             if (cv.isExpired()) {
                 return null;
             }
-            return (T) cv.value();
+            Object val = cv.value();
+            return val == NULL_SENTINEL ? null : (T) val;
+        }
+        if (cached == NULL_SENTINEL) {
+            return null;
         }
         return (T) cached;
     }
@@ -231,11 +235,16 @@ public class QueryCacheManager implements CacheAdapter {
      */
     @SuppressWarnings("unchecked")
     public <T> T computeIfAbsent(String key, java.util.function.Supplier<T> loader, long ttlSeconds) {
-        // Use Caffeine's atomic get(key, mappingFunction) for stampede protection:
-        // when multiple threads request the same uncached key concurrently, only one executes the loader.
+        // Caffeine's get(key, fn) only calls fn when the key is absent from the cache.
+        // Our per-entry TTL is manual (CachedValue.isExpired), so Caffeine still considers
+        // expired entries "present". We must invalidate them first to trigger re-loading.
+        Object existing = cache.getIfPresent(key);
+        if (existing instanceof CachedValue cv && cv.isExpired()) {
+            cache.invalidate(key);
+        }
         Object cached = cache.get(key, k -> {
             T loaded = loader.get();
-            return loaded != null ? packWithTtl(loaded, ttlSeconds) : NULL_SENTINEL;
+            return loaded != null ? packWithTtl(loaded, ttlSeconds) : packWithTtl(NULL_SENTINEL, ttlSeconds);
         });
         T value = unpackIfPresent(cached);
         if (value == null) {

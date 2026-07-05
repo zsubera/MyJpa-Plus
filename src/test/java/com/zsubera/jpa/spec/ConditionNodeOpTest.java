@@ -114,4 +114,34 @@ class ConditionNodeOpTest {
     void resolveLe_validValue_succeeds() {
         assertDoesNotThrow(() -> ConditionNode.Op.LE.resolve(root, "status", 5, '\0', cb));
     }
+
+    @Test
+    void resolveLike_nullValue_throws() {
+        assertThrows(IllegalArgumentException.class,
+            () -> ConditionNode.Op.LIKE.resolve(root, "name", null, '\0', cb));
+    }
+
+    @Test
+    void resolveNotLike_nullValue_throws() {
+        assertThrows(IllegalArgumentException.class,
+            () -> ConditionNode.Op.NOT_LIKE.resolve(root, "name", null, '\0', cb));
+    }
+
+    @Test
+    void resolveEqIgnoreCase_nullValue_throws() {
+        assertThrows(IllegalArgumentException.class,
+            () -> ConditionNode.Op.EQ_IGNORE_CASE.resolve(root, "name", null, '\0', cb));
+    }
+
+    @Test
+    void resolveNeIgnoreCase_nullValue_throws() {
+        assertThrows(IllegalArgumentException.class,
+            () -> ConditionNode.Op.NE_IGNORE_CASE.resolve(root, "name", null, '\0', cb));
+    }
+
+    @Test
+    void resolveLikeIgnoreCase_nullValue_throws() {
+        assertThrows(IllegalArgumentException.class,
+            () -> ConditionNode.Op.LIKE_IGNORE_CASE.resolve(root, "name", null, '\0', cb));
+    }
 }

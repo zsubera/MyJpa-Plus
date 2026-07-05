@@ -1,6 +1,7 @@
 package com.zsubera.jpa.util;
 
 import com.zsubera.jpa.spec.QuerySpec;
+import jakarta.persistence.AttributeNode;
 import jakarta.persistence.EntityGraph;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.Subgraph;
@@ -231,16 +232,59 @@ public final class EntityGraphHelper<T> {
      * @param subgraph 子图
      * @param path 属性路径
      */
+    /**
+     * 递归添加属性节点到子图，支持多级嵌套路径如 "b.c.d"。
+     *
+     * <p>
+     * 当两条路径共享中间前缀时（如 "roles.permissions.x" 和 "roles.permissions.y"），
+     * 该方法会复用已存在的子图而非重复创建。JPA 规范要求重复添加同名子图时抛出
+     * {@link IllegalArgumentException}，但 Hibernate 实现会返回已存在的子图。
+     * 此处通过 try-catch 兼容两种行为。
+     *
+     * @param subgraph 子图
+     * @param path 属性路径
+     */
+    @SuppressWarnings("unchecked")
     private void addAttributeNodeRecursive(Subgraph<Object> subgraph, String path) {
         int dotIndex = path.indexOf('.');
         if (dotIndex > 0) {
             String root = path.substring(0, dotIndex);
             String remaining = path.substring(dotIndex + 1);
-            Subgraph<Object> nested = subgraph.addSubgraph(root);
+            Subgraph<Object> nested;
+            try {
+                nested = subgraph.addSubgraph(root);
+            } catch (IllegalArgumentException e) {
+                // JPA spec: addSubgraph throws if subgraph already exists.
+                // Hibernate: returns existing subgraph. Handle both.
+                nested = findExistingSubgraph(subgraph, root);
+                if (nested == null) {
+                    throw e;
+                }
+            }
             addAttributeNodeRecursive(nested, remaining);
         } else {
             subgraph.addAttributeNodes(path);
         }
+    }
+
+    /**
+     * 在已有属性节点中查找指定名称的子图。
+     *
+     * @param subgraph 父子图
+     * @param name 属性名称
+     * @return 已存在的子图，若未找到返回 null
+     */
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    private Subgraph<Object> findExistingSubgraph(Subgraph<Object> subgraph, String name) {
+        for (AttributeNode node : subgraph.getAttributeNodes()) {
+            if (name.equals(node.getAttributeName())) {
+                java.util.Map subgraphs = node.getSubgraphs();
+                if (!subgraphs.isEmpty()) {
+                    return (Subgraph<Object>) subgraphs.values().iterator().next();
+                }
+            }
+        }
+        return null;
     }
 
     /**

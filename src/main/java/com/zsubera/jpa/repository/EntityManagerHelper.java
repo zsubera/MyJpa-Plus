@@ -267,10 +267,15 @@ public final class EntityManagerHelper {
      * @throws IllegalStateException 如果未找到 EMF
      */
     private static EntityManagerFactory resolveEntityManagerFactory(@Nullable Class<?> entityType) {
-        // ponytail: allResolversUseDefault 的快速路径不在锁保护下读取，存在微小竞态：
-        // registerResolver 刚写入 false 但其他线程可能尚未看到。对于生产环境可忽略。
-        // 这里保留快速路径以优化单数据源（95%+ 场景），但通过 volatile 保证最终可见性。
         if (allResolversUseDefault) {
+            // 即使 allResolversUseDefault 为 true，仍需检查该实体类型是否有已注册的 resolver，
+            // 因为 registerResolver 可能刚将标志设为 false 但本线程尚未看到 volatile 写入。
+            if (entityType != null) {
+                EntityManagerResolver resolver = resolvers.get(entityType);
+                if (resolver != null) {
+                    return resolver.resolve(entityType);
+                }
+            }
             EntityManagerFactory emf = defaultEntityManagerFactory;
             if (emf == null) {
                 emf = resolveFromApplicationContext();

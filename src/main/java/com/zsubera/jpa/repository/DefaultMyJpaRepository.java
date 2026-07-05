@@ -840,6 +840,11 @@ public class DefaultMyJpaRepository<T, ID> extends SimpleJpaRepository<T, ID> im
         if (sf != null && shouldApplySoftDeleteFilter()) {
             java.lang.reflect.Field field =
                 com.zsubera.jpa.softdelete.SoftDeleteHelper.getField(entityClass, sf);
+            if (field == null) {
+                throw new IllegalStateException(
+                    "SoftDelete field '" + sf + "' not found on " + entityClass.getName()
+                        + ". The field may have been removed or renamed.");
+            }
             com.zsubera.jpa.annotation.SoftDelete annotation =
                 field.getAnnotation(com.zsubera.jpa.annotation.SoftDelete.class);
             com.zsubera.jpa.softdelete.SoftDeleteHelper.ResolvedDeletedValue resolved =
