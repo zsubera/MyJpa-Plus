@@ -1061,11 +1061,8 @@ public class MyJpaTemplate implements MyJpaTemplateOperations {
                     + "Consider using findAll() with explicit maxResults or findAllStream() for large datasets.",
                 resolveMaxResults());
             Specification<T> dataSpec = spec;
-            String sdField = com.zsubera.jpa.softdelete.SoftDeleteHelper.findSoftDeleteField(entityClass);
-            boolean autoFilter = com.zsubera.jpa.autoconfigure.GlobalConfigHolder.getConfig() != null
-                && com.zsubera.jpa.autoconfigure.GlobalConfigHolder.getConfig().isSoftDeleteAutoFilter();
-            if (sdField != null && autoFilter && !com.zsubera.jpa.repository.SoftDeleteContext.isIgnoreSoftDelete()) {
-                Specification<T> sdSpec = com.zsubera.jpa.softdelete.SoftDeleteHelper.isNotDeleted(entityClass);
+            if (shouldApplySoftDeleteFilter()) {
+                Specification<T> sdSpec = SoftDeleteHelper.isNotDeleted(entityClass);
                 dataSpec = spec != null ? spec.and(sdSpec) : sdSpec;
             }
             TypedQuery<T> typedQuery = buildSpecificationQuery(entityClass, dataSpec, null, resolveMaxResults());
@@ -1083,11 +1080,8 @@ public class MyJpaTemplate implements MyJpaTemplateOperations {
 
         // 数据查询 - 与计数查询保持一致的软删除过滤
         Specification<T> dataSpec = spec;
-        String sdField = com.zsubera.jpa.softdelete.SoftDeleteHelper.findSoftDeleteField(entityClass);
-        boolean autoFilter = com.zsubera.jpa.autoconfigure.GlobalConfigHolder.getConfig() != null
-            && com.zsubera.jpa.autoconfigure.GlobalConfigHolder.getConfig().isSoftDeleteAutoFilter();
-        if (sdField != null && autoFilter && !com.zsubera.jpa.repository.SoftDeleteContext.isIgnoreSoftDelete()) {
-            Specification<T> sdSpec = com.zsubera.jpa.softdelete.SoftDeleteHelper.isNotDeleted(entityClass);
+        if (shouldApplySoftDeleteFilter()) {
+            Specification<T> sdSpec = SoftDeleteHelper.isNotDeleted(entityClass);
             dataSpec = spec != null ? spec.and(sdSpec) : sdSpec;
         }
         TypedQuery<T> query = buildSpecificationQuery(entityClass, dataSpec, pageable.getSort(), pageable.getPageSize());

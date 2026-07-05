@@ -31,10 +31,12 @@ class BatchSaveTemplate {
     private static final SampledEvictionCache<Class<?>, java.lang.reflect.Method> ID_METHOD_CACHE =
         new SampledEvictionCache<>(1024, 0.75, 100, 64);
     private static final java.lang.reflect.Method NO_ID_METHOD_SENTINEL;
+    private static final java.lang.reflect.Method NO_VERSION_SENTINEL;
 
     static {
         try {
             NO_ID_METHOD_SENTINEL = Object.class.getDeclaredMethod("toString");
+            NO_VERSION_SENTINEL = Object.class.getDeclaredMethod("hashCode");
         } catch (NoSuchMethodException e) {
             throw new RuntimeException(e);
         }
@@ -238,9 +240,9 @@ class BatchSaveTemplate {
                     }
                 }
             }
-            return null;
+            return NO_VERSION_SENTINEL;
         });
-        if (getVersion == null) {
+        if (getVersion == null || getVersion == NO_VERSION_SENTINEL) {
             return null;
         }
         try {

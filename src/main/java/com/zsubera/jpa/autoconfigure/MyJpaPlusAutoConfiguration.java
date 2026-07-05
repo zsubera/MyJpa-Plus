@@ -169,6 +169,9 @@ public class MyJpaPlusAutoConfiguration {
                 String skipSalt = applicationContext.getEnvironment().getProperty("myjpa-plus.encrypt.skip-salt-check");
                 if ("true".equalsIgnoreCase(skipSalt)) {
                     EncryptConverter.setSkipSaltCheck(true);
+                    log.warn("SECURITY: Encryption salt check is DISABLED via "
+                        + "myjpa-plus.encrypt.skip-salt-check=true. "
+                        + "This is unsafe for production environments.");
                 }
             }
 
