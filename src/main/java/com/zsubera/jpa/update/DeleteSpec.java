@@ -11,9 +11,11 @@ import jakarta.persistence.criteria.CriteriaDelete;
 import jakarta.persistence.criteria.CriteriaQuery;
 import jakarta.persistence.criteria.Predicate;
 import jakarta.persistence.criteria.Root;
+import java.util.ArrayList;
 import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.lang.Nullable;
 
 /**
  * JPA {@link CriteriaDelete} 批量删除操作的类型安全构建器。
@@ -255,43 +257,62 @@ public class DeleteSpec<T> extends AbstractBulkOperationSpec<T, DeleteSpec<T>> {
     }
 
     /**
-     * 执行限制删除行数的条件删除操作，支持可选的悲观锁。
-     *
-     * <p>
-     * 此方法首先查询符合条件的实体 ID 列表（带限制），然后对这些实体执行删除操作。
-     *
-     * <p>
-     * <strong>重要副作用：</strong>默认回退到 {@code em.clear()} 会分离当前事务中<strong>所有</strong>托管实体，
-     * 包括调用方在同一事务中持有的其他实体。在 Hibernate 环境下会使用选择性缓存驱逐（仅影响指定实体类型）。
-     * 调用方应在 {@code executeLimited} 返回后重新查询需要的实体。
-     *
-     * <p>
-     * <strong>并发风险警告：</strong>此方法分两步执行（先查询 ID，再删除），在高并发场景下存在竞态条件。 在查询ID和执行删除之间，其他事务可能修改或删除记录，导致数据不一致。
-     *
-     * <p>
-     * <strong>安全使用建议（按推荐程度排序）：</strong>
-     * <ol>
-     * <li>使用 {@code pessimisticLock=true}，在单个数据库事务中持有行锁，防止并发修改：
-     *
-     * <pre>{@code
-     * DeleteSpec.of(LogEntry.class).lt(LogEntry::getTimestamp, cutoffDate).executeLimited(entityManager, 1000, true); // 悲观锁
-     * }</pre>
-     *
-     * <li>在已有的 {@code @Transactional} 方法内调用，确保查询和更新在同一事务中执行
-     * <li>对于支持 {@code DELETE ... LIMIT} 的数据库（如 MySQL），考虑使用原生 SQL 作为替代方案
-     * <li>在应用层使用分布式锁保护整个操作流程
-     * </ol>
-     *
-     * <p>
-     * <strong>注意：</strong>此方法使用 CriteriaDelete 绕过 JPA 生命周期回调，不会触发 {@code @PreRemove}/{@code @PostRemove}。
-     * 删除成功后会自动调用 {@code em.clear()} 清除持久化上下文，防止 L1 缓存中保留已删除实体的过期数据。
-     *
-     * @param em 实体管理器
-     * @param limit 最大删除行数
-     * @param pessimisticLock 如果为 true，则获取 {@link jakarta.persistence.LockModeType#PESSIMISTIC_WRITE} 锁以防止并发修改
-     * @return 实际删除的行数
+     * 带游标的限制删除，确保每次迭代处理不同的行集。
      */
+    public int executeLimited(EntityManager em, int limit, @Nullable Object lastId) {
+        return executeLimitedWithCursor(em, limit, true, lastId);
+    }
+
+    /**
+     * 执行限制删除并返回游标信息，供批量循环使用。
+     */
+    public record BatchCursor(int affected, @Nullable Object lastId) {}
+
+    public BatchCursor executeLimitedCursor(EntityManager em, int limit, @Nullable Object lastId) {
+        if (limit <= 0) {
+            throw new IllegalArgumentException("limit must be positive");
+        }
+        if (EntityClassResolver.hasCompositeKey(entityClass)) {
+            throw new UnsupportedOperationException(
+                "executeLimited() does not support entities with composite primary keys.");
+        }
+        CriteriaBuilder cb = em.getCriteriaBuilder();
+        String idFieldName = EntityClassResolver.resolveIdFieldName(entityClass);
+        CriteriaQuery<?> idQuery = cb.createQuery();
+        Root<T> idRoot = idQuery.from(entityClass);
+        idQuery.select(idRoot.get(idFieldName));
+        List<Predicate> predicateList = new ArrayList<>();
+        Predicate[] predicates = buildPredicates(idRoot, cb);
+        for (Predicate p : predicates) {
+            predicateList.add(p);
+        }
+        if (lastId != null) {
+            predicateList.add(cb.greaterThan(idRoot.get(idFieldName), (Comparable)lastId));
+        }
+        idQuery.where(predicateList.isEmpty() ? cb.conjunction() : cb.and(predicateList.toArray(new Predicate[0])));
+        idQuery.orderBy(cb.asc(idRoot.get(idFieldName)));
+        List<?> ids = em.createQuery(idQuery).setMaxResults(limit).getResultList();
+        if (ids.isEmpty()) {
+            return new BatchCursor(0, lastId);
+        }
+        CriteriaDelete<T> delete = cb.createCriteriaDelete(entityClass);
+        Root<T> deleteRoot = delete.from(entityClass);
+        delete.where(InClauseBuilder.in(cb, deleteRoot.get(idFieldName), ids));
+        int affected = em.createQuery(delete).executeUpdate();
+        if (affected > 0) {
+            em.flush();
+            em.clear();
+            com.zsubera.jpa.util.CacheEvictionHelper.evictEntityCache(em, entityClass);
+        }
+        return new BatchCursor(affected, ids.get(ids.size() - 1));
+    }
+
     public int executeLimited(EntityManager em, int limit, boolean pessimisticLock) {
+        return executeLimitedWithCursor(em, limit, pessimisticLock, null);
+    }
+
+    private int executeLimitedWithCursor(EntityManager em, int limit, boolean pessimisticLock,
+        @Nullable Object lastId) {
         if (limit <= 0) {
             throw new IllegalArgumentException("limit must be positive");
         }
@@ -308,20 +329,17 @@ public class DeleteSpec<T> extends AbstractBulkOperationSpec<T, DeleteSpec<T>> {
         }
         if (!pessimisticLock) {
             log.warn("executeLimited() with pessimisticLock=false may cause race conditions. "
-                + "Consider using pessimisticLock=true for critical operations. "
-                + "The two-step approach (SELECT IDs then DELETE) has a time window where concurrent "
-                + "transactions may modify or delete records, leading to inconsistent results.");
+                + "Consider using pessimisticLock=true for critical operations.");
         }
         CriteriaBuilder cb = em.getCriteriaBuilder();
 
-        // Step 1: 查询符合条件的ID列表（带LIMIT）
         String idFieldName = EntityClassResolver.resolveIdFieldName(entityClass);
         CriteriaQuery<?> idQuery = cb.createQuery();
         Root<T> idRoot = idQuery.from(entityClass);
         idQuery.select(idRoot.get(idFieldName));
+        List<Predicate> predicateList = new ArrayList<>();
         Predicate[] predicates = buildPredicates(idRoot, cb);
         if (predicates.length == 0) {
-            // 与 deleteAll() 保持一致的安全检查
             if (!allowUnconditional) {
                 throw new IllegalStateException("No WHERE conditions specified for DELETE operation. "
                     + "Call .allowUnconditional(true) to explicitly confirm this operation, "
@@ -329,8 +347,16 @@ public class DeleteSpec<T> extends AbstractBulkOperationSpec<T, DeleteSpec<T>> {
             }
             log.warn("WARNING: Executing limited DELETE without conditions on {} — this will affect up to {} rows!",
                 entityClass.getSimpleName(), limit);
+        } else {
+            for (Predicate p : predicates) {
+                predicateList.add(p);
+            }
         }
-        idQuery.where(predicates.length > 0 ? cb.and(predicates) : cb.conjunction());
+        if (lastId != null) {
+            predicateList.add(cb.greaterThan(idRoot.get(idFieldName), (Comparable)lastId));
+        }
+        idQuery.where(predicateList.isEmpty() ? cb.conjunction() : cb.and(predicateList.toArray(new Predicate[0])));
+        idQuery.orderBy(cb.asc(idRoot.get(idFieldName)));
         TypedQuery<?> query = em.createQuery(idQuery);
         query.setMaxResults(limit);
         if (pessimisticLock) {

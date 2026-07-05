@@ -250,7 +250,10 @@ class BulkOperationTemplate {
         if (batchSize <= 0) {
             throw new IllegalArgumentException("batchSize must be positive");
         }
-        return executeBatchInternal(batchSize, "update", size -> spec.executeLimited(entityManager, size), true);
+        return executeBatchWithCursor(batchSize, "update", (size, lastId) -> {
+            UpdateSpec.BatchCursor cursor = spec.executeLimitedCursor(entityManager, size, lastId);
+            return new Object[]{cursor.affected(), cursor.lastId()};
+        });
     }
 
     /**
@@ -268,7 +271,10 @@ class BulkOperationTemplate {
         if (batchSize <= 0) {
             throw new IllegalArgumentException("batchSize must be positive");
         }
-        return executeBatchInternal(batchSize, "delete", size -> spec.executeLimited(entityManager, size), true);
+        return executeBatchWithCursor(batchSize, "delete", (size, lastId) -> {
+            DeleteSpec.BatchCursor cursor = spec.executeLimitedCursor(entityManager, size, lastId);
+            return new Object[]{cursor.affected(), cursor.lastId()};
+        });
     }
 
     /**
@@ -323,6 +329,51 @@ class BulkOperationTemplate {
         return total < ABSOLUTE_MAX_BATCH_ROWS;
     }
 
+    /**
+     * 使用游标分页的批量执行，确保每批处理不同的行集。
+     * 当 SET 子句不改变 WHERE 条件列时，避免重复处理相同行。
+     */
+    @FunctionalInterface
+    interface CursorExecutor {
+        /**
+         * @param batchSize 批次大小
+         * @param lastId 上一批最后的 ID（首批为 null）
+         * @return Object[]{affectedRows, lastId}
+         */
+        Object[] execute(int batchSize, Object lastId);
+    }
+
+    private int executeBatchWithCursor(int batchSize, String operationName, CursorExecutor executor) {
+        int total = 0;
+        int iteration = 0;
+        Object lastId = null;
+        int effectiveLimit = resolveMaxBulkOperationRows();
+        while (true) {
+            Object[] result = executor.execute(batchSize, lastId);
+            int affected = (Integer)result[0];
+            if (affected == 0) {
+                break;
+            }
+            lastId = result[1];
+            total += affected;
+            if (log.isDebugEnabled()) {
+                log.debug("Batch {}: {} rows {}ed in this batch (total: {})", operationName, affected,
+                    operationName, total);
+            }
+            iteration++;
+            if (iteration >= maxBatchIterations) {
+                log.error("Batch {} reached maximum iterations ({}). Possible infinite loop. Total rows: {}",
+                    operationName, maxBatchIterations, total);
+                break;
+            }
+            effectiveLimit = resolveMaxBulkOperationRows();
+            if (!isWithinLimit(total, effectiveLimit)) {
+                break;
+            }
+        }
+        return total;
+    }
+
     // ---- 独立事务分批执行 ----
 
     /**
@@ -375,8 +426,11 @@ class BulkOperationTemplate {
         if (failureStrategy == null) {
             throw new IllegalArgumentException("failureStrategy must not be null");
         }
-        return executeBatchInSeparateTransactionsWithResult(batchSize, "update",
-            size -> executeInNewTransaction(em -> spec.executeLimited(em, size)), failureStrategy);
+        return executeBatchInSeparateTransactionsWithCursor(batchSize, "update", failureStrategy,
+            (size, lastId) -> executeInNewTransaction(em -> {
+                UpdateSpec.BatchCursor cursor = spec.executeLimitedCursor(em, size, lastId);
+                return new Object[]{cursor.affected(), cursor.lastId()};
+            }));
     }
 
     /**
@@ -399,8 +453,11 @@ class BulkOperationTemplate {
         if (failureStrategy == null) {
             throw new IllegalArgumentException("failureStrategy must not be null");
         }
-        return executeBatchInSeparateTransactionsWithResult(batchSize, "delete",
-            size -> executeInNewTransaction(em -> spec.executeLimited(em, size)), failureStrategy);
+        return executeBatchInSeparateTransactionsWithCursor(batchSize, "delete", failureStrategy,
+            (size, lastId) -> executeInNewTransaction(em -> {
+                DeleteSpec.BatchCursor cursor = spec.executeLimitedCursor(em, size, lastId);
+                return new Object[]{cursor.affected(), cursor.lastId()};
+            }));
     }
 
     /**
@@ -465,6 +522,62 @@ class BulkOperationTemplate {
     }
 
     /**
+     * 带游标的独立事务批量执行，返回详细结果。
+     */
+    private BatchResult executeBatchInSeparateTransactionsWithCursor(int batchSize, String operationName,
+        BatchFailureStrategy failureStrategy, CursorExecutor executor) {
+        int total = 0;
+        int batchCount = 0;
+        int failedBatchIndex = -1;
+        Throwable failureCause = null;
+        boolean shouldContinue = true;
+        int iteration = 0;
+        int consecutiveFailures = 0;
+        Object lastId = null;
+        while (shouldContinue) {
+            batchCount++;
+            try {
+                Object[] result = executor.execute(batchSize, lastId);
+                int batchResult = (Integer)result[0];
+                lastId = result[1];
+                total += batchResult;
+                consecutiveFailures = 0;
+                if (batchResult > 0 && log.isDebugEnabled()) {
+                    log.debug("Batch {} committed: {} rows {}ed in this batch (total: {})", operationName, batchResult,
+                        operationName, total);
+                }
+                if (batchResult == 0) {
+                    shouldContinue = false;
+                }
+                int effectiveLimit = resolveMaxBulkOperationRows();
+                if (effectiveLimit > 0 && total >= effectiveLimit) {
+                    shouldContinue = false;
+                } else if (!isWithinLimit(total, effectiveLimit)) {
+                    log.warn("Batch {} reached safety limit ({} rows). Stopping.", operationName,
+                        ABSOLUTE_MAX_BATCH_ROWS);
+                    shouldContinue = false;
+                }
+            } catch (RuntimeException | Error e) {
+                failedBatchIndex = batchCount - 1;
+                failureCause = e;
+                consecutiveFailures++;
+                log.error("Batch {} failed at batch index {} (consecutive failures: {}): {}", operationName,
+                    failedBatchIndex, consecutiveFailures, e.getMessage(), e);
+                if (failureStrategy == BatchFailureStrategy.ABORT || consecutiveFailures >= 3) {
+                    shouldContinue = false;
+                }
+            }
+            iteration++;
+            if (iteration >= maxBatchIterations) {
+                log.error("Batch {} reached maximum iterations ({}). Possible infinite loop. Total rows: {}",
+                    operationName, maxBatchIterations, total);
+                break;
+            }
+        }
+        return new BatchResult(total, batchCount, failedBatchIndex == -1, failedBatchIndex, failureCause);
+    }
+
+    /**
      * 分批执行批量更新，每批在独立事务中提交。
      *
      * @param spec 要执行的 UpdateSpec
@@ -479,8 +592,14 @@ class BulkOperationTemplate {
         if (batchSize <= 0) {
             throw new IllegalArgumentException("batchSize must be positive");
         }
-        return executeBatchInSeparateTransactionsInternal(batchSize, "update",
-            size -> executeInNewTransaction(em -> spec.executeLimited(em, size)));
+        return executeBatchWithCursor(batchSize, "update-separate-tx", (size, lastId) -> {
+            @SuppressWarnings("unchecked")
+            Object[] r = (Object[])executeInNewTransaction(em -> {
+                UpdateSpec.BatchCursor c = spec.executeLimitedCursor(em, size, lastId);
+                return new Object[]{c.affected(), c.lastId()};
+            });
+            return r;
+        });
     }
 
     /**
@@ -498,8 +617,14 @@ class BulkOperationTemplate {
         if (batchSize <= 0) {
             throw new IllegalArgumentException("batchSize must be positive");
         }
-        return executeBatchInSeparateTransactionsInternal(batchSize, "delete",
-            size -> executeInNewTransaction(em -> spec.executeLimited(em, size)));
+        return executeBatchWithCursor(batchSize, "delete-separate-tx", (size, lastId) -> {
+            @SuppressWarnings("unchecked")
+            Object[] r = (Object[])executeInNewTransaction(em -> {
+                DeleteSpec.BatchCursor c = spec.executeLimitedCursor(em, size, lastId);
+                return new Object[]{c.affected(), c.lastId()};
+            });
+            return r;
+        });
     }
 
     /**

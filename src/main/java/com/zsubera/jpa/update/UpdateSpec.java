@@ -430,6 +430,72 @@ public class UpdateSpec<T> extends AbstractBulkOperationSpec<T, UpdateSpec<T>> {
     }
 
     /**
+     * 执行限制更新行数的条件更新操作，支持游标分页以避免重复处理相同行。
+     *
+     * @param em 实体管理器
+     * @param limit 最大更新行数
+     * @param lastId 上一批最后处理的 ID 值（null 表示从头开始）
+     * @return 实际更新的行数
+     */
+    public int executeLimited(EntityManager em, int limit, @Nullable Object lastId) {
+        return executeLimitedWithCursor(em, limit, true, lastId);
+    }
+
+    /**
+     * 执行限制更新并返回游标信息，供批量循环使用。
+     *
+     * @return 包含 affected 行数和最后处理 ID 的游标结果
+     */
+    public record BatchCursor(int affected, @Nullable Object lastId) {}
+
+    public BatchCursor executeLimitedCursor(EntityManager em, int limit, @Nullable Object lastId) {
+        if (setClauses.isEmpty() && expressionSetClauses.isEmpty()) {
+            throw new IllegalStateException("At least one set() clause is required");
+        }
+        if (limit <= 0) {
+            throw new IllegalArgumentException("limit must be positive");
+        }
+        if (EntityClassResolver.hasCompositeKey(entityClass)) {
+            throw new UnsupportedOperationException(
+                "executeLimited() does not support entities with composite primary keys.");
+        }
+        CriteriaBuilder cb = em.getCriteriaBuilder();
+        String idFieldName = EntityClassResolver.resolveIdFieldName(entityClass);
+        CriteriaQuery<?> idQuery = cb.createQuery();
+        Root<T> idRoot = idQuery.from(entityClass);
+        idQuery.select(idRoot.get(idFieldName));
+        List<Predicate> predicateList = new ArrayList<>();
+        Predicate[] predicates = buildPredicates(idRoot, cb);
+        for (Predicate p : predicates) {
+            predicateList.add(p);
+        }
+        if (lastId != null) {
+            predicateList.add(cb.greaterThan(idRoot.get(idFieldName), (Comparable)lastId));
+        }
+        idQuery.where(predicateList.isEmpty() ? cb.conjunction() : cb.and(predicateList.toArray(new Predicate[0])));
+        idQuery.orderBy(cb.asc(idRoot.get(idFieldName)));
+        List<?> ids = em.createQuery(idQuery).setMaxResults(limit).getResultList();
+        if (ids.isEmpty()) {
+            return new BatchCursor(0, lastId);
+        }
+        CriteriaUpdate<T> update = cb.createCriteriaUpdate(entityClass);
+        Root<T> updateRoot = update.from(entityClass);
+        for (SetClause sc : setClauses) {
+            update.set(updateRoot.get(sc.fieldName), sc.value);
+        }
+        applyExpressionSetClauses(update, updateRoot, cb);
+        applyVersionIncrement(update, updateRoot, cb);
+        update.where(InClauseBuilder.in(cb, updateRoot.get(idFieldName), ids));
+        int affected = em.createQuery(update).executeUpdate();
+        if (affected > 0) {
+            em.flush();
+            em.clear();
+            com.zsubera.jpa.util.CacheEvictionHelper.evictEntityCache(em, entityClass);
+        }
+        return new BatchCursor(affected, ids.get(ids.size() - 1));
+    }
+
+    /**
      * 执行限制更新行数的条件更新操作，支持可选的悲观锁。
      *
      * <p>
@@ -460,6 +526,14 @@ public class UpdateSpec<T> extends AbstractBulkOperationSpec<T, UpdateSpec<T>> {
      * @throws IllegalStateException 如果未指定 SET 子句
      */
     public int executeLimited(EntityManager em, int limit, boolean pessimisticLock) {
+        return executeLimitedWithCursor(em, limit, pessimisticLock, null);
+    }
+
+    /**
+     * 带游标分页的限制更新。通过 ORDER BY id 和 WHERE id > lastId 确保每次迭代处理不同的行集。
+     */
+    private int executeLimitedWithCursor(EntityManager em, int limit, boolean pessimisticLock,
+        @Nullable Object lastId) {
         if (setClauses.isEmpty() && expressionSetClauses.isEmpty()) {
             throw new IllegalStateException("At least one set() clause is required");
         }
@@ -488,9 +562,9 @@ public class UpdateSpec<T> extends AbstractBulkOperationSpec<T, UpdateSpec<T>> {
         CriteriaQuery<?> idQuery = cb.createQuery();
         Root<T> idRoot = idQuery.from(entityClass);
         idQuery.select(idRoot.get(idFieldName));
+        List<Predicate> predicateList = new ArrayList<>();
         Predicate[] predicates = buildPredicates(idRoot, cb);
         if (predicates.length == 0) {
-            // 与 updateAll() 保持一致的安全检查
             if (!allowUnconditional) {
                 throw new IllegalStateException("No WHERE conditions specified for UPDATE operation. "
                     + "Call .allowUnconditional(true) to explicitly confirm this operation, "
@@ -498,8 +572,17 @@ public class UpdateSpec<T> extends AbstractBulkOperationSpec<T, UpdateSpec<T>> {
             }
             log.warn("WARNING: Executing limited UPDATE without conditions on {} — this will affect up to {} rows!",
                 entityClass.getSimpleName(), limit);
+        } else {
+            for (Predicate p : predicates) {
+                predicateList.add(p);
+            }
         }
-        idQuery.where(predicates.length > 0 ? cb.and(predicates) : cb.conjunction());
+        // 游标条件：WHERE id > lastId，跳过已处理的行
+        if (lastId != null) {
+            predicateList.add(cb.greaterThan(idRoot.get(idFieldName), (Comparable)lastId));
+        }
+        idQuery.where(predicateList.isEmpty() ? cb.conjunction() : cb.and(predicateList.toArray(new Predicate[0])));
+        idQuery.orderBy(cb.asc(idRoot.get(idFieldName)));
         TypedQuery<?> query = em.createQuery(idQuery);
         query.setMaxResults(limit);
         if (pessimisticLock) {
@@ -521,10 +604,6 @@ public class UpdateSpec<T> extends AbstractBulkOperationSpec<T, UpdateSpec<T>> {
         applyVersionIncrement(update, updateRoot, cb);
         update.where(InClauseBuilder.in(cb, updateRoot.get(idFieldName), ids));
         var uq = em.createQuery(update);
-        // ponytail: TOCTOU 防护——SELECT 和 UPDATE 在同一 RESOURCE_LOCAL 事务中执行。
-        // SELECT 使用 PESSIMISTIC_WRITE 锁定匹配行，事务内的 UPDATE 会等待这些行锁释放，
-        // 有效序列化 SELECT 和 UPDATE 操作。当 pessimisticLock=false 时无此保护，
-        // 并发事务可能在 SELECT 和 UPDATE 之间修改/删除行。
         int updated = uq.executeUpdate();
         if (updated > 0) {
             em.flush();
