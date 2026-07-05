@@ -551,6 +551,7 @@ public class MyJpaPlusAutoConfiguration {
         registry.register("SoftDeleteContext", SoftDeleteContext::reset);
         registry.register("EntityManagerHelper", EntityManagerHelper::reset);
         registry.register("SoftDeleteHelper event publisher", () -> SoftDeleteBulkExecutor.setEventPublisher(null));
+        registry.register("GlobalConfigHolder", GlobalConfigHolder::reset);
         if (applicationContext != null) {
             registry.register("CacheAdapter", () -> {
                 CacheAdapter cacheAdapter = applicationContext.getBean(CacheAdapter.class);

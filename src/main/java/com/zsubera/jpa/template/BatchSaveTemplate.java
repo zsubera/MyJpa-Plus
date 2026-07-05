@@ -150,17 +150,54 @@ class BatchSaveTemplate {
     <T> List<T> saveAllBatchedInSeparateTransactions(Iterable<T> entities, int batchSize) {
         ArrayList<T> result = new ArrayList<>();
         ArrayList<T> batch = new ArrayList<>();
-        for (T entity : entities) {
-            batch.add(entity);
-            if (batch.size() >= batchSize) {
-                result.addAll(executeBatchSave(batch));
-                batch.clear();
+        int batchNumber = 0;
+        try {
+            for (T entity : entities) {
+                batch.add(entity);
+                if (batch.size() >= batchSize) {
+                    result.addAll(executeBatchSave(batch));
+                    batch.clear();
+                    batchNumber++;
+                }
             }
-        }
-        if (!batch.isEmpty()) {
-            result.addAll(executeBatchSave(batch));
+            if (!batch.isEmpty()) {
+                result.addAll(executeBatchSave(batch));
+            }
+        } catch (RuntimeException e) {
+            throw new PartialBatchCommitException(batchNumber, result.size(), result, e);
         }
         return result;
+    }
+
+    /**
+     * 独立事务批量保存部分提交异常。当某批在独立事务中提交失败时抛出，
+     * 携带已成功提交的实体列表，便于调用方了解部分提交状态。
+     */
+    static class PartialBatchCommitException extends RuntimeException {
+        private final int completedBatches;
+        private final int committedEntities;
+        private final List<?> committedResults;
+
+        PartialBatchCommitException(int completedBatches, int committedEntities,
+            List<?> committedResults, Throwable cause) {
+            super("Batch save failed after " + completedBatches + " batches committed "
+                + committedEntities + " entities. Remaining entities were NOT committed.", cause);
+            this.completedBatches = completedBatches;
+            this.committedEntities = committedEntities;
+            this.committedResults = committedResults;
+        }
+
+        public int getCompletedBatches() {
+            return completedBatches;
+        }
+
+        public int getCommittedEntities() {
+            return committedEntities;
+        }
+
+        public List<?> getCommittedResults() {
+            return committedResults;
+        }
     }
 
     private <T> List<T> executeBatchSave(List<T> batch) {

@@ -270,14 +270,15 @@ public class EncryptConverter implements AttributeConverter<String, String> {
             return version + ":" + Base64.getEncoder().encodeToString(combined);
         } catch (GeneralSecurityException e) {
             // ponytail: intentionally discard cipher — doFinal failure may leave
-            // cipher in an inconsistent state. init() resets on reuse, but defensive
-            // discard eliminates the window entirely.
+            // cipher in an inconsistent state. Mark returned so finally block
+            // does not recycle it back to the pool.
+            cipherReturned = true;
             log.error("Encryption failed", e);
             throw new MyJpaPlusException("Failed to encrypt value. Check encryption key configuration.", e);
         } finally {
-            // ponytail: return cipher on RuntimeException paths (e.g. IllegalArgumentException
-            // from init()) to prevent pool depletion. init() was never completed successfully,
-            // so the cipher is in a clean state and safe to reuse.
+            // ponytail: return cipher only on non-crypto-failure paths (e.g. IllegalArgumentException
+            // from init()) to prevent pool depletion. On GeneralSecurityException from doFinal(),
+            // cipherReturned is set to true above to discard the compromised cipher.
             if (!cipherReturned) {
                 returnCipher(cipher);
             }
@@ -348,6 +349,7 @@ public class EncryptConverter implements AttributeConverter<String, String> {
                 return new String(decrypted, StandardCharsets.UTF_8);
             } catch (GeneralSecurityException e) {
                 // ponytail: discard cipher on exception — same rationale as encrypt path.
+                cipherReturned = true;
                 throw e;
             } finally {
                 if (!cipherReturned) {

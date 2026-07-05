@@ -110,6 +110,10 @@ public class MyJpaPlusException extends RuntimeException {
         if (message != null) {
             sb.append(": ").append(message);
         }
+        Throwable cause = getCause();
+        if (cause != null) {
+            sb.append(" <-- ").append(cause);
+        }
         return sb.toString();
     }
 

@@ -354,23 +354,30 @@ public final class EntityCodeGenerator {
         return Character.toUpperCase(name.charAt(0)) + name.substring(1);
     }
 
-    private static void appendExtraImports(StringBuilder sb, List<ColumnDef> columns) {
-        boolean needsBigDecimal = columns.stream().anyMatch(c -> "BigDecimal".equals(c.javaType()));
-        boolean needsLocalDate = columns.stream().anyMatch(c -> "LocalDate".equals(c.javaType()));
-        boolean needsLocalDateTime = columns.stream().anyMatch(c -> "LocalDateTime".equals(c.javaType()));
-        boolean needsInstant = columns.stream().anyMatch(c -> "Instant".equals(c.javaType()));
+    private static final java.util.Map<String, String> TYPE_IMPORTS = java.util.Map.ofEntries(
+        java.util.Map.entry("BigDecimal", "java.math.BigDecimal"),
+        java.util.Map.entry("BigInteger", "java.math.BigInteger"),
+        java.util.Map.entry("LocalDate", "java.time.LocalDate"),
+        java.util.Map.entry("LocalDateTime", "java.time.LocalDateTime"),
+        java.util.Map.entry("LocalTime", "java.time.LocalTime"),
+        java.util.Map.entry("Instant", "java.time.Instant"),
+        java.util.Map.entry("Date", "java.util.Date"),
+        java.util.Map.entry("UUID", "java.util.UUID"),
+        java.util.Map.entry("URI", "java.net.URI"),
+        java.util.Map.entry("URL", "java.net.URL"),
+        java.util.Map.entry("byte[]", "byte[]"),
+        java.util.Map.entry("Byte[]", "java.lang.Byte[]"));
 
-        if (needsBigDecimal) {
-            sb.append("import java.math.BigDecimal;\n");
+    private static void appendExtraImports(StringBuilder sb, List<ColumnDef> columns) {
+        java.util.Set<String> imports = new java.util.LinkedHashSet<>();
+        for (ColumnDef col : columns) {
+            String fqn = TYPE_IMPORTS.get(col.javaType());
+            if (fqn != null && !fqn.equals("byte[]")) {
+                imports.add(fqn);
+            }
         }
-        if (needsLocalDate) {
-            sb.append("import java.time.LocalDate;\n");
-        }
-        if (needsLocalDateTime) {
-            sb.append("import java.time.LocalDateTime;\n");
-        }
-        if (needsInstant) {
-            sb.append("import java.time.Instant;\n");
+        for (String fqn : imports) {
+            sb.append("import ").append(fqn).append(";\n");
         }
     }
 

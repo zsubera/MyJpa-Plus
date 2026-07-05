@@ -85,9 +85,14 @@ public class CacheInvalidationListener {
 
     private void evictByEntity(String entityName, String reason) {
         String prefix = entityName + ":";
-        int evicted = cacheAdapter.evictByPrefix(prefix);
-        if (evicted > 0) {
-            log.debug("Cache invalidated ({}): {} entries evicted for entity '{}'", reason, evicted, entityName);
+        try {
+            int evicted = cacheAdapter.evictByPrefix(prefix);
+            if (evicted > 0) {
+                log.debug("Cache invalidated ({}): {} entries evicted for entity '{}'", reason, evicted, entityName);
+            }
+        } catch (Exception e) {
+            log.warn("Cache eviction failed for entity '{}' ({}): {}. Cached queries may be stale until TTL expires.",
+                entityName, reason, e.getMessage());
         }
     }
 }

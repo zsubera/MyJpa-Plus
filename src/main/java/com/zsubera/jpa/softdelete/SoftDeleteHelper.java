@@ -536,8 +536,8 @@ public final class SoftDeleteHelper {
                     try {
                         field.setAccessible(true);
                     } catch (SecurityException e) {
-                        // ponytail: 缓存失败结果，避免每次调用重复扫描和抛出异常（DoS 放大风险）。
-                        // 返回字段名但记录错误——调用方会在 getField() 时再次遇到 SecurityException。
+                        // ponytail: 返回字段名而非 sentinel——调用方会在 getField() 时再次遇到 SecurityException。
+                        // 若返回 NO_FIELD_SENTINEL，findSoftDeleteField() 会返回 null，导致软删除过滤被永久禁用。
                         String moduleName = cls.getModule() != null ? cls.getModule().getName() : "unnamed";
                         String pkg = cls.getPackageName();
                         log.error(
@@ -545,7 +545,7 @@ public final class SoftDeleteHelper {
                                 + "Solutions: 1) Add to module-info.java: opens {}; "
                                 + "2) JVM: --add-opens {}/{}=ALL-UNNAMED; " + "3) Use public getter/setter.",
                             field.getName(), cls.getSimpleName(), moduleName, pkg, pkg, moduleName, pkg);
-                        return NO_FIELD_SENTINEL;
+                        return field.getName();
                     }
                     return field.getName();
                 }

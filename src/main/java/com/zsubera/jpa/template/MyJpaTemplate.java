@@ -390,7 +390,7 @@ public class MyJpaTemplate implements MyJpaTemplateOperations {
         // ponytail: Sort.toString() 可能很长（复杂排序），使用定长编码避免缓存键膨胀
         String sortPart;
         org.springframework.data.domain.Sort sort = spec.getSort();
-        if (sort.isSorted()) {
+        if (sort != null && sort.isSorted()) {
             StringBuilder sb = new StringBuilder();
             for (org.springframework.data.domain.Sort.Order o : sort) {
                 sb.append(o.getProperty()).append(o.isAscending() ? 'A' : 'D').append(',');
@@ -1060,7 +1060,15 @@ public class MyJpaTemplate implements MyJpaTemplateOperations {
                 "Pageable.unpaged() used with pagination method - applying maxResults limit ({}). "
                     + "Consider using findAll() with explicit maxResults or findAllStream() for large datasets.",
                 resolveMaxResults());
-            TypedQuery<T> typedQuery = buildSpecificationQuery(entityClass, spec, null, resolveMaxResults());
+            Specification<T> dataSpec = spec;
+            String sdField = com.zsubera.jpa.softdelete.SoftDeleteHelper.findSoftDeleteField(entityClass);
+            boolean autoFilter = com.zsubera.jpa.autoconfigure.GlobalConfigHolder.getConfig() != null
+                && com.zsubera.jpa.autoconfigure.GlobalConfigHolder.getConfig().isSoftDeleteAutoFilter();
+            if (sdField != null && autoFilter && !com.zsubera.jpa.repository.SoftDeleteContext.isIgnoreSoftDelete()) {
+                Specification<T> sdSpec = com.zsubera.jpa.softdelete.SoftDeleteHelper.isNotDeleted(entityClass);
+                dataSpec = spec != null ? spec.and(sdSpec) : sdSpec;
+            }
+            TypedQuery<T> typedQuery = buildSpecificationQuery(entityClass, dataSpec, null, resolveMaxResults());
             if (querySpec != null) {
                 querySpec.applyQuerySettings(typedQuery);
             }
@@ -1073,8 +1081,16 @@ public class MyJpaTemplate implements MyJpaTemplateOperations {
         // 计数查询
         long total = QueryBuildHelper.executeCountQuery(entityManager, entityClass, spec);
 
-        // 数据查询 - 复用 buildSpecificationQuery 避免重复的查询构建逻辑
-        TypedQuery<T> query = buildSpecificationQuery(entityClass, spec, pageable.getSort(), pageable.getPageSize());
+        // 数据查询 - 与计数查询保持一致的软删除过滤
+        Specification<T> dataSpec = spec;
+        String sdField = com.zsubera.jpa.softdelete.SoftDeleteHelper.findSoftDeleteField(entityClass);
+        boolean autoFilter = com.zsubera.jpa.autoconfigure.GlobalConfigHolder.getConfig() != null
+            && com.zsubera.jpa.autoconfigure.GlobalConfigHolder.getConfig().isSoftDeleteAutoFilter();
+        if (sdField != null && autoFilter && !com.zsubera.jpa.repository.SoftDeleteContext.isIgnoreSoftDelete()) {
+            Specification<T> sdSpec = com.zsubera.jpa.softdelete.SoftDeleteHelper.isNotDeleted(entityClass);
+            dataSpec = spec != null ? spec.and(sdSpec) : sdSpec;
+        }
+        TypedQuery<T> query = buildSpecificationQuery(entityClass, dataSpec, pageable.getSort(), pageable.getPageSize());
         try {
             query.setFirstResult(Math.toIntExact(pageable.getOffset()));
         } catch (ArithmeticException e) {

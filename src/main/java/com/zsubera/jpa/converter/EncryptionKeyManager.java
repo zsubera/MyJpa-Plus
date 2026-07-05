@@ -319,11 +319,28 @@ final class EncryptionKeyManager {
                     + "EncryptConverter requires a key to function.");
             } else {
                 String key = (keyEnv != null && !keyEnv.isEmpty()) ? keyEnv : keyProp;
-                int byteLength = key.getBytes(StandardCharsets.UTF_8).length;
-                if (byteLength < MIN_KEY_LENGTH) {
-                    throw new MyJpaPlusException(
-                        "Encryption key must be at least " + MIN_KEY_LENGTH + " bytes (UTF-8 encoded). "
-                            + "Current byte length: " + byteLength + " (character length: " + key.length() + ").");
+                if (MULTI_KEY_PATTERN.matcher(key).matches()) {
+                    String[] entries = key.split(",");
+                    for (String entry : entries) {
+                        int colonIdx = entry.indexOf(':');
+                        if (colonIdx >= 0 && colonIdx < entry.length() - 1) {
+                            String rawValue = entry.substring(colonIdx + 1).trim();
+                            int byteLen = rawValue.getBytes(StandardCharsets.UTF_8).length;
+                            if (byteLen < MIN_KEY_LENGTH) {
+                                String version = entry.substring(0, colonIdx).trim();
+                                throw new MyJpaPlusException(
+                                    "Encryption key for version '" + version + "' must be at least "
+                                        + MIN_KEY_LENGTH + " bytes (UTF-8 encoded). Current: " + byteLen + " bytes.");
+                            }
+                        }
+                    }
+                } else {
+                    int byteLength = key.getBytes(StandardCharsets.UTF_8).length;
+                    if (byteLength < MIN_KEY_LENGTH) {
+                        throw new MyJpaPlusException(
+                            "Encryption key must be at least " + MIN_KEY_LENGTH + " bytes (UTF-8 encoded). "
+                                + "Current byte length: " + byteLength + " (character length: " + key.length() + ").");
+                    }
                 }
                 if (keyProp != null && !keyProp.isEmpty() && (keyEnv == null || keyEnv.isEmpty())) {
                     log.warn("SECURITY: Encryption key configured via system property '{}'. "

@@ -2,7 +2,6 @@ package com.zsubera.jpa.template;
 
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
-import com.github.benmanes.caffeine.cache.Expiry;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -60,6 +59,9 @@ public class QueryCacheManager implements CacheAdapter {
     /** 缓存键最大长度限制，防止恶意超长键导致内存问题 */
     private static final int MAX_KEY_LENGTH = 1024;
 
+    /** 哨兵对象，用于在 Caffeine 的 get(key, mappingFunction) 中表示 null 结果 */
+    private static final Object NULL_SENTINEL = new Object();
+
     /** 缓存命中计数 */
     private final AtomicLong hitCount = new AtomicLong(0);
 
@@ -69,13 +71,38 @@ public class QueryCacheManager implements CacheAdapter {
     /**
      * Caffeine 缓存实例。
      * <p>
-     * 使用 {@link Expiry} 实现 per-entry TTL，每次访问时重新计算剩余过期时间。
+     * 使用 {@link CachedValue} 包装器实现 per-entry TTL，每次访问时检查过期状态。
      * Caffeine 内部使用 W-TinyLFU 驱逐算法，在容量超限时自动驱逐低频访问条目。
      */
     private final Cache<String, Object> cache;
 
     /** 最大缓存条目数（用于 getMaxEntries/setMaxEntries） */
     private volatile int maxEntries;
+
+    /** 内部缓存值包装器，记录写入时间戳以支持 per-entry TTL 过期 */
+    private record CachedValue(Object value, long writeTimeNanos, long ttlNanos) {
+        boolean isExpired() {
+            return System.nanoTime() - writeTimeNanos >= ttlNanos;
+        }
+    }
+
+    private Object packWithTtl(Object value, long ttlSeconds) {
+        return new CachedValue(value, System.nanoTime(), TimeUnit.SECONDS.toNanos(ttlSeconds));
+    }
+
+    @SuppressWarnings("unchecked")
+    private <T> T unpackIfPresent(Object cached) {
+        if (cached == NULL_SENTINEL) {
+            return null;
+        }
+        if (cached instanceof CachedValue cv) {
+            if (cv.isExpired()) {
+                return null;
+            }
+            return (T) cv.value();
+        }
+        return (T) cached;
+    }
 
     /**
      * 创建使用默认最大条目数的 QueryCacheManager。
@@ -141,18 +168,18 @@ public class QueryCacheManager implements CacheAdapter {
     @Override
     @SuppressWarnings("unchecked")
     public <T> T get(String key) {
-        Object value = cache.getIfPresent(key);
+        Object cached = cache.getIfPresent(key);
+        T value = unpackIfPresent(cached);
         if (value == null) {
             missCount.incrementAndGet();
             return null;
         }
         hitCount.incrementAndGet();
-        T typed = (T) value;
         // ponytail: 返回 List 的防御性拷贝，防止调用者修改返回值破坏缓存数据一致性
-        if (typed instanceof List<?> list) {
+        if (value instanceof List<?> list) {
             return (T) new ArrayList<>(list);
         }
-        return typed;
+        return value;
     }
 
     /**
@@ -183,7 +210,7 @@ public class QueryCacheManager implements CacheAdapter {
                 key.substring(0, 64));
             return false;
         }
-        cache.put(key, value);
+        cache.put(key, packWithTtl(value, ttlSeconds));
         log.debug("Cache put for key: {} (ttl={}s)", key, ttlSeconds);
         return true;
     }
@@ -204,13 +231,17 @@ public class QueryCacheManager implements CacheAdapter {
      */
     @SuppressWarnings("unchecked")
     public <T> T computeIfAbsent(String key, java.util.function.Supplier<T> loader, long ttlSeconds) {
-        T cached = get(key);
-        if (cached != null) {
-            return cached;
-        }
-        T value = loader.get();
-        if (value != null) {
-            put(key, value, ttlSeconds);
+        // Use Caffeine's atomic get(key, mappingFunction) for stampede protection:
+        // when multiple threads request the same uncached key concurrently, only one executes the loader.
+        Object cached = cache.get(key, k -> {
+            T loaded = loader.get();
+            return loaded != null ? packWithTtl(loaded, ttlSeconds) : NULL_SENTINEL;
+        });
+        T value = unpackIfPresent(cached);
+        if (value == null) {
+            missCount.incrementAndGet();
+        } else {
+            hitCount.incrementAndGet();
         }
         return value;
     }

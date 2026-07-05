@@ -95,13 +95,15 @@ class QueryCacheManagerLoadLockTest {
 
     @Test
     void computeIfAbsent_afterEviction_reloadsFromLoader() {
-        // Put with 0 TTL to force immediate expiry
-        cache.computeIfAbsent("expire-key", () -> 999, 0);
+        // Put a value, then evict it explicitly
+        cache.computeIfAbsent("expire-key", () -> 999, 60);
+        assertEquals(999, (int) cache.get("expire-key"));
 
-        // Verify it's expired
+        // Evict
+        cache.evict("expire-key");
         assertNull(cache.get("expire-key"));
 
-        // Should reload
+        // Should reload from loader with new value
         Integer result = cache.computeIfAbsent("expire-key", () -> 777, 60);
         assertEquals(777, result);
     }

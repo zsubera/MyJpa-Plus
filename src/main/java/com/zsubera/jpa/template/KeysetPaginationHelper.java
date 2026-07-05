@@ -83,6 +83,12 @@ final class KeysetPaginationHelper {
         // First page: no cursor values → skip keyset predicate
         boolean isFirstPage = lastSortValues == null || lastSortValues.length == 0;
 
+        if (!isFirstPage && lastSortValues.length != orders.size()) {
+            throw new IllegalArgumentException(
+                "Cursor array length (" + lastSortValues.length + ") must match sort order count ("
+                    + orders.size() + "). Sort: " + sort);
+        }
+
         CriteriaBuilder cb = entityManager.getCriteriaBuilder();
         CriteriaQuery<T> cq = cb.createQuery(entityClass);
         Root<T> root = cq.from(entityClass);

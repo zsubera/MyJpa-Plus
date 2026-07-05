@@ -193,23 +193,23 @@ final class CacheKeyBuilder {
      * 将值的哈希码写入缓存键，而非原始值。防止密码、token 等敏感数据泄露到缓存键中。
      * 包含类型信息和内容哈希以减少碰撞概率。
      *
-     * <p>使用 SHA-256 的前 8 字节（64-bit）作为哈希值。64-bit 哈希的生日碰撞上界为 ~2^32，
-     * 对于百万级缓存条目，碰撞概率可忽略。相比原 CRC32C（32-bit，碰撞上界 ~2^16）大幅提升安全性。</p>
+     * <p>使用 FNV-1a 64-bit 非加密哈希。64-bit 哈希的生日碰撞上界为 ~2^32，
+     * 对于百万级缓存条目，碰撞概率可忽略。</p>
      */
     private static void appendHashedValue(StringBuilder sb, Object value) {
         if (value instanceof String s) {
             sb.append("S[").append(s.length()).append(":").append(Long.toUnsignedString(hash64(s))).append("]");
         } else if (value instanceof Object[] arr) {
-            sb.append("A[").append(arr.length).append(":").append(java.util.Arrays.deepHashCode(arr)).append("]");
+            sb.append("A[").append(arr.length).append(":").append(Long.toUnsignedString(hashObjectArray(arr))).append("]");
         } else if (value instanceof int[] arr) {
-            sb.append("AI[").append(arr.length).append(":").append(java.util.Arrays.hashCode(arr)).append("]");
+            sb.append("AI[").append(arr.length).append(":").append(Long.toUnsignedString(hashIntArray(arr))).append("]");
         } else if (value instanceof long[] arr) {
-            sb.append("AL[").append(arr.length).append(":").append(java.util.Arrays.hashCode(arr)).append("]");
+            sb.append("AL[").append(arr.length).append(":").append(Long.toUnsignedString(hashLongArray(arr))).append("]");
         } else if (value instanceof double[] arr) {
-            sb.append("AD[").append(arr.length).append(":").append(java.util.Arrays.hashCode(arr)).append("]");
+            sb.append("AD[").append(arr.length).append(":").append(Long.toUnsignedString(hashDoubleArray(arr))).append("]");
         } else if (value.getClass().isArray()) {
             sb.append("AX[").append(value.getClass().getSimpleName()).append(":")
-                .append(java.util.Arrays.deepHashCode(new Object[] {value})).append("]");
+                .append(Long.toUnsignedString(hashObjectArray(new Object[] {value}))).append("]");
         } else {
             String s = String.valueOf(value);
             sb.append("N[").append(value.getClass().getName()).append(":").append(Long.toUnsignedString(hash64(s)))
@@ -218,14 +218,54 @@ final class CacheKeyBuilder {
     }
 
     /**
-     * ponytail: 使用 FNV-1a 非加密哈希替代 SHA-256，性能提升 ~100x。
-     * 缓存键不需要加密安全性，FNV-1a 碰撞率足够低。
+     * FNV-1a 64-bit 非加密哈希，用于缓存键生成。
      */
     private static long hash64(String s) {
         long hash = 0xcbf29ce484222325L; // FNV offset basis
         for (int i = 0; i < s.length(); i++) {
             hash ^= s.charAt(i);
             hash *= 0x100000001b3L; // FNV prime
+        }
+        return hash;
+    }
+
+    private static long hashObjectArray(Object[] arr) {
+        long hash = 0xcbf29ce484222325L;
+        for (Object o : arr) {
+            String s = String.valueOf(o);
+            for (int i = 0; i < s.length(); i++) {
+                hash ^= s.charAt(i);
+                hash *= 0x100000001b3L;
+            }
+            hash ^= 0x9e3779b97f4a7c15L; // per-element separator
+            hash *= 0x100000001b3L;
+        }
+        return hash;
+    }
+
+    private static long hashIntArray(int[] arr) {
+        long hash = 0xcbf29ce484222325L;
+        for (int v : arr) {
+            hash ^= v;
+            hash *= 0x100000001b3L;
+        }
+        return hash;
+    }
+
+    private static long hashLongArray(long[] arr) {
+        long hash = 0xcbf29ce484222325L;
+        for (long v : arr) {
+            hash ^= v;
+            hash *= 0x100000001b3L;
+        }
+        return hash;
+    }
+
+    private static long hashDoubleArray(double[] arr) {
+        long hash = 0xcbf29ce484222325L;
+        for (double v : arr) {
+            hash ^= Double.doubleToLongBits(v);
+            hash *= 0x100000001b3L;
         }
         return hash;
     }

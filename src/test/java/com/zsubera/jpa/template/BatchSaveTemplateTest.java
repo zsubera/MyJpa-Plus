@@ -192,8 +192,9 @@ class BatchSaveTemplateTest {
 
     @Test
     void testSaveAllBatchedInSeparateTransactionsNullEntities() {
-        assertThrows(NullPointerException.class,
+        var ex = assertThrows(BatchSaveTemplate.PartialBatchCommitException.class,
             () -> batchSaveTemplate.saveAllBatchedInSeparateTransactions(null, 10));
+        assertInstanceOf(NullPointerException.class, ex.getCause());
     }
 
     @Test
