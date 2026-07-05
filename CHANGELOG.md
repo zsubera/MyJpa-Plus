@@ -5,30 +5,25 @@
 
 ## [未发布]
 
-### 新增
-- **QuerySpec 投影查询** — `select()` 选择字段、`selectAs()` 自定义别名、`asDto()` 构造函数 DTO 映射，通过 `repository.findAll(spec)` 或 `template.find(entityClass, spec)` 执行
-- **聚合函数支持** — `QuerySpec.count()`/`sum()`/`avg()`/`max()`/`min()` 静态方法，可在投影查询中直接使用
-- **DTO 按名称匹配** — 使用 record 组件名或 `-parameters` 编译参数名自动匹配 DTO 构造参数，无需按位置对应
-- **自动配置防御** — `RepositoryBaseClassPostProcessor` 增加 bean 级 try-catch 和启动日志，单个仓库初始化失败不阻断全局启动
-
 ### 变更
-- **移除 SpotBugs 插件** — 从 pom.xml 中移除 `spotbugs-maven-plugin`，保留 `@SuppressFBWarnings` 注解
-
-### 删除
-- **ProjectionSpec** — 已从代码库完全移除，生产代码已迁移至 `QueryProjectionSupport`
-- **ProjectionSpec 集成测试** — 移除 31 个使用已删除 `ProjectionSpec` API 的集成测试方法
+- **Caffeine 缓存统一** — 全部手写缓存实现替换为 Caffeine，消除约 1000 行手写缓存代码
+  - `SampledEvictionCache`：内部实现从 ConcurrentHashMap + 采样驱逐改为 Caffeine（13+ 处引用）
+  - `QueryCacheManager`：从 847 行手写实现缩减为 ~300 行 Caffeine 后端
+  - `EncryptionKeyManager`：密钥缓存从 ConcurrentHashMap + RWLock + 手动 LRU 改为 Caffeine
+  - `DialectDetector`：方言缓存从 ConcurrentHashMap + 手动驱逐改为 Caffeine
+  - `QueryMetricsCollector`：指标存储从 ConcurrentHashMap + 手动驱逐改为 Caffeine
+  - 13 处 `ConcurrentReferenceHashMap` 弱引用缓存替换为 `Caffeine.newBuilder().weakKeys()`
+  - 移除 `EncryptionKeyManager` 中的 `ReentrantReadWriteLock` 和手动 LRU 淘汰逻辑
+- **依赖更新** — 新增 Caffeine 3.1.8（由 Spring Boot BOM 管理版本）
 
 ### 修复
-- **EncryptConverter Cipher 池异常路径泄漏** — `convertToDatabaseColumn()` 和 `convertToEntityAttribute()` 的 `catch` 块中补充 `returnCipher(cipher)`，确保 `cipher.init()` 或 `cipher.doFinal()` 抛出 `GeneralSecurityException` 时 Cipher 对象归还到池中，防止反复失败后池耗尽
-- **EncryptConverter Cipher 池状态污染** — 移除 `finally` 块中对失败 Cipher 的返回调用，防止 `init()` 或 `doFinal()` 失败后损坏的 Cipher 被返回池中污染后续操作
-- **CodeEnumType assemble() trim 不匹配** — `assemble()` 从二级缓存读取时添加 `.trim()`，与 `getOrBuildCodeMap()` 中的 key 构建逻辑保持一致，修复字符型枚举 code 含空格时的反序列化失败
-- **SqlSanitizer ReDoS 防护** — `DOLLAR_QUOTE_PATTERN` 和 `Q_QUOTE_CHAR_PATTERN` 添加最大长度限制 `{0,4096}`，防止反向引用配合惰性量词在恶意输入下导致二次指数级回溯
+- **EncryptConverter Cipher 池 RuntimeException 泄漏** — `cipher.init()` 抛出 `IllegalArgumentException` 等 RuntimeException 时 Cipher 未归还池中，添加 `cipherReturned` 标志位确保所有异常路径归还
+- **DefaultMyJpaRepository 批量操作忽略 AUTO_FILTER_OVERRIDE** — `update()` 和 `delete()` 默认方法未检查 ThreadLocal 覆盖值，覆写为委托 `shouldApplySoftDeleteFilter()`
+- **SoftDeleteHelper.isSoftDeleted NPE 防御** — 弱引用缓存驱逐重建时 annotation 可能为 null，添加防御性检查回退到 Boolean 类型判断
 
 ### 测试
-- **SlowQueryDataSourceProxy 单元测试** — 19 个测试覆盖代理创建、`isWrapped` 检测、监听器生命周期（注册/移除/通知/异常隔离）、PreparedStatement 代理包装与批处理计数、`InvocationTargetException` 解包
-- **SqlSanitizer 补充测试** — 34 个测试覆盖 PostgreSQL E-字符串、MySQL 双引号字符串、Oracle Q-引号单字符分隔符、美元引用字符串边界情况
-- **CodeEnumHelper 单元测试** — 11 个测试覆盖 `resolveCodeField` 带注解/无注解枚举、缓存行为、`hasCodeEnumValue`
-- **QueryHavingSupport 单元测试** — 32 个测试覆盖 `having(BiFunction)`/`having(Function)`、`addHavingCondition` 空值校验、运算符白名单校验、`applyHaving` 空 GROUP BY 守卫
+- **SampledEvictionCacheTest 更新** — 适配 Caffeine 行为（lazy eviction、estimatedSize 近似值）
+- **LambdaUtilsTest 更新** — 适配 Caffeine 缓存驱逐行为
 
 ## [1.3.0] - 2026-07-04
 

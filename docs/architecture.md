@@ -41,7 +41,7 @@ com.zsubera.jpa
 ├── template/          # 查询执行与缓存
 │   ├── MyJpaTemplate    — 主查询/批量模板（Spring Bean）
 │   ├── MyJpaTemplateOperations — 模板操作接口（Lambda 查询重载）
-│   ├── QueryCacheManager — 基于 ConcurrentHashMap 的 TTL 缓存（实现 CacheAdapter）
+│   ├── QueryCacheManager — 基于 Caffeine 的 TTL 缓存（实现 CacheAdapter）
 │   ├── CacheAdapter     — 可插拔缓存后端 SPI
 │   ├── CacheInvalidationListener — 实体修改后自动驱逐缓存
 │   ├── BulkOperationTemplate — 带事务管理的批量执行
@@ -109,7 +109,7 @@ com.zsubera.jpa
     ├── LambdaUtils        — SerializedLambda → 属性名提取
     ├── IdentifierValidator — SQL 标识符验证 + Unicode 同形字符检测
     ├── InClauseBuilder    — IN/NOT IN 子句自动分批
-    ├── SampledEvictionCache — 基于 ConcurrentHashMap 的采样驱逐缓存
+    ├── SampledEvictionCache — 基于 Caffeine 的有界缓存工具类
     ├── CacheEvictionHelper — L1 缓存选择性驱逐
     ├── PageableHelper     — 分页参数辅助工具
     └── EntityClassResolver / StringHelper / EntityGraphHelper
@@ -286,10 +286,10 @@ IN 子句硬限制:        5,000 参数（可配置）
 | SoftDeleteContext | 是 | ThreadLocal<Integer> 计数器 |
 | EntityManagerHelper | 是 | ConcurrentHashMap + volatile 字段 |
 | SoftDeleteBulkExecutor | 是 | 无状态（纯静态方法，无共享可变状态） |
-| QueryCacheManager | 是 | ConcurrentHashMap + ReentrantLock.tryLock() |
-| DialectDetector | 是 | ConcurrentHashMap 缓存 |
+| QueryCacheManager | 是 | Caffeine 内置 segment 锁 |
+| DialectDetector | 是 | Caffeine 缓存 |
 | EncryptConverter | 是 | ConcurrentLinkedDeque Cipher 对象池（有界，64 容量），borrow/return 原子操作，异常路径 catch 块归还 |
 | InClauseBuilder | 是 | AtomicReference<Config> |
-| LambdaUtils | 是 | SampledEvictionCache（基于 ConcurrentHashMap） |
+| LambdaUtils | 是 | Caffeine 缓存（SampledEvictionCache 后端） |
 | IdentifierValidator | 是 | Volatile 标志（仅配置时写入） |
-| SampledEvictionCache | 是 | ConcurrentHashMap + tryLock 驱逐 |
+| SampledEvictionCache | 是 | Caffeine 内置并发安全 |

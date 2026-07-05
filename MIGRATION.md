@@ -1,5 +1,26 @@
 # 升级指南
 
+## 从 1.3.0 升级到 1.3.1
+
+### 依赖变更
+
+- **新增 Caffeine** — `com.github.ben-manes.caffeine:caffeine` 作为 compile 依赖（由 Spring Boot BOM 管理版本）。如果项目已通过 Spring Boot 引入 Caffeine，无额外影响。
+
+### 行为变更
+
+| 变更项 | 旧行为 | 新行为 | 影响 |
+|-------|--------|--------|------|
+| `SampledEvictionCache` | ConcurrentHashMap + 采样驱逐 | Caffeine W-TinyLFU | 驱逐更精确，`evictionTargetRatio`/`samplingInterval` 参数被忽略 |
+| `QueryCacheManager` | 847 行手写实现 | Caffeine 后端 | TTL/大小限制由 Caffeine 自动管理 |
+| `EncryptionKeyManager` | ConcurrentHashMap + RWLock + 手动 LRU | Caffeine | 锁顺序约束移除，`clearCaches()` 简化 |
+| `SampledEvictionCache.setMaxSize()` | 动态调整驱逐门槛 | 重建缓存（丢失现有条目） | 仅在启动初始化阶段调用，实际影响可忽略 |
+
+### 缺陷修复
+
+- **EncryptConverter Cipher 池 RuntimeException 泄漏** — `cipher.init()` 抛出 `IllegalArgumentException` 等未受检异常时 Cipher 未归还池中，添加 `cipherReturned` 标志位确保所有路径归还
+- **DefaultMyJpaRepository 批量操作忽略 AUTO_FILTER_OVERRIDE** — `update()` 和 `delete()` 默认方法未检查 ThreadLocal 覆盖值，已覆写为委托 `shouldApplySoftDeleteFilter()`
+- **SoftDeleteHelper.isSoftDeleted NPE 防御** — 弱引用缓存驱逐重建时 annotation 可能为 null，添加防御性检查
+
 ## 从 1.2.0 升级到 1.3.0
 
 ### 破坏性变更

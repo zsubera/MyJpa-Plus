@@ -20,6 +20,7 @@
 本项目依赖极简：
 
 - **Spring Boot 3.x**（可选，compile 作用域）— 提供 JPA Criteria API 的框架
+- **Caffeine**（compile 作用域）— 高性能缓存库，用于内部缓存实现
 - **Jackson Databind**（可选，compile 作用域）— 用于字段脱敏序列化
 - **SpotBugs Annotations**（可选，compile 作用域）— 静态分析注解
 

@@ -39,7 +39,7 @@
 | 🗑️ | **软删除** — 支持 Boolean/Integer/Enum/String 类型 |
 | 🏗️ | **多数据源** — 按实体类型解析不同的 EntityManagerFactory |
 | ☕ | **Spring Boot 自动配置** — 开箱即用，零配置 |
-| 🔌 | **可插拔缓存** — CacheAdapter SPI 支持注入 Redis/Caffeine 等分布式缓存 |
+| 🔌 | **可插拔缓存** — CacheAdapter SPI 支持注入 Redis 等分布式缓存（默认 Caffeine） |
 
 </div>
 
@@ -292,7 +292,7 @@ boolean deleted = SoftDeleteHelper.isSoftDeleted(User.class, user);
 | SPI / 接口 | 用途 |
 |:---|:---|
 | `DialectStrategy` | 注册自定义 UPSERT SQL 方言，通过 `DialectDetector.registerDialect()` 注册 |
-| `CacheAdapter` | 可插拔查询缓存后端，默认基于 ConcurrentHashMap，可替换为 Redis/Caffeine |
+| `CacheAdapter` | 可插拔查询缓存后端，默认基于 Caffeine，可替换为 Redis 等分布式缓存 |
 | `SoftDeleteBulkExecutor.EventPublisher` | 批量软删除后的缓存失效回调，由自动配置在启动时注册 |
 | `OptimisticLockRetryAdvisor` | 重试策略配置：`maxRetries`、`backoffMs`（系统属性） |
 
