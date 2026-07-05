@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<suppressions xmlns="https://jeremylong.github.io/DependencyCheck/dependency-suppression.1.3.xsd">
+    <suppress>
+        <notes><![CDATA[
+            Spring Boot CVEs applicable only to web/actuator modules.
+            MyJpa-Plus depends only on spring-boot-starter-data-jpa (optional),
+            which does not include the vulnerable web endpoints.
+        ]]></notes>
+        <cve>CVE-2026-40972</cve>
+        <cve>CVE-2026-40973</cve>
+        <cve>CVE-2026-40974</cve>
+        <cve>CVE-2026-40975</cve>
+        <cve>CVE-2026-40977</cve>
+        <cve>CVE-2026-22733</cve>
+    </suppress>
+    <suppress>
+        <notes><![CDATA[
+            Spring Framework CVEs — MyJpa-Plus uses only JPA/Criteria API,
+            not web, WebSocket, or messaging components affected by these CVEs.
+        ]]></notes>
+        <cve>CVE-2026-22740</cve>
+        <cve>CVE-2026-22737</cve>
+        <cve>CVE-2026-22745</cve>
+        <cve>CVE-2026-22741</cve>
+        <cve>CVE-2026-22735</cve>
+    </suppress>
+    <suppress>
+        <notes><![CDATA[
+            Log4j CVEs — not used directly. MyJpa-Plus uses SLF4J/Logback
+            as provided by Spring Boot. The Log4j API jar is a transitive
+            dependency but the runtime implementation is Logback.
+        ]]></notes>
+        <cve>CVE-2025-68161</cve>
+        <cve>CVE-2026-34477</cve>
+        <cve>CVE-2026-34478</cve>
+        <cve>CVE-2026-34479</cve>
+        <cve>CVE-2026-34480</cve>
+        <cve>CVE-2026-34481</cve>
+    </suppress>
+    <suppress>
+        <notes><![CDATA[
+            Angus Activation — used by Jakarta Mail for email functionality.
+            MyJpa-Plus is a JPA library and does not send emails.
+        ]]></notes>
+        <cve>CVE-2025-7962</cve>
+    </suppress>
+</suppressions>

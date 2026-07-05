@@ -1,0 +1,171 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<FindBugsFilter>
+    <!-- Exclude CT_CONSTRUCTOR_THROW for MyJpaTemplate -->
+    <!-- This is a false positive because EntityManager injection is managed by Spring -->
+    <Match>
+        <Class name="com.zsubera.jpa.template.MyJpaTemplate"/>
+        <Bug pattern="CT_CONSTRUCTOR_THROW"/>
+    </Match>
+
+    <!-- Exclude CT_CONSTRUCTOR_THROW for internal condition group builders -->
+    <!-- These classes have package-private constructors with defensive null checks.
+         The constructors are only invoked from within the same package (QuerySpec),
+         so the Finalizer attack risk is not applicable. -->
+    <Match>
+        <Class name="com.zsubera.jpa.spec.JoinGroup"/>
+        <Bug pattern="CT_CONSTRUCTOR_THROW"/>
+    </Match>
+    <Match>
+        <Class name="com.zsubera.jpa.spec.OrGroup"/>
+        <Bug pattern="CT_CONSTRUCTOR_THROW"/>
+    </Match>
+    <Match>
+        <Class name="com.zsubera.jpa.spec.OrJoinGroup"/>
+        <Bug pattern="CT_CONSTRUCTOR_THROW"/>
+    </Match>
+
+    <!-- Exclude CT_CONSTRUCTOR_THROW for MyJpaPlusAutoConfiguration -->
+    <!-- Constructor validates properties before use, and Spring manages the lifecycle -->
+    <Match>
+        <Class name="com.zsubera.jpa.autoconfigure.MyJpaPlusAutoConfiguration"/>
+        <Bug pattern="CT_CONSTRUCTOR_THROW"/>
+    </Match>
+
+    <!-- Exclude CT_CONSTRUCTOR_THROW for SubQuerySpec -->
+    <!-- Static factory method validates parameters before constructor call -->
+    <Match>
+        <Class name="com.zsubera.jpa.spec.SubQuerySpec"/>
+        <Bug pattern="CT_CONSTRUCTOR_THROW"/>
+    </Match>
+
+    <!-- Exclude CT_CONSTRUCTOR_THROW for OrConditionBuilder -->
+    <!-- This class has package-private constructor with defensive null checks.
+         The constructor is only invoked from within the same package (AbstractBulkOperationSpec),
+         so the Finalizer attack risk is not applicable. -->
+    <Match>
+        <Class name="com.zsubera.jpa.update.OrConditionBuilder"/>
+        <Bug pattern="CT_CONSTRUCTOR_THROW"/>
+    </Match>
+
+    <!-- Exclude CT_CONSTRUCTOR_THROW for SqlSlowQueryInterceptor -->
+    <!-- Constructor validates configuration parameters, and the class is managed by the monitoring framework -->
+    <Match>
+        <Class name="com.zsubera.jpa.monitor.SqlSlowQueryInterceptor"/>
+        <Bug pattern="CT_CONSTRUCTOR_THROW"/>
+    </Match>
+
+    <!-- Exclude CT_CONSTRUCTOR_THROW for MergeSpec -->
+    <!-- Constructor validates entityClass parameter; defensive null check is intentional -->
+    <Match>
+        <Class name="com.zsubera.jpa.update.MergeSpec"/>
+        <Bug pattern="CT_CONSTRUCTOR_THROW"/>
+    </Match>
+
+    <!-- Exclude EI_EXPOSE_REP for MyJpaTemplate cacheManager -->
+    <!-- The cacheManager is intentionally exposed for external configuration and management -->
+    <Match>
+        <Class name="com.zsubera.jpa.template.MyJpaTemplate"/>
+        <Bug pattern="EI_EXPOSE_REP"/>
+    </Match>
+    <Match>
+        <Class name="com.zsubera.jpa.template.MyJpaTemplate"/>
+        <Bug pattern="EI_EXPOSE_REP2"/>
+    </Match>
+
+    <!-- Exclude EI_EXPOSE_REP for MyJpaTemplate.KeysetPage -->
+    <!-- The KeysetPage is an immutable value object; exposing its fields is acceptable -->
+    <Match>
+        <Class name="com.zsubera.jpa.template.MyJpaTemplate$KeysetPage"/>
+        <Bug pattern="EI_EXPOSE_REP"/>
+    </Match>
+    <Match>
+        <Class name="com.zsubera.jpa.template.MyJpaTemplate$KeysetPage"/>
+        <Bug pattern="EI_EXPOSE_REP2"/>
+    </Match>
+
+    <!-- Exclude EI_EXPOSE_REP for MyJpaTemplateOperations inner records -->
+    <!-- BatchResult and KeysetPage are immutable value objects; exposing their fields is acceptable -->
+    <Match>
+        <Class name="com.zsubera.jpa.template.MyJpaTemplateOperations$BatchResult"/>
+        <Bug pattern="EI_EXPOSE_REP"/>
+    </Match>
+    <Match>
+        <Class name="com.zsubera.jpa.template.MyJpaTemplateOperations$BatchResult"/>
+        <Bug pattern="EI_EXPOSE_REP2"/>
+    </Match>
+    <Match>
+        <Class name="com.zsubera.jpa.template.MyJpaTemplateOperations$KeysetPage"/>
+        <Bug pattern="EI_EXPOSE_REP"/>
+    </Match>
+    <Match>
+        <Class name="com.zsubera.jpa.template.MyJpaTemplateOperations$KeysetPage"/>
+        <Bug pattern="EI_EXPOSE_REP2"/>
+    </Match>
+
+    <!-- Exclude ST_WRITE_TO_STATIC_FROM_INSTANCE_METHOD for EncryptConverter -->
+    <!-- devSaltWarningLogged is a static volatile flag written from convertToDatabaseColumn()
+         to ensure the one-time warning is logged exactly once across all instances. -->
+    <Match>
+        <Class name="com.zsubera.jpa.converter.EncryptConverter"/>
+        <Bug pattern="ST_WRITE_TO_STATIC_FROM_INSTANCE_METHOD"/>
+    </Match>
+
+    <!-- Exclude REC_CATCH_EXCEPTION for SecurityContextAuditorAware -->
+    <!-- initSecurityReflection() catches Exception to handle ClassNotFoundException,
+         NoSuchMethodException, IllegalAccessException etc. from reflection API. -->
+    <Match>
+        <Class name="com.zsubera.jpa.autoconfigure.MyJpaPlusAutoConfiguration$SecurityContextAuditorAware"/>
+        <Bug pattern="REC_CATCH_EXCEPTION"/>
+    </Match>
+
+    <!-- Exclude JLM_JSR166_UTILCONCURRENT_MONITORENTER for SqlSlowQueryInterceptor -->
+    <!-- Synchronization on PROXY_CLASS_CACHE (ConcurrentMap) is intentional: double-checked locking
+         for periodic cache eviction. The synchronized block only triggers when cache exceeds threshold. -->
+    <Match>
+        <Class name="com.zsubera.jpa.monitor.SqlSlowQueryInterceptor$DataSourceProxyHandler"/>
+        <Bug pattern="JLM_JSR166_UTILCONCURRENT_MONITORENTER"/>
+    </Match>
+
+    <!-- Exclude EI_EXPOSE_REP2 for MyJpaPlusAutoConfiguration -->
+    <!-- Constructor stores Spring-managed properties bean; lifecycle managed by Spring container -->
+    <Match>
+        <Class name="com.zsubera.jpa.autoconfigure.MyJpaPlusAutoConfiguration"/>
+        <Bug pattern="EI_EXPOSE_REP2"/>
+    </Match>
+
+    <!-- Exclude EI_EXPOSE_STATIC_REP2 for QuerySpec.setGlobalConfig -->
+    <!-- One-time startup configuration; MyJpaPlusGlobalConfig fields are effectively immutable after Spring init -->
+    <Match>
+        <Class name="com.zsubera.jpa.spec.QuerySpec"/>
+        <Bug pattern="EI_EXPOSE_STATIC_REP2"/>
+    </Match>
+
+    <!-- Exclude DE_MIGHT_IGNORE + REC_CATCH_EXCEPTION for EntityFieldExtractor static initializer -->
+    <!-- Static block catches specific reflection exceptions (ClassNotFoundException, NoSuchMethodException,
+         InstantiationException, IllegalAccessException, InvocationTargetException) when loading
+         SpringPhysicalNamingStrategy. The multi-catch is correct; SpotBugs false positive. -->
+    <Match>
+        <Class name="com.zsubera.jpa.update.EntityFieldExtractor"/>
+        <Bug pattern="DE_MIGHT_IGNORE"/>
+    </Match>
+    <Match>
+        <Class name="com.zsubera.jpa.update.EntityFieldExtractor"/>
+        <Bug pattern="REC_CATCH_EXCEPTION"/>
+    </Match>
+
+    <!-- Exclude JLM_JSR166_UTILCONCURRENT_MONITORENTER for EncryptConverter -->
+    <!-- getOrCreateWarmUpExecutor() uses synchronized on AtomicReference to ensure
+         thread-safe lazy initialization. This is intentional. -->
+    <Match>
+        <Class name="com.zsubera.jpa.converter.EncryptConverter"/>
+        <Bug pattern="JLM_JSR166_UTILCONCURRENT_MONITORENTER"/>
+    </Match>
+
+    <!-- Exclude RCN_REDUNDANT_NULLCHECK_OF_NONNULL_VALUE for DefaultMyJpaRepository -->
+    <!-- resolveGlobalConfig() null-checks the result from GlobalConfigHolder.getConfig();
+         the holder may return null in edge cases. The check is defensive. -->
+    <Match>
+        <Class name="com.zsubera.jpa.repository.DefaultMyJpaRepository"/>
+        <Bug pattern="RCN_REDUNDANT_NULLCHECK_OF_NONNULL_VALUE"/>
+    </Match>
+</FindBugsFilter>

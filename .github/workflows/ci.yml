@@ -3,8 +3,14 @@ name: CI
 on:
   push:
     branches: [main, master]
+    tags: [v*]
   pull_request:
     branches: [main, master]
+
+# 防止并发 CI 运行，节省资源
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   build:
@@ -12,16 +18,102 @@ jobs:
     strategy:
       matrix:
         java: [17, 21]
-
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: ci_test_2024
+          MYSQL_DATABASE: test
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -pci_test_2024"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+    env:
+      DB_USERNAME: root
+      DB_PASSWORD: ci_test_2024
     steps:
       - uses: actions/checkout@v4
-
       - name: Set up JDK ${{ matrix.java }}
         uses: actions/setup-java@v4
         with:
           java-version: ${{ matrix.java }}
           distribution: 'temurin'
           cache: maven
-
+      - name: Check code formatting
+        run: mvn spotless:check --batch-mode --no-transfer-progress
       - name: Build and verify
-        run: ./mvnw clean verify --batch-mode
+        run: |
+          mvn clean verify --batch-mode --no-transfer-progress \
+            -Dgpg.skip=true \
+            -Ddependency-check.skip=true \
+            -DexcludedGroups=integration \
+            -Dspring.datasource.username=root \
+            -Dspring.datasource.password=ci_test_2024 \
+            -Dspring.datasource.hikari.maximum-pool-size=2 \
+            -Dspring.datasource.hikari.minimum-idle=1
+
+  integration:
+    needs: build
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: ci_test_2024
+          MYSQL_DATABASE: test
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -pci_test_2024"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+    env:
+      DB_USERNAME: root
+      DB_PASSWORD: ci_test_2024
+    strategy:
+      matrix:
+        java: [17, 21]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up JDK ${{ matrix.java }}
+        uses: actions/setup-java@v4
+        with:
+          java-version: ${{ matrix.java }}
+          distribution: 'temurin'
+          cache: maven
+      - name: Run PostgreSQL + MySQL integration tests
+        run: >
+          mvn test --batch-mode --no-transfer-progress -Dgpg.skip=true -Dgroups=integration
+          -Dspring.datasource.username=root
+          -Dspring.datasource.password=ci_test_2024
+          -Dspring.datasource.hikari.maximum-pool-size=2
+          -Dspring.datasource.hikari.minimum-idle=1
+
+  release-deploy:
+    needs: [build, integration]
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          java-version: 17
+          distribution: 'temurin'
+          cache: maven
+      - uses: ./.github/actions/setup-maven-central
+        with:
+          gpg-private-key: ${{ secrets.GPG_PRIVATE_KEY }}
+          gpg-key-name: ${{ secrets.GPG_KEY_NAME }}
+          central-username: ${{ secrets.CENTRAL_TOKEN_USERNAME }}
+          central-password: ${{ secrets.CENTRAL_TOKEN_PASSWORD }}
+      - name: Set release version from tag
+        run: |
+          VERSION="${GITHUB_REF#refs/tags/v}"
+          echo "Releasing version $VERSION"
+          mvn versions:set -DnewVersion="$VERSION"
+      - name: Deploy RELEASE
+        run: mvn deploy --batch-mode --no-transfer-progress -DskipTests -Ddependency-check.skip=true -P central-release

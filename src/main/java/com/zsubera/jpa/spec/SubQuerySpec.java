@@ -1,69 +1,920 @@
 package com.zsubera.jpa.spec;
 
+import com.zsubera.jpa.util.IdentifierValidator;
 import com.zsubera.jpa.util.LambdaUtils;
-
 import jakarta.persistence.criteria.CriteriaBuilder;
+import jakarta.persistence.criteria.Path;
 import jakarta.persistence.criteria.Predicate;
 import jakarta.persistence.criteria.Root;
 import jakarta.persistence.criteria.Subquery;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
+import java.util.function.Consumer;
+import org.springframework.lang.Nullable;
 
-public class SubQuerySpec<S> {
+/**
+ * JPA EXISTS / NOT EXISTS 子查询的类型安全构建器。
+ *
+ * <p>
+ * 提供子查询实体的条件方法，并可访问关联的外部查询根以构建关联谓词。
+ *
+ * <p>
+ * <strong>设计说明：</strong>与 {@link ConditionBuilder} 使用延迟求值（构建在查询执行时解析的 {@link ConditionNode} 树）不同，{@code SubQuerySpec}
+ * 使用<em>即时</em>求值——每个条件方法立即创建 JPA {@link jakarta.persistence.criteria.Predicate} 并添加到内部列表中。这是必要的，因为子查询必须在
+ * 外部查询构建之前完全构造完成。谓词构造委托给 {@link PredicateHelper} 以与其他组件共享逻辑。
+ *
+ * <p>
+ * 条件便捷方法（带 {@code boolean condition} 参数）通过实现 {@link ConditionalMethods} 接口统一提供，避免与
+ * {@link ConditionBuilder} 重复。
+ *
+ * <p>
+ * 新增条件类型时，需同步更新以下位置：
+ * <ol>
+ * <li>{@link ConditionBuilder} — 查询构建器</li>
+ * <li>{@link ConditionNode.Op} — 运算符枚举</li>
+ * <li>{@link NodeResolver} — 查询条件解析（resolveSimple 等方法）</li>
+ * <li>{@link com.zsubera.jpa.spec.QueryProjectionSupport} — 投影查询支持</li>
+ * <li>{@link com.zsubera.jpa.update.AbstractBulkOperationSpec} — 批量操作条件</li>
+ * <li>此类（SubQuerySpec）— 子查询条件</li>
+ * </ol>
+ *
+ * <p>
+ * 通过 {@link QuerySpec#exists(Class, java.util.function.Consumer)} 或
+ * {@link QuerySpec#notExists(Class, java.util.function.Consumer)} 使用。
+ *
+ * @param <S> 子查询实体类型
+ */
+public class SubQuerySpec<S> implements ConditionalMethods<S, SubQuerySpec<S>> {
 
     private final Subquery<S> subquery;
     private final Root<S> root;
     private final CriteriaBuilder cb;
+    private final Root<?> correlatedRoot;
     private final List<Predicate> predicates = new ArrayList<>();
+    private boolean selectSet;
+    private Class<?> selectType;
+    /** 缓存的 SELECT 字段名，用于 inSubQuery 两阶段类型推断中的 select 重放。 */
+    private String selectFieldName;
+    /** 标记是否为 or()/not() 创建的子实例（共享 subquery 引用）。 */
+    private final boolean isChild;
 
-    SubQuerySpec(Subquery<S> subquery, Root<S> root, CriteriaBuilder cb) {
-        this.subquery = subquery;
-        this.root = root;
-        this.cb = cb;
+    private SubQuerySpec(Subquery<S> subquery, Root<S> root, Root<?> correlatedRoot, CriteriaBuilder cb) {
+        this(subquery, root, correlatedRoot, cb, false);
     }
 
-    void applyWhere() {
+    private SubQuerySpec(Subquery<S> subquery, Root<S> root, Root<?> correlatedRoot, CriteriaBuilder cb,
+        boolean isChild) {
+        this.subquery = subquery;
+        this.root = root;
+        this.correlatedRoot = correlatedRoot;
+        this.cb = cb;
+        this.isChild = isChild;
+    }
+
+    /**
+     * 创建 SubQuerySpec 实例。
+     *
+     * @param subquery 子查询对象
+     * @param root 子查询根
+     * @param correlatedRoot 关联的外部查询根
+     * @param cb CriteriaBuilder 实例
+     * @return 新的 SubQuerySpec 实例
+     * @throws IllegalArgumentException 如果任何参数为 null
+     */
+    public static <S> SubQuerySpec<S> create(Subquery<S> subquery, Root<S> root, Root<?> correlatedRoot,
+        CriteriaBuilder cb) {
+        if (subquery == null) {
+            throw new IllegalArgumentException("subquery must not be null");
+        }
+        if (root == null) {
+            throw new IllegalArgumentException("root must not be null");
+        }
+        if (correlatedRoot == null) {
+            throw new IllegalArgumentException("correlatedRoot must not be null");
+        }
+        if (cb == null) {
+            throw new IllegalArgumentException("cb must not be null");
+        }
+        return new SubQuerySpec<>(subquery, root, correlatedRoot, cb);
+    }
+
+    @Override
+    public SubQuerySpec<S> self() {
+        return this;
+    }
+
+    /**
+     * 将已添加的谓词应用到子查询的 WHERE 子句。
+     */
+    public void applyWhere() {
         if (!predicates.isEmpty()) {
             subquery.where(cb.and(predicates.toArray(new Predicate[0])));
         }
     }
 
-    public SubQuerySpec<S> eq(SFunction<S, ?> field, Object value) {
-        predicates.add(cb.equal(root.get(LambdaUtils.getPropertyName(field)), value));
-        return this;
+    /**
+     * 清除已添加的谓词。用于 inSubQuery 场景下的两阶段类型推断。
+     */
+    void clearPredicates() {
+        predicates.clear();
     }
 
-    public SubQuerySpec<S> ne(SFunction<S, ?> field, Object value) {
-        predicates.add(cb.notEqual(root.get(LambdaUtils.getPropertyName(field)), value));
-        return this;
+    /**
+     * 检查是否已设置 SELECT 子句。
+     *
+     * @return 如果已设置 SELECT 返回 true
+     */
+    public boolean isSelectSet() {
+        return selectSet;
     }
 
-    public SubQuerySpec<S> isNull(SFunction<S, ?> field) {
-        predicates.add(cb.isNull(root.get(LambdaUtils.getPropertyName(field))));
-        return this;
+    /**
+     * 返回关联的外部查询根，用于构建关联谓词。在条件方法中使用以引用外部实体。
+     *
+     * <p>
+     * <strong>类型安全警告：</strong>此方法执行未经检查的类型转换。调用方必须确保返回的 {@link Root} 与目标实体类型匹配， 否则可能导致运行时
+     * {@link ClassCastException}。通常用于 {@link #correlatedEq(SFunction, SFunction)} 模式中。
+     *
+     * @param <T> 外部实体类型
+     * @return 外部查询 {@link Root}
+     */
+    @SuppressWarnings("unchecked")
+    public <T> Root<T> correlated() {
+        return (Root<T>)correlatedRoot;
     }
 
-    public SubQuerySpec<S> isNotNull(SFunction<S, ?> field) {
-        predicates.add(cb.isNotNull(root.get(LambdaUtils.getPropertyName(field))));
-        return this;
-    }
-
-    public SubQuerySpec<S> in(SFunction<S, ?> field, Object... values) {
-        CriteriaBuilder.In<Object> in = cb.in(root.get(LambdaUtils.getPropertyName(field)));
-        for (Object v : values) {
-            in.value(v);
+    /**
+     * 添加外部查询与子查询之间的等值关联条件。
+     *
+     * <p>
+     * 这是关联子查询最常见的模式，例如：
+     *
+     * <pre>{@code
+     * qs.exists(Order.class,
+     *     sub -> sub.correlatedEq(Customer::getId, Order::getCustomerId).gt(Order::getAmount, 1000));
+     * }</pre>
+     *
+     * 生成：{@code EXISTS (SELECT 1 FROM orders WHERE customer.id = orders.customer_id AND amount >
+     * 1000)}
+     *
+     * @param outerField 外部实体的字段（例如 Customer::getId）
+     * @param subField 子查询实体的对应字段（例如 Order::getCustomerId）
+     * @param <T> 外部实体类型
+     * @return 当前 SubQuerySpec 实例，支持链式调用
+     */
+    public <T> SubQuerySpec<S> correlatedEq(SFunction<T, ?> outerField, SFunction<S, ?> subField) {
+        if (outerField == null) {
+            throw new IllegalArgumentException("outerField must not be null");
         }
-        predicates.add(in);
+        if (subField == null) {
+            throw new IllegalArgumentException("subField must not be null");
+        }
+        predicates.add(cb.equal(correlatedRoot.get(LambdaUtils.getPropertyName(outerField)),
+            root.get(LambdaUtils.getPropertyName(subField))));
         return this;
     }
 
-    public <R> SubQuerySpec<S> where(java.util.function.Function<Root<S>, Predicate> condition) {
-        predicates.add(condition.apply(root));
+    // ---- 比较运算符 ----
+
+    /**
+     * 添加子查询实体的严格等值条件。value 为 null 时抛出异常。
+     *
+     * @param field 实体字段
+     * @param value 比较值，不能为 null
+     * @return 当前 SubQuerySpec 实例，支持链式调用
+     * @throws IllegalArgumentException 如果 field 或 value 为 null
+     */
+    public SubQuerySpec<S> eqStrict(SFunction<S, ?> field, Object value) {
+        if (field == null) {
+            throw new IllegalArgumentException("field must not be null");
+        }
+        if (value == null) {
+            throw new IllegalArgumentException("value must not be null. Use isNull() for null comparisons.");
+        }
+        return eq(field, value);
+    }
+
+    /**
+     * 添加子查询实体的严格不等条件。value 为 null 时抛出异常。
+     *
+     * @param field 实体字段
+     * @param value 比较值，不能为 null
+     * @return 当前 SubQuerySpec 实例，支持链式调用
+     * @throws IllegalArgumentException 如果 field 或 value 为 null
+     */
+    public SubQuerySpec<S> neStrict(SFunction<S, ?> field, Object value) {
+        if (field == null) {
+            throw new IllegalArgumentException("field must not be null");
+        }
+        if (value == null) {
+            throw new IllegalArgumentException("value must not be null. Use isNotNull() for null comparisons.");
+        }
+        return ne(field, value);
+    }
+
+    /**
+     * 添加子查询实体的等值条件。value 为 null 时自动转为 IS NULL。
+     *
+     * @param field 实体字段
+     * @param value 比较值，null 表示 IS NULL
+     * @return 当前 SubQuerySpec 实例，支持链式调用
+     * @throws IllegalArgumentException 如果 field 为 null
+     */
+    public SubQuerySpec<S> eq(SFunction<S, ?> field, @Nullable Object value) {
+        if (field == null) {
+            throw new IllegalArgumentException("field must not be null");
+        }
+        predicates.add(PredicateHelper.eq(root, LambdaUtils.property(field), value, cb));
         return this;
     }
 
+    /**
+     * 添加子查询实体的不等值条件。value 为 null 时自动转为 IS NOT NULL。
+     *
+     * @param field 实体字段
+     * @param value 比较值，null 表示 IS NOT NULL
+     * @return 当前 SubQuerySpec 实例，支持链式调用
+     * @throws IllegalArgumentException 如果 field 为 null
+     */
+    public SubQuerySpec<S> ne(SFunction<S, ?> field, @Nullable Object value) {
+        if (field == null) {
+            throw new IllegalArgumentException("field must not be null");
+        }
+        predicates.add(PredicateHelper.ne(root, LambdaUtils.property(field), value, cb));
+        return this;
+    }
+
+    /**
+     * 添加子查询实体的大于条件。
+     *
+     * @param field 实体字段
+     * @param value 比较值
+     * @return 当前 SubQuerySpec 实例，支持链式调用
+     * @throws IllegalArgumentException 如果 value 为 null
+     */
+    public SubQuerySpec<S> gt(SFunction<S, ?> field, Comparable<?> value) {
+        if (field == null) {
+            throw new IllegalArgumentException("field must not be null");
+        }
+        if (value == null) {
+            throw new IllegalArgumentException("value must not be null");
+        }
+        predicates.add(PredicateHelper.gt(root, LambdaUtils.property(field), value, cb));
+        return this;
+    }
+
+    /**
+     * 添加子查询实体的大于等于条件。
+     *
+     * @param field 实体字段
+     * @param value 比较值
+     * @return 当前 SubQuerySpec 实例，支持链式调用
+     * @throws IllegalArgumentException 如果 value 为 null
+     */
+    public SubQuerySpec<S> ge(SFunction<S, ?> field, Comparable<?> value) {
+        if (field == null) {
+            throw new IllegalArgumentException("field must not be null");
+        }
+        if (value == null) {
+            throw new IllegalArgumentException("value must not be null");
+        }
+        predicates.add(PredicateHelper.ge(root, LambdaUtils.property(field), value, cb));
+        return this;
+    }
+
+    /**
+     * 添加子查询实体的小于条件。
+     *
+     * @param field 实体字段
+     * @param value 比较值
+     * @return 当前 SubQuerySpec 实例，支持链式调用
+     * @throws IllegalArgumentException 如果 value 为 null
+     */
+    public SubQuerySpec<S> lt(SFunction<S, ?> field, Comparable<?> value) {
+        if (field == null) {
+            throw new IllegalArgumentException("field must not be null");
+        }
+        if (value == null) {
+            throw new IllegalArgumentException("value must not be null");
+        }
+        predicates.add(PredicateHelper.lt(root, LambdaUtils.property(field), value, cb));
+        return this;
+    }
+
+    /**
+     * 添加子查询实体的小于等于条件。
+     *
+     * @param field 实体字段
+     * @param value 比较值
+     * @return 当前 SubQuerySpec 实例，支持链式调用
+     * @throws IllegalArgumentException 如果 value 为 null
+     */
+    public SubQuerySpec<S> le(SFunction<S, ?> field, Comparable<?> value) {
+        if (field == null) {
+            throw new IllegalArgumentException("field must not be null");
+        }
+        if (value == null) {
+            throw new IllegalArgumentException("value must not be null");
+        }
+        predicates.add(PredicateHelper.le(root, LambdaUtils.property(field), value, cb));
+        return this;
+    }
+
+    // ---- 字符串运算符 ----
+
+    /**
+     * 添加包含匹配条件 {@code field LIKE '%value%'}，值中的通配符会被自动转义。
+     *
+     * @param field 实体字段
+     * @param value 匹配值
+     * @return 当前 SubQuerySpec 实例，支持链式调用
+     * @throws IllegalArgumentException 如果 value 为 null
+     */
+    public SubQuerySpec<S> like(SFunction<S, ?> field, String value) {
+        if (field == null) {
+            throw new IllegalArgumentException("field must not be null");
+        }
+        if (value == null) {
+            throw new IllegalArgumentException("value must not be null");
+        }
+        predicates.add(PredicateHelper.like(root, LambdaUtils.property(field),
+            ConditionalMethods.wrapLikePattern(value), cb, PredicateHelper.LIKE_ESCAPE_CHAR));
+        return this;
+    }
+
+    /**
+     * 添加包含匹配条件 {@code field NOT LIKE '%value%'}，值中的通配符会被自动转义。
+     *
+     * @param field 实体字段
+     * @param value 匹配值
+     * @return 当前 SubQuerySpec 实例，支持链式调用
+     * @throws IllegalArgumentException 如果 value 为 null
+     */
+    public SubQuerySpec<S> notLike(SFunction<S, ?> field, String value) {
+        if (field == null) {
+            throw new IllegalArgumentException("field must not be null");
+        }
+        if (value == null) {
+            throw new IllegalArgumentException("value must not be null");
+        }
+        predicates.add(PredicateHelper.notLike(root, LambdaUtils.property(field),
+            ConditionalMethods.wrapLikePattern(value), cb, PredicateHelper.LIKE_ESCAPE_CHAR));
+        return this;
+    }
+
+    /**
+     * 添加子查询实体的前缀匹配条件。
+     *
+     * @param field 实体字段
+     * @param value 前缀值
+     * @return 当前 SubQuerySpec 实例，支持链式调用
+     * @throws IllegalArgumentException 如果 value 为 null
+     */
+    public SubQuerySpec<S> startsWith(SFunction<S, ?> field, String value) {
+        if (field == null) {
+            throw new IllegalArgumentException("field must not be null");
+        }
+        if (value == null) {
+            throw new IllegalArgumentException("value must not be null");
+        }
+        predicates.add(PredicateHelper.startsWith(root, LambdaUtils.property(field), value, cb));
+        return this;
+    }
+
+    /**
+     * 添加子查询实体的后缀匹配条件。
+     *
+     * @param field 实体字段
+     * @param value 后缀值
+     * @return 当前 SubQuerySpec 实例，支持链式调用
+     * @throws IllegalArgumentException 如果 value 为 null
+     */
+    public SubQuerySpec<S> endsWith(SFunction<S, ?> field, String value) {
+        if (field == null) {
+            throw new IllegalArgumentException("field must not be null");
+        }
+        if (value == null) {
+            throw new IllegalArgumentException("value must not be null");
+        }
+        predicates.add(PredicateHelper.endsWith(root, LambdaUtils.property(field), value, cb));
+        return this;
+    }
+
+    /**
+     * 添加子查询实体的不匹配前缀条件。
+     *
+     * @param field 实体字段
+     * @param value 前缀值
+     * @return 当前 SubQuerySpec 实例，支持链式调用
+     * @throws IllegalArgumentException 如果 value 为 null
+     */
+    public SubQuerySpec<S> notStartsWith(SFunction<S, ?> field, String value) {
+        if (field == null) {
+            throw new IllegalArgumentException("field must not be null");
+        }
+        if (value == null) {
+            throw new IllegalArgumentException("value must not be null");
+        }
+        String pattern = PredicateHelper.escapeLikeWildcards(value) + "%";
+        predicates.add(
+            PredicateHelper.notLike(root, LambdaUtils.property(field), pattern, cb, PredicateHelper.LIKE_ESCAPE_CHAR));
+        return this;
+    }
+
+    /**
+     * 添加子查询实体的不匹配后缀条件。
+     *
+     * @param field 实体字段
+     * @param value 后缀值
+     * @return 当前 SubQuerySpec 实例，支持链式调用
+     * @throws IllegalArgumentException 如果 value 为 null
+     */
+    public SubQuerySpec<S> notEndsWith(SFunction<S, ?> field, String value) {
+        if (field == null) {
+            throw new IllegalArgumentException("field must not be null");
+        }
+        if (value == null) {
+            throw new IllegalArgumentException("value must not be null");
+        }
+        String pattern = "%" + PredicateHelper.escapeLikeWildcards(value);
+        predicates.add(
+            PredicateHelper.notLike(root, LambdaUtils.property(field), pattern, cb, PredicateHelper.LIKE_ESCAPE_CHAR));
+        return this;
+    }
+
+    // ---- 集合运算符 ----
+
+    /**
+     * 添加子查询实体的 BETWEEN 条件。
+     *
+     * @param field 实体字段
+     * @param start 范围起始值（包含）
+     * @param end 范围结束值（包含）
+     * @return 当前 SubQuerySpec 实例，支持链式调用
+     * @throws IllegalArgumentException 如果 start 或 end 为 null，或 start 大于 end
+     */
+    public SubQuerySpec<S> between(SFunction<S, ?> field, Comparable<?> start, Comparable<?> end) {
+        if (field == null) {
+            throw new IllegalArgumentException("field must not be null");
+        }
+        PredicateHelper.validateRange(start, end);
+        predicates.add(PredicateHelper.between(root, LambdaUtils.property(field), start, end, cb));
+        return this;
+    }
+
+    /**
+     * 添加子查询实体的 NOT BETWEEN 条件。
+     *
+     * @param field 实体字段
+     * @param start 范围起始值（包含）
+     * @param end 范围结束值（包含）
+     * @return 当前 SubQuerySpec 实例，支持链式调用
+     * @throws IllegalArgumentException 如果 start 或 end 为 null，或 start 大于 end
+     */
+    public SubQuerySpec<S> notBetween(SFunction<S, ?> field, Comparable<?> start, Comparable<?> end) {
+        if (field == null) {
+            throw new IllegalArgumentException("field must not be null");
+        }
+        PredicateHelper.validateRange(start, end);
+        predicates.add(PredicateHelper.notBetween(root, LambdaUtils.property(field), start, end, cb));
+        return this;
+    }
+
+    /**
+     * 添加子查询实体的 IN 条件（可变参数形式）。
+     *
+     * @param field 实体字段
+     * @param values 值列表
+     * @return 当前 SubQuerySpec 实例，支持链式调用
+     * @throws IllegalArgumentException 如果 values 为 null 或空
+     */
+    public SubQuerySpec<S> in(SFunction<S, ?> field, Object... values) {
+        if (field == null) {
+            throw new IllegalArgumentException("field must not be null");
+        }
+        if (values == null || values.length == 0) {
+            throw new IllegalArgumentException("values must not be empty");
+        }
+        predicates.add(PredicateHelper.in(root, LambdaUtils.property(field), values, cb));
+        return this;
+    }
+
+    /**
+     * 添加子查询实体的 NOT IN 条件（可变参数形式）。
+     *
+     * @param field 实体字段
+     * @param values 值列表
+     * @return 当前 SubQuerySpec 实例，支持链式调用
+     * @throws IllegalArgumentException 如果 values 为 null 或空
+     */
+    public SubQuerySpec<S> notIn(SFunction<S, ?> field, Object... values) {
+        if (field == null) {
+            throw new IllegalArgumentException("field must not be null");
+        }
+        if (values == null || values.length == 0) {
+            throw new IllegalArgumentException("values must not be empty");
+        }
+        predicates.add(PredicateHelper.notIn(root, LambdaUtils.property(field), values, cb));
+        return this;
+    }
+
+    /**
+     * 添加子查询实体的 IN 条件（集合形式）。
+     *
+     * @param field 实体字段
+     * @param values 值集合
+     * @return 当前 SubQuerySpec 实例，支持链式调用
+     * @throws IllegalArgumentException 如果 values 为 null 或空
+     */
+    public SubQuerySpec<S> in(SFunction<S, ?> field, Collection<?> values) {
+        if (field == null) {
+            throw new IllegalArgumentException("field must not be null");
+        }
+        if (values == null || values.isEmpty()) {
+            throw new IllegalArgumentException("values must not be empty");
+        }
+        predicates.add(PredicateHelper.in(root, LambdaUtils.property(field), values, cb));
+        return this;
+    }
+
+    /**
+     * 添加子查询实体的 NOT IN 条件（集合形式）。
+     *
+     * @param field 实体字段
+     * @param values 值集合
+     * @return 当前 SubQuerySpec 实例，支持链式调用
+     * @throws IllegalArgumentException 如果 values 为 null 或空
+     */
+    public SubQuerySpec<S> notIn(SFunction<S, ?> field, Collection<?> values) {
+        if (field == null) {
+            throw new IllegalArgumentException("field must not be null");
+        }
+        if (values == null || values.isEmpty()) {
+            throw new IllegalArgumentException("values must not be empty");
+        }
+        predicates.add(PredicateHelper.notIn(root, LambdaUtils.property(field), values, cb));
+        return this;
+    }
+
+    // ---- Null 运算符 ----
+
+    /**
+     * 添加子查询实体的 IS NULL 条件。
+     *
+     * @param field 实体字段
+     * @return 当前 SubQuerySpec 实例，支持链式调用
+     */
+    public SubQuerySpec<S> isNull(SFunction<S, ?> field) {
+        if (field == null) {
+            throw new IllegalArgumentException("field must not be null");
+        }
+        predicates.add(PredicateHelper.isNull(root, LambdaUtils.property(field), cb));
+        return this;
+    }
+
+    /**
+     * 添加子查询实体的 IS NOT NULL 条件。
+     *
+     * @param field 实体字段
+     * @return 当前 SubQuerySpec 实例，支持链式调用
+     */
+    public SubQuerySpec<S> isNotNull(SFunction<S, ?> field) {
+        if (field == null) {
+            throw new IllegalArgumentException("field must not be null");
+        }
+        predicates.add(PredicateHelper.isNotNull(root, LambdaUtils.property(field), cb));
+        return this;
+    }
+
+    /**
+     * 添加子查询实体的忽略大小写的等值条件。
+     *
+     * @param field 实体字段
+     * @param value 比较值
+     * @return 当前 SubQuerySpec 实例，支持链式调用
+     */
+    public SubQuerySpec<S> eqIgnoreCase(SFunction<S, ?> field, String value) {
+        if (field == null) {
+            throw new IllegalArgumentException("field must not be null");
+        }
+        predicates.add(PredicateHelper.eqIgnoreCase(root, LambdaUtils.property(field), value, cb));
+        return this;
+    }
+
+    /**
+     * 添加子查询实体的忽略大小写的不等条件。
+     *
+     * @param field 实体字段
+     * @param value 比较值
+     * @return 当前 SubQuerySpec 实例，支持链式调用
+     */
+    public SubQuerySpec<S> neIgnoreCase(SFunction<S, ?> field, String value) {
+        if (field == null) {
+            throw new IllegalArgumentException("field must not be null");
+        }
+        predicates.add(PredicateHelper.neIgnoreCase(root, LambdaUtils.property(field), value, cb));
+        return this;
+    }
+
+    /**
+     * 添加子查询实体的忽略大小写 LIKE 条件：{@code UPPER(field) LIKE '%value%'}。
+     *
+     * <p>
+     * 值中的 {@code %} 或 {@code _} 字符会被转义，作为字面量处理，防止 LIKE 注入。
+     *
+     * @param field 实体字段
+     * @param value 要匹配的原始字符串值（通配符会被转义）
+     * @return 当前 SubQuerySpec 实例，支持链式调用
+     * @throws IllegalArgumentException 如果 value 为 null
+     */
+    public SubQuerySpec<S> likeIgnoreCase(SFunction<S, ?> field, String value) {
+        if (field == null) {
+            throw new IllegalArgumentException("field must not be null");
+        }
+        if (value == null) {
+            throw new IllegalArgumentException("value must not be null");
+        }
+        predicates.add(PredicateHelper.likeIgnoreCase(root, LambdaUtils.property(field),
+            ConditionalMethods.wrapLikePattern(value), cb, PredicateHelper.LIKE_ESCAPE_CHAR));
+        return this;
+    }
+
+    // ---- 集合空检查 ----
+
+    /**
+     * 添加子查询实体的集合为空条件。
+     *
+     * @param field 实体集合字段
+     * @return 当前 SubQuerySpec 实例，支持链式调用
+     */
+    public SubQuerySpec<S> isEmpty(SFunction<S, ?> field) {
+        if (field == null) {
+            throw new IllegalArgumentException("field must not be null");
+        }
+        predicates.add(PredicateHelper.isEmpty(root, LambdaUtils.property(field), cb));
+        return this;
+    }
+
+    /**
+     * 添加子查询实体的集合不为空条件。
+     *
+     * @param field 实体集合字段
+     * @return 当前 SubQuerySpec 实例，支持链式调用
+     * @throws IllegalArgumentException 如果 field 为 null
+     */
+    public SubQuerySpec<S> isNotEmpty(SFunction<S, ?> field) {
+        if (field == null) {
+            throw new IllegalArgumentException("field must not be null");
+        }
+        predicates.add(PredicateHelper.isNotEmpty(root, LambdaUtils.property(field), cb));
+        return this;
+    }
+
+    // ---- 多字段搜索 ----
+
+    /**
+     * 添加多字段模糊搜索条件。对指定的多个字段进行 OR 组合的 LIKE 查询。
+     *
+     * @param keyword 搜索关键词
+     * @param fields 要搜索的实体字段列表
+     * @return 当前 SubQuerySpec 实例，支持链式调用
+     * @throws IllegalArgumentException 如果 fields 中包含 null 元素
+     */
+    public SubQuerySpec<S> multiLike(String keyword, SFunction<S, ?>... fields) {
+        if (keyword == null) {
+            throw new IllegalArgumentException("keyword must not be null");
+        }
+        if (fields == null) {
+            throw new IllegalArgumentException("fields must not be null");
+        }
+        if (!keyword.isEmpty() && fields.length > 0) {
+            String pattern = "%" + PredicateHelper.escapeLikeWildcards(keyword) + "%";
+            List<Predicate> likes = new ArrayList<>();
+            for (SFunction<S, ?> field : fields) {
+                if (field == null) {
+                    throw new IllegalArgumentException("fields must not contain null elements");
+                }
+                likes.add(cb.like(root.get(LambdaUtils.property(field)).as(String.class), pattern,
+                    PredicateHelper.LIKE_ESCAPE_CHAR));
+            }
+            if (!likes.isEmpty()) {
+                predicates.add(likes.size() == 1 ? likes.get(0) : cb.or(likes.toArray(new Predicate[0])));
+            }
+        }
+        return this;
+    }
+
+    /**
+     * 添加多字段模糊搜索条件（字符串字段名版本）。
+     *
+     * <p>
+     * 适用于只有字符串形式字段名的场景（如通用解析器、动态字段名等）， 无法使用方法引用时的替代方案。
+     *
+     * <pre>{@code
+     * // 使用字符串字段名
+     * sub.multiLike("keyword", "name", "email", "phone");
+     *
+     * // 动态字段名
+     * String[] searchFields = {"name", "email"};
+     * sub.multiLike("keyword", searchFields);
+     * }</pre>
+     *
+     * @param keyword 搜索关键词
+     * @param fieldNames 要搜索的字段名字符串列表
+     * @return 当前 SubQuerySpec 实例，支持链式调用
+     * @throws IllegalArgumentException 如果 fieldNames 为 null、空或包含 null 元素
+     */
+    public SubQuerySpec<S> multiLike(String keyword, String... fieldNames) {
+        if (fieldNames == null || fieldNames.length == 0) {
+            throw new IllegalArgumentException("fieldNames must not be empty");
+        }
+        if (keyword == null || keyword.isEmpty()) {
+            throw new IllegalArgumentException("keyword must not be null or empty");
+        }
+        String pattern = "%" + PredicateHelper.escapeLikeWildcards(keyword) + "%";
+        List<Predicate> likes = new ArrayList<>();
+        for (String fieldName : fieldNames) {
+            if (fieldName == null) {
+                throw new IllegalArgumentException("fieldNames must not contain null elements");
+            }
+            if (!ConditionBuilder.SAFE_NESTED_FIELD_NAME_PATTERN.matcher(fieldName).matches()) {
+                throw new IllegalArgumentException("fieldName contains invalid characters: " + fieldName);
+            }
+            String[] segments = fieldName.split("\\.");
+            for (String segment : segments) {
+                IdentifierValidator.validateColumnName(segment);
+            }
+            likes.add(cb.like(root.get(fieldName).as(String.class), pattern, PredicateHelper.LIKE_ESCAPE_CHAR));
+        }
+        if (!likes.isEmpty()) {
+            predicates.add(likes.size() == 1 ? likes.get(0) : cb.or(likes.toArray(new Predicate[0])));
+        }
+        return this;
+    }
+
+    // ---- 条件组支持 ----
+
+    /**
+     * 添加 OR 条件组。consumer 内添加的所有条件以 OR 方式组合。
+     *
+     * <pre>{@code
+     * sub.exists(Order.class, s -> s.or(o ->
+     *     o.eq(Order::getStatus, "PENDING").eq(Order::getStatus, "PROCESSING")));
+     * }</pre>
+     *
+     * <p>
+     * <strong>子查询共享：</strong>child SubQuerySpec 与 parent 共享同一个 {@code subquery} 引用。
+     * child 的条件独立累积，但 {@code applyWhere()} 和 {@code applySelectToSubquery()} 仅在顶层 SubQuerySpec 调用。
+     * 因此，child 中的条件不会影响共享的 subquery，这是安全的。
+     *
+     * @param config OR 组配置消费者
+     * @return 当前 SubQuerySpec 实例，支持链式调用
+     * @throws IllegalArgumentException 如果 config 为 null
+     */
+    public SubQuerySpec<S> or(Consumer<SubQuerySpec<S>> config) {
+        if (config == null) {
+            throw new IllegalArgumentException("config must not be null");
+        }
+        SubQuerySpec<S> child = new SubQuerySpec<>(subquery, root, correlatedRoot, cb, true);
+        config.accept(child);
+        if (!child.predicates.isEmpty()) {
+            predicates.add(child.predicates.size() == 1 ? child.predicates.get(0)
+                : cb.or(child.predicates.toArray(new Predicate[0])));
+        }
+        return this;
+    }
+
+    /**
+     * 添加 NOT 条件组。consumer 内添加的所有条件以 AND 方式组合，然后整体取反。
+     *
+     * <pre>{@code
+     * sub.not(n -> n.eq(Order::getStatus, "CANCELLED"));
+     * // 生成: NOT (status = 'CANCELLED')
+     * }</pre>
+     *
+     * @param config NOT 组配置消费者
+     * @return 当前 SubQuerySpec 实例，支持链式调用
+     * @throws IllegalArgumentException 如果 config 为 null
+     */
+    public SubQuerySpec<S> not(Consumer<SubQuerySpec<S>> config) {
+        if (config == null) {
+            throw new IllegalArgumentException("config must not be null");
+        }
+        SubQuerySpec<S> child = new SubQuerySpec<>(subquery, root, correlatedRoot, cb, true);
+        config.accept(child);
+        if (!child.predicates.isEmpty()) {
+            Predicate combined = child.predicates.size() == 1 ? child.predicates.get(0)
+                : cb.and(child.predicates.toArray(new Predicate[0]));
+            predicates.add(cb.not(combined));
+        }
+        return this;
+    }
+
+    /**
+     * 仅在 {@code condition} 为 true 时添加 OR 条件组。
+     *
+     * @param condition 执行条件
+     * @param config OR 组配置消费者
+     * @return 当前 SubQuerySpec 实例，支持链式调用
+     */
+    public SubQuerySpec<S> or(boolean condition, Consumer<SubQuerySpec<S>> config) {
+        return condition ? or(config) : this;
+    }
+
+    /**
+     * 仅在 {@code condition} 为 true 时添加 NOT 条件组。
+     *
+     * @param condition 执行条件
+     * @param config NOT 组配置消费者
+     * @return 当前 SubQuerySpec 实例，支持链式调用
+     */
+    public SubQuerySpec<S> not(boolean condition, Consumer<SubQuerySpec<S>> config) {
+        return condition ? not(config) : this;
+    }
+
+    /**
+     * 设置此子查询的 SELECT 子句。如果未调用，子查询默认选择子查询根。
+     *
+     * <p>
+     * <strong>幂等性说明：</strong>如果通过 {@link #presetSelectType(Class, String)} 已预设了 selectType（例如在 inSubQuery 的两阶段类型推断中），
+     * 则此方法在第二次调用时会跳过重复设置，避免不必要的操作。真实子查询的 SELECT 子句通过 {@link #applySelectToSubquery()} 方法在 lambda 执行后正确设置。
+     *
+     * @param field 要选择的实体字段
+     * @return 当前 SubQuerySpec 实例，支持链式调用
+     */
+    @SuppressWarnings({"unchecked", "rawtypes"})
     public SubQuerySpec<S> select(SFunction<S, ?> field) {
-        subquery.select(root.get(LambdaUtils.getPropertyName(field)));
+        if (field == null) {
+            throw new IllegalArgumentException("field must not be null");
+        }
+        if (isChild) {
+            throw new IllegalStateException("select() must not be called inside or()/not() consumer. "
+                + "The child SubQuerySpec shares the parent's subquery, "
+                + "and calling select() would corrupt the parent's SELECT clause. "
+                + "Set the SELECT on the parent SubQuerySpec before calling or()/not().");
+        }
+        if (selectSet) {
+            throw new IllegalStateException(
+                "select() called but SELECT already set to '" + selectFieldName + "'. Cannot override.");
+        }
+        String propName = LambdaUtils.getPropertyName(field);
+        Path selectPath = root.get(propName);
+        subquery.select(selectPath);
+        selectSet = true;
+        selectType = selectPath.getJavaType();
+        selectFieldName = propName;
         return this;
     }
+
+    /**
+     * 获取 SELECT 字段名。
+     *
+     * @return SELECT 字段名，如果未设置 SELECT 则返回 null
+     */
+    String getSelectFieldName() {
+        return selectFieldName;
+    }
+
+    /**
+     * 获取 SELECT 子句选择的字段类型。
+     *
+     * @return 选择的字段类型，如果未设置 SELECT 则返回 null
+     */
+    Class<?> getSelectType() {
+        return selectType;
+    }
+
+    /**
+     * 预设 SELECT 字段类型和字段名，避免 inSubQuery 场景下配置 lambda 的副作用问题。
+     *
+     * <p>
+     * 此方法用于 {@code NodeResolver.resolveInSubQueryInternal} 中的第一阶段类型推断结果传递。通过预先设置类型和字段信息， 第二阶段中
+     * {@link #select(SFunction)} 调用将变为幂等操作（跳过重复设置），而真实子查询的 SELECT 子句通过 {@link #applySelectToSubquery()} 方法在 lambda
+     * 执行后正确设置。
+     *
+     * @param selectType SELECT 字段类型
+     * @param selectFieldName SELECT 字段名
+     */
+    void presetSelectType(Class<?> selectType, String selectFieldName) {
+        this.selectType = selectType;
+        this.selectFieldName = selectFieldName;
+        this.selectSet = true;
+    }
+
+    /**
+     * 将缓存的 SELECT 字段应用到真实子查询。
+     *
+     * <p>
+     * 用于 inSubQuery 的第二阶段：在 lambda 执行完成后，将 SELECT 子句正确设置到真实子查询上。 此方法在 {@code NodeResolver.resolveInSubQueryInternal}
+     * 中调用。
+     */
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    void applySelectToSubquery() {
+        if (selectFieldName != null && selectSet) {
+            Path selectPath = root.get(selectFieldName);
+            subquery.select(selectPath);
+        }
+    }
+
 }

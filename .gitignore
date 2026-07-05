@@ -18,6 +18,7 @@ Thumbs.db
 *.swp
 *.swo
 *~
+*.bat
 
 # Java
 *.class
@@ -28,3 +29,25 @@ Thumbs.db
 # Build output
 build/
 out/
+/AGENTS.md
+/run-audit.bat
+
+# Sensitive files
+.env
+.env.*
+*.key
+*.pem
+*.p12
+*.jks
+*.keystore
+credentials.json
+
+# Audit workflow
+.opencode/
+.opencode1/
+.playwright-cli/
+my-profile/
+.mimocode/
+
+# Local debugging sources
+spring-data-sources/

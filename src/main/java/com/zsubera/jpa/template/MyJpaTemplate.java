@@ -1,0 +1,1662 @@
+package com.zsubera.jpa.template;
+
+import com.zsubera.jpa.util.EntityClassResolver;
+import com.zsubera.jpa.spec.QuerySpec;
+import com.zsubera.jpa.spec.SFunction;
+import com.zsubera.jpa.spec.QueryProjectionSupport;
+import com.zsubera.jpa.update.DeleteSpec;
+import com.zsubera.jpa.update.UpdateSpec;
+import com.zsubera.jpa.util.EntityGraphHelper;
+import com.zsubera.jpa.autoconfigure.GlobalConfigHolder;
+import com.zsubera.jpa.autoconfigure.MyJpaPlusGlobalConfig;
+import com.zsubera.jpa.repository.SoftDeleteContext;
+import com.zsubera.jpa.softdelete.SoftDeleteHelper;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.EntityManagerFactory;
+import jakarta.persistence.PersistenceContext;
+import jakarta.persistence.Tuple;
+import org.springframework.transaction.PlatformTransactionManager;
+import jakarta.persistence.TypedQuery;
+import jakarta.persistence.criteria.CriteriaBuilder;
+import jakarta.persistence.criteria.CriteriaQuery;
+import jakarta.persistence.criteria.Root;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.List;
+import java.util.Optional;
+import java.util.function.Consumer;
+import java.util.stream.Stream;
+import jakarta.annotation.PostConstruct;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.ApplicationContext;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
+import org.springframework.lang.Nullable;
+import org.springframework.transaction.annotation.Transactional;
+
+/**
+ * MyJpa-Plus 查询和批量操作的便捷模板，支持自动注入 {@link EntityManager}。
+ *
+ * <p>
+ * 使用此模板可以避免手动将 {@code EntityManager} 传递给 {@link UpdateSpec} 和 {@link DeleteSpec}。 只需注入此模板即可使用其方法。
+ *
+ * <p>
+ * <strong>API 选择指南：</strong>
+ * <ul>
+ * <li><strong>简单查询</strong>：使用 {@link com.zsubera.jpa.repository.MyJpaRepository}，直接调用 {@code findAll(spec)} 等方法</li>
+ * <li><strong>需要安全限制的查询</strong>：使用 {@code MyJpaTemplate}，提供内置的结果数量限制、深度分页保护和批量操作限制</li>
+ * <li><strong>大数据量操作</strong>：使用 {@link #findAllStream(Class, QuerySpec, Consumer)} 进行流式查询，避免内存溢出</li>
+ * </ul>
+ *
+ * <p>
+ * <strong>注意：</strong>直接使用 {@code Repository.findAll(spec)} 可能导致全表查询和内存溢出（OOM）。 推荐使用此模板进行查询，它提供了内置的结果数量限制和分页支持。
+ *
+ * <p>
+ * <strong>生产安全：</strong>此模板为生产环境强制执行安全限制：
+ *
+ * <ul>
+ * <li>{@link #findAll} 和 {@link #find} 方法有可配置的最大行数限制
+ * <li>深度分页（大 offset）会触发警告日志
+ * <li>使用 {@link #findAllStream} 处理大数据集可避免内存问题
+ * </ul>
+ *
+ * <p>
+ * 示例：
+ *
+ * <pre>{@code
+ * &#64;Autowired
+ * private MyJpaTemplate jpa;
+ *
+ * public void deactivateOldUsers() {
+ *     int updated =
+ *         jpa.execute(jpa.update(User.class).set(User::getStatus, "INACTIVE").lt(User::getLastLogin, cutoffDate));
+ *
+ *     int deleted = jpa.execute(jpa.delete(LogEntry.class).lt(LogEntry::getTimestamp, oldDate));
+ *
+ *     List<User> activeUsers = jpa.findAll(User.class, new QuerySpec<User>().eq(User::getStatus, "ACTIVE"));
+ * }
+ * }</pre>
+ *
+ * <p>
+ * 配置示例（application.yml）：
+ *
+ * <pre>{@code
+ * myjpa-plus:
+ *   query:
+ *     max-results: 50000
+ *     deep-pagination-offset-threshold: 500000
+ * }</pre>
+ */
+public class MyJpaTemplate implements MyJpaTemplateOperations {
+
+    private static final Logger log = LoggerFactory.getLogger(MyJpaTemplate.class);
+
+    /** {@link #findAll} 和 {@link #find} 方法返回的默认最大行数。 */
+    public static final int DEFAULT_MAX_RESULTS = 10000;
+
+    /** 深度分页的 offset 阈值，超过此值会记录警告日志。 */
+    public static final int DEFAULT_DEEP_PAGINATION_OFFSET_THRESHOLD = 100000;
+
+    /** 表示禁用限制的特殊值，用于 {@link #deepPaginationOffsetLimit} 和 {@link #maxBulkOperationRows}。 */
+    public static final int DISABLED = -1;
+
+    /** 批量操作默认最大影响行数。 */
+    public static final int DEFAULT_MAX_BULK_OPERATION_ROWS = 10000;
+
+    /** 深度分页默认硬限制（offset）。 */
+    public static final int DEFAULT_DEEP_PAGINATION_OFFSET_LIMIT = 1000000;
+
+    /** 深度分页警告日志的最小间隔（毫秒），防止日志泛滥。 */
+    public static final long DEEP_PAGINATION_WARN_INTERVAL_MS = 60_000;
+
+    /** 上次记录深度分页警告的时间戳。 */
+    private final java.util.concurrent.atomic.AtomicLong lastDeepPaginationWarnTime =
+        new java.util.concurrent.atomic.AtomicLong(0);
+
+    @PersistenceContext
+    private EntityManager entityManager;
+
+    @Autowired(required = false)
+    private EntityManagerFactory entityManagerFactory;
+
+    @Autowired(required = false)
+    private ApplicationContext applicationContext;
+
+    private volatile int maxResults = DEFAULT_MAX_RESULTS;
+    private volatile int deepPaginationOffsetThreshold = DEFAULT_DEEP_PAGINATION_OFFSET_THRESHOLD;
+    /** 深度分页硬限制。默认 1000000，{@code DISABLED} 表示禁用（仅记录警告）。 */
+    private volatile int deepPaginationOffsetLimit = DEFAULT_DEEP_PAGINATION_OFFSET_LIMIT;
+    /** 批量操作最大影响行数限制。默认 10000，{@code DISABLED} 表示不限制。 */
+    private volatile int maxBulkOperationRows = DEFAULT_MAX_BULK_OPERATION_ROWS;
+
+    /** 缓存适配器，支持可插拔的缓存后端（本地、Redis 等）。 */
+    @Autowired(required = false)
+    private CacheAdapter cacheAdapter;
+
+    /** 批量操作执行模板，封装 UpdateSpec/DeleteSpec/MergeSpec 的批量执行逻辑。 */
+    private volatile BulkOperationTemplate bulkOperationTemplate;
+
+    /** 批量保存操作模板，封装 persist/merge 的批量保存逻辑。 */
+    private volatile BatchSaveTemplate batchSaveTemplate;
+
+    /** Keyset 分页辅助类，封装游标分页的核心逻辑。 */
+    private volatile KeysetPaginationHelper keysetPaginationHelper;
+
+    private final Object helperInitMonitor = new Object();
+
+    /** 创建 MyJpaTemplate 实例，使用默认配置。 */
+    public MyJpaTemplate() {
+        // 使用默认值
+    }
+
+    /**
+     * 创建配置了自定义参数的 MyJpaTemplate 实例。 参数验证在 {@link #setMaxResults(int)} 和 {@link #setDeepPaginationOffsetThreshold(int)}
+     * 中进行。
+     *
+     * @param maxResults 最大返回行数
+     * @param deepPaginationOffsetThreshold 深度分页警告阈值
+     */
+    public MyJpaTemplate(int maxResults, int deepPaginationOffsetThreshold) {
+        setMaxResults(maxResults);
+        setDeepPaginationOffsetThreshold(deepPaginationOffsetThreshold);
+    }
+
+    /**
+     * 创建指定 EntityManager 的 MyJpaTemplate 实例，用于单元测试。
+     *
+     * <p>
+     * 生产环境应使用默认构造函数，由 Spring 自动注入 {@link EntityManager}。
+     *
+     * @param entityManager 要使用的 EntityManager 实例
+     */
+    public MyJpaTemplate(EntityManager entityManager) {
+        this.entityManager = entityManager;
+    }
+
+    /**
+     * 设置最大返回行数。
+     *
+     * <p>
+     * 设置为 {@code -1} 表示禁用限制（不限制返回行数）。 默认值为 {@value #DEFAULT_MAX_RESULTS}。
+     *
+     * @param maxResults 最大返回行数，或 {@code -1} 表示禁用
+     * @throws IllegalArgumentException 如果值不是正数且不等于 -1
+     */
+    private static void
+        syncToGlobalConfig(java.util.function.Consumer<com.zsubera.jpa.autoconfigure.MyJpaPlusGlobalConfig> setter) {
+        com.zsubera.jpa.autoconfigure.MyJpaPlusGlobalConfig config =
+            com.zsubera.jpa.autoconfigure.GlobalConfigHolder.getConfig();
+        if (config != null) {
+            setter.accept(config);
+        }
+    }
+
+    /**
+     * 设置最大查询结果数。
+     *
+     * <p>
+     * <strong>注意：</strong>此方法同时更新全局配置（{@link com.zsubera.jpa.autoconfigure.MyJpaPlusGlobalConfig}），
+     * 影响所有 {@link MyJpaTemplate} 实例。如需仅影响当前实例，请在构造后直接调用。
+     *
+     * @param maxResults 最大结果数，-1 表示不限制
+     * @throws IllegalArgumentException 如果值无效
+     */
+    public void setMaxResults(int maxResults) {
+        if (maxResults <= 0 && maxResults != -1) {
+            throw new IllegalArgumentException("maxResults must be positive or -1 (disabled)");
+        }
+        this.maxResults = maxResults;
+        syncToGlobalConfig(c -> c.setMaxResults(maxResults));
+    }
+
+    /**
+     * 设置深度分页警告阈值。
+     *
+     * @param deepPaginationOffsetThreshold 深度分页警告阈值
+     * @throws IllegalArgumentException 如果值不是正数
+     */
+    public void setDeepPaginationOffsetThreshold(int deepPaginationOffsetThreshold) {
+        if (deepPaginationOffsetThreshold <= 0) {
+            throw new IllegalArgumentException("deepPaginationOffsetThreshold must be positive");
+        }
+        this.deepPaginationOffsetThreshold = deepPaginationOffsetThreshold;
+        syncToGlobalConfig(c -> c.setDeepPaginationOffsetThreshold(deepPaginationOffsetThreshold));
+    }
+
+    /**
+     * 设置深度分页硬限制。超过此 offset 值将抛出 {@link IllegalArgumentException}，阻止执行。
+     *
+     * <p>
+     * 设置为 {@code -1} 表示禁用硬限制（仅记录警告日志，不阻止执行）。
+     *
+     * @param deepPaginationOffsetLimit 深度分页硬限制值，或 {@code -1} 表示禁用
+     * @throws IllegalArgumentException 如果值不是正数且不等于 -1
+     */
+    public void setDeepPaginationOffsetLimit(int deepPaginationOffsetLimit) {
+        if (deepPaginationOffsetLimit <= 0 && deepPaginationOffsetLimit != -1) {
+            throw new IllegalArgumentException("deepPaginationOffsetLimit must be positive or -1 (disabled)");
+        }
+        this.deepPaginationOffsetLimit = deepPaginationOffsetLimit;
+        syncToGlobalConfig(c -> c.setDeepPaginationOffsetLimit(deepPaginationOffsetLimit));
+    }
+
+    /**
+     * 设置批量操作最大影响行数限制。
+     *
+     * <p>
+     * 设置为 {@code -1} 表示禁用限制（不限制影响行数）。
+     *
+     * @param maxBulkOperationRows 最大影响行数，或 {@code -1} 表示禁用
+     * @throws IllegalArgumentException 如果值不是正数且不等于 -1
+     */
+    public void setMaxBulkOperationRows(int maxBulkOperationRows) {
+        if (maxBulkOperationRows <= 0 && maxBulkOperationRows != -1) {
+            throw new IllegalArgumentException("maxBulkOperationRows must be positive or -1 (disabled)");
+        }
+        this.maxBulkOperationRows = maxBulkOperationRows;
+        if (bulkOperationTemplate != null) {
+            getBulkOperationTemplate().setMaxBulkOperationRows(maxBulkOperationRows);
+        }
+        syncToGlobalConfig(c -> c.setMaxBulkOperationRows(maxBulkOperationRows));
+    }
+
+    /**
+     * 设置查询缓存管理器。注入后可使用 {@link #findAllCached} 方法。
+     *
+     * <p>
+     * 此方法保持向后兼容。内部将 {@link QueryCacheManager} 包装为 {@link CacheAdapter}。
+     * 新代码应优先使用 {@link #setCacheAdapter(CacheAdapter)}。
+     *
+     * @param cacheManager 缓存管理器实例
+     */
+    public void setCacheManager(QueryCacheManager cacheManager) {
+        this.cacheAdapter = cacheManager;
+    }
+
+    /**
+     * 获取查询缓存管理器（向后兼容）。
+     *
+     * @return 缓存管理器实例，可能为 null
+     */
+    public QueryCacheManager getCacheManager() {
+        return cacheAdapter instanceof QueryCacheManager qcm ? qcm : null;
+    }
+
+    /**
+     * 设置缓存适配器。注入后可使用 {@link #findAllCached} 方法。
+     *
+     * <p>
+     * 可注入任何 {@link CacheAdapter} 实现，包括 Redis、Caffeine 等分布式或近端缓存。
+     * 默认实现为 {@link QueryCacheManager}（本地 ConcurrentHashMap 缓存）。
+     *
+     * @param cacheAdapter 缓存适配器实例
+     */
+    public void setCacheAdapter(CacheAdapter cacheAdapter) {
+        this.cacheAdapter = cacheAdapter;
+    }
+
+    /**
+     * 获取缓存适配器。
+     *
+     * @return 缓存适配器实例，可能为 null
+     */
+    public CacheAdapter getCacheAdapter() {
+        return cacheAdapter;
+    }
+
+    /**
+     * 初始化批量操作模板。在所有依赖注入完成后调用。
+     */
+    @PostConstruct
+    private void initBulkOperationTemplate() {
+        initializeHelpers(false);
+    }
+
+    private PlatformTransactionManager resolveTransactionManager() {
+        if (applicationContext == null) {
+            return null;
+        }
+        try {
+            return applicationContext.getBean(PlatformTransactionManager.class);
+        } catch (org.springframework.beans.BeansException e) {
+            log.debug("PlatformTransactionManager bean not found: {}", e.getMessage());
+            return null;
+        }
+    }
+
+    /**
+     * 获取批量操作模板，确保已初始化。
+     *
+     * @return 批量操作模板
+     * @throws IllegalStateException 如果 MyJpaTemplate 未完全初始化
+     */
+    private BulkOperationTemplate getBulkOperationTemplate() {
+        initializeHelpers(true);
+        return requireInitialized(bulkOperationTemplate, "BulkOperationTemplate");
+    }
+
+    /**
+     * 获取批量保存模板，确保已初始化。
+     *
+     * @return 批量保存模板
+     * @throws IllegalStateException 如果 MyJpaTemplate 未完全初始化
+     */
+    private BatchSaveTemplate getBatchSaveTemplate() {
+        initializeHelpers(true);
+        return requireInitialized(batchSaveTemplate, "BatchSaveTemplate");
+    }
+
+    /**
+     * 获取键集分页助手，确保已初始化。
+     *
+     * @return 键集分页助手
+     * @throws IllegalStateException 如果 MyJpaTemplate 未完全初始化
+     */
+    private KeysetPaginationHelper getKeysetPaginationHelper() {
+        initializeHelpers(false);
+        return requireInitialized(keysetPaginationHelper, "KeysetPaginationHelper");
+    }
+
+    /**
+     * 带缓存的查询方法。如果缓存命中则直接返回，否则执行查询并将结果缓存。
+     *
+     * <p>
+     * 缓存键格式：{@code entityClassFqcn:specCacheKey:sort}。如果需要更精确的缓存控制，请使用 {@link QueryCacheManager} 直接管理。
+     *
+     * @param entityClass 实体类
+     * @param spec 查询规范
+     * @param ttlSeconds 缓存过期时间（秒）
+     * @param <T> 实体类型
+     * @return 匹配实体列表
+     * @throws IllegalStateException 如果未配置 CacheAdapter
+     * @throws IllegalArgumentException 如果参数为 null 或 ttlSeconds 为负数
+     */
+    @Override
+    @Transactional(readOnly = true)
+    public <T> List<T> findAllCached(Class<T> entityClass, QuerySpec<T> spec, long ttlSeconds) {
+        if (cacheAdapter == null) {
+            throw new IllegalStateException(
+                "CacheAdapter not available. " + "Inject a CacheAdapter bean or use MyJpaTemplate.setCacheAdapter().");
+        }
+        validateQueryParams(entityClass, spec);
+        if (ttlSeconds < 0) {
+            throw new IllegalArgumentException("ttlSeconds must not be negative");
+        }
+        // 使用 FQCN 作为缓存键，避免不同包下同名实体类的缓存冲突
+        // ponytail: Sort.toString() 可能很长（复杂排序），使用定长编码避免缓存键膨胀
+        String sortPart;
+        org.springframework.data.domain.Sort sort = spec.getSort();
+        if (sort.isSorted()) {
+            StringBuilder sb = new StringBuilder();
+            for (org.springframework.data.domain.Sort.Order o : sort) {
+                sb.append(o.getProperty()).append(o.isAscending() ? 'A' : 'D').append(',');
+            }
+            sortPart = sb.toString();
+        } else {
+            sortPart = "U"; // unsorted
+        }
+        // Include SoftDeleteContext state to prevent stale cached results when soft delete filtering is toggled
+        String softDeletePart = SoftDeleteContext.isIgnoreSoftDelete() ? "SD ignored" : "SD active";
+        String cacheKey = entityClass.getName() + ":" + spec.cacheKey() + ":" + sortPart + ":" + softDeletePart;
+        List<T> cached = cacheAdapter.get(cacheKey);
+        if (cached != null) {
+            log.debug("Cache hit for key: {}", cacheKey);
+            return new ArrayList<>(cached);
+        }
+        log.debug("Cache miss for key: {}", cacheKey);
+        List<T> result = findAll(entityClass, spec);
+        List<T> immutableResult = java.util.Collections.unmodifiableList(new ArrayList<>(result));
+        if (org.springframework.transaction.support.TransactionSynchronizationManager.isActualTransactionActive()) {
+            // ponytail: 在事务提交后写入缓存，避免回滚时缓存残留脏数据。
+            // 如果事务回滚，缓存不会被写入，后续查询会重新执行。
+            org.springframework.transaction.support.TransactionSynchronizationManager
+                .registerSynchronization(new org.springframework.transaction.support.TransactionSynchronization() {
+                    @Override
+                    public void afterCommit() {
+                        cacheAdapter.put(cacheKey, immutableResult, ttlSeconds);
+                        log.debug("Cache written after transaction commit for key: {}", cacheKey);
+                    }
+                });
+        } else {
+            cacheAdapter.put(cacheKey, immutableResult, ttlSeconds);
+        }
+        return new ArrayList<>(immutableResult);
+    }
+
+    /**
+     * 创建指定实体类型的 {@link UpdateSpec}。{@link EntityManager} 将在执行时通过 {@link #execute(UpdateSpec)} 提供。
+     *
+     * @param entityClass 要更新的实体类
+     * @param <T> 实体类型
+     * @return 新的 UpdateSpec（尚未绑定 EntityManager）
+     */
+    @Override
+    public <T> UpdateSpec<T> update(Class<T> entityClass) {
+        return new UpdateSpec<>(entityClass);
+    }
+
+    /**
+     * 创建指定实体类型的 {@link DeleteSpec}。{@link EntityManager} 将在执行时通过 {@link #execute(DeleteSpec)} 提供。
+     *
+     * @param entityClass 要删除的实体类
+     * @param <T> 实体类型
+     * @return 新的 DeleteSpec（尚未绑定 EntityManager）
+     */
+    @Override
+    public <T> DeleteSpec<T> delete(Class<T> entityClass) {
+        return new DeleteSpec<>(entityClass);
+    }
+
+    // ---- 批量保存方法 ----
+
+    /**
+     * 批量保存实体，使用 EntityManager flush/clear 进行分批处理。
+     *
+     * <p>
+     * 此方法适用于大批量插入场景，通过定期 flush 和 clear EntityManager 来：
+     * <ul>
+     * <li>减少内存占用（清除一级缓存中的实体）</li>
+     * <li>提高数据库交互效率（批量发送 INSERT 语句）</li>
+     * </ul>
+     *
+     * <p>
+     * <strong>注意：</strong>此方法使用 {@code merge()} 操作，对于新实体会执行 INSERT，对于已存在的实体会执行 UPDATE。 如果确定所有实体都是新建的，可以考虑使用原生 JDBC
+     * 批处理以获得更好的性能。
+     *
+     * <p>
+     * <strong>返回值说明：</strong>返回的实体处于 detached 状态（一级缓存已清除）。 访问延迟加载的关联属性将抛出 {@code LazyInitializationException}。
+     * 如需使用返回的实体，请先通过 {@code entityManager.merge()} 重新关联到持久化上下文。
+     *
+     * @param entities 要保存的实体列表
+     * @param batchSize 每批大小，建议值为 50-200
+     * @param <T> 实体类型
+     * @return 保存后的实体列表（detached 状态）
+     * @throws IllegalArgumentException 如果 entities 为 null 或 batchSize 不是正数
+     */
+    @Override
+    @Transactional
+    public <T> List<T> saveAllBatched(Iterable<T> entities, int batchSize) {
+        validateBatchParams(entities, "entities", batchSize);
+        return getBatchSaveTemplate().saveAllBatched(entities, batchSize);
+    }
+
+    /**
+     * 纯 persist 批量保存实体，所有实体都使用 {@code persist()} 操作。
+     *
+     * <p>
+     * 与 {@link #saveAllBatched(Iterable, int)} 不同，此方法对所有实体使用 {@code persist()}， 避免了 {@code merge()} 产生的额外 SELECT
+     * 查询。适用于确定所有实体都是新建的场景（如手动赋 ID 的 UUID 实体）。
+     *
+     * <p>
+     * <strong>注意：</strong>如果实体已存在于数据库中，将抛出 {@code EntityExistsException}。
+     *
+     * @param entities 要保存的实体列表
+     * @param batchSize 每批大小，建议值为 50-200
+     * @param <T> 实体类型
+     * @return 保存后的实体列表（detached 状态）
+     * @throws IllegalArgumentException 如果 entities 为 null 或 batchSize 不是正数
+     */
+    @Override
+    @Transactional
+    public <T> List<T> saveAllBatchedPure(Iterable<T> entities, int batchSize) {
+        validateBatchParams(entities, "entities", batchSize);
+        return getBatchSaveTemplate().saveAllBatchedPure(entities, batchSize);
+    }
+
+    /**
+     * 批量保存实体，每批在独立事务中提交，避免长事务导致的数据库锁等待超时问题。
+     *
+     * <p>
+     * 与 {@link #saveAllBatched(Iterable, int)} 不同，此方法每批操作完成后立即提交事务。 适用于大数据量保存场景（如 100000+ 实体），避免长事务导致的问题：
+     * <ul>
+     * <li>数据库锁等待超时</li>
+     * <li>事务日志撑爆</li>
+     * <li>回滚段空间不足</li>
+     * </ul>
+     *
+     * <p>
+     * <strong>注意：</strong>如果某批操作失败，已提交的批次不会回滚。调用方需要自行处理部分成功的情况。
+     *
+     * @param entities 要保存的实体列表
+     * @param batchSize 每批大小，建议值为 50-200
+     * @param <T> 实体类型
+     * @return 保存后的实体列表
+     * @throws IllegalArgumentException 如果 entities 为 null 或 batchSize 不是正数
+     */
+    @Override
+    public <T> List<T> saveAllBatchedInSeparateTransactions(Iterable<T> entities, int batchSize) {
+        validateBatchParams(entities, "entities", batchSize);
+        return getBatchSaveTemplate().saveAllBatchedInSeparateTransactions(entities, batchSize);
+    }
+
+    // ---- 便捷查询方法 ----
+
+    /**
+     * 根据 ID 查找实体。
+     *
+     * <p>
+     * 对于非软删除实体，直接使用 {@link EntityManager#find(Class, Object)} 以获得最佳性能。 对于软删除实体，使用 Specification 查询以自动过滤已删除记录。
+     *
+     * @param entityClass 实体类
+     * @param id 实体 ID
+     * @param <T> 实体类型
+     * @param <ID> ID 类型
+     * @return 匹配实体的 Optional 包装
+     */
+    @Override
+    @Transactional(readOnly = true)
+    public <T, ID> Optional<T> findById(Class<T> entityClass, ID id) {
+        if (entityClass == null) {
+            throw new IllegalArgumentException("entityClass must not be null");
+        }
+        if (id == null) {
+            throw new IllegalArgumentException("id must not be null");
+        }
+        String softDeleteFieldName = SoftDeleteHelper.findSoftDeleteField(entityClass);
+        if (softDeleteFieldName == null || !shouldApplySoftDeleteFilter()) {
+            return Optional.ofNullable(entityManager.find(entityClass, id));
+        }
+        String idFieldName = EntityClassResolver.resolveIdFieldName(entityClass);
+        Specification<T> idSpec = (root, query, cb) -> cb.equal(root.get(idFieldName), id);
+        Specification<T> softDeleteSpec = SoftDeleteHelper.isNotDeleted(entityClass);
+        Specification<T> combinedSpec = idSpec.and(softDeleteSpec);
+        CriteriaBuilder cb = entityManager.getCriteriaBuilder();
+        CriteriaQuery<T> cq = cb.createQuery(entityClass);
+        Root<T> root = cq.from(entityClass);
+        jakarta.persistence.criteria.Predicate predicate = combinedSpec.toPredicate(root, cq, cb);
+        if (predicate != null) {
+            cq.where(predicate);
+        }
+        TypedQuery<T> query = entityManager.createQuery(cq);
+        query.setMaxResults(1);
+        List<T> results = query.getResultList();
+        return results.isEmpty() ? Optional.empty() : Optional.of(results.get(0));
+    }
+
+    private boolean shouldApplySoftDeleteFilter() {
+        MyJpaPlusGlobalConfig cfg = GlobalConfigHolder.getConfig();
+        return cfg != null && cfg.isSoftDeleteAutoFilter() && !SoftDeleteContext.isIgnoreSoftDelete();
+    }
+
+    private void initializeHelpers(boolean requireTransactionalHelpers) {
+        if (keysetPaginationHelper != null
+            && (!requireTransactionalHelpers || bulkOperationTemplate != null && batchSaveTemplate != null)) {
+            return;
+        }
+        synchronized (helperInitMonitor) {
+            if (keysetPaginationHelper == null) {
+                keysetPaginationHelper = new KeysetPaginationHelper(entityManager);
+            }
+            if (bulkOperationTemplate != null && batchSaveTemplate != null) {
+                return;
+            }
+            PlatformTransactionManager txManager = resolveTransactionManager();
+            if (txManager == null) {
+                if (requireTransactionalHelpers) {
+                    throw new IllegalStateException(
+                        "PlatformTransactionManager not available. Batch operations require a PlatformTransactionManager bean.");
+                }
+                log.debug(
+                    "PlatformTransactionManager bean not found. Batch helpers will initialize lazily when needed.");
+                return;
+            }
+            bulkOperationTemplate = new BulkOperationTemplate(entityManager, maxBulkOperationRows, txManager);
+            batchSaveTemplate = new BatchSaveTemplate(entityManager, txManager);
+        }
+    }
+
+    /**
+     * 查找匹配给定 {@link QuerySpec} 的单个实体。
+     *
+     * @param entityClass 实体类
+     * @param spec 查询规范
+     * @param <T> 实体类型
+     * @return 匹配实体的 Optional 包装
+     */
+    @Override
+    @Transactional(readOnly = true)
+    public <T> Optional<T> findOne(Class<T> entityClass, QuerySpec<T> spec) {
+        validateQueryParams(entityClass, spec);
+        CriteriaBuilder cb = entityManager.getCriteriaBuilder();
+        CriteriaQuery<T> cq = cb.createQuery(entityClass);
+        Root<T> root = cq.from(entityClass);
+        jakarta.persistence.criteria.Predicate predicate = spec.toPredicate(root, cq, cb);
+        if (predicate != null) {
+            cq.where(predicate);
+        }
+        TypedQuery<T> query = entityManager.createQuery(cq);
+        query.setMaxResults(1);
+        spec.applyQuerySettings(query);
+        List<T> results = query.getResultList();
+        return results.isEmpty() ? Optional.empty() : Optional.of(results.get(0));
+    }
+
+    // ---- 计数方法 ----
+
+    /**
+     * 统计匹配给定 {@link QuerySpec} 的实体数量。
+     *
+     * @param entityClass 实体类
+     * @param spec 查询规范
+     * @param <T> 实体类型
+     * @return 匹配实体数量
+     */
+    @Override
+    @Transactional(readOnly = true)
+    public <T> long count(Class<T> entityClass, QuerySpec<T> spec) {
+        validateQueryParams(entityClass, spec);
+        return count(entityClass, spec.toSpecification());
+    }
+
+    /**
+     * 统计匹配给定 {@link Specification} 的实体数量。
+     *
+     * @param entityClass 实体类
+     * @param spec 查询规范
+     * @param <T> 实体类型
+     * @return 匹配实体数量
+     */
+    @Override
+    @Transactional(readOnly = true)
+    public <T> long count(Class<T> entityClass, Specification<T> spec) {
+        validateQueryParams(entityClass, spec);
+        CriteriaBuilder cb = entityManager.getCriteriaBuilder();
+        return executeCountQuery(entityClass, spec, cb);
+    }
+
+    // ---- 查询方法 ----
+
+    /**
+     * 查找匹配给定 {@link QuerySpec} 的所有实体。
+     *
+     * <p>
+     * <strong>生产说明：</strong>此方法将结果限制为可配置的最大行数（默认 {@value #DEFAULT_MAX_RESULTS}）。使用
+     * {@link #findAll(Class, QuerySpec, int)} 指定自定义限制，或使用 {@link #findAllStream(Class, QuerySpec, java.util.function.Consumer)} 进行无界流式查询。
+     *
+     * @param entityClass 实体类
+     * @param spec 查询规范
+     * @param <T> 实体类型
+     * @return 匹配实体列表（限制为最大行数）
+     */
+    @Override
+    @Transactional(readOnly = true)
+    public <T> List<T> findAll(Class<T> entityClass, QuerySpec<T> spec) {
+        validateQueryParams(entityClass, spec);
+        return findAll(entityClass, spec, resolveMaxResults());
+    }
+
+    /**
+     * 查找匹配给定 {@link QuerySpec} 的所有实体，支持自定义最大行数限制。
+     *
+     * @param entityClass 实体类
+     * @param spec 查询规范
+     * @param maxResults 返回的最大结果数
+     * @param <T> 实体类型
+     * @return 匹配实体列表
+     */
+    @Override
+    @Transactional(readOnly = true)
+    public <T> List<T> findAll(Class<T> entityClass, QuerySpec<T> spec, int maxResults) {
+        validateQueryParams(entityClass, spec);
+        if (maxResults <= 0 && maxResults != -1) {
+            throw new IllegalArgumentException("maxResults must be positive or -1 (disabled)");
+        }
+        Integer effectiveMaxResults = maxResults == -1 ? null : maxResults;
+        TypedQuery<T> query = buildTypedQuery(entityClass, spec, null, effectiveMaxResults);
+        return query.getResultList();
+    }
+
+    /**
+     * 查找匹配给定 {@link QuerySpec} 的所有实体，支持自定义排序。
+     *
+     * @param entityClass 实体类
+     * @param spec 查询规范
+     * @param sort 排序规则
+     * @param <T> 实体类型
+     * @return 匹配实体列表（限制为最大行数）
+     * @throws IllegalArgumentException 如果任何参数为 null
+     */
+    @Override
+    @Transactional(readOnly = true)
+    public <T> List<T> findAll(Class<T> entityClass, QuerySpec<T> spec, org.springframework.data.domain.Sort sort) {
+        validateQueryParams(entityClass, spec);
+        if (sort == null) {
+            throw new IllegalArgumentException("sort must not be null");
+        }
+        TypedQuery<T> query = buildSpecificationQuery(entityClass, spec.toSpecification(), sort, resolveMaxResults());
+        spec.applyQuerySettings(query);
+        return query.getResultList();
+    }
+
+    /**
+     * 查找匹配给定 {@link QuerySpec} 的所有实体，支持可选的 EntityGraph 用于急切加载。
+     *
+     * @param entityClass 实体类
+     * @param spec 查询规范
+     * @param entityGraph 用于急切加载的实体图（可为 null）
+     * @param <T> 实体类型
+     * @return 匹配实体列表
+     */
+    @Override
+    @Transactional(readOnly = true)
+    public <T> List<T> findAll(Class<T> entityClass, QuerySpec<T> spec, EntityGraphHelper<T> entityGraph) {
+        return findAll(entityClass, spec, entityGraph, resolveMaxResults());
+    }
+
+    /**
+     * 查找匹配给定 {@link QuerySpec} 的所有实体，支持可选的 EntityGraph 和自定义最大行数限制。
+     *
+     * @param entityClass 实体类
+     * @param spec 查询规范
+     * @param entityGraph 用于急切加载的实体图（可为 null）
+     * @param maxResults 返回的最大结果数
+     * @param <T> 实体类型
+     * @return 匹配实体列表
+     */
+    @Override
+    @Transactional(readOnly = true)
+    public <T> List<T> findAll(Class<T> entityClass, QuerySpec<T> spec, EntityGraphHelper<T> entityGraph,
+        int maxResults) {
+        validateQueryParams(entityClass, spec);
+        if (maxResults <= 0 && maxResults != -1) {
+            throw new IllegalArgumentException("maxResults must be positive or -1 (disabled)");
+        }
+        Integer effectiveMaxResults = maxResults == -1 ? null : maxResults;
+        TypedQuery<T> query = buildTypedQuery(entityClass, spec, entityGraph, effectiveMaxResults);
+        return query.getResultList();
+    }
+
+    /**
+     * 安全版本的流式查询，自动管理 Stream 生命周期。
+     *
+     * <p>
+     * 此方法在 try-with-resources 中执行 Stream，确保 Stream 被正确关闭，避免数据库连接泄漏。
+     *
+     * <p>
+     * 示例：
+     *
+     * <pre>{@code
+     * jpa.findAllStream(User.class, spec, stream -> {
+     *     stream.filter(u -> u.getAge() > 18).forEach(this::processUser);
+     * });
+     * }</pre>
+     *
+     * @param entityClass 实体类
+     * @param spec 查询规范
+     * @param consumer Stream 消费者（在 try-with-resources 中执行）
+     * @param <T> 实体类型
+     * @throws IllegalArgumentException 如果任何参数为 null
+     */
+    @Override
+    @Transactional(readOnly = true)
+    public <T> void findAllStream(Class<T> entityClass, QuerySpec<T> spec, Consumer<Stream<T>> consumer) {
+        validateQueryParams(entityClass, spec);
+        if (consumer == null) {
+            throw new IllegalArgumentException("consumer must not be null");
+        }
+        try (Stream<T> stream = doFindStream(entityClass, spec, null)) {
+            consumer.accept(stream);
+        }
+    }
+
+    /**
+     * 安全版本的流式查询，支持 EntityGraph 急切加载。
+     *
+     * <p>
+     * 与 {@link #findAllStream(Class, QuerySpec, Consumer)} 相同，但额外支持通过 {@link EntityGraphHelper} 指定急切加载的关联关系。
+     *
+     * <pre>{@code
+     * EntityGraphHelper<User> graph = EntityGraphHelper.forEntity(User.class).add("roles");
+     * jpa.findAllStream(User.class, spec, graph, stream -> {
+     *     stream.forEach(this::processUser);
+     * });
+     * }</pre>
+     *
+     * @param entityClass 实体类
+     * @param spec 查询规范
+     * @param entityGraph 实体图（可为 null，null 时不应用实体图）
+     * @param consumer Stream 消费者（在 try-with-resources 中执行）
+     * @param <T> 实体类型
+     * @throws IllegalArgumentException 如果 entityClass、spec 或 consumer 为 null
+     */
+    @Override
+    @Transactional(readOnly = true)
+    public <T> void findAllStream(Class<T> entityClass, QuerySpec<T> spec, EntityGraphHelper<T> entityGraph,
+        Consumer<Stream<T>> consumer) {
+        validateQueryParams(entityClass, spec);
+        if (consumer == null) {
+            throw new IllegalArgumentException("consumer must not be null");
+        }
+        try (Stream<T> stream = doFindStream(entityClass, spec, entityGraph)) {
+            consumer.accept(stream);
+        }
+    }
+
+    /**
+     * 内部流式查询实现。通过 {@link #findAllStream(Class, QuerySpec, Consumer)} 和
+     * {@link #findAllStream(Class, QuerySpec, EntityGraphHelper, Consumer)} 调用。
+     *
+     * <p>
+     * 设置 {@code fetchSize} hint 以支持数据库游标的增量获取，避免一次性加载全部结果到内存。
+     *
+     * @param entityClass 实体类
+     * @param spec 查询规范
+     * @param entityGraph 用于急切加载的实体图（可为 null）
+     * @param <T> 实体类型
+     * @return 流式查询结果，调用方负责在 try-with-resources 中关闭
+     */
+    private <T> Stream<T> doFindStream(Class<T> entityClass, QuerySpec<T> spec, EntityGraphHelper<T> entityGraph) {
+        TypedQuery<T> query = buildTypedQuery(entityClass, spec, entityGraph, null);
+        int fetchSize = com.zsubera.jpa.util.PageableHelper.determineFetchSize(entityManager);
+        if (fetchSize != 0) {
+            query.setHint("jakarta.persistence.query.fetchSize", fetchSize);
+        }
+        return query.getResultStream();
+    }
+
+    /**
+     * 构建 TypedQuery 的公共方法，消除查询构建逻辑的重复。
+     *
+     * @param entityClass 实体类
+     * @param spec 查询规范
+     * @param entityGraph 用于急切加载的实体图（可为 null）
+     * @param maxResults 最大结果数（null 表示不限制）
+     * @param <T> 实体类型
+     * @return 构建的 TypedQuery
+     */
+    private <T> TypedQuery<T> buildTypedQuery(Class<T> entityClass, QuerySpec<T> spec, EntityGraphHelper<T> entityGraph,
+        Integer maxResults) {
+        TypedQuery<T> query = buildSpecificationQuery(entityClass, spec.toSpecification(), null, maxResults);
+        if (entityGraph != null) {
+            entityGraph.apply(query, entityManager);
+        }
+        spec.applyQuerySettings(query);
+        return query;
+    }
+
+    /**
+     * 查找匹配给定 {@link Specification} 的单个实体。
+     *
+     * @param entityClass 实体类
+     * @param spec 查询规范
+     * @param <T> 实体类型
+     * @return 匹配实体的 Optional 包装
+     */
+    @Override
+    @Transactional(readOnly = true)
+    public <T> Optional<T> findOne(Class<T> entityClass, Specification<T> spec) {
+        validateQueryParams(entityClass, spec);
+        CriteriaBuilder cb = entityManager.getCriteriaBuilder();
+        CriteriaQuery<T> cq = cb.createQuery(entityClass);
+        Root<T> root = cq.from(entityClass);
+        jakarta.persistence.criteria.Predicate predicate = spec.toPredicate(root, cq, cb);
+        if (predicate != null) {
+            cq.where(predicate);
+        }
+        TypedQuery<T> query = entityManager.createQuery(cq);
+        query.setMaxResults(1);
+        List<T> results = query.getResultList();
+        return results.isEmpty() ? Optional.empty() : Optional.of(results.get(0));
+    }
+
+    /**
+     * 查找匹配给定 {@link Specification} 的所有实体。
+     *
+     * @param entityClass 实体类
+     * @param spec 查询规范
+     * @param <T> 实体类型
+     * @return 匹配实体列表（限制为最大行数）
+     */
+    @Override
+    @Transactional(readOnly = true)
+    public <T> List<T> find(Class<T> entityClass, Specification<T> spec) {
+        validateQueryParams(entityClass, spec);
+        return find(entityClass, spec, resolveMaxResults());
+    }
+
+    /**
+     * 查找匹配给定 {@link Specification} 的所有实体，支持自定义最大行数限制。
+     *
+     * @param entityClass 实体类
+     * @param spec 查询规范
+     * @param maxResults 返回的最大结果数
+     * @param <T> 实体类型
+     * @return 匹配实体列表
+     */
+    @Override
+    @Transactional(readOnly = true)
+    public <T> List<T> find(Class<T> entityClass, Specification<T> spec, int maxResults) {
+        validateQueryParams(entityClass, spec);
+        if (maxResults <= 0 && maxResults != DISABLED) {
+            throw new IllegalArgumentException("maxResults must be positive or -1 (disabled)");
+        }
+        Integer effectiveMaxResults = maxResults == DISABLED ? null : maxResults;
+        TypedQuery<T> query = buildSpecificationQuery(entityClass, spec, null, effectiveMaxResults);
+        return query.getResultList();
+    }
+
+    /**
+     * 构建基于 Specification 的 TypedQuery 的公共方法。委托给 {@link QueryBuildHelper}。
+     */
+    private <T> TypedQuery<T> buildSpecificationQuery(Class<T> entityClass, Specification<T> spec,
+        @Nullable org.springframework.data.domain.Sort sort, Integer maxResults) {
+        return QueryBuildHelper.buildSpecificationQuery(entityManager, entityClass, spec, sort, maxResults);
+    }
+
+    /**
+     * 将 Spring Data {@link org.springframework.data.domain.Sort} 应用到 JPA CriteriaQuery。委托给 {@link QueryBuildHelper}。
+     */
+    private <T> void applySort(CriteriaQuery<T> query, Root<T> root, CriteriaBuilder cb,
+        @Nullable org.springframework.data.domain.Sort sort) {
+        QueryBuildHelper.applySort(query, root, cb, sort);
+    }
+
+    /**
+     * 分页查找匹配给定 {@link QuerySpec} 的实体。
+     *
+     * @param entityClass 实体类
+     * @param spec 查询规范
+     * @param pageable 分页信息
+     * @param <T> 实体类型
+     * @return 匹配实体的分页结果
+     */
+    @Override
+    @Transactional(readOnly = true)
+    public <T> Page<T> findAll(Class<T> entityClass, QuerySpec<T> spec, Pageable pageable) {
+        validateQueryParams(entityClass, spec);
+        if (pageable == null) {
+            throw new IllegalArgumentException("pageable must not be null");
+        }
+        return doFindPage(entityClass, spec.toSpecification(), pageable, spec);
+    }
+
+    /**
+     * 检查深度分页，超过阈值时记录警告，超过硬限制时抛出异常。
+     *
+     * @param offset 分页偏移量
+     * @throws IllegalArgumentException 如果 offset 超过硬限制
+     */
+    /**
+     * 从 GlobalConfigHolder 解析运行时配置值。优先使用 GlobalConfigHolder 中的值（来自 application.yml），
+     * 回退到本地字段值（程序式配置）。
+     */
+    private static int resolveConfigValue(
+        java.util.function.Function<com.zsubera.jpa.autoconfigure.MyJpaPlusGlobalConfig, Integer> getter,
+        int localFallback) {
+        com.zsubera.jpa.autoconfigure.MyJpaPlusGlobalConfig config =
+            com.zsubera.jpa.autoconfigure.GlobalConfigHolder.getConfig();
+        if (config != null) {
+            Integer value = getter.apply(config);
+            if (value != null) {
+                return value;
+            }
+        }
+        return localFallback;
+    }
+
+    private int resolveMaxResults() {
+        return resolveConfigValue(com.zsubera.jpa.autoconfigure.MyJpaPlusGlobalConfig::getMaxResults, maxResults);
+    }
+
+    private int resolveDeepPaginationOffsetThreshold() {
+        return resolveConfigValue(com.zsubera.jpa.autoconfigure.MyJpaPlusGlobalConfig::getDeepPaginationOffsetThreshold,
+            deepPaginationOffsetThreshold);
+    }
+
+    private int resolveDeepPaginationOffsetLimit() {
+        return resolveConfigValue(com.zsubera.jpa.autoconfigure.MyJpaPlusGlobalConfig::getDeepPaginationOffsetLimit,
+            deepPaginationOffsetLimit);
+    }
+
+    private void checkDeepPagination(long offset) {
+        DeepPaginationGuard.check(offset, resolveDeepPaginationOffsetThreshold(), resolveDeepPaginationOffsetLimit(),
+            lastDeepPaginationWarnTime);
+    }
+
+    /**
+     * 执行计数查询的公共方法。委托给 {@link QueryBuildHelper}。
+     */
+    private <T> long executeCountQuery(Class<T> entityClass, Specification<T> spec, CriteriaBuilder cb) {
+        return QueryBuildHelper.executeCountQuery(entityManager, entityClass, spec);
+    }
+
+    /**
+     * 分页查找匹配给定 {@link Specification} 的实体。
+     *
+     * @param entityClass 实体类
+     * @param spec 查询规范
+     * @param pageable 分页信息
+     * @param <T> 实体类型
+     * @return 匹配实体的分页结果
+     */
+    @Override
+    @Transactional(readOnly = true)
+    public <T> Page<T> findPage(Class<T> entityClass, Specification<T> spec, Pageable pageable) {
+        validateQueryParams(entityClass, spec);
+        if (pageable == null) {
+            throw new IllegalArgumentException("pageable must not be null");
+        }
+        return doFindPage(entityClass, spec, pageable, null);
+    }
+
+    /**
+     * 公共分页逻辑，消除 findPageInternal 和 findPage 的代码重复。
+     *
+     * @param entityClass 实体类
+     * @param spec 查询规范
+     * @param pageable 分页信息
+     * @param querySpec QuerySpec 实例（用于应用查询设置，可为 null）
+     * @param <T> 实体类型
+     * @return 匹配实体的分页结果
+     */
+    private <T> Page<T> doFindPage(Class<T> entityClass, Specification<T> spec, Pageable pageable,
+        @Nullable QuerySpec<T> querySpec) {
+        if (pageable.isUnpaged()) {
+            log.debug(
+                "Pageable.unpaged() used with pagination method - applying maxResults limit ({}). "
+                    + "Consider using findAll() with explicit maxResults or findAllStream() for large datasets.",
+                resolveMaxResults());
+            TypedQuery<T> typedQuery = buildSpecificationQuery(entityClass, spec, null, resolveMaxResults());
+            if (querySpec != null) {
+                querySpec.applyQuerySettings(typedQuery);
+            }
+            List<T> allContent = typedQuery.getResultList();
+            return new PageImpl<>(allContent);
+        }
+
+        checkDeepPagination(pageable.getOffset());
+
+        // 计数查询
+        long total = QueryBuildHelper.executeCountQuery(entityManager, entityClass, spec);
+
+        // 数据查询 - 复用 buildSpecificationQuery 避免重复的查询构建逻辑
+        TypedQuery<T> query = buildSpecificationQuery(entityClass, spec, pageable.getSort(), pageable.getPageSize());
+        try {
+            query.setFirstResult(Math.toIntExact(pageable.getOffset()));
+        } catch (ArithmeticException e) {
+            throw new IllegalArgumentException("Page offset (" + pageable.getOffset() + ") exceeds Integer.MAX_VALUE. "
+                + "JPA setFirstResult() does not support offsets larger than Integer.MAX_VALUE.", e);
+        }
+        if (querySpec != null) {
+            querySpec.applyQuerySettings(query);
+        }
+        List<T> content = query.getResultList();
+
+        return new PageImpl<>(content, pageable, total);
+    }
+
+    /**
+     * 使用给定的 {@link UpdateSpec} 执行批量更新。
+     *
+     * @param spec 要执行的 UpdateSpec
+     * @param <T> 实体类型
+     * @return 受影响的行数
+     */
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public <T> int execute(UpdateSpec<T> spec) {
+        requireNonNull(spec);
+        int affected = getBulkOperationTemplate().execute(spec);
+        publishEntityModifiedEvent(spec.getEntityClass(), affected);
+        return affected;
+    }
+
+    /**
+     * 使用给定的 {@link DeleteSpec} 执行批量删除。
+     *
+     * @param spec 要执行的 DeleteSpec
+     * @param <T> 实体类型
+     * @return 受影响的行数
+     */
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public <T> int execute(DeleteSpec<T> spec) {
+        requireNonNull(spec);
+        int affected = getBulkOperationTemplate().execute(spec);
+        publishEntityModifiedEvent(spec.getEntityClass(), affected);
+        return affected;
+    }
+
+    /**
+     * 使用给定的 {@link com.zsubera.jpa.update.MergeSpec} 执行 UPSERT 操作。
+     *
+     * @param spec 要执行的 MergeSpec
+     * @param <T> 实体类型
+     * @return 受影响的行数
+     * @throws IllegalArgumentException 如果 spec 为 null
+     */
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public <T> int execute(com.zsubera.jpa.update.MergeSpec<T> spec) {
+        requireNonNull(spec);
+        int affected = getBulkOperationTemplate().execute(spec);
+        publishEntityModifiedEvent(spec.getEntityClass(), affected);
+        return affected;
+    }
+
+    private static void requireNonNull(Object spec) {
+        if (spec == null) {
+            throw new IllegalArgumentException("spec must not be null");
+        }
+    }
+
+    /**
+     * 批量执行 UPSERT 操作，使用 EntityManager flush/clear 进行分批处理。
+     *
+     * <p>
+     * 此方法在单个事务中执行所有批次，通过定期 flush 和 clear EntityManager 减少内存占用。
+     *
+     * @param mergeSpec MergeSpec 实例（已配置冲突列和更新列）
+     * @param entities 要 UPSERT 的实体列表
+     * @param batchSize 每批大小，建议值为 50-200
+     * @param <T> 实体类型
+     * @return 受影响的总行数
+     * @throws IllegalArgumentException 如果任何参数为 null 或 batchSize 不是正数
+     */
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public <T> int executeBatch(com.zsubera.jpa.update.MergeSpec<T> mergeSpec, List<T> entities, int batchSize) {
+        if (mergeSpec == null) {
+            throw new IllegalArgumentException("mergeSpec must not be null");
+        }
+        if (entities == null || entities.isEmpty()) {
+            throw new IllegalArgumentException("entities must not be null or empty");
+        }
+        if (batchSize <= 0) {
+            throw new IllegalArgumentException("batchSize must be positive");
+        }
+        int affected = getBulkOperationTemplate().executeBatch(mergeSpec, entities, batchSize);
+        publishEntityModifiedEvent(mergeSpec.getEntityClass(), affected);
+        return affected;
+    }
+
+    /**
+     * 使用给定的 {@link UpdateSpec} 执行批量更新，限制最大影响行数。
+     *
+     * @param spec 要执行的 UpdateSpec
+     * @param maxRows 最大影响行数，如果为 -1 则使用全局配置
+     * @param <T> 实体类型
+     * @return 受影响的行数
+     * @throws IllegalArgumentException 如果 maxRows 不是正数且不等于 -1
+     */
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public <T> int executeWithMaxRows(UpdateSpec<T> spec, int maxRows) {
+        if (spec == null) {
+            throw new IllegalArgumentException("spec must not be null");
+        }
+        if (maxRows <= 0 && maxRows != -1) {
+            throw new IllegalArgumentException("maxRows must be positive or -1 (use global config)");
+        }
+        int affected = getBulkOperationTemplate().executeWithMaxRows(spec, maxRows);
+        publishEntityModifiedEvent(spec.getEntityClass(), affected);
+        return affected;
+    }
+
+    /**
+     * 使用给定的 {@link DeleteSpec} 执行批量删除，限制最大影响行数。
+     *
+     * @param spec 要执行的 DeleteSpec
+     * @param maxRows 最大影响行数，如果为 -1 则使用全局配置
+     * @param <T> 实体类型
+     * @return 受影响的行数
+     * @throws IllegalArgumentException 如果 maxRows 不是正数且不等于 -1
+     */
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public <T> int executeWithMaxRows(DeleteSpec<T> spec, int maxRows) {
+        if (spec == null) {
+            throw new IllegalArgumentException("spec must not be null");
+        }
+        if (maxRows <= 0 && maxRows != -1) {
+            throw new IllegalArgumentException("maxRows must be positive or -1 (use global config)");
+        }
+        int affected = getBulkOperationTemplate().executeWithMaxRows(spec, maxRows);
+        publishEntityModifiedEvent(spec.getEntityClass(), affected);
+        return affected;
+    }
+
+    /**
+     * 分批执行批量更新。通过分批处理减少内存占用（通过 {@link EntityManager#clear()} 清除一级缓存）， 但所有批次在同一个事务中执行，要么全部成功，要么全部回滚。
+     *
+     * @param spec 要执行的 UpdateSpec
+     * @param batchSize 每批更新的行数
+     * @param <T> 实体类型
+     * @return 受影响的总行数
+     */
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public <T> int executeBatch(UpdateSpec<T> spec, int batchSize) {
+        validateBatchParams(spec, "spec", batchSize);
+        int affected = getBulkOperationTemplate().executeBatch(spec, batchSize);
+        publishEntityModifiedEvent(spec.getEntityClass(), affected);
+        return affected;
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public <T> int executeBatch(DeleteSpec<T> spec, int batchSize) {
+        validateBatchParams(spec, "spec", batchSize);
+        int affected = getBulkOperationTemplate().executeBatch(spec, batchSize);
+        publishEntityModifiedEvent(spec.getEntityClass(), affected);
+        return affected;
+    }
+
+    // ---- 分批提交事务的批量操作 ----
+
+    /**
+     * 分批执行批量更新，每批在独立事务中提交，支持失败回调。
+     *
+     * @param spec 要执行的 UpdateSpec
+     * @param batchSize 每批更新的行数
+     * @param failureStrategy 失败时的处理策略
+     * @param <T> 实体类型
+     * @return 批量执行结果
+     */
+    @Override
+    public <T> MyJpaTemplateOperations.BatchResult executeBatchInSeparateTransactions(UpdateSpec<T> spec, int batchSize,
+        MyJpaTemplateOperations.BatchFailureStrategy failureStrategy) {
+        validateBatchParams(spec, "spec", batchSize);
+        if (failureStrategy == null) {
+            throw new IllegalArgumentException("failureStrategy must not be null");
+        }
+        BulkOperationTemplate.BatchResult result = getBulkOperationTemplate().executeBatchInSeparateTransactions(spec,
+            batchSize, convertFailureStrategy(failureStrategy));
+        publishEntityModifiedEvent(spec.getEntityClass(), result.totalRows());
+        return new MyJpaTemplateOperations.BatchResult(result.totalRows(), result.batchCount(), result.success(),
+            result.failedBatchIndex(), result.failureCause());
+    }
+
+    /**
+     * 分批执行批量删除，每批在独立事务中提交，支持失败回调。
+     *
+     * @param spec 要执行的 DeleteSpec
+     * @param batchSize 每批删除的行数
+     * @param failureStrategy 失败时的处理策略
+     * @param <T> 实体类型
+     * @return 批量执行结果
+     */
+    @Override
+    public <T> MyJpaTemplateOperations.BatchResult executeBatchInSeparateTransactions(DeleteSpec<T> spec, int batchSize,
+        MyJpaTemplateOperations.BatchFailureStrategy failureStrategy) {
+        validateBatchParams(spec, "spec", batchSize);
+        if (failureStrategy == null) {
+            throw new IllegalArgumentException("failureStrategy must not be null");
+        }
+        BulkOperationTemplate.BatchResult result = getBulkOperationTemplate().executeBatchInSeparateTransactions(spec,
+            batchSize, convertFailureStrategy(failureStrategy));
+        publishEntityModifiedEvent(spec.getEntityClass(), result.totalRows());
+        return new MyJpaTemplateOperations.BatchResult(result.totalRows(), result.batchCount(), result.success(),
+            result.failedBatchIndex(), result.failureCause());
+    }
+
+    private static BulkOperationTemplate.BatchFailureStrategy
+        convertFailureStrategy(MyJpaTemplateOperations.BatchFailureStrategy strategy) {
+        return switch (strategy) {
+            case CONTINUE -> BulkOperationTemplate.BatchFailureStrategy.CONTINUE;
+            case ABORT -> BulkOperationTemplate.BatchFailureStrategy.ABORT;
+        };
+    }
+
+    /**
+     * 分批执行批量更新，每批在独立事务中提交。
+     *
+     * @param spec 要执行的 UpdateSpec
+     * @param batchSize 每批更新的行数
+     * @param <T> 实体类型
+     * @return 受影响的总行数
+     */
+    @Override
+    public <T> int executeBatchInSeparateTransactions(UpdateSpec<T> spec, int batchSize) {
+        validateBatchParams(spec, "spec", batchSize);
+        int affected = getBulkOperationTemplate().executeBatchInSeparateTransactions(spec, batchSize);
+        publishEntityModifiedEvent(spec.getEntityClass(), affected);
+        return affected;
+    }
+
+    /**
+     * 分批执行批量删除，每批在独立事务中提交。
+     *
+     * @param spec 要执行的 DeleteSpec
+     * @param batchSize 每批删除的行数
+     * @param <T> 实体类型
+     * @return 受影响的总行数
+     */
+    @Override
+    public <T> int executeBatchInSeparateTransactions(DeleteSpec<T> spec, int batchSize) {
+        validateBatchParams(spec, "spec", batchSize);
+        int affected = getBulkOperationTemplate().executeBatchInSeparateTransactions(spec, batchSize);
+        publishEntityModifiedEvent(spec.getEntityClass(), affected);
+        return affected;
+    }
+
+    /**
+     * 分页查找匹配给定 {@link Specification} 的实体，不执行 count 查询。 使用多查一条记录的方式判断是否有下一页，适用于不需要总记录数的场景。
+     *
+     * @param entityClass 实体类
+     * @param spec 查询规范
+     * @param pageable 分页信息
+     * @param <T> 实体类型
+     * @return 匹配实体的 Slice 结果（无 count 查询）
+     * @throws IllegalArgumentException 如果任何参数为 null
+     */
+    @Override
+    @Transactional(readOnly = true)
+    public <T> org.springframework.data.domain.Slice<T> findSlice(Class<T> entityClass, Specification<T> spec,
+        Pageable pageable) {
+        validateQueryParams(entityClass, spec);
+        if (pageable == null) {
+            throw new IllegalArgumentException("pageable must not be null");
+        }
+        if (pageable.isPaged()) {
+            checkDeepPagination(pageable.getOffset());
+        }
+        CriteriaBuilder cb = entityManager.getCriteriaBuilder();
+        CriteriaQuery<T> cq = cb.createQuery(entityClass);
+        Root<T> root = cq.from(entityClass);
+        jakarta.persistence.criteria.Predicate predicate = spec.toPredicate(root, cq, cb);
+        if (predicate != null) {
+            cq.where(predicate);
+        }
+        applySort(cq, root, cb, pageable.getSort());
+        TypedQuery<T> query = entityManager.createQuery(cq);
+        try {
+            query.setFirstResult(Math.toIntExact(pageable.getOffset()));
+        } catch (ArithmeticException e) {
+            throw new IllegalArgumentException("Page offset exceeds Integer.MAX_VALUE.", e);
+        }
+        // 总是请求 pageSize+1 行以检测是否有下一页。
+        // maxResults 仅作为安全上限：当 maxResults > 0 且小于 pageSize+1 时，
+        // 无法准确判断是否有下一页，此时保守地认为有下一页（除非结果集为空或不足一页）。
+        int pageSize = pageable.getPageSize();
+        int fetchLimit = pageSize == Integer.MAX_VALUE ? Integer.MAX_VALUE : pageSize + 1;
+        boolean maxResultsLimited = false;
+        int effectiveMaxResults = resolveMaxResults();
+        if (effectiveMaxResults > 0 && effectiveMaxResults < fetchLimit) {
+            fetchLimit = effectiveMaxResults;
+            maxResultsLimited = true;
+        }
+        query.setMaxResults(fetchLimit);
+        List<T> content = query.getResultList();
+        boolean hasNext;
+        if (maxResultsLimited) {
+            // ponytail: maxResults 是硬限制，无法获取下一页数据
+            // 当 maxResults < pageSize+1 时，即使有更多数据也无法通过 slice 分页获取
+            // 诚实返回 hasNext=false，避免调用方无限循环
+            hasNext = false;
+            if (content.size() >= effectiveMaxResults) {
+                log.warn(
+                    "findSlice with maxResultsLimited=true "
+                        + "(maxResults={}, pageSize={}) may have truncated results. "
+                        + "Slice pagination is broken when maxResults < pageSize+1. "
+                        + "Increase maxResults or reduce pageSize for correct pagination.",
+                    effectiveMaxResults, pageable.getPageSize());
+            }
+        } else {
+            hasNext = content.size() > pageable.getPageSize();
+        }
+        if (hasNext) {
+            content = content.subList(0, Math.min(content.size(), pageable.getPageSize()));
+        }
+        return new org.springframework.data.domain.SliceImpl<>(content, pageable, hasNext);
+    }
+
+    /**
+     * 根据 ID 集合批量查找实体。
+     *
+     * <p>
+     * 使用 {@link com.zsubera.jpa.util.InClauseBuilder} 自动处理大型 IN 子句的分批， 避免超出数据库的参数数量限制（Oracle: 1000, SQL Server: 2100）。
+     *
+     * @param entityClass 实体类
+     * @param ids ID 集合
+     * @param <T> 实体类型
+     * @param <ID> ID 类型
+     * @return 匹配实体列表
+     * @throws IllegalArgumentException 如果任何参数为 null 或 ids 为空
+     */
+    @Override
+    @Transactional(readOnly = true)
+    public <T, ID> List<T> findAllById(Class<T> entityClass, Collection<ID> ids) {
+        if (entityClass == null) {
+            throw new IllegalArgumentException("entityClass must not be null");
+        }
+        if (ids == null || ids.isEmpty()) {
+            throw new IllegalArgumentException("ids must not be null or empty");
+        }
+        String idFieldName = EntityClassResolver.resolveIdFieldName(entityClass);
+        CriteriaBuilder cb = entityManager.getCriteriaBuilder();
+        CriteriaQuery<T> cq = cb.createQuery(entityClass);
+        Root<T> root = cq.from(entityClass);
+        // 直接传递 ids Collection 以避免不必要的 toArray() 转换
+        cq.where(com.zsubera.jpa.util.InClauseBuilder.in(cb, root.get(idFieldName), ids));
+        TypedQuery<T> query = entityManager.createQuery(cq);
+        int max = resolveMaxResults();
+        if (max > 0) {
+            query.setMaxResults(max);
+        }
+        return query.getResultList();
+    }
+
+    /**
+     * 根据 ID 集合批量查找未被软删除的实体。
+     *
+     * <p>
+     * 使用 {@link com.zsubera.jpa.util.InClauseBuilder} 自动处理大型 IN 子句的分批， 避免超出数据库的参数数量限制。
+     *
+     * @param entityClass 实体类
+     * @param ids ID 集合
+     * @param <T> 实体类型
+     * @param <ID> ID 类型
+     * @return 匹配的未删除实体列表
+     * @throws IllegalArgumentException 如果任何参数为 null 或 ids 为空
+     */
+    @Override
+    @Transactional(readOnly = true)
+    public <T, ID> List<T> findNotDeletedAllById(Class<T> entityClass, Collection<ID> ids) {
+        if (entityClass == null) {
+            throw new IllegalArgumentException("entityClass must not be null");
+        }
+        if (ids == null || ids.isEmpty()) {
+            throw new IllegalArgumentException("ids must not be null or empty");
+        }
+        String idFieldName = EntityClassResolver.resolveIdFieldName(entityClass);
+        // 直接传递 ids Collection 以避免不必要的 toArray() 转换
+        Specification<T> idSpec =
+            (root, query, cb) -> com.zsubera.jpa.util.InClauseBuilder.in(cb, root.get(idFieldName), ids);
+        Specification<T> softDeleteSpec = com.zsubera.jpa.softdelete.SoftDeleteHelper.isNotDeleted(entityClass);
+        Specification<T> combinedSpec = idSpec.and(softDeleteSpec);
+        CriteriaBuilder cb = entityManager.getCriteriaBuilder();
+        CriteriaQuery<T> cq = cb.createQuery(entityClass);
+        Root<T> root = cq.from(entityClass);
+        jakarta.persistence.criteria.Predicate predicate = combinedSpec.toPredicate(root, cq, cb);
+        if (predicate != null) {
+            cq.where(predicate);
+        }
+        TypedQuery<T> query = entityManager.createQuery(cq);
+        int max = resolveMaxResults();
+        if (max > 0) {
+            query.setMaxResults(max);
+        }
+        return query.getResultList();
+    }
+
+    // ---- Keyset 分页 ----
+
+    /**
+     * 游标分页查询，避免大 offset 的性能退化。
+     *
+     * <p>
+     * 使用上一页最后一条记录的排序字段值作为游标，通过 WHERE 条件定位下一页起始位置。 性能始终为 O(log n)，不受页码大小影响。
+     *
+     * <p>
+     * 使用示例：
+     *
+     * <pre>{@code
+     * // 第一页
+     * KeysetPage<User> page1 = jpa.findKeysetPage(User.class, spec, Sort.by("id"), 20, null);
+     *
+     * // 下一页：使用上一页的 lastSortValues
+     * KeysetPage<User> page2 = jpa.findKeysetPage(User.class, spec, Sort.by("id"), 20, page1.lastSortValues());
+     * }</pre>
+     *
+     * <p>
+     * <strong>限制：</strong>
+     * <ul>
+     * <li>排序字段必须有数据库索引以保证性能</li>
+     * <li>排序字段组合必须唯一（或包含主键），否则可能遗漏记录</li>
+     * <li>不支持跳页（只能前进/后退一页），需要跳页请使用 offset 分页</li>
+     * </ul>
+     *
+     * @param entityClass 实体类
+     * @param spec 查询规范
+     * @param sort 排序规则（至少一个字段，建议包含主键以保证唯一性）
+     * @param pageSize 每页大小
+     * @param lastSortValues 上一页最后一条记录的排序字段值（null 表示查询第一页）
+     * @param <T> 实体类型
+     * @return 游标分页结果
+     * @throws IllegalArgumentException 如果参数不合法
+     */
+    @Override
+    @Transactional(readOnly = true)
+    public <T> MyJpaTemplateOperations.KeysetPage<T> findKeysetPage(Class<T> entityClass, Specification<T> spec,
+        org.springframework.data.domain.Sort sort, int pageSize, Object... lastSortValues) {
+        validateQueryParams(entityClass, spec);
+        if (sort == null || sort.isUnsorted()) {
+            throw new IllegalArgumentException("sort must not be null or unsorted for keyset pagination");
+        }
+        if (pageSize <= 0) {
+            throw new IllegalArgumentException("pageSize must be positive");
+        }
+        List<org.springframework.data.domain.Sort.Order> orders = sort.stream().toList();
+        if (lastSortValues != null && lastSortValues.length != orders.size()) {
+            throw new IllegalArgumentException("lastSortValues length (" + lastSortValues.length
+                + ") must match sort fields count (" + orders.size() + ")");
+        }
+
+        return getKeysetPaginationHelper().findKeysetPage(entityClass, spec, sort, pageSize, lastSortValues);
+    }
+
+    // ---- 投影查询方法 ----
+
+    /**
+     * 投影查询。通过 {@link QuerySpec#select(SFunction[])} 和 {@link QuerySpec#asDto(Class)} 配置投影字段和 DTO 映射。
+     *
+     * <p>示例：
+     * <pre>{@code
+     * // Tuple 投影
+     * List<Tuple> tuples = template.find(User.class,
+     *     new QuerySpec<User>().select(User::getName, User::getStatus).eq(User::getStatus, "ACTIVE"));
+     *
+     * // DTO 投影
+     * List<NameDto> dtos = template.find(User.class,
+     *     new QuerySpec<User>().select(User::getName).asDto(NameDto.class).eq(User::getStatus, "ACTIVE"));
+     * }</pre>
+     *
+     * @param entityClass 实体类
+     * @param spec 查询条件（必须已配置 select()）
+     * @return 投影结果列表
+     */
+    @SuppressWarnings("unchecked")
+    @Transactional(readOnly = true)
+    public final <T> List<T> find(Class<T> entityClass, QuerySpec<T> spec) {
+        validateQueryParams(entityClass, spec);
+        if (!spec.isProjectionMode()) {
+            throw new IllegalArgumentException("QuerySpec must have select() configured for projection query");
+        }
+        EntityManager em = requireInitialized(entityManager, "entityManager");
+        Specification<T> softDeleteSpec =
+            shouldApplySoftDeleteFilter() ? SoftDeleteHelper.isNotDeleted(entityClass) : null;
+        Class<?> dtoClass = spec.getProjectionDtoClass();
+        if (dtoClass != null) {
+            return (List<
+                T>)new QueryProjectionSupport<>(entityClass, spec, softDeleteSpec, spec.getProjectionFieldsWithAlias())
+                    .toDtoList(em, dtoClass, resolveMaxResults());
+        }
+        return (List<
+            T>)new QueryProjectionSupport<>(entityClass, spec, softDeleteSpec, spec.getProjectionFieldsWithAlias())
+                .toTupleList(em, resolveMaxResults());
+    }
+
+    /**
+     * 分页投影查询。
+     *
+     * @param entityClass 实体类
+     * @param spec 查询条件（必须已配置 select()）
+     * @param pageable 分页信息
+     * @return 分页 Tuple 结果
+     */
+    @SuppressWarnings("unchecked")
+    @Transactional(readOnly = true)
+    public final <T> Page<Tuple> projectionPage(Class<T> entityClass, QuerySpec<T> spec, Pageable pageable) {
+        validateQueryParams(entityClass, spec);
+        if (!spec.isProjectionMode()) {
+            throw new IllegalArgumentException("QuerySpec must have select() configured for projection query");
+        }
+        if (pageable == null) {
+            throw new IllegalArgumentException("pageable must not be null");
+        }
+        EntityManager em = requireInitialized(entityManager, "entityManager");
+        Specification<T> softDeleteSpec =
+            shouldApplySoftDeleteFilter() ? SoftDeleteHelper.isNotDeleted(entityClass) : null;
+        return new QueryProjectionSupport<>(entityClass, spec, softDeleteSpec, spec.getProjectionFieldsWithAlias())
+            .toTuplePage(em, pageable);
+    }
+
+    // ---- 内部辅助方法 ----
+
+    /**
+     * 验证查询参数非空。减少各查询方法中的重复验证代码。
+     */
+    private static void validateQueryParams(Class<?> entityClass, Object spec) {
+        if (entityClass == null) {
+            throw new IllegalArgumentException("entityClass must not be null");
+        }
+        if (spec == null) {
+            throw new IllegalArgumentException("spec must not be null");
+        }
+    }
+
+    /**
+     * 验证批量操作参数。减少各批量方法中的重复验证代码。
+     */
+    private static void validateBatchParams(Object param, String paramName, int batchSize) {
+        if (param == null) {
+            throw new IllegalArgumentException(paramName + " must not be null");
+        }
+        if (batchSize <= 0) {
+            throw new IllegalArgumentException("batchSize must be positive");
+        }
+    }
+
+    /**
+     * 统一的初始化检查 getter，减少 getter 方法中的重复 null 检查。
+     */
+    private static <T> T requireInitialized(T field, String name) {
+        if (field == null) {
+            throw new IllegalStateException("MyJpaTemplate not fully initialized. " + name + " is null. "
+                + "This can happen if methods are called before Spring context refresh completes.");
+        }
+        return field;
+    }
+
+    /**
+     * 发布实体变更事件，触发缓存自动失效。
+     *
+     * @param entityClass 变更的实体类
+     * @param affectedRows 受影响的行数
+     */
+    private void publishEntityModifiedEvent(Class<?> entityClass, int affectedRows) {
+        if (affectedRows > 0 && applicationContext != null) {
+            try {
+                applicationContext.publishEvent(new EntityModifiedEvent(entityClass, affectedRows));
+            } catch (Exception e) {
+                log.warn("EntityModifiedEvent publish failed for {} ({} rows), cache may be stale",
+                    entityClass.getSimpleName(), affectedRows, e);
+            }
+        }
+    }
+}

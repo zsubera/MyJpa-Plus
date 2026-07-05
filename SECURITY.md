@@ -1,21 +1,26 @@
-# Security Policy
+# 安全策略
 
-## Supported Versions
+## 支持的版本
 
-| Version | Supported          |
-|---------|--------------------|
-| 1.0.x   | :white_check_mark: |
+| 版本 | 支持状态 |
+|---|---|
+| 1.3.x | :white_check_mark: |
+| 1.2.x | :white_check_mark: |
+| 1.1.x | :white_check_mark: |
+| < 1.1.0 | :x: 不再支持 |
 
-## Reporting a Vulnerability
+## 报告漏洞
 
-Please report security vulnerabilities via email to the project maintainers.
-Do not open public issues for security vulnerabilities.
+**请勿通过公开 issue 报告安全漏洞。**
 
-## Dependencies
+请使用 [GitHub Security Advisory](https://github.com/zsubera/myjpa-plus/security/advisories/new) 私密报告安全问题，或发送邮件至 POM 开发者信息中的地址联系项目维护者。我们会在 48 小时内确认收到，并在修复后公开披露。
 
-This project has minimal dependencies:
+## 依赖项
 
-- **Spring Boot 3.x** (optional, compile scope) — Framework providing JPA Criteria API
-- **H2 Database** (test scope only) — In-memory database for integration tests
+本项目依赖极简：
 
-No runtime dependencies on web frameworks, logging libraries, or serialization libraries.
+- **Spring Boot 3.x**（可选，compile 作用域）— 提供 JPA Criteria API 的框架
+- **Jackson Databind**（可选，compile 作用域）— 用于字段脱敏序列化
+- **SpotBugs Annotations**（可选，compile 作用域）— 静态分析注解
+
+无任何 Web 框架、日志库或序列化库的运行时依赖。MySQL Connector/J 仅 test 作用域。
