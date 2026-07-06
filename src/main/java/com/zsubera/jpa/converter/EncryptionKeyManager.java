@@ -61,6 +61,12 @@ final class EncryptionKeyManager {
     static void setPbkdf2Iterations(int iterations) {
         if (iterations >= PBKDF2_ITERATIONS_MIN && iterations <= PBKDF2_ITERATIONS_MAX) {
             configuredPbkdf2Iterations = iterations;
+            // 如果密钥已缓存，清除缓存以使用新迭代次数重新派生
+            if (!KEY_CACHE.asMap().isEmpty()) {
+                log.warn("PBKDF2 iterations changed to {} after keys were already derived. "
+                    + "Key cache has been cleared; keys will be re-derived on next access.", iterations);
+                KEY_CACHE.invalidateAll();
+            }
         } else {
             throw new IllegalArgumentException("PBKDF2 iterations must be between " + PBKDF2_ITERATIONS_MIN + " and "
                 + PBKDF2_ITERATIONS_MAX + ", got: " + iterations);
@@ -356,12 +362,12 @@ final class EncryptionKeyManager {
         KEY_VERSION_LOCK.lock();
         try {
             keyVersionSnapshot = new KeyVersionSnapshot(null, 0);
+            KEY_CACHE.invalidateAll();
+            KEY_VALIDATED.set(false);
+            CACHED_SALT_REF.set(null);
         } finally {
             KEY_VERSION_LOCK.unlock();
         }
-        KEY_CACHE.invalidateAll();
-        KEY_VALIDATED.set(false);
-        CACHED_SALT_REF.set(null);
     }
 
     static void refreshKeyVersion() {

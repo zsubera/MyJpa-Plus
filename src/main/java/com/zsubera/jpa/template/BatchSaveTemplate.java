@@ -125,7 +125,13 @@ class BatchSaveTemplate {
         ArrayList<T> result = new ArrayList<>();
         int count = 0;
         for (T entity : entities) {
-            result.add(saveFunction.apply(entity));
+            try {
+                result.add(saveFunction.apply(entity));
+            } catch (RuntimeException e) {
+                // 清理持久化上下文，防止脏状态干扰后续操作或异常处理
+                entityManager.clear();
+                throw e;
+            }
             count++;
             if (count % batchSize == 0) {
                 entityManager.flush();

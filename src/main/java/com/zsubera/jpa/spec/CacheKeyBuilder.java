@@ -155,11 +155,14 @@ final class CacheKeyBuilder {
         } else if (node instanceof ConditionNode.ExistsNode<?> en) {
             sb.append(en.negate ? "NOTEXISTS(" : "EXISTS(");
             sb.append(en.subEntity.getSimpleName());
-            sb.append(",ref=").append(en.config.getClass().getName().hashCode()).append(")");
+            // ponytail: 子查询缓存键基于 lambda 类的泛型签名哈希。
+            // 同一 lambda 在不同编译单元中可能产生不同类名，导致缓存未命中。
+            // 这是尽力而为的缓存策略，不影响正确性，仅影响缓存命中率。
+            sb.append(",ref=").append(en.config.getClass().toGenericString().hashCode()).append(")");
         } else if (node instanceof ConditionNode.InSubQueryNode<?> isn) {
             sb.append(isn.negate ? "NOTINSUBQUERY(" : "INSUBQUERY(");
             sb.append(isn.outerFieldName).append(",").append(isn.subEntity.getSimpleName());
-            sb.append(",ref=").append(isn.config.getClass().getName().hashCode()).append(")");
+            sb.append(",ref=").append(isn.config.getClass().toGenericString().hashCode()).append(")");
         } else if (node instanceof ConditionNode.NegateNode nn) {
             sb.append("NOT(");
             appendCacheKey(sb, nn.inner(), nextDepth);

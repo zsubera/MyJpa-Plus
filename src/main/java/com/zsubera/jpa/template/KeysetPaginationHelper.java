@@ -52,12 +52,29 @@ final class KeysetPaginationHelper {
      * 创建使用默认 NULLS LAST 语义的分页助手。
      *
      * <p>
-     * 大多数数据库（PostgreSQL、Oracle、SQL Server）默认 NULLS LAST。
-     * MySQL 将 NULL 视为最小值（ASC 时 NULLS FIRST，DESC 时 NULLS LAST）。
-     * 对于需要 NULLS FIRST 语义的场景，请使用 {@link #KeysetPaginationHelper(EntityManager, boolean)} 并设置 {@code nullsFirst=true}。
+     * 自动检测数据库类型并设置默认 NULLS FIRST/LAST 语义：
+     * <ul>
+     * <li>MySQL/MariaDB: NULLS FIRST（MySQL 将 NULL 视为最小值）</li>
+     * <li>PostgreSQL/Oracle/SQL Server: NULLS LAST（标准 SQL 默认）</li>
+     * </ul>
+     * 对于需要覆盖默认语义的场景，请使用 {@link #KeysetPaginationHelper(EntityManager, boolean)}。
      */
     KeysetPaginationHelper(EntityManager entityManager) {
-        this(entityManager, false);
+        this(entityManager, detectNullsFirst(entityManager));
+    }
+
+    /**
+     * 自动检测数据库类型，返回正确的 NULLS FIRST 默认值。
+     * MySQL 将 NULL 视为最小值（ASC 时等效于 NULLS FIRST），其他数据库默认 NULLS LAST。
+     */
+    private static boolean detectNullsFirst(EntityManager entityManager) {
+        try {
+            java.sql.Connection conn = entityManager.unwrap(java.sql.Connection.class);
+            String productName = conn.getMetaData().getDatabaseProductName().toLowerCase();
+            return productName.contains("mysql") || productName.contains("mariadb");
+        } catch (Exception e) {
+            return false;
+        }
     }
 
     KeysetPaginationHelper(EntityManager entityManager, boolean nullsFirst) {

@@ -70,12 +70,14 @@ public final class GlobalConfigHolder {
     /**
      * 上次查找失败的时间戳（毫秒），用于退避重试，避免每次查询都触发容器查找。
      */
+    /** 上次查找失败的单调时间戳（纳秒），用于退避重试。使用 nanoTime 确保单调递增。 */
     private static volatile long lastLookupFailureTime;
 
     /**
      * 查找失败后的退避间隔（毫秒），5 秒内不重试。
      */
     private static final long LOOKUP_BACKOFF_MS = 5000;
+    private static final long LOOKUP_BACKOFF_NANOS = java.util.concurrent.TimeUnit.MILLISECONDS.toNanos(LOOKUP_BACKOFF_MS);
 
     /**
      * 获取全局配置。优先级：Spring Bean 容器 > 静态持有实例 > 默认配置。
@@ -91,8 +93,8 @@ public final class GlobalConfigHolder {
         ApplicationContext ctx = applicationContext;
         if (ctx != null) {
             // 退避重试：上次查找失败后在退避窗口内跳过重试
-            long now = System.currentTimeMillis();
-            if (now - lastLookupFailureTime < LOOKUP_BACKOFF_MS) {
+            long now = System.nanoTime();
+            if (now - lastLookupFailureTime < LOOKUP_BACKOFF_NANOS) {
                 MyJpaPlusGlobalConfig c = config;
                 return c != null ? c : DEFAULT_CONFIG;
             }

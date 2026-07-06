@@ -118,15 +118,36 @@ public final class SoftDeleteBulkExecutor {
                 + "Consider using softDeleteByIds() with specific IDs or UpdateSpec.withVersionIncrement(true) for safe concurrent updates.",
                 entityClass.getSimpleName());
 
-        String escapedTable = SoftDeleteHelper.validateIdentifier(SoftDeleteHelper.resolveTableName(entityClass));
+        String escapedTable = SoftDeleteHelper.quoteIdentifier(SoftDeleteHelper.validateIdentifier(SoftDeleteHelper.resolveTableName(entityClass)));
         String escapedColumn =
-            SoftDeleteHelper.validateIdentifier(SoftDeleteHelper.resolveColumnName(entityClass, ctx.fieldName()));
+            SoftDeleteHelper.quoteIdentifier(SoftDeleteHelper.validateIdentifier(SoftDeleteHelper.resolveColumnName(entityClass, ctx.fieldName())));
         String timestampColumn = resolveTimestampColumn(entityClass, ctx.annotation());
         String versionColumn = versionInfo != null ? versionInfo.columnName : null;
 
         String setClause =
             escapedColumn + " = ?1" + (timestampColumn != null ? ", " + timestampColumn + " = CURRENT_TIMESTAMP" : "")
                 + (versionColumn != null ? ", " + versionColumn + " = " + versionColumn + " + 1" : "");
+
+        // 安全检查：先查询受影响行数，再执行 UPDATE，避免 UPDATE 后才发现超限导致脏持久化上下文
+        if (maxRows > 0) {
+            long count;
+            if (ctx.resolved().booleanField()) {
+                count = ((Number) em.createNativeQuery("SELECT COUNT(*) FROM " + escapedTable + " WHERE "
+                    + escapedColumn + " = ?1 OR " + escapedColumn + " IS NULL")
+                    .setParameter(1, Boolean.FALSE).setParameter(2, Boolean.TRUE).getSingleResult()).longValue();
+            } else {
+                Object dv = ctx.resolved().dbValue();
+                count = ((Number) em.createNativeQuery("SELECT COUNT(*) FROM " + escapedTable + " WHERE "
+                    + escapedColumn + " != ?1 OR " + escapedColumn + " IS NULL")
+                    .setParameter(1, dv).getSingleResult()).longValue();
+            }
+            if (count > maxRows) {
+                throw new IllegalStateException("softDeleteAll would affect " + count
+                    + " rows, exceeding the limit of " + maxRows
+                    + ". Use softDeleteByIds() with explicit ID lists, or increase the limit.");
+            }
+        }
+
         int updated;
         if (ctx.resolved().booleanField()) {
             updated = em
@@ -139,15 +160,6 @@ public final class SoftDeleteBulkExecutor {
                 + " != ?1 OR " + escapedColumn + " IS NULL").setParameter(1, dv).executeUpdate();
         }
 
-        if (maxRows > 0 && updated > maxRows) {
-            jakarta.persistence.EntityTransaction tx = em.getTransaction();
-            if (tx.isActive()) {
-                tx.setRollbackOnly();
-            }
-            throw new IllegalStateException("softDeleteAll affected " + updated + " rows, exceeding the limit of "
-                + maxRows + ". Transaction has been marked for rollback. "
-                + "Use softDeleteByIds() with explicit ID lists, or increase the limit.");
-        }
         publishAfterUpdate(em, entityClass, updated);
         return updated;
     }
@@ -164,10 +176,10 @@ public final class SoftDeleteBulkExecutor {
                 + "). " + "Consider processing in smaller batches or using a temporary table.");
 
         ExecContext ctx = resolveExecContext(entityClass);
-        String escapedTable = SoftDeleteHelper.validateIdentifier(SoftDeleteHelper.resolveTableName(entityClass));
+        String escapedTable = SoftDeleteHelper.quoteIdentifier(SoftDeleteHelper.validateIdentifier(SoftDeleteHelper.resolveTableName(entityClass)));
         String escapedColumn =
-            SoftDeleteHelper.validateIdentifier(SoftDeleteHelper.resolveColumnName(entityClass, ctx.fieldName()));
-        String escapedIdColumn = SoftDeleteHelper.validateIdentifier(SoftDeleteHelper.resolveIdColumnName(entityClass));
+            SoftDeleteHelper.quoteIdentifier(SoftDeleteHelper.validateIdentifier(SoftDeleteHelper.resolveColumnName(entityClass, ctx.fieldName())));
+        String escapedIdColumn = SoftDeleteHelper.quoteIdentifier(SoftDeleteHelper.validateIdentifier(SoftDeleteHelper.resolveIdColumnName(entityClass)));
         String timestampColumn = resolveTimestampColumn(entityClass, ctx.annotation());
         String versionColumn = resolveVersionColumn(entityClass);
         String setClause = escapedColumn + " = :deletedValue"
@@ -238,16 +250,28 @@ public final class SoftDeleteBulkExecutor {
             update.set(ctx.annotation().deletedTimestampField(), cb.currentTimestamp());
         if (versionInfo != null)
             update.set(versionInfo.field().getName(), cb.sum(root.get(versionInfo.field().getName()), 1));
-        int updated = em.createQuery(update).executeUpdate();
-        if (maxRows > 0 && updated > maxRows) {
-            jakarta.persistence.EntityTransaction tx = em.getTransaction();
-            if (tx.isActive()) {
-                tx.setRollbackOnly();
+
+        // 安全检查：先查询受影响行数，再执行 UPDATE
+        if (maxRows > 0) {
+            jakarta.persistence.criteria.CriteriaQuery<Long> countQuery = cb.createQuery(Long.class);
+            jakarta.persistence.criteria.Root<T> countRoot = countQuery.from(entityClass);
+            countQuery.select(cb.count(countRoot));
+            if (ctx.resolved().booleanField()) {
+                countQuery.where(cb.or(cb.isNull(countRoot.get(ctx.fieldName())),
+                    cb.equal(countRoot.get(ctx.fieldName()), false)));
+            } else {
+                countQuery.where(cb.or(cb.isNull(countRoot.get(ctx.fieldName())),
+                    cb.notEqual(countRoot.get(ctx.fieldName()), ctx.resolved().dbValue())));
             }
-            throw new IllegalStateException("softDeleteAllUsingCriteriaUpdate affected " + updated
-                + " rows, exceeding the limit of " + maxRows + ". Transaction has been marked for rollback. "
-                + "Consider using softDeleteByIdsUsingEntityManager() with explicit ID lists.");
+            long count = em.createQuery(countQuery).getSingleResult();
+            if (count > maxRows) {
+                throw new IllegalStateException("softDeleteAllUsingCriteriaUpdate would affect " + count
+                    + " rows, exceeding the limit of " + maxRows
+                    + ". Consider using softDeleteByIdsUsingEntityManager() with explicit ID lists.");
+            }
         }
+
+        int updated = em.createQuery(update).executeUpdate();
         publishAfterUpdate(em, entityClass, updated);
         return updated;
     }

@@ -80,6 +80,13 @@ public final class SlowQueryDataSourceProxy {
     }
 
     /**
+     * 清除所有已注册的慢查询监听器。在应用关闭时调用，防止内存泄漏。
+     */
+    public static void clearListeners() {
+        LISTENERS.clear();
+    }
+
+    /**
      * 通知所有已注册的监听器。内部方法，由计时委托调用。
      */
     static void notifyListeners(String sql, long elapsedMs, long thresholdMs) {

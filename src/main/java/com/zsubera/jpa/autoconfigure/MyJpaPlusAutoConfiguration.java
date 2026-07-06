@@ -143,10 +143,19 @@ public class MyJpaPlusAutoConfiguration {
                 EntityManagerHelper.setApplicationContext(applicationContext);
             }
 
-            // 注册 SoftDeleteHelper 事件发布回调，支持批量软删除操作后的缓存自动失效
+            // 注册 SoftDeleteHelper 事件发布回调，支持批量软删除操作后的缓存自动失效。
+            // 使用懒解析模式：publishEvent 时才从 ApplicationContext 获取事件发布者，
+            // 确保 CacheInvalidationListener 等监听器 bean 已注册。
             if (applicationContext != null) {
-                SoftDeleteBulkExecutor.setEventPublisher((entityClass, affectedRows) -> applicationContext
-                    .publishEvent(new EntityModifiedEvent(entityClass, affectedRows)));
+                SoftDeleteBulkExecutor.setEventPublisher((entityClass, affectedRows) -> {
+                    try {
+                        org.springframework.context.ApplicationEventPublisher publisher =
+                            applicationContext.getBean(org.springframework.context.ApplicationEventPublisher.class);
+                        publisher.publishEvent(new EntityModifiedEvent(entityClass, affectedRows));
+                    } catch (Exception e) {
+                        log.debug("Failed to publish EntityModifiedEvent: {}", e.getMessage());
+                    }
+                });
             }
 
             // 应用 IN 子句配置
@@ -313,6 +322,10 @@ public class MyJpaPlusAutoConfiguration {
                 log.error("  JAVA_TOOL_OPTIONS=\"{}\"", ADD_OPENS_ARG);
                 log.error("");
                 log.error("=".repeat(80));
+                throw new IllegalStateException(
+                    "MyJpa-Plus requires --add-opens java.base/java.lang.invoke=ALL-UNNAMED for lambda query support. "
+                        + "All lambda-based queries (User::getName style) will fail at runtime without this JVM argument. "
+                        + "See the error messages above for fix instructions.");
             }
         }
     }
@@ -554,7 +567,10 @@ public class MyJpaPlusAutoConfiguration {
         registry.register("SoftDeleteContext", SoftDeleteContext::reset);
         registry.register("EntityManagerHelper", EntityManagerHelper::reset);
         registry.register("SoftDeleteHelper event publisher", () -> SoftDeleteBulkExecutor.setEventPublisher(null));
+        registry.register("SlowQueryDataSourceProxy listeners", SlowQueryDataSourceProxy::clearListeners);
         registry.register("GlobalConfigHolder", GlobalConfigHolder::reset);
+        registry.register("InClauseBuilder", InClauseBuilder::reset);
+        registry.register("FunctionWhitelist", FunctionWhitelist::reset);
         if (applicationContext != null) {
             registry.register("CacheAdapter", () -> {
                 CacheAdapter cacheAdapter = applicationContext.getBean(CacheAdapter.class);

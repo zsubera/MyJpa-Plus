@@ -264,7 +264,10 @@ public class MergeSpec<T> {
         T entitySnapshot = this.entity;
         // Step 1: merge if detached to make managed, then flush to trigger callbacks
         if (!em.contains(entitySnapshot)) {
-            em.merge(entitySnapshot);
+            // em.merge() 返回新的托管实例，原始 entitySnapshot 保持游离态。
+            // 调用方应通过 entity 字段获取合并后的实体引用。
+            T merged = em.merge(entitySnapshot);
+            this.entity = merged;
         }
         em.flush();
         // Step 2: after flush, entity is managed and persisted — skip native UPSERT

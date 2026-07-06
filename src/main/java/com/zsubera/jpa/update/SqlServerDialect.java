@@ -39,6 +39,10 @@ final class SqlServerDialect extends AbstractDialectStrategy {
     @Override
     public SqlWithParams buildUpsertSql(String tableName, List<String> insertColumns,
         List<EntityFieldValue> insertFieldValues, List<String> conflictColumns, List<String> updateColumns) {
+        if (insertColumns.size() != insertFieldValues.size()) {
+            throw new IllegalArgumentException("Column count (" + insertColumns.size()
+                + ") does not match value count (" + insertFieldValues.size() + ")");
+        }
         String escapedTable = escapeIdentifier(tableName);
         List<Object> allParams = new ArrayList<>();
 

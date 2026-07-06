@@ -151,6 +151,29 @@ public final class SoftDeleteHelper {
     }
 
     /**
+     * 将 SQL 标识符用双引号包裹，确保大小写敏感。符合 ANSI SQL 标准，PostgreSQL 原生支持。
+     * MySQL 需要启用 ANSI_QUOTES 模式。对于已验证的标识符，此方法不会抛出异常。
+     *
+     * @param identifier 已验证的 SQL 标识符
+     * @return 双引号包裹的标识符
+     */
+    static String quoteIdentifier(String identifier) {
+        if (identifier == null || identifier.isEmpty()) {
+            return identifier;
+        }
+        // 处理 schema.table 格式
+        String[] parts = identifier.split("\\.");
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < parts.length; i++) {
+            if (i > 0) {
+                sb.append('.');
+            }
+            sb.append('"').append(parts[i]).append('"');
+        }
+        return sb.toString();
+    }
+
+    /**
      * 验证表名标识符。用于原生 SQL 中不需要大小写敏感的场景。
      *
      * <p>

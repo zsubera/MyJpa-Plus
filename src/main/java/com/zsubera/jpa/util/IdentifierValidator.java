@@ -88,8 +88,10 @@ public final class IdentifierValidator {
      * @param enabled 是否启用
      */
     public static void setUnicodeIdentifiers(boolean enabled) {
-        ensurePropsLoaded();
-        unicodeIdentifiers = enabled;
+        synchronized (IdentifierValidator.class) {
+            ensurePropsLoaded();
+            unicodeIdentifiers = enabled;
+        }
     }
 
     /**
