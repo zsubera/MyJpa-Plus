@@ -134,7 +134,7 @@ public final class SoftDeleteBulkExecutor {
             if (ctx.resolved().booleanField()) {
                 count = ((Number) em.createNativeQuery("SELECT COUNT(*) FROM " + escapedTable + " WHERE "
                     + escapedColumn + " = ?1 OR " + escapedColumn + " IS NULL")
-                    .setParameter(1, Boolean.FALSE).setParameter(2, Boolean.TRUE).getSingleResult()).longValue();
+                    .setParameter(1, Boolean.FALSE).getSingleResult()).longValue();
             } else {
                 Object dv = ctx.resolved().dbValue();
                 count = ((Number) em.createNativeQuery("SELECT COUNT(*) FROM " + escapedTable + " WHERE "

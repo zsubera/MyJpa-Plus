@@ -389,7 +389,15 @@ class SoftDeleteHelperTest {
         repository.flush();
 
         jakarta.persistence.EntityManager mockEm = org.mockito.Mockito.mock(jakarta.persistence.EntityManager.class);
+        jakarta.persistence.Query mockCountQuery = org.mockito.Mockito.mock(jakarta.persistence.Query.class);
         jakarta.persistence.Query mockUpdateQuery = org.mockito.Mockito.mock(jakarta.persistence.Query.class);
+        org.mockito.Mockito.when(mockEm.createNativeQuery(org.mockito.ArgumentMatchers.contains("SELECT COUNT")))
+            .thenReturn(mockCountQuery);
+        org.mockito.Mockito.when(mockCountQuery.getSingleResult()).thenReturn(5L);
+        org.mockito.Mockito
+            .when(
+                mockCountQuery.setParameter(org.mockito.ArgumentMatchers.anyInt(), org.mockito.ArgumentMatchers.any()))
+            .thenReturn(mockCountQuery);
         org.mockito.Mockito.when(mockEm.createNativeQuery(org.mockito.ArgumentMatchers.contains("UPDATE")))
             .thenReturn(mockUpdateQuery);
         org.mockito.Mockito
@@ -439,6 +447,10 @@ class SoftDeleteHelperTest {
         org.mockito.Mockito.when(mockEm.createNativeQuery(org.mockito.ArgumentMatchers.contains("SELECT COUNT")))
             .thenReturn(mockCountQuery);
         org.mockito.Mockito.when(mockCountQuery.getSingleResult()).thenReturn(3L);
+        org.mockito.Mockito
+            .when(
+                mockCountQuery.setParameter(org.mockito.ArgumentMatchers.anyInt(), org.mockito.ArgumentMatchers.any()))
+            .thenReturn(mockCountQuery);
         org.mockito.Mockito.when(mockCountQuery.setFirstResult(org.mockito.ArgumentMatchers.anyInt()))
             .thenReturn(mockCountQuery);
         org.mockito.Mockito.when(mockCountQuery.setMaxResults(org.mockito.ArgumentMatchers.anyInt()))

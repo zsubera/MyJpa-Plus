@@ -162,15 +162,24 @@ public final class SoftDeleteContext {
     /**
      * 推入忽略标记（增加计数）。当方法进入 {@code @IgnoreSoftDelete} 注解的方法时调用。
      *
-     * @throws IllegalStateException 如果计数超过安全上限（可能存在泄漏）
+     * <p>
+     * 当计数超过安全上限时，自动重置 ThreadLocal 并抛出异常。这防止了因 push/pop 不匹配导致的
+     * 软删除过滤被永久跳过的安全风险。
+     *
+     * @throws IllegalStateException 如果计数超过安全上限（可能存在泄漏，ThreadLocal 已自动重置）
      */
     public static void pushIgnore() {
         int count = IGNORE_COUNT.get();
         int limit = maxIgnoreCount;
         if (count >= limit) {
+            log.error("SoftDeleteContext pushIgnore() exceeded safety ceiling ({}). "
+                + "Auto-resetting to prevent soft-delete filter bypass. "
+                + "Check for pushIgnore/popIgnore imbalance.", limit);
+            IGNORE_COUNT.set(0);
             throw new IllegalStateException(
-                "SoftDeleteContext ignore count exceeded maximum (" + limit + "). Possible leak detected."
-                    + " Ensure every pushIgnore() has a matching popIgnore() in a finally block.");
+                "SoftDeleteContext ignore count exceeded maximum (" + limit + "). "
+                    + "ThreadLocal has been auto-reset to prevent soft-delete filter bypass. "
+                    + "Ensure every pushIgnore() has a matching popIgnore() in a finally block.");
         }
         IGNORE_COUNT.set(count + 1);
     }

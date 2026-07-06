@@ -28,6 +28,11 @@ public final class EnvironmentHelper {
     /**
      * 判断当前是否为生产环境。
      *
+     * <p>
+     * 注意：此方法仅检查系统属性和环境变量，不检查 Spring {@code Environment}（合并了
+     * application.yml 等配置源）。这是因为在自动配置早期阶段 Spring Environment 可能尚未就绪。
+     * 如果用户仅通过 application.yml 配置 spring.profiles.active=prod，此方法可能无法检测到。
+     *
      * @return {@code true} 如果检测到生产环境配置
      */
     public static boolean isProductionEnvironment() {

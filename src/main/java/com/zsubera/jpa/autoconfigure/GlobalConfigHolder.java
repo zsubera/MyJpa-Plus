@@ -50,6 +50,7 @@ public final class GlobalConfigHolder {
     public static void setApplicationContext(ApplicationContext ctx) {
         applicationContext = ctx;
         cachedBean = null;
+        cachedBeanVerifyTime = 0;
     }
 
     /**
@@ -60,12 +61,21 @@ public final class GlobalConfigHolder {
     public static void setConfig(MyJpaPlusGlobalConfig globalConfig) {
         config = globalConfig;
         cachedBean = null;
+        cachedBeanVerifyTime = 0;
     }
 
     /**
      * 缓存的 Spring Bean 引用，避免每次 getConfig() 调用 ctx.getBean()。
      */
     private static volatile MyJpaPlusGlobalConfig cachedBean;
+
+    /**
+     * 缓存的 bean 最后验证时间戳（纳秒），用于定期重新验证缓存的有效性。
+     * 每 5 分钟重新从 ApplicationContext 查找一次，防止 Context 刷新后引用过期。
+     */
+    private static volatile long cachedBeanVerifyTime;
+
+    private static final long CACHE_VERIFY_INTERVAL_NANOS = java.util.concurrent.TimeUnit.MINUTES.toNanos(5);
 
     /**
      * 上次查找失败的时间戳（毫秒），用于退避重试，避免每次查询都触发容器查找。
@@ -85,9 +95,28 @@ public final class GlobalConfigHolder {
      * @return 全局配置实例，永不为 null
      */
     public static MyJpaPlusGlobalConfig getConfig() {
-        // 优先从 ApplicationContext 查找（首次命中后缓存 Bean 引用）
+        // 优先从 ApplicationContext 查找（首次命中后缓存 Bean 引用，每 5 分钟重新验证）
         MyJpaPlusGlobalConfig bean = cachedBean;
         if (bean != null) {
+            long now = System.nanoTime();
+            if (now - cachedBeanVerifyTime < CACHE_VERIFY_INTERVAL_NANOS) {
+                return bean;
+            }
+            // 缓存过期，尝试重新获取以验证 bean 是否仍然有效
+            ApplicationContext ctx = applicationContext;
+            if (ctx != null) {
+                try {
+                    MyJpaPlusGlobalConfig refreshed = ctx.getBean(MyJpaPlusGlobalConfig.class);
+                    cachedBean = refreshed;
+                    cachedBeanVerifyTime = now;
+                    return refreshed;
+                } catch (Exception e) {
+                    // bean 已不存在（Context 刷新），清除缓存并回退
+                    cachedBean = null;
+                    cachedBeanVerifyTime = 0;
+                }
+            }
+            // 回退到过期的缓存（比返回 null 更安全）
             return bean;
         }
         ApplicationContext ctx = applicationContext;
@@ -141,6 +170,7 @@ public final class GlobalConfigHolder {
         config = null;
         applicationContext = null;
         cachedBean = null;
+        cachedBeanVerifyTime = 0;
         lastLookupFailureTime = 0;
     }
 

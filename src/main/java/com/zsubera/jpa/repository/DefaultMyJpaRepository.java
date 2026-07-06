@@ -437,11 +437,13 @@ public class DefaultMyJpaRepository<T, ID> extends SimpleJpaRepository<T, ID> im
         Class dtoClass = sp.getProjectionDtoClass();
         com.zsubera.jpa.spec.QueryProjectionSupport qps = new com.zsubera.jpa.spec.QueryProjectionSupport(domainClass,
             sp, softDeleteSpec, sp.getProjectionFieldsWithAlias());
+        int maxResults = com.zsubera.jpa.autoconfigure.GlobalConfigHolder.resolveConfigValue(
+            com.zsubera.jpa.autoconfigure.MyJpaPlusGlobalConfig::getMaxResults,
+            com.zsubera.jpa.template.MyJpaTemplate.DEFAULT_MAX_RESULTS);
         if (dtoClass != null) {
-            return (List)qps.toDtoList(entityManager, dtoClass,
-                com.zsubera.jpa.template.MyJpaTemplate.DEFAULT_MAX_RESULTS);
+            return (List)qps.toDtoList(entityManager, dtoClass, maxResults);
         }
-        return (List)qps.toTupleList(entityManager, com.zsubera.jpa.template.MyJpaTemplate.DEFAULT_MAX_RESULTS);
+        return (List)qps.toTupleList(entityManager, maxResults);
     }
 
     @SuppressWarnings({"unchecked", "rawtypes"})
@@ -450,7 +452,10 @@ public class DefaultMyJpaRepository<T, ID> extends SimpleJpaRepository<T, ID> im
             shouldApplySoftDeleteFilter() ? SoftDeleteHelper.isNotDeleted(domainClass) : null;
         com.zsubera.jpa.spec.QueryProjectionSupport qps = new com.zsubera.jpa.spec.QueryProjectionSupport(domainClass,
             sp, softDeleteSpec, sp.getProjectionFieldsWithAlias());
-        return (Page)qps.toTuplePage(entityManager, pageable);
+        int maxResults = com.zsubera.jpa.autoconfigure.GlobalConfigHolder.resolveConfigValue(
+            com.zsubera.jpa.autoconfigure.MyJpaPlusGlobalConfig::getMaxResults,
+            com.zsubera.jpa.template.MyJpaTemplate.DEFAULT_MAX_RESULTS);
+        return (Page)qps.toTuplePage(entityManager, pageable, maxResults);
     }
 
     /**

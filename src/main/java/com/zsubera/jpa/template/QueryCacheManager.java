@@ -179,9 +179,12 @@ public class QueryCacheManager implements CacheAdapter {
             return null;
         }
         hitCount.incrementAndGet();
-        // ponytail: 返回 List 的防御性拷贝，防止调用者修改返回值破坏缓存数据一致性
+        // ponytail: 返回不可变 List 视图，避免防御性拷贝的内存开销，
+        // 同时防止调用者修改返回值破坏缓存数据一致性。
         if (value instanceof List<?> list) {
-            return (T) new ArrayList<>(list);
+            @SuppressWarnings("unchecked")
+            T result = (T) java.util.Collections.unmodifiableList(list);
+            return result;
         }
         return value;
     }

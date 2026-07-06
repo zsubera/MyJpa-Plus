@@ -313,58 +313,69 @@ final class EncryptionKeyManager {
         if (KEY_VALIDATED.get()) {
             return;
         }
+        // ponytail: 将耗时的密钥校验移到 synchronized 块外，减少锁持有时间。
+        // 仅在 synchronized 块内设置 KEY_VALIDATED 标志。
+        String keyEnv = System.getenv(KEY_ENV);
+        String keyProp = System.getProperty(KEY_PROPERTY);
+        if ((keyEnv == null || keyEnv.isEmpty()) && (keyProp == null || keyProp.isEmpty())) {
+            throw new MyJpaPlusException("Encryption key not configured. Set environment variable " + KEY_ENV
+                + " or system property " + KEY_PROPERTY + " before starting the application. "
+                + "EncryptConverter requires a key to function.");
+        }
+        String key = (keyEnv != null && !keyEnv.isEmpty()) ? keyEnv : keyProp;
+        // 在锁外执行耗时的密钥长度校验
+        validateKeyLengthForKey(key);
+        if (keyProp != null && !keyProp.isEmpty() && (keyEnv == null || keyEnv.isEmpty())) {
+            log.warn("SECURITY: Encryption key configured via system property '{}'. "
+                + "System properties are JVM-wide visible and may be exposed in process listings (e.g., /proc/PID/cmdline). "
+                + "Use environment variable '{}' for production environments.", KEY_PROPERTY, KEY_ENV);
+        }
         synchronized (EncryptionKeyManager.class) {
             if (KEY_VALIDATED.get()) {
                 return;
-            }
-            String keyEnv = System.getenv(KEY_ENV);
-            String keyProp = System.getProperty(KEY_PROPERTY);
-            if ((keyEnv == null || keyEnv.isEmpty()) && (keyProp == null || keyProp.isEmpty())) {
-                throw new MyJpaPlusException("Encryption key not configured. Set environment variable " + KEY_ENV
-                    + " or system property " + KEY_PROPERTY + " before starting the application. "
-                    + "EncryptConverter requires a key to function.");
-            } else {
-                String key = (keyEnv != null && !keyEnv.isEmpty()) ? keyEnv : keyProp;
-                if (MULTI_KEY_PATTERN.matcher(key).matches()) {
-                    String[] entries = key.split(",");
-                    for (String entry : entries) {
-                        int colonIdx = entry.indexOf(':');
-                        if (colonIdx >= 0 && colonIdx < entry.length() - 1) {
-                            String rawValue = entry.substring(colonIdx + 1).trim();
-                            int byteLen = rawValue.getBytes(StandardCharsets.UTF_8).length;
-                            if (byteLen < MIN_KEY_LENGTH) {
-                                String version = entry.substring(0, colonIdx).trim();
-                                throw new MyJpaPlusException(
-                                    "Encryption key for version '" + version + "' must be at least "
-                                        + MIN_KEY_LENGTH + " bytes (UTF-8 encoded). Current: " + byteLen + " bytes.");
-                            }
-                        }
-                    }
-                } else {
-                    int byteLength = key.getBytes(StandardCharsets.UTF_8).length;
-                    if (byteLength < MIN_KEY_LENGTH) {
-                        throw new MyJpaPlusException(
-                            "Encryption key must be at least " + MIN_KEY_LENGTH + " bytes (UTF-8 encoded). "
-                                + "Current byte length: " + byteLength + " (character length: " + key.length() + ").");
-                    }
-                }
-                if (keyProp != null && !keyProp.isEmpty() && (keyEnv == null || keyEnv.isEmpty())) {
-                    log.warn("SECURITY: Encryption key configured via system property '{}'. "
-                        + "System properties are JVM-wide visible and may be exposed in process listings (e.g., /proc/PID/cmdline). "
-                        + "Use environment variable '{}' for production environments.", KEY_PROPERTY, KEY_ENV);
-                }
             }
             KEY_VALIDATED.set(true);
         }
     }
 
+    /**
+     * 在 synchronized 块外执行密钥长度校验。支持单密钥和多版本密钥格式。
+     */
+    private static void validateKeyLengthForKey(String key) {
+        if (MULTI_KEY_PATTERN.matcher(key).matches()) {
+            String[] entries = key.split(",");
+            for (String entry : entries) {
+                int colonIdx = entry.indexOf(':');
+                if (colonIdx >= 0 && colonIdx < entry.length() - 1) {
+                    String rawValue = entry.substring(colonIdx + 1).trim();
+                    int byteLen = rawValue.getBytes(StandardCharsets.UTF_8).length;
+                    if (byteLen < MIN_KEY_LENGTH) {
+                        String version = entry.substring(0, colonIdx).trim();
+                        throw new MyJpaPlusException(
+                            "Encryption key for version '" + version + "' must be at least "
+                                + MIN_KEY_LENGTH + " bytes (UTF-8 encoded). Current: " + byteLen + " bytes.");
+                    }
+                }
+            }
+        } else {
+            int byteLength = key.getBytes(StandardCharsets.UTF_8).length;
+            if (byteLength < MIN_KEY_LENGTH) {
+                throw new MyJpaPlusException(
+                    "Encryption key must be at least " + MIN_KEY_LENGTH + " bytes (UTF-8 encoded). "
+                        + "Current byte length: " + byteLength + " (character length: " + key.length() + ").");
+            }
+        }
+    }
+
     static void clearCaches() {
+        // ponytail: 将不需要锁保护的操作移到 synchronized 块外，减少锁持有时间。
+        // KEY_CACHE.invalidateAll() 和 KEY_VALIDATED.set(false) 是原子操作，无需锁保护。
+        KEY_CACHE.invalidateAll();
+        KEY_VALIDATED.set(false);
+        CACHED_SALT_REF.set(null);
         KEY_VERSION_LOCK.lock();
         try {
             keyVersionSnapshot = new KeyVersionSnapshot(null, 0);
-            KEY_CACHE.invalidateAll();
-            KEY_VALIDATED.set(false);
-            CACHED_SALT_REF.set(null);
         } finally {
             KEY_VERSION_LOCK.unlock();
         }

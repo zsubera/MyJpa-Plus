@@ -175,8 +175,12 @@ public final class QueryProjectionSupport<T> {
     }
 
     public Page<Tuple> toTuplePage(EntityManager em, Pageable pageable) {
+        return toTuplePage(em, pageable, MyJpaTemplate.DEFAULT_MAX_RESULTS);
+    }
+
+    public Page<Tuple> toTuplePage(EntityManager em, Pageable pageable, int maxResults) {
         if (pageable.isUnpaged()) {
-            List<Tuple> all = toTupleList(em, MyJpaTemplate.DEFAULT_MAX_RESULTS);
+            List<Tuple> all = toTupleList(em, maxResults);
             return new PageImpl<>(all);
         }
 

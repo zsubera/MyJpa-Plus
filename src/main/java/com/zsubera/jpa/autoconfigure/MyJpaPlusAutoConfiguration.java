@@ -84,7 +84,7 @@ public class MyJpaPlusAutoConfiguration {
     private final ApplicationContext applicationContext;
 
     public MyJpaPlusAutoConfiguration(MyJpaPlusProperties properties,
-        @Autowired(required = false) ApplicationContext applicationContext) {
+        ApplicationContext applicationContext) {
         if (properties == null) {
             throw new IllegalArgumentException("properties must not be null");
         }
@@ -127,7 +127,7 @@ public class MyJpaPlusAutoConfiguration {
 
         MyJpaPlusConfigInitializer(MyJpaPlusProperties properties,
             @Autowired(required = false) MyJpaPlusGlobalConfig globalConfig,
-            @Autowired(required = false) ApplicationContext applicationContext) {
+            ApplicationContext applicationContext) {
             // 使用全局配置提供者替代静态可变状态
             if (globalConfig != null) {
                 DefaultMyJpaRepository.setGlobalConfigProvider(DefaultMyJpaRepository.createMutableConfigProvider(
@@ -158,13 +158,9 @@ public class MyJpaPlusAutoConfiguration {
                 });
             }
 
-            // 应用 IN 子句配置
+            // 应用 IN 子句配置（验证已在 MyJpaPlusProperties.validate() 中完成）
             int inMax = properties.getQuery().getInClauseMaxSize();
             int inHard = properties.getQuery().getInClauseHardLimit();
-            if (inHard < inMax) {
-                throw new IllegalArgumentException(
-                    "inClauseHardLimit (" + inHard + ") must be >= inClauseMaxSize (" + inMax + ")");
-            }
             InClauseBuilder.setConfig(new InClauseBuilder.Config(inMax, inHard));
 
             // 应用 Lambda 缓存配置

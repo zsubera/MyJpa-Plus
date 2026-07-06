@@ -111,26 +111,35 @@ public class EncryptConverter implements AttributeConverter<String, String> {
      */
     private static final java.util.Queue<Cipher> CIPHER_POOL = new ConcurrentLinkedDeque<>();
 
+    /**
+     * 池当前大小的近似计数器。使用 AtomicInteger 替代 ConcurrentLinkedDeque.size()（O(n)），
+     * 消除高并发下每次 borrow/return 的 O(n) 遍历开销。
+     */
+    private static final java.util.concurrent.atomic.AtomicInteger POOL_SIZE = new java.util.concurrent.atomic.AtomicInteger(0);
+
     private static Cipher borrowCipher() {
         Cipher cipher = CIPHER_POOL.poll();
-        if (cipher == null) {
-            try {
-                cipher = Cipher.getInstance(ALGORITHM);
-            } catch (GeneralSecurityException e) {
-                throw new MyJpaPlusException("Failed to initialize cipher", e);
-            }
+        if (cipher != null) {
+            POOL_SIZE.decrementAndGet();
+            return cipher;
+        }
+        try {
+            cipher = Cipher.getInstance(ALGORITHM);
+        } catch (GeneralSecurityException e) {
+            throw new MyJpaPlusException("Failed to initialize cipher", e);
         }
         return cipher;
     }
 
     private static void returnCipher(Cipher cipher) {
-        if (CIPHER_POOL.size() >= MAX_POOL_SIZE) {
+        if (POOL_SIZE.get() >= MAX_POOL_SIZE) {
             // ponytail: 池满时丢弃归还的 cipher，下次 borrow 重新创建。
             // 避免池中混入状态异常的 cipher（doFinal 异常后虽然 init 会重置状态，
             // 但防御性丢弃防止任何潜在问题）。
             return;
         }
         CIPHER_POOL.offer(cipher);
+        POOL_SIZE.incrementAndGet();
     }
 
     /**
@@ -138,6 +147,7 @@ public class EncryptConverter implements AttributeConverter<String, String> {
      */
     static void clearCipherPool() {
         CIPHER_POOL.clear();
+        POOL_SIZE.set(0);
     }
 
     /**
@@ -327,15 +337,19 @@ public class EncryptConverter implements AttributeConverter<String, String> {
             try {
                 combined = Base64.getDecoder().decode(base64Data);
             } catch (IllegalArgumentException e) {
-                log.error("Invalid Base64 data in encrypted field. Returning null to avoid blocking entire query.", e);
-                return null;
+                log.error("Invalid Base64 data in encrypted field.", e);
+                throw new MyJpaPlusException("Decryption failed: invalid Base64 data in encrypted field. "
+                    + "The value may be corrupted or encrypted with a different encoding. "
+                    + "Original value cannot be recovered.", e);
             }
             int minRequired = GCM_IV_LENGTH + (GCM_TAG_LENGTH / 8);
             if (combined.length < minRequired) {
                 log.error("Invalid encrypted data: decoded length ({}) is less than minimum required ({} bytes = IV + tag). "
-                    + "Data may be truncated or corrupted. Returning null to avoid blocking entire query.",
+                    + "Data may be truncated or corrupted.",
                     combined.length, minRequired);
-                return null;
+                throw new MyJpaPlusException("Decryption failed: encrypted data too short (" + combined.length
+                    + " bytes). Minimum required: " + minRequired + " bytes (IV + GCM tag). "
+                    + "Data may be truncated or corrupted. Original value cannot be recovered.");
             }
             byte[] iv = new byte[GCM_IV_LENGTH];
             System.arraycopy(combined, 0, iv, 0, GCM_IV_LENGTH);
@@ -370,9 +384,10 @@ public class EncryptConverter implements AttributeConverter<String, String> {
                 }
             }
         } catch (GeneralSecurityException | RuntimeException e) {
-            log.error("Decryption failed for encrypted field. Returning null to avoid blocking entire query. "
+            log.error("Decryption failed for encrypted field. "
                 + "The encrypted value may be corrupted or encrypted with a different key.", e);
-            return null;
+            throw new MyJpaPlusException("Decryption failed: the encrypted value may be corrupted "
+                + "or encrypted with a different key. Original value cannot be recovered.", e);
         }
     }
 
