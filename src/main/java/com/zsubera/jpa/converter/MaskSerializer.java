@@ -128,13 +128,13 @@ public class MaskSerializer extends JsonSerializer<String> {
             return "*".repeat(codePointCount);
         }
         if (codePointCount == 2) {
-            return new String(Character.toChars(name.codePointAt(0))) + "*";
+            // 使用 substring 替代 Character.toChars 避免额外 char[] 分配
+            return name.substring(0, name.offsetByCodePoints(0, 1)) + "*";
         }
         // 对于3个以上字符：保留首尾，遮蔽中间部分
         int lastCodePointIndex = name.offsetByCodePoints(0, codePointCount - 1);
-        return String.valueOf(Character.toChars(name.codePointAt(0))) +
-        // 确保正确的Unicode字符重复
-            "*".repeat(codePointCount - 2) + String.valueOf(Character.toChars(name.codePointAt(lastCodePointIndex)));
+        return name.substring(0, name.offsetByCodePoints(0, 1)) +
+            "*".repeat(codePointCount - 2) + name.substring(lastCodePointIndex);
     }
 
     private static String maskBankCard(String bankCard) {

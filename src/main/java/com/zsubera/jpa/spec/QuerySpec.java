@@ -320,6 +320,8 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
         copy.queryTimeout = this.queryTimeout;
         copy.lockMode = this.lockMode;
         copy.projectionDtoClass = this.projectionDtoClass;
+        // ponytail: ProjectionField 是不可变类（所有字段 final），共享引用安全。
+        // 与 condition 树的深拷贝策略不同，此处无需防御性拷贝。
         copy.projectionFields.addAll(this.projectionFields);
         return copy;
     }

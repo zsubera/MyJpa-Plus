@@ -61,7 +61,8 @@ public class MyJpaRepositoryFactoryBean<T extends Repository<S, ID>, S, ID> exte
         try {
             return EntityClassResolver.resolve(repositoryInterface);
         } catch (Exception e) {
-            log.debug("Could not resolve entity type for repository: {}", repositoryInterface.getSimpleName());
+            log.warn("Could not resolve entity type for repository: {}. "
+                + "Multi-datasource registration will be skipped for this repository.", repositoryInterface.getSimpleName());
             return null;
         }
     }

@@ -112,8 +112,20 @@ final class BulkTransactionHelper {
      *
      * <p>JTA 环境下 {@link EntityManager#getTransaction()} 抛出 {@link IllegalStateException}，
      * 因此通过 Spring 的 {@link TransactionSynchronizationManager} 判断。
-     * 注意：此方法调用 em.getTransaction() 仅为触发 IllegalStateException 来检测 JTA 环境，
-     * 返回值不使用。
+    /**
+     * 检测当前是否为 JTA 环境且有活动事务。
+     *
+     * <p>
+     * 检测逻辑：尝试调用 {@code em.getTransaction()}，如果抛出 {@code IllegalStateException}
+     * 则说明是 JTA 环境（JTA EntityManager 不支持 getTransaction()），此时委托给 Spring 的
+     * {@code TransactionSynchronizationManager} 判断事务状态。
+     *
+     * <p>
+     * 注意：在 RESOURCE_LOCAL 环境中即使有活动事务也返回 false，因为 RESOURCE_LOCAL 的
+     * {@code em.getTransaction()} 不会抛异常。
+     *
+     * @param em 实体管理器
+     * @return 如果是 JTA 环境且有活动事务返回 true
      */
     static boolean isJtaTransactionActive(EntityManager em) {
         try {

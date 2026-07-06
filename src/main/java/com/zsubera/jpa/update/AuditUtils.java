@@ -79,8 +79,10 @@ public final class AuditUtils {
      */
     public static void setMaxStackDepth(int depth) {
         if (depth > 0 && depth <= MAX_STACK_DEPTH_LIMIT) {
-            maxStackDepth = depth;
-            maxStackDepthInitialized = true;
+            synchronized (AuditUtils.class) {
+                maxStackDepth = depth;
+                maxStackDepthInitialized = true;
+            }
         }
     }
 

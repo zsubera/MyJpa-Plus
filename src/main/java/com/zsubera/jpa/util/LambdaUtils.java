@@ -191,7 +191,8 @@ public final class LambdaUtils {
         // ponytail: 降级到 resolveViaSerialization（仅当 lambda 提取完全失败时）
         String propertyName = resolveViaSerialization(fn);
         IdentifierValidator.validateColumnName(propertyName);
-        return propertyName;
+        // 缓存降级路径的结果，避免后续调用重复序列化（每次 5-10μs）
+        return CACHE.computeIfAbsent(key, k -> propertyName);
     }
 
     /**

@@ -520,6 +520,9 @@ public class DefaultMyJpaRepository<T, ID> extends SimpleJpaRepository<T, ID> im
             return Optional.empty();
         }
         if (!shouldApplySoftDeleteFilter()) {
+            // ponytail: 无软删除过滤时使用 entityManager.find()，返回 managed 实体。
+            // 有软删除过滤时使用 Specification 查询，返回 detached 实体。
+            // 两种路径的实体生命周期状态不同，调用方应注意一致性。
             return Optional.ofNullable(entityManager.find(domainClass, id));
         }
         return findOne(withIdAndSoftDelete(id));

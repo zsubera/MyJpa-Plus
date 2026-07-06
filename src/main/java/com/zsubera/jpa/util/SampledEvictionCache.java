@@ -4,6 +4,8 @@ import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * 基于 {@link Caffeine} 的有界缓存，替代原先基于 ConcurrentHashMap 的手写采样驱逐实现。
@@ -25,6 +27,8 @@ import java.util.function.Function;
  * @param <V> 值类型
  */
 public class SampledEvictionCache<K, V> {
+
+    private static final Logger log = LoggerFactory.getLogger(SampledEvictionCache.class);
 
     private volatile Cache<K, V> delegate;
     private volatile int maxSize;
@@ -85,12 +89,19 @@ public class SampledEvictionCache<K, V> {
     /**
      * 动态调整最大容量。会重建缓存（丢失现有条目）。
      * 仅在启动初始化阶段调用，实际影响可忽略。
+     *
+     * @param maxSize 新的最大容量
+     * @throws IllegalArgumentException 如果 maxSize 不是正数
      */
     public void setMaxSize(int maxSize) {
         if (maxSize <= 0)
             throw new IllegalArgumentException("maxSize must be positive, got: " + maxSize);
+        long previousSize = delegate.estimatedSize();
         this.maxSize = maxSize;
         this.delegate = build(maxSize);
+        if (previousSize > 0) {
+            log.debug("Cache resized from {} to {} entries — {} entries dropped", previousSize, maxSize, previousSize);
+        }
     }
 
     public void clear() {

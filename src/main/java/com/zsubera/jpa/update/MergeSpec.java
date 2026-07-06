@@ -520,13 +520,17 @@ public class MergeSpec<T> {
                 List<List<EntityFieldExtractor.EntityFieldValue>> batchFieldValues =
                     new ArrayList<>(cachedAllFvs.size());
                 for (List<EntityFieldExtractor.EntityFieldValue> allFvs : cachedAllFvs) {
-                    Map<String, EntityFieldExtractor.EntityFieldValue> colMap = new HashMap<>();
-                    for (EntityFieldExtractor.EntityFieldValue fv : allFvs) {
-                        colMap.put(fv.columnName(), fv);
-                    }
-                    List<EntityFieldExtractor.EntityFieldValue> insertFvs = new ArrayList<>();
+                    // 使用线性扫描替代 HashMap，减少批量场景下的 GC 压力
+                    // insertColumns 列表通常较小（<50），线性扫描 O(n*m) 可接受
+                    List<EntityFieldExtractor.EntityFieldValue> insertFvs = new ArrayList<>(insertColumns.size());
                     for (String col : insertColumns) {
-                        EntityFieldExtractor.EntityFieldValue fv = colMap.get(col);
+                        EntityFieldExtractor.EntityFieldValue fv = null;
+                        for (EntityFieldExtractor.EntityFieldValue f : allFvs) {
+                            if (f.columnName().equals(col)) {
+                                fv = f;
+                                break;
+                            }
+                        }
                         insertFvs
                             .add(fv != null ? fv : new EntityFieldExtractor.EntityFieldValue(col, col, null, true));
                     }

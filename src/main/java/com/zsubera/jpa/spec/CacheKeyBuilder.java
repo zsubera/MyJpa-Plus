@@ -210,9 +210,14 @@ final class CacheKeyBuilder {
             sb.append("AL[").append(arr.length).append(":").append(Long.toUnsignedString(hashLongArray(arr))).append("]");
         } else if (value instanceof double[] arr) {
             sb.append("AD[").append(arr.length).append(":").append(Long.toUnsignedString(hashDoubleArray(arr))).append("]");
+        } else if (value instanceof byte[] arr) {
+            sb.append("AB[").append(arr.length).append(":").append(Long.toUnsignedString(hashByteArray(arr))).append("]");
+        } else if (value instanceof float[] arr) {
+            sb.append("AF[").append(arr.length).append(":").append(Long.toUnsignedString(hashFloatArray(arr))).append("]");
         } else if (value.getClass().isArray()) {
+            // 剩余基本类型数组（short[], boolean[], char[]）使用 String.valueOf 哈希
             sb.append("AX[").append(value.getClass().getSimpleName()).append(":")
-                .append(Long.toUnsignedString(hashObjectArray(new Object[] {value}))).append("]");
+                .append(Long.toUnsignedString(hash64(String.valueOf(value)))).append("]");
         } else {
             String s = String.valueOf(value);
             sb.append("N[").append(value.getClass().getName()).append(":").append(Long.toUnsignedString(hash64(s)))
@@ -268,6 +273,24 @@ final class CacheKeyBuilder {
         long hash = 0xcbf29ce484222325L;
         for (double v : arr) {
             hash ^= Double.doubleToLongBits(v);
+            hash *= 0x100000001b3L;
+        }
+        return hash;
+    }
+
+    private static long hashByteArray(byte[] arr) {
+        long hash = 0xcbf29ce484222325L;
+        for (byte v : arr) {
+            hash ^= v;
+            hash *= 0x100000001b3L;
+        }
+        return hash;
+    }
+
+    private static long hashFloatArray(float[] arr) {
+        long hash = 0xcbf29ce484222325L;
+        for (float v : arr) {
+            hash ^= Float.floatToIntBits(v);
             hash *= 0x100000001b3L;
         }
         return hash;
