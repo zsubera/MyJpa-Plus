@@ -21,6 +21,7 @@ class EncryptConverterExtendedTest {
         System.setProperty("myjpa.encrypt.key", TEST_KEY);
         System.setProperty("myjpa.encrypt.salt", "test-salt-value");
         EncryptConverter.clearCaches();
+        EncryptConverter.setSkipSaltCheck(false);
         Field f = EncryptionKeyManager.class.getDeclaredField("KEY_VALIDATED");
         f.setAccessible(true);
         ((java.util.concurrent.atomic.AtomicBoolean)f.get(null)).set(false);

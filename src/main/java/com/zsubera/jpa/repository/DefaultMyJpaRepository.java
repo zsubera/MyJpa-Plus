@@ -822,7 +822,7 @@ public class DefaultMyJpaRepository<T, ID> extends SimpleJpaRepository<T, ID> im
         Class<T> entityClass = domainClass;
         com.zsubera.jpa.update.UpdateSpec<T> spec = new com.zsubera.jpa.update.UpdateSpec<>(entityClass);
         config.accept(spec);
-        jakarta.persistence.EntityManager em = EntityManagerHelper.getTransactionalEntityManager(entityClass);
+        jakarta.persistence.EntityManager em = this.entityManager;
         String sf = com.zsubera.jpa.softdelete.SoftDeleteHelper.findSoftDeleteField(entityClass);
         if (sf != null && shouldApplySoftDeleteFilter()) {
             spec.addCondition((root, cb) -> com.zsubera.jpa.softdelete.SoftDeleteHelper.buildNotDeleted(cb, root,
@@ -843,7 +843,7 @@ public class DefaultMyJpaRepository<T, ID> extends SimpleJpaRepository<T, ID> im
         Class<T> entityClass = domainClass;
         com.zsubera.jpa.update.DeleteSpec<T> spec = new com.zsubera.jpa.update.DeleteSpec<>(entityClass);
         config.accept(spec);
-        jakarta.persistence.EntityManager em = EntityManagerHelper.getTransactionalEntityManager(entityClass);
+        jakarta.persistence.EntityManager em = this.entityManager;
         String sf = com.zsubera.jpa.softdelete.SoftDeleteHelper.findSoftDeleteField(entityClass);
         if (sf != null && shouldApplySoftDeleteFilter()) {
             java.lang.reflect.Field field =

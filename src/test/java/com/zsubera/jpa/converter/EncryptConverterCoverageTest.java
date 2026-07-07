@@ -34,6 +34,7 @@ class EncryptConverterCoverageTest {
         System.clearProperty("myjpa-plus.encrypt.skip-salt-check");
         System.clearProperty("myjpa.encrypt.key.version");
         EncryptConverter.clearCaches();
+        EncryptConverter.setSkipSaltCheck(false);
         Field f = EncryptionKeyManager.class.getDeclaredField("KEY_VALIDATED");
         f.setAccessible(true);
         ((java.util.concurrent.atomic.AtomicBoolean)f.get(null)).set(false);

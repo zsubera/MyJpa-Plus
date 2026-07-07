@@ -57,6 +57,14 @@ class BatchOperationInterfaceTest {
         repository.flush();
     }
 
+    @org.junit.jupiter.api.AfterAll
+    static void cleanupAll() {
+        // Reset EntityManagerHelper static state AFTER all tests in this class complete.
+        // This prevents stale EMF/resolver references from leaking into the next test class
+        // (DefaultMyJpaRepositoryBranchTest) which creates its own Spring context.
+        EntityManagerHelper.reset();
+    }
+
     @Test
     void factoryBeanCreatesCorrectProxyType() {
         assertThat(repository).isInstanceOf(MyJpaRepository.class);
