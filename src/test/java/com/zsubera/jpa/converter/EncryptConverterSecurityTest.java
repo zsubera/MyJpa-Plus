@@ -7,6 +7,7 @@ import java.util.Base64;
 import java.util.List;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
+import com.zsubera.jpa.exception.MyJpaPlusException;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -54,7 +55,7 @@ class EncryptConverterSecurityTest {
         decoded[midpoint] = (byte)(decoded[midpoint] ^ 0xFF);
 
         String tampered = version + ":" + Base64.getEncoder().encodeToString(decoded);
-        assertNull(converter.convertToEntityAttribute(tampered));
+        assertThrows(MyJpaPlusException.class, () -> converter.convertToEntityAttribute(tampered));
     }
 
     @Test
@@ -71,7 +72,7 @@ class EncryptConverterSecurityTest {
         decoded[0] = (byte)(decoded[0] ^ 0x01);
 
         String tampered = version + ":" + Base64.getEncoder().encodeToString(decoded);
-        assertNull(converter.convertToEntityAttribute(tampered));
+        assertThrows(MyJpaPlusException.class, () -> converter.convertToEntityAttribute(tampered));
     }
 
     @Test
@@ -89,14 +90,14 @@ class EncryptConverterSecurityTest {
         System.arraycopy(decoded, 0, truncated, 0, truncated.length);
 
         String tampered = version + ":" + Base64.getEncoder().encodeToString(truncated);
-        assertNull(converter.convertToEntityAttribute(tampered));
+        assertThrows(MyJpaPlusException.class, () -> converter.convertToEntityAttribute(tampered));
     }
 
     @Test
     @DisplayName("invalid Base64 data throws exception")
     void shouldRejectInvalidBase64() {
         String invalid = "v1:not-valid-base64!!!";
-        assertNull(converter.convertToEntityAttribute(invalid));
+        assertThrows(MyJpaPlusException.class, () -> converter.convertToEntityAttribute(invalid));
     }
 
     @Test

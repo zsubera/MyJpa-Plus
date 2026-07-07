@@ -394,6 +394,76 @@ class DefaultMyJpaRepositoryBranchTest {
         }
     }
 
+    // ---- findById with soft delete ----
+
+    @Test
+    void findById_activeEntity_returnsEntity() {
+        SoftDeleteRepoTestEntity saved = saveEntity("active", false);
+        Optional<SoftDeleteRepoTestEntity> found = repository.findById(saved.getId());
+        assertTrue(found.isPresent());
+        assertEquals("active", found.get().getName());
+    }
+
+    @Test
+    void findById_deletedEntity_returnsEmpty() {
+        SoftDeleteRepoTestEntity saved = saveEntity("deleted", true);
+        Optional<SoftDeleteRepoTestEntity> found = repository.findById(saved.getId());
+        assertFalse(found.isPresent());
+    }
+
+    @Test
+    void findById_nullId_returnsEmpty() {
+        assertFalse(repository.findById(null).isPresent());
+    }
+
+    // ---- deleteById with soft delete ----
+
+    @Test
+    void deleteById_activeEntity_softDeletes() {
+        SoftDeleteRepoTestEntity saved = saveEntity("toDelete", false);
+        repository.deleteById(saved.getId());
+        SoftDeleteContext.pushIgnore();
+        try {
+            SoftDeleteRepoTestEntity entity = repository.findById(saved.getId()).orElse(null);
+            assertNotNull(entity);
+            assertTrue(entity.getDeleted());
+        } finally {
+            SoftDeleteContext.popIgnore();
+        }
+    }
+
+    // ---- delete(T) with soft delete ----
+
+    @Test
+    void delete_entity_softDeletes() {
+        SoftDeleteRepoTestEntity saved = saveEntity("toDelete", false);
+        repository.delete(saved);
+        SoftDeleteContext.pushIgnore();
+        try {
+            SoftDeleteRepoTestEntity entity = repository.findById(saved.getId()).orElse(null);
+            assertNotNull(entity);
+            assertTrue(entity.getDeleted());
+        } finally {
+            SoftDeleteContext.popIgnore();
+        }
+    }
+
+    // ---- getReferenceById with soft delete ----
+
+    @Test
+    void getReferenceById_deletedEntity_throws() {
+        SoftDeleteRepoTestEntity saved = saveEntity("deleted", true);
+        assertThrows(Exception.class, () -> repository.getReferenceById(saved.getId()));
+    }
+
+    @Test
+    void getReferenceById_activeEntity_returnsProxy() {
+        SoftDeleteRepoTestEntity saved = saveEntity("active", false);
+        SoftDeleteRepoTestEntity ref = repository.getReferenceById(saved.getId());
+        assertNotNull(ref);
+        assertEquals("active", ref.getName());
+    }
+
     private SoftDeleteRepoTestEntity saveEntity(String name, boolean deleted) {
         SoftDeleteRepoTestEntity entity = new SoftDeleteRepoTestEntity();
         entity.setName(name);

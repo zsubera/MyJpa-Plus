@@ -276,4 +276,92 @@ class EntityFieldExtractorTest {
         EntityFieldExtractor<NoIdEntity> extractor = new EntityFieldExtractor<>(NoIdEntity.class);
         assertThrows(IllegalStateException.class, extractor::resolveIdColumnNames);
     }
+
+    // ---- @Embedded null value ----
+
+    @Test
+    void extractFieldValues_embeddedNullValue_skipsEmbedded() {
+        EntityWithEmbedded entity = new EntityWithEmbedded();
+        entity.setName("test");
+        entity.setAddress(null); // null embedded
+
+        EntityFieldExtractor<EntityWithEmbedded> extractor = new EntityFieldExtractor<>(EntityWithEmbedded.class);
+        List<EntityFieldExtractor.EntityFieldValue> fields = extractor.extractFieldValues(entity);
+
+        assertTrue(fields.stream().anyMatch(f -> f.fieldName().equals("name")));
+        assertFalse(fields.stream().anyMatch(f -> f.fieldName().startsWith("address.")));
+    }
+
+    // ---- @Column(updatable=false) is NOT excluded (by design) ----
+
+    @Entity
+    @Table(name = "entity_with_non_updatable")
+    static class EntityWithNonUpdatable {
+        @Id
+        @GeneratedValue
+        private Long id;
+
+        private String name;
+
+        @Column(updatable = false)
+        private String createdAt;
+
+        public Long getId() { return id; }
+        public void setId(Long id) { this.id = id; }
+        public String getName() { return name; }
+        public void setName(String name) { this.name = name; }
+        public String getCreatedAt() { return createdAt; }
+        public void setCreatedAt(String createdAt) { this.createdAt = createdAt; }
+    }
+
+    @Test
+    void extractFieldValues_keepsNonUpdatableColumn() {
+        // @Column(updatable=false) is intentionally kept — the field can be inserted
+        EntityWithNonUpdatable entity = new EntityWithNonUpdatable();
+        entity.setName("test");
+        entity.setCreatedAt("2024-01-01");
+
+        EntityFieldExtractor<EntityWithNonUpdatable> extractor =
+            new EntityFieldExtractor<>(EntityWithNonUpdatable.class);
+        List<EntityFieldExtractor.EntityFieldValue> fields = extractor.extractFieldValues(entity);
+
+        assertTrue(fields.stream().anyMatch(f -> f.fieldName().equals("name")));
+        assertTrue(fields.stream().anyMatch(f -> f.fieldName().equals("createdAt")));
+    }
+
+    // ---- @Column(insertable=false) IS excluded ----
+
+    @Entity
+    @Table(name = "entity_with_non_insertable")
+    static class EntityWithNonInsertable {
+        @Id
+        @GeneratedValue
+        private Long id;
+
+        private String name;
+
+        @Column(insertable = false)
+        private String computedField;
+
+        public Long getId() { return id; }
+        public void setId(Long id) { this.id = id; }
+        public String getName() { return name; }
+        public void setName(String name) { this.name = name; }
+        public String getComputedField() { return computedField; }
+        public void setComputedField(String computedField) { this.computedField = computedField; }
+    }
+
+    @Test
+    void extractFieldValues_excludesNonInsertableColumn() {
+        EntityWithNonInsertable entity = new EntityWithNonInsertable();
+        entity.setName("test");
+        entity.setComputedField("computed");
+
+        EntityFieldExtractor<EntityWithNonInsertable> extractor =
+            new EntityFieldExtractor<>(EntityWithNonInsertable.class);
+        List<EntityFieldExtractor.EntityFieldValue> fields = extractor.extractFieldValues(entity);
+
+        assertTrue(fields.stream().anyMatch(f -> f.fieldName().equals("name")));
+        assertFalse(fields.stream().anyMatch(f -> f.fieldName().equals("computedField")));
+    }
 }

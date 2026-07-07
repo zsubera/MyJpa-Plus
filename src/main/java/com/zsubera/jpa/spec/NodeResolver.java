@@ -299,7 +299,7 @@ final class NodeResolver {
             }
         }
         if (childPredicates.isEmpty()) {
-            return ctx.cb().conjunction();
+            return ctx.cb().disjunction();
         }
         if (childPredicates.size() == 1) {
             return childPredicates.get(0);

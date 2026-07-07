@@ -6,8 +6,8 @@ import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
-import java.util.concurrent.ConcurrentHashMap;
 import javax.crypto.spec.SecretKeySpec;
+import com.zsubera.jpa.exception.MyJpaPlusException;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -104,14 +104,14 @@ class EncryptConverterExtendedTest {
     @Test
     void convertToEntityAttribute_invalidBase64() {
         EncryptConverter converter = new EncryptConverter();
-        assertNull(converter.convertToEntityAttribute("v1:not-valid-base64!!!"));
+        assertThrows(MyJpaPlusException.class, () -> converter.convertToEntityAttribute("v1:not-valid-base64!!!"));
     }
 
     @Test
     void convertToEntityAttribute_shortData() {
         EncryptConverter converter = new EncryptConverter();
         String shortData = Base64.getEncoder().encodeToString(new byte[] {1, 2, 3});
-        assertNull(converter.convertToEntityAttribute("v1:" + shortData));
+        assertThrows(MyJpaPlusException.class, () -> converter.convertToEntityAttribute("v1:" + shortData));
     }
 
     @Test
@@ -125,7 +125,7 @@ class EncryptConverterExtendedTest {
             f.setAccessible(true);
             ((java.util.concurrent.atomic.AtomicBoolean)f.get(null)).set(false);
             EncryptConverter converter2 = new EncryptConverter();
-            assertNull(converter2.convertToEntityAttribute(encrypted));
+            assertThrows(MyJpaPlusException.class, () -> converter2.convertToEntityAttribute(encrypted));
         } catch (Exception e) {
             fail(e);
         } finally {
@@ -139,14 +139,15 @@ class EncryptConverterExtendedTest {
         Field cacheField = EncryptionKeyManager.class.getDeclaredField("KEY_CACHE");
         cacheField.setAccessible(true);
         @SuppressWarnings("unchecked")
-        ConcurrentHashMap<String, SecretKeySpec> cache = (ConcurrentHashMap<String, SecretKeySpec>)cacheField.get(null);
-        cache.clear();
+        com.github.benmanes.caffeine.cache.Cache<String, SecretKeySpec> cache =
+            (com.github.benmanes.caffeine.cache.Cache<String, SecretKeySpec>)cacheField.get(null);
+        cache.invalidateAll();
         for (int i = 0; i < 16; i++) {
             cache.put("v" + i, new SecretKeySpec(new byte[16], "AES"));
         }
         EncryptConverter converter = new EncryptConverter();
-        assertNull(converter.convertToEntityAttribute("v999:AAAA"));
-        cache.clear();
+        assertThrows(MyJpaPlusException.class, () -> converter.convertToEntityAttribute("v999:AAAA"));
+        cache.invalidateAll();
     }
 
     @Test

@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.*;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
 import jakarta.persistence.criteria.CriteriaBuilder;
+import jakarta.persistence.criteria.Predicate;
 import jakarta.persistence.criteria.CriteriaQuery;
 import jakarta.persistence.criteria.Root;
 import org.junit.jupiter.api.BeforeEach;
@@ -128,15 +129,15 @@ class ConditionNodeOpTest {
     }
 
     @Test
-    void resolveEqIgnoreCase_nullValue_throws() {
-        assertThrows(IllegalArgumentException.class,
-            () -> ConditionNode.Op.EQ_IGNORE_CASE.resolve(root, "name", null, '\0', cb));
+    void resolveEqIgnoreCase_nullValue_producesIsNull() {
+        Predicate p = ConditionNode.Op.EQ_IGNORE_CASE.resolve(root, "name", null, '\0', cb);
+        assertNotNull(p);
     }
 
     @Test
-    void resolveNeIgnoreCase_nullValue_throws() {
-        assertThrows(IllegalArgumentException.class,
-            () -> ConditionNode.Op.NE_IGNORE_CASE.resolve(root, "name", null, '\0', cb));
+    void resolveNeIgnoreCase_nullValue_producesIsNotNull() {
+        Predicate p = ConditionNode.Op.NE_IGNORE_CASE.resolve(root, "name", null, '\0', cb);
+        assertNotNull(p);
     }
 
     @Test

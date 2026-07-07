@@ -20,7 +20,6 @@ import org.springframework.transaction.annotation.Transactional;
 @Transactional
 @TestPropertySource(properties = {
     "spring.datasource.url=jdbc:mysql://localhost:3306/test?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC",
-    "spring.datasource.username=root", "spring.datasource.password=ci_test_2024",
     "spring.datasource.driver-class-name=com.mysql.cj.jdbc.Driver",
     "spring.jpa.database-platform=org.hibernate.dialect.MySQLDialect", "spring.jpa.hibernate.ddl-auto=create",
     "myjpa-plus.monitoring.enabled=true", "myjpa-plus.monitoring.slow-query-threshold-ms=500"})

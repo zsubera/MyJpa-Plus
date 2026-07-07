@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.*;
 import java.lang.reflect.Field;
 import java.util.Queue;
 import javax.crypto.Cipher;
+import com.zsubera.jpa.exception.MyJpaPlusException;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -72,7 +73,7 @@ class EncryptConverterCipherPoolTest {
             f.setAccessible(true);
             ((java.util.concurrent.atomic.AtomicBoolean)f.get(null)).set(false);
             EncryptConverter badConverter = new EncryptConverter();
-            assertNull(badConverter.convertToEntityAttribute(encrypted));
+            assertThrows(MyJpaPlusException.class, () -> badConverter.convertToEntityAttribute(encrypted));
             assertEquals(0, pool.size());
         } catch (Exception e) {
             fail(e);

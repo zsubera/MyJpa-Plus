@@ -16,7 +16,6 @@ import org.springframework.test.context.TestPropertySource;
 @SpringBootTest
 @TestPropertySource(properties = {
     "spring.datasource.url=jdbc:mysql://localhost:3306/test?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC",
-    "spring.datasource.username=root", "spring.datasource.password=ci_test_2024",
     "spring.datasource.driver-class-name=com.mysql.cj.jdbc.Driver",
     "spring.jpa.database-platform=org.hibernate.dialect.MySQLDialect", "spring.jpa.hibernate.ddl-auto=create",
     "myjpa.encrypt.key=1234567890123456", "myjpa.encrypt.salt=test-salt-value",

@@ -143,14 +143,8 @@ public sealed interface ConditionNode permits ConditionNode.SimpleNode, Conditio
                     }
                     return PredicateHelper.notLike(path, fieldName, (String)value, cb);
                 case EQ_IGNORE_CASE:
-                    if (value == null) {
-                        throw new IllegalArgumentException("EQ_IGNORE_CASE operator requires non-null value");
-                    }
                     return PredicateHelper.eqIgnoreCase(path, fieldName, (String)value, cb);
                 case NE_IGNORE_CASE:
-                    if (value == null) {
-                        throw new IllegalArgumentException("NE_IGNORE_CASE operator requires non-null value");
-                    }
                     return PredicateHelper.neIgnoreCase(path, fieldName, (String)value, cb);
                 case LIKE_IGNORE_CASE:
                     if (value == null) {

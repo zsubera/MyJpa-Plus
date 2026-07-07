@@ -739,4 +739,158 @@ class PredicateHelperTest {
             new ConditionNode.SimpleNode("status", new Comparable[] {1}, ConditionNode.Op.NOT_BETWEEN);
         assertThrows(IllegalArgumentException.class, () -> PredicateHelper.resolveSimplePredicate(root, node, cb));
     }
+
+    // ---- validateRange edge cases ----
+
+    @Test
+    void validateRange_nanValues_throws() {
+        assertThrows(IllegalArgumentException.class,
+            () -> PredicateHelper.validateRange(Double.NaN, Double.valueOf(1.0)));
+    }
+
+    @Test
+    void validateRange_crossTypeNan_throws() {
+        // When types differ (Integer vs Double), the BigDecimal fallback path is taken
+        // BigDecimal("NaN") throws NumberFormatException → NaN check triggers
+        assertThrows(IllegalArgumentException.class,
+            () -> PredicateHelper.validateRange(Integer.valueOf(1), Double.NaN));
+    }
+
+    @Test
+    void validateRange_equalBounds_succeeds() {
+        assertDoesNotThrow(() -> PredicateHelper.validateRange(5, 5));
+    }
+
+    @Test
+    void validateRange_crossNumeric_succeeds() {
+        assertDoesNotThrow(() -> PredicateHelper.validateRange(1, 2L));
+    }
+
+    // ---- escapeLikeWildcards edge cases ----
+
+    @Test
+    void escapeLikeWildcards_unicodeInput() {
+        String result = PredicateHelper.escapeLikeWildcards("日本語_test%");
+        assertEquals("日本語\\_test\\%", result);
+    }
+
+    @Test
+    void escapeLikeWildcards_emptyString() {
+        assertEquals("", PredicateHelper.escapeLikeWildcards(""));
+    }
+
+    @Test
+    void escapeLikeWildcards_onlyBackslashes() {
+        assertEquals("\\\\\\\\", PredicateHelper.escapeLikeWildcards("\\\\"));
+    }
+
+    // ---- startsWith/endsWith/contains with null ----
+
+    @Test
+    void startsWith_nullValue_returnsDisjunction() {
+        CriteriaBuilder cb = em.getCriteriaBuilder();
+        CriteriaQuery<TestEntity> cq = cb.createQuery(TestEntity.class);
+        Root<TestEntity> root = cq.from(TestEntity.class);
+        Predicate p = PredicateHelper.startsWith(root, "name", null, cb);
+        assertNotNull(p);
+        // disjunction matches zero rows
+        cq.where(p);
+        List<TestEntity> result = em.createQuery(cq).getResultList();
+        assertTrue(result.isEmpty());
+    }
+
+    @Test
+    void endsWith_nullValue_returnsDisjunction() {
+        CriteriaBuilder cb = em.getCriteriaBuilder();
+        CriteriaQuery<TestEntity> cq = cb.createQuery(TestEntity.class);
+        Root<TestEntity> root = cq.from(TestEntity.class);
+        Predicate p = PredicateHelper.endsWith(root, "name", null, cb);
+        assertNotNull(p);
+        cq.where(p);
+        List<TestEntity> result = em.createQuery(cq).getResultList();
+        assertTrue(result.isEmpty());
+    }
+
+    @Test
+    void contains_nullValue_returnsDisjunction() {
+        CriteriaBuilder cb = em.getCriteriaBuilder();
+        CriteriaQuery<TestEntity> cq = cb.createQuery(TestEntity.class);
+        Root<TestEntity> root = cq.from(TestEntity.class);
+        Predicate p = PredicateHelper.contains(root, "name", null, cb);
+        assertNotNull(p);
+        cq.where(p);
+        List<TestEntity> result = em.createQuery(cq).getResultList();
+        assertTrue(result.isEmpty());
+    }
+
+    // ---- neIgnoreCase direct call ----
+
+    @Test
+    void neIgnoreCase_directCall_succeeds() {
+        CriteriaBuilder cb = em.getCriteriaBuilder();
+        CriteriaQuery<TestEntity> cq = cb.createQuery(TestEntity.class);
+        Root<TestEntity> root = cq.from(TestEntity.class);
+        Predicate p = PredicateHelper.neIgnoreCase(root, "name", "test", cb);
+        assertNotNull(p);
+    }
+
+    @Test
+    void neIgnoreCase_nullValue_returnsIsNotNull() {
+        CriteriaBuilder cb = em.getCriteriaBuilder();
+        CriteriaQuery<TestEntity> cq = cb.createQuery(TestEntity.class);
+        Root<TestEntity> root = cq.from(TestEntity.class);
+        Predicate p = PredicateHelper.neIgnoreCase(root, "name", null, cb);
+        assertNotNull(p);
+    }
+
+    // ---- like/notLike with empty string ----
+
+    @Test
+    void like_emptyString_succeeds() {
+        CriteriaBuilder cb = em.getCriteriaBuilder();
+        CriteriaQuery<TestEntity> cq = cb.createQuery(TestEntity.class);
+        Root<TestEntity> root = cq.from(TestEntity.class);
+        Predicate p = PredicateHelper.like(root, "name", "", cb);
+        assertNotNull(p);
+    }
+
+    @Test
+    void notLike_emptyString_succeeds() {
+        CriteriaBuilder cb = em.getCriteriaBuilder();
+        CriteriaQuery<TestEntity> cq = cb.createQuery(TestEntity.class);
+        Root<TestEntity> root = cq.from(TestEntity.class);
+        Predicate p = PredicateHelper.notLike(root, "name", "", cb);
+        assertNotNull(p);
+    }
+
+    // ---- in/notIn with single element ----
+
+    @Test
+    void in_singleElement_succeeds() {
+        CriteriaBuilder cb = em.getCriteriaBuilder();
+        CriteriaQuery<TestEntity> cq = cb.createQuery(TestEntity.class);
+        Root<TestEntity> root = cq.from(TestEntity.class);
+        Predicate p = PredicateHelper.in(root, "status", new Object[] {1}, cb);
+        assertNotNull(p);
+    }
+
+    @Test
+    void notIn_singleElement_succeeds() {
+        CriteriaBuilder cb = em.getCriteriaBuilder();
+        CriteriaQuery<TestEntity> cq = cb.createQuery(TestEntity.class);
+        Root<TestEntity> root = cq.from(TestEntity.class);
+        Predicate p = PredicateHelper.notIn(root, "status", new Object[] {1}, cb);
+        assertNotNull(p);
+    }
+
+    // ---- contains with empty string ----
+
+    @Test
+    void contains_emptyString_succeeds() {
+        CriteriaBuilder cb = em.getCriteriaBuilder();
+        CriteriaQuery<TestEntity> cq = cb.createQuery(TestEntity.class);
+        Root<TestEntity> root = cq.from(TestEntity.class);
+        Predicate p = PredicateHelper.contains(root, "name", "", cb);
+        assertNotNull(p);
+    }
 }
