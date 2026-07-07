@@ -1250,11 +1250,13 @@ class UpdateSpecTest {
     // ===== checkRowCountBeforeExecute 行数限制 =====
 
     @Test
-    @org.junit.jupiter.api.Disabled("ponytail: pre-existing — MySQL REPEATABLE READ + CriteriaQuery SELECT doesn't see rows inserted in same tx")
+    @org.springframework.transaction.annotation.Transactional(
+        propagation = org.springframework.transaction.annotation.Propagation.REQUIRES_NEW,
+        isolation = org.springframework.transaction.annotation.Isolation.READ_COMMITTED)
     void testCheckRowCountBeforeExecuteExceedsLimit() {
         com.zsubera.jpa.autoconfigure.MyJpaPlusGlobalConfig config =
             com.zsubera.jpa.autoconfigure.GlobalConfigHolder.getConfig();
-        int oldLimit = config.getMaxBulkOperationRows();
+        Integer oldLimit = config.getMaxBulkOperationRows();
         try {
             config.setMaxBulkOperationRows(1);
 
@@ -1267,7 +1269,9 @@ class UpdateSpecTest {
             assertThrows(IllegalStateException.class, () -> new UpdateSpec<>(TestEntity.class)
                 .set(TestEntity::getName, "x").eq(TestEntity::getStatus, 1).execute(em));
         } finally {
-            config.setMaxBulkOperationRows(oldLimit);
+            if (oldLimit != null) {
+                config.setMaxBulkOperationRows(oldLimit);
+            }
         }
     }
 
