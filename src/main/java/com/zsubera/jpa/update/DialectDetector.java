@@ -180,9 +180,11 @@ final class DialectDetector {
         try {
             java.sql.Connection conn = em.unwrap(java.sql.Connection.class);
             // ponytail: Some connection pools (HikariCP proxy) wrap the Connection.
-            // Unwrap recursively to handle pool proxies.
-            while (conn.isWrapperFor(java.sql.Connection.class)) {
+            // Unwrap recursively to handle pool proxies, with iteration limit to prevent infinite loops.
+            int unwrapAttempts = 0;
+            while (conn.isWrapperFor(java.sql.Connection.class) && unwrapAttempts < 5) {
                 conn = conn.unwrap(java.sql.Connection.class);
+                unwrapAttempts++;
             }
             String productName = conn.getMetaData().getDatabaseProductName().toLowerCase();
             String dialect = mapDialect(productName);
@@ -247,6 +249,11 @@ final class DialectDetector {
         String manualDialect = System.getProperty("myjpa-plus.dialect");
         if (manualDialect != null && !manualDialect.isEmpty()) {
             String mapped = mapDialect(manualDialect.toLowerCase());
+            if (!DIALECT_STRATEGIES.containsKey(mapped)) {
+                throw new MyJpaPlusException("Unknown dialect '" + manualDialect + "' (mapped to '" + mapped + "'). "
+                    + "Available dialects: " + DIALECT_STRATEGIES.keySet()
+                    + ". Register a custom dialect via DialectDetector.registerDialect() if needed.");
+            }
             log.info("Using manually configured dialect: {}", mapped);
             cacheDialect(factoryKey, mapped);
             return mapped;
@@ -302,12 +309,13 @@ final class DialectDetector {
             if (jdbcUrl != null) {
                 String url = jdbcUrl.toString();
                 // 从 URL 中移除凭据信息以防止堆转储泄露
-                String sanitizedUrl = url.replaceAll("://[^:]+:[^@]+@", "://***:***@");
+                // ponytail: 使用更健壮的清理方式，移除整个 userinfo 段（://user:pass@）
+                String sanitizedUrl = url.replaceAll("://[^/]+@", "://***@");
                 return sanitizedUrl;
             }
         } catch (Exception ignored) {
             // 回退到基于 identity 的键
         }
-        return emf.getClass().getName() + "#" + emfCounter.incrementAndGet();
+        return emf.getClass().getName() + "@" + System.identityHashCode(emf);
     }
 }

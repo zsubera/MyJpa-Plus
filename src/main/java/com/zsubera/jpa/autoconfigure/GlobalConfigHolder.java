@@ -77,9 +77,6 @@ public final class GlobalConfigHolder {
 
     private static final long CACHE_VERIFY_INTERVAL_NANOS = java.util.concurrent.TimeUnit.MINUTES.toNanos(5);
 
-    /**
-     * 上次查找失败的时间戳（毫秒），用于退避重试，避免每次查询都触发容器查找。
-     */
     /** 上次查找失败的单调时间戳（纳秒），用于退避重试。使用 nanoTime 确保单调递增。 */
     private static volatile long lastLookupFailureTime;
 

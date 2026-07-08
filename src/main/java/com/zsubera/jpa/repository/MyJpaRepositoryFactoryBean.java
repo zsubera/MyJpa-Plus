@@ -36,8 +36,9 @@ public class MyJpaRepositoryFactoryBean<T extends Repository<S, ID>, S, ID> exte
 
     @Override
     protected RepositoryFactorySupport createRepositoryFactory(EntityManager entityManager) {
-        // 向后兼容：设置默认 EMF（单数据源场景）
-        EntityManagerHelper.setEntityManagerFactory(entityManager.getEntityManagerFactory());
+        // ponytail: 使用 setEntityManagerFactoryIfAbsent 避免多数据源场景中后初始化的
+        // FactoryBean 覆盖已设置的默认值。仅在尚未设置时生效。
+        EntityManagerHelper.setEntityManagerFactoryIfAbsent(entityManager.getEntityManagerFactory());
 
         // 多数据源场景：按实体类型注册 EMF（仅在未手动注册时设置默认值）
         if (entityType != null) {

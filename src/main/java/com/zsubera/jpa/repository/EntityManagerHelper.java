@@ -70,6 +70,20 @@ public final class EntityManagerHelper {
     }
 
     /**
+     * 设置默认 {@link EntityManagerFactory}，仅在尚未设置时生效。
+     * 防止多数据源场景中后初始化的 FactoryBean 覆盖已设置的默认值。
+     *
+     * @param emf 默认的 EntityManagerFactory
+     */
+    public static void setEntityManagerFactoryIfAbsent(EntityManagerFactory emf) {
+        synchronized (resolverCheckLock) {
+            if (defaultEntityManagerFactory == null) {
+                defaultEntityManagerFactory = emf;
+            }
+        }
+    }
+
+    /**
      * 设置 Spring ApplicationContext。由 {@link com.zsubera.jpa.autoconfigure.MyJpaPlusAutoConfiguration} 在启动时调用。
      *
      * <p>

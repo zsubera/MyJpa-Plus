@@ -284,6 +284,12 @@ public class DeleteSpec<T> extends AbstractBulkOperationSpec<T, DeleteSpec<T>> {
             throw new IllegalArgumentException(
                 "lastId must implement Comparable for cursor-based pagination. Type: " + lastId.getClass().getName());
         }
+        // ponytail: 与 executeLimitedWithCursor 保持一致，应用全局上限和无条件删除守卫
+        int globalMax = resolveMaxBulkOperationRows();
+        if (globalMax > 0 && limit > globalMax) {
+            throw new IllegalArgumentException("limit (" + limit + ") exceeds global max (" + globalMax
+                + "). Adjust myjpa-plus.query.max-bulk-operation-rows or use a smaller limit.");
+        }
         if (EntityClassResolver.hasCompositeKey(entityClass)) {
             throw new UnsupportedOperationException(
                 "executeLimited() does not support entities with composite primary keys.");
@@ -295,6 +301,11 @@ public class DeleteSpec<T> extends AbstractBulkOperationSpec<T, DeleteSpec<T>> {
         idQuery.select(idRoot.get(idFieldName));
         List<Predicate> predicateList = new ArrayList<>();
         Predicate[] predicates = buildPredicates(idRoot, cb);
+        // ponytail: 与 executeLimitedWithCursor 保持一致，应用无条件删除守卫
+        if (predicates.length == 0 && !allowUnconditional) {
+            throw new IllegalStateException("No WHERE conditions specified for DELETE operation. "
+                + "Call .allowUnconditional(true) to explicitly confirm this operation.");
+        }
         for (Predicate p : predicates) {
             predicateList.add(p);
         }

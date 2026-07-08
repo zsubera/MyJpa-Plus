@@ -459,6 +459,12 @@ public class UpdateSpec<T> extends AbstractBulkOperationSpec<T, UpdateSpec<T>> {
             throw new IllegalArgumentException(
                 "lastId must implement Comparable for cursor-based pagination. Type: " + lastId.getClass().getName());
         }
+        // ponytail: 与 executeLimitedWithCursor 保持一致，应用全局上限守卫
+        int globalMax = resolveMaxBulkOperationRows();
+        if (globalMax > 0 && limit > globalMax) {
+            throw new IllegalArgumentException("limit (" + limit + ") exceeds global max (" + globalMax
+                + "). Adjust myjpa-plus.query.max-bulk-operation-rows or use a smaller limit.");
+        }
         if (EntityClassResolver.hasCompositeKey(entityClass)) {
             throw new UnsupportedOperationException(
                 "executeLimited() does not support entities with composite primary keys.");
