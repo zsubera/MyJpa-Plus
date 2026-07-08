@@ -157,6 +157,12 @@ public class OptimisticLockRetryAdvisor {
                 throw t;
             }
         }
+        if (attempt > 0) {
+            log.warn("OptimisticLockRetry: No PlatformTransactionManager configured. "
+                + "Retry attempt {} will execute without a new transaction. "
+                + "L1 cache will NOT be cleared between retries, making retries ineffective. "
+                + "Configure a PlatformTransactionManager bean for proper retry behavior.", attempt);
+        }
         return pjp.proceed();
     }
 

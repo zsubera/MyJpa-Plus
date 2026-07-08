@@ -93,4 +93,16 @@ class OracleDialectTest {
         assertTrue(result.sql().contains("(target.\"id\" = source.\"id\""));
         assertTrue(result.sql().contains("IS NULL AND source.\"id\" IS NULL)"));
     }
+
+    @Test
+    void buildUpsertSql_emptyConflictColumns_throws() {
+        List<String> insertCols = List.of("id", "name");
+        List<EntityFieldValue> fieldValues =
+            List.of(new EntityFieldValue("id", "id", 1L, true), new EntityFieldValue("name", "name", "John", true));
+        List<String> conflictCols = List.of();
+        List<String> updateCols = List.of("name");
+
+        assertThrows(IllegalArgumentException.class,
+            () -> dialect.buildUpsertSql("users", insertCols, fieldValues, conflictCols, updateCols));
+    }
 }

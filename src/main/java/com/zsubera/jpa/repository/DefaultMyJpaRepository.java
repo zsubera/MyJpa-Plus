@@ -782,6 +782,7 @@ public class DefaultMyJpaRepository<T, ID> extends SimpleJpaRepository<T, ID> im
     public void deleteAll(Iterable<? extends T> entities) {
         org.springframework.util.Assert.notNull(entities, "Entities must not be null");
         java.util.List<ID> ids = new java.util.ArrayList<>();
+        java.util.List<T> skippedEntities = new java.util.ArrayList<>();
         jakarta.persistence.PersistenceUnitUtil util = entityManager.getEntityManagerFactory().getPersistenceUnitUtil();
         for (T entity : entities) {
             @SuppressWarnings("unchecked")
@@ -789,11 +790,18 @@ public class DefaultMyJpaRepository<T, ID> extends SimpleJpaRepository<T, ID> im
             if (id != null) {
                 ids.add(id);
             } else {
+                skippedEntities.add(entity);
                 log.warn(
                     "deleteAll: Could not extract ID from entity {}. "
                         + "Entity may be detached. Load the entity within a transaction before calling deleteAll().",
                     entity.getClass().getSimpleName());
             }
+        }
+        if (!skippedEntities.isEmpty()) {
+            throw new IllegalArgumentException(
+                "deleteAll: Cannot delete " + skippedEntities.size() + " entity(ies) because their IDs could not be extracted. "
+                    + "This typically happens with detached entities or uninitialized proxies. "
+                    + "Load entities within a transaction before calling deleteAll().");
         }
         if (ids.isEmpty()) {
             return;

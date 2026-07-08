@@ -65,6 +65,9 @@ public final class SoftDeleteHelper {
     private static final int MAX_CACHE_SIZE = 1024;
     private static final Logger log = org.slf4j.LoggerFactory.getLogger(SoftDeleteHelper.class);
 
+    /** 缓存检测到的数据库方言，避免重复检测 */
+    private static volatile String cachedDialect;
+
     /**
      * SQL 保留字集合（MySQL + PostgreSQL 交集），用于表名验证。
      */
@@ -151,16 +154,21 @@ public final class SoftDeleteHelper {
     }
 
     /**
-     * 将 SQL 标识符用双引号包裹，确保大小写敏感。符合 ANSI SQL 标准，PostgreSQL 原生支持。
-     * MySQL 需要启用 ANSI_QUOTES 模式。对于已验证的标识符，此方法不会抛出异常。
+     * 将 SQL 标识符用引号包裹，确保大小写敏感。根据数据库类型自动选择正确的引用字符：
+     * <ul>
+     * <li>MySQL: 反引号 {@code `identifier`}</li>
+     * <li>PostgreSQL/Oracle/SQL Server: 双引号 {@code "identifier"} (ANSI SQL 标准)</li>
+     * </ul>
      *
      * @param identifier 已验证的 SQL 标识符
-     * @return 双引号包裹的标识符
+     * @param dialect 数据库方言（"mysql"、"postgresql"、"oracle"、"sqlserver"）
+     * @return 引号包裹的标识符
      */
-    static String quoteIdentifier(String identifier) {
+    static String quoteIdentifier(String identifier, String dialect) {
         if (identifier == null || identifier.isEmpty()) {
             return identifier;
         }
+        char quoteChar = "mysql".equals(dialect) ? '`' : '"';
         // 处理 schema.table 格式
         String[] parts = identifier.split("\\.");
         StringBuilder sb = new StringBuilder();
@@ -168,9 +176,103 @@ public final class SoftDeleteHelper {
             if (i > 0) {
                 sb.append('.');
             }
-            sb.append('"').append(parts[i]).append('"');
+            sb.append(quoteChar).append(parts[i]).append(quoteChar);
         }
         return sb.toString();
+    }
+
+    /**
+     * 将 SQL 标识符用双引号包裹（ANSI SQL 标准）。默认使用双引号，适用于 PostgreSQL。
+     * 对于 MySQL，请使用 {@link #quoteIdentifier(String, String)} 并传入方言参数。
+     *
+     * @param identifier 已验证的 SQL 标识符
+     * @return 双引号包裹的标识符
+     */
+    static String quoteIdentifier(String identifier) {
+        return quoteIdentifier(identifier, "postgresql");
+    }
+
+    /**
+     * 检测数据库方言类型。优先使用系统属性 myjpa-plus.dialect，否则通过 JDBC 元数据检测。
+     *
+     * @param em EntityManager 实例
+     * @return 数据库方言字符串（"mysql"、"postgresql"、"oracle"、"sqlserver"）
+     */
+    static String detectDialect(jakarta.persistence.EntityManager em) {
+        // 优先使用缓存
+        String cached = cachedDialect;
+        if (cached != null) {
+            return cached;
+        }
+
+        // 优先使用系统属性
+        String manualDialect = System.getProperty("myjpa-plus.dialect");
+        if (manualDialect != null && !manualDialect.isEmpty()) {
+            cachedDialect = manualDialect.toLowerCase();
+            return cachedDialect;
+        }
+
+        // 通过 Hibernate SessionFactory 的数据库方言检测
+        try {
+            jakarta.persistence.EntityManagerFactory emf = em.getEntityManagerFactory();
+            // 检查 Hibernate dialect 属性
+            Object dialectProp = emf.getProperties().get("hibernate.dialect");
+            if (dialectProp != null) {
+                String dialectStr = dialectProp.toString().toLowerCase();
+                log.debug("Detected Hibernate dialect property: {}", dialectStr);
+                if (dialectStr.contains("mysql")) {
+                    cachedDialect = "mysql";
+                    return cachedDialect;
+                } else if (dialectStr.contains("postgresql")) {
+                    cachedDialect = "postgresql";
+                    return cachedDialect;
+                } else if (dialectStr.contains("oracle")) {
+                    cachedDialect = "oracle";
+                    return cachedDialect;
+                } else if (dialectStr.contains("sqlserver") || dialectStr.contains("microsoft")) {
+                    cachedDialect = "sqlserver";
+                    return cachedDialect;
+                }
+            }
+
+            // 尝试通过 JDBC 获取连接
+            java.sql.Connection conn = null;
+            try {
+                conn = em.unwrap(java.sql.Connection.class);
+            } catch (Exception ex) {
+                log.debug("Failed to unwrap Connection directly: {}", ex.getMessage());
+            }
+
+            if (conn != null) {
+                int unwrapAttempts = 0;
+                while (conn.isWrapperFor(java.sql.Connection.class) && unwrapAttempts < 5) {
+                    conn = conn.unwrap(java.sql.Connection.class);
+                    unwrapAttempts++;
+                }
+                String productName = conn.getMetaData().getDatabaseProductName().toLowerCase();
+                log.debug("Detected database product: {}", productName);
+                if (productName.contains("mysql")) {
+                    cachedDialect = "mysql";
+                } else if (productName.contains("postgresql")) {
+                    cachedDialect = "postgresql";
+                } else if (productName.contains("oracle")) {
+                    cachedDialect = "oracle";
+                } else if (productName.contains("microsoft") || productName.contains("sqlserver")) {
+                    cachedDialect = "sqlserver";
+                } else {
+                    cachedDialect = "postgresql";
+                }
+                return cachedDialect;
+            }
+
+            log.warn("Could not detect database dialect, defaulting to postgresql");
+            cachedDialect = "postgresql";
+            return cachedDialect;
+        } catch (Exception e) {
+            log.warn("Failed to detect database dialect, defaulting to postgresql: {}", e.getMessage());
+            cachedDialect = "postgresql";
+            return cachedDialect;
+        }
     }
 
     /**

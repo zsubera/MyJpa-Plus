@@ -90,4 +90,16 @@ class SqlServerDialectTest {
 
         assertTrue(result.sql().endsWith(";"));
     }
+
+    @Test
+    void buildUpsertSql_emptyConflictColumns_throws() {
+        List<String> insertCols = List.of("id", "name");
+        List<EntityFieldValue> fieldValues =
+            List.of(new EntityFieldValue("id", "id", 1L, true), new EntityFieldValue("name", "name", "John", true));
+        List<String> conflictCols = List.of();
+        List<String> updateCols = List.of("name");
+
+        assertThrows(IllegalArgumentException.class,
+            () -> dialect.buildUpsertSql("users", insertCols, fieldValues, conflictCols, updateCols));
+    }
 }

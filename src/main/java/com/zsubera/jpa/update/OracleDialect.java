@@ -34,6 +34,11 @@ final class OracleDialect extends AbstractDialectStrategy {
     @Override
     public SqlWithParams buildUpsertSql(String tableName, List<String> insertColumns,
         List<EntityFieldValue> insertFieldValues, List<String> conflictColumns, List<String> updateColumns) {
+        if (conflictColumns == null || conflictColumns.isEmpty()) {
+            throw new IllegalArgumentException(
+                "Oracle UPSERT requires at least one conflict column for the ON clause. "
+                    + "Specify conflict columns via MergeSpec.withConflictColumns().");
+        }
         if (insertColumns.size() != insertFieldValues.size()) {
             throw new IllegalArgumentException("Column count (" + insertColumns.size()
                 + ") does not match value count (" + insertFieldValues.size() + ")");

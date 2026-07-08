@@ -116,9 +116,13 @@ public final class SoftDeleteBulkExecutor {
                 + "Consider using softDeleteByIds() with specific IDs or UpdateSpec.withVersionIncrement(true) for safe concurrent updates.",
                 entityClass.getSimpleName());
 
-        String escapedTable = SoftDeleteHelper.quoteIdentifier(SoftDeleteHelper.validateIdentifier(SoftDeleteHelper.resolveTableName(entityClass)));
+        String dialect = SoftDeleteHelper.detectDialect(em);
+        if (log.isDebugEnabled()) {
+            log.debug("Detected dialect: {}, entity: {}", dialect, entityClass.getSimpleName());
+        }
+        String escapedTable = SoftDeleteHelper.quoteIdentifier(SoftDeleteHelper.validateIdentifier(SoftDeleteHelper.resolveTableName(entityClass)), dialect);
         String escapedColumn =
-            SoftDeleteHelper.quoteIdentifier(SoftDeleteHelper.validateIdentifier(SoftDeleteHelper.resolveColumnName(entityClass, ctx.fieldName())));
+            SoftDeleteHelper.quoteIdentifier(SoftDeleteHelper.validateIdentifier(SoftDeleteHelper.resolveColumnName(entityClass, ctx.fieldName())), dialect);
         String timestampColumn = resolveTimestampColumn(entityClass, ctx.annotation());
         String versionColumn = versionInfo != null ? versionInfo.columnName : null;
 
@@ -167,10 +171,11 @@ public final class SoftDeleteBulkExecutor {
                 + "). " + "Consider processing in smaller batches or using a temporary table.");
 
         ExecContext ctx = resolveExecContext(entityClass);
-        String escapedTable = SoftDeleteHelper.quoteIdentifier(SoftDeleteHelper.validateIdentifier(SoftDeleteHelper.resolveTableName(entityClass)));
+        String dialect = SoftDeleteHelper.detectDialect(em);
+        String escapedTable = SoftDeleteHelper.quoteIdentifier(SoftDeleteHelper.validateIdentifier(SoftDeleteHelper.resolveTableName(entityClass)), dialect);
         String escapedColumn =
-            SoftDeleteHelper.quoteIdentifier(SoftDeleteHelper.validateIdentifier(SoftDeleteHelper.resolveColumnName(entityClass, ctx.fieldName())));
-        String escapedIdColumn = SoftDeleteHelper.quoteIdentifier(SoftDeleteHelper.validateIdentifier(SoftDeleteHelper.resolveIdColumnName(entityClass)));
+            SoftDeleteHelper.quoteIdentifier(SoftDeleteHelper.validateIdentifier(SoftDeleteHelper.resolveColumnName(entityClass, ctx.fieldName())), dialect);
+        String escapedIdColumn = SoftDeleteHelper.quoteIdentifier(SoftDeleteHelper.validateIdentifier(SoftDeleteHelper.resolveIdColumnName(entityClass)), dialect);
         String timestampColumn = resolveTimestampColumn(entityClass, ctx.annotation());
         String versionColumn = resolveVersionColumn(entityClass);
         String setClause = escapedColumn + " = :deletedValue"

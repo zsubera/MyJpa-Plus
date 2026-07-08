@@ -165,6 +165,12 @@ final class MysqlDialect extends AbstractDialectStrategy {
             }
             sql.append(")");
         }
+        if (insertColumns.isEmpty()) {
+            throw new MyJpaPlusException(
+                "Batch UPSERT requires at least one insert column. "
+                    + "All fields may be auto-generated with null values. "
+                    + "Ensure at least one non-auto-generated field is included.");
+        }
         if (useRowAliasSyntax) {
             sql.append(" AS new");
         }

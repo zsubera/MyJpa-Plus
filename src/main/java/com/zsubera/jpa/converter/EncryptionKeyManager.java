@@ -63,8 +63,8 @@ final class EncryptionKeyManager {
      */
     static void setPbkdf2Iterations(int iterations) {
         if (iterations >= PBKDF2_ITERATIONS_MIN && iterations <= PBKDF2_ITERATIONS_MAX) {
-            configuredPbkdf2Iterations = iterations;
-            // 如果密钥已缓存，清除缓存以使用新迭代次数重新派生
+            // 先失效缓存，确保并发的 getKeySpec() 调用使用新迭代次数重新派生
+            // 而不是读取到新的迭代次数但使用旧缓存的密钥
             if (!KEY_CACHE.asMap().isEmpty()) {
                 log.error("SECURITY CRITICAL: PBKDF2 iterations changed to {} after keys were already derived. "
                     + "Key cache has been cleared. ALL existing encrypted data in the database "
@@ -74,6 +74,7 @@ final class EncryptionKeyManager {
                     + "use EncryptConverter.reEncrypt() before or immediately after this change.", iterations);
                 KEY_CACHE.invalidateAll();
             }
+            configuredPbkdf2Iterations = iterations;
         } else {
             throw new IllegalArgumentException("PBKDF2 iterations must be between " + PBKDF2_ITERATIONS_MIN + " and "
                 + PBKDF2_ITERATIONS_MAX + ", got: " + iterations);

@@ -170,4 +170,15 @@ class MysqlDialectTest {
     void isUseRowAliasSyntax_defaultFalse() {
         assertFalse(dialect.isUseRowAliasSyntax());
     }
+
+    @Test
+    void buildBatchUpsertSql_emptyInsertColumns_throws() {
+        List<String> insertCols = List.of();
+        List<List<EntityFieldValue>> batch = List.of(List.of());
+        List<String> conflictCols = List.of("id");
+        List<String> updateCols = List.of();
+
+        assertThrows(com.zsubera.jpa.exception.MyJpaPlusException.class,
+            () -> dialect.buildBatchUpsertSql("users", insertCols, batch, conflictCols, updateCols));
+    }
 }
