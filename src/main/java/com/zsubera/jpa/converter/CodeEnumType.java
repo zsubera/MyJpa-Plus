@@ -276,7 +276,12 @@ public class CodeEnumType implements UserType<Object>, DynamicParameterizedType 
                         }
                     }
                 } catch (IllegalAccessException e) {
-                    log.warn("Failed to read @CodeEnumValue field for enum {}", cls.getSimpleName(), e);
+                    // ponytail: 不能静默跳过 — 跳过会导致重复 code 检查被绕过，造成静默数据损坏。
+                    // 抛出 HibernateException 让用户立即发现模块访问限制问题。
+                    throw new HibernateException("Cannot access @CodeEnumValue field in enum "
+                        + cls.getSimpleName() + "." + field.getName()
+                        + ". Ensure the enum package is opened to the persistence provider "
+                        + "(add --add-opens or opens directive in module-info.java).", e);
                 }
             }
             return map;

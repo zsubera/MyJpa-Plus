@@ -396,13 +396,13 @@ class SoftDeleteHelperTest {
         org.mockito.Mockito.when(mockCountQuery.getSingleResult()).thenReturn(5L);
         org.mockito.Mockito
             .when(
-                mockCountQuery.setParameter(org.mockito.ArgumentMatchers.anyInt(), org.mockito.ArgumentMatchers.any()))
+                mockCountQuery.setParameter(org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.any()))
             .thenReturn(mockCountQuery);
         org.mockito.Mockito.when(mockEm.createNativeQuery(org.mockito.ArgumentMatchers.contains("UPDATE")))
             .thenReturn(mockUpdateQuery);
         org.mockito.Mockito
             .when(
-                mockUpdateQuery.setParameter(org.mockito.ArgumentMatchers.anyInt(), org.mockito.ArgumentMatchers.any()))
+                mockUpdateQuery.setParameter(org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.any()))
             .thenReturn(mockUpdateQuery);
         // Return more updated rows than maxRows to trigger post-update limit check
         org.mockito.Mockito.when(mockUpdateQuery.executeUpdate()).thenReturn(5);
@@ -423,7 +423,7 @@ class SoftDeleteHelperTest {
             .thenReturn(mockUpdateQuery);
         org.mockito.Mockito
             .when(
-                mockUpdateQuery.setParameter(org.mockito.ArgumentMatchers.anyInt(), org.mockito.ArgumentMatchers.any()))
+                mockUpdateQuery.setParameter(org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.any()))
             .thenReturn(mockUpdateQuery);
         org.mockito.Mockito.when(mockUpdateQuery.executeUpdate()).thenReturn(5);
 
@@ -449,7 +449,7 @@ class SoftDeleteHelperTest {
         org.mockito.Mockito.when(mockCountQuery.getSingleResult()).thenReturn(3L);
         org.mockito.Mockito
             .when(
-                mockCountQuery.setParameter(org.mockito.ArgumentMatchers.anyInt(), org.mockito.ArgumentMatchers.any()))
+                mockCountQuery.setParameter(org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.any()))
             .thenReturn(mockCountQuery);
         org.mockito.Mockito.when(mockCountQuery.setFirstResult(org.mockito.ArgumentMatchers.anyInt()))
             .thenReturn(mockCountQuery);
@@ -459,7 +459,7 @@ class SoftDeleteHelperTest {
             .thenReturn(mockUpdateQuery);
         org.mockito.Mockito
             .when(
-                mockUpdateQuery.setParameter(org.mockito.ArgumentMatchers.anyInt(), org.mockito.ArgumentMatchers.any()))
+                mockUpdateQuery.setParameter(org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.any()))
             .thenReturn(mockUpdateQuery);
         org.mockito.Mockito.when(mockUpdateQuery.executeUpdate()).thenReturn(3);
 

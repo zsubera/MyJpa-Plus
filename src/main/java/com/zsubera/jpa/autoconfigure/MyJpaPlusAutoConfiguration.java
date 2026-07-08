@@ -79,6 +79,9 @@ public class MyJpaPlusAutoConfiguration {
 
     private static final Logger log = LoggerFactory.getLogger(MyJpaPlusAutoConfiguration.class);
 
+    /** 缓存 CacheAdapter 引用，避免 ContextClosedEvent 中 getBean() 死锁 */
+    private static volatile CacheAdapter cachedCacheAdapter;
+
     private final MyJpaPlusProperties properties;
 
     private final ApplicationContext applicationContext;
@@ -466,9 +469,13 @@ public class MyJpaPlusAutoConfiguration {
     @ConditionalOnMissingBean(CacheAdapter.class)
     public CacheAdapter cacheAdapter(@Autowired(required = false) QueryCacheManager cacheManager) {
         if (cacheManager != null) {
-            return cacheManager;
+            CacheAdapter adapter = cacheManager;
+            cachedCacheAdapter = adapter;
+            return adapter;
         }
-        return CacheAdapter.disabled();
+        CacheAdapter adapter = CacheAdapter.disabled();
+        cachedCacheAdapter = adapter;
+        return adapter;
     }
 
     /**
@@ -567,11 +574,13 @@ public class MyJpaPlusAutoConfiguration {
         registry.register("GlobalConfigHolder", GlobalConfigHolder::reset);
         registry.register("InClauseBuilder", InClauseBuilder::reset);
         registry.register("FunctionWhitelist", FunctionWhitelist::reset);
-        if (applicationContext != null) {
-            registry.register("CacheAdapter", () -> {
-                CacheAdapter cacheAdapter = applicationContext.getBean(CacheAdapter.class);
-                cacheAdapter.close();
-            });
+        // ponytail: 使用缓存的 CacheAdapter 引用，避免 ContextClosedEvent 中 getBean() 死锁。
+        // Spring 的 DefaultLifecycleProcessor 在销毁 bean 时持有 singleton 锁，
+        // getBean() 也需要该锁，两者同时调用会死锁。
+        CacheAdapter adapterToClose = cachedCacheAdapter;
+        if (adapterToClose != null) {
+            registry.register("CacheAdapter", () -> adapterToClose.close());
+            cachedCacheAdapter = null;
         }
         registry.executeAll();
         log.info("MyJpa-Plus context closed, caches cleaned");

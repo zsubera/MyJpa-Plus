@@ -70,9 +70,14 @@ final class KeysetPaginationHelper {
     private static boolean detectNullsFirst(EntityManager entityManager) {
         try {
             java.sql.Connection conn = entityManager.unwrap(java.sql.Connection.class);
+            // ponytail: 处理连接池代理，递归 unwrap 到物理连接
+            while (conn.isWrapperFor(java.sql.Connection.class)) {
+                conn = conn.unwrap(java.sql.Connection.class);
+            }
             String productName = conn.getMetaData().getDatabaseProductName().toLowerCase();
             return productName.contains("mysql") || productName.contains("mariadb");
         } catch (Exception e) {
+            log.warn("Failed to detect database type for NULLS handling, assuming NULLS LAST: {}", e.getMessage());
             return false;
         }
     }

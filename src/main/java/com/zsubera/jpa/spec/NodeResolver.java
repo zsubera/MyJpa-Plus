@@ -276,11 +276,14 @@ final class NodeResolver {
             join.on(existingOnPredicate == null ? newOnPredicate : cb.and(existingOnPredicate, newOnPredicate));
             return cb.conjunction();
         }
-        if (isFetch && !innerPredicates.isEmpty()) {
-            log.warn(
-                "FETCH JOIN conditions for path '{}' will be applied to WHERE clause instead of ON clause. "
-                    + "This may degrade LEFT JOIN to INNER JOIN if conditions filter out NULL rows.",
-                fullPath != null ? fullPath : node.fieldName);
+        if (isFetch && node.joinType == ConditionNode.JoinType.LEFT_FETCH && !innerPredicates.isEmpty()) {
+            throw new QueryBuildException(
+                "LEFT FETCH JOIN with filter conditions is not supported by the JPA Criteria API. "
+                    + "FETCH JOIN cannot specify an ON clause, so conditions are applied to WHERE, "
+                    + "which silently degrades LEFT JOIN semantics to INNER JOIN (rows with no matching "
+                    + "children will be excluded). Path: '" + (fullPath != null ? fullPath : node.fieldName) + "'. "
+                    + "Use leftJoin() (non-fetch) with conditions instead, or move the filter to a separate "
+                    + "WHERE predicate outside the join block.");
         }
         return innerPredicates.isEmpty() ? cb.conjunction() : cb.and(innerPredicates.toArray(new Predicate[0]));
     }
@@ -377,6 +380,14 @@ final class NodeResolver {
     private static Root<?> resolveCorrelationRoot(jakarta.persistence.criteria.Subquery<?> subquery, Path<?> path) {
         if (path instanceof Root<?> root) {
             return subquery.correlate(root);
+        }
+        if (path instanceof jakarta.persistence.criteria.Join<?, ?>) {
+            throw new QueryBuildException(
+                "EXISTS/IN subquery inside a JOIN node's conditions cannot correlate against a Join path. "
+                    + "The JPA Criteria API requires correlation via a Root path, but the current path is a "
+                    + path.getClass().getSimpleName()
+                    + ". Move the subquery condition to the query root level, or restructure the query "
+                    + "to use a non-fetch JOIN with the subquery in the WHERE clause.");
         }
         throw new IllegalArgumentException("EXISTS correlation requires a Root path for correlation, but got "
             + path.getClass().getSimpleName() + ". Ensure EXISTS is used at the query root level.");

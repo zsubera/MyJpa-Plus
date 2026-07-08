@@ -198,7 +198,11 @@ public final class QueryProjectionSupport<T> {
         spec.applyOrderBy(dataRoot, dataQuery, cb);
 
         TypedQuery<Tuple> dataTypedQuery = em.createQuery(dataQuery);
-        dataTypedQuery.setFirstResult((int)pageable.getOffset());
+        try {
+            dataTypedQuery.setFirstResult(Math.toIntExact(pageable.getOffset()));
+        } catch (ArithmeticException e) {
+            throw new IllegalArgumentException("Page offset exceeds Integer.MAX_VALUE.", e);
+        }
         dataTypedQuery.setMaxResults(pageable.getPageSize());
         List<Tuple> content = dataTypedQuery.getResultList();
 

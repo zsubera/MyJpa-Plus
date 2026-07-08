@@ -256,18 +256,12 @@ class JoinGroupCoverageTest {
     }
 
     @Test
-    void leftFetchJoin_withConditions_executes() {
-        ParentEntity parent = newParent("admin", 10);
-        parentRepository.save(parent);
-        TestEntity child = newEntity("child", 0);
-        child.setParent(parent);
-        repository.save(child);
-
+    void leftFetchJoin_withConditions_throwsQueryBuildException() {
         QuerySpec<TestEntity> qs = new QuerySpec<>();
         qs.leftFetchJoin(TestEntity::getParent,
             (JoinGroup<TestEntity, ParentEntity> j) -> j.eq(ParentEntity::getCategory, "admin"));
-        List<TestEntity> result = repository.findAll(qs.toSpecification());
-        assertEquals(1, result.size());
+        assertThrows(com.zsubera.jpa.exception.QueryBuildException.class,
+            () -> repository.findAll(qs.toSpecification()));
     }
 
     @Test

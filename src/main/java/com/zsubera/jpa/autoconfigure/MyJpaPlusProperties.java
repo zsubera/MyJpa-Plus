@@ -155,7 +155,8 @@ public class MyJpaPlusProperties {
         private int maxBulkOperationRows = 10000;
 
         /**
-         * PBKDF2 密钥派生迭代次数。更高值更安全但更慢。 默认值：{@code 600000}
+         * PBKDF2 密钥派生迭代次数。更高值更安全但更慢。
+         * 注意：此默认值必须与 EncryptionKeyManager.PBKDF2_ITERATIONS_DEFAULT 保持一致。
          */
         private int pbkdf2Iterations = 600000;
 

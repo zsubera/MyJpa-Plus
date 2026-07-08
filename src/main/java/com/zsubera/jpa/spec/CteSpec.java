@@ -285,17 +285,70 @@ public class CteSpec {
                 String namedParam = "_cte_" + cteIndex + "_param_" + i;
                 StringBuilder sb = new StringBuilder(rewrittenSql.length());
                 boolean inString = false;
+                boolean inDollarQuote = false;
+                String dollarTag = null;
                 for (int j = 0; j < rewrittenSql.length(); j++) {
                     char c = rewrittenSql.charAt(j);
+                    // ponytail: 处理 PostgreSQL dollar-quoted strings ($$...$$ 或 $tag$...$tag$)
+                    if (!inString && c == '$') {
+                        int tagEnd = rewrittenSql.indexOf('$', j + 1);
+                        if (tagEnd > j + 1) {
+                            String candidateTag = rewrittenSql.substring(j + 1, tagEnd);
+                            if (!candidateTag.contains("$") && !candidateTag.isEmpty()) {
+                                // $tag$...$tag$ 形式
+                                String closeTag = "$" + candidateTag + "$";
+                                if (rewrittenSql.startsWith(closeTag, j)) {
+                                    if (!inDollarQuote) {
+                                        inDollarQuote = true;
+                                        dollarTag = closeTag;
+                                        j += closeTag.length() - 1;
+                                        continue;
+                                    } else if (closeTag.equals(dollarTag)) {
+                                        inDollarQuote = false;
+                                        dollarTag = null;
+                                        j += closeTag.length() - 1;
+                                        continue;
+                                    }
+                                }
+                            } else if (candidateTag.isEmpty()) {
+                                // $$...$$ 形式
+                                if (!inDollarQuote) {
+                                    inDollarQuote = true;
+                                    dollarTag = "$$";
+                                    j += 1; // skip second $
+                                    continue;
+                                } else if ("$$".equals(dollarTag)) {
+                                    inDollarQuote = false;
+                                    dollarTag = null;
+                                    j += 1; // skip second $
+                                    continue;
+                                }
+                            }
+                        }
+                        if (inDollarQuote) {
+                            sb.append(c);
+                            continue;
+                        }
+                    }
+                    if (inDollarQuote) {
+                        sb.append(c);
+                        continue;
+                    }
                     if (c == '\\' && inString && j + 1 < rewrittenSql.length()) {
                         sb.append(c);
                         sb.append(rewrittenSql.charAt(++j));
                         continue;
                     }
                     if (c == '\'') {
+                        // ponytail: 处理 SQL 转义引号 '' — 两个连续单引号不切换 inString
+                        if (inString && j + 1 < rewrittenSql.length() && rewrittenSql.charAt(j + 1) == '\'') {
+                            sb.append("''");
+                            j++; // skip the second quote
+                            continue;
+                        }
                         inString = !inString;
                     }
-                    if (!inString && c == '?' && rewrittenSql.regionMatches(j, paramStr, 0, paramStr.length())) {
+                    if (!inString && !inDollarQuote && c == '?' && rewrittenSql.regionMatches(j, paramStr, 0, paramStr.length())) {
                         sb.append(':').append(namedParam);
                         j += paramStr.length() - 1;
                     } else {
@@ -715,8 +768,8 @@ public class CteSpec {
             }
             log.warn(message);
         }
-        // 检测 UNION SELECT 注入尝试
-        if (UNION_SELECT_PATTERN.matcher(sql).find()) {
+        // 检测 UNION SELECT 注入尝试（仅非递归 CTE — 递归 CTE 中 UNION SELECT 是合法语法）
+        if (!recursive && UNION_SELECT_PATTERN.matcher(sql).find()) {
             String message = "SECURITY: " + context + " SQL contains potential UNION SELECT injection pattern. "
                 + "Ensure this is intentional and not user input. SQL: " + truncated;
             if (strictMode) {

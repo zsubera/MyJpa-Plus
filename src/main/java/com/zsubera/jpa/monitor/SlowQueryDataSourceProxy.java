@@ -330,7 +330,7 @@ public final class SlowQueryDataSourceProxy {
      */
     private static class StatementTimingHandler implements InvocationHandler {
 
-        private String sql;
+        private volatile String sql;
         private final Object target;
         private final long slowQueryThresholdMs;
         private int batchCount;

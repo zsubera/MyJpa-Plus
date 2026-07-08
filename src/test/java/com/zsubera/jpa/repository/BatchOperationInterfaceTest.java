@@ -195,9 +195,10 @@ class BatchOperationInterfaceTest {
         entityManager.flush();
         entityManager.clear();
 
+        // Bob already has deleted=true, so soft-delete guard excludes him — affected=0 (no-op)
         int affected = repository.delete(s -> s.eq(MyJpaTestEntity::getDeleted, true));
 
-        assertThat(affected).isEqualTo(1);
+        assertThat(affected).isEqualTo(0);
         entityManager.clear();
 
         List<MyJpaTestEntity> all = repository.findAll();

@@ -112,17 +112,11 @@ class EncryptConverterEdgeCaseTest {
         java.util.Queue<javax.crypto.Cipher> pool =
             (java.util.Queue<javax.crypto.Cipher>)poolField.get(null);
 
-        Field sizeField = EncryptConverter.class.getDeclaredField("POOL_SIZE");
-        sizeField.setAccessible(true);
-        java.util.concurrent.atomic.AtomicInteger poolSize =
-            (java.util.concurrent.atomic.AtomicInteger)sizeField.get(null);
-
         // Fill pool to max
         for (int i = 0; i < 64; i++) {
             pool.offer(javax.crypto.Cipher.getInstance("AES/GCM/NoPadding"));
-            poolSize.incrementAndGet();
         }
-        assertEquals(64, poolSize.get());
+        assertEquals(64, pool.size());
 
         // Return one more — should be discarded
         EncryptConverter converter = new EncryptConverter();
@@ -130,6 +124,6 @@ class EncryptConverterEdgeCaseTest {
         assertNotNull(encrypted);
 
         // Pool should still be at max (overflow cipher was discarded)
-        assertTrue(poolSize.get() <= 64);
+        assertTrue(pool.size() <= 64);
     }
 }

@@ -36,9 +36,13 @@ public class EntityModifiedEvent extends ApplicationEvent {
      *
      * @param entityClass 变更的实体类
      * @param affectedRows 受影响的行数
+     * @throws IllegalArgumentException 如果 entityClass 为 null
      */
     public EntityModifiedEvent(Class<?> entityClass, int affectedRows) {
-        super(entityClass);
+        super(entityClass != null ? entityClass.getName() : "null");
+        if (entityClass == null) {
+            throw new IllegalArgumentException("entityClass must not be null");
+        }
         this.entityName = entityClass.getName();
         this.affectedRows = affectedRows;
     }
@@ -48,9 +52,13 @@ public class EntityModifiedEvent extends ApplicationEvent {
      *
      * @param entityName 变更的实体名称
      * @param affectedRows 受影响的行数
+     * @throws IllegalArgumentException 如果 entityName 为 null
      */
     public EntityModifiedEvent(String entityName, int affectedRows) {
-        super(entityName);
+        super(entityName != null ? entityName : "null");
+        if (entityName == null) {
+            throw new IllegalArgumentException("entityName must not be null");
+        }
         this.entityName = entityName;
         this.affectedRows = affectedRows;
     }

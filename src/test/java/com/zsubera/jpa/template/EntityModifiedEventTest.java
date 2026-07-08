@@ -26,7 +26,8 @@ class EntityModifiedEventTest {
     @Test
     void classConstructorSetsSource() {
         EntityModifiedEvent event = new EntityModifiedEvent(String.class, 3);
-        assertEquals(String.class, event.getSource());
+        // ponytail: 两个构造函数统一使用 String 作为 source，确保类型一致性
+        assertEquals(String.class.getName(), event.getSource());
     }
 
     @Test

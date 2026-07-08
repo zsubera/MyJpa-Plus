@@ -52,10 +52,14 @@ final class EntityFieldExtractor<T> {
 
     /**
      * getter 方法缓存，避免每次字段提取都执行 getMethod() 反射查找。
-     * key: "className#fieldName"，value: Method 或 NO_GETTER_SENTINEL。
+     * ponytail: 使用 Class<?> + getterName 复合键，避免字符串拼接开销。
+     * 缓存大小上限为 MAX_FIELD_CACHE_SIZE，通过采样驱逐防止内存泄漏。
      */
-    private static final Cache<String, java.lang.reflect.Method> GETTER_CACHE =
+    private static final Cache<Object, java.lang.reflect.Method> GETTER_CACHE =
         Caffeine.newBuilder().maximumSize(MAX_FIELD_CACHE_SIZE).build();
+
+    /** 复合缓存键：Class<?>（用于弱引用驱逐）+ getterName（用于区分字段） */
+    private record GetterCacheKey(Class<?> clazz, String getterName) {}
     private static final java.lang.reflect.Method NO_GETTER_SENTINEL;
     static {
         try {
@@ -253,7 +257,7 @@ final class EntityFieldExtractor<T> {
         String fieldName = field.getName();
         // 尝试 getXxx() getter 方法（带缓存）
         String getterName = "get" + Character.toUpperCase(fieldName.charAt(0)) + fieldName.substring(1);
-        String cacheKey = cls.getName() + "#" + getterName;
+        GetterCacheKey cacheKey = new GetterCacheKey(cls, getterName);
         java.lang.reflect.Method cached = GETTER_CACHE.getIfPresent(cacheKey);
         if (cached == NO_GETTER_SENTINEL) {
             // skip

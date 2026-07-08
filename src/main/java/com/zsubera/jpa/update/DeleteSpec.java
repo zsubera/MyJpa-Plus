@@ -157,23 +157,31 @@ public class DeleteSpec<T> extends AbstractBulkOperationSpec<T, DeleteSpec<T>> {
         jakarta.persistence.criteria.CriteriaBuilder cb = em.getCriteriaBuilder();
         jakarta.persistence.criteria.CriteriaUpdate<T> update = cb.createCriteriaUpdate(entityClass);
         jakarta.persistence.criteria.Root<T> root = update.from(entityClass);
-        Predicate[] predicates = buildPredicates(root, cb);
-        if (predicates.length == 0) {
+        List<Predicate> predicates = new ArrayList<>();
+        // Guard: exclude already-soft-deleted rows to avoid inflating affected counts
+        String softDeleteField = SoftDeleteHelper.findSoftDeleteField(entityClass);
+        if (softDeleteField != null) {
+            Predicate notDeleted = SoftDeleteHelper.buildNotDeleted(cb, root, softDeleteField, entityClass);
+            predicates.add(notDeleted);
+        }
+        Predicate[] userPredicates = buildPredicates(root, cb);
+        if (userPredicates.length == 0) {
             if (!allowUnconditional) {
                 throw new IllegalStateException("No WHERE conditions specified for soft-delete operation. "
-                    + "This would soft-delete ALL rows in the table. "
+                    + "This would soft-delete ALL active rows in the table. "
                     + "If unconditional soft-delete is intended, use allowUnconditional(true).");
             }
-            log.warn("AUDIT: Executing unconditional soft-delete on {} — this will affect ALL rows! Call stack: {}",
+            log.warn("AUDIT: Executing unconditional soft-delete on {} — this will affect ALL active rows! Call stack: {}",
                 entityClass.getSimpleName(), AuditUtils.getCallStack());
         } else {
-            update.where(cb.and(predicates));
+            for (Predicate p : userPredicates) {
+                predicates.add(p);
+            }
         }
+        update.where(cb.and(predicates.toArray(new Predicate[0])));
         update.set(fieldName, deletedValue);
         int affected = em.createQuery(update).executeUpdate();
         if (affected > 0) {
-            em.flush();
-            em.clear();
             com.zsubera.jpa.util.CacheEvictionHelper.evictEntityCache(em, entityClass);
         }
         return affected;

@@ -76,8 +76,6 @@ public final class SoftDeleteBulkExecutor {
 
     private static void publishAfterUpdate(EntityManager em, Class<?> entityClass, int updated) {
         if (updated > 0) {
-            em.flush();
-            em.clear();
             com.zsubera.jpa.util.CacheEvictionHelper.evictEntityCache(em, entityClass);
             publishEvent(entityClass, updated);
         }
@@ -125,7 +123,7 @@ public final class SoftDeleteBulkExecutor {
         String versionColumn = versionInfo != null ? versionInfo.columnName : null;
 
         String setClause =
-            escapedColumn + " = ?1" + (timestampColumn != null ? ", " + timestampColumn + " = CURRENT_TIMESTAMP" : "")
+            escapedColumn + " = :deletedValue" + (timestampColumn != null ? ", " + timestampColumn + " = CURRENT_TIMESTAMP" : "")
                 + (versionColumn != null ? ", " + versionColumn + " = " + versionColumn + " + 1" : "");
 
         // 安全检查：先查询受影响行数，再执行 UPDATE，避免 UPDATE 后才发现超限导致脏持久化上下文
@@ -133,13 +131,13 @@ public final class SoftDeleteBulkExecutor {
             long count;
             if (ctx.resolved().booleanField()) {
                 count = ((Number) em.createNativeQuery("SELECT COUNT(*) FROM " + escapedTable + " WHERE "
-                    + escapedColumn + " = ?1 OR " + escapedColumn + " IS NULL")
-                    .setParameter(1, Boolean.FALSE).getSingleResult()).longValue();
+                    + escapedColumn + " = :deletedValue OR " + escapedColumn + " IS NULL")
+                    .setParameter("deletedValue", Boolean.FALSE).getSingleResult()).longValue();
             } else {
                 Object dv = ctx.resolved().dbValue();
                 count = ((Number) em.createNativeQuery("SELECT COUNT(*) FROM " + escapedTable + " WHERE "
-                    + escapedColumn + " != ?1 OR " + escapedColumn + " IS NULL")
-                    .setParameter(1, dv).getSingleResult()).longValue();
+                    + escapedColumn + " != :deletedValue OR " + escapedColumn + " IS NULL")
+                    .setParameter("deletedValue", dv).getSingleResult()).longValue();
             }
             if (count > maxRows) {
                 throw new IllegalStateException("softDeleteAll would affect " + count
@@ -149,16 +147,9 @@ public final class SoftDeleteBulkExecutor {
         }
 
         int updated;
-        if (ctx.resolved().booleanField()) {
-            updated = em
-                .createNativeQuery("UPDATE " + escapedTable + " SET " + setClause + " WHERE " + escapedColumn
-                    + " = ?2 OR " + escapedColumn + " IS NULL")
-                .setParameter(1, Boolean.TRUE).setParameter(2, Boolean.FALSE).executeUpdate();
-        } else {
-            Object dv = ctx.resolved().dbValue();
-            updated = em.createNativeQuery("UPDATE " + escapedTable + " SET " + setClause + " WHERE " + escapedColumn
-                + " != ?1 OR " + escapedColumn + " IS NULL").setParameter(1, dv).executeUpdate();
-        }
+        Object deletedValue = ctx.resolved().booleanField() ? Boolean.TRUE : ctx.resolved().dbValue();
+        updated = em.createNativeQuery("UPDATE " + escapedTable + " SET " + setClause + " WHERE " + escapedColumn
+            + " != :deletedValue OR " + escapedColumn + " IS NULL").setParameter("deletedValue", deletedValue).executeUpdate();
 
         publishAfterUpdate(em, entityClass, updated);
         return updated;

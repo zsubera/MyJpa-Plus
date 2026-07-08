@@ -354,7 +354,7 @@ public final class EntityManagerHelper {
             defaultEntityManagerFactory = null;
             resolvers.clear();
             allResolversUseDefault = true;
+            applicationContext = null;
         }
-        applicationContext = null;
     }
 }

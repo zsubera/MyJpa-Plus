@@ -50,8 +50,8 @@ public final class SqlSanitizer {
     private static final Pattern DOUBLE_QUOTE_PATTERN =
         Pattern.compile("\"[^\"\\\\]*(?:\\\\.[^\"\\\\]*|\"\")*[^\"\\\\]*\"");
 
-    /** 单引号字符串模式，支持转义 '' 和反斜杠转义 \' */
-    private static final Pattern SINGLE_QUOTE_PATTERN = Pattern.compile("'[^'\\\\]*(?:\\\\.[^'\\\\]*|'')*[^'\\\\]*'");
+    /** 单引号字符串模式，支持转义 '' 和反斜杠转义 \'。末尾可选反斜杠处理以 \' 结尾的字符串。 */
+    private static final Pattern SINGLE_QUOTE_PATTERN = Pattern.compile("'[^'\\\\]*(?:\\\\.[^'\\\\]*|'')*[^'\\\\]*\\\\?'");
 
     /** PostgreSQL 美元参数模式（$1, $2 等） */
     private static final Pattern DOLLAR_PARAM_PATTERN = Pattern.compile("\\$\\d+");

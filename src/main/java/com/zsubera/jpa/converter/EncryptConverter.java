@@ -108,19 +108,16 @@ public class EncryptConverter implements AttributeConverter<String, String> {
     /**
      * Cipher 对象池：使用 ConcurrentLinkedDeque 替代 ThreadLocal，
      * 避免虚拟线程场景下百万级 ThreadLocal 实例导致 OOM。
+     * ponytail: 不再使用独立的 AtomicInteger 计数器跟踪大小，
+     * 直接使用 ConcurrentLinkedDeque.size()（O(n)）。
+     * 池大小上限为 64，O(n) 遍历开销可忽略不计，
+     * 消除了高并发下计数器与队列实际大小失步的问题。
      */
     private static final java.util.Queue<Cipher> CIPHER_POOL = new ConcurrentLinkedDeque<>();
-
-    /**
-     * 池当前大小的近似计数器。使用 AtomicInteger 替代 ConcurrentLinkedDeque.size()（O(n)），
-     * 消除高并发下每次 borrow/return 的 O(n) 遍历开销。
-     */
-    private static final java.util.concurrent.atomic.AtomicInteger POOL_SIZE = new java.util.concurrent.atomic.AtomicInteger(0);
 
     private static Cipher borrowCipher() {
         Cipher cipher = CIPHER_POOL.poll();
         if (cipher != null) {
-            POOL_SIZE.decrementAndGet();
             return cipher;
         }
         try {
@@ -132,14 +129,13 @@ public class EncryptConverter implements AttributeConverter<String, String> {
     }
 
     private static void returnCipher(Cipher cipher) {
-        if (POOL_SIZE.get() >= MAX_POOL_SIZE) {
+        if (CIPHER_POOL.size() >= MAX_POOL_SIZE) {
             // ponytail: 池满时丢弃归还的 cipher，下次 borrow 重新创建。
             // 避免池中混入状态异常的 cipher（doFinal 异常后虽然 init 会重置状态，
             // 但防御性丢弃防止任何潜在问题）。
             return;
         }
         CIPHER_POOL.offer(cipher);
-        POOL_SIZE.incrementAndGet();
     }
 
     /**
@@ -147,7 +143,6 @@ public class EncryptConverter implements AttributeConverter<String, String> {
      */
     static void clearCipherPool() {
         CIPHER_POOL.clear();
-        POOL_SIZE.set(0);
     }
 
     /**
@@ -203,6 +198,16 @@ public class EncryptConverter implements AttributeConverter<String, String> {
     }
 
     /**
+     * 设置密钥版本缓存刷新间隔（毫秒）。默认 300,000ms（5分钟）。
+     * 缩短此间隔可使密钥版本变更更快生效，但会增加环境变量/系统属性的读取频率。
+     *
+     * @param intervalMs 刷新间隔（毫秒），最小 1,000ms
+     */
+    public static void setKeyVersionRefreshInterval(long intervalMs) {
+        EncryptionKeyManager.setKeyVersionRefreshInterval(intervalMs);
+    }
+
+    /**
      * 异步预热密钥缓存。在应用启动后调用此方法可避免首次请求的延迟。
      */
     public static void warmUpKeyCache() {
@@ -214,7 +219,7 @@ public class EncryptConverter implements AttributeConverter<String, String> {
                     EncryptionKeyManager.getKeySpec(version);
                     log.info("Encryption key cache warmed up for version: {}", version);
                 } catch (Exception e) {
-                    log.warn("Failed to warm up encryption key cache: {}", e.getMessage());
+                    log.warn("Failed to warm up encryption key cache: {}", e.getMessage(), e);
                 }
             }, executor);
         } catch (java.util.concurrent.RejectedExecutionException e) {
@@ -231,7 +236,7 @@ public class EncryptConverter implements AttributeConverter<String, String> {
             EncryptionKeyManager.getKeySpec(version);
             log.info("Encryption key cache warmed up synchronously for version: {}", version);
         } catch (Exception e) {
-            log.warn("Failed to warm up encryption key cache synchronously: {}", e.getMessage());
+            log.warn("Failed to warm up encryption key cache synchronously: {}", e.getMessage(), e);
         }
     }
 
@@ -339,8 +344,10 @@ public class EncryptConverter implements AttributeConverter<String, String> {
             } catch (IllegalArgumentException e) {
                 log.error("Invalid Base64 data in encrypted field.", e);
                 throw new MyJpaPlusException("Decryption failed: invalid Base64 data in encrypted field. "
-                    + "The value may be corrupted or encrypted with a different encoding. "
-                    + "Original value cannot be recovered.", e);
+                    + "The value may not be encrypted (stored as plain text), corrupted, "
+                    + "or encrypted with a different encoding. "
+                    + "If this field was recently added, ensure all existing rows are encrypted "
+                    + "or the column default is compatible with the encrypted format.", e);
             }
             int minRequired = GCM_IV_LENGTH + (GCM_TAG_LENGTH / 8);
             if (combined.length < minRequired) {

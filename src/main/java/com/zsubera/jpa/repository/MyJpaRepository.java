@@ -213,6 +213,9 @@ public interface MyJpaRepository<T, ID> extends JpaRepository<T, ID>, JpaSpecifi
      * @throws IllegalStateException 如果无活动事务
      */
     default int update(Consumer<UpdateSpec<T>> config) {
+        if (config == null) {
+            throw new IllegalArgumentException("config must not be null");
+        }
         Class<T> entityClass = getEntityClass();
         UpdateSpec<T> spec = new UpdateSpec<>(entityClass);
         config.accept(spec);
@@ -243,6 +246,9 @@ public interface MyJpaRepository<T, ID> extends JpaRepository<T, ID>, JpaSpecifi
      * @throws IllegalStateException 如果无活动事务
      */
     default int delete(Consumer<DeleteSpec<T>> config) {
+        if (config == null) {
+            throw new IllegalArgumentException("config must not be null");
+        }
         Class<T> entityClass = getEntityClass();
         DeleteSpec<T> spec = new DeleteSpec<>(entityClass);
         config.accept(spec);
@@ -290,6 +296,9 @@ public interface MyJpaRepository<T, ID> extends JpaRepository<T, ID>, JpaSpecifi
      * @throws IllegalStateException 如果无活动事务
      */
     default int merge(Consumer<MergeSpec<T>> config) {
+        if (config == null) {
+            throw new IllegalArgumentException("config must not be null");
+        }
         Class<T> entityClass = getEntityClass();
         MergeSpec<T> spec = new MergeSpec<>(entityClass);
         config.accept(spec);

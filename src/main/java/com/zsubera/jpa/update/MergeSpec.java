@@ -584,6 +584,7 @@ public class MergeSpec<T> {
         int total = 0;
         int batchStart = 0;
         int iterationCount = 0;
+        // ponytail: 10000 与 BulkOperationTemplate.DEFAULT_MAX_BATCH_ITERATIONS 保持一致
         int maxIterations = com.zsubera.jpa.autoconfigure.GlobalConfigHolder.resolveMaxUpsertBatchIterations(10000);
         while (batchStart < entities.size()) {
             if (++iterationCount > maxIterations) {

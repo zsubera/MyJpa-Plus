@@ -46,10 +46,13 @@ public final class CacheEvictionHelper {
                 Class<?> cacheClass = Class.forName("org.hibernate.Cache");
                 evictEntityDataMethod = cacheClass.getMethod("evictEntityData", Class.class);
                 hibernateAvailable = true;
+                reflectionInitialized = true;
             } catch (ClassNotFoundException | NoSuchMethodException e) {
                 hibernateAvailable = false;
+                // ponytail: 不设置 reflectionInitialized = true，允许后续重试。
+                // 在 lazy class loading 或 OSGi 场景中，Hibernate 类可能稍后才可用。
+                log.debug("Hibernate L2 cache reflection not available, will retry on next call: {}", e.getMessage());
             }
-            reflectionInitialized = true;
         }
     }
 

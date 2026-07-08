@@ -138,8 +138,21 @@ public final class InClauseBuilder {
 
     /**
      * 原子替换当前配置。由 Spring Boot 自动配置调用。
+     * ponytail: 添加上限验证，防止通过 Spring Boot 属性设置超过 MAX_ALLOWED_VALUE 的值。
      */
     public static void setConfig(Config config) {
+        if (config == null) {
+            throw new IllegalArgumentException("config must not be null");
+        }
+        if (config.maxInClauseSize() > MAX_ALLOWED_VALUE || config.hardLimit() > MAX_ALLOWED_VALUE) {
+            log.warn("IN clause config values exceed upper limit ({}). Clamping: maxSize={}, hardLimit={}.",
+                MAX_ALLOWED_VALUE,
+                Math.min(config.maxInClauseSize(), MAX_ALLOWED_VALUE),
+                Math.min(config.hardLimit(), MAX_ALLOWED_VALUE));
+            config = new Config(
+                Math.min(config.maxInClauseSize(), MAX_ALLOWED_VALUE),
+                Math.min(config.hardLimit(), MAX_ALLOWED_VALUE));
+        }
         CONFIG_REF.set(config);
         log.info("IN clause config updated: maxSize={}, hardLimit={}", config.maxInClauseSize(), config.hardLimit());
     }

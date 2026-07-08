@@ -39,10 +39,13 @@ final class EncryptionKeyManager {
     private static final String SALT_PROPERTY = "myjpa.encrypt.salt";
     private static final int MIN_KEY_LENGTH = 16;
     private static final int MAX_KEY_CACHE_SIZE = 16;
-    private static final long KEY_VERSION_REFRESH_INTERVAL_MS = 300_000L;
+    private static final long KEY_VERSION_REFRESH_INTERVAL_MS_DEFAULT = 300_000L;
+    private static volatile long keyVersionRefreshIntervalMs = KEY_VERSION_REFRESH_INTERVAL_MS_DEFAULT;
     private static final int PBKDF2_KEY_LENGTH = 256;
     private static final int PBKDF2_ITERATIONS_MIN = 100_000;
     private static final int PBKDF2_ITERATIONS_MAX = 10_000_000;
+    /** PBKDF2 默认迭代次数。 */
+    static final int PBKDF2_ITERATIONS_DEFAULT = 600_000;
 
     /**
      * ponytail: 通过 volatile 支持 Spring 属性注入，优先级高于系统属性/环境变量。
@@ -63,8 +66,12 @@ final class EncryptionKeyManager {
             configuredPbkdf2Iterations = iterations;
             // 如果密钥已缓存，清除缓存以使用新迭代次数重新派生
             if (!KEY_CACHE.asMap().isEmpty()) {
-                log.warn("PBKDF2 iterations changed to {} after keys were already derived. "
-                    + "Key cache has been cleared; keys will be re-derived on next access.", iterations);
+                log.error("SECURITY CRITICAL: PBKDF2 iterations changed to {} after keys were already derived. "
+                    + "Key cache has been cleared. ALL existing encrypted data in the database "
+                    + "that was encrypted with the previous iteration count will become UNDECRYPTABLE "
+                    + "and throw MyJpaPlusException on next read. "
+                    + "This action is IRREVERSIBLE. To re-encrypt existing data, "
+                    + "use EncryptConverter.reEncrypt() before or immediately after this change.", iterations);
                 KEY_CACHE.invalidateAll();
             }
         } else {
@@ -103,7 +110,7 @@ final class EncryptionKeyManager {
             } catch (NumberFormatException ignored) {
             }
         }
-        return 600_000;
+        return PBKDF2_ITERATIONS_DEFAULT;
     }
 
     private static final java.util.regex.Pattern MULTI_KEY_PATTERN =
@@ -144,14 +151,14 @@ final class EncryptionKeyManager {
     static String getKeyVersion() {
         KeyVersionSnapshot snap = keyVersionSnapshot;
         long now = System.currentTimeMillis();
-        if (snap.version != null && (now - snap.refreshTimestamp) < KEY_VERSION_REFRESH_INTERVAL_MS) {
+        if (snap.version != null && (now - snap.refreshTimestamp) < keyVersionRefreshIntervalMs) {
             return snap.version;
         }
         KEY_VERSION_LOCK.lock();
         try {
             snap = keyVersionSnapshot;
             now = System.currentTimeMillis();
-            if (snap.version != null && (now - snap.refreshTimestamp) < KEY_VERSION_REFRESH_INTERVAL_MS) {
+            if (snap.version != null && (now - snap.refreshTimestamp) < keyVersionRefreshIntervalMs) {
                 return snap.version;
             }
             String version = System.getenv(KEY_VERSION_ENV);
@@ -159,11 +166,29 @@ final class EncryptionKeyManager {
                 version = System.getProperty(KEY_VERSION_PROPERTY);
             }
             String resolved = (version != null && !version.isEmpty()) ? version : "v1";
+            if (snap.version != null && !snap.version.equals(resolved)) {
+                log.warn("Encryption key version changed from '{}' to '{}'. "
+                    + "Data encrypted with version '{}' will use the new key after cache refresh.",
+                    snap.version, resolved, snap.version);
+            }
             keyVersionSnapshot = new KeyVersionSnapshot(resolved, now);
             return resolved;
         } finally {
             KEY_VERSION_LOCK.unlock();
         }
+    }
+
+    /**
+     * 设置密钥版本缓存刷新间隔（毫秒）。默认 300,000ms（5分钟）。
+     *
+     * @param intervalMs 刷新间隔（毫秒），最小 1,000ms
+     */
+    static void setKeyVersionRefreshInterval(long intervalMs) {
+        if (intervalMs < 1_000) {
+            throw new IllegalArgumentException("Key version refresh interval must be at least 1000ms, got: " + intervalMs);
+        }
+        keyVersionRefreshIntervalMs = intervalMs;
+        log.info("Key version refresh interval set to {}ms", intervalMs);
     }
 
     private static char[] resolveRawKey(String version) {
@@ -264,6 +289,10 @@ final class EncryptionKeyManager {
 
     private static final AtomicReference<byte[]> CACHED_SALT_REF = new AtomicReference<>();
 
+    /** 开发环境专用回退盐值。仅在 skipSaltCheck=true 且非生产环境时使用。 */
+    private static final byte[] DEV_SALT_FALLBACK =
+        "myjpa-plus-dev-salt-fallback".getBytes(StandardCharsets.UTF_8);
+
     private static byte[] getSalt() {
         byte[] cached = CACHED_SALT_REF.get();
         if (cached != null) {
@@ -286,12 +315,11 @@ final class EncryptionKeyManager {
                 throw new MyJpaPlusException("Cannot skip PBKDF2 salt check in production environment. "
                     + "Set environment variable " + SALT_ENV + " or system property " + SALT_PROPERTY + ".");
             }
-            log.warn("SECURITY: Skipping PBKDF2 salt check. Using a dev-only deterministic salt derived from "
-                + "application name. Encrypted data will be UNRECOVERABLE after application restart. "
+            log.warn("SECURITY: Skipping PBKDF2 salt check. Using a dev-only deterministic salt. "
+                + "Encrypted data will be UNRECOVERABLE after application restart. "
                 + "This is ONLY acceptable for local development with disposable data.");
-            byte[] devSalt = "myjpa-plus-dev-salt-fallback-2024".getBytes(StandardCharsets.UTF_8);
-            CACHED_SALT_REF.compareAndSet(null, devSalt);
-            return devSalt.clone();
+            CACHED_SALT_REF.compareAndSet(null, DEV_SALT_FALLBACK);
+            return DEV_SALT_FALLBACK.clone();
         }
         throw new MyJpaPlusException("PBKDF2 salt must be configured. " + "Set environment variable " + SALT_ENV
             + " or system property " + SALT_PROPERTY + ". " + "Salt is required for PBKDF2 key derivation security. "
@@ -367,12 +395,21 @@ final class EncryptionKeyManager {
         }
     }
 
+    /**
+     * 清除所有缓存的密钥、版本信息和盐值。
+     *
+     * <p><strong>并发注意：</strong>此方法非原子操作 — 各字段在锁外重置，
+     * 仅 keyVersionSnapshot 在锁内重置。并发的 getKeySpec()/getKeyVersion() 调用
+     * 可能在短暂窗口内观察到混合状态（如旧版本标签 + 新迭代次数派生的密钥）。
+     * 此方法应在应用启动阶段或已知无并发加密操作时调用（如 refreshKeyVersion()）。
+     */
     static void clearCaches() {
         // ponytail: 将不需要锁保护的操作移到 synchronized 块外，减少锁持有时间。
         // KEY_CACHE.invalidateAll() 和 KEY_VALIDATED.set(false) 是原子操作，无需锁保护。
         KEY_CACHE.invalidateAll();
         KEY_VALIDATED.set(false);
         CACHED_SALT_REF.set(null);
+        configuredPbkdf2Iterations = -1;
         KEY_VERSION_LOCK.lock();
         try {
             keyVersionSnapshot = new KeyVersionSnapshot(null, 0);
