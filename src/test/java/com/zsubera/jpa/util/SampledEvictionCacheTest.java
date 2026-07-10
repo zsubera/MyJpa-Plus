@@ -37,15 +37,15 @@ class SampledEvictionCacheTest {
     @Test
     void putAndGet() {
         var cache = new SampledEvictionCache<String, String>(100, 0.75, 100);
-        assertNull(cache.put("a", "1"));
+        cache.put("a", "1");
         assertEquals("1", cache.get("a"));
     }
 
     @Test
-    void putReturnsOldValue() {
+    void putOverwritesValue() {
         var cache = new SampledEvictionCache<String, String>(100, 0.75, 100);
         cache.put("a", "1");
-        assertEquals("1", cache.put("a", "2"));
+        cache.put("a", "2");
         assertEquals("2", cache.get("a"));
     }
 

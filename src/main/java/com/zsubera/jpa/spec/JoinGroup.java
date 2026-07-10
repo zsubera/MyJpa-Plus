@@ -40,6 +40,16 @@ public class JoinGroup<T, J> implements ConditionBuilder<J, JoinGroup<T, J>> {
         this.joinNode = joinNode;
     }
 
+    static <T, J> JoinGroup<T, J> createJoin(QuerySpec<T> root, SFunction<T, ?> field,
+        ConditionNode.JoinType joinType) {
+        if (field == null) {
+            throw new IllegalArgumentException("field must not be null");
+        }
+        ConditionNode.JoinNode joinNode = new ConditionNode.JoinNode(LambdaUtils.getPropertyName(field), joinType);
+        root.currentGroup().add(joinNode);
+        return new JoinGroup<>(root, joinNode);
+    }
+
     @Override
     public List<ConditionNode> conditions() {
         return joinNode.innerConditions;
@@ -80,7 +90,9 @@ public class JoinGroup<T, J> implements ConditionBuilder<J, JoinGroup<T, J>> {
             new ConditionNode.JoinNode(LambdaUtils.getPropertyName(field), ConditionNode.JoinType.INNER);
         joinNode.innerConditions.add(nestedJoin);
         config.accept(new JoinGroup<>(root, nestedJoin));
-        return new JoinGroup<>(root, nestedJoin);
+        @SuppressWarnings("unchecked")
+        JoinGroup<T, J2> result = (JoinGroup<T, J2>) this;
+        return result;
     }
 
     /**
@@ -103,7 +115,9 @@ public class JoinGroup<T, J> implements ConditionBuilder<J, JoinGroup<T, J>> {
             new ConditionNode.JoinNode(LambdaUtils.getPropertyName(field), ConditionNode.JoinType.LEFT);
         joinNode.innerConditions.add(nestedJoin);
         config.accept(new JoinGroup<>(root, nestedJoin));
-        return new JoinGroup<>(root, nestedJoin);
+        @SuppressWarnings("unchecked")
+        JoinGroup<T, J2> result = (JoinGroup<T, J2>) this;
+        return result;
     }
 
     /**
@@ -126,7 +140,9 @@ public class JoinGroup<T, J> implements ConditionBuilder<J, JoinGroup<T, J>> {
             new ConditionNode.JoinNode(LambdaUtils.getPropertyName(field), ConditionNode.JoinType.FETCH);
         joinNode.innerConditions.add(nestedJoin);
         config.accept(new JoinGroup<>(root, nestedJoin));
-        return new JoinGroup<>(root, nestedJoin);
+        @SuppressWarnings("unchecked")
+        JoinGroup<T, J2> result = (JoinGroup<T, J2>) this;
+        return result;
     }
 
     /**
@@ -149,7 +165,9 @@ public class JoinGroup<T, J> implements ConditionBuilder<J, JoinGroup<T, J>> {
             new ConditionNode.JoinNode(LambdaUtils.getPropertyName(field), ConditionNode.JoinType.LEFT_FETCH);
         joinNode.innerConditions.add(nestedJoin);
         config.accept(new JoinGroup<>(root, nestedJoin));
-        return new JoinGroup<>(root, nestedJoin);
+        @SuppressWarnings("unchecked")
+        JoinGroup<T, J2> result = (JoinGroup<T, J2>) this;
+        return result;
     }
 
     /**

@@ -60,17 +60,18 @@ abstract class AbstractDialectStrategy implements DialectStrategy {
         String escapeSeq = getEscapeSequence();
         String closeQuoteStr = String.valueOf(closeQuote);
 
-        if (identifier.indexOf('.') >= 0) {
-            String[] parts = identifier.split("\\.");
-            StringBuilder sb = new StringBuilder();
-            for (int i = 0; i < parts.length; i++) {
-                if (i > 0) {
-                    sb.append('.');
-                }
-                sb.append(openQuote).append(parts[i].replace(closeQuoteStr, escapeSeq)).append(closeQuote);
-            }
-            return sb.toString();
+        StringBuilder sb = new StringBuilder(identifier.length() + 4);
+        int from = 0;
+        while (true) {
+            int dot = identifier.indexOf('.', from);
+            sb.append(openQuote);
+            String part = dot >= 0 ? identifier.substring(from, dot) : identifier.substring(from);
+            sb.append(part.replace(closeQuoteStr, escapeSeq));
+            sb.append(closeQuote);
+            if (dot < 0) break;
+            sb.append('.');
+            from = dot + 1;
         }
-        return openQuote + identifier.replace(closeQuoteStr, escapeSeq) + closeQuote;
+        return sb.toString();
     }
 }

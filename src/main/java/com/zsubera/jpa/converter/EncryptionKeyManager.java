@@ -63,8 +63,9 @@ final class EncryptionKeyManager {
      */
     static void setPbkdf2Iterations(int iterations) {
         if (iterations >= PBKDF2_ITERATIONS_MIN && iterations <= PBKDF2_ITERATIONS_MAX) {
-            // 先失效缓存，确保并发的 getKeySpec() 调用使用新迭代次数重新派生
-            // 而不是读取到新的迭代次数但使用旧缓存的密钥
+            // ponytail: 先设置新的迭代次数，再失效缓存，消除竞态窗口。
+            // 旧顺序（先失效再设值）允许并发 getKeySpec() 在失效后、设值前用旧迭代次数派生密钥并缓存。
+            configuredPbkdf2Iterations = iterations;
             if (!KEY_CACHE.asMap().isEmpty()) {
                 log.error("SECURITY CRITICAL: PBKDF2 iterations changed to {} after keys were already derived. "
                     + "Key cache has been cleared. ALL existing encrypted data in the database "
@@ -74,7 +75,6 @@ final class EncryptionKeyManager {
                     + "use EncryptConverter.reEncrypt() before or immediately after this change.", iterations);
                 KEY_CACHE.invalidateAll();
             }
-            configuredPbkdf2Iterations = iterations;
         } else {
             throw new IllegalArgumentException("PBKDF2 iterations must be between " + PBKDF2_ITERATIONS_MIN + " and "
                 + PBKDF2_ITERATIONS_MAX + ", got: " + iterations);
@@ -405,14 +405,12 @@ final class EncryptionKeyManager {
      * 此方法应在应用启动阶段或已知无并发加密操作时调用（如 refreshKeyVersion()）。
      */
     static void clearCaches() {
-        // ponytail: 将不需要锁保护的操作移到 synchronized 块外，减少锁持有时间。
-        // KEY_CACHE.invalidateAll() 和 KEY_VALIDATED.set(false) 是原子操作，无需锁保护。
-        KEY_CACHE.invalidateAll();
-        KEY_VALIDATED.set(false);
-        CACHED_SALT_REF.set(null);
-        configuredPbkdf2Iterations = -1;
         KEY_VERSION_LOCK.lock();
         try {
+            KEY_CACHE.invalidateAll();
+            KEY_VALIDATED.set(false);
+            CACHED_SALT_REF.set(null);
+            configuredPbkdf2Iterations = -1;
             keyVersionSnapshot = new KeyVersionSnapshot(null, 0);
         } finally {
             KEY_VERSION_LOCK.unlock();

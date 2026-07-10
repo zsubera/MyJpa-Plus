@@ -3,6 +3,7 @@ package com.zsubera.jpa.softdelete;
 import static org.junit.jupiter.api.Assertions.*;
 
 import com.zsubera.jpa.spec.*;
+import com.zsubera.jpa.exception.SecurityViolationException;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
 import java.util.List;
@@ -525,17 +526,17 @@ class SoftDeleteHelperAdditionalTest {
 
     @Test
     void validateIdentifier_null_throws() {
-        assertThrows(IllegalArgumentException.class, () -> SoftDeleteHelper.validateIdentifier(null));
+        assertThrows(SecurityViolationException.class, () -> SoftDeleteHelper.validateIdentifier(null));
     }
 
     @Test
     void validateIdentifier_empty_throws() {
-        assertThrows(IllegalArgumentException.class, () -> SoftDeleteHelper.validateIdentifier(""));
+        assertThrows(SecurityViolationException.class, () -> SoftDeleteHelper.validateIdentifier(""));
     }
 
     @Test
     void validateIdentifier_invalidChars_throws() {
-        assertThrows(IllegalArgumentException.class, () -> SoftDeleteHelper.validateIdentifier("bad-name"));
+        assertThrows(SecurityViolationException.class, () -> SoftDeleteHelper.validateIdentifier("bad-name"));
     }
 
     @Test
@@ -665,12 +666,12 @@ class SoftDeleteHelperAdditionalTest {
 
     @Test
     void validateTableName_null_throws() {
-        assertThrows(IllegalArgumentException.class, () -> SoftDeleteHelper.validateTableName(null));
+        assertThrows(SecurityViolationException.class, () -> SoftDeleteHelper.validateTableName(null));
     }
 
     @Test
     void validateTableName_empty_throws() {
-        assertThrows(IllegalArgumentException.class, () -> SoftDeleteHelper.validateTableName(""));
+        assertThrows(SecurityViolationException.class, () -> SoftDeleteHelper.validateTableName(""));
     }
 
     @Test

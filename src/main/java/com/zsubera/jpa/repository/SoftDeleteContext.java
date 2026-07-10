@@ -42,7 +42,7 @@ public final class SoftDeleteContext {
 
     private static final Logger log = LoggerFactory.getLogger(SoftDeleteContext.class);
 
-    private static final ThreadLocal<Integer> IGNORE_COUNT = ThreadLocal.withInitial(() -> 0);
+    private static final ThreadLocal<int[]> IGNORE_COUNT = ThreadLocal.withInitial(() -> new int[]{0});
 
     /** 安全上限：超过此值认为存在泄漏，抛出异常。可通过系统属性 myjpa-plus.soft-delete.max-ignore-count 配置。 */
     private static volatile int maxIgnoreCount;
@@ -147,7 +147,7 @@ public final class SoftDeleteContext {
      * @return 如果应跳过过滤返回 true
      */
     public static boolean isIgnoreSoftDelete() {
-        return IGNORE_COUNT.get() > 0;
+        return IGNORE_COUNT.get()[0] > 0;
     }
 
     /**
@@ -156,7 +156,7 @@ public final class SoftDeleteContext {
      * @return 当前线程的忽略计数
      */
     public static int getIgnoreCount() {
-        return IGNORE_COUNT.get();
+        return IGNORE_COUNT.get()[0];
     }
 
     /**
@@ -169,19 +169,20 @@ public final class SoftDeleteContext {
      * @throws IllegalStateException 如果计数超过安全上限（可能存在泄漏，ThreadLocal 已自动重置）
      */
     public static void pushIgnore() {
-        int count = IGNORE_COUNT.get();
+        int[] countHolder = IGNORE_COUNT.get();
+        int count = countHolder[0];
         int limit = maxIgnoreCount;
         if (count >= limit) {
             log.error("SoftDeleteContext pushIgnore() exceeded safety ceiling ({}). "
                 + "Auto-resetting to prevent soft-delete filter bypass. "
                 + "Check for pushIgnore/popIgnore imbalance.", limit);
-            IGNORE_COUNT.set(0);
+            countHolder[0] = 0;
             throw new IllegalStateException(
                 "SoftDeleteContext ignore count exceeded maximum (" + limit + "). "
                     + "ThreadLocal has been auto-reset to prevent soft-delete filter bypass. "
                     + "Ensure every pushIgnore() has a matching popIgnore() in a finally block.");
         }
-        IGNORE_COUNT.set(count + 1);
+        countHolder[0] = count + 1;
     }
 
     /**
@@ -191,18 +192,18 @@ public final class SoftDeleteContext {
      * 当计数归零时自动清除 ThreadLocal，防止内存泄漏。包含防御性检查以处理异常场景下的计数漂移。
      */
     public static void popIgnore() {
-        int count = IGNORE_COUNT.get();
+        int[] countHolder = IGNORE_COUNT.get();
+        int count = countHolder[0];
         if (count <= 0) {
             log.warn("SoftDeleteContext.popIgnore() called with count={}, possible push/pop mismatch. "
                 + "Cleaning up ThreadLocal to prevent memory leak.", count);
             IGNORE_COUNT.remove();
             return;
         }
-        // ponytail: count >= 1 here, so count == 1 means "last level — remove entirely"
         if (count == 1) {
             IGNORE_COUNT.remove();
         } else {
-            IGNORE_COUNT.set(count - 1);
+            countHolder[0] = count - 1;
         }
     }
 
@@ -244,7 +245,8 @@ public final class SoftDeleteContext {
      * @return 当前线程的忽略计数（0 表示未忽略）
      */
     public static int captureAndResetForAsync() {
-        int count = IGNORE_COUNT.get();
+        int[] countHolder = IGNORE_COUNT.get();
+        int count = countHolder[0];
         if (count > 0) {
             IGNORE_COUNT.remove();
         }
@@ -277,7 +279,7 @@ public final class SoftDeleteContext {
      */
     public static void restoreForAsync(int capturedCount) {
         if (capturedCount > 0) {
-            IGNORE_COUNT.set(capturedCount);
+            IGNORE_COUNT.set(new int[]{capturedCount});
         }
     }
 

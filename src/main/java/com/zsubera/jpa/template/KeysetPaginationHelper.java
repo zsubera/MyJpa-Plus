@@ -70,9 +70,11 @@ final class KeysetPaginationHelper {
     private static boolean detectNullsFirst(EntityManager entityManager) {
         try {
             java.sql.Connection conn = entityManager.unwrap(java.sql.Connection.class);
-            // ponytail: 处理连接池代理，递归 unwrap 到物理连接
-            while (conn.isWrapperFor(java.sql.Connection.class)) {
+            // ponytail: 处理连接池代理，递归 unwrap 到物理连接，设置迭代上限防止死循环
+            int unwrapAttempts = 0;
+            while (conn.isWrapperFor(java.sql.Connection.class) && unwrapAttempts < 5) {
                 conn = conn.unwrap(java.sql.Connection.class);
+                unwrapAttempts++;
             }
             String productName = conn.getMetaData().getDatabaseProductName().toLowerCase();
             return productName.contains("mysql") || productName.contains("mariadb");
@@ -133,29 +135,39 @@ final class KeysetPaginationHelper {
         }
 
         // 应用排序（包含 NULLS FIRST/LAST 以匹配 keyset predicate 的 NULL 语义）
-        // ponytail: JPA 3.1 Order doesn't have nullsFirst/nullsLast. Use Hibernate's sort() with NullPrecedence.
-        org.hibernate.query.NullPrecedence nullPrecedence =
-            nullsFirst ? org.hibernate.query.NullPrecedence.FIRST : org.hibernate.query.NullPrecedence.LAST;
+        // ponytail: JPA 3.1 Order doesn't have nullsFirst/nullsLast. Use Hibernate's sort() with NullPrecedence
+        // when available; fall back to standard JPA asc()/desc() for other providers (EclipseLink, OpenJPA, etc.).
         List<jakarta.persistence.criteria.Order> orderList = new ArrayList<>();
-        for (Sort.Order order : orders) {
-            jakarta.persistence.criteria.Expression<?> expr = root.get(order.getProperty());
-            jakarta.persistence.criteria.Order sorted;
-            if (order.isAscending()) {
-                sorted = ((org.hibernate.query.criteria.HibernateCriteriaBuilder)cb).sort(
-                    (org.hibernate.query.criteria.JpaExpression<?>)expr, org.hibernate.query.SortDirection.ASCENDING,
-                    nullPrecedence);
-            } else {
-                sorted = ((org.hibernate.query.criteria.HibernateCriteriaBuilder)cb).sort(
-                    (org.hibernate.query.criteria.JpaExpression<?>)expr, org.hibernate.query.SortDirection.DESCENDING,
-                    nullPrecedence);
+        if (cb instanceof org.hibernate.query.criteria.HibernateCriteriaBuilder hcb) {
+            org.hibernate.query.NullPrecedence nullPrecedence =
+                nullsFirst ? org.hibernate.query.NullPrecedence.FIRST : org.hibernate.query.NullPrecedence.LAST;
+            for (Sort.Order order : orders) {
+                jakarta.persistence.criteria.Expression<?> expr = root.get(order.getProperty());
+                jakarta.persistence.criteria.Order sorted;
+                if (order.isAscending()) {
+                    sorted = hcb.sort(
+                        (org.hibernate.query.criteria.JpaExpression<?>)expr, org.hibernate.query.SortDirection.ASCENDING,
+                        nullPrecedence);
+                } else {
+                    sorted = hcb.sort(
+                        (org.hibernate.query.criteria.JpaExpression<?>)expr, org.hibernate.query.SortDirection.DESCENDING,
+                        nullPrecedence);
+                }
+                orderList.add(sorted);
             }
-            orderList.add(sorted);
+        } else {
+            for (Sort.Order order : orders) {
+                jakarta.persistence.criteria.Expression<?> expr = root.get(order.getProperty());
+                orderList.add(order.isAscending() ? cb.asc(expr) : cb.desc(expr));
+            }
         }
         cq.orderBy(orderList);
 
         // 多查一条以判断是否有下一页
+        // pageSize + 1 在 pageSize == Integer.MAX_VALUE 时溢出，使用饱和运算
+        int fetchLimit = pageSize == Integer.MAX_VALUE ? Integer.MAX_VALUE : pageSize + 1;
         jakarta.persistence.TypedQuery<T> query = entityManager.createQuery(cq);
-        query.setMaxResults(pageSize + 1);
+        query.setMaxResults(fetchLimit);
         List<T> results = query.getResultList();
         boolean hasNext = results.size() > pageSize;
         if (hasNext) {

@@ -57,7 +57,7 @@ import org.springframework.lang.Nullable;
  * @see com.zsubera.jpa.template.MyJpaTemplate#findAll(Class, QuerySpec)
  * @see com.zsubera.jpa.template.MyJpaTemplate#findPage(Class, Specification, org.springframework.data.domain.Pageable)
  */
-@SuppressWarnings("ALL")
+@SuppressWarnings({"unchecked", "rawtypes"})
 public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, QuerySpec<T>> {
 
     private static final Logger log = LoggerFactory.getLogger(QuerySpec.class);

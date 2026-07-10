@@ -38,6 +38,13 @@ final class MysqlDialect extends AbstractDialectStrategy {
         this.useRowAliasSyntax = defaultUseRowAliasSyntax;
     }
 
+    /**
+     * 设置是否使用 MySQL 8.0.19+ 的行别名语法（{@code AS new}）。
+     *
+     * <p><strong>线程安全说明：</strong>此字段为 volatile，读取在单次 {@link #buildUpsertSql} 调用内一致。
+     * 但并发调用此 setter 与 {@code buildUpsertSql()} 可能导致不同实体使用不同语法。
+     * 建议在应用启动阶段设置一次，运行时不要修改。</p>
+     */
     void setUseRowAliasSyntax(boolean enabled) {
         this.useRowAliasSyntax = enabled;
     }

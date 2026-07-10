@@ -119,8 +119,9 @@ final class DialectDetector {
             return cached;
         }
         // 优先级 1：从 EntityManagerFactory 属性中的 JDBC URL 检测（无 Hibernate 依赖）
+        java.util.Map<?, ?> props = null;
         try {
-            java.util.Map<?, ?> props = em.getEntityManagerFactory().getProperties();
+            props = emf.getProperties();
             Object jdbcUrl = props.get("jakarta.persistence.jdbc.url");
             if (jdbcUrl == null) {
                 jdbcUrl = props.get("hibernate.connection.url");
@@ -149,8 +150,15 @@ final class DialectDetector {
         }
 
         // 优先级 2：从 hibernate.dialect 属性直接读取方言（避免反射 Connection）
+        if (props == null) {
+            try {
+                props = emf.getProperties();
+            } catch (Exception ex) {
+                log.debug("Failed to load properties for hibernate.dialect check: {}", ex.getMessage());
+            }
+        }
         try {
-            Object dialectProp = emf.getProperties().get("hibernate.dialect");
+            Object dialectProp = props != null ? props.get("hibernate.dialect") : null;
             if (dialectProp != null) {
                 String dialectStr = dialectProp.toString().toLowerCase();
                 // Check known Hibernate dialect prefixes first

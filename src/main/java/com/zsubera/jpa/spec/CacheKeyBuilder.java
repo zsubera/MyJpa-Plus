@@ -155,14 +155,11 @@ final class CacheKeyBuilder {
         } else if (node instanceof ConditionNode.ExistsNode<?> en) {
             sb.append(en.negate ? "NOTEXISTS(" : "EXISTS(");
             sb.append(en.subEntity.getSimpleName());
-            // ponytail: 子查询缓存键基于 lambda 类的泛型签名哈希。
-            // 同一 lambda 在不同编译单元中可能产生不同类名，导致缓存未命中。
-            // 这是尽力而为的缓存策略，不影响正确性，仅影响缓存命中率。
-            sb.append(",ref=").append(en.config.getClass().toGenericString().hashCode()).append(")");
+            sb.append(",ref=").append(lambdaCapturedArgHash(en.config)).append(")");
         } else if (node instanceof ConditionNode.InSubQueryNode<?> isn) {
             sb.append(isn.negate ? "NOTINSUBQUERY(" : "INSUBQUERY(");
             sb.append(isn.outerFieldName).append(",").append(isn.subEntity.getSimpleName());
-            sb.append(",ref=").append(isn.config.getClass().toGenericString().hashCode()).append(")");
+            sb.append(",ref=").append(lambdaCapturedArgHash(isn.config)).append(")");
         } else if (node instanceof ConditionNode.NegateNode nn) {
             sb.append("NOT(");
             appendCacheKey(sb, nn.inner(), nextDepth);
@@ -294,5 +291,34 @@ final class CacheKeyBuilder {
             hash *= 0x100000001b3L;
         }
         return hash;
+    }
+
+    private static String lambdaCapturedArgHash(Object lambda) {
+        try {
+            java.lang.reflect.Method writeReplace = lambda.getClass().getDeclaredMethod("writeReplace");
+            writeReplace.setAccessible(true);
+            Object result = writeReplace.invoke(lambda);
+            if (result instanceof java.lang.invoke.SerializedLambda sl) {
+                int argCount = sl.getCapturedArgCount();
+                if (argCount == 0) {
+                    return "noargs:" + sl.getFunctionalInterfaceMethodName();
+                }
+                StringBuilder sb = new StringBuilder(sl.getFunctionalInterfaceMethodName());
+                for (int i = 0; i < argCount; i++) {
+                    Object arg = sl.getCapturedArg(i);
+                    sb.append("|");
+                    if (arg != null) {
+                        sb.append(arg.getClass().getName()).append("=");
+                        sb.append(Long.toUnsignedString(hash64(String.valueOf(arg))));
+                    } else {
+                        sb.append("null");
+                    }
+                }
+                return Long.toUnsignedString(hash64(sb.toString()));
+            }
+        } catch (Exception e) {
+            // Fall through to identity hash fallback
+        }
+        return String.valueOf(System.identityHashCode(lambda));
     }
 }

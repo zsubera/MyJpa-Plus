@@ -81,6 +81,10 @@ public class MergeSpec<T> {
     private static final SampledEvictionCache<String, Boolean> IDENTITY_WARNING_CACHE =
         new SampledEvictionCache<>(256, 0.75, 100, 64);
 
+    /** 表名缓存，避免每次 UPSERT 重复反射扫描 @Table/@Entity 注解。 */
+    private static final SampledEvictionCache<Class<?>, String> TABLE_NAME_CACHE =
+        new SampledEvictionCache<>(512, 0.75, 100, 128);
+
     /** executeBatch(List, EntityManager) 的默认批次大小。 */
     static final int DEFAULT_BATCH_SIZE = 100;
 
@@ -264,10 +268,7 @@ public class MergeSpec<T> {
         T entitySnapshot = this.entity;
         // Step 1: merge if detached to make managed, then flush to trigger callbacks
         if (!em.contains(entitySnapshot)) {
-            // em.merge() 返回新的托管实例，原始 entitySnapshot 保持游离态。
-            // 调用方应通过 entity 字段获取合并后的实体引用。
-            T merged = em.merge(entitySnapshot);
-            this.entity = merged;
+            em.merge(entitySnapshot);
         }
         em.flush();
         // Step 2: after flush, entity is managed and persisted — skip native UPSERT
@@ -295,11 +296,16 @@ public class MergeSpec<T> {
      */
     private int executeWith(EntityManager em, T entityToMerge) {
         DialectStrategy strategy = resolveDialectStrategy(em);
-        return executeWith(em, entityToMerge, strategy);
+        List<String> effectiveConflictFields =
+            conflictFields.isEmpty() ? fieldExtractor.resolveIdColumnNames() : new ArrayList<>(conflictFields);
+        java.util.Set<String> conflictSet = new java.util.LinkedHashSet<>(effectiveConflictFields);
+        return executeWith(em, entityToMerge, strategy, effectiveConflictFields, conflictSet);
     }
 
-    private int executeWith(EntityManager em, T entityToMerge, DialectStrategy strategy) {
-        SqlWithParams sqlWithParams = buildSqlFor(em, entityToMerge, strategy);
+    private int executeWith(EntityManager em, T entityToMerge, DialectStrategy strategy,
+        List<String> preComputedConflictFields, java.util.Set<String> preComputedConflictSet) {
+        SqlWithParams sqlWithParams = buildSqlFor(em, entityToMerge, strategy, preComputedConflictFields,
+            preComputedConflictSet);
         if (log.isTraceEnabled()) {
             log.trace("Executing UPSERT SQL: {}", sqlWithParams.sql());
         }
@@ -351,7 +357,8 @@ public class MergeSpec<T> {
             }
             clazz = clazz.getSuperclass();
         }
-        IDENTITY_WARNING_CACHE.put(cacheKey, Boolean.TRUE);
+        // No @Id found — cache FALSE to allow future re-detection if the class changes
+        IDENTITY_WARNING_CACHE.put(cacheKey, Boolean.FALSE);
     }
 
     /**
@@ -446,6 +453,9 @@ public class MergeSpec<T> {
     }
 
     private int doBatchSingleRow(List<T> entities, EntityManager em, int batchSize, DialectStrategy strategy) {
+        List<String> effectiveConflictFields =
+            conflictFields.isEmpty() ? fieldExtractor.resolveIdColumnNames() : new ArrayList<>(conflictFields);
+        Set<String> conflictSet = new LinkedHashSet<>(effectiveConflictFields);
         int total = 0;
         try {
             for (int i = 0; i < entities.size(); i++) {
@@ -457,11 +467,13 @@ public class MergeSpec<T> {
                     em.flush();
                     em.clear();
                 }
-                total += executeWith(em, entity, strategy);
+                total += executeWith(em, entity, strategy, effectiveConflictFields, conflictSet);
             }
             em.flush();
         } catch (RuntimeException e) {
-            em.clear();
+            if (em.isOpen()) {
+                em.clear();
+            }
             throw e;
         }
         return total;
@@ -543,7 +555,9 @@ public class MergeSpec<T> {
                 em.clear();
             }
         } catch (RuntimeException e) {
-            em.clear();
+            if (em.isOpen()) {
+                em.clear();
+            }
             throw e;
         }
         return total;
@@ -610,7 +624,13 @@ public class MergeSpec<T> {
 
     private int executeSingleBatchInTransaction(List<T> entities, EntityManager em, DialectStrategy strategy,
         int batchStart, int batchEnd) {
-        EntityTransaction tx = em.getTransaction();
+        EntityTransaction tx;
+        try {
+            tx = em.getTransaction();
+        } catch (IllegalStateException e) {
+            throw new MyJpaPlusException("JTA environment detected in executeSingleBatchInTransaction. "
+                + "executeBatchInSeparateTransactions requires RESOURCE_LOCAL transaction manager.", e);
+        }
         if (tx == null || tx.isActive()) {
             throw new MyJpaPlusException("executeBatchInSeparateTransactions requires no active transaction. "
                 + "An active RESOURCE_LOCAL transaction was detected. "
@@ -656,6 +676,11 @@ public class MergeSpec<T> {
         List<String> effectiveConflictFields =
             conflictFields.isEmpty() ? fieldExtractor.resolveIdColumnNames() : new ArrayList<>(conflictFields);
         Set<String> conflictSet = new LinkedHashSet<>(effectiveConflictFields);
+        return buildSqlFor(em, entity, strategy, effectiveConflictFields, conflictSet);
+    }
+
+    private SqlWithParams buildSqlFor(EntityManager em, T entity, DialectStrategy strategy,
+        List<String> effectiveConflictFields, Set<String> conflictSet) {
         List<EntityFieldExtractor.EntityFieldValue> allFieldValues = fieldExtractor.extractFieldValues(entity);
         List<String> insertColumns = new ArrayList<>();
         List<EntityFieldExtractor.EntityFieldValue> insertFieldValues = new ArrayList<>();
@@ -685,7 +710,7 @@ public class MergeSpec<T> {
      * @return 数据库表名
      */
     private String resolveTableName() {
-        return IdentifierValidator.resolveTableName(entityClass);
+        return TABLE_NAME_CACHE.computeIfAbsent(entityClass, clazz -> IdentifierValidator.resolveTableName(clazz));
     }
 
     private List<String> allNonConflictColumns(List<EntityFieldExtractor.EntityFieldValue> allFieldValues,

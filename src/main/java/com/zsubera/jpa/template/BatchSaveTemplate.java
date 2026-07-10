@@ -42,12 +42,20 @@ class BatchSaveTemplate {
         }
     }
 
+    private static final SampledEvictionCache<Class<?>, Boolean> HAS_GENERATED_VALUE_CACHE =
+        new SampledEvictionCache<>(1024, 0.75, 100);
+
+    private static final SampledEvictionCache<Class<?>, Boolean> HAS_ID_ANNOTATION_CACHE =
+        new SampledEvictionCache<>(1024, 0.75, 100);
+
     private final EntityManager entityManager;
     private final jakarta.persistence.EntityManagerFactory entityManagerFactory;
+    private final jakarta.persistence.PersistenceUnitUtil persistenceUnitUtil;
 
     BatchSaveTemplate(EntityManager entityManager) {
         this.entityManager = entityManager;
         this.entityManagerFactory = entityManager.getEntityManagerFactory();
+        this.persistenceUnitUtil = entityManagerFactory.getPersistenceUnitUtil();
     }
 
     private <R> R executeInNewTransaction(java.util.function.Function<EntityManager, R> operation) {
@@ -260,9 +268,7 @@ class BatchSaveTemplate {
 
     private boolean isNewEntity(Object entity) {
         try {
-            jakarta.persistence.PersistenceUnitUtil puu =
-                entityManager.getEntityManagerFactory().getPersistenceUnitUtil();
-            Object id = puu.getIdentifier(entity);
+            Object id = persistenceUnitUtil.getIdentifier(entity);
             // ponytail: null ID always means new entity — don't check @Version for null IDs,
             // as primitive @Version fields return non-null auto-boxed defaults (0L/0).
             if (id == null) {
@@ -336,34 +342,38 @@ class BatchSaveTemplate {
      * 检查实体类的 ID 字段是否声明了 {@code @GeneratedValue} 注解。
      */
     private static boolean hasGeneratedValueAnnotation(Class<?> entityClass) {
-        Class<?> current = entityClass;
-        while (current != null && current != Object.class) {
-            for (java.lang.reflect.Field field : current.getDeclaredFields()) {
-                if (field.isAnnotationPresent(jakarta.persistence.Id.class)
-                    || field.isAnnotationPresent(jakarta.persistence.EmbeddedId.class)) {
-                    return field.isAnnotationPresent(jakarta.persistence.GeneratedValue.class);
+        return HAS_GENERATED_VALUE_CACHE.computeIfAbsent(entityClass, clazz -> {
+            Class<?> current = clazz;
+            while (current != null && current != Object.class) {
+                for (java.lang.reflect.Field field : current.getDeclaredFields()) {
+                    if (field.isAnnotationPresent(jakarta.persistence.Id.class)
+                        || field.isAnnotationPresent(jakarta.persistence.EmbeddedId.class)) {
+                        return field.isAnnotationPresent(jakarta.persistence.GeneratedValue.class);
+                    }
                 }
+                current = current.getSuperclass();
             }
-            current = current.getSuperclass();
-        }
-        return false;
+            return false;
+        });
     }
 
     /**
      * 检查实体类或其父类是否声明了 {@code @Id} 或 {@code @EmbeddedId} 注解的字段。
      */
     private static boolean hasIdAnnotation(Class<?> entityClass) {
-        Class<?> current = entityClass;
-        while (current != null && current != Object.class) {
-            for (java.lang.reflect.Field field : current.getDeclaredFields()) {
-                if (field.isAnnotationPresent(jakarta.persistence.Id.class)
-                    || field.isAnnotationPresent(jakarta.persistence.EmbeddedId.class)) {
-                    return true;
+        return HAS_ID_ANNOTATION_CACHE.computeIfAbsent(entityClass, clazz -> {
+            Class<?> current = clazz;
+            while (current != null && current != Object.class) {
+                for (java.lang.reflect.Field field : current.getDeclaredFields()) {
+                    if (field.isAnnotationPresent(jakarta.persistence.Id.class)
+                        || field.isAnnotationPresent(jakarta.persistence.EmbeddedId.class)) {
+                        return true;
+                    }
                 }
+                current = current.getSuperclass();
             }
-            current = current.getSuperclass();
-        }
-        return false;
+            return false;
+        });
     }
 
 }

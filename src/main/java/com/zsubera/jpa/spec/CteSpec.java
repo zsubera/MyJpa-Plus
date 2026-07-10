@@ -482,6 +482,9 @@ public class CteSpec {
         log.debug("CteSpec: executing native query for single result (length={})", sql.length());
         Query query = em.createNativeQuery(sql);
         applyParameters(query);
+        if (!sql.toUpperCase(java.util.Locale.ROOT).contains("LIMIT")) {
+            query.setMaxResults(2);
+        }
         List<?> results = query.getResultList();
         if (results.isEmpty()) {
             return Optional.empty();

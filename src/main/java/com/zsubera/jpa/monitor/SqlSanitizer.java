@@ -36,25 +36,18 @@ public final class SqlSanitizer {
 
     private SqlSanitizer() {}
 
-    /** 十六进制字面量模式（X'...'）— 必须在单引号模式之前匹配 */
-    private static final Pattern HEX_LITERAL_PATTERN = Pattern.compile("X'[^'\\\\]*(?:\\\\.[^'\\\\]*|'')*[^'\\\\]*'");
-
-    /** Unicode 字符串模式（N'...'）— 必须在单引号模式之前匹配 */
-    private static final Pattern UNICODE_STRING_PATTERN =
-        Pattern.compile("N'[^'\\\\]*(?:\\\\.[^'\\\\]*|'')*[^'\\\\]*'");
-
-    /** PostgreSQL E-字符串模式（E'...'）— 必须在单引号模式之前匹配 */
-    private static final Pattern PG_ESTRING_PATTERN = Pattern.compile("E'[^'\\\\]*(?:\\\\.[^'\\\\]*|'')*[^'\\\\]*'");
-
-    /** 双引号字符串模式（MySQL ANSI_QUOTES / SQLite）— 必须在单引号模式之前匹配 */
-    private static final Pattern DOUBLE_QUOTE_PATTERN =
-        Pattern.compile("\"[^\"\\\\]*(?:\\\\.[^\"\\\\]*|\"\")*[^\"\\\\]*\"");
-
-    /** 单引号字符串模式，支持转义 '' 和反斜杠转义 \'。末尾可选反斜杠处理以 \' 结尾的字符串。 */
-    private static final Pattern SINGLE_QUOTE_PATTERN = Pattern.compile("'[^'\\\\]*(?:\\\\.[^'\\\\]*|'')*[^'\\\\]*\\\\?'");
-
-    /** PostgreSQL 美元参数模式（$1, $2 等） */
-    private static final Pattern DOLLAR_PARAM_PATTERN = Pattern.compile("\\$\\d+");
+    /** 所有字符串字面量模式的组合（一次遍历替代10次 replaceAll）。顺序敏感：特殊引号在前。 */
+    private static final Pattern LITERAL_PATTERN = Pattern.compile(
+        "\\$(\\w*)\\$(?s:.{0,4096}?)\\$\\1\\$" // PostgreSQL 美元引用字符串
+        + "|q'\\[[\\s\\S]+?\\]'|q'\\([\\s\\S]+?\\)'|q'\\{[\\s\\S]+?\\}'|q'<[\\s\\S]+?>'" // Oracle q'[...]' 引用
+        + "|q'([^\\[({<\\s'\\\\])[\\s\\S]{0,4096}?\\2'" // Oracle q'x...x' 引用
+        + "|X'[^'\\\\]*(?:\\\\.[^'\\\\]*|'')*[^'\\\\]*'" // 十六进制字面量
+        + "|N'[^'\\\\]*(?:\\\\.[^'\\\\]*|'')*[^'\\\\]*'" // Unicode 字符串
+        + "|E'[^'\\\\]*(?:\\\\.[^'\\\\]*|'')*[^'\\\\]*'" // PostgreSQL E-字符串
+        + "|\"[^\"\\\\]*(?:\\\\.[^\"\\\\]*|\"\")*[^\"\\\\]*\"" // 双引号字符串
+        + "|'[^'\\\\]*(?:\\\\.[^'\\\\]*|'')*[^'\\\\]*\\\\?'" // 单引号字符串
+        + "|\\$\\d+", // PostgreSQL 美元参数
+        Pattern.CASE_INSENSITIVE);
 
     /** 数字字面量模式 */
     private static final Pattern NUMBER_LITERAL_PATTERN = Pattern.compile("\\b\\d+\\.?\\d*(?:[eE][+-]?\\d+)?\\b");
@@ -65,17 +58,6 @@ public final class SqlSanitizer {
     /** LIMIT/OFFSET/FETCH 数字保护模式 */
     private static final Pattern LIMIT_OFFSET_PATTERN =
         Pattern.compile("(?i)(?:LIMIT|OFFSET|FETCH\\s+(?:FIRST|NEXT))\\s+\\d+(?:\\s+ROWS)?");
-
-    /** PostgreSQL 美元引用字符串模式（支持 $$...$$ 和 $tag$...$tag$）。 ponytail: 使用捕获组 + 反向引用匹配标签。限制最大长度防止 ReDoS。 */
-    private static final Pattern DOLLAR_QUOTE_PATTERN = Pattern.compile("\\$(\\w*)\\$(?s:.{0,4096}?)\\$\\1\\$");
-
-    /** Oracle Q 引用模式：q'[...]', q'(...)', q'{...}', q'<...>', q'!...!' 等。 ponytail: 贪婪匹配到对应闭合分隔符。 */
-    private static final Pattern Q_QUOTE_BRACKET_PATTERN = Pattern.compile(
-        "q'\\[[\\s\\S]+?\\]'|q'\\([\\s\\S]+?\\)'|q'\\{[\\s\\S]+?\\}'|q'<[\\s\\S]+?>'", Pattern.CASE_INSENSITIVE);
-
-    /** Oracle Q 引用单字符分隔符模式：q'x...x' 等（排除 bracket、空白、引号和反斜杠）。 ponytail: 限制最大长度防止 ReDoS。 */
-    private static final Pattern Q_QUOTE_CHAR_PATTERN =
-        Pattern.compile("q'([^\\[({<\\s'\\\\])[\\s\\S]{0,4096}?\\1'", Pattern.CASE_INSENSITIVE);
 
     /**
      * 对 SQL 语句进行脱敏处理，移除可能包含敏感数据的字符串字面量和数字字面量。
@@ -98,16 +80,8 @@ public final class SqlSanitizer {
 
         String result = sql;
 
-        // 替换各种字符串字面量（顺序重要：必须在注释移除之前，防止 -- 跨引号匹配）
-        result = DOLLAR_QUOTE_PATTERN.matcher(result).replaceAll("?"); // PostgreSQL 美元引用字符串
-        result = Q_QUOTE_BRACKET_PATTERN.matcher(result).replaceAll("?"); // Oracle q'[...]' 引用字符串
-        result = Q_QUOTE_CHAR_PATTERN.matcher(result).replaceAll("?"); // Oracle q'x...x' 引用字符串
-        result = HEX_LITERAL_PATTERN.matcher(result).replaceAll("?"); // 十六进制字面量（X'...'）
-        result = UNICODE_STRING_PATTERN.matcher(result).replaceAll("?"); // Unicode 字符串（N'...'）
-        result = PG_ESTRING_PATTERN.matcher(result).replaceAll("?"); // PostgreSQL E-字符串（E'...'）
-        result = DOUBLE_QUOTE_PATTERN.matcher(result).replaceAll("?"); // 双引号字符串（MySQL ANSI_QUOTES）
-        result = SINGLE_QUOTE_PATTERN.matcher(result).replaceAll("?"); // 单引号字符串
-        result = DOLLAR_PARAM_PATTERN.matcher(result).replaceAll("?"); // PostgreSQL 美元参数
+        // 使用组合模式一次遍历替换所有字符串字面量和参数
+        result = LITERAL_PATTERN.matcher(result).replaceAll("?");
 
         // 移除注释（字符串已被替换后，-- 不会跨引号匹配）
         result = COMMENT_PATTERN.matcher(result).replaceAll("");

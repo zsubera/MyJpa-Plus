@@ -212,6 +212,10 @@ public class UpdateSpec<T> extends AbstractBulkOperationSpec<T, UpdateSpec<T>> {
      * <strong>安全保护：</strong>如果配置了最大批量操作行数限制，执行前会先计数验证，
      * 超过限制时抛出 {@link IllegalStateException} 阻止执行。
      *
+     * <p><strong>副作用：</strong>当 affected > 0 时，会调用 {@code em.flush()} 和 {@code em.clear()}，
+     * 清空持久化上下文中的所有托管实体。在此方法之前通过 {@code em.find()} 等加载的实体将变为游离状态，
+     * 后续访问其延迟加载属性可能导致 {@code LazyInitializationException}。
+     *
      * @param em 实体管理器
      * @return 更新的实体数量
      * @throws IllegalStateException 如果未指定 SET 子句或超过最大行数限制
@@ -476,8 +480,18 @@ public class UpdateSpec<T> extends AbstractBulkOperationSpec<T, UpdateSpec<T>> {
         idQuery.select(idRoot.get(idFieldName));
         List<Predicate> predicateList = new ArrayList<>();
         Predicate[] predicates = buildPredicates(idRoot, cb);
-        for (Predicate p : predicates) {
-            predicateList.add(p);
+        if (predicates.length == 0) {
+            if (!allowUnconditional) {
+                throw new IllegalStateException("No WHERE conditions specified for UPDATE operation. "
+                    + "Call .allowUnconditional(true) to explicitly confirm this operation, "
+                    + "or use updateAll(EntityManager) instead.");
+            }
+            log.warn("WARNING: Executing limited UPDATE without conditions on {} — this will affect up to {} rows!",
+                entityClass.getSimpleName(), limit);
+        } else {
+            for (Predicate p : predicates) {
+                predicateList.add(p);
+            }
         }
         if (lastId != null) {
             predicateList.add(cb.greaterThan(idRoot.get(idFieldName), (Comparable)lastId));

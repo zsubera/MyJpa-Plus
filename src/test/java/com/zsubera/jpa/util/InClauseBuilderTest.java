@@ -230,18 +230,32 @@ class InClauseBuilderTest {
     }
 
     @Test
-    void notIn_mixedNulls_excludesNullRowsAndMatchingValues() {
+    void notIn_mixedNulls_excludesAllRows() {
         persistEntity("a", 1);
         persistEntity("b", 2);
         persistEntity("c", 3);
         CriteriaBuilder cb = em.getCriteriaBuilder();
         CriteriaQuery<TestEntity> cq = cb.createQuery(TestEntity.class);
         Root<TestEntity> root = cq.from(TestEntity.class);
-        // NOT IN (1, NULL) should match rows where status IS NOT NULL AND status NOT IN (1)
+        // SQL standard: NOT IN (1, NULL) = x != 1 AND x != NULL → x != NULL is always UNKNOWN → matches NO rows
         Predicate predicate = InClauseBuilder.notIn(cb, root.get("status"), Arrays.asList(1, null));
         cq.where(predicate);
         List<TestEntity> result = em.createQuery(cq).getResultList();
-        assertEquals(2, result.size());
+        assertEquals(0, result.size());
+    }
+
+    @Test
+    void notIn_array_mixedNulls_excludesAllRows() {
+        persistEntity("a", 1);
+        persistEntity("b", 2);
+        persistEntity("c", 3);
+        CriteriaBuilder cb = em.getCriteriaBuilder();
+        CriteriaQuery<TestEntity> cq = cb.createQuery(TestEntity.class);
+        Root<TestEntity> root = cq.from(TestEntity.class);
+        Predicate predicate = InClauseBuilder.notIn(cb, root.get("status"), 1, null);
+        cq.where(predicate);
+        List<TestEntity> result = em.createQuery(cq).getResultList();
+        assertEquals(0, result.size());
     }
 
     @Test

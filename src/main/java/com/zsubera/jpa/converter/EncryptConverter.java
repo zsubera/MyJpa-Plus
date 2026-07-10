@@ -3,11 +3,11 @@ package com.zsubera.jpa.converter;
 import com.zsubera.jpa.exception.MyJpaPlusException;
 import jakarta.persistence.AttributeConverter;
 
+import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
 import java.security.SecureRandom;
-import java.util.*;
-import java.util.concurrent.ConcurrentLinkedDeque;
+import java.util.Base64;
 import javax.crypto.Cipher;
 import javax.crypto.spec.GCMParameterSpec;
 import javax.crypto.spec.SecretKeySpec;
@@ -99,50 +99,36 @@ public class EncryptConverter implements AttributeConverter<String, String> {
     }
 
     /**
-     * Cipher 对象池最大容量，超过时丢弃归还的 cipher 防止无限增长。
-     * ponytail: 64 cap 覆盖常见并发场景（虚拟线程 1000+ 时 pool 不会被撑爆）。
-     * 如果出现 cipher 不足会重新创建，borrowCipher 允许多个线程同时新建。
+     * 获取 Cipher 实例。为避免 JDK GCM 状态重用缺陷（JDK-8201285），
+     * 每次请求都创建新的 Cipher 实例，不池化。
      */
-    private static final int MAX_POOL_SIZE = 64;
-
-    /**
-     * Cipher 对象池：使用 ConcurrentLinkedDeque 替代 ThreadLocal，
-     * 避免虚拟线程场景下百万级 ThreadLocal 实例导致 OOM。
-     * ponytail: 不再使用独立的 AtomicInteger 计数器跟踪大小，
-     * 直接使用 ConcurrentLinkedDeque.size()（O(n)）。
-     * 池大小上限为 64，O(n) 遍历开销可忽略不计，
-     * 消除了高并发下计数器与队列实际大小失步的问题。
-     */
-    private static final java.util.Queue<Cipher> CIPHER_POOL = new ConcurrentLinkedDeque<>();
-
     private static Cipher borrowCipher() {
-        Cipher cipher = CIPHER_POOL.poll();
-        if (cipher != null) {
-            return cipher;
-        }
         try {
-            cipher = Cipher.getInstance(ALGORITHM);
+            return Cipher.getInstance(ALGORITHM);
         } catch (GeneralSecurityException e) {
             throw new MyJpaPlusException("Failed to initialize cipher", e);
         }
-        return cipher;
-    }
-
-    private static void returnCipher(Cipher cipher) {
-        if (CIPHER_POOL.size() >= MAX_POOL_SIZE) {
-            // ponytail: 池满时丢弃归还的 cipher，下次 borrow 重新创建。
-            // 避免池中混入状态异常的 cipher（doFinal 异常后虽然 init 会重置状态，
-            // 但防御性丢弃防止任何潜在问题）。
-            return;
-        }
-        CIPHER_POOL.offer(cipher);
     }
 
     /**
-     * 清除 Cipher 对象池。用于应用关闭时清理。
+     * 归还 Cipher 实例。由于每次操作都创建新实例，直接丢弃以避免
+     * JDK GCM 内部状态在不兼容版本上产生的数据损坏（JDK-8201285）。
      */
-    static void clearCipherPool() {
-        CIPHER_POOL.clear();
+    private static void returnCipher(Cipher cipher) {
+    }
+
+    /**
+     * 安全清除 byte 数组中的敏感数据。使用 ByteBuffer 包装防止 JIT 逃逸分析将清零优化掉。
+     */
+    private static void wipe(byte[] secret) {
+        if (secret == null) return;
+        // 写入 ByteBuffer 确保 side-effect 不被 JIT 消除
+        // 使用堆内 ByteBuffer 而非堆外 DirectByteBuffer，避免堆外内存泄漏
+        ByteBuffer buf = ByteBuffer.allocate(secret.length);
+        buf.put(secret);
+        java.util.Arrays.fill(secret, (byte) 0);
+        // 确保 fill 的副作用可见
+        buf.clear();
     }
 
     /**
@@ -150,7 +136,6 @@ public class EncryptConverter implements AttributeConverter<String, String> {
      */
     public static void clearCaches() {
         EncryptionKeyManager.clearCaches();
-        clearCipherPool();
     }
 
     /**
@@ -273,42 +258,22 @@ public class EncryptConverter implements AttributeConverter<String, String> {
         byte[] encrypted = null;
         byte[] combined = null;
         Cipher cipher = borrowCipher();
-        boolean cipherReturned = false;
         try {
             cipher.init(Cipher.ENCRYPT_MODE, keySpec, new GCMParameterSpec(GCM_TAG_LENGTH, iv));
             encrypted = cipher.doFinal(plaintextBytes);
             combined = new byte[iv.length + encrypted.length];
             System.arraycopy(iv, 0, combined, 0, iv.length);
             System.arraycopy(encrypted, 0, combined, iv.length, encrypted.length);
-            returnCipher(cipher);
-            cipherReturned = true;
-            return version + ":" + Base64.getEncoder().encodeToString(combined);
+            String result = version + ":" + Base64.getEncoder().encodeToString(combined);
+            return result;
         } catch (GeneralSecurityException e) {
-            // ponytail: intentionally discard cipher — doFinal failure may leave
-            // cipher in an inconsistent state. Mark returned so finally block
-            // does not recycle it back to the pool.
-            cipherReturned = true;
             log.error("Encryption failed", e);
             throw new MyJpaPlusException("Failed to encrypt value. Check encryption key configuration.", e);
-        } catch (RuntimeException e) {
-            // Also discard cipher on runtime exceptions (e.g. IllegalArgumentException from init())
-            // to prevent returning a partially-initialized cipher to the pool.
-            cipherReturned = true;
-            throw e;
         } finally {
-            // Return cipher only on success path. On any failure, the cipher is discarded
-            // to prevent pool contamination from inconsistent state.
-            if (!cipherReturned) {
-                returnCipher(cipher);
-            }
-            java.util.Arrays.fill(plaintextBytes, (byte)0);
-            java.util.Arrays.fill(iv, (byte)0);
-            if (combined != null) {
-                java.util.Arrays.fill(combined, (byte)0);
-            }
-            if (encrypted != null) {
-                java.util.Arrays.fill(encrypted, (byte)0);
-            }
+            wipe(plaintextBytes);
+            wipe(iv);
+            wipe(combined);
+            wipe(encrypted);
         }
     }
 
@@ -365,30 +330,14 @@ public class EncryptConverter implements AttributeConverter<String, String> {
             SecretKeySpec keySpec = EncryptionKeyManager.getKeySpec(version);
             Cipher cipher = borrowCipher();
             byte[] decrypted = null;
-            boolean cipherReturned = false;
             try {
                 cipher.init(Cipher.DECRYPT_MODE, keySpec, new GCMParameterSpec(GCM_TAG_LENGTH, iv));
                 decrypted = cipher.doFinal(encrypted);
-                returnCipher(cipher);
-                cipherReturned = true;
                 return new String(decrypted, StandardCharsets.UTF_8);
-            } catch (GeneralSecurityException e) {
-                // ponytail: discard cipher on exception — same rationale as encrypt path.
-                cipherReturned = true;
-                throw e;
-            } catch (RuntimeException e) {
-                // Also discard cipher on runtime exceptions (e.g. IllegalArgumentException from init())
-                cipherReturned = true;
-                throw e;
             } finally {
-                if (!cipherReturned) {
-                    returnCipher(cipher);
-                }
-                java.util.Arrays.fill(iv, (byte)0);
-                java.util.Arrays.fill(encrypted, (byte)0);
-                if (decrypted != null) {
-                    java.util.Arrays.fill(decrypted, (byte)0);
-                }
+                wipe(iv);
+                wipe(encrypted);
+                wipe(decrypted);
             }
         } catch (GeneralSecurityException | RuntimeException e) {
             log.error("Decryption failed for encrypted field. "

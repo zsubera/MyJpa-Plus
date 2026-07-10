@@ -66,10 +66,10 @@ class QualityRegressionTest {
     void funcNode_rejectsNonWhitelisted() {
         java.lang.reflect.InvocationTargetException ex = assertThrows(
             java.lang.reflect.InvocationTargetException.class, () -> {
-                java.lang.reflect.Constructor<ConditionNode.FuncNode> ctor =
-                    ConditionNode.FuncNode.class.getDeclaredConstructor(String.class, Object[].class);
-                ctor.setAccessible(true);
-                ctor.newInstance("pg_sleep", new Object[]{1});
+                java.lang.reflect.Method ofMethod =
+                    ConditionNode.FuncNode.class.getDeclaredMethod("of", String.class, Object[].class);
+                ofMethod.setAccessible(true);
+                ofMethod.invoke(null, "pg_sleep", new Object[]{1});
             });
         assertInstanceOf(com.zsubera.jpa.exception.SecurityViolationException.class, ex.getCause());
     }

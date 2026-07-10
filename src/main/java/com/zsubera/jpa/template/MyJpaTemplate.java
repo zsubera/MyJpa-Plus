@@ -401,15 +401,18 @@ public class MyJpaTemplate implements MyJpaTemplateOperations {
         }
         // Include SoftDeleteContext state to prevent stale cached results when soft delete filtering is toggled
         String softDeletePart = SoftDeleteContext.isIgnoreSoftDelete() ? "SD ignored" : "SD active";
-        String cacheKey = entityClass.getName() + ":" + spec.cacheKey() + ":" + sortPart + ":" + softDeletePart;
+        // Include maxResults in cache key to prevent returning wrong-sized results when GlobalConfig changes
+        int maxResultsLimit = resolveMaxResults();
+        String cacheKey = entityClass.getName() + ":" + spec.cacheKey() + ":" + sortPart + ":" + softDeletePart
+            + ":mr=" + maxResultsLimit;
         List<T> cached = cacheAdapter.get(cacheKey);
         if (cached != null) {
             log.debug("Cache hit for key: {}", cacheKey);
-            return new ArrayList<>(cached);
+            return cached;
         }
         log.debug("Cache miss for key: {}", cacheKey);
         List<T> result = findAll(entityClass, spec);
-        List<T> immutableResult = java.util.Collections.unmodifiableList(new ArrayList<>(result));
+        List<T> immutableResult = java.util.Collections.unmodifiableList(result);
         if (org.springframework.transaction.support.TransactionSynchronizationManager.isActualTransactionActive()) {
             // ponytail: 在事务提交后写入缓存，避免回滚时缓存残留脏数据。
             // 如果事务回滚，缓存不会被写入，后续查询会重新执行。
@@ -424,7 +427,7 @@ public class MyJpaTemplate implements MyJpaTemplateOperations {
         } else {
             cacheAdapter.put(cacheKey, immutableResult, ttlSeconds);
         }
-        return new ArrayList<>(immutableResult);
+        return immutableResult;
     }
 
     /**
@@ -481,7 +484,11 @@ public class MyJpaTemplate implements MyJpaTemplateOperations {
     @Transactional
     public <T> List<T> saveAllBatched(Iterable<T> entities, int batchSize) {
         validateBatchParams(entities, "entities", batchSize);
-        return getBatchSaveTemplate().saveAllBatched(entities, batchSize);
+        List<T> result = getBatchSaveTemplate().saveAllBatched(entities, batchSize);
+        if (!result.isEmpty()) {
+            publishEntityModifiedEvent(result.get(0).getClass(), result.size());
+        }
+        return result;
     }
 
     /**
@@ -504,7 +511,11 @@ public class MyJpaTemplate implements MyJpaTemplateOperations {
     @Transactional
     public <T> List<T> saveAllBatchedPure(Iterable<T> entities, int batchSize) {
         validateBatchParams(entities, "entities", batchSize);
-        return getBatchSaveTemplate().saveAllBatchedPure(entities, batchSize);
+        List<T> result = getBatchSaveTemplate().saveAllBatchedPure(entities, batchSize);
+        if (!result.isEmpty()) {
+            publishEntityModifiedEvent(result.get(0).getClass(), result.size());
+        }
+        return result;
     }
 
     /**
@@ -530,7 +541,11 @@ public class MyJpaTemplate implements MyJpaTemplateOperations {
     @Override
     public <T> List<T> saveAllBatchedInSeparateTransactions(Iterable<T> entities, int batchSize) {
         validateBatchParams(entities, "entities", batchSize);
-        return getBatchSaveTemplate().saveAllBatchedInSeparateTransactions(entities, batchSize);
+        List<T> result = getBatchSaveTemplate().saveAllBatchedInSeparateTransactions(entities, batchSize);
+        if (!result.isEmpty()) {
+            publishEntityModifiedEvent(result.get(0).getClass(), result.size());
+        }
+        return result;
     }
 
     // ---- 便捷查询方法 ----
@@ -578,8 +593,15 @@ public class MyJpaTemplate implements MyJpaTemplateOperations {
     }
 
     private boolean shouldApplySoftDeleteFilter() {
+        if (SoftDeleteContext.isIgnoreSoftDelete()) {
+            return false;
+        }
+        Boolean override = com.zsubera.jpa.repository.DefaultMyJpaRepository.getAutoFilterOverride();
+        if (override != null) {
+            return override;
+        }
         MyJpaPlusGlobalConfig cfg = GlobalConfigHolder.getConfig();
-        return cfg != null && cfg.isSoftDeleteAutoFilter() && !SoftDeleteContext.isIgnoreSoftDelete();
+        return cfg == null || cfg.isSoftDeleteAutoFilter();
     }
 
     private void initializeHelpers(boolean requireTransactionalHelpers) {
@@ -691,7 +713,15 @@ public class MyJpaTemplate implements MyJpaTemplateOperations {
     @Transactional(readOnly = true)
     public <T> List<T> findAll(Class<T> entityClass, QuerySpec<T> spec) {
         validateQueryParams(entityClass, spec);
-        return findAll(entityClass, spec, resolveMaxResults());
+        Specification<T> dataSpec = spec;
+        if (shouldApplySoftDeleteFilter()) {
+            Specification<T> sdSpec = SoftDeleteHelper.isNotDeleted(entityClass);
+            dataSpec = spec != null ? spec.and(sdSpec) : sdSpec;
+        }
+        TypedQuery<T> query = QueryBuildHelper.buildSpecificationQuery(entityManager, entityClass, dataSpec, null,
+            resolveMaxResults());
+        spec.applyQuerySettings(query);
+        return query.getResultList();
     }
 
     /**
@@ -1080,15 +1110,15 @@ public class MyJpaTemplate implements MyJpaTemplateOperations {
 
         checkDeepPagination(pageable.getOffset());
 
-        // 计数查询
-        long total = QueryBuildHelper.executeCountQuery(entityManager, entityClass, spec);
-
         // 数据查询 - 与计数查询保持一致的软删除过滤
         Specification<T> dataSpec = spec;
         if (shouldApplySoftDeleteFilter()) {
             Specification<T> sdSpec = SoftDeleteHelper.isNotDeleted(entityClass);
             dataSpec = spec != null ? spec.and(sdSpec) : sdSpec;
         }
+
+        // 计数查询 - 使用与数据查询相同的过滤条件，确保 totalElements 与返回的数据一致
+        long total = QueryBuildHelper.executeCountQuery(entityManager, entityClass, dataSpec);
         TypedQuery<T> query = buildSpecificationQuery(entityClass, dataSpec, pageable.getSort(), pageable.getPageSize());
         try {
             query.setFirstResult(Math.toIntExact(pageable.getOffset()));
@@ -1448,16 +1478,15 @@ public class MyJpaTemplate implements MyJpaTemplateOperations {
             throw new IllegalArgumentException("ids must not be null or empty");
         }
         String idFieldName = EntityClassResolver.resolveIdFieldName(entityClass);
-        CriteriaBuilder cb = entityManager.getCriteriaBuilder();
-        CriteriaQuery<T> cq = cb.createQuery(entityClass);
-        Root<T> root = cq.from(entityClass);
-        // 直接传递 ids Collection 以避免不必要的 toArray() 转换
-        cq.where(com.zsubera.jpa.util.InClauseBuilder.in(cb, root.get(idFieldName), ids));
-        TypedQuery<T> query = entityManager.createQuery(cq);
-        int max = resolveMaxResults();
-        if (max > 0) {
-            query.setMaxResults(max);
+        Specification<T> idSpec = (root, query, cb) ->
+            com.zsubera.jpa.util.InClauseBuilder.in(cb, root.get(idFieldName), ids);
+        Specification<T> dataSpec = idSpec;
+        if (shouldApplySoftDeleteFilter()) {
+            Specification<T> sdSpec = SoftDeleteHelper.isNotDeleted(entityClass);
+            dataSpec = idSpec.and(sdSpec);
         }
+        TypedQuery<T> query = QueryBuildHelper.buildSpecificationQuery(
+            entityManager, entityClass, dataSpec, null, resolveMaxResults());
         return query.getResultList();
     }
 

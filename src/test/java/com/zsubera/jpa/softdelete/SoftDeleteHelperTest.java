@@ -15,6 +15,7 @@ import com.zsubera.jpa.spec.TestEntity;
 import com.zsubera.jpa.spec.TestEntityRepository;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
+import com.zsubera.jpa.exception.SecurityViolationException;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.BeforeEach;
@@ -244,17 +245,17 @@ class SoftDeleteHelperTest {
 
     @Test
     void testEscapeIdentifierWithNullThrowsException() {
-        assertThrows(IllegalArgumentException.class, () -> SoftDeleteHelper.validateIdentifier(null));
+        assertThrows(SecurityViolationException.class, () -> SoftDeleteHelper.validateIdentifier(null));
     }
 
     @Test
     void testEscapeIdentifierWithEmptyThrowsException() {
-        assertThrows(IllegalArgumentException.class, () -> SoftDeleteHelper.validateIdentifier(""));
+        assertThrows(SecurityViolationException.class, () -> SoftDeleteHelper.validateIdentifier(""));
     }
 
     @Test
     void testEscapeIdentifierWithInvalidCharsThrowsException() {
-        assertThrows(IllegalArgumentException.class, () -> SoftDeleteHelper.validateIdentifier("table;DROP"));
+        assertThrows(SecurityViolationException.class, () -> SoftDeleteHelper.validateIdentifier("table;DROP"));
     }
 
     @Test
@@ -365,15 +366,15 @@ class SoftDeleteHelperTest {
 
     @Test
     void testEscapeIdentifier_invalidCharactersThrows() {
-        assertThrows(IllegalArgumentException.class, () -> SoftDeleteHelper.validateIdentifier("my column"));
-        assertThrows(IllegalArgumentException.class, () -> SoftDeleteHelper.validateIdentifier("my-table"));
-        assertThrows(IllegalArgumentException.class, () -> SoftDeleteHelper.validateIdentifier("'; DROP TABLE --"));
+        assertThrows(SecurityViolationException.class, () -> SoftDeleteHelper.validateIdentifier("my column"));
+        assertThrows(SecurityViolationException.class, () -> SoftDeleteHelper.validateIdentifier("my-table"));
+        assertThrows(SecurityViolationException.class, () -> SoftDeleteHelper.validateIdentifier("'; DROP TABLE --"));
     }
 
     @Test
     void testEscapeIdentifier_nullOrEmptyThrows() {
-        assertThrows(IllegalArgumentException.class, () -> SoftDeleteHelper.validateIdentifier(null));
-        assertThrows(IllegalArgumentException.class, () -> SoftDeleteHelper.validateIdentifier(""));
+        assertThrows(SecurityViolationException.class, () -> SoftDeleteHelper.validateIdentifier(null));
+        assertThrows(SecurityViolationException.class, () -> SoftDeleteHelper.validateIdentifier(""));
     }
 
     @Test

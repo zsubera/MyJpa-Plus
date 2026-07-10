@@ -108,9 +108,9 @@ public final class SoftDeleteHelper {
     private static final Cache<Class<?>, Specification<?>> DELETED_SPEC_CACHE =
         Caffeine.newBuilder().weakKeys().build();
 
-    /** 缓存: (entityClass, fieldName) -> Field 对象（或哨兵值），避免重复反射查找。两层结构：Class<?> 提供强引用。 */
-    private static final ConcurrentHashMap<Class<?>, ConcurrentHashMap<String, Object>> FIELD_OBJECT_CACHE =
-        new ConcurrentHashMap<>();
+    /** 缓存: (entityClass, fieldName) -> Field 对象（或哨兵值），避免重复反射查找。使用 Caffeine weakKeys 允许类加载器 GC。 */
+    private static final Cache<Class<?>, ConcurrentHashMap<String, Object>> FIELD_OBJECT_CACHE =
+        Caffeine.newBuilder().weakKeys().build();
 
     /** 缓存: entityClass -> SoftDelete annotation，避免每次查询重复反射查找。 */
     private static final Cache<Class<?>, SoftDelete> ANNOTATION_CACHE =
@@ -139,17 +139,7 @@ public final class SoftDeleteHelper {
      * @throws IllegalArgumentException 如果标识符包含非法字符
      */
     static String validateIdentifier(String identifier) {
-        if (identifier == null || identifier.isEmpty()) {
-            throw new IllegalArgumentException("Identifier must not be null or empty");
-        }
-
-        String[] parts = identifier.split("\\.");
-        for (String part : parts) {
-            if (!IdentifierValidator.SAFE_IDENTIFIER_PATTERN.matcher(part).matches()) {
-                throw new IllegalArgumentException("Invalid SQL identifier: '" + identifier
-                    + "'. Each part must contain only alphanumeric characters and underscores.");
-            }
-        }
+        IdentifierValidator.validate(identifier);
         return identifier;
     }
 
@@ -691,7 +681,7 @@ public final class SoftDeleteHelper {
 
     public static Field getField(Class<?> entityClass, String fieldName) {
         ConcurrentHashMap<String, Object> innerCache =
-            FIELD_OBJECT_CACHE.computeIfAbsent(entityClass, k -> new ConcurrentHashMap<>());
+            FIELD_OBJECT_CACHE.get(entityClass, k -> new ConcurrentHashMap<>());
         Object cached = innerCache.computeIfAbsent(fieldName, k -> {
             Class<?> current = entityClass;
             while (current != null && current != Object.class) {
@@ -807,7 +797,7 @@ public final class SoftDeleteHelper {
         FIELD_CACHE.invalidateAll();
         NOT_DELETED_SPEC_CACHE.invalidateAll();
         DELETED_SPEC_CACHE.invalidateAll();
-        FIELD_OBJECT_CACHE.clear();
+        FIELD_OBJECT_CACHE.invalidateAll();
         ANNOTATION_CACHE.invalidateAll();
         FIELDS_CACHE.invalidateAll();
         COLUMN_NAME_CACHE.clear();

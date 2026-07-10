@@ -1,6 +1,7 @@
 package com.zsubera.jpa.repository;
 
 import com.zsubera.jpa.annotation.IgnoreSoftDelete;
+import com.zsubera.jpa.util.SampledEvictionCache;
 import java.lang.reflect.Method;
 import org.aspectj.lang.ProceedingJoinPoint;
 import org.aspectj.lang.annotation.Around;
@@ -32,21 +33,10 @@ public class IgnoreSoftDeleteAdvisor {
     private static final Logger log = LoggerFactory.getLogger(IgnoreSoftDeleteAdvisor.class);
 
     /**
-     * 缓存注解检查结果，避免重复反射。使用 Method 对象作为 key（identity-based），避免 hashCode 碰撞。
-     * ponytail: 添加采样驱逐防止动态代理类名不断变化导致内存泄漏。
+     * 缓存注解检查结果，避免重复反射。使用 SampledEvictionCache 自动管理驱逐。
      */
-    private static final java.util.concurrent.ConcurrentMap<Method, Boolean> ANNOTATION_CACHE =
-        new java.util.concurrent.ConcurrentHashMap<>();
-
-    /** ANNOTATION_CACHE 最大条目数，超过时触发采样驱逐。 */
-    private static final int MAX_ANNOTATION_CACHE_SIZE = 4096;
-
-    /** 采样计数器，每 256 次调用检查一次缓存大小。 */
-    private static final java.util.concurrent.atomic.AtomicInteger EVICTION_COUNTER =
-        new java.util.concurrent.atomic.AtomicInteger(0);
-
-    /** 缓存驱逐锁，防止多线程并发驱逐导致驱逐过量。 */
-    private static final java.util.concurrent.locks.Lock EVICTION_LOCK = new java.util.concurrent.locks.ReentrantLock();
+    private static final SampledEvictionCache<Method, Boolean> ANNOTATION_CACHE =
+        new SampledEvictionCache<>(4096, 0.75, 100, 256);
 
     /**
      * 拦截所有 Spring Data JPA Repository 方法调用。
@@ -66,24 +56,6 @@ public class IgnoreSoftDeleteAdvisor {
     public Object aroundRepositoryMethod(ProceedingJoinPoint pjp) throws Throwable {
         MethodSignature signature = (MethodSignature)pjp.getSignature();
         Method method = signature.getMethod();
-
-        if ((EVICTION_COUNTER.incrementAndGet() & 255) == 0 && ANNOTATION_CACHE.size() > MAX_ANNOTATION_CACHE_SIZE) {
-            if (EVICTION_LOCK.tryLock()) {
-                try {
-                    if (ANNOTATION_CACHE.size() > MAX_ANNOTATION_CACHE_SIZE) {
-                        int toEvict = MAX_ANNOTATION_CACHE_SIZE / 4;
-                        java.util.Iterator<Method> it = ANNOTATION_CACHE.keySet().iterator();
-                        while (it.hasNext() && toEvict > 0) {
-                            it.next();
-                            it.remove();
-                            toEvict--;
-                        }
-                    }
-                } finally {
-                    EVICTION_LOCK.unlock();
-                }
-            }
-        }
 
         Boolean hasAnnotation = ANNOTATION_CACHE.computeIfAbsent(method,
             m -> AnnotationUtils.findAnnotation(m, IgnoreSoftDelete.class) != null

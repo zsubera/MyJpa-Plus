@@ -164,33 +164,26 @@ class EncryptConverterSecurityTest {
     }
 
     @Test
-    @DisplayName("cipher pool returns cipher after encryption success")
-    void shouldReturnCipherAfterSuccess() {
-        EncryptConverter.clearCipherPool();
+    @DisplayName("repeated encrypt returns non-null results")
+    void shouldRepeatedEncryptReturnsNonNull() {
         String encrypted = converter.convertToDatabaseColumn("test");
         assertNotNull(encrypted);
-        // After successful encryption, the cipher should be returned to the pool.
-        // A second encrypt should reuse the pooled cipher.
         String encrypted2 = converter.convertToDatabaseColumn("test2");
         assertNotNull(encrypted2);
     }
 
     @Test
-    @DisplayName("cipher pool returns cipher after decryption failure")
-    void shouldReturnCipherAfterDecryptionFailure() {
-        EncryptConverter.clearCipherPool();
-        // First, successfully encrypt to populate the pool
+    @DisplayName("encrypt after decryption failure still succeeds")
+    void shouldEncryptAfterDecryptionFailure() {
         String encrypted = converter.convertToDatabaseColumn("test");
         assertNotNull(encrypted);
 
-        // Now try to decrypt garbage - the cipher should be returned to pool
         try {
             converter.convertToEntityAttribute("v1:garbage-data-that-will-fail");
         } catch (Exception expected) {
             // expected
         }
 
-        // Verify the cipher was returned by doing another successful operation
         String encrypted2 = converter.convertToDatabaseColumn("test2");
         assertNotNull(encrypted2);
     }

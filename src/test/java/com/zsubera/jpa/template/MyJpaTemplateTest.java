@@ -1352,7 +1352,7 @@ class MyJpaTemplateTest {
     }
 
     @Test
-    void testFindAllCachedReturnIsMutableAndCacheIsIndependent() {
+    void testFindAllCachedReturnIsImmutableAndCacheIsIndependent() {
         QueryCacheManager cacheManager = new QueryCacheManager();
         template.setCacheManager(cacheManager);
 
@@ -1366,9 +1366,11 @@ class MyJpaTemplateTest {
         List<TestEntity> result = template.findAllCached(TestEntity.class, qs, 60);
         assertEquals(1, result.size());
 
-        result.clear();
-        assertEquals(0, result.size());
+        // Returned list is unmodifiable — cache integrity is protected
+        assertThrows(UnsupportedOperationException.class, () -> result.clear());
+        assertEquals(1, result.size());
 
+        // Cache is independent — second call returns cached data
         List<TestEntity> cached = template.findAllCached(TestEntity.class, qs, 60);
         assertEquals(1, cached.size());
     }

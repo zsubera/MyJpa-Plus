@@ -277,51 +277,6 @@ class BulkOperationTemplate {
         });
     }
 
-    /**
-     * 分批执行操作的通用实现。
-     *
-     * <p>
-     * <strong>副作用：</strong>当 {@code clearContext=true} 时，每批执行后调用
-     * {@code entityManager.flush()} + {@code entityManager.clear()}。
-     * {@code em.clear()} 会分离当前事务中<strong>所有</strong>托管实体，包括调用方在同一事务中持有的其他实体。
-     * 调用方应在批次执行完成后重新查询需要的实体。
-     *
-     * @param batchSize 每批大小
-     * @param operationName 操作名称（用于日志）
-     * @param batchExecutor 批次执行器
-     * @param clearContext 是否在每批后清除持久化上下文
-     * @return 受影响的总行数
-     */
-    private int executeBatchInternal(int batchSize, String operationName,
-        java.util.function.IntUnaryOperator batchExecutor, boolean clearContext) {
-        int total = 0;
-        int batchResult;
-        int iteration = 0;
-        int effectiveLimit = resolveMaxBulkOperationRows();
-        do {
-            batchResult = batchExecutor.applyAsInt(batchSize);
-            total += batchResult;
-            if (batchResult > 0) {
-                entityManager.flush();
-                if (clearContext) {
-                    entityManager.clear();
-                }
-                if (log.isDebugEnabled()) {
-                    log.debug("Batch {}: {} rows {}ed in this batch (total: {})", operationName, batchResult,
-                        operationName, total);
-                }
-            }
-            iteration++;
-            if (iteration >= maxBatchIterations) {
-                log.error("Batch {} reached maximum iterations ({}). Possible infinite loop. Total rows: {}",
-                    operationName, maxBatchIterations, total);
-                break;
-            }
-            effectiveLimit = resolveMaxBulkOperationRows();
-        } while (batchResult > 0 && isWithinLimit(total, effectiveLimit));
-        return total;
-    }
-
     private static boolean isWithinLimit(int total, int effectiveLimit) {
         if (effectiveLimit > 0) {
             return total < effectiveLimit;
@@ -458,67 +413,6 @@ class BulkOperationTemplate {
                 DeleteSpec.BatchCursor cursor = spec.executeLimitedCursor(em, size, lastId);
                 return new Object[]{cursor.affected(), cursor.lastId()};
             }));
-    }
-
-    /**
-     * 分批在独立事务中执行操作的通用实现，返回详细结果。
-     */
-    private BatchResult executeBatchInSeparateTransactionsWithResult(int batchSize, String operationName,
-        java.util.function.IntUnaryOperator batchExecutor, BatchFailureStrategy failureStrategy) {
-        int total = 0;
-        int batchCount = 0;
-        int failedBatchIndex = -1;
-        Throwable failureCause = null;
-        boolean shouldContinue = true;
-        int iteration = 0;
-        int consecutiveFailures = 0;
-        while (shouldContinue) {
-            int batchResult;
-            batchCount++;
-            try {
-                batchResult = batchExecutor.applyAsInt(batchSize);
-                total += batchResult;
-                consecutiveFailures = 0;
-                if (batchResult > 0 && log.isDebugEnabled()) {
-                    log.debug("Batch {} committed: {} rows {}ed in this batch (total: {})", operationName, batchResult,
-                        operationName, total);
-                }
-                if (batchResult == 0) {
-                    shouldContinue = false;
-                }
-                int effectiveLimit = resolveMaxBulkOperationRows();
-                if (effectiveLimit > 0 && total >= effectiveLimit) {
-                    shouldContinue = false;
-                } else if (!isWithinLimit(total, effectiveLimit)) {
-                    log.warn("Batch {} reached safety limit ({} rows). Stopping.", operationName,
-                        ABSOLUTE_MAX_BATCH_ROWS);
-                    shouldContinue = false;
-                }
-            } catch (RuntimeException | Error e) {
-                failedBatchIndex = batchCount - 1;
-                failureCause = e;
-                consecutiveFailures++;
-                log.error("Batch {} failed at batch index {} (consecutive failures: {}): {}", operationName,
-                    failedBatchIndex, consecutiveFailures, e.getMessage(), e);
-                if (failureStrategy == BatchFailureStrategy.ABORT || consecutiveFailures >= 3) {
-                    if (failureStrategy == BatchFailureStrategy.CONTINUE && consecutiveFailures >= 3) {
-                        log.warn(
-                            "Batch {} aborting after {} consecutive failures despite CONTINUE strategy "
-                                + "(safety limit). Set failureStrategy to ABORT for immediate halt, "
-                                + "or investigate root cause of repeated failures.",
-                            operationName, consecutiveFailures);
-                    }
-                    shouldContinue = false;
-                }
-            }
-            iteration++;
-            if (iteration >= maxBatchIterations) {
-                log.error("Batch {} reached maximum iterations ({}). Possible infinite loop. Total rows: {}",
-                    operationName, maxBatchIterations, total);
-                break;
-            }
-        }
-        return new BatchResult(total, batchCount, failedBatchIndex == -1, failedBatchIndex, failureCause);
     }
 
     /**

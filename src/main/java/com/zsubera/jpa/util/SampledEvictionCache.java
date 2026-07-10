@@ -74,12 +74,10 @@ public class SampledEvictionCache<K, V> {
     }
 
     /**
-     * 存入键值对，返回旧值（可能为 null）。
+     * 存入键值对。注意：不返回旧值（避免不必要的查找开销）。
      */
-    public V put(K key, V value) {
-        V old = delegate.getIfPresent(key);
+    public void put(K key, V value) {
         delegate.put(key, value);
-        return old;
     }
 
     public int size() {

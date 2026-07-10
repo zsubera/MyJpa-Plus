@@ -41,11 +41,11 @@ import org.slf4j.LoggerFactory;
  * <strong>线程安全：</strong>配置通过 {@link AtomicReference} 持有不可变 {@link Config} 原子切换。
  *
  * <p>
- * <strong>NOT IN 与 NULL 的语义差异：</strong>
+ * <strong>NOT IN 与 NULL 的语义：</strong>
  * <ul>
  *   <li>SQL 语义: {@code field NOT IN (NULL)} 对每行返回 UNKNOWN（永不匹配任何行）</li>
- *   <li>本实现采用 SQL 语义: NOT IN 全为 NULL 时返回 FALSE（disjunction），不匹配任何行。</li>
- *   <li>混合 NULL 时（如 {@code NOT IN (1, 2, NULL)}），正确生成 {@code field NOT IN (1, 2) AND field IS NOT NULL}</li>
+ *   <li>本实现严格遵循 SQL 标准: NOT IN 遇到任何 NULL 值时返回 false（disjunction），永不匹配任何行。</li>
+ *   <li>因为 {@code x NOT IN (1, NULL)} = {@code x != 1 AND x != NULL}，而 {@code x != NULL} 永远为 UNKNOWN</li>
  * </ul>
  *
  * <p>
@@ -330,7 +330,7 @@ public final class InClauseBuilder {
             notInPredicate = buildBatchedNotIn(cb, path, nonNullValues, config);
         }
         if (hasNull) {
-            return cb.and(notInPredicate, cb.isNotNull(path));
+            return cb.disjunction();
         }
         return notInPredicate;
     }
@@ -365,7 +365,7 @@ public final class InClauseBuilder {
             notInPredicate = buildBatchedNotIn(cb, path, nonNullValues, config);
         }
         if (hasNull) {
-            return cb.and(notInPredicate, cb.isNotNull(path));
+            return cb.disjunction();
         }
         return notInPredicate;
     }

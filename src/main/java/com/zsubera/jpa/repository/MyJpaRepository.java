@@ -318,7 +318,15 @@ public interface MyJpaRepository<T, ID> extends JpaRepository<T, ID>, JpaSpecifi
         if (spec == null) {
             throw new IllegalArgumentException("spec must not be null");
         }
-        return spec.executeInTransaction(EntityManagerHelper.getTransactionalEntityManager(getEntityClass()));
+        Class<T> entityClass = getEntityClass();
+        jakarta.persistence.EntityManager em = EntityManagerHelper.getTransactionalEntityManager(entityClass);
+        String softDeleteField = com.zsubera.jpa.softdelete.SoftDeleteHelper.findSoftDeleteField(entityClass);
+        if (softDeleteField != null && isSoftDeleteAutoFilterEnabled()
+            && !com.zsubera.jpa.repository.SoftDeleteContext.isIgnoreSoftDelete()) {
+            spec.addCondition((root, cb) -> com.zsubera.jpa.softdelete.SoftDeleteHelper.buildNotDeleted(cb, root,
+                softDeleteField, entityClass));
+        }
+        return spec.executeInTransaction(em);
     }
 
     /**
@@ -335,13 +343,30 @@ public interface MyJpaRepository<T, ID> extends JpaRepository<T, ID>, JpaSpecifi
             throw new IllegalArgumentException("spec must not be null");
         }
         Class<T> entityClass = getEntityClass();
+        jakarta.persistence.EntityManager em = EntityManagerHelper.getTransactionalEntityManager(entityClass);
         String softDeleteField = com.zsubera.jpa.softdelete.SoftDeleteHelper.findSoftDeleteField(entityClass);
+        if (softDeleteField != null && isSoftDeleteAutoFilterEnabled()
+            && !com.zsubera.jpa.repository.SoftDeleteContext.isIgnoreSoftDelete()) {
+            java.lang.reflect.Field field =
+                com.zsubera.jpa.softdelete.SoftDeleteHelper.getField(entityClass, softDeleteField);
+            if (field == null) {
+                throw new IllegalStateException(
+                    "SoftDelete field '" + softDeleteField + "' not found on " + entityClass.getName()
+                        + ". The field may have been removed or renamed.");
+            }
+            com.zsubera.jpa.annotation.SoftDelete annotation =
+                field.getAnnotation(com.zsubera.jpa.annotation.SoftDelete.class);
+            com.zsubera.jpa.softdelete.SoftDeleteHelper.ResolvedDeletedValue resolved =
+                com.zsubera.jpa.softdelete.SoftDeleteHelper.resolveDeletedValue(entityClass, field, annotation);
+            Object deletedVal = resolved.booleanField() ? Boolean.TRUE : resolved.dbValue();
+            return spec.executeAsSoftDelete(em, softDeleteField, deletedVal);
+        }
         if (softDeleteField != null && isBlockUnconditionalDelete()) {
             throw new IllegalStateException("execute(DeleteSpec) on " + entityClass.getSimpleName()
                 + " bypasses soft-delete filtering. The entity has a @SoftDelete field and "
                 + "blockUnconditionalDelete is enabled. Use delete() or soft-delete API instead.");
         }
-        return spec.executeInTransaction(EntityManagerHelper.getTransactionalEntityManager(entityClass));
+        return spec.executeInTransaction(em);
     }
 
     /**

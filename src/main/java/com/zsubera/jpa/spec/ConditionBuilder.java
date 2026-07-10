@@ -685,9 +685,17 @@ public interface ConditionBuilder<E, SELF extends ConditionBuilder<E, SELF>> ext
                     throw new IllegalArgumentException(
                         "fieldNames[" + i + "] contains invalid characters: " + fieldNames[i]);
                 }
-                String[] segments = fieldNames[i].split("\\.");
-                for (String segment : segments) {
-                    IdentifierValidator.validateColumnName(segment);
+                int dot = fieldNames[i].indexOf('.');
+                if (dot < 0) {
+                    IdentifierValidator.validateColumnName(fieldNames[i]);
+                } else {
+                    int from = 0;
+                    while (dot >= 0) {
+                        IdentifierValidator.validateColumnName(fieldNames[i].substring(from, dot));
+                        from = dot + 1;
+                        dot = fieldNames[i].indexOf('.', from);
+                    }
+                    IdentifierValidator.validateColumnName(fieldNames[i].substring(from));
                 }
             }
             conditions().add(new ConditionNode.MultiLikeNode(keyword, fieldNames));

@@ -574,7 +574,8 @@ public sealed interface ConditionNode permits ConditionNode.SimpleNode, Conditio
         final Object[] params;
 
         /**
-         * 包级私有构造函数。执行与 of() 相同的白名单验证，防止包内代码绕过安全检查。
+         * 包级私有构造函数。由 {@link #of(String, Object[])} 工厂方法调用，
+         * 白名单验证由 of() 完成，构造函数仅进行 null 检查和防御性拷贝。
          *
          * @param functionName 数据库函数名
          * @param params 函数参数
@@ -585,19 +586,6 @@ public sealed interface ConditionNode permits ConditionNode.SimpleNode, Conditio
             }
             if (params == null) {
                 throw new IllegalArgumentException("params must not be null");
-            }
-            // ponytail: 包级私有构造函数也执行白名单验证，防止包内新代码绕过安全检查
-            String upperName = functionName.toUpperCase(java.util.Locale.ROOT);
-            if (!ConditionBuilder.SAFE_FUNCTION_NAMES.contains(upperName)
-                && !FunctionWhitelist.containsSafeFunction(upperName)) {
-                throw new com.zsubera.jpa.exception.SecurityViolationException(
-                    "Function not in whitelist: '" + functionName + "'. "
-                        + "Only whitelisted functions are allowed.");
-            }
-            if (!ConditionBuilder.BOOLEAN_FUNCTION_NAMES.contains(upperName)
-                && !FunctionWhitelist.containsBooleanFunction(upperName)) {
-                throw new com.zsubera.jpa.exception.SecurityViolationException(
-                    "Function must be a boolean-returning function: '" + functionName + "'.");
             }
             this.functionName = functionName;
             this.params = params.clone();

@@ -301,12 +301,12 @@ public final class SlowQueryDataSourceProxy {
             if (micrometerChecked) {
                 return;
             }
-            micrometerChecked = true;
             try {
                 Class<?> registryClass = Class.forName("io.micrometer.core.instrument.MeterRegistry");
                 Class<?> globalRegistryClass = Class.forName("io.micrometer.core.instrument.Metrics");
                 Object registry = globalRegistryClass.getMethod("globalRegistry").invoke(null);
                 if (registry == null) {
+                    micrometerChecked = true;
                     return;
                 }
                 Class<?> tagsClass = Class.forName("io.micrometer.core.instrument.Tags");
@@ -317,6 +317,7 @@ public final class SlowQueryDataSourceProxy {
                     distSummaryClass.getMethod("description", String.class),
                     distSummaryClass.getMethod("register", registryClass),
                     distSummaryClass.getMethod("record", tagsClass, double.class));
+                micrometerChecked = true;
                 log.info("Micrometer detected — SQL query metrics will be recorded to myjpa.query.duration");
             } catch (ReflectiveOperationException e) {
                 log.trace("Micrometer not available on classpath", e);

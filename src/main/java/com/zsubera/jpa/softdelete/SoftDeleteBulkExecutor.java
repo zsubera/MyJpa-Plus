@@ -155,6 +155,17 @@ public final class SoftDeleteBulkExecutor {
         updated = em.createNativeQuery("UPDATE " + escapedTable + " SET " + setClause + " WHERE " + escapedColumn
             + " != :deletedValue OR " + escapedColumn + " IS NULL").setParameter("deletedValue", deletedValue).executeUpdate();
 
+        // ponytail: 后置检查处理并发导致超额删除的场景
+        if (maxRows > 0 && updated > maxRows) {
+            if (log.isWarnEnabled()) {
+                log.warn("softDeleteAll affected {} rows, exceeding the pre-check limit of {}. "
+                    + "Concurrent modifications detected.", updated, maxRows);
+            }
+            em.getTransaction().setRollbackOnly();
+            throw new MyJpaPlusException("softDeleteAll affected " + updated + " rows, exceeding the pre-check limit of "
+                + maxRows + ". Concurrent modifications detected. Transaction will be rolled back.");
+        }
+
         publishAfterUpdate(em, entityClass, updated);
         return updated;
     }
@@ -237,7 +248,7 @@ public final class SoftDeleteBulkExecutor {
             update.set(ctx.fieldName(), Boolean.TRUE);
             update.where(cb.or(cb.isNull(root.get(ctx.fieldName())), cb.equal(root.get(ctx.fieldName()), false)));
         } else {
-            update.set(ctx.fieldName(), (Comparable)ctx.resolved().dbValue());
+            update.set(ctx.fieldName(), ctx.resolved().dbValue());
             update.where(cb.or(cb.isNull(root.get(ctx.fieldName())),
                 cb.notEqual(root.get(ctx.fieldName()), ctx.resolved().dbValue())));
         }
@@ -297,7 +308,7 @@ public final class SoftDeleteBulkExecutor {
             if (ctx.resolved().booleanField())
                 batchUpdate.set(ctx.fieldName(), Boolean.TRUE);
             else
-                batchUpdate.set(ctx.fieldName(), (Comparable)ctx.resolved().dbValue());
+                batchUpdate.set(ctx.fieldName(), ctx.resolved().dbValue());
             if (timestampField != null)
                 batchUpdate.set(ctx.annotation().deletedTimestampField(), cb.currentTimestamp());
             if (versionField != null)
@@ -371,9 +382,5 @@ public final class SoftDeleteBulkExecutor {
     static Field resolveVersionField(Class<?> entityClass) {
         VersionFieldInfo info = resolveVersionFieldInfo(entityClass);
         return info != null ? info.field : null;
-    }
-
-    private static boolean hasVersionField(Class<?> entityClass) {
-        return resolveVersionFieldInfo(entityClass) != null;
     }
 }

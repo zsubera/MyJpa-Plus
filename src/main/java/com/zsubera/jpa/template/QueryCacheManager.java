@@ -79,6 +79,13 @@ public class QueryCacheManager implements CacheAdapter {
     /** 最大缓存条目数（用于 getMaxEntries/setMaxEntries） */
     private volatile int maxEntries;
 
+    /**
+     * 前缀索引，用于 O(k) 前缀驱逐（k = 匹配条目数）而非 O(n) 全扫描。
+     * key = 实体类名前缀（如 "com.example.User:"），value = 该前缀下的缓存键集合。
+     */
+    private final java.util.concurrent.ConcurrentHashMap<String, java.util.Set<String>> prefixIndex =
+        new java.util.concurrent.ConcurrentHashMap<>();
+
     /** 内部缓存值包装器，记录写入时间戳以支持 per-entry TTL 过期 */
     private record CachedValue(Object value, long writeTimeNanos, long ttlNanos) {
         boolean isExpired() {
@@ -129,6 +136,11 @@ public class QueryCacheManager implements CacheAdapter {
         this.cache = Caffeine.newBuilder()
             .maximumSize(maxEntries)
             .executor(Runnable::run)
+            .removalListener((String key, Object value, com.github.benmanes.caffeine.cache.RemovalCause cause) -> {
+                if (key != null) {
+                    removeFromPrefixIndex(key);
+                }
+            })
             .build();
     }
 
@@ -218,6 +230,7 @@ public class QueryCacheManager implements CacheAdapter {
             return false;
         }
         cache.put(key, packWithTtl(value, ttlSeconds));
+        addToPrefixIndex(key);
         log.debug("Cache put for key: {} (ttl={}s)", key, ttlSeconds);
         return true;
     }
@@ -238,17 +251,11 @@ public class QueryCacheManager implements CacheAdapter {
      */
     @SuppressWarnings("unchecked")
     public <T> T computeIfAbsent(String key, java.util.function.Supplier<T> loader, long ttlSeconds) {
-        // Caffeine's get(key, fn) only calls fn when the key is absent from the cache.
-        // Our per-entry TTL is manual (CachedValue.isExpired), so Caffeine still considers
-        // expired entries "present". We must invalidate them first to trigger re-loading.
-        Object existing = cache.getIfPresent(key);
-        if (existing instanceof CachedValue cv && cv.isExpired()) {
-            cache.invalidate(key);
-        }
         Object cached = cache.get(key, k -> {
             T loaded = loader.get();
             return loaded != null ? packWithTtl(loaded, ttlSeconds) : packWithTtl(NULL_SENTINEL, ttlSeconds);
         });
+        addToPrefixIndex(key);
         T value = unpackIfPresent(cached);
         if (value == null) {
             missCount.incrementAndGet();
@@ -266,6 +273,7 @@ public class QueryCacheManager implements CacheAdapter {
     @Override
     public void evict(String key) {
         cache.invalidate(key);
+        removeFromPrefixIndex(key);
         log.debug("Cache evicted for key: {}", key);
     }
 
@@ -275,6 +283,7 @@ public class QueryCacheManager implements CacheAdapter {
     @Override
     public void clear() {
         cache.invalidateAll();
+        prefixIndex.clear();
         log.debug("Cache cleared");
     }
 
@@ -295,19 +304,40 @@ public class QueryCacheManager implements CacheAdapter {
             return 0;
         }
         String normalizedPrefix = keyPrefix.endsWith(":") ? keyPrefix : keyPrefix + ":";
-        List<String> keysToRemove = new ArrayList<>();
-        for (String key : cache.asMap().keySet()) {
-            if (key.startsWith(normalizedPrefix)) {
-                keysToRemove.add(key);
-            }
+        java.util.Set<String> trackedKeys = prefixIndex.get(normalizedPrefix);
+        if (trackedKeys == null || trackedKeys.isEmpty()) {
+            return 0;
         }
+        List<String> keysToRemove = new ArrayList<>(trackedKeys);
         for (String key : keysToRemove) {
             cache.invalidate(key);
         }
+        prefixIndex.remove(normalizedPrefix);
         if (!keysToRemove.isEmpty()) {
             log.debug("Cache evicted {} entries with prefix '{}'", keysToRemove.size(), keyPrefix);
         }
         return keysToRemove.size();
+    }
+
+    private String extractPrefix(String key) {
+        int colonIndex = key.indexOf(':');
+        return colonIndex >= 0 ? key.substring(0, colonIndex + 1) : key;
+    }
+
+    private void addToPrefixIndex(String key) {
+        String prefix = extractPrefix(key);
+        prefixIndex.computeIfAbsent(prefix, k -> java.util.concurrent.ConcurrentHashMap.newKeySet()).add(key);
+    }
+
+    private void removeFromPrefixIndex(String key) {
+        String prefix = extractPrefix(key);
+        java.util.Set<String> keys = prefixIndex.get(prefix);
+        if (keys != null) {
+            keys.remove(key);
+            if (keys.isEmpty()) {
+                prefixIndex.remove(prefix);
+            }
+        }
     }
 
     /**

@@ -341,7 +341,9 @@ final class EntityFieldExtractor<T> {
                         return gva != null;
                     }
                     if (f.isAnnotationPresent(jakarta.persistence.EmbeddedId.class)) {
-                        return true;
+                        jakarta.persistence.GeneratedValue gva =
+                            f.getAnnotation(jakarta.persistence.GeneratedValue.class);
+                        return gva != null;
                     }
                 } catch (NoSuchFieldException ignored) {
                     // 继续检查父类
@@ -413,6 +415,10 @@ final class EntityFieldExtractor<T> {
      * 如果项目使用了自定义 PhysicalNamingStrategy，请为涉及原生 SQL/批量操作的字段显式声明
      * {@code @Column(name = "...")}，避免列名推断偏差。
      *
+     * <p>
+     * 支持属性访问模式（{@code @Column} 在 getter 方法上）：当字段上没有 {@code @Column} 注解时，
+     * 查找对应的 getter 方法并检查其 {@code @Column} 注解。
+     *
      * @param field 实体字段
      * @return 数据库列名
      */
@@ -424,8 +430,22 @@ final class EntityFieldExtractor<T> {
             IdentifierValidator.validateColumnName(name);
             return name;
         }
+        // 属性访问模式：检查 getter 上的 @Column
+        String fieldName = field.getName();
+        String getterName = "get" + Character.toUpperCase(fieldName.charAt(0)) + fieldName.substring(1);
+        Class<?> declaringClass = field.getDeclaringClass();
+        try {
+            java.lang.reflect.Method getter = declaringClass.getMethod(getterName);
+            Column getterColumn = getter.getAnnotation(Column.class);
+            if (getterColumn != null && !getterColumn.name().isEmpty()) {
+                String name = getterColumn.name();
+                IdentifierValidator.validateColumnName(name);
+                return name;
+            }
+        } catch (NoSuchMethodException ignored) {
+        }
         // 回退到 snake_case 转换
-        String name = com.zsubera.jpa.util.StringHelper.camelToSnake(field.getName());
+        String name = com.zsubera.jpa.util.StringHelper.camelToSnake(fieldName);
         IdentifierValidator.validateColumnName(name);
         return name;
     }

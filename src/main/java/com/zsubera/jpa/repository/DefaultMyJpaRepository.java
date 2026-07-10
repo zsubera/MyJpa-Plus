@@ -234,6 +234,15 @@ public class DefaultMyJpaRepository<T, ID> extends SimpleJpaRepository<T, ID> im
     }
 
     /**
+     * 获取当前线程的 AUTO_FILTER_OVERRIDE 值，供 MyJpaTemplate 等外部组件使用。
+     *
+     * @return 当前覆盖值（null 表示未设置）
+     */
+    public static Boolean getAutoFilterOverride() {
+        return AUTO_FILTER_OVERRIDE.get();
+    }
+
+    /**
      * 在异步边界前捕获并重置 AUTO_FILTER_OVERRIDE 状态，返回原始覆盖值用于后续恢复。
      *
      * <p>
@@ -586,24 +595,24 @@ public class DefaultMyJpaRepository<T, ID> extends SimpleJpaRepository<T, ID> im
         if (id == null) {
             throw new IllegalArgumentException("ID must not be null");
         }
-        if (!shouldApplySoftDeleteFilter()) {
-            if (shouldBlockHardDelete()) {
-                throw new IllegalStateException("Hard DELETE on " + domainClass.getSimpleName()
-                    + " is blocked because the entity has a @SoftDelete field. "
-                    + "Set DefaultMyJpaRepository.setBlockUnconditionalDelete(false) to allow this operation.");
-            }
-            String idFieldName = EntityClassResolver.resolveIdFieldName(domainClass);
-            jakarta.persistence.criteria.CriteriaBuilder cb = entityManager.getCriteriaBuilder();
-            jakarta.persistence.criteria.CriteriaDelete<T> delete = cb.createCriteriaDelete(domainClass);
-            jakarta.persistence.criteria.Root<T> root = delete.from(domainClass);
-            delete.where(cb.equal(root.get(idFieldName), id));
-            int deleted = entityManager.createQuery(delete).executeUpdate();
-            return deleted > 0;
+        if (shouldApplySoftDeleteFilter()) {
+            @SuppressWarnings("unchecked")
+            ID castId = id;
+            int updated = SoftDeleteBulkExecutor.softDeleteByIds(entityManager, domainClass, java.util.List.of(castId));
+            return updated > 0;
         }
-        @SuppressWarnings("unchecked")
-        ID castId = id;
-        int updated = SoftDeleteBulkExecutor.softDeleteByIds(entityManager, domainClass, java.util.List.of(castId));
-        return updated > 0;
+        if (shouldBlockHardDelete()) {
+            throw new IllegalStateException("Hard DELETE on " + domainClass.getSimpleName()
+                + " is blocked because the entity has a @SoftDelete field. "
+                + "Set DefaultMyJpaRepository.setBlockUnconditionalDelete(false) to allow this operation.");
+        }
+        String idFieldName = EntityClassResolver.resolveIdFieldName(domainClass);
+        jakarta.persistence.criteria.CriteriaBuilder cb = entityManager.getCriteriaBuilder();
+        jakarta.persistence.criteria.CriteriaDelete<T> delete = cb.createCriteriaDelete(domainClass);
+        jakarta.persistence.criteria.Root<T> root = delete.from(domainClass);
+        delete.where(cb.equal(root.get(idFieldName), id));
+        int deleted = entityManager.createQuery(delete).executeUpdate();
+        return deleted > 0;
     }
 
     /**
@@ -831,7 +840,7 @@ public class DefaultMyJpaRepository<T, ID> extends SimpleJpaRepository<T, ID> im
         com.zsubera.jpa.update.UpdateSpec<T> spec = new com.zsubera.jpa.update.UpdateSpec<>(entityClass);
         config.accept(spec);
         jakarta.persistence.EntityManager em = this.entityManager;
-        String sf = com.zsubera.jpa.softdelete.SoftDeleteHelper.findSoftDeleteField(entityClass);
+        String sf = this.softDeleteFieldName;
         if (sf != null && shouldApplySoftDeleteFilter()) {
             spec.addCondition((root, cb) -> com.zsubera.jpa.softdelete.SoftDeleteHelper.buildNotDeleted(cb, root,
                 sf, entityClass));
@@ -852,7 +861,7 @@ public class DefaultMyJpaRepository<T, ID> extends SimpleJpaRepository<T, ID> im
         com.zsubera.jpa.update.DeleteSpec<T> spec = new com.zsubera.jpa.update.DeleteSpec<>(entityClass);
         config.accept(spec);
         jakarta.persistence.EntityManager em = this.entityManager;
-        String sf = com.zsubera.jpa.softdelete.SoftDeleteHelper.findSoftDeleteField(entityClass);
+        String sf = this.softDeleteFieldName;
         if (sf != null && shouldApplySoftDeleteFilter()) {
             java.lang.reflect.Field field =
                 com.zsubera.jpa.softdelete.SoftDeleteHelper.getField(entityClass, sf);

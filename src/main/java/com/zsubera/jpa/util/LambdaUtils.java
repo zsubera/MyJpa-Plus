@@ -271,38 +271,6 @@ public final class LambdaUtils {
     }
 
     /**
-     * 通过反射 {@code SerializedLambda.writeReplace()} 解析属性名。
-     * 需要 {@code --add-opens java.base/java.lang.invoke=ALL-UNNAMED}。
-     */
-    private static <T> String resolveViaReflection(SFunction<T, ?> fn) throws ReflectiveOperationException {
-        Class<?> fnClass = fn.getClass();
-        Method writeReplace;
-        try {
-            writeReplace = METHOD_CACHE.computeIfAbsent(fnClass, clazz -> {
-                try {
-                    Method m = clazz.getDeclaredMethod("writeReplace");
-                    m.setAccessible(true);
-                    return m;
-                } catch (ReflectiveOperationException e) {
-                    throw new RuntimeException(e);
-                }
-            });
-        } catch (RuntimeException e) {
-            if (e.getCause() instanceof ReflectiveOperationException roe) {
-                throw roe;
-            }
-            throw e;
-        }
-        Object result = writeReplace.invoke(fn);
-        if (!(result instanceof SerializedLambda lambda)) {
-            throw new MyJpaPlusException("Expected SerializedLambda from writeReplace(), got "
-                + (result != null ? result.getClass().getName() : "null")
-                + ". This may be caused by custom serialization proxies or bytecode enhancement.");
-        }
-        return resolvePropertyFromLambda(lambda);
-    }
-
-    /**
      * 通过标准 Java 序列化解析属性名。利用 {@link ObjectOutputStream} 自动调用
      * lambda 的 {@code writeReplace()} 方法，无需 {@code --add-opens} 反射访问。
      *
@@ -326,7 +294,8 @@ public final class LambdaUtils {
                         ? ObjectInputFilter.Status.ALLOWED : ObjectInputFilter.Status.REJECTED;
                 });
                 SerializedLambda lambda = (SerializedLambda)ois.readObject();
-                return resolvePropertyFromLambda(lambda);
+                String key = lambda.getImplClass() + "#" + lambda.getImplMethodName();
+                return CACHE.computeIfAbsent(key, k -> methodToProperty(lambda.getImplMethodName()));
             }
         } catch (IOException | ClassNotFoundException e) {
             throw new MyJpaPlusException("Failed to extract property name from method reference. "
@@ -339,15 +308,6 @@ public final class LambdaUtils {
                 + "  3. Custom serialization proxy or bytecode enhancement interfering with writeReplace()\n"
                 + "Original error: " + e.getMessage(), e);
         }
-    }
-
-    /**
-     * 从 {@link SerializedLambda} 中提取方法名并转换为属性名。
-     * 包含缓存查找和采样驱逐检查。
-     */
-    private static String resolvePropertyFromLambda(SerializedLambda lambda) {
-        String key = lambda.getImplClass() + "#" + lambda.getImplMethodName();
-        return CACHE.computeIfAbsent(key, k -> methodToProperty(lambda.getImplMethodName()));
     }
 
     static int cacheSize() {

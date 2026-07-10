@@ -1,6 +1,5 @@
 package com.zsubera.jpa.spec;
 
-import com.zsubera.jpa.util.LambdaUtils;
 import java.util.List;
 import java.util.function.Consumer;
 
@@ -26,12 +25,7 @@ public class OrGroup<T> implements ConditionBuilder<T, OrGroup<T>> {
     }
 
     private <J> JoinGroup<T, J> internalJoin(SFunction<T, ?> field, ConditionNode.JoinType joinType) {
-        if (field == null) {
-            throw new IllegalArgumentException("field must not be null");
-        }
-        ConditionNode.JoinNode joinNode = new ConditionNode.JoinNode(LambdaUtils.getPropertyName(field), joinType);
-        root.currentGroup().add(joinNode);
-        return new JoinGroup<>(root, joinNode);
+        return JoinGroup.createJoin(root, field, joinType);
     }
 
     // ---- 基于 Consumer 的 API（自动关闭） ----

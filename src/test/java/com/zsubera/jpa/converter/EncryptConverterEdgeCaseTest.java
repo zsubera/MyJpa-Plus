@@ -101,29 +101,23 @@ class EncryptConverterEdgeCaseTest {
         assertDoesNotThrow(EncryptConverter::doShutdownWarmUpExecutor);
     }
 
-    // ---- Cipher pool max-size discard ----
+    // ---- No cipher pooling (JDK GCM reuse bug mitigation) ----
 
     @Test
-    void cipherPool_maxSizeDiscard_doesNotThrow() throws Exception {
-        // Fill the cipher pool to max capacity, then verify that overflow is discarded gracefully
-        Field poolField = EncryptConverter.class.getDeclaredField("CIPHER_POOL");
-        poolField.setAccessible(true);
-        @SuppressWarnings("unchecked")
-        java.util.Queue<javax.crypto.Cipher> pool =
-            (java.util.Queue<javax.crypto.Cipher>)poolField.get(null);
-
-        // Fill pool to max
-        for (int i = 0; i < 64; i++) {
-            pool.offer(javax.crypto.Cipher.getInstance("AES/GCM/NoPadding"));
-        }
-        assertEquals(64, pool.size());
-
-        // Return one more — should be discarded
+    void encryptDecrypt_roundtrip_succeeds() {
         EncryptConverter converter = new EncryptConverter();
-        String encrypted = converter.convertToDatabaseColumn("test");
+        String encrypted = converter.convertToDatabaseColumn("test-value");
         assertNotNull(encrypted);
+        assertEquals("test-value", converter.convertToEntityAttribute(encrypted));
+    }
 
-        // Pool should still be at max (overflow cipher was discarded)
-        assertTrue(pool.size() <= 64);
+    @Test
+    void multipleRoundtrips_allSucceed() {
+        EncryptConverter converter = new EncryptConverter();
+        for (int i = 0; i < 10; i++) {
+            String val = "roundtrip-" + i;
+            String encrypted = converter.convertToDatabaseColumn(val);
+            assertEquals(val, converter.convertToEntityAttribute(encrypted));
+        }
     }
 }

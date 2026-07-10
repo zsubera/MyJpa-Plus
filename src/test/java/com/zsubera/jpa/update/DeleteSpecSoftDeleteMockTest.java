@@ -48,15 +48,16 @@ class DeleteSpecSoftDeleteMockTest {
     }
 
     @Test
-    void executeAsSoftDelete_doesNotFlushWhenAffected() {
+    void executeAsSoftDelete_flushesWhenAffected() {
         DeleteSpec<TestEntity> spec = new DeleteSpec<>(TestEntity.class).allowUnconditional(true);
         jakarta.persistence.Query q = mock(jakarta.persistence.Query.class);
         when(q.executeUpdate()).thenReturn(3);
         EntityManager em = em();
         when(em.createQuery(any(CriteriaUpdate.class))).thenReturn(q);
         spec.executeAsSoftDelete(em, "deleted", true);
-        // Caller manages persistence context — executeAsSoftDelete no longer flushes/clears
-        verify(em, never()).flush();
+        // executeAsSoftDelete flushes and clears persistence context when affected > 0
+        verify(em).flush();
+        verify(em, atLeastOnce()).clear();
     }
 
     @Test
