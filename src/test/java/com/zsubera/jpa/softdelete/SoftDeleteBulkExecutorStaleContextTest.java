@@ -1,6 +1,10 @@
 package com.zsubera.jpa.softdelete;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.zsubera.jpa.spec.SoftDeleteTestEntity;
 import com.zsubera.jpa.spec.SoftDeleteTestEntityRepository;
@@ -30,6 +34,39 @@ class SoftDeleteBulkExecutorStaleContextTest {
     void setUp() {
         repository.deleteAll();
         repository.flush();
+    }
+
+    @Test
+    void softDeleteAllUsingCriteriaUpdate_exceedsMaxRows_throwsBeforeExecution() {
+        SoftDeleteTestEntity e1 = new SoftDeleteTestEntity();
+        e1.setName("a");
+        repository.save(e1);
+        SoftDeleteTestEntity e2 = new SoftDeleteTestEntity();
+        e2.setName("b");
+        repository.save(e2);
+        repository.flush();
+
+        // maxRows=1 but 2 active rows exist → pre-check should throw
+        assertThrows(IllegalStateException.class,
+            () -> SoftDeleteBulkExecutor.softDeleteAllUsingCriteriaUpdate(
+                em, SoftDeleteTestEntity.class, true, 1));
+
+        // verify neither entity was soft-deleted
+        assertEquals(false, em.find(SoftDeleteTestEntity.class, e1.getId()).getDeleted());
+        assertEquals(false, em.find(SoftDeleteTestEntity.class, e2.getId()).getDeleted());
+    }
+
+    @Test
+    void softDeleteAllUsingCriteriaUpdate_withinMaxRows_succeeds() {
+        SoftDeleteTestEntity e1 = new SoftDeleteTestEntity();
+        e1.setName("c");
+        repository.save(e1);
+        repository.flush();
+
+        int count = SoftDeleteBulkExecutor.softDeleteAllUsingCriteriaUpdate(
+            em, SoftDeleteTestEntity.class, true, 10);
+        assertEquals(1, count);
+        assertTrue(em.find(SoftDeleteTestEntity.class, e1.getId()).getDeleted());
     }
 
     @Test

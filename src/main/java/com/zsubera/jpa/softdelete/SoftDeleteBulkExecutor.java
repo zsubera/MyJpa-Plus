@@ -161,7 +161,12 @@ public final class SoftDeleteBulkExecutor {
                 log.warn("softDeleteAll affected {} rows, exceeding the pre-check limit of {}. "
                     + "Concurrent modifications detected.", updated, maxRows);
             }
-            em.getTransaction().setRollbackOnly();
+            try {
+                em.getTransaction().setRollbackOnly();
+            } catch (IllegalStateException e) {
+                // JTA environment: setRollbackOnly not available on EntityTransaction
+                // The exception will propagate to the caller for transaction rollback
+            }
             throw new MyJpaPlusException("softDeleteAll affected " + updated + " rows, exceeding the pre-check limit of "
                 + maxRows + ". Concurrent modifications detected. Transaction will be rolled back.");
         }
@@ -279,6 +284,22 @@ public final class SoftDeleteBulkExecutor {
         }
 
         int updated = em.createQuery(update).executeUpdate();
+        // ponytail: 后置检查处理并发导致超额删除的场景，与 softDeleteAll（原生 SQL 版本）保持一致
+        if (maxRows > 0 && updated > maxRows) {
+            if (log.isWarnEnabled()) {
+                log.warn("softDeleteAllUsingCriteriaUpdate affected {} rows, exceeding the pre-check limit of {}. "
+                    + "Concurrent modifications detected.", updated, maxRows);
+            }
+            try {
+                em.getTransaction().setRollbackOnly();
+            } catch (IllegalStateException e) {
+                // JTA environment: setRollbackOnly not available on EntityTransaction
+                // The exception will propagate to the caller for transaction rollback
+            }
+            throw new MyJpaPlusException("softDeleteAllUsingCriteriaUpdate affected " + updated
+                + " rows, exceeding the pre-check limit of " + maxRows
+                + ". Concurrent modifications detected. Transaction will be rolled back.");
+        }
         publishAfterUpdate(em, entityClass, updated);
         return updated;
     }

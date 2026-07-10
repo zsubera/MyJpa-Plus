@@ -86,7 +86,9 @@ public class SampledEvictionCache<K, V> {
 
     /**
      * 动态调整最大容量。会重建缓存（丢失现有条目）。
-     * 仅在启动初始化阶段调用，实际影响可忽略。
+     *
+     * <p><strong>注意：</strong>此方法会丢弃所有现有缓存条目。仅应在启动初始化阶段调用。
+     * 运行时调用会导致缓存命中率骤降。
      *
      * @param maxSize 新的最大容量
      * @throws IllegalArgumentException 如果 maxSize 不是正数
@@ -98,7 +100,9 @@ public class SampledEvictionCache<K, V> {
         this.maxSize = maxSize;
         this.delegate = build(maxSize);
         if (previousSize > 0) {
-            log.debug("Cache resized from {} to {} entries — {} entries dropped", previousSize, maxSize, previousSize);
+            log.warn("Cache resized from {} to {} entries — {} entries dropped. "
+                + "setMaxSize() should only be called during startup initialization.", previousSize, maxSize,
+                previousSize);
         }
     }
 

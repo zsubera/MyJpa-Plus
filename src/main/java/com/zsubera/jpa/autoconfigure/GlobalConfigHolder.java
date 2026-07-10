@@ -113,7 +113,10 @@ public final class GlobalConfigHolder {
                     cachedBeanVerifyTime = 0;
                 }
             }
-            // 回退到过期的缓存（比返回 null 更安全）
+            // 回退到过期的缓存（比返回 null 更安全），记录警告以便排查配置异常
+            LOG.warn("MyJpaPlusGlobalConfig bean lookup failed (context may have been refreshed), "
+                + "falling back to stale cached instance. Config changes since last refresh will not take effect "
+                + "until the next successful lookup.");
             return bean;
         }
         ApplicationContext ctx = applicationContext;
