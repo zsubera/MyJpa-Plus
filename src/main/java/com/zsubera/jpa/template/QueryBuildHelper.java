@@ -75,8 +75,17 @@ final class QueryBuildHelper {
         // 合并软删除过滤条件（与 MyJpaTemplate.shouldApplySoftDeleteFilter() 保持一致）
         Specification<T> combinedSpec = spec;
         String softDeleteFieldName = com.zsubera.jpa.softdelete.SoftDeleteHelper.findSoftDeleteField(entityClass);
-        boolean autoFilterEnabled = com.zsubera.jpa.autoconfigure.GlobalConfigHolder.getConfig() != null
-            && com.zsubera.jpa.autoconfigure.GlobalConfigHolder.getConfig().isSoftDeleteAutoFilter();
+        // ponytail: 检查 ThreadLocal 覆盖值，与 MyJpaTemplate.shouldApplySoftDeleteFilter() 保持一致。
+        // 此前遗漏了 getAutoFilterOverride() 检查，导致 withAutoFilterOverride(false) 时
+        // count 查询仍应用软删除过滤，与数据查询不一致（totalElements 偏小）。
+        Boolean override = com.zsubera.jpa.repository.DefaultMyJpaRepository.getAutoFilterOverride();
+        boolean autoFilterEnabled;
+        if (override != null) {
+            autoFilterEnabled = override;
+        } else {
+            autoFilterEnabled = com.zsubera.jpa.autoconfigure.GlobalConfigHolder.getConfig() != null
+                && com.zsubera.jpa.autoconfigure.GlobalConfigHolder.getConfig().isSoftDeleteAutoFilter();
+        }
         boolean applySoftDelete = softDeleteFieldName != null && autoFilterEnabled
             && !com.zsubera.jpa.repository.SoftDeleteContext.isIgnoreSoftDelete();
         if (applySoftDelete) {
