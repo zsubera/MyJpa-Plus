@@ -243,4 +243,102 @@ class CteSpecSecurityCheckTest {
     void strictMode_alwaysTrue() {
         assertTrue(CteSpec.isStrictMode());
     }
+
+    // ---- DML keywords in CTE body (Fix #4: DELETE/INSERT/UPDATE/MERGE detection) ----
+
+    @Test
+    void as_withDeleteKeyword_throwsSecurityException() {
+        assertThrows(SecurityException.class, () -> CteSpec.with("ct").as("SELECT * FROM (DELETE FROM users) sub"));
+    }
+
+    @Test
+    void as_withInsertKeyword_throwsSecurityException() {
+        assertThrows(SecurityException.class,
+            () -> CteSpec.with("ct").as("SELECT * FROM (INSERT INTO users VALUES(1)) sub"));
+    }
+
+    @Test
+    void as_withUpdateKeyword_throwsSecurityException() {
+        assertThrows(SecurityException.class,
+            () -> CteSpec.with("ct").as("SELECT * FROM (UPDATE users SET name='x') sub"));
+    }
+
+    @Test
+    void as_withMergeKeyword_throwsSecurityException() {
+        assertThrows(SecurityException.class,
+            () -> CteSpec.with("ct").as("SELECT * FROM (MERGE INTO users USING src ON true) sub"));
+    }
+
+    @Test
+    void as_withCallKeyword_throwsSecurityException() {
+        assertThrows(SecurityException.class,
+            () -> CteSpec.with("ct").as("SELECT * FROM (CALL evil_proc()) sub"));
+    }
+
+    @Test
+    void as_withCopyKeyword_throwsSecurityException() {
+        assertThrows(SecurityException.class,
+            () -> CteSpec.with("ct").as("SELECT * FROM (COPY users TO '/tmp/out') sub"));
+    }
+
+    // ---- INTO OUTFILE / LOAD DATA detection (Fix #5) ----
+
+    @Test
+    void as_withIntoOutfile_throwsSecurityException() {
+        assertThrows(SecurityException.class,
+            () -> CteSpec.with("ct").as("SELECT * INTO OUTFILE '/tmp/data' FROM users"));
+    }
+
+    @Test
+    void as_withIntoDumpfile_throwsSecurityException() {
+        assertThrows(SecurityException.class,
+            () -> CteSpec.with("ct").as("SELECT * INTO DUMPFILE '/tmp/data' FROM users"));
+    }
+
+    @Test
+    void as_withLoadDataInfile_throwsSecurityException() {
+        assertThrows(SecurityException.class,
+            () -> CteSpec.with("ct").as("LOAD DATA INFILE '/tmp/data' INTO TABLE users"));
+    }
+
+    @Test
+    void as_withLoadDataLocal_throwsSecurityException() {
+        assertThrows(SecurityException.class,
+            () -> CteSpec.with("ct").as("LOAD DATA LOCAL INFILE '/tmp/data' INTO TABLE users"));
+    }
+
+    // ---- and() reserved word validation (Fix #6) ----
+
+    @Test
+    void and_reservedWordSelect_throws() {
+        CteSpec spec = CteSpec.with("cte1").as("SELECT 1");
+        assertThrows(IllegalArgumentException.class, () -> spec.and("SELECT"));
+    }
+
+    @Test
+    void and_reservedWordFrom_throws() {
+        CteSpec spec = CteSpec.with("cte1").as("SELECT 1");
+        assertThrows(IllegalArgumentException.class, () -> spec.and("FROM"));
+    }
+
+    @Test
+    void and_reservedWordDrop_throws() {
+        CteSpec spec = CteSpec.with("cte1").as("SELECT 1");
+        assertThrows(IllegalArgumentException.class, () -> spec.and("DROP"));
+    }
+
+    @Test
+    void and_validName_noException() {
+        CteSpec spec = CteSpec.with("cte1").as("SELECT 1");
+        assertDoesNotThrow(() -> spec.and("cte2"));
+    }
+
+    @Test
+    void and_withReservedWordCausesSqlError_throwsBeforeExecution() {
+        // Before fix: and("SELECT") would succeed at build time but fail at DB execution
+        // After fix: and("SELECT") throws IllegalArgumentException at build time
+        CteSpec spec = CteSpec.with("cte1").as("SELECT 1");
+        IllegalArgumentException ex = assertThrows(IllegalArgumentException.class, () -> spec.and("SELECT"));
+        assertTrue(ex.getMessage().contains("reserved word"));
+    }
 }

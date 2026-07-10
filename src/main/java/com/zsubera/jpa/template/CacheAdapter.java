@@ -160,6 +160,22 @@ public interface CacheAdapter {
     }
 
     /**
+     * 返回当前的驱逐代数。每次 {@link #evictByPrefix(String)} 或 {@link #clear()} 调用后递增。
+     *
+     * <p>
+     * 用于 {@link MyJpaTemplate#findAllCached} 的 afterCommit 回调中检测缓存是否在查询后被驱逐，
+     * 避免将过期数据重新写入缓存（跨事务竞态条件防护）。
+     *
+     * <p>
+     * 默认实现返回 0（表示不支持代数追踪），此时 MyJpaTemplate 会跳过代数检查，退化为原有行为。
+     *
+     * @return 当前驱逐代数
+     */
+    default long getEvictionGeneration() {
+        return 0;
+    }
+
+    /**
      * 返回一个禁用的缓存适配器实例，所有操作均为无操作。
      *
      * <p>

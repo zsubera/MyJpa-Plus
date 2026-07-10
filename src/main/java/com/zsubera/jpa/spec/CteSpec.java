@@ -394,6 +394,7 @@ public class CteSpec {
             throw new IllegalArgumentException(
                 "cteName contains invalid characters: " + cteName + ". Only alphanumeric and underscore are allowed.");
         }
+        validateNotReservedWord(cteName);
         return addCte(cteName);
     }
 
@@ -700,8 +701,9 @@ public class CteSpec {
      * 使用 {@code \b} 单词边界确保仅匹配独立关键字（如 "DROP"），而非子字符串（如 "DROPDOWN" 中的 "DROP"）。 xp_cmdshell 和 sp_executesql
      * 不使用单词边界，因为它们是完整的存储过程名称。
      */
-    private static final Pattern DANGEROUS_KEYWORD_PATTERN =
-        Pattern.compile("\\b(DROP|TRUNCATE|GRANT|REVOKE|ALTER|CREATE|EXEC|EXECUTE)\\b", Pattern.CASE_INSENSITIVE);
+    private static final Pattern DANGEROUS_KEYWORD_PATTERN = Pattern.compile(
+        "\\b(DROP|TRUNCATE|GRANT|REVOKE|ALTER|CREATE|EXEC|EXECUTE|DELETE|INSERT|UPDATE|MERGE|CALL|COPY)\\b",
+        Pattern.CASE_INSENSITIVE);
 
     /** 危险存储过程名称，使用子字符串匹配。 */
     private static final Pattern DANGEROUS_PROCEDURE_PATTERN =
@@ -722,6 +724,11 @@ public class CteSpec {
     /** WAITFOR DELAY 时间盲注检测模式（SQL Server）。 */
     private static final Pattern WAITFOR_DELAY_PATTERN =
         Pattern.compile("\\bWAITFOR\\s+DELAY\\b", Pattern.CASE_INSENSITIVE);
+
+    /** INTO OUTFILE / LOAD DATA 文件操作检测模式（MySQL）。 */
+    private static final Pattern FILE_OPERATION_PATTERN =
+        Pattern.compile("\\bINTO\\s+(OUTFILE|DUMPFILE)\\b|\\bLOAD\\s+DATA\\s+(INFILE|LOCAL)\\b",
+            Pattern.CASE_INSENSITIVE);
 
     /**
      * 检测 SQL 中的潜在危险模式。默认仅记录日志，strictMode=true 时抛出异常。
@@ -794,6 +801,15 @@ public class CteSpec {
         if (WAITFOR_DELAY_PATTERN.matcher(sql).find()) {
             String message = "SECURITY: " + context
                 + " SQL contains WAITFOR DELAY pattern (time-based blind SQL injection). " + "SQL: " + truncated;
+            if (strictMode) {
+                throw new SecurityException(message);
+            }
+            log.warn(message);
+        }
+        // 检测 INTO OUTFILE / LOAD DATA 文件操作（MySQL）
+        if (FILE_OPERATION_PATTERN.matcher(sql).find()) {
+            String message = "SECURITY: " + context
+                + " SQL contains file operation pattern (INTO OUTFILE/LOAD DATA). " + "SQL: " + truncated;
             if (strictMode) {
                 throw new SecurityException(message);
             }

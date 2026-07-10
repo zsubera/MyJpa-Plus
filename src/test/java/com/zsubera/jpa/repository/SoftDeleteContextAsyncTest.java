@@ -160,4 +160,115 @@ class SoftDeleteContextAsyncTest {
         SoftDeleteContext.reset();
         assertEquals(0, SoftDeleteContext.getIgnoreCount());
     }
+
+    // ---- TaskDecorator IGNORE_COUNT propagation tests (Fix #2) ----
+
+    @Test
+    void createTaskDecorator_propagatesIgnoreCount() throws Exception {
+        ExecutorService executor = Executors.newSingleThreadExecutor();
+        try {
+            // Simulate @IgnoreSoftDelete setting IGNORE_COUNT
+            SoftDeleteContext.pushIgnore();
+            assertTrue(SoftDeleteContext.isIgnoreSoftDelete());
+
+            org.springframework.core.task.TaskDecorator decorator = DefaultMyJpaRepository.createTaskDecorator();
+            Runnable decorated = decorator.decorate(() -> {
+                // In async thread: IGNORE_COUNT should be restored
+                assertTrue(SoftDeleteContext.isIgnoreSoftDelete(),
+                    "TaskDecorator should propagate IGNORE_COUNT to async thread");
+                assertEquals(1, SoftDeleteContext.getIgnoreCount());
+            });
+
+            // After decorate, parent state should be reset
+            assertFalse(SoftDeleteContext.isIgnoreSoftDelete(),
+                "Parent thread IGNORE_COUNT should be reset after decorate");
+
+            Future<?> result = executor.submit(decorated);
+            result.get(5, TimeUnit.SECONDS);
+
+            // After async task, parent state should be restored
+            // (Note: in real usage the parent thread continues independently)
+        } finally {
+            SoftDeleteContext.reset();
+            executor.shutdown();
+        }
+    }
+
+    @Test
+    void createTaskDecorator_nestedIgnoreCount() throws Exception {
+        ExecutorService executor = Executors.newSingleThreadExecutor();
+        try {
+            SoftDeleteContext.pushIgnore();
+            SoftDeleteContext.pushIgnore();
+            assertEquals(2, SoftDeleteContext.getIgnoreCount());
+
+            org.springframework.core.task.TaskDecorator decorator = DefaultMyJpaRepository.createTaskDecorator();
+            Runnable decorated = decorator.decorate(() -> {
+                assertEquals(2, SoftDeleteContext.getIgnoreCount(),
+                    "TaskDecorator should propagate nested IGNORE_COUNT");
+            });
+
+            assertFalse(SoftDeleteContext.isIgnoreSoftDelete());
+
+            Future<?> result = executor.submit(decorated);
+            result.get(5, TimeUnit.SECONDS);
+        } finally {
+            SoftDeleteContext.reset();
+            executor.shutdown();
+        }
+    }
+
+    @Test
+    void createTaskDecorator_zeroIgnoreCount_noop() throws Exception {
+        ExecutorService executor = Executors.newSingleThreadExecutor();
+        try {
+            // No pushIgnore called — IGNORE_COUNT should be 0
+            org.springframework.core.task.TaskDecorator decorator = DefaultMyJpaRepository.createTaskDecorator();
+            Runnable decorated = decorator.decorate(() -> {
+                assertFalse(SoftDeleteContext.isIgnoreSoftDelete(),
+                    "TaskDecorator with zero IGNORE_COUNT should not set ignore state");
+            });
+
+            Future<?> result = executor.submit(decorated);
+            result.get(5, TimeUnit.SECONDS);
+        } finally {
+            SoftDeleteContext.reset();
+            executor.shutdown();
+        }
+    }
+
+    @Test
+    void createTaskDecorator_exceptionInTask_capturesAndClearsIgnoreCount() throws Exception {
+        ExecutorService executor = Executors.newSingleThreadExecutor();
+        try {
+            SoftDeleteContext.pushIgnore();
+            assertTrue(SoftDeleteContext.isIgnoreSoftDelete());
+
+            org.springframework.core.task.TaskDecorator decorator = DefaultMyJpaRepository.createTaskDecorator();
+            Runnable decorated = decorator.decorate(() -> {
+                // Async thread should have IGNORE_COUNT restored
+                assertTrue(SoftDeleteContext.isIgnoreSoftDelete());
+                assertEquals(1, SoftDeleteContext.getIgnoreCount());
+                throw new RuntimeException("task failure");
+            });
+
+            // After decorate, parent's IGNORE_COUNT should be captured and reset
+            assertFalse(SoftDeleteContext.isIgnoreSoftDelete(),
+                "Parent IGNORE_COUNT should be captured and reset by TaskDecorator");
+
+            Future<?> result = executor.submit(decorated);
+            try {
+                result.get(5, TimeUnit.SECONDS);
+                fail("Should have thrown");
+            } catch (ExecutionException e) {
+                assertEquals(RuntimeException.class, e.getCause().getClass());
+            }
+
+            // After task failure, async thread's IGNORE_COUNT should be cleaned up
+            // (verified by the async thread's finally block calling SoftDeleteContext.reset())
+        } finally {
+            SoftDeleteContext.reset();
+            executor.shutdown();
+        }
+    }
 }

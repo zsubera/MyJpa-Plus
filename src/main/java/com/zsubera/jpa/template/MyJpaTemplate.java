@@ -413,6 +413,8 @@ public class MyJpaTemplate implements MyJpaTemplateOperations {
         log.debug("Cache miss for key: {}", cacheKey);
         List<T> result = findAll(entityClass, spec);
         List<T> immutableResult = java.util.Collections.unmodifiableList(result);
+        // 防护跨事务竞态：记录当前驱逐代数，afterCommit 写入前检查是否已被驱逐
+        long generationBeforeQuery = cacheAdapter.getEvictionGeneration();
         if (org.springframework.transaction.support.TransactionSynchronizationManager.isActualTransactionActive()) {
             // ponytail: 在事务提交后写入缓存，避免回滚时缓存残留脏数据。
             // 如果事务回滚，缓存不会被写入，后续查询会重新执行。
@@ -420,6 +422,12 @@ public class MyJpaTemplate implements MyJpaTemplateOperations {
                 .registerSynchronization(new org.springframework.transaction.support.TransactionSynchronization() {
                     @Override
                     public void afterCommit() {
+                        // 检查缓存是否在查询后被其他事务驱逐，避免将过期数据重新写入
+                        if (cacheAdapter.getEvictionGeneration() != generationBeforeQuery) {
+                            log.debug("Cache evicted after query but before commit, skipping stale write for key: {}",
+                                cacheKey);
+                            return;
+                        }
                         cacheAdapter.put(cacheKey, immutableResult, ttlSeconds);
                         log.debug("Cache written after transaction commit for key: {}", cacheKey);
                     }

@@ -304,18 +304,22 @@ public class DefaultMyJpaRepository<T, ID> extends SimpleJpaRepository<T, ID> im
     public static org.springframework.core.task.TaskDecorator createTaskDecorator() {
         return runnable -> {
             Boolean captured = captureAndResetForAsync();
+            int ignoreCount = SoftDeleteContext.captureAndResetForAsync();
             try {
                 return () -> {
                     try {
                         restoreForAsync(captured);
+                        SoftDeleteContext.restoreForAsync(ignoreCount);
                         runnable.run();
                     } finally {
                         AUTO_FILTER_OVERRIDE.remove();
+                        SoftDeleteContext.reset();
                     }
                 };
             } catch (RuntimeException e) {
                 // Restore parent's ThreadLocal so the decorator's own state isn't lost
                 restoreForAsync(captured);
+                SoftDeleteContext.restoreForAsync(ignoreCount);
                 throw e;
             }
         };
@@ -333,6 +337,7 @@ public class DefaultMyJpaRepository<T, ID> extends SimpleJpaRepository<T, ID> im
                     @Override
                     public void afterCompletion(int status) {
                         AUTO_FILTER_OVERRIDE.remove();
+                        SoftDeleteContext.reset();
                     }
                 });
         }

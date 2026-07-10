@@ -531,4 +531,51 @@ class QueryCacheManagerTest {
         assertEquals(2, evicted, "Should evict all User entries despite multi-level prefix");
         assertEquals(1, cache.size(), "Order entry should remain");
     }
+
+    // ---- eviction generation tests (Fix #1: cache race condition) ----
+
+    @Test
+    void evictionGeneration_initialValueIsZero() {
+        assertEquals(0, cache.getEvictionGeneration());
+    }
+
+    @Test
+    void evictionGeneration_incrementsOnEvictByPrefix() {
+        cache.put("User:q1", "v1", 60);
+
+        cache.evictByPrefix("User:");
+
+        assertEquals(1, cache.getEvictionGeneration());
+    }
+
+    @Test
+    void evictionGeneration_incrementsOnClear() {
+        cache.put("key1", "v1", 60);
+
+        cache.clear();
+
+        assertEquals(1, cache.getEvictionGeneration());
+    }
+
+    @Test
+    void evictionGeneration_incrementsMultipleTimes() {
+        cache.put("User:q1", "v1", 60);
+        cache.put("Order:q1", "v2", 60);
+
+        cache.evictByPrefix("User:");
+        cache.evictByPrefix("Order:");
+        cache.clear();
+
+        assertEquals(3, cache.getEvictionGeneration());
+    }
+
+    @Test
+    void evictionGeneration_noIncrementOnEmptyEvict() {
+        cache.put("User:q1", "v1", 60);
+
+        // Evict non-existent prefix — should not increment
+        cache.evictByPrefix("Nonexistent:");
+
+        assertEquals(0, cache.getEvictionGeneration());
+    }
 }

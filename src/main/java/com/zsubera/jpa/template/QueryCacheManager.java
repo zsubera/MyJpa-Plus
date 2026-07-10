@@ -69,6 +69,12 @@ public class QueryCacheManager implements CacheAdapter {
     private final AtomicLong missCount = new AtomicLong(0);
 
     /**
+     * 驱逐代数计数器。每次 evictByPrefix 或 clear 调用后递增。
+     * 用于 MyJpaTemplate.afterCommit 回调中检测缓存是否在查询后被驱逐。
+     */
+    private final AtomicLong evictionGeneration = new AtomicLong(0);
+
+    /**
      * Caffeine 缓存实例。
      * <p>
      * 使用 {@link CachedValue} 包装器实现 per-entry TTL，每次访问时检查过期状态。
@@ -284,6 +290,7 @@ public class QueryCacheManager implements CacheAdapter {
     public void clear() {
         cache.invalidateAll();
         prefixIndex.clear();
+        evictionGeneration.incrementAndGet();
         log.debug("Cache cleared");
     }
 
@@ -313,6 +320,7 @@ public class QueryCacheManager implements CacheAdapter {
             cache.invalidate(key);
         }
         prefixIndex.remove(normalizedPrefix);
+        evictionGeneration.incrementAndGet();
         if (!keysToRemove.isEmpty()) {
             log.debug("Cache evicted {} entries with prefix '{}'", keysToRemove.size(), keyPrefix);
         }
@@ -348,6 +356,11 @@ public class QueryCacheManager implements CacheAdapter {
     @Override
     public int size() {
         return (int) cache.estimatedSize();
+    }
+
+    @Override
+    public long getEvictionGeneration() {
+        return evictionGeneration.get();
     }
 
     /**
