@@ -139,17 +139,19 @@ class CteSpecSecurityCheckTest {
         assertThrows(SecurityException.class, () -> CteSpec.with("ct").as("SELECT 1; DROP TABLE users"));
     }
 
-    // ---- UNION SELECT injection ----
+    // ---- UNION SELECT in CTEs ----
+    // UNION SELECT / UNION ALL SELECT are valid SQL in both recursive and non-recursive CTEs.
+    // E.g., WITH cte AS (SELECT 1 UNION ALL SELECT 2) SELECT * FROM cte is perfectly valid.
+    // These are intentionally NOT blocked to avoid false positives.
 
     @Test
-    void as_withUnionSelect_throwsSecurityException() {
-        assertThrows(SecurityException.class, () -> CteSpec.with("ct").as("SELECT 1 UNION SELECT password FROM admin"));
+    void as_withUnionSelect_allowed() {
+        assertDoesNotThrow(() -> CteSpec.with("ct").as("SELECT 1 UNION SELECT password FROM admin"));
     }
 
     @Test
-    void as_withUnionAllSelect_throwsSecurityException() {
-        // UNION ALL SELECT is not valid in non-recursive CTEs — treated as injection attempt
-        assertThrows(SecurityException.class, () -> CteSpec.with("ct").as("SELECT 1 UNION ALL SELECT 2"));
+    void as_withUnionAllSelect_allowed() {
+        assertDoesNotThrow(() -> CteSpec.with("ct").as("SELECT 1 UNION ALL SELECT 2"));
     }
 
     // ---- WAITFOR DELAY (SQL Server blind injection) ----

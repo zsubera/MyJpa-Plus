@@ -109,9 +109,9 @@ class DefectRegressionTest {
     }
 
     @Test
-    @DisplayName("Non-recursive CTE with UNION SELECT should throw in strict mode")
-    void cte_nonRecursive_unionSelect_throws() {
-        assertThrows(SecurityException.class, () -> {
+    @DisplayName("Non-recursive CTE with UNION SELECT should be allowed (valid SQL in CTEs)")
+    void cte_nonRecursive_unionSelect_allowed() {
+        assertDoesNotThrow(() -> {
             CteSpec.with("cte").as("SELECT id FROM test_entity UNION SELECT id FROM test_entity");
         });
     }
