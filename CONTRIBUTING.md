@@ -38,7 +38,7 @@ cd myjpa-plus
 | 包 | 职责 |
 |---|---|
 | `com.zsubera.jpa.spec` | 核心查询构建：QuerySpec、ConditionBuilder（含子接口）、ConditionNode、NodeResolver、CteSpec、QueryAggregates、FunctionWhitelist、PredicateHelper、Spec、SubQuerySpec、JoinGroup、OrJoinGroup、OrGroup、NotGroup、BulkConditionSupport、ConditionalMethods |
-| `com.zsubera.jpa.update` | 批量操作：UpdateSpec、DeleteSpec、MergeSpec、AbstractBulkOperationSpec、OrConditionBuilder、BulkTransactionHelper、AuditUtils、DialectDetector、DialectStrategy、EntityFieldExtractor、MysqlDialect、PostgresDialect、OracleDialect、SqlServerDialect |
+| `com.zsubera.jpa.update` | 批量操作：UpdateSpec、DeleteSpec、MergeSpec、AbstractBulkOperationSpec、PersistenceContextStrategy、OrConditionBuilder、BulkTransactionHelper、AuditUtils、DialectDetector、DialectStrategy、EntityFieldExtractor、MysqlDialect、PostgresDialect、OracleDialect、SqlServerDialect |
 | `com.zsubera.jpa.repository` | 扩展 Repository：MyJpaRepository、DefaultMyJpaRepository、SoftDeleteContext、EntityManagerHelper、EntityManagerResolver、MyJpaRepositoryFactoryBean、OptimisticLockRetryAdvisor、IgnoreSoftDeleteAdvisor |
 | `com.zsubera.jpa.projection` | 投影查询：已移除（功能迁移至 `QueryProjectionSupport`） |
 | `com.zsubera.jpa.template` | 模板与缓存：MyJpaTemplate、MyJpaTemplateOperations、BulkOperationTemplate、BatchSaveTemplate、KeysetPaginationHelper、QueryCacheManager、CacheAdapter、CacheInvalidationListener、QueryBuildHelper、DeepPaginationGuard、CachedQueryResult、DisabledCacheAdapter、EntityModifiedEvent |

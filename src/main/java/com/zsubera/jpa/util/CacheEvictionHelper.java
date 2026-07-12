@@ -92,12 +92,14 @@ public final class CacheEvictionHelper {
             return;
         }
         ensureReflectionInitialized();
-        if (hibernateAvailable && hibernateSessionClass.isInstance(em.getDelegate())) {
+        if (hibernateAvailable) {
             try {
-                Object session = em.unwrap(hibernateSessionClass);
-                Object factory = getSessionFactoryMethod.invoke(session);
-                Object cache = getCacheMethod.invoke(factory);
-                evictEntityDataMethod.invoke(cache, entityClass);
+                if (hibernateSessionClass.isInstance(em.getDelegate())) {
+                    Object session = em.unwrap(hibernateSessionClass);
+                    Object factory = getSessionFactoryMethod.invoke(session);
+                    Object cache = getCacheMethod.invoke(factory);
+                    evictEntityDataMethod.invoke(cache, entityClass);
+                }
             } catch (Exception e) {
                 log.warn("Failed to evict entity L2 cache selectively for {}, falling back to em.clear()",
                     entityClass.getSimpleName(), e);

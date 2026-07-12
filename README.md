@@ -122,6 +122,27 @@ int total = jpa.executeBatchInSeparateTransactions(
 );
 ```
 
+### 持久化上下文策略
+
+```java
+// 默认自动清除 L1 缓存（AUTO_CLEAR）
+jpa.execute(jpa.update(User.class).set(User::getStatus, "INACTIVE"));
+
+// 由调用方自行管理持久化上下文
+int updated = jpa.execute(
+    jpa.update(User.class)
+        .set(User::getStatus, "INACTIVE")
+        .persistenceStrategy(PersistenceContextStrategy.DEFER_TO_CALLER)
+);
+
+// MergeSpec 同样支持
+int affected = new MergeSpec<>(User.class)
+    .withEntity(user)
+    .onConflict(User::getEmail)
+    .persistenceStrategy(PersistenceContextStrategy.DEFER_TO_CALLER)
+    .execute(em);
+```
+
 ### UPSERT / 合并
 
 ```java

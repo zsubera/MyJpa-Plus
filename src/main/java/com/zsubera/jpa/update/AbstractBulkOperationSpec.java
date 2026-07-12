@@ -62,6 +62,7 @@ public abstract class AbstractBulkOperationSpec<T, SELF extends AbstractBulkOper
 
     protected final Class<T> entityClass;
     protected final List<BulkConditionNode> conditionNodes = new ArrayList<>();
+    private PersistenceContextStrategy persistenceContextStrategy = PersistenceContextStrategy.AUTO_CLEAR;
 
     /**
      * 构造函数，初始化实体类类型。
@@ -70,6 +71,35 @@ public abstract class AbstractBulkOperationSpec<T, SELF extends AbstractBulkOper
      */
     protected AbstractBulkOperationSpec(Class<T> entityClass) {
         this.entityClass = entityClass;
+    }
+
+    /**
+     * 设置批量操作后的持久化上下文管理策略。
+     *
+     * <p>默认值为 {@link PersistenceContextStrategy#AUTO_CLEAR}，保持向后兼容。
+     * 如果调用方希望自行管理持久化上下文，可设置为 {@link PersistenceContextStrategy#DEFER_TO_CALLER}。
+     *
+     * @param strategy 持久化上下文策略
+     * @return 当前构建器实例，支持链式调用
+     */
+    public SELF persistenceStrategy(PersistenceContextStrategy strategy) {
+        if (strategy == null) {
+            throw new IllegalArgumentException("persistenceStrategy must not be null");
+        }
+        this.persistenceContextStrategy = strategy;
+        return self();
+    }
+
+    /**
+     * 批量操作后清理持久化上下文：根据策略选择性地 flush + clear L1 缓存，然后驱逐 L2 缓存。
+     * 子类在每个批量操作方法的 {@code affected > 0} 分支中调用此方法。
+     */
+    protected void afterBulkOperation(EntityManager em, Class<?> entityClass) {
+        if (persistenceContextStrategy == PersistenceContextStrategy.AUTO_CLEAR) {
+            em.flush();
+            em.clear();
+        }
+        com.zsubera.jpa.util.CacheEvictionHelper.evictEntityCache(em, entityClass);
     }
 
     /**

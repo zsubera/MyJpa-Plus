@@ -807,5 +807,6 @@ public final class SoftDeleteHelper {
         COLUMN_NAME_CACHE.clear();
         ID_COLUMN_NAME_CACHE.clear();
         RESOLVED_VALUE_CACHE.clear();
+        cachedDialect = null;
     }
 }

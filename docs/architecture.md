@@ -36,9 +36,10 @@ com.zsubera.jpa
 │   ├── DialectStrategy  — 方言特定 UPSERT SQL 生成 SPI
 │   ├── AbstractDialectStrategy — 共享转义逻辑
 │   ├── MysqlDialect / PostgresDialect / OracleDialect / SqlServerDialect
+│   ├── PersistenceContextStrategy — 批量操作后持久化上下文管理策略（AUTO_CLEAR / DEFER_TO_CALLER）
 │   └── EntityFieldExtractor — 反射实体字段 → 列名/值对
 │
-├── template/          # 查询执行与缓存
+├── template/            # 查询执行与缓存
 │   ├── MyJpaTemplate    — 主查询/批量模板（Spring Bean）
 │   ├── MyJpaTemplateOperations — 模板操作接口（Lambda 查询重载）
 │   ├── QueryCacheManager — 基于 Caffeine 的 TTL 缓存（实现 CacheAdapter）
@@ -222,9 +223,10 @@ QuerySpec.func(field, "functionName", params...)
 CteSpec.as(sql)
   → CTE 名称的保留字验证
   → 危险关键词检测（DROP、TRUNCATE、GRANT 等），带词边界匹配
-  → SQL 注入模式检测（注释、分号、UNION SELECT、WAITFOR DELAY）
+  → SQL 注入模式检测（注释、分号、WAITFOR DELAY）
   → 未绑定参数检测
   → strictMode = true（硬编码，不可禁用）
+  → 注：UNION SELECT / UNION ALL SELECT 在递归和非递归 CTE 中均为合法语法，不作为注入特征检测
 ```
 
 ### 第 4 层：LIKE 通配符转义

@@ -226,7 +226,7 @@ public final class SoftDeleteBulkExecutor {
                 if (ctx.resolved().booleanField()) {
                     count =
                         ((Number)em.createNativeQuery("SELECT COUNT(*) FROM " + escapedTable + " WHERE " + whereClause)
-                            .setParameter("deletedValue", Boolean.FALSE).getSingleResult()).longValue();
+                            .setParameter("deletedValue", Boolean.TRUE).getSingleResult()).longValue();
                 } else {
                     Object dv = ctx.resolved().dbValue();
                     count = ((Number)em

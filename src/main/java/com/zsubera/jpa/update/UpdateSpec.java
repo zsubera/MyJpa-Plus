@@ -231,9 +231,7 @@ public class UpdateSpec<T> extends AbstractBulkOperationSpec<T, UpdateSpec<T>> {
             }
             int affected = e.createQuery(update).executeUpdate();
             if (affected > 0) {
-                e.flush();
-                e.clear();
-                com.zsubera.jpa.util.CacheEvictionHelper.evictEntityCache(e, entityClass);
+                afterBulkOperation(e, entityClass);
             }
             return affected;
         });
@@ -408,9 +406,7 @@ public class UpdateSpec<T> extends AbstractBulkOperationSpec<T, UpdateSpec<T>> {
                 + ". Concurrent modifications detected. Transaction has been rolled back or marked rollback-only.");
         }
         if (affected > 0) {
-            em.flush();
-            em.clear();
-            com.zsubera.jpa.util.CacheEvictionHelper.evictEntityCache(em, entityClass);
+            afterBulkOperation(em, entityClass);
         }
         return affected;
     }
@@ -537,9 +533,7 @@ public class UpdateSpec<T> extends AbstractBulkOperationSpec<T, UpdateSpec<T>> {
         update.where(InClauseBuilder.in(cb, updateRoot.get(idFieldName), ids));
         int affected = em.createQuery(update).executeUpdate();
         if (affected > 0) {
-            em.flush();
-            em.clear();
-            com.zsubera.jpa.util.CacheEvictionHelper.evictEntityCache(em, entityClass);
+            afterBulkOperation(em, entityClass);
         }
         return new BatchCursor(affected, ids.get(ids.size() - 1));
     }
@@ -659,9 +653,7 @@ public class UpdateSpec<T> extends AbstractBulkOperationSpec<T, UpdateSpec<T>> {
         var uq = em.createQuery(update);
         int updated = uq.executeUpdate();
         if (updated > 0) {
-            em.flush();
-            em.clear();
-            com.zsubera.jpa.util.CacheEvictionHelper.evictEntityCache(em, entityClass);
+            afterBulkOperation(em, entityClass);
         }
         return updated;
     }

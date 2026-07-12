@@ -99,9 +99,7 @@ public class DeleteSpec<T> extends AbstractBulkOperationSpec<T, DeleteSpec<T>> {
             }
             int affected = e.createQuery(delete).executeUpdate();
             if (affected > 0) {
-                e.flush();
-                e.clear();
-                com.zsubera.jpa.util.CacheEvictionHelper.evictEntityCache(e, entityClass);
+                afterBulkOperation(e, entityClass);
             }
             return affected;
         });
@@ -150,15 +148,6 @@ public class DeleteSpec<T> extends AbstractBulkOperationSpec<T, DeleteSpec<T>> {
      * @return 受影响的行数
      */
     public int executeAsSoftDelete(EntityManager em, String fieldName, Object deletedValue) {
-        int limit = resolveMaxBulkOperationRows();
-        if (limit > 0) {
-            long count = countBeforeExecute(em);
-            if (count > limit) {
-                throw new IllegalStateException("Soft-delete would affect " + count
-                    + " rows, which exceeds the configured limit of " + limit + " rows. "
-                    + "Use executeLimited() with an explicit limit, or adjust myjpa-plus.query.max-bulk-operation-rows.");
-            }
-        }
         jakarta.persistence.criteria.CriteriaBuilder cb = em.getCriteriaBuilder();
         jakarta.persistence.criteria.CriteriaUpdate<T> update = cb.createCriteriaUpdate(entityClass);
         jakarta.persistence.criteria.Root<T> root = update.from(entityClass);
@@ -184,6 +173,31 @@ public class DeleteSpec<T> extends AbstractBulkOperationSpec<T, DeleteSpec<T>> {
                 predicates.add(p);
             }
         }
+        // ponytail: COUNT must include the soft-delete filter to count only active rows,
+        // matching the actual UPDATE's affected row count.
+        int limit = resolveMaxBulkOperationRows();
+        if (limit > 0) {
+            jakarta.persistence.criteria.CriteriaQuery<Long> countQuery = cb.createQuery(Long.class);
+            jakarta.persistence.criteria.Root<T> countRoot = countQuery.from(entityClass);
+            countQuery.select(cb.count(countRoot));
+            List<Predicate> countPredicates = new ArrayList<>();
+            if (softDeleteField != null) {
+                countPredicates.add(SoftDeleteHelper.buildNotDeleted(cb, countRoot, softDeleteField, entityClass));
+            }
+            Predicate[] countUserPredicates = buildPredicates(countRoot, cb);
+            for (Predicate p : countUserPredicates) {
+                countPredicates.add(p);
+            }
+            if (!countPredicates.isEmpty()) {
+                countQuery.where(cb.and(countPredicates.toArray(new Predicate[0])));
+            }
+            long count = em.createQuery(countQuery).getSingleResult();
+            if (count > limit) {
+                throw new IllegalStateException("Soft-delete would affect " + count
+                    + " rows, which exceeds the configured limit of " + limit + " rows. "
+                    + "Use executeLimited() with an explicit limit, or adjust myjpa-plus.query.max-bulk-operation-rows.");
+            }
+        }
         update.where(cb.and(predicates.toArray(new Predicate[0])));
         update.set(fieldName, deletedValue);
         int affected = em.createQuery(update).executeUpdate();
@@ -195,9 +209,13 @@ public class DeleteSpec<T> extends AbstractBulkOperationSpec<T, DeleteSpec<T>> {
                 log.warn("executeAsSoftDelete affected {} rows, exceeding the pre-check limit of {}. "
                     + "Concurrent modifications detected.", affected, limit);
             }
-            com.zsubera.jpa.softdelete.SoftDeleteBulkExecutor rollbackHelper = null;
+            jakarta.persistence.EntityTransaction tx;
             try {
-                jakarta.persistence.EntityTransaction tx = em.getTransaction();
+                tx = em.getTransaction();
+            } catch (IllegalStateException jtaEx) {
+                tx = null;
+            }
+            try {
                 if (tx != null && tx.isActive()) {
                     tx.rollback();
                     log.warn("Transaction has been rolled back.");
@@ -214,9 +232,7 @@ public class DeleteSpec<T> extends AbstractBulkOperationSpec<T, DeleteSpec<T>> {
                     + ". Concurrent modifications detected. Transaction has been rolled back or marked rollback-only.");
         }
         if (affected > 0) {
-            em.flush();
-            em.clear();
-            com.zsubera.jpa.util.CacheEvictionHelper.evictEntityCache(em, entityClass);
+            afterBulkOperation(em, entityClass);
         }
         return affected;
     }
@@ -262,8 +278,13 @@ public class DeleteSpec<T> extends AbstractBulkOperationSpec<T, DeleteSpec<T>> {
                 log.warn("deleteAll affected {} rows, exceeding the pre-check limit of {}. "
                     + "Concurrent modifications detected.", affected, limit);
             }
+            jakarta.persistence.EntityTransaction tx;
             try {
-                jakarta.persistence.EntityTransaction tx = em.getTransaction();
+                tx = em.getTransaction();
+            } catch (IllegalStateException jtaEx) {
+                tx = null;
+            }
+            try {
                 if (tx != null && tx.isActive()) {
                     tx.rollback();
                     log.warn("Transaction has been rolled back.");
@@ -279,9 +300,7 @@ public class DeleteSpec<T> extends AbstractBulkOperationSpec<T, DeleteSpec<T>> {
                 + ". Concurrent modifications detected. Transaction has been rolled back or marked rollback-only.");
         }
         if (affected > 0) {
-            em.flush();
-            em.clear();
-            com.zsubera.jpa.util.CacheEvictionHelper.evictEntityCache(em, entityClass);
+            afterBulkOperation(em, entityClass);
         }
         return affected;
     }
@@ -382,9 +401,7 @@ public class DeleteSpec<T> extends AbstractBulkOperationSpec<T, DeleteSpec<T>> {
         delete.where(InClauseBuilder.in(cb, deleteRoot.get(idFieldName), ids));
         int affected = em.createQuery(delete).executeUpdate();
         if (affected > 0) {
-            em.flush();
-            em.clear();
-            com.zsubera.jpa.util.CacheEvictionHelper.evictEntityCache(em, entityClass);
+            afterBulkOperation(em, entityClass);
         }
         return new BatchCursor(affected, ids.get(ids.size() - 1));
     }
@@ -460,9 +477,7 @@ public class DeleteSpec<T> extends AbstractBulkOperationSpec<T, DeleteSpec<T>> {
         var dq = em.createQuery(delete);
         int deleted = dq.executeUpdate();
         if (deleted > 0) {
-            em.flush();
-            em.clear();
-            com.zsubera.jpa.util.CacheEvictionHelper.evictEntityCache(em, entityClass);
+            afterBulkOperation(em, entityClass);
         }
         return deleted;
     }

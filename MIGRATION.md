@@ -14,12 +14,25 @@
 | `QueryCacheManager` | 847 行手写实现 | Caffeine 后端 | TTL/大小限制由 Caffeine 自动管理 |
 | `EncryptionKeyManager` | ConcurrentHashMap + RWLock + 手动 LRU | Caffeine | 锁顺序约束移除，`clearCaches()` 简化 |
 | `SampledEvictionCache.setMaxSize()` | 动态调整驱逐门槛 | 重建缓存（丢失现有条目） | 仅在启动初始化阶段调用，实际影响可忽略 |
+| `CteSpec` UNION SELECT 检测 | 非递归 CTE 中检测 `UNION SELECT` / `UNION ALL SELECT` 视为注入 | 移除该检测，UNION SELECT 在递归和非递归 CTE 中均为合法语法 | 之前因误报而失败的合法 CTE 查询现在可以正常执行 |
+| `BulkTransactionHelper` clear 时序 | 新事务中先 `em.clear()` 再 `tx.commit()` | 先 `tx.commit()` 再 `em.clear()` | 修复新事务提交后 L1 缓存丢失 |
+| `SoftDeleteBulkExecutor.countActiveRows()` | 使用 `Boolean.FALSE` 作为参数 | 使用 `Boolean.TRUE` | 修复布尔类型软删除实体的活跃行计数 |
+| `DeleteSpec.executeAsSoftDelete` 行数限制 | COUNT 查询不含软删除过滤 | COUNT 查询包含软删除过滤条件 | 精确匹配实际 UPDATE 影响行数 |
+| `CacheEvictionHelper` Hibernate 检测 | 无条件调用 `hibernateSessionClass.isInstance()` | 先检查 `hibernateAvailable` 再调用 | 修复非 Hibernate 环境下的 ClassCastException |
+
+### 新增 API
+
+- **`AbstractBulkOperationSpec.persistenceStrategy()` / `MergeSpec.persistenceStrategy()`** — 控制批量操作后的持久化上下文管理。默认 `AUTO_CLEAR`（自动 flush + clear），可设为 `DEFER_TO_CALLER` 由调用方自行管理。
 
 ### 缺陷修复
 
 - **EncryptConverter Cipher 池 RuntimeException 泄漏** — `cipher.init()` 抛出 `IllegalArgumentException` 等未受检异常时 Cipher 未归还池中，添加 `cipherReturned` 标志位确保所有路径归还
 - **DefaultMyJpaRepository 批量操作忽略 AUTO_FILTER_OVERRIDE** — `update()` 和 `delete()` 默认方法未检查 ThreadLocal 覆盖值，已覆写为委托 `shouldApplySoftDeleteFilter()`
 - **SoftDeleteHelper.isSoftDeleted NPE 防御** — 弱引用缓存驱逐重建时 annotation 可能为 null，添加防御性检查
+- **SoftDeleteHelper.clearCaches 方言残留** — `clearCaches()` 新增清理 `cachedDialect`，修复缓存清理后方言残留导致上下文切换错误
+- **SoftDeleteBulkExecutor 计数查询** — `countActiveRows()` 中 `Boolean.FALSE` 修正为 `Boolean.TRUE`
+- **DeleteSpec JTA 回滚** — `rollback()` 调用前添加 `IllegalStateException` 捕获，修复 JTA 事务环境崩溃
+- **executeCountQuery AUTO_FILTER_OVERRIDE** — 修复分页计数查询遗漏 `AUTO_FILTER_OVERRIDE` 检查
 
 ## 从 1.2.0 升级到 1.3.0
 

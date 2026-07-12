@@ -93,6 +93,7 @@ public class MergeSpec<T> {
     private final List<String> updateFields = new ArrayList<>();
     private boolean explicitUpdateFields = false;
     private DialectStrategy customDialect;
+    private PersistenceContextStrategy persistenceContextStrategy = PersistenceContextStrategy.AUTO_CLEAR;
 
     /**
      * 创建指定实体类型的 MergeSpec 构建器。
@@ -193,6 +194,17 @@ public class MergeSpec<T> {
             throw new IllegalArgumentException("dialect must not be null");
         }
         this.customDialect = dialect;
+        return this;
+    }
+
+    /**
+     * 设置批量操作后的持久化上下文管理策略。
+     */
+    public MergeSpec<T> persistenceStrategy(PersistenceContextStrategy strategy) {
+        if (strategy == null) {
+            throw new IllegalArgumentException("strategy must not be null");
+        }
+        this.persistenceContextStrategy = strategy;
         return this;
     }
 
@@ -461,13 +473,15 @@ public class MergeSpec<T> {
                 if (entity == null) {
                     throw new IllegalArgumentException("entities[" + i + "] must not be null");
                 }
-                if (i > 0 && i % batchSize == 0) {
+                if (i > 0 && i % batchSize == 0 && persistenceContextStrategy == PersistenceContextStrategy.AUTO_CLEAR) {
                     em.flush();
                     em.clear();
                 }
                 total += executeWith(em, entity, strategy, effectiveConflictFields, conflictSet);
             }
-            em.flush();
+            if (persistenceContextStrategy == PersistenceContextStrategy.AUTO_CLEAR) {
+                em.flush();
+            }
         } catch (RuntimeException e) {
             if (em.isOpen()) {
                 em.clear();
@@ -549,8 +563,10 @@ public class MergeSpec<T> {
                 SqlWithParams batchSql = strategy.buildBatchUpsertSql(tableName, insertColumns, batchFieldValues,
                     effectiveConflictFields, effectiveUpdateFields);
                 total += executeNativeQuery(em, batchSql.sql(), batchSql.params());
-                em.flush();
-                em.clear();
+                if (persistenceContextStrategy == PersistenceContextStrategy.AUTO_CLEAR) {
+                    em.flush();
+                    em.clear();
+                }
             }
         } catch (RuntimeException e) {
             if (em.isOpen()) {

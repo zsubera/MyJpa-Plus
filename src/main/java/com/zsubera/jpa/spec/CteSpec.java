@@ -714,13 +714,9 @@ public class CteSpec {
     private static final Pattern COMMENT_INJECTION_PATTERN = Pattern.compile("/\\*|\\*/|--(?!:)");
     private static final Pattern SEMICOLON_INJECTION_PATTERN = Pattern.compile(";\\s*\\w");
 
-    /** UNION SELECT 注入检测模式。仅检测 UNION SELECT（不含 ALL），因为 UNION ALL 是递归 CTE 的合法语法。 */
-    private static final Pattern UNION_SELECT_PATTERN =
-        Pattern.compile("\\bUNION\\s+SELECT\\b", Pattern.CASE_INSENSITIVE);
-
-    /** UNION ALL SELECT 注入检测模式。非递归 CTE 中 UNION ALL 不是合法语法，应视为注入尝试。 */
-    private static final Pattern UNION_ALL_SELECT_PATTERN =
-        Pattern.compile("\\bUNION\\s+ALL\\s+SELECT\\b", Pattern.CASE_INSENSITIVE);
+    // Note: UNION SELECT and UNION ALL SELECT are valid SQL in both recursive and non-recursive CTEs.
+    // E.g., WITH cte AS (SELECT 1 UNION ALL SELECT 2) SELECT * FROM cte is perfectly valid.
+    // These patterns are intentionally NOT used for blocking — they would cause false positives.
 
     /** WAITFOR DELAY 时间盲注检测模式（SQL Server）。 */
     private static final Pattern WAITFOR_DELAY_PATTERN =
@@ -778,25 +774,8 @@ public class CteSpec {
             }
             log.warn(message);
         }
-        // 检测 UNION SELECT 注入尝试（仅非递归 CTE — 递归 CTE 中 UNION SELECT 是合法语法）
-        if (!recursive && UNION_SELECT_PATTERN.matcher(sql).find()) {
-            String message = "SECURITY: " + context + " SQL contains potential UNION SELECT injection pattern. "
-                + "Ensure this is intentional and not user input. SQL: " + truncated;
-            if (strictMode) {
-                throw new SecurityException(message);
-            }
-            log.warn(message);
-        }
-        // 非递归 CTE 中 UNION ALL SELECT 不是合法语法，视为注入尝试
-        if (!recursive && UNION_ALL_SELECT_PATTERN.matcher(sql).find()) {
-            String message =
-                "SECURITY: " + context + " SQL contains UNION ALL SELECT in non-recursive CTE (not valid syntax). "
-                    + "Ensure this is intentional and not user input. SQL: " + truncated;
-            if (strictMode) {
-                throw new SecurityException(message);
-            }
-            log.warn(message);
-        }
+        // Note: UNION SELECT / UNION ALL SELECT checks removed — they are valid SQL in both
+        // recursive and non-recursive CTEs (e.g., WITH cte AS (SELECT 1 UNION ALL SELECT 2) ...).
         // 检测 WAITFOR DELAY 时间盲注（SQL Server）
         if (WAITFOR_DELAY_PATTERN.matcher(sql).find()) {
             String message = "SECURITY: " + context

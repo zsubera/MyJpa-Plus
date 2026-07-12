@@ -5,6 +5,10 @@
 
 ## [未发布]
 
+### 新增
+- **持久化上下文策略** — `AbstractBulkOperationSpec.persistenceStrategy()` 和 `MergeSpec.persistenceStrategy()` 支持 `PersistenceContextStrategy.DEFER_TO_CALLER`，允许调用方自行管理批量操作后的 flush/clear，默认保持 `AUTO_CLEAR` 向后兼容
+- **并发安全的批量更新/删除限制** — 增强行数限制检查的线程安全性，修复并发场景下限制绕过问题
+
 ### 变更
 - **Caffeine 缓存统一** — 全部手写缓存实现替换为 Caffeine，消除约 1000 行手写缓存代码
   - `SampledEvictionCache`：内部实现从 ConcurrentHashMap + 采样驱逐改为 Caffeine（13+ 处引用）
@@ -15,15 +19,39 @@
   - 13 处 `ConcurrentReferenceHashMap` 弱引用缓存替换为 `Caffeine.newBuilder().weakKeys()`
   - 移除 `EncryptionKeyManager` 中的 `ReentrantReadWriteLock` 和手动 LRU 淘汰逻辑
 - **依赖更新** — 新增 Caffeine 3.1.8（由 Spring Boot BOM 管理版本）
+- **CteSpec UNION SELECT 检测移除** — 移除 UNION SELECT / UNION ALL SELECT 注入检测模式，它们是非递归和递归 CTE 中的合法语法（如 `WITH cte AS (SELECT 1 UNION ALL SELECT 2) SELECT * FROM cte`），之前会导致误报
+- **BulkTransactionHelper clear 时序** — `em.clear()` 移至 `tx.commit()` 之后执行，修复新事务中清空持久化上下文导致提交后 L1 缓存丢失的问题
+- **CacheEvictionHelper Hibernate 检测** — 增加 `hibernateSessionClass.isInstance()` 空值安全检测，修复非 Hibernate 环境下的 `ClassCastException`
 
 ### 修复
 - **EncryptConverter Cipher 池 RuntimeException 泄漏** — `cipher.init()` 抛出 `IllegalArgumentException` 等 RuntimeException 时 Cipher 未归还池中，添加 `cipherReturned` 标志位确保所有异常路径归还
 - **DefaultMyJpaRepository 批量操作忽略 AUTO_FILTER_OVERRIDE** — `update()` 和 `delete()` 默认方法未检查 ThreadLocal 覆盖值，覆写为委托 `shouldApplySoftDeleteFilter()`
 - **SoftDeleteHelper.isSoftDeleted NPE 防御** — 弱引用缓存驱逐重建时 annotation 可能为 null，添加防御性检查回退到 Boolean 类型判断
+- **SoftDeleteBulkExecutor 计数查询** — `countActiveRows()` 中 `Boolean.FALSE` 修正为 `Boolean.TRUE`，修复软删除布尔类型实体的活跃行计数错误
+- **SoftDeleteHelper.clearCaches 方言缓存** — 新增 `cachedDialect = null` 清理，修复缓存清理后方言残留导致上下文切换错误
+- **DeleteSpec.executeAsSoftDelete 行数限制** — COUNT 查询现在包含软删除过滤条件，精确匹配实际 UPDATE 影响行数，防止并发修改导致计数不准确
+- **DeleteSpec JTA 回滚** — `rollback()` 调用前添加 `IllegalStateException` 捕获，修复 JTA 事务环境中回滚时崩溃
+- **executeCountQuery 遗漏 AUTO_FILTER_OVERRIDE** — 修复分页计数查询未检查 `AUTO_FILTER_OVERRIDE` ThreadLocal，导致分页总记录数不一致
+- **批量保存异常处理和缓存清理** — 修复批量保存失败时缓存未正确清理的问题
+- **条件节点空值处理** — 修复 `null` 值在条件节点中的处理不一致，补充 71 个测试覆盖关键缺口
+- **批量操作安全漏洞** — 修复批量操作中的多个安全漏洞和性能问题（SQL 注入、行数限制绕过等）
+- **批量操作循环重复处理相同行** — 修复游标分页批量处理中因排序不稳定导致的重复处理问题
+- **高影响正确性修复** — 修复 17 个正确性缺陷，覆盖数据完整性、并发安全、安全漏洞和崩溃风险
+- **EntityManagerHelper 多数据源竞争条件** — 修复并发注册时的竞态条件
+- **SQL 标识符引用** — 修复 SQL 标识符引用和多数据源支持问题
+
+### 优化
+- **查询性能和加密转换器** — 优化多个组件的性能和线程安全性
+- **批量保存模板版本方法处理** — 修复版本方法处理和安全警告日志
 
 ### 测试
 - **SampledEvictionCacheTest 更新** — 适配 Caffeine 行为（lazy eviction、estimatedSize 近似值）
 - **LambdaUtilsTest 更新** — 适配 Caffeine 缓存驱逐行为
+- **SlowQueryDataSourceProxy 补充测试** — 新增内部类测试覆盖
+- **SlowQueryDataSourceProxyPostProcessor 测试** — 新增后处理代理测试
+- **PredicateHelper.validateRange 测试** — 新增边界情况测试
+- **加密转换器、条件节点、异常处理** — 补充测试覆盖
+- **预存测试隔离修复** — 修复 6 个预存测试的隔离性问题
 
 ## [1.3.0] - 2026-07-04
 
