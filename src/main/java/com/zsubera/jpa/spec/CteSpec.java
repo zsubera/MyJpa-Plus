@@ -1,6 +1,12 @@
 package com.zsubera.jpa.spec;
 
+import com.zsubera.jpa.monitor.SqlSanitizer;
 import com.zsubera.jpa.util.IdentifierValidator;
+import net.sf.jsqlparser.JSQLParserException;
+import net.sf.jsqlparser.parser.CCJSqlParserUtil;
+import net.sf.jsqlparser.statement.Statement;
+import net.sf.jsqlparser.statement.select.PlainSelect;
+import net.sf.jsqlparser.statement.select.Select;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.Query;
 import java.util.ArrayList;
@@ -373,10 +379,19 @@ public class CteSpec {
      * @throws SecurityException 如果 strictMode=true 且检测到非 SELECT 语句
      */
     private static void validateSelectOnly(String sql) {
-        String trimmed = sql.trim().toUpperCase();
-        if (!trimmed.startsWith("SELECT") && !trimmed.startsWith("WITH")) {
-            throw new SecurityException("SECURITY: CTE SQL must start with SELECT or WITH. " + "Got: "
-                + (trimmed.length() > 50 ? trimmed.substring(0, 50) + "..." : trimmed));
+        try {
+            Statement stmt = CCJSqlParserUtil.parse(sql);
+            if (!(stmt instanceof Select)) {
+                throw new SecurityException("SECURITY: CTE SQL must be a SELECT statement. Got: "
+                    + SqlSanitizer.sanitize(sql.length() > 50 ? sql.substring(0, 50) + "..." : sql));
+            }
+        } catch (JSQLParserException e) {
+            // 解析失败时降级为字符串检查
+            String trimmed = sql.trim().toUpperCase();
+            if (!trimmed.startsWith("SELECT") && !trimmed.startsWith("WITH")) {
+                throw new SecurityException("SECURITY: CTE SQL must start with SELECT or WITH. Got: "
+                    + SqlSanitizer.sanitize(trimmed.length() > 50 ? trimmed.substring(0, 50) + "..." : trimmed));
+            }
         }
     }
 
@@ -737,8 +752,36 @@ public class CteSpec {
      * @throws SecurityException 如果 strictMode=true 且检测到危险模式
      */
     private static void checkSqlSafety(String sql, String context, boolean recursive) {
-        String truncated = sql.length() > 100 ? sql.substring(0, 100) + "..." : sql;
-        // 使用单词边界正则匹配，避免子字符串误报（如 "DROPDOWN" 中的 "DROP"）
+        String sanitized = SqlSanitizer.sanitize(sql);
+        String truncated = sanitized.length() > 100 ? sanitized.substring(0, 100) + "..." : sanitized;
+
+        // AST 结构检查：非 SELECT 语句（如 INSERT/UPDATE/DELETE/DROP/ALTER/CREATE）
+        try {
+            Statement stmt = CCJSqlParserUtil.parse(sql);
+            if (!(stmt instanceof Select)) {
+                String message = "SECURITY: " + context
+                    + " SQL is not a SELECT statement (detected via AST parsing). "
+                    + "Ensure this is intentional and not user input. SQL: " + truncated;
+                if (strictMode) {
+                    throw new SecurityException(message);
+                }
+                log.warn(message);
+            }
+        } catch (JSQLParserException e) {
+            // 解析失败时降级为字符串前缀检查
+            String trimmed = sql.trim().toUpperCase();
+            if (!trimmed.startsWith("SELECT") && !trimmed.startsWith("WITH")) {
+                String message = "SECURITY: " + context + " SQL does not start with SELECT or WITH. " + "SQL: "
+                    + truncated;
+                if (strictMode) {
+                    throw new SecurityException(message);
+                }
+                log.warn(message);
+            }
+        }
+
+        // 正则检查：危险关键字、存储过程、注释注入、分号注入、方言特定模式
+        // 这些无法通过 AST 结构检测（它们是 SELECT 内部的字符串模式）
         if (DANGEROUS_KEYWORD_PATTERN.matcher(sql).find()) {
             String message = "SECURITY: " + context + " SQL contains potentially dangerous DDL/admin keyword. "
                 + "Ensure this is intentional and not user input. SQL: " + truncated;
@@ -755,7 +798,6 @@ public class CteSpec {
             }
             log.warn(message);
         }
-        // 检测注释注入尝试
         if (COMMENT_INJECTION_PATTERN.matcher(sql).find()) {
             String message =
                 "SECURITY: " + context + " SQL contains potential comment injection patterns (/*, */, --). "
@@ -765,7 +807,6 @@ public class CteSpec {
             }
             log.warn(message);
         }
-        // 检测分号注入尝试
         if (SEMICOLON_INJECTION_PATTERN.matcher(sql).find()) {
             String message = "SECURITY: " + context + " SQL contains potential semicolon injection pattern. "
                 + "Ensure this is intentional and not user input. SQL: " + truncated;
@@ -774,9 +815,6 @@ public class CteSpec {
             }
             log.warn(message);
         }
-        // Note: UNION SELECT / UNION ALL SELECT checks removed — they are valid SQL in both
-        // recursive and non-recursive CTEs (e.g., WITH cte AS (SELECT 1 UNION ALL SELECT 2) ...).
-        // 检测 WAITFOR DELAY 时间盲注（SQL Server）
         if (WAITFOR_DELAY_PATTERN.matcher(sql).find()) {
             String message = "SECURITY: " + context
                 + " SQL contains WAITFOR DELAY pattern (time-based blind SQL injection). " + "SQL: " + truncated;
@@ -785,7 +823,6 @@ public class CteSpec {
             }
             log.warn(message);
         }
-        // 检测 INTO OUTFILE / LOAD DATA 文件操作（MySQL）
         if (FILE_OPERATION_PATTERN.matcher(sql).find()) {
             String message = "SECURITY: " + context + " SQL contains file operation pattern (INTO OUTFILE/LOAD DATA). "
                 + "SQL: " + truncated;
@@ -803,7 +840,8 @@ public class CteSpec {
      * @param boundParams 已绑定的参数映射
      */
     private static void checkUnboundParameters(String sql, Map<String, Object> boundParams) {
-        // ponytail: 原子组 (?>...) 防止非匹配输入上的灾难性回溯
+        // 正则检测：先剥离字符串字面量，再查找 :paramName 模式
+        // 原子组 (?>...) 防止灾难性回溯
         String stripped = sql.replaceAll("'(?>[^'\\\\]|\\\\.|'')*", "''");
         java.util.regex.Matcher matcher = UNBOUND_PARAM_PATTERN.matcher(stripped);
         List<String> unboundParams = new ArrayList<>();

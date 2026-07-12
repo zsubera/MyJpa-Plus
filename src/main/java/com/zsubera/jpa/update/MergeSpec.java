@@ -1,6 +1,7 @@
 package com.zsubera.jpa.update;
 
 import com.zsubera.jpa.exception.MyJpaPlusException;
+import com.zsubera.jpa.monitor.SqlSanitizer;
 import com.zsubera.jpa.spec.SFunction;
 import com.zsubera.jpa.util.IdentifierValidator;
 import com.zsubera.jpa.util.LambdaUtils;
@@ -317,9 +318,22 @@ public class MergeSpec<T> {
         SqlWithParams sqlWithParams =
             buildSqlFor(em, entityToMerge, strategy, preComputedConflictFields, preComputedConflictSet);
         if (log.isTraceEnabled()) {
-            log.trace("Executing UPSERT SQL: {}", sqlWithParams.sql());
+            log.trace("Executing UPSERT SQL: {}", SqlSanitizer.sanitize(sqlWithParams.sql()));
         }
+        validateGeneratedSql(sqlWithParams.sql());
         return executeNativeQuery(em, sqlWithParams.sql(), sqlWithParams.params());
+    }
+
+    /**
+     * 使用 JSqlParser 验证生成的 UPSERT SQL 语法。解析失败时记录警告但不阻断执行。
+     */
+    private static void validateGeneratedSql(String sql) {
+        try {
+            net.sf.jsqlparser.parser.CCJSqlParserUtil.parse(sql);
+        } catch (net.sf.jsqlparser.JSQLParserException e) {
+            log.warn("Generated UPSERT SQL syntax warning: {} — {}", e.getMessage(),
+                sql.length() > 100 ? sql.substring(0, 100) + "..." : sql);
+        }
     }
 
     private int executeNativeQuery(EntityManager em, String sql, List<Object> params) {

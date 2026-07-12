@@ -8,6 +8,8 @@ import java.lang.reflect.Field;
 import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import net.sf.jsqlparser.JSQLParserException;
+import net.sf.jsqlparser.parser.CCJSqlParserUtil;
 
 /**
  * 批量软删除操作的执行器。从 {@link SoftDeleteHelper} 中提取，聚焦于
@@ -100,6 +102,7 @@ public final class SoftDeleteBulkExecutor {
     private static int executeSoftDeleteWithLimit(EntityManager em, String escapedTable, String setClause,
         String whereClause, Object deletedValue, int maxRows, String dialect) {
         String sql = "UPDATE " + escapedTable + " SET " + setClause + " WHERE " + whereClause + " LIMIT :limit";
+        validateGeneratedSql(sql, "softDeleteWithLimit UPDATE");
         jakarta.persistence.Query query = em.createNativeQuery(sql);
         query.setParameter("deletedValue", deletedValue);
         query.setParameter("limit", maxRows);
@@ -242,7 +245,9 @@ public final class SoftDeleteBulkExecutor {
                             + ". Use softDeleteByIds() with explicit ID lists, or increase the limit.");
                 }
             }
-            updated = em.createNativeQuery("UPDATE " + escapedTable + " SET " + setClause + " WHERE " + whereClause)
+            String updateSql = "UPDATE " + escapedTable + " SET " + setClause + " WHERE " + whereClause;
+            validateGeneratedSql(updateSql, "softDeleteAll UPDATE");
+            updated = em.createNativeQuery(updateSql)
                 .setParameter("deletedValue", deletedValue).executeUpdate();
             if (maxRows > 0 && updated > maxRows) {
                 if (log.isWarnEnabled()) {
@@ -301,8 +306,10 @@ public final class SoftDeleteBulkExecutor {
                     placeholders.append(", ");
                 placeholders.append(":id").append(j);
             }
-            var query = em.createNativeQuery("UPDATE " + escapedTable + " SET " + setClause + " WHERE "
-                + escapedIdColumn + " IN (" + placeholders + ") AND " + whereClause);
+            String batchSql = "UPDATE " + escapedTable + " SET " + setClause + " WHERE " + escapedIdColumn + " IN ("
+                + placeholders + ") AND " + whereClause;
+            validateGeneratedSql(batchSql, "softDeleteByIds batch UPDATE");
+            var query = em.createNativeQuery(batchSql);
             query.setParameter("deletedValue", deletedValue);
             for (int j = 0; j < batch.size(); j++)
                 query.setParameter("id" + j, batch.get(j));
@@ -520,5 +527,17 @@ public final class SoftDeleteBulkExecutor {
     static Field resolveVersionField(Class<?> entityClass) {
         VersionFieldInfo info = resolveVersionFieldInfo(entityClass);
         return info != null ? info.field : null;
+    }
+
+    /**
+     * 使用 JSqlParser 验证生成的 SQL 语法。解析失败时记录警告但不阻断执行。
+     */
+    static void validateGeneratedSql(String sql, String context) {
+        try {
+            CCJSqlParserUtil.parse(sql);
+        } catch (JSQLParserException e) {
+            log.warn("Generated SQL syntax warning ({}): {} — {}", context, e.getMessage(),
+                sql.length() > 100 ? sql.substring(0, 100) + "..." : sql);
+        }
     }
 }
