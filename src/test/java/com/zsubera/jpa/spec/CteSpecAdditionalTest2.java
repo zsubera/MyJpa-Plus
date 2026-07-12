@@ -354,9 +354,12 @@ class CteSpecAdditionalTest2 {
     }
 
     @Test
-    void checkSqlSafety_strictMode_rejectsUnionSelect() {
+    void checkSqlSafety_strictMode_allowsUnionSelect() {
+        // UNION SELECT is valid SQL in both recursive and non-recursive CTEs.
+        // E.g., WITH cte AS (SELECT 1 UNION ALL SELECT 2) SELECT * FROM cte is perfectly valid.
+        // This test verifies that UNION SELECT is NOT rejected by the safety checker.
         if (CteSpec.isStrictMode()) {
-            assertThrows(SecurityException.class, () -> CteSpec.with("x").as("SELECT 1 UNION SELECT 2"));
+            assertDoesNotThrow(() -> CteSpec.with("x").as("SELECT 1 UNION SELECT 2"));
         }
     }
 

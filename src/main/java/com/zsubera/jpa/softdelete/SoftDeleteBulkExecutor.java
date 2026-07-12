@@ -232,11 +232,9 @@ public final class SoftDeleteBulkExecutor {
                         ((Number)em.createNativeQuery("SELECT COUNT(*) FROM " + escapedTable + " WHERE " + whereClause)
                             .setParameter("deletedValue", Boolean.TRUE).getSingleResult()).longValue();
                 } else {
-                    Object dv = ctx.resolved().dbValue();
-                    count = ((Number)em
-                        .createNativeQuery("SELECT COUNT(*) FROM " + escapedTable + " WHERE " + escapedColumn
-                            + " != :deletedValue OR " + escapedColumn + " IS NULL")
-                        .setParameter("deletedValue", dv).getSingleResult()).longValue();
+                    count =
+                        ((Number)em.createNativeQuery("SELECT COUNT(*) FROM " + escapedTable + " WHERE " + whereClause)
+                            .setParameter("deletedValue", deletedValue).getSingleResult()).longValue();
                 }
                 if (count > maxRows) {
                     throw new IllegalStateException(

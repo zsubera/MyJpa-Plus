@@ -259,8 +259,8 @@ public class EncryptConverter implements AttributeConverter<String, String> {
         byte[] plaintextBytes = attribute.getBytes(StandardCharsets.UTF_8);
         byte[] encrypted = null;
         byte[] combined = null;
-        Cipher cipher = borrowCipher();
         try {
+            Cipher cipher = borrowCipher();
             cipher.init(Cipher.ENCRYPT_MODE, keySpec, new GCMParameterSpec(GCM_TAG_LENGTH, iv));
             encrypted = cipher.doFinal(plaintextBytes);
             combined = new byte[iv.length + encrypted.length];
@@ -318,6 +318,7 @@ public class EncryptConverter implements AttributeConverter<String, String> {
             }
             int minRequired = GCM_IV_LENGTH + (GCM_TAG_LENGTH / 8);
             if (combined.length < minRequired) {
+                wipe(combined);
                 log.error(
                     "Invalid encrypted data: decoded length ({}) is less than minimum required ({} bytes = IV + tag). "
                         + "Data may be truncated or corrupted.",
@@ -331,9 +332,9 @@ public class EncryptConverter implements AttributeConverter<String, String> {
             byte[] encrypted = new byte[combined.length - GCM_IV_LENGTH];
             System.arraycopy(combined, GCM_IV_LENGTH, encrypted, 0, encrypted.length);
             SecretKeySpec keySpec = EncryptionKeyManager.getKeySpec(version);
-            Cipher cipher = borrowCipher();
             byte[] decrypted = null;
             try {
+                Cipher cipher = borrowCipher();
                 cipher.init(Cipher.DECRYPT_MODE, keySpec, new GCMParameterSpec(GCM_TAG_LENGTH, iv));
                 decrypted = cipher.doFinal(encrypted);
                 return new String(decrypted, StandardCharsets.UTF_8);

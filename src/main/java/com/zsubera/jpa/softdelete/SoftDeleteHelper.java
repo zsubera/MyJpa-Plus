@@ -156,6 +156,8 @@ public final class SoftDeleteHelper {
             return identifier;
         }
         char quoteChar = "mysql".equals(dialect) ? '`' : '"';
+        String escapeSeq = "mysql".equals(dialect) ? "``" : "\"\"";
+        String closeQuoteStr = String.valueOf(quoteChar);
         // 处理 schema.table 格式
         String[] parts = identifier.split("\\.");
         StringBuilder sb = new StringBuilder();
@@ -163,7 +165,7 @@ public final class SoftDeleteHelper {
             if (i > 0) {
                 sb.append('.');
             }
-            sb.append(quoteChar).append(parts[i]).append(quoteChar);
+            sb.append(quoteChar).append(parts[i].replace(closeQuoteStr, escapeSeq)).append(quoteChar);
         }
         return sb.toString();
     }
