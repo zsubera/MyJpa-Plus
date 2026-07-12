@@ -50,6 +50,7 @@ class BulkOperationTemplate {
 
     private final EntityManager entityManager;
     private final jakarta.persistence.EntityManagerFactory entityManagerFactory;
+    private final PlatformTransactionManager txManager;
     private volatile int maxBulkOperationRows;
 
     /**
@@ -57,11 +58,12 @@ class BulkOperationTemplate {
      *
      * @param entityManager 实体管理器
      * @param maxBulkOperationRows 批量操作最大影响行数限制（-1 表示不限制）
-     * @param txManager Spring 事务管理器
+     * @param txManager Spring 事务管理器（可为 null，为 null 时使用 RESOURCE_LOCAL EntityTransaction）
      */
     BulkOperationTemplate(EntityManager entityManager, int maxBulkOperationRows, PlatformTransactionManager txManager) {
         this.entityManager = entityManager;
         this.entityManagerFactory = entityManager.getEntityManagerFactory();
+        this.txManager = txManager;
         this.maxBulkOperationRows = maxBulkOperationRows;
     }
 

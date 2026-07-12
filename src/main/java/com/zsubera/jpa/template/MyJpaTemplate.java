@@ -937,10 +937,15 @@ public class MyJpaTemplate implements MyJpaTemplateOperations {
     @Transactional(readOnly = true)
     public <T> Optional<T> findOne(Class<T> entityClass, Specification<T> spec) {
         validateQueryParams(entityClass, spec);
+        Specification<T> dataSpec = spec;
+        if (shouldApplySoftDeleteFilter()) {
+            Specification<T> sdSpec = SoftDeleteHelper.isNotDeleted(entityClass);
+            dataSpec = spec != null ? spec.and(sdSpec) : sdSpec;
+        }
         CriteriaBuilder cb = entityManager.getCriteriaBuilder();
         CriteriaQuery<T> cq = cb.createQuery(entityClass);
         Root<T> root = cq.from(entityClass);
-        jakarta.persistence.criteria.Predicate predicate = spec.toPredicate(root, cq, cb);
+        jakarta.persistence.criteria.Predicate predicate = dataSpec.toPredicate(root, cq, cb);
         if (predicate != null) {
             cq.where(predicate);
         }

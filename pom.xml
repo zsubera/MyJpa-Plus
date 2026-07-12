@@ -64,6 +64,14 @@
             <artifactId>caffeine</artifactId>
         </dependency>
 
+        <!-- JSqlParser: SQL parser for AST-based log sanitization (replaces hand-written regex) -->
+        <dependency>
+            <groupId>com.github.jsqlparser</groupId>
+            <artifactId>jsqlparser</artifactId>
+            <version>5.3</version>
+            <optional>true</optional>
+        </dependency>
+
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-test</artifactId>

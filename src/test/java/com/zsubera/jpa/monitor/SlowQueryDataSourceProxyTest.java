@@ -356,7 +356,7 @@ class SlowQueryDataSourceProxyTest {
             invokeTimed.invoke(null, stmt, "UPDATE t SET x=1", 0L, executeUpdate, new Object[] {"UPDATE t SET x=1"});
             assertEquals(1, notifyCount.get());
             // SQL is sanitized (literals replaced with ?) before notifying listeners
-            assertEquals("UPDATE t SET x=?", capturedSql.get());
+            assertEquals("UPDATE t SET x = ?", capturedSql.get());
         } finally {
             SlowQueryDataSourceProxy.removeListener(listener);
         }

@@ -63,17 +63,20 @@ final class EncryptionKeyManager {
      */
     static void setPbkdf2Iterations(int iterations) {
         if (iterations >= PBKDF2_ITERATIONS_MIN && iterations <= PBKDF2_ITERATIONS_MAX) {
-            // ponytail: 先设置新的迭代次数，再失效缓存，消除竞态窗口。
-            // 旧顺序（先失效再设值）允许并发 getKeySpec() 在失效后、设值前用旧迭代次数派生密钥并缓存。
-            configuredPbkdf2Iterations = iterations;
-            if (!KEY_CACHE.asMap().isEmpty()) {
-                log.error("SECURITY CRITICAL: PBKDF2 iterations changed to {} after keys were already derived. "
-                    + "Key cache has been cleared. ALL existing encrypted data in the database "
-                    + "that was encrypted with the previous iteration count will become UNDECRYPTABLE "
-                    + "and throw MyJpaPlusException on next read. "
-                    + "This action is IRREVERSIBLE. To re-encrypt existing data, "
-                    + "use EncryptConverter.reEncrypt() before or immediately after this change.", iterations);
-                KEY_CACHE.invalidateAll();
+            KEY_VERSION_LOCK.lock();
+            try {
+                configuredPbkdf2Iterations = iterations;
+                if (!KEY_CACHE.asMap().isEmpty()) {
+                    log.error("SECURITY CRITICAL: PBKDF2 iterations changed to {} after keys were already derived. "
+                        + "Key cache has been cleared. ALL existing encrypted data in the database "
+                        + "that was encrypted with the previous iteration count will become UNDECRYPTABLE "
+                        + "and throw MyJpaPlusException on next read. "
+                        + "This action is IRREVERSIBLE. To re-encrypt existing data, "
+                        + "use EncryptConverter.reEncrypt() before or immediately after this change.", iterations);
+                    KEY_CACHE.invalidateAll();
+                }
+            } finally {
+                KEY_VERSION_LOCK.unlock();
             }
         } else {
             throw new IllegalArgumentException("PBKDF2 iterations must be between " + PBKDF2_ITERATIONS_MIN + " and "

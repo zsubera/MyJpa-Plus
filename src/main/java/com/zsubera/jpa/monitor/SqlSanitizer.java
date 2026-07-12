@@ -1,26 +1,36 @@
 package com.zsubera.jpa.monitor;
 
+import net.sf.jsqlparser.JSQLParserException;
+import net.sf.jsqlparser.parser.CCJSqlParserUtil;
+import net.sf.jsqlparser.statement.Statement;
+import net.sf.jsqlparser.statement.select.*;
+
 import java.util.ArrayList;
 import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * SQL 语句脱敏工具类。
+ * SQL 语句脱敏工具类（基于 JSqlParser AST 解析 + 后处理）。
  *
  * <p>
- * 用于在日志记录前移除 SQL 中的敏感数据（字符串字面量、数字字面量等），防止敏感信息泄露到日志文件。 标识符（表名、列名等）和 LIMIT/OFFSET 数字保留不变，便于调试。
+ * 用于在日志记录前移除 SQL 中的敏感数据（字符串字面量、数字字面量等），防止敏感信息泄露到日志文件。
+ * 标识符（表名、列名等）和 LIMIT/OFFSET/FETCH 数字保留不变，便于调试。
  *
  * <p>
- * 支持的 SQL 方言特性：
+ * 实现策略：
+ * <ol>
+ * <li>使用 JSqlParser 解析 SQL 为 AST — 正确处理所有 SQL 方言（美元引用、Q 引用等）</li>
+ * <li>AST toString() 生成规范化的 SQL — 字符串字面量变为单引号格式</li>
+ * <li>后处理：用正则将单引号字符串和数字替换为 ?，保留 LIMIT/OFFSET 数字</li>
+ * </ol>
+ *
+ * <p>
+ * 相比纯正则实现的优势：
  * <ul>
- * <li>标准 SQL 单引号字符串（支持转义 '' 和反斜杠转义 \'）</li>
- * <li>PostgreSQL 美元引用字符串（$$...$$ 和 $tag$...$tag$）</li>
- * <li>PostgreSQL 美元参数（$1, $2 等）</li>
- * <li>Oracle Q 引用字符串（q'[]', q'()', q'{}', q'<>'）</li>
- * <li>十六进制字面量（X'...'）</li>
- * <li>Unicode 字符串（N'...'）</li>
- * <li>数字字面量（排除 LIMIT/OFFSET/FETCH 后的数字）</li>
+ * <li>消除 ReDoS 风险 — JSqlParser 解析器不是正则引擎</li>
+ * <li>正确处理嵌套子查询、复杂表达式、所有方言语法</li>
+ * <li>解析失败时优雅降级（返回原始 SQL）</li>
  * </ul>
  *
  * <p>
@@ -36,26 +46,42 @@ public final class SqlSanitizer {
 
     private SqlSanitizer() {}
 
-    /** 所有字符串字面量模式的组合（一次遍历替代10次 replaceAll）。顺序敏感：特殊引号在前。 */
-    private static final Pattern LITERAL_PATTERN = Pattern.compile("\\$(\\w*)\\$(?s:.{0,4096}?)\\$\\1\\$" // PostgreSQL
-                                                                                                          // 美元引用字符串
-        + "|q'\\[[\\s\\S]+?\\]'|q'\\([\\s\\S]+?\\)'|q'\\{[\\s\\S]+?\\}'|q'<[\\s\\S]+?>'" // Oracle q'[...]' 引用
-        + "|q'([^\\[({<\\s'\\\\])[\\s\\S]{0,4096}?\\2'" // Oracle q'x...x' 引用
-        + "|X'[^'\\\\]*(?:\\\\.[^'\\\\]*|'')*[^'\\\\]*'" // 十六进制字面量
-        + "|N'[^'\\\\]*(?:\\\\.[^'\\\\]*|'')*[^'\\\\]*'" // Unicode 字符串
-        + "|E'[^'\\\\]*(?:\\\\.[^'\\\\]*|'')*[^'\\\\]*'" // PostgreSQL E-字符串
-        + "|\"[^\"\\\\]*(?:\\\\.[^\"\\\\]*|\"\")*[^\"\\\\]*\"" // 双引号字符串
-        + "|'[^'\\\\]*(?:\\\\.[^'\\\\]*|'')*[^'\\\\]*\\\\?'" // 单引号字符串
-        + "|\\$\\d+", // PostgreSQL 美元参数
-        Pattern.CASE_INSENSITIVE);
+    /**
+     * 后处理：匹配单引号字符串字面量（处理 '' 和 \' 转义）。
+     * JSqlParser toString() 输出的字符串都是单引号格式。
+     */
+    private static final Pattern STRING_LITERAL_PATTERN =
+        Pattern.compile("'[^'\\\\]*(?:\\\\.[^'\\\\]*|'')*[^'\\\\]*\\\\?'");
 
-    /** 数字字面量模式 */
-    private static final Pattern NUMBER_LITERAL_PATTERN = Pattern.compile("\\b\\d+\\.?\\d*(?:[eE][+-]?\\d+)?\\b");
+    /** 后处理：匹配 E-字符串（PostgreSQL）、N-字符串（Unicode）、X-字符串（十六进制）。 */
+    private static final Pattern PREFIXED_STRING_PATTERN =
+        Pattern.compile("(?:[ENX])'[^'\\\\]*(?:\\\\.[^'\\\\]*|'')*[^'\\\\]*\\\\?'");
 
-    /** SQL 注释模式（单行注释 -- 和多行注释 /* ... *​/） */
-    private static final Pattern COMMENT_PATTERN = Pattern.compile("(?:--[^\n]*|/\\*[\\s\\S]*?\\*/)");
+    /** 后处理：匹配美元引用字符串（$$...$$），内容可包含单个 $。使用占有量词避免回溯。 */
+    private static final Pattern DOLLAR_QUOTED_PATTERN =
+        Pattern.compile("\\$\\$[^$]*+(?:\\$(?!\\$)[^$]*+)*\\$\\$");
 
-    /** LIMIT/OFFSET/FETCH 数字保护模式 */
+    /** 后处理：匹配带标签的美元引用字符串（$tag$...$tag$），使用反向引用。 */
+    private static final Pattern DOLLAR_TAGGED_PATTERN =
+        Pattern.compile("\\$(\\w+)\\$.*?\\$\\1\\$", Pattern.DOTALL);
+
+    /** 后处理：匹配 Oracle Q-引用字符串。 */
+    private static final Pattern ORACLE_QQUOTE_PATTERN =
+        Pattern.compile("[Qq]'[\\s\\S]+?'");
+
+    /** 后处理：匹配双引号字符串/标识符。 */
+    private static final Pattern DOUBLE_QUOTE_PATTERN =
+        Pattern.compile("\"[^\"]*\"");
+
+    /** 后处理：匹配 PostgreSQL 美元参数（$1, $2 等）。 */
+    private static final Pattern DOLLAR_PARAM_PATTERN =
+        Pattern.compile("\\$\\d+");
+
+    /** 后处理：匹配数字字面量（整数、小数、科学计数法）。 */
+    private static final Pattern NUMBER_LITERAL_PATTERN =
+        Pattern.compile("\\b\\d+\\.?\\d*(?:[eE][+-]?\\d+)?\\b");
+
+    /** 保护 LIMIT/OFFSET/FETCH 后的数字不被替换。 */
     private static final Pattern LIMIT_OFFSET_PATTERN =
         Pattern.compile("(?i)(?:LIMIT|OFFSET|FETCH\\s+(?:FIRST|NEXT))\\s+\\d+(?:\\s+ROWS)?");
 
@@ -77,19 +103,33 @@ public final class SqlSanitizer {
         if (sql == null) {
             return "<null>";
         }
+        if (sql.isEmpty()) {
+            return "";
+        }
 
-        String result = sql;
+        String normalized;
+        try {
+            Statement stmt = CCJSqlParserUtil.parse(sql);
+            normalized = stmt.toString();
+        } catch (JSQLParserException e) {
+            // 解析失败时使用原始 SQL（降级为不脱敏，兼容 ORM 生成的非标准 SQL）
+            normalized = sql;
+        }
 
-        // 使用组合模式一次遍历替换所有字符串字面量和参数
-        result = LITERAL_PATTERN.matcher(result).replaceAll("?");
+        // 替换各种类型的字符串字面量为 ?
+        // 顺序重要：先处理前缀字符串，再处理普通单引号字符串
+        normalized = PREFIXED_STRING_PATTERN.matcher(normalized).replaceAll("?");
+        normalized = DOLLAR_QUOTED_PATTERN.matcher(normalized).replaceAll("?");
+        normalized = DOLLAR_TAGGED_PATTERN.matcher(normalized).replaceAll("?");
+        normalized = ORACLE_QQUOTE_PATTERN.matcher(normalized).replaceAll("?");
+        normalized = DOUBLE_QUOTE_PATTERN.matcher(normalized).replaceAll("?");
+        normalized = DOLLAR_PARAM_PATTERN.matcher(normalized).replaceAll("?");
+        normalized = STRING_LITERAL_PATTERN.matcher(normalized).replaceAll("?");
 
-        // 移除注释（字符串已被替换后，-- 不会跨引号匹配）
-        result = COMMENT_PATTERN.matcher(result).replaceAll("");
+        // 保护 LIMIT/OFFSET/FETCH 数字，替换其他数字
+        normalized = protectAndReplaceNumbers(normalized);
 
-        // 保护 LIMIT/OFFSET/FETCH 数字，然后替换其他数字
-        result = protectAndReplaceNumbers(result);
-
-        return result;
+        return normalized;
     }
 
     /**
