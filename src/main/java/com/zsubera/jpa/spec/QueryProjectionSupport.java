@@ -218,6 +218,7 @@ public final class QueryProjectionSupport<T> {
             if (field instanceof AggregateSFunction agg) {
                 Expression<?> expr = switch (agg.getAggregateType()) {
                     case COUNT -> agg.isCountAll() ? cb.count(root) : cb.count(root.get(agg.getFieldName()));
+                    case COUNT_FIELD -> cb.count(root.get(agg.getFieldName()));
                     case SUM -> cb.sum(root.get(agg.getFieldName()));
                     case AVG -> cb.avg(root.get(agg.getFieldName()));
                     case MAX -> cb.max(root.get(agg.getFieldName()));

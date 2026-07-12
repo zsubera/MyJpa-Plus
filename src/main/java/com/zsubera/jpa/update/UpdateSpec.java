@@ -389,21 +389,14 @@ public class UpdateSpec<T> extends AbstractBulkOperationSpec<T, UpdateSpec<T>> {
                 log.warn("updateAll affected {} rows, exceeding the pre-check limit of {}. "
                     + "Concurrent modifications detected.", affected, limit);
             }
-            try {
-                jakarta.persistence.EntityTransaction tx = em.getTransaction();
-                if (tx != null && tx.isActive()) {
-                    tx.rollback();
-                    log.warn("Transaction has been rolled back.");
-                } else {
-                    org.springframework.transaction.interceptor.TransactionAspectSupport.currentTransactionStatus()
-                        .setRollbackOnly();
-                    log.warn("Transaction marked as rollback-only.");
-                }
-            } catch (Exception rollbackEx) {
-                log.error("CRITICAL: Rollback FAILED. The UPDATE may be committed. Data corruption risk.", rollbackEx);
+            boolean rolledBack = rollbackOrMarkRollbackOnly(em, "updateAll");
+            if (!rolledBack) {
+                log.error("CRITICAL: Rollback FAILED. The UPDATE may be committed. Data corruption risk.");
             }
             throw new IllegalStateException("updateAll affected " + affected + " rows, exceeding the limit of " + limit
-                + ". Concurrent modifications detected. Transaction has been rolled back or marked rollback-only.");
+                + ". Concurrent modifications detected. "
+                + (rolledBack ? "Transaction has been rolled back or marked rollback-only."
+                    : "WARNING: Rollback FAILED. The UPDATE may have been committed. Data corruption risk."));
         }
         if (affected > 0) {
             afterBulkOperation(em, entityClass);

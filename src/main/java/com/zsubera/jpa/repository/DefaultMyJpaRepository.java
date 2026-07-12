@@ -4,6 +4,7 @@ import com.zsubera.jpa.softdelete.SoftDeleteBulkExecutor;
 import com.zsubera.jpa.softdelete.SoftDeleteHelper;
 import com.zsubera.jpa.update.AuditUtils;
 import com.zsubera.jpa.util.EntityClassResolver;
+import com.zsubera.jpa.util.InClauseBuilder;
 import jakarta.persistence.EntityManager;
 import java.util.List;
 import java.util.Optional;
@@ -685,12 +686,17 @@ public class DefaultMyJpaRepository<T, ID> extends SimpleJpaRepository<T, ID> im
         executeDeleteOrBlock(() -> SoftDeleteBulkExecutor.softDeleteByIds(entityManager, domainClass, idList), () -> {
             // 硬删除路径使用 CriteriaDelete 批量操作，避免 super.deleteAllById()
             // 内部回调 this.deleteById() 导致 N 次独立 findById + remove 查询。
+            // 按 InClauseBuilder 的 maxInClauseSize 分批执行，避免超出数据库 IN 子句参数限制。
             String idFieldName = EntityClassResolver.resolveIdFieldName(domainClass);
-            jakarta.persistence.criteria.CriteriaBuilder cb = entityManager.getCriteriaBuilder();
-            jakarta.persistence.criteria.CriteriaDelete<T> delete = cb.createCriteriaDelete(domainClass);
-            jakarta.persistence.criteria.Root<T> root = delete.from(domainClass);
-            delete.where(root.get(idFieldName).in(idList));
-            entityManager.createQuery(delete).executeUpdate();
+            int batchSize = InClauseBuilder.getMaxInClauseSize();
+            for (int i = 0; i < idList.size(); i += batchSize) {
+                List<ID> batch = idList.subList(i, Math.min(i + batchSize, idList.size()));
+                jakarta.persistence.criteria.CriteriaBuilder cb = entityManager.getCriteriaBuilder();
+                jakarta.persistence.criteria.CriteriaDelete<T> delete = cb.createCriteriaDelete(domainClass);
+                jakarta.persistence.criteria.Root<T> root = delete.from(domainClass);
+                delete.where(root.get(idFieldName).in(batch));
+                entityManager.createQuery(delete).executeUpdate();
+            }
         });
     }
 
@@ -830,11 +836,15 @@ public class DefaultMyJpaRepository<T, ID> extends SimpleJpaRepository<T, ID> im
         }
         executeDeleteOrBlock(() -> SoftDeleteBulkExecutor.softDeleteByIds(entityManager, domainClass, ids), () -> {
             String idFieldName = EntityClassResolver.resolveIdFieldName(domainClass);
-            jakarta.persistence.criteria.CriteriaBuilder cb = entityManager.getCriteriaBuilder();
-            jakarta.persistence.criteria.CriteriaDelete<T> delete = cb.createCriteriaDelete(domainClass);
-            jakarta.persistence.criteria.Root<T> root = delete.from(domainClass);
-            delete.where(root.get(idFieldName).in(ids));
-            entityManager.createQuery(delete).executeUpdate();
+            int batchSize = InClauseBuilder.getMaxInClauseSize();
+            for (int i = 0; i < ids.size(); i += batchSize) {
+                List<ID> batch = ids.subList(i, Math.min(i + batchSize, ids.size()));
+                jakarta.persistence.criteria.CriteriaBuilder cb = entityManager.getCriteriaBuilder();
+                jakarta.persistence.criteria.CriteriaDelete<T> delete = cb.createCriteriaDelete(domainClass);
+                jakarta.persistence.criteria.Root<T> root = delete.from(domainClass);
+                delete.where(root.get(idFieldName).in(batch));
+                entityManager.createQuery(delete).executeUpdate();
+            }
         });
     }
 
