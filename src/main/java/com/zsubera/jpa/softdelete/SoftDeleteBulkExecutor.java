@@ -104,7 +104,9 @@ public final class SoftDeleteBulkExecutor {
         query.setParameter("deletedValue", deletedValue);
         query.setParameter("limit", maxRows);
         int updated = query.executeUpdate();
-        // 当 updated >= maxRows 时，可能还有更多行未被更新，需要额外 COUNT 判断
+        // 当 updated >= maxRows 时，可能还有更多行未被更新，需要额外 COUNT 判断。
+        // 即使 UPDATE LIMIT 已原子性地限制了本次更新行数，仍需检查是否还有更多待处理行，
+        // 以便在超过限制时抛出异常，引导用户使用更安全的批量操作方式。
         if (updated >= maxRows) {
             long remaining =
                 ((Number)em.createNativeQuery("SELECT COUNT(*) FROM " + escapedTable + " WHERE " + whereClause)

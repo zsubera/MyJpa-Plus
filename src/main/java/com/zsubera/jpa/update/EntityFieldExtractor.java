@@ -51,10 +51,11 @@ final class EntityFieldExtractor<T> {
     /**
      * getter 方法缓存，避免每次字段提取都执行 getMethod() 反射查找。
      * ponytail: 使用 Class<?> + getterName 复合键，避免字符串拼接开销。
+     * weakKeys 确保当 Class<?> 被 GC 回收时，对应的缓存条目自动清理，防止类加载器泄漏。
      * 缓存大小上限为 MAX_FIELD_CACHE_SIZE，通过采样驱逐防止内存泄漏。
      */
     private static final Cache<Object, java.lang.reflect.Method> GETTER_CACHE =
-        Caffeine.newBuilder().maximumSize(MAX_FIELD_CACHE_SIZE).build();
+        Caffeine.newBuilder().weakKeys().maximumSize(MAX_FIELD_CACHE_SIZE).build();
 
     /** 复合缓存键：Class<?>（用于弱引用驱逐）+ getterName（用于区分字段） */
     private record GetterCacheKey(Class<?> clazz, String getterName) {

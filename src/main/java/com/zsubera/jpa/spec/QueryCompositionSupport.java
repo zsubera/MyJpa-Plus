@@ -46,6 +46,7 @@ final class QueryCompositionSupport<T> {
         }
         List<ConditionNode> group = parent.currentGroup();
         ConditionNode.OrNode orNode;
+        boolean isNewOrNode = false;
 
         // 合并到已存在的 OrNode：如果当前组最后一个节点也是 OrNode，则合并条件而非创建新节点
         if (!group.isEmpty() && group.get(group.size() - 1) instanceof ConditionNode.OrNode) {
@@ -53,11 +54,20 @@ final class QueryCompositionSupport<T> {
         } else {
             orNode = new ConditionNode.OrNode();
             group.add(orNode);
+            isNewOrNode = true;
         }
 
+        int sizeBefore = orNode.nodes.size();
         parent.getGroupStack().push(orNode.nodes);
         try {
             config.accept(new OrGroup<>(parent));
+        } catch (RuntimeException e) {
+            // 消费者异常时移除本次添加的部分条件，恢复 OrNode 到添加前的状态
+            orNode.nodes.subList(sizeBefore, orNode.nodes.size()).clear();
+            if (isNewOrNode && orNode.nodes.isEmpty()) {
+                group.remove(orNode);
+            }
+            throw e;
         } finally {
             parent.getGroupStack().pop();
         }
@@ -76,10 +86,18 @@ final class QueryCompositionSupport<T> {
         }
         ConditionNode.AndNode andNode = new ConditionNode.AndNode();
         ConditionNode.NegateNode negate = new ConditionNode.NegateNode(andNode);
-        parent.currentGroup().add(negate);
+        // 保存根组引用——push 到 stack 后 currentGroup() 会返回 andNode.nodes，
+        // 因此必须在 push 之前捕获 negate 所在的父组。
+        List<ConditionNode> rootGroup = parent.currentGroup();
+        rootGroup.add(negate);
+        int sizeBefore = andNode.nodes.size();
         parent.getGroupStack().push(andNode.nodes);
         try {
             config.accept(NotGroup.create(parent));
+        } catch (RuntimeException e) {
+            andNode.nodes.subList(sizeBefore, andNode.nodes.size()).clear();
+            rootGroup.remove(negate);
+            throw e;
         } finally {
             parent.getGroupStack().pop();
         }

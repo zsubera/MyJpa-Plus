@@ -912,7 +912,12 @@ public class MyJpaTemplate implements MyJpaTemplateOperations {
      */
     private <T> TypedQuery<T> buildTypedQuery(Class<T> entityClass, QuerySpec<T> spec, EntityGraphHelper<T> entityGraph,
         Integer maxResults) {
-        TypedQuery<T> query = buildSpecificationQuery(entityClass, spec.toSpecification(), null, maxResults);
+        Specification<T> dataSpec = spec.toSpecification();
+        if (shouldApplySoftDeleteFilter()) {
+            Specification<T> sdSpec = SoftDeleteHelper.isNotDeleted(entityClass);
+            dataSpec = dataSpec != null ? dataSpec.and(sdSpec) : sdSpec;
+        }
+        TypedQuery<T> query = buildSpecificationQuery(entityClass, dataSpec, null, maxResults);
         if (entityGraph != null) {
             entityGraph.apply(query, entityManager);
         }

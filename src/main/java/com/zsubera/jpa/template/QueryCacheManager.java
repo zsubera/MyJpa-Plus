@@ -260,8 +260,11 @@ public class QueryCacheManager implements CacheAdapter {
         T value = unpackIfPresent(cached);
         if (value == null) {
             missCount.incrementAndGet();
-        } else {
-            hitCount.incrementAndGet();
+            return null;
+        }
+        hitCount.incrementAndGet();
+        if (value instanceof List<?> list) {
+            return (T) java.util.Collections.unmodifiableList(list);
         }
         return value;
     }
@@ -284,10 +287,11 @@ public class QueryCacheManager implements CacheAdapter {
      */
     @Override
     public void clear() {
-        // 先清空 prefixIndex，再清空 cache，确保 concurrent put() 在 cache.invalidateAll()
-        // 之后添加的条目仍会被 removal listener 清理前缀索引。
-        prefixIndex.clear();
+        // 先清空 cache，再清空 prefixIndex：removal listener 在 invalidateAll 期间
+        // 会清理每个被驱逐 key 的 prefixIndex 条目；之后再清空 prefixIndex 移除
+        // 任何在 invalidateAll 期间被并发 put() 添加的幽灵条目。
         cache.invalidateAll();
+        prefixIndex.clear();
         evictionGeneration.incrementAndGet();
         log.debug("Cache cleared");
     }

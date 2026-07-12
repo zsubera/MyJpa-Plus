@@ -101,13 +101,31 @@ public final class EntityGraphHelper<T> {
             String root = attributePath.substring(0, dotIndex);
             String subpath = attributePath.substring(dotIndex + 1);
             attributePaths.merge(root, new String[] {subpath}, (old, val) -> {
-                // 追加前检查子路径是否重复
+                // 追加前检查子路径是否重复或前缀冲突：
+                // - 如果新 subpath 是已有路径的前缀（如 add("A.B.C") 后 add("A.B")），跳过
+                // - 如果已有路径是新 subpath 的前缀（如 add("A.B") 后 add("A.B.C")），移除旧的短路径
+                // 否则追加新子路径。
+                boolean subpathIsPrefix = false;
+                java.util.List<String> filtered = new java.util.ArrayList<>(old.length);
                 for (String existing : old) {
                     if (existing.equals(subpath)) {
-                        return old;
+                        return old; // 完全重复，跳过
                     }
+                    if (subpath.startsWith(existing + ".")) {
+                        // 新路径更深，移除旧的短前缀路径
+                        continue;
+                    }
+                    if (existing.startsWith(subpath + ".")) {
+                        // 旧路径更深，新路径是前缀，跳过添加
+                        subpathIsPrefix = true;
+                    }
+                    filtered.add(existing);
                 }
-                return appendToArray(old, subpath);
+                if (subpathIsPrefix) {
+                    return filtered.isEmpty() ? old : filtered.toArray(new String[0]);
+                }
+                filtered.add(subpath);
+                return filtered.toArray(new String[0]);
             });
         } else {
             // 使用 merge 而非 put 以保留已有的子路径

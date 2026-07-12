@@ -215,21 +215,27 @@ public class DeleteSpec<T> extends AbstractBulkOperationSpec<T, DeleteSpec<T>> {
             } catch (IllegalStateException jtaEx) {
                 tx = null;
             }
+            boolean rolledBack = false;
             try {
                 if (tx != null && tx.isActive()) {
                     tx.rollback();
+                    rolledBack = true;
                     log.warn("Transaction has been rolled back.");
                 } else {
                     org.springframework.transaction.interceptor.TransactionAspectSupport.currentTransactionStatus()
                         .setRollbackOnly();
+                    rolledBack = true;
                     log.warn("Transaction marked as rollback-only.");
                 }
             } catch (Exception rollbackEx) {
-                log.error("CRITICAL: Rollback FAILED. The UPDATE may be committed. Data corruption risk.", rollbackEx);
+                log.error("CRITICAL: Rollback FAILED. The soft-delete may have been committed. Data corruption risk.",
+                    rollbackEx);
             }
             throw new IllegalStateException(
                 "executeAsSoftDelete affected " + affected + " rows, exceeding the limit of " + limit
-                    + ". Concurrent modifications detected. Transaction has been rolled back or marked rollback-only.");
+                    + ". Concurrent modifications detected. "
+                    + (rolledBack ? "Transaction has been rolled back or marked rollback-only."
+                        : "WARNING: Rollback FAILED. The soft-delete may have been committed. Data corruption risk."));
         }
         if (affected > 0) {
             afterBulkOperation(em, entityClass);

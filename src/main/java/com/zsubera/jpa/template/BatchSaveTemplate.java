@@ -314,15 +314,16 @@ class BatchSaveTemplate {
                 boolean hasIdAnnotation = hasIdAnnotation(entity.getClass());
                 if (hasIdAnnotation) {
                     log.debug("No getId() method found for {} but @Id annotation present; "
-                        + "assuming existing entity (merge will be used).", entity.getClass().getSimpleName());
+                        + "assuming new entity (persist will be used).", entity.getClass().getSimpleName());
+                    return true;
                 } else {
                     log.warn(
-                        "No getId() method and no @Id annotation found for {}; assuming existing entity. "
-                            + "This may cause unnecessary SELECT queries during merge. "
-                            + "Consider implementing getId() method or using saveAllBatchedPure() for new entities.",
+                        "No getId() method and no @Id annotation found for {}; assuming new entity. "
+                            + "If this entity already exists in the database, use saveAllBatchedPure() or "
+                            + "implement getId() to enable proper existing-entity detection.",
                         entity.getClass().getSimpleName());
+                    return true;
                 }
-                return false;
             }
             Object id = getId.invoke(entity);
             return id == null;
