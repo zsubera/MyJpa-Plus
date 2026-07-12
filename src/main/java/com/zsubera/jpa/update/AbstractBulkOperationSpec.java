@@ -198,6 +198,40 @@ public abstract class AbstractBulkOperationSpec<T, SELF extends AbstractBulkOper
     protected abstract int doExecute(EntityManager em);
 
     /**
+     * 尝试回滚当前事务。支持 RESOURCE_LOCAL 和 JTA 环境。
+     * <p>
+     * RESOURCE_LOCAL 环境下使用 {@code em.getTransaction().rollback()}，
+     * JTA 环境下回退到 {@code TransactionAspectSupport.currentTransactionStatus().setRollbackOnly()}。
+     *
+     * @param em 实体管理器
+     * @param operationDesc 操作描述，用于日志
+     * @return true 如果回滚成功或已标记为 rollback-only
+     */
+    static boolean rollbackOrMarkRollbackOnly(EntityManager em, String operationDesc) {
+        try {
+            jakarta.persistence.EntityTransaction tx = em.getTransaction();
+            if (tx != null && tx.isActive()) {
+                tx.rollback();
+                log.warn("Transaction has been rolled back for {}.", operationDesc);
+                return true;
+            }
+        } catch (IllegalStateException ignored) {
+            // JTA 环境：getTransaction() 抛出 IllegalStateException
+        } catch (Exception e) {
+            log.warn("Failed to rollback via EntityTransaction for {}: {}", operationDesc, e.getMessage());
+        }
+        try {
+            org.springframework.transaction.interceptor.TransactionAspectSupport.currentTransactionStatus()
+                .setRollbackOnly();
+            log.warn("Transaction marked as rollback-only for {}.", operationDesc);
+            return true;
+        } catch (Exception e) {
+            log.error("Failed to mark rollback-only for {}: {}", operationDesc, e.getMessage());
+        }
+        return false;
+    }
+
+    /**
      * 获取全局配置中的最大批量操作行数限制。
      *
      * @return 限制值，如果未配置或禁用则返回 -1
@@ -222,9 +256,20 @@ public abstract class AbstractBulkOperationSpec<T, SELF extends AbstractBulkOper
         }
         int affected = buildAndExecute.apply(em);
         if (limit > 0 && affected > limit) {
+            if (log.isWarnEnabled()) {
+                log.warn("{} affected {} rows, exceeding the pre-check limit of {}. "
+                    + "Concurrent modifications detected.", operationName, affected, limit);
+            }
+            // ponytail: Explicit rollback consistent with updateAll()/deleteAll() behavior.
+            // In Spring @Transactional context, the framework also rolls back on unchecked exceptions,
+            // but this handles RESOURCE_LOCAL transactions where the caller may catch the exception.
+            if (!rollbackOrMarkRollbackOnly(em, "Bulk " + operationName)) {
+                log.error("CRITICAL: Rollback FAILED. The {} may be committed. Data corruption risk.",
+                    operationName);
+            }
             throw new com.zsubera.jpa.exception.MyJpaPlusException(
                 operationName + " affected " + affected + " rows, exceeding the pre-check limit of " + limit
-                    + ". Concurrent modifications detected. Transaction will be rolled back.");
+                    + ". Concurrent modifications detected. Transaction has been rolled back or marked rollback-only.");
         }
         return affected;
     }

@@ -127,7 +127,9 @@ public class EncryptConverter implements AttributeConverter<String, String> {
         ByteBuffer buf = ByteBuffer.allocate(secret.length);
         buf.put(secret);
         java.util.Arrays.fill(secret, (byte)0);
-        // 确保 fill 的副作用可见
+        // 清除 buffer 内部数组中的副本，防止敏感数据残留
+        byte[] bufArray = buf.array();
+        java.util.Arrays.fill(bufArray, (byte)0);
         buf.clear();
     }
 

@@ -76,17 +76,19 @@ public final class SoftDeleteBulkExecutor {
 
     /**
      * 检查指定方言是否支持 UPDATE ... LIMIT 语法。
-     * MySQL 和 PostgreSQL 支持此语法，可在 UPDATE 语句中直接限制影响行数，
+     * 仅 MySQL 支持此语法，可在 UPDATE 语句中直接限制影响行数，
      * 消除预检查 COUNT 与 UPDATE 之间的竞态条件。
+     * PostgreSQL 不支持 UPDATE ... LIMIT，会回退到 COUNT + 后置检查模式。
      */
     private static boolean supportsUpdateLimit(String dialect) {
-        return "mysql".equals(dialect) || "postgresql".equals(dialect);
+        return "mysql".equals(dialect);
     }
 
     /**
      * 使用 UPDATE ... LIMIT 执行软删除，原子性地限制影响行数。
      *
-     * <p>MySQL 和 PostgreSQL 均支持 {@code UPDATE ... SET ... WHERE ... LIMIT :limit} 语法。
+     * <p>仅 MySQL 支持 {@code UPDATE ... SET ... WHERE ... LIMIT :limit} 语法。
+     * PostgreSQL、Oracle、SQL Server 不支持此语法，会回退到 COUNT + 后置检查模式。
      * 数据库引擎在单条语句内同时完成"筛选行"和"更新行"，
      * 不存在其他事务在此期间修改行数的竞态窗口。
      *
@@ -213,7 +215,7 @@ public final class SoftDeleteBulkExecutor {
         String whereClause = escapedColumn + " != :deletedValue OR " + escapedColumn + " IS NULL";
 
         if (maxRows > 0 && supportsUpdateLimit(dialect)) {
-            // ponytail: 对支持 UPDATE LIMIT 的数据库（MySQL、PostgreSQL），直接在 UPDATE 语句中限制行数。
+            // ponytail: 对支持 UPDATE LIMIT 的数据库（仅 MySQL），直接在 UPDATE 语句中限制行数。
             // 这消除了预检查 COUNT 与 UPDATE 之间的竞态条件窗口——数据库引擎在单条语句内
             // 同时完成"筛选行"和"更新行"，不存在其他事务在此期间修改行数的可能。
             updated =
