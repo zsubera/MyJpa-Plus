@@ -4,10 +4,8 @@ import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
-import java.util.function.Function;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -113,12 +111,12 @@ public class QueryCacheManager implements CacheAdapter {
                 return null;
             }
             Object val = cv.value();
-            return val == NULL_SENTINEL ? null : (T) val;
+            return val == NULL_SENTINEL ? null : (T)val;
         }
         if (cached == NULL_SENTINEL) {
             return null;
         }
-        return (T) cached;
+        return (T)cached;
     }
 
     /**
@@ -139,15 +137,12 @@ public class QueryCacheManager implements CacheAdapter {
             throw new IllegalArgumentException("maxEntries must be positive");
         }
         this.maxEntries = maxEntries;
-        this.cache = Caffeine.newBuilder()
-            .maximumSize(maxEntries)
-            .executor(Runnable::run)
+        this.cache = Caffeine.newBuilder().maximumSize(maxEntries).executor(Runnable::run)
             .removalListener((String key, Object value, com.github.benmanes.caffeine.cache.RemovalCause cause) -> {
                 if (key != null) {
                     removeFromPrefixIndex(key);
                 }
-            })
-            .build();
+            }).build();
     }
 
     /**
@@ -201,7 +196,7 @@ public class QueryCacheManager implements CacheAdapter {
         // 同时防止调用者修改返回值破坏缓存数据一致性。
         if (value instanceof List<?> list) {
             @SuppressWarnings("unchecked")
-            T result = (T) java.util.Collections.unmodifiableList(list);
+            T result = (T)java.util.Collections.unmodifiableList(list);
             return result;
         }
         return value;
@@ -364,7 +359,7 @@ public class QueryCacheManager implements CacheAdapter {
      */
     @Override
     public int size() {
-        return (int) cache.estimatedSize();
+        return (int)cache.estimatedSize();
     }
 
     @Override
@@ -382,7 +377,7 @@ public class QueryCacheManager implements CacheAdapter {
         long hits = hitCount.get();
         long misses = missCount.get();
         long total = hits + misses;
-        return total == 0 ? 0.0 : (double) hits / total;
+        return total == 0 ? 0.0 : (double)hits / total;
     }
 
     /**

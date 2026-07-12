@@ -114,19 +114,19 @@ public class EncryptConverter implements AttributeConverter<String, String> {
      * 归还 Cipher 实例。由于每次操作都创建新实例，直接丢弃以避免
      * JDK GCM 内部状态在不兼容版本上产生的数据损坏（JDK-8201285）。
      */
-    private static void returnCipher(Cipher cipher) {
-    }
+    private static void returnCipher(Cipher cipher) {}
 
     /**
      * 安全清除 byte 数组中的敏感数据。使用 ByteBuffer 包装防止 JIT 逃逸分析将清零优化掉。
      */
     private static void wipe(byte[] secret) {
-        if (secret == null) return;
+        if (secret == null)
+            return;
         // 写入 ByteBuffer 确保 side-effect 不被 JIT 消除
         // 使用堆内 ByteBuffer 而非堆外 DirectByteBuffer，避免堆外内存泄漏
         ByteBuffer buf = ByteBuffer.allocate(secret.length);
         buf.put(secret);
-        java.util.Arrays.fill(secret, (byte) 0);
+        java.util.Arrays.fill(secret, (byte)0);
         // 确保 fill 的副作用可见
         buf.clear();
     }
@@ -316,8 +316,9 @@ public class EncryptConverter implements AttributeConverter<String, String> {
             }
             int minRequired = GCM_IV_LENGTH + (GCM_TAG_LENGTH / 8);
             if (combined.length < minRequired) {
-                log.error("Invalid encrypted data: decoded length ({}) is less than minimum required ({} bytes = IV + tag). "
-                    + "Data may be truncated or corrupted.",
+                log.error(
+                    "Invalid encrypted data: decoded length ({}) is less than minimum required ({} bytes = IV + tag). "
+                        + "Data may be truncated or corrupted.",
                     combined.length, minRequired);
                 throw new MyJpaPlusException("Decryption failed: encrypted data too short (" + combined.length
                     + " bytes). Minimum required: " + minRequired + " bytes (IV + GCM tag). "

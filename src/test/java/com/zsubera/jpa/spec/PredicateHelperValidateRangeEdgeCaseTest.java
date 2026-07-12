@@ -16,20 +16,17 @@ class PredicateHelperValidateRangeEdgeCaseTest {
 
     @Test
     void validateRange_nullStart_throws() {
-        assertThrows(IllegalArgumentException.class,
-            () -> PredicateHelper.validateRange(null, 10));
+        assertThrows(IllegalArgumentException.class, () -> PredicateHelper.validateRange(null, 10));
     }
 
     @Test
     void validateRange_nullEnd_throws() {
-        assertThrows(IllegalArgumentException.class,
-            () -> PredicateHelper.validateRange(1, null));
+        assertThrows(IllegalArgumentException.class, () -> PredicateHelper.validateRange(1, null));
     }
 
     @Test
     void validateRange_bothNull_throws() {
-        assertThrows(IllegalArgumentException.class,
-            () -> PredicateHelper.validateRange(null, null));
+        assertThrows(IllegalArgumentException.class, () -> PredicateHelper.validateRange(null, null));
     }
 
     // ===== cross Number type path (BigDecimal fallback) =====
@@ -46,8 +43,7 @@ class PredicateHelperValidateRangeEdgeCaseTest {
 
     @Test
     void validateRange_integerVsLong_startGreaterThanEnd_throws() {
-        assertThrows(IllegalArgumentException.class,
-            () -> PredicateHelper.validateRange(10, 5L));
+        assertThrows(IllegalArgumentException.class, () -> PredicateHelper.validateRange(10, 5L));
     }
 
     @Test
@@ -57,8 +53,7 @@ class PredicateHelperValidateRangeEdgeCaseTest {
 
     @Test
     void validateRange_longVsInteger_startGreaterThanEnd_throws() {
-        assertThrows(IllegalArgumentException.class,
-            () -> PredicateHelper.validateRange(100L, 50));
+        assertThrows(IllegalArgumentException.class, () -> PredicateHelper.validateRange(100L, 50));
     }
 
     @Test
@@ -68,8 +63,7 @@ class PredicateHelperValidateRangeEdgeCaseTest {
 
     @Test
     void validateRange_integerVsDouble_startGreaterThanEnd_throws() {
-        assertThrows(IllegalArgumentException.class,
-            () -> PredicateHelper.validateRange(10, 5.5));
+        assertThrows(IllegalArgumentException.class, () -> PredicateHelper.validateRange(10, 5.5));
     }
 
     @Test
@@ -79,22 +73,19 @@ class PredicateHelperValidateRangeEdgeCaseTest {
 
     @Test
     void validateRange_longMaxValue_startGreaterThanEnd_throws() {
-        assertThrows(IllegalArgumentException.class,
-            () -> PredicateHelper.validateRange(Long.MAX_VALUE, 0));
+        assertThrows(IllegalArgumentException.class, () -> PredicateHelper.validateRange(Long.MAX_VALUE, 0));
     }
 
     // ===== incompatible types (non-Number) =====
 
     @Test
     void validateRange_incompatibleTypes_throws() {
-        assertThrows(IllegalArgumentException.class,
-            () -> PredicateHelper.validateRange("abc", 123));
+        assertThrows(IllegalArgumentException.class, () -> PredicateHelper.validateRange("abc", 123));
     }
 
     @Test
     void validateRange_incompatibleTypesReversed_throws() {
-        assertThrows(IllegalArgumentException.class,
-            () -> PredicateHelper.validateRange(123, "abc"));
+        assertThrows(IllegalArgumentException.class, () -> PredicateHelper.validateRange(123, "abc"));
     }
 
     // ===== same Comparable type paths =====
@@ -106,8 +97,7 @@ class PredicateHelperValidateRangeEdgeCaseTest {
 
     @Test
     void validateRange_strings_startGreaterThanEnd_throws() {
-        assertThrows(IllegalArgumentException.class,
-            () -> PredicateHelper.validateRange("zebra", "apple"));
+        assertThrows(IllegalArgumentException.class, () -> PredicateHelper.validateRange("zebra", "apple"));
     }
 
     @Test
@@ -124,22 +114,19 @@ class PredicateHelperValidateRangeEdgeCaseTest {
 
     @Test
     void validateRange_doubleVsFloat_startGreaterThanEnd_throws() {
-        assertThrows(IllegalArgumentException.class,
-            () -> PredicateHelper.validateRange(10.0, 5.0f));
+        assertThrows(IllegalArgumentException.class, () -> PredicateHelper.validateRange(10.0, 5.0f));
     }
 
     // ===== Infinity values (cross-Number path) =====
 
     @Test
     void validateRange_positiveInfinity_throws() {
-        assertThrows(IllegalArgumentException.class,
-            () -> PredicateHelper.validateRange(0, Double.POSITIVE_INFINITY));
+        assertThrows(IllegalArgumentException.class, () -> PredicateHelper.validateRange(0, Double.POSITIVE_INFINITY));
     }
 
     @Test
     void validateRange_negativeInfinity_throws() {
-        assertThrows(IllegalArgumentException.class,
-            () -> PredicateHelper.validateRange(Double.NEGATIVE_INFINITY, 0));
+        assertThrows(IllegalArgumentException.class, () -> PredicateHelper.validateRange(Double.NEGATIVE_INFINITY, 0));
     }
 
     @Test

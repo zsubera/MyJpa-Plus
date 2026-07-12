@@ -118,8 +118,7 @@ class ConditionNodeOpTest {
 
     @Test
     void resolveLike_nullValue_throws() {
-        assertThrows(IllegalArgumentException.class,
-            () -> ConditionNode.Op.LIKE.resolve(root, "name", null, '\0', cb));
+        assertThrows(IllegalArgumentException.class, () -> ConditionNode.Op.LIKE.resolve(root, "name", null, '\0', cb));
     }
 
     @Test

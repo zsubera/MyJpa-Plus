@@ -494,9 +494,8 @@ class BatchSaveTemplateTest {
     void partialBatchCommitException_carryFailedEntities() {
         List<String> committed = List.of("a", "b");
         List<String> failed = List.of("c", "d", "e");
-        BatchSaveTemplate.PartialBatchCommitException ex =
-            new BatchSaveTemplate.PartialBatchCommitException(1, 2, committed, failed,
-                new RuntimeException("db error"));
+        BatchSaveTemplate.PartialBatchCommitException ex = new BatchSaveTemplate.PartialBatchCommitException(1, 2,
+            committed, failed, new RuntimeException("db error"));
 
         assertEquals(1, ex.getCompletedBatches());
         assertEquals(2, ex.getCommittedEntities());

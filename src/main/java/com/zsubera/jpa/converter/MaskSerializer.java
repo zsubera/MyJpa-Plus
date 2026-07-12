@@ -133,8 +133,8 @@ public class MaskSerializer extends JsonSerializer<String> {
         }
         // 对于3个以上字符：保留首尾，遮蔽中间部分
         int lastCodePointIndex = name.offsetByCodePoints(0, codePointCount - 1);
-        return name.substring(0, name.offsetByCodePoints(0, 1)) +
-            "*".repeat(codePointCount - 2) + name.substring(lastCodePointIndex);
+        return name.substring(0, name.offsetByCodePoints(0, 1)) + "*".repeat(codePointCount - 2)
+            + name.substring(lastCodePointIndex);
     }
 
     private static String maskBankCard(String bankCard) {

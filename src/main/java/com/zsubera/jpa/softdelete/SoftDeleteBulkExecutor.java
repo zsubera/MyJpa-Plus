@@ -95,8 +95,8 @@ public final class SoftDeleteBulkExecutor {
      *
      * @return 实际更新的行数（<= maxRows）
      */
-    private static int executeSoftDeleteWithLimit(EntityManager em, String escapedTable,
-        String setClause, String whereClause, Object deletedValue, int maxRows, String dialect) {
+    private static int executeSoftDeleteWithLimit(EntityManager em, String escapedTable, String setClause,
+        String whereClause, Object deletedValue, int maxRows, String dialect) {
         String sql = "UPDATE " + escapedTable + " SET " + setClause + " WHERE " + whereClause + " LIMIT :limit";
         jakarta.persistence.Query query = em.createNativeQuery(sql);
         query.setParameter("deletedValue", deletedValue);
@@ -104,13 +104,13 @@ public final class SoftDeleteBulkExecutor {
         int updated = query.executeUpdate();
         // 当 updated >= maxRows 时，可能还有更多行未被更新，需要额外 COUNT 判断
         if (updated >= maxRows) {
-            long remaining = ((Number) em.createNativeQuery(
-                "SELECT COUNT(*) FROM " + escapedTable + " WHERE " + whereClause)
-                .setParameter("deletedValue", deletedValue).getSingleResult()).longValue();
+            long remaining =
+                ((Number)em.createNativeQuery("SELECT COUNT(*) FROM " + escapedTable + " WHERE " + whereClause)
+                    .setParameter("deletedValue", deletedValue).getSingleResult()).longValue();
             if (remaining > maxRows) {
-                throw new IllegalStateException("softDeleteAll would affect " + remaining
-                    + " rows, exceeding the limit of " + maxRows
-                    + ". Use softDeleteByIds() with explicit ID lists, or increase the limit.");
+                throw new IllegalStateException(
+                    "softDeleteAll would affect " + remaining + " rows, exceeding the limit of " + maxRows
+                        + ". Use softDeleteByIds() with explicit ID lists, or increase the limit.");
             }
         }
         return updated;
@@ -151,8 +151,8 @@ public final class SoftDeleteBulkExecutor {
         }
         // 尝试 Spring TransactionAspectSupport（适用于 Spring 管理的事务）
         try {
-            org.springframework.transaction.interceptor.TransactionAspectSupport
-                .currentTransactionStatus().setRollbackOnly();
+            org.springframework.transaction.interceptor.TransactionAspectSupport.currentTransactionStatus()
+                .setRollbackOnly();
             return true;
         } catch (Exception e) {
             log.debug("Failed to set rollback-only via TransactionAspectSupport: {}", e.getMessage());
@@ -196,15 +196,17 @@ public final class SoftDeleteBulkExecutor {
         if (log.isDebugEnabled()) {
             log.debug("Detected dialect: {}, entity: {}", dialect, entityClass.getSimpleName());
         }
-        String escapedTable = SoftDeleteHelper.quoteIdentifier(SoftDeleteHelper.validateIdentifier(SoftDeleteHelper.resolveTableName(entityClass)), dialect);
-        String escapedColumn =
-            SoftDeleteHelper.quoteIdentifier(SoftDeleteHelper.validateIdentifier(SoftDeleteHelper.resolveColumnName(entityClass, ctx.fieldName())), dialect);
+        String escapedTable = SoftDeleteHelper.quoteIdentifier(
+            SoftDeleteHelper.validateIdentifier(SoftDeleteHelper.resolveTableName(entityClass)), dialect);
+        String escapedColumn = SoftDeleteHelper.quoteIdentifier(
+            SoftDeleteHelper.validateIdentifier(SoftDeleteHelper.resolveColumnName(entityClass, ctx.fieldName())),
+            dialect);
         String timestampColumn = resolveTimestampColumn(entityClass, ctx.annotation());
         String versionColumn = versionInfo != null ? versionInfo.columnName : null;
 
-        String setClause =
-            escapedColumn + " = :deletedValue" + (timestampColumn != null ? ", " + timestampColumn + " = CURRENT_TIMESTAMP" : "")
-                + (versionColumn != null ? ", " + versionColumn + " = " + versionColumn + " + 1" : "");
+        String setClause = escapedColumn + " = :deletedValue"
+            + (timestampColumn != null ? ", " + timestampColumn + " = CURRENT_TIMESTAMP" : "")
+            + (versionColumn != null ? ", " + versionColumn + " = " + versionColumn + " + 1" : "");
 
         int updated;
         Object deletedValue = ctx.resolved().booleanField() ? Boolean.TRUE : ctx.resolved().dbValue();
@@ -214,26 +216,28 @@ public final class SoftDeleteBulkExecutor {
             // ponytail: 对支持 UPDATE LIMIT 的数据库（MySQL、PostgreSQL），直接在 UPDATE 语句中限制行数。
             // 这消除了预检查 COUNT 与 UPDATE 之间的竞态条件窗口——数据库引擎在单条语句内
             // 同时完成"筛选行"和"更新行"，不存在其他事务在此期间修改行数的可能。
-            updated = executeSoftDeleteWithLimit(em, escapedTable, setClause, whereClause,
-                deletedValue, maxRows, dialect);
+            updated =
+                executeSoftDeleteWithLimit(em, escapedTable, setClause, whereClause, deletedValue, maxRows, dialect);
         } else {
             // ponytail: 对不支持 UPDATE LIMIT 的数据库（Oracle、SQL Server），使用预检查 COUNT + 后置验证模式。
             // 预检查与 UPDATE 之间存在竞态窗口，后置检查 + 回滚作为安全网。
             if (maxRows > 0) {
                 long count;
                 if (ctx.resolved().booleanField()) {
-                    count = ((Number) em.createNativeQuery("SELECT COUNT(*) FROM " + escapedTable + " WHERE "
-                        + whereClause).setParameter("deletedValue", Boolean.FALSE).getSingleResult()).longValue();
+                    count =
+                        ((Number)em.createNativeQuery("SELECT COUNT(*) FROM " + escapedTable + " WHERE " + whereClause)
+                            .setParameter("deletedValue", Boolean.FALSE).getSingleResult()).longValue();
                 } else {
                     Object dv = ctx.resolved().dbValue();
-                    count = ((Number) em.createNativeQuery("SELECT COUNT(*) FROM " + escapedTable + " WHERE "
-                        + escapedColumn + " != :deletedValue OR " + escapedColumn + " IS NULL")
+                    count = ((Number)em
+                        .createNativeQuery("SELECT COUNT(*) FROM " + escapedTable + " WHERE " + escapedColumn
+                            + " != :deletedValue OR " + escapedColumn + " IS NULL")
                         .setParameter("deletedValue", dv).getSingleResult()).longValue();
                 }
                 if (count > maxRows) {
-                    throw new IllegalStateException("softDeleteAll would affect " + count
-                        + " rows, exceeding the limit of " + maxRows
-                        + ". Use softDeleteByIds() with explicit ID lists, or increase the limit.");
+                    throw new IllegalStateException(
+                        "softDeleteAll would affect " + count + " rows, exceeding the limit of " + maxRows
+                            + ". Use softDeleteByIds() with explicit ID lists, or increase the limit.");
                 }
             }
             updated = em.createNativeQuery("UPDATE " + escapedTable + " SET " + setClause + " WHERE " + whereClause)
@@ -246,9 +250,9 @@ public final class SoftDeleteBulkExecutor {
                 boolean rolledBack = rollbackCurrentTransaction(em);
                 String rollbackStatus = rolledBack ? "Transaction has been rolled back."
                     : "CRITICAL: Rollback FAILED. The UPDATE may be committed. Data corruption risk.";
-                throw new MyJpaPlusException("softDeleteAll affected " + updated
-                    + " rows, exceeding the pre-check limit of " + maxRows
-                    + ". Concurrent modifications detected. " + rollbackStatus);
+                throw new MyJpaPlusException(
+                    "softDeleteAll affected " + updated + " rows, exceeding the pre-check limit of " + maxRows
+                        + ". Concurrent modifications detected. " + rollbackStatus);
             }
         }
 
@@ -269,10 +273,13 @@ public final class SoftDeleteBulkExecutor {
 
         ExecContext ctx = resolveExecContext(entityClass);
         String dialect = SoftDeleteHelper.detectDialect(em);
-        String escapedTable = SoftDeleteHelper.quoteIdentifier(SoftDeleteHelper.validateIdentifier(SoftDeleteHelper.resolveTableName(entityClass)), dialect);
-        String escapedColumn =
-            SoftDeleteHelper.quoteIdentifier(SoftDeleteHelper.validateIdentifier(SoftDeleteHelper.resolveColumnName(entityClass, ctx.fieldName())), dialect);
-        String escapedIdColumn = SoftDeleteHelper.quoteIdentifier(SoftDeleteHelper.validateIdentifier(SoftDeleteHelper.resolveIdColumnName(entityClass)), dialect);
+        String escapedTable = SoftDeleteHelper.quoteIdentifier(
+            SoftDeleteHelper.validateIdentifier(SoftDeleteHelper.resolveTableName(entityClass)), dialect);
+        String escapedColumn = SoftDeleteHelper.quoteIdentifier(
+            SoftDeleteHelper.validateIdentifier(SoftDeleteHelper.resolveColumnName(entityClass, ctx.fieldName())),
+            dialect);
+        String escapedIdColumn = SoftDeleteHelper.quoteIdentifier(
+            SoftDeleteHelper.validateIdentifier(SoftDeleteHelper.resolveIdColumnName(entityClass)), dialect);
         String timestampColumn = resolveTimestampColumn(entityClass, ctx.annotation());
         String versionColumn = resolveVersionColumn(entityClass);
         String setClause = escapedColumn + " = :deletedValue"
@@ -354,17 +361,17 @@ public final class SoftDeleteBulkExecutor {
             jakarta.persistence.criteria.Root<T> countRoot = countQuery.from(entityClass);
             countQuery.select(cb.count(countRoot));
             if (ctx.resolved().booleanField()) {
-                countQuery.where(cb.or(cb.isNull(countRoot.get(ctx.fieldName())),
-                    cb.equal(countRoot.get(ctx.fieldName()), false)));
+                countQuery.where(
+                    cb.or(cb.isNull(countRoot.get(ctx.fieldName())), cb.equal(countRoot.get(ctx.fieldName()), false)));
             } else {
                 countQuery.where(cb.or(cb.isNull(countRoot.get(ctx.fieldName())),
                     cb.notEqual(countRoot.get(ctx.fieldName()), ctx.resolved().dbValue())));
             }
             long count = em.createQuery(countQuery).getSingleResult();
             if (count > maxRows) {
-                throw new IllegalStateException("softDeleteAllUsingCriteriaUpdate would affect " + count
-                    + " rows, exceeding the limit of " + maxRows
-                    + ". Consider using softDeleteByIdsUsingEntityManager() with explicit ID lists.");
+                throw new IllegalStateException(
+                    "softDeleteAllUsingCriteriaUpdate would affect " + count + " rows, exceeding the limit of "
+                        + maxRows + ". Consider using softDeleteByIdsUsingEntityManager() with explicit ID lists.");
             }
 
             // ponytail: 使用 SELECT ... FOR UPDATE 获取 ID 列表（带悲观锁），然后按 ID 更新。
@@ -376,8 +383,8 @@ public final class SoftDeleteBulkExecutor {
             jakarta.persistence.criteria.Root<T> idRoot = idQuery.from(entityClass);
             idQuery.select(idRoot.get(idFieldName));
             if (ctx.resolved().booleanField()) {
-                idQuery.where(cb.or(cb.isNull(idRoot.get(ctx.fieldName())),
-                    cb.equal(idRoot.get(ctx.fieldName()), false)));
+                idQuery
+                    .where(cb.or(cb.isNull(idRoot.get(ctx.fieldName())), cb.equal(idRoot.get(ctx.fieldName()), false)));
             } else {
                 idQuery.where(cb.or(cb.isNull(idRoot.get(ctx.fieldName())),
                     cb.notEqual(idRoot.get(ctx.fieldName()), ctx.resolved().dbValue())));

@@ -35,7 +35,7 @@ class SqlWithParamsTest {
 
     @Test
     void paramsAllowNullElements() {
-        SqlWithParams sp = new SqlWithParams("INSERT INTO t VALUES (?)", Arrays.asList((Object) null));
+        SqlWithParams sp = new SqlWithParams("INSERT INTO t VALUES (?)", Arrays.asList((Object)null));
         assertNull(sp.params().get(0));
     }
 

@@ -111,9 +111,8 @@ final class KeysetPaginationHelper {
         boolean isFirstPage = lastSortValues == null || lastSortValues.length == 0;
 
         if (!isFirstPage && lastSortValues.length != orders.size()) {
-            throw new IllegalArgumentException(
-                "Cursor array length (" + lastSortValues.length + ") must match sort order count ("
-                    + orders.size() + "). Sort: " + sort);
+            throw new IllegalArgumentException("Cursor array length (" + lastSortValues.length
+                + ") must match sort order count (" + orders.size() + "). Sort: " + sort);
         }
 
         CriteriaBuilder cb = entityManager.getCriteriaBuilder();
@@ -148,13 +147,11 @@ final class KeysetPaginationHelper {
                 jakarta.persistence.criteria.Expression<?> expr = root.get(order.getProperty());
                 jakarta.persistence.criteria.Order sorted;
                 if (order.isAscending()) {
-                    sorted = hcb.sort(
-                        (org.hibernate.query.criteria.JpaExpression<?>)expr, org.hibernate.query.SortDirection.ASCENDING,
-                        nullPrecedence);
+                    sorted = hcb.sort((org.hibernate.query.criteria.JpaExpression<?>)expr,
+                        org.hibernate.query.SortDirection.ASCENDING, nullPrecedence);
                 } else {
-                    sorted = hcb.sort(
-                        (org.hibernate.query.criteria.JpaExpression<?>)expr, org.hibernate.query.SortDirection.DESCENDING,
-                        nullPrecedence);
+                    sorted = hcb.sort((org.hibernate.query.criteria.JpaExpression<?>)expr,
+                        org.hibernate.query.SortDirection.DESCENDING, nullPrecedence);
                 }
                 orderList.add(sorted);
             }

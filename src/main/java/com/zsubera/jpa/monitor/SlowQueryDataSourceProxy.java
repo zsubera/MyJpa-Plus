@@ -4,7 +4,6 @@ import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.lang.reflect.Proxy;
-import java.util.concurrent.atomic.AtomicInteger;
 import javax.sql.DataSource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -245,8 +244,8 @@ public final class SlowQueryDataSourceProxy {
                 return result;
             }
             if ("executeBatch".equals(name)) {
-                String batchSql = batchCount > 0 ? sql + " [batch of " + batchCount + " statements]"
-                    : sql + " [batch (0)]";
+                String batchSql =
+                    batchCount > 0 ? sql + " [batch of " + batchCount + " statements]" : sql + " [batch (0)]";
                 return StatementTimingDelegate.invokeTimed(target, batchSql, slowQueryThresholdMs, method, args);
             }
             return StatementTimingDelegate.invokeTimed(target, sql, slowQueryThresholdMs, method, args);
@@ -368,8 +367,8 @@ public final class SlowQueryDataSourceProxy {
                 return result;
             }
             if ("executeBatch".equals(name)) {
-                String batchSql = batchCount > 0 ? sql + " [batch of " + batchCount + " statements]"
-                    : sql + " [batch (0)]";
+                String batchSql =
+                    batchCount > 0 ? sql + " [batch of " + batchCount + " statements]" : sql + " [batch (0)]";
                 return StatementTimingDelegate.invokeTimed(target, batchSql, slowQueryThresholdMs, method, args);
             }
             return StatementTimingDelegate.invokeTimed(target, sql, slowQueryThresholdMs, method, args);

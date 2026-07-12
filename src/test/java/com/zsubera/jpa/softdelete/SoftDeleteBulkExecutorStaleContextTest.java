@@ -48,8 +48,7 @@ class SoftDeleteBulkExecutorStaleContextTest {
 
         // maxRows=1 but 2 active rows exist → pre-check should throw
         assertThrows(IllegalStateException.class,
-            () -> SoftDeleteBulkExecutor.softDeleteAllUsingCriteriaUpdate(
-                em, SoftDeleteTestEntity.class, true, 1));
+            () -> SoftDeleteBulkExecutor.softDeleteAllUsingCriteriaUpdate(em, SoftDeleteTestEntity.class, true, 1));
 
         // verify neither entity was soft-deleted
         assertEquals(false, em.find(SoftDeleteTestEntity.class, e1.getId()).getDeleted());
@@ -63,8 +62,7 @@ class SoftDeleteBulkExecutorStaleContextTest {
         repository.save(e1);
         repository.flush();
 
-        int count = SoftDeleteBulkExecutor.softDeleteAllUsingCriteriaUpdate(
-            em, SoftDeleteTestEntity.class, true, 10);
+        int count = SoftDeleteBulkExecutor.softDeleteAllUsingCriteriaUpdate(em, SoftDeleteTestEntity.class, true, 10);
         assertEquals(1, count);
         assertTrue(em.find(SoftDeleteTestEntity.class, e1.getId()).getDeleted());
     }

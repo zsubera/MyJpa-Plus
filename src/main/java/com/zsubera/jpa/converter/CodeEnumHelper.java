@@ -61,10 +61,10 @@ public final class CodeEnumHelper {
                         // ponytail: 记录完整异常栈，帮助排查模块访问限制问题
                         // 不静默返回 sentinel — 上游 CodeEnumType 会抛出 "@CodeEnumValue not found"
                         // 误导性错误，此处日志是定位根因的唯一线索
-                        org.slf4j.LoggerFactory.getLogger(CodeEnumHelper.class)
-                            .error("Cannot access @CodeEnumValue field '{}' in enum {}. "
+                        org.slf4j.LoggerFactory.getLogger(CodeEnumHelper.class).error(
+                            "Cannot access @CodeEnumValue field '{}' in enum {}. "
                                 + "Ensure the enum package is opened to the persistence provider.",
-                                field.getName(), cls.getName(), e);
+                            field.getName(), cls.getName(), e);
                         return NO_CODE_FIELD_SENTINEL;
                     }
                 }

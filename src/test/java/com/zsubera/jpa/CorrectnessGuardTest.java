@@ -117,8 +117,8 @@ class CorrectnessGuardTest {
         entityManager.clear();
 
         Specification<SoftDeleteTestEntity> spec = (root, query, cb) -> cb.conjunction();
-        Slice<SoftDeleteTestEntity> result = template.findSlice(
-            SoftDeleteTestEntity.class, spec, PageRequest.of(0, 10, Sort.by("name")));
+        Slice<SoftDeleteTestEntity> result =
+            template.findSlice(SoftDeleteTestEntity.class, spec, PageRequest.of(0, 10, Sort.by("name")));
 
         assertEquals(1, result.getContent().size());
         assertEquals("active", result.getContent().get(0).getName());
@@ -155,8 +155,7 @@ class CorrectnessGuardTest {
     @Test
     @DisplayName("CacheAdapter.close should not throw")
     void cacheAdapter_closeIsSafe() {
-        com.zsubera.jpa.template.CacheAdapter adapter =
-            com.zsubera.jpa.template.CacheAdapter.disabled();
+        com.zsubera.jpa.template.CacheAdapter adapter = com.zsubera.jpa.template.CacheAdapter.disabled();
         assertNotNull(adapter);
         assertDoesNotThrow(adapter::close);
     }
@@ -223,8 +222,7 @@ class CorrectnessGuardTest {
     @Test
     @DisplayName("Large offset should throw ArithmeticException")
     void largeOffset_throwsArithmeticException() {
-        assertThrows(ArithmeticException.class,
-            () -> Math.toIntExact(((long) Integer.MAX_VALUE) + 1));
+        assertThrows(ArithmeticException.class, () -> Math.toIntExact(((long)Integer.MAX_VALUE) + 1));
     }
 
     // ---- 批量软删除不破坏持久化上下文 ----
@@ -238,8 +236,8 @@ class CorrectnessGuardTest {
         repository.save(entity);
         entityManager.flush();
 
-        int count = com.zsubera.jpa.softdelete.SoftDeleteBulkExecutor.softDeleteAllUsingCriteriaUpdate(
-            entityManager, SoftDeleteTestEntity.class, true, 100);
+        int count = com.zsubera.jpa.softdelete.SoftDeleteBulkExecutor.softDeleteAllUsingCriteriaUpdate(entityManager,
+            SoftDeleteTestEntity.class, true, 100);
 
         assertEquals(1, count);
 
@@ -257,18 +255,15 @@ class CorrectnessGuardTest {
         com.zsubera.jpa.update.DeleteSpec<SoftDeleteTestEntity> spec =
             new com.zsubera.jpa.update.DeleteSpec<>(SoftDeleteTestEntity.class);
 
-        assertThrows(IllegalStateException.class,
-            () -> spec.executeLimitedCursor(entityManager, 100, null));
+        assertThrows(IllegalStateException.class, () -> spec.executeLimitedCursor(entityManager, 100, null));
     }
 
     @Test
     @DisplayName("executeLimitedCursor should allow with allowUnconditional")
     void executeLimitedCursor_allowsWithUnconditional() {
         com.zsubera.jpa.update.DeleteSpec<SoftDeleteTestEntity> spec =
-            new com.zsubera.jpa.update.DeleteSpec<>(SoftDeleteTestEntity.class)
-                .allowUnconditional(true);
+            new com.zsubera.jpa.update.DeleteSpec<>(SoftDeleteTestEntity.class).allowUnconditional(true);
 
-        assertDoesNotThrow(
-            () -> spec.executeLimitedCursor(entityManager, 100, null));
+        assertDoesNotThrow(() -> spec.executeLimitedCursor(entityManager, 100, null));
     }
 }

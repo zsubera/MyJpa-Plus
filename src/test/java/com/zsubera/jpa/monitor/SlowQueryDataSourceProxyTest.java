@@ -260,21 +260,28 @@ class SlowQueryDataSourceProxyTest {
         java.sql.Statement stmt = mockStatement();
         Object handler = createStatementTimingHandler(stmt, "SELECT 1", 100000);
 
-        java.lang.reflect.Method invoke = handler.getClass().getMethod("invoke", Object.class, java.lang.reflect.Method.class, Object[].class);
+        java.lang.reflect.Method invoke =
+            handler.getClass().getMethod("invoke", Object.class, java.lang.reflect.Method.class, Object[].class);
 
         // executeUpdate(String) — in timing method list
-        invoke.invoke(handler, null, java.sql.Statement.class.getMethod("executeUpdate", String.class), new Object[] {"UPDATE t"});
+        invoke.invoke(handler, null, java.sql.Statement.class.getMethod("executeUpdate", String.class),
+            new Object[] {"UPDATE t"});
         // executeUpdate(String) again to verify SQL capture
-        invoke.invoke(handler, null, java.sql.Statement.class.getMethod("executeUpdate", String.class), new Object[] {"DELETE FROM t"});
+        invoke.invoke(handler, null, java.sql.Statement.class.getMethod("executeUpdate", String.class),
+            new Object[] {"DELETE FROM t"});
         // execute(String) — returns boolean from mock
-        java.sql.Statement boolTarget = (java.sql.Statement)Proxy.newProxyInstance(java.sql.Statement.class.getClassLoader(),
-            new Class<?>[] {java.sql.Statement.class}, (p, m, a) -> "execute".equals(m.getName()) ? true : null);
+        java.sql.Statement boolTarget =
+            (java.sql.Statement)Proxy.newProxyInstance(java.sql.Statement.class.getClassLoader(),
+                new Class<?>[] {java.sql.Statement.class}, (p, m, a) -> "execute".equals(m.getName()) ? true : null);
         Object handler2 = createStatementTimingHandler(boolTarget, "DELETE FROM t", 100000);
-        Object result = invoke.invoke(handler2, null, java.sql.Statement.class.getMethod("execute", String.class), new Object[] {"DELETE FROM t"});
+        Object result = invoke.invoke(handler2, null, java.sql.Statement.class.getMethod("execute", String.class),
+            new Object[] {"DELETE FROM t"});
         assertEquals(true, result);
         // addBatch(String) + addBatch(String) + clearBatch + executeBatch
-        invoke.invoke(handler, null, java.sql.Statement.class.getMethod("addBatch", String.class), new Object[] {"INSERT INTO t VALUES (1)"});
-        invoke.invoke(handler, null, java.sql.Statement.class.getMethod("addBatch", String.class), new Object[] {"INSERT INTO t VALUES (2)"});
+        invoke.invoke(handler, null, java.sql.Statement.class.getMethod("addBatch", String.class),
+            new Object[] {"INSERT INTO t VALUES (1)"});
+        invoke.invoke(handler, null, java.sql.Statement.class.getMethod("addBatch", String.class),
+            new Object[] {"INSERT INTO t VALUES (2)"});
         invoke.invoke(handler, null, java.sql.Statement.class.getMethod("clearBatch"), null);
         invoke.invoke(handler, null, java.sql.Statement.class.getMethod("executeBatch"), null);
     }
@@ -285,7 +292,8 @@ class SlowQueryDataSourceProxyTest {
         java.lang.reflect.Method executeUpdate = java.sql.Statement.class.getMethod("executeUpdate", String.class);
         Object handler = createStatementTimingHandler(target, "initial", 100000);
 
-        java.lang.reflect.Method invoke = handler.getClass().getMethod("invoke", Object.class, java.lang.reflect.Method.class, Object[].class);
+        java.lang.reflect.Method invoke =
+            handler.getClass().getMethod("invoke", Object.class, java.lang.reflect.Method.class, Object[].class);
         Object result = invoke.invoke(handler, null, executeUpdate, new Object[] {"UPDATE t SET x=1"});
 
         assertEquals(0, result);
@@ -297,7 +305,8 @@ class SlowQueryDataSourceProxyTest {
         java.lang.reflect.Method addBatch = java.sql.Statement.class.getMethod("addBatch", String.class);
         Object handler = createStatementTimingHandler(target, "initial", 100000);
 
-        java.lang.reflect.Method invoke = handler.getClass().getMethod("invoke", Object.class, java.lang.reflect.Method.class, Object[].class);
+        java.lang.reflect.Method invoke =
+            handler.getClass().getMethod("invoke", Object.class, java.lang.reflect.Method.class, Object[].class);
         invoke.invoke(handler, null, addBatch, new Object[] {"INSERT INTO t VALUES (1)"});
         invoke.invoke(handler, null, addBatch, new Object[] {"INSERT INTO t VALUES (2)"});
 
@@ -313,7 +322,8 @@ class SlowQueryDataSourceProxyTest {
         java.lang.reflect.Method clearBatch = java.sql.Statement.class.getMethod("clearBatch");
         Object handler = createStatementTimingHandler(target, "initial", 100000);
 
-        java.lang.reflect.Method invoke = handler.getClass().getMethod("invoke", Object.class, java.lang.reflect.Method.class, Object[].class);
+        java.lang.reflect.Method invoke =
+            handler.getClass().getMethod("invoke", Object.class, java.lang.reflect.Method.class, Object[].class);
         invoke.invoke(handler, null, addBatch, new Object[] {"INSERT INTO t VALUES (1)"});
         invoke.invoke(handler, null, addBatch, new Object[] {"INSERT INTO t VALUES (2)"});
         invoke.invoke(handler, null, clearBatch, null);
@@ -412,7 +422,8 @@ class SlowQueryDataSourceProxyTest {
         java.lang.reflect.Method execute = java.sql.Statement.class.getMethod("execute", String.class);
         Object handler = createStatementTimingHandler(target, "initial", 100000);
 
-        java.lang.reflect.Method invoke = handler.getClass().getMethod("invoke", Object.class, java.lang.reflect.Method.class, Object[].class);
+        java.lang.reflect.Method invoke =
+            handler.getClass().getMethod("invoke", Object.class, java.lang.reflect.Method.class, Object[].class);
         Object result = invoke.invoke(handler, null, execute, new Object[] {"DELETE FROM t"});
 
         assertEquals(true, result);
@@ -477,8 +488,8 @@ class SlowQueryDataSourceProxyTest {
     }
 
     private Connection mockConnectionWithCallableStatement() {
-        return (Connection)Proxy.newProxyInstance(Connection.class.getClassLoader(),
-            new Class<?>[] {Connection.class}, (proxy, method, args) -> {
+        return (Connection)Proxy.newProxyInstance(Connection.class.getClassLoader(), new Class<?>[] {Connection.class},
+            (proxy, method, args) -> {
                 if ("prepareCall".equals(method.getName())) {
                     return mockCallableStatement();
                 }
@@ -490,14 +501,13 @@ class SlowQueryDataSourceProxyTest {
     }
 
     private java.sql.CallableStatement mockCallableStatement() {
-        return (java.sql.CallableStatement)Proxy.newProxyInstance(
-            java.sql.CallableStatement.class.getClassLoader(),
+        return (java.sql.CallableStatement)Proxy.newProxyInstance(java.sql.CallableStatement.class.getClassLoader(),
             new Class<?>[] {java.sql.CallableStatement.class}, (proxy, method, args) -> null);
     }
 
     private Connection mockConnectionWithCreateStatement() {
-        return (Connection)Proxy.newProxyInstance(Connection.class.getClassLoader(),
-            new Class<?>[] {Connection.class}, (proxy, method, args) -> {
+        return (Connection)Proxy.newProxyInstance(Connection.class.getClassLoader(), new Class<?>[] {Connection.class},
+            (proxy, method, args) -> {
                 if ("createStatement".equals(method.getName())) {
                     return mockStatement();
                 }
@@ -526,8 +536,8 @@ class SlowQueryDataSourceProxyTest {
     }
 
     private DataSource mockDataSourceWithPrepareCall() {
-        return (DataSource)Proxy.newProxyInstance(DataSource.class.getClassLoader(),
-            new Class<?>[] {DataSource.class}, (proxy, method, args) -> {
+        return (DataSource)Proxy.newProxyInstance(DataSource.class.getClassLoader(), new Class<?>[] {DataSource.class},
+            (proxy, method, args) -> {
                 if ("getConnection".equals(method.getName())) {
                     return mockConnectionWithCallableStatement();
                 }
@@ -536,8 +546,8 @@ class SlowQueryDataSourceProxyTest {
     }
 
     private DataSource mockDataSourceWithCreateStatement() {
-        return (DataSource)Proxy.newProxyInstance(DataSource.class.getClassLoader(),
-            new Class<?>[] {DataSource.class}, (proxy, method, args) -> {
+        return (DataSource)Proxy.newProxyInstance(DataSource.class.getClassLoader(), new Class<?>[] {DataSource.class},
+            (proxy, method, args) -> {
                 if ("getConnection".equals(method.getName())) {
                     return mockConnectionWithCreateStatement();
                 }
@@ -569,14 +579,17 @@ class SlowQueryDataSourceProxyTest {
     }
 
     private Object createStatementTimingHandler(Object target, String sql, long threshold) throws Exception {
-        Class<?> handlerClass = Class.forName("com.zsubera.jpa.monitor.SlowQueryDataSourceProxy$StatementTimingHandler");
-        java.lang.reflect.Constructor<?> ctor = handlerClass.getDeclaredConstructor(Object.class, String.class, long.class);
+        Class<?> handlerClass =
+            Class.forName("com.zsubera.jpa.monitor.SlowQueryDataSourceProxy$StatementTimingHandler");
+        java.lang.reflect.Constructor<?> ctor =
+            handlerClass.getDeclaredConstructor(Object.class, String.class, long.class);
         ctor.setAccessible(true);
         return ctor.newInstance(target, sql, threshold);
     }
 
     private java.lang.reflect.Method getStatementTimingDelegateMethod() throws Exception {
-        Class<?> delegateClass = Class.forName("com.zsubera.jpa.monitor.SlowQueryDataSourceProxy$StatementTimingDelegate");
+        Class<?> delegateClass =
+            Class.forName("com.zsubera.jpa.monitor.SlowQueryDataSourceProxy$StatementTimingDelegate");
         return delegateClass.getDeclaredMethod("invokeTimed", Object.class, String.class, long.class,
             java.lang.reflect.Method.class, Object[].class);
     }

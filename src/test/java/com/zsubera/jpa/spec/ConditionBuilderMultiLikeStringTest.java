@@ -20,7 +20,7 @@ class ConditionBuilderMultiLikeStringTest {
     @Test
     void nullFieldNamesArrayThrows() {
         QuerySpec<TestEntity> qs = new QuerySpec<>();
-        assertThrows(IllegalArgumentException.class, () -> qs.multiLike("test", (String[]) null));
+        assertThrows(IllegalArgumentException.class, () -> qs.multiLike("test", (String[])null));
     }
 
     @Test
@@ -74,7 +74,7 @@ class ConditionBuilderMultiLikeStringTest {
         qs.multiLike("keyword", "name", "email");
         List<ConditionNode> conditions = qs.conditions();
         assertEquals(1, conditions.size());
-        ConditionNode.MultiLikeNode node = (ConditionNode.MultiLikeNode) conditions.get(0);
+        ConditionNode.MultiLikeNode node = (ConditionNode.MultiLikeNode)conditions.get(0);
         assertEquals(2, node.fieldNames.length);
         assertEquals("name", node.fieldNames[0]);
         assertEquals("email", node.fieldNames[1]);
@@ -117,7 +117,7 @@ class ConditionBuilderMultiLikeStringTest {
     void multiLikeNodeToStringMasksKeyword() {
         QuerySpec<TestEntity> qs = new QuerySpec<>();
         qs.multiLike("secret", "name");
-        ConditionNode.MultiLikeNode node = (ConditionNode.MultiLikeNode) qs.conditions().get(0);
+        ConditionNode.MultiLikeNode node = (ConditionNode.MultiLikeNode)qs.conditions().get(0);
         String str = node.toString();
         assertTrue(str.contains("***("));
         assertFalse(str.contains("secret"));
@@ -127,7 +127,7 @@ class ConditionBuilderMultiLikeStringTest {
     void multiLikeNodeDefensiveCopy() {
         QuerySpec<TestEntity> qs = new QuerySpec<>();
         qs.multiLike("kw", "a", "b");
-        ConditionNode.MultiLikeNode node = (ConditionNode.MultiLikeNode) qs.conditions().get(0);
+        ConditionNode.MultiLikeNode node = (ConditionNode.MultiLikeNode)qs.conditions().get(0);
         // Verify fieldNames are stored (defensive copy tested via NodeInnerClassTest)
         assertEquals(2, node.fieldNames.length);
     }

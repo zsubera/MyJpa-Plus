@@ -86,8 +86,9 @@ public class DeleteSpec<T> extends AbstractBulkOperationSpec<T, DeleteSpec<T>> {
     public int execute(EntityManager em) {
         String softDeleteField = SoftDeleteHelper.findSoftDeleteField(entityClass);
         if (softDeleteField != null) {
-            log.warn("AUDIT: Physical DELETE on @SoftDelete entity {} (field '{}'). "
-                + "Consider using softDeleteAll() or executeAsSoftDelete() instead. Call stack: {}",
+            log.warn(
+                "AUDIT: Physical DELETE on @SoftDelete entity {} (field '{}'). "
+                    + "Consider using softDeleteAll() or executeAsSoftDelete() instead. Call stack: {}",
                 entityClass.getSimpleName(), softDeleteField, AuditUtils.getCallStack());
         }
         return executeWithLimitCheck(em, "DELETE", e -> {
@@ -175,7 +176,8 @@ public class DeleteSpec<T> extends AbstractBulkOperationSpec<T, DeleteSpec<T>> {
                     + "This would soft-delete ALL active rows in the table. "
                     + "If unconditional soft-delete is intended, use allowUnconditional(true).");
             }
-            log.warn("AUDIT: Executing unconditional soft-delete on {} — this will affect ALL active rows! Call stack: {}",
+            log.warn(
+                "AUDIT: Executing unconditional soft-delete on {} — this will affect ALL active rows! Call stack: {}",
                 entityClass.getSimpleName(), AuditUtils.getCallStack());
         } else {
             for (Predicate p : userPredicates) {
@@ -200,16 +202,16 @@ public class DeleteSpec<T> extends AbstractBulkOperationSpec<T, DeleteSpec<T>> {
                     tx.rollback();
                     log.warn("Transaction has been rolled back.");
                 } else {
-                    org.springframework.transaction.interceptor.TransactionAspectSupport
-                        .currentTransactionStatus().setRollbackOnly();
+                    org.springframework.transaction.interceptor.TransactionAspectSupport.currentTransactionStatus()
+                        .setRollbackOnly();
                     log.warn("Transaction marked as rollback-only.");
                 }
             } catch (Exception rollbackEx) {
                 log.error("CRITICAL: Rollback FAILED. The UPDATE may be committed. Data corruption risk.", rollbackEx);
             }
-            throw new IllegalStateException("executeAsSoftDelete affected " + affected
-                + " rows, exceeding the limit of " + limit
-                + ". Concurrent modifications detected. Transaction has been rolled back or marked rollback-only.");
+            throw new IllegalStateException(
+                "executeAsSoftDelete affected " + affected + " rows, exceeding the limit of " + limit
+                    + ". Concurrent modifications detected. Transaction has been rolled back or marked rollback-only.");
         }
         if (affected > 0) {
             em.flush();
@@ -266,15 +268,14 @@ public class DeleteSpec<T> extends AbstractBulkOperationSpec<T, DeleteSpec<T>> {
                     tx.rollback();
                     log.warn("Transaction has been rolled back.");
                 } else {
-                    org.springframework.transaction.interceptor.TransactionAspectSupport
-                        .currentTransactionStatus().setRollbackOnly();
+                    org.springframework.transaction.interceptor.TransactionAspectSupport.currentTransactionStatus()
+                        .setRollbackOnly();
                     log.warn("Transaction marked as rollback-only.");
                 }
             } catch (Exception rollbackEx) {
                 log.error("CRITICAL: Rollback FAILED. The DELETE may be committed. Data corruption risk.", rollbackEx);
             }
-            throw new IllegalStateException("deleteAll affected " + affected
-                + " rows, exceeding the limit of " + limit
+            throw new IllegalStateException("deleteAll affected " + affected + " rows, exceeding the limit of " + limit
                 + ". Concurrent modifications detected. Transaction has been rolled back or marked rollback-only.");
         }
         if (affected > 0) {
@@ -331,7 +332,8 @@ public class DeleteSpec<T> extends AbstractBulkOperationSpec<T, DeleteSpec<T>> {
     /**
      * 执行限制删除并返回游标信息，供批量循环使用。
      */
-    public record BatchCursor(int affected, @Nullable Object lastId) {}
+    public record BatchCursor(int affected, @Nullable Object lastId) {
+    }
 
     public BatchCursor executeLimitedCursor(EntityManager em, int limit, @Nullable Object lastId) {
         if (limit <= 0) {

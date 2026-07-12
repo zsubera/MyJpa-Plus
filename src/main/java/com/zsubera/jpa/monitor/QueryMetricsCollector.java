@@ -2,8 +2,6 @@ package com.zsubera.jpa.monitor;
 
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
-import java.util.HashMap;
-import java.util.Map;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.LongAdder;
 import org.slf4j.Logger;
@@ -55,8 +53,7 @@ public class QueryMetricsCollector {
     private static final QueryMetricsCollector INSTANCE = new QueryMetricsCollector();
 
     /** 查询指标存储。Caffeine 内置 LRU 驱逐，max 4096 条目。 */
-    private final Cache<String, QueryMetrics> metricsMap =
-        Caffeine.newBuilder().maximumSize(4096).build();
+    private final Cache<String, QueryMetrics> metricsMap = Caffeine.newBuilder().maximumSize(4096).build();
 
     /** 慢查询阈值（纳秒），默认 1 秒 */
     private volatile long slowQueryThresholdNanos = 1_000_000_000L;

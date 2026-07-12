@@ -7,7 +7,6 @@ import com.zsubera.jpa.converter.CodeEnumValue;
 import com.zsubera.jpa.converter.EncryptConverter;
 import com.zsubera.jpa.exception.QueryBuildException;
 import com.zsubera.jpa.repository.EntityManagerHelper;
-import com.zsubera.jpa.repository.SoftDeleteContext;
 import com.zsubera.jpa.spec.*;
 import com.zsubera.jpa.template.MyJpaTemplate;
 import jakarta.persistence.EntityManager;
@@ -21,7 +20,6 @@ import org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabas
 import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
-import org.springframework.data.jpa.domain.Specification;
 import org.springframework.test.context.ContextConfiguration;
 
 /**
@@ -86,19 +84,16 @@ class DefectRegressionTest {
     @DisplayName("leftFetchJoin with filter conditions should throw QueryBuildException")
     void leftFetchJoin_withConditions_throws() {
         QuerySpec<TestEntity> qs = new QuerySpec<>();
-        qs.<ParentEntity>leftFetchJoin(TestEntity::getParent,
-            j -> j.eq(ParentEntity::getCategory, "admin"));
+        qs.<ParentEntity>leftFetchJoin(TestEntity::getParent, j -> j.eq(ParentEntity::getCategory, "admin"));
 
-        assertThrows(QueryBuildException.class,
-            () -> template.findAll(TestEntity.class, qs));
+        assertThrows(QueryBuildException.class, () -> template.findAll(TestEntity.class, qs));
     }
 
     @Test
     @DisplayName("INNER fetchJoin with conditions should not throw")
     void fetchJoin_inner_withConditions_ok() {
         QuerySpec<TestEntity> qs = new QuerySpec<>();
-        qs.<ParentEntity>fetchJoin(TestEntity::getParent,
-            j -> j.eq(ParentEntity::getCategory, "admin"));
+        qs.<ParentEntity>fetchJoin(TestEntity::getParent, j -> j.eq(ParentEntity::getCategory, "admin"));
 
         assertDoesNotThrow(() -> qs.toSpecification());
     }
@@ -109,8 +104,7 @@ class DefectRegressionTest {
     @DisplayName("Recursive CTE with UNION SELECT should be allowed")
     void cte_recursive_unionSelect_allowed() {
         assertDoesNotThrow(() -> {
-            CteSpec.withRecursive("cte")
-                .as("SELECT id FROM test_entity UNION SELECT id FROM test_entity");
+            CteSpec.withRecursive("cte").as("SELECT id FROM test_entity UNION SELECT id FROM test_entity");
         });
     }
 
@@ -118,8 +112,7 @@ class DefectRegressionTest {
     @DisplayName("Non-recursive CTE with UNION SELECT should throw in strict mode")
     void cte_nonRecursive_unionSelect_throws() {
         assertThrows(SecurityException.class, () -> {
-            CteSpec.with("cte")
-                .as("SELECT id FROM test_entity UNION SELECT id FROM test_entity");
+            CteSpec.with("cte").as("SELECT id FROM test_entity UNION SELECT id FROM test_entity");
         });
     }
 
@@ -129,8 +122,7 @@ class DefectRegressionTest {
     @DisplayName("CteSpec dollar-quoted string should preserve placeholders")
     void cte_dollarQuoted_preservesPlaceholders() {
         assertDoesNotThrow(() -> {
-            CteSpec.with("cte")
-                .asSafe("SELECT $$value is ?1$$ AS col", "test");
+            CteSpec.with("cte").asSafe("SELECT $$value is ?1$$ AS col", "test");
         });
     }
 
@@ -155,9 +147,8 @@ class DefectRegressionTest {
     @Test
     @DisplayName("StatementTimingHandler.sql field should be volatile")
     void slowQueryProxy_sqlField_volatile() throws Exception {
-        java.lang.reflect.Field sqlField = Class.forName(
-            "com.zsubera.jpa.monitor.SlowQueryDataSourceProxy$StatementTimingHandler")
-            .getDeclaredField("sql");
+        java.lang.reflect.Field sqlField = Class
+            .forName("com.zsubera.jpa.monitor.SlowQueryDataSourceProxy$StatementTimingHandler").getDeclaredField("sql");
         assertTrue(java.lang.reflect.Modifier.isVolatile(sqlField.getModifiers()));
     }
 
@@ -200,8 +191,7 @@ class DefectRegressionTest {
     @DisplayName("CacheEvictionHelper.evictEntityCache should not throw even if L2 unavailable")
     void cacheEvictionHelper_noThrow() {
         assertDoesNotThrow(() -> {
-            com.zsubera.jpa.util.CacheEvictionHelper.evictEntityCache(
-                entityManager, SoftDeleteTestEntity.class);
+            com.zsubera.jpa.util.CacheEvictionHelper.evictEntityCache(entityManager, SoftDeleteTestEntity.class);
         });
     }
 
@@ -239,8 +229,7 @@ class DefectRegressionTest {
     @Test
     @DisplayName("Large offset should throw ArithmeticException")
     void largeOffset_throws() {
-        assertThrows(ArithmeticException.class,
-            () -> Math.toIntExact(((long) Integer.MAX_VALUE) + 1));
+        assertThrows(ArithmeticException.class, () -> Math.toIntExact(((long)Integer.MAX_VALUE) + 1));
     }
 
     // ---- DialectDetector 类加载 ----

@@ -74,7 +74,7 @@ class NodeInnerClassTest {
 
     @Test
     void multiLikeNodeValidConstruction() {
-        ConditionNode.MultiLikeNode node = new ConditionNode.MultiLikeNode("keyword", new String[]{"name", "email"});
+        ConditionNode.MultiLikeNode node = new ConditionNode.MultiLikeNode("keyword", new String[] {"name", "email"});
         assertEquals("keyword", node.keyword);
         assertEquals(2, node.fieldNames.length);
     }
@@ -82,24 +82,22 @@ class NodeInnerClassTest {
     @Test
     void multiLikeNodeNullKeywordThrows() {
         assertThrows(IllegalArgumentException.class,
-            () -> new ConditionNode.MultiLikeNode(null, new String[]{"name"}));
+            () -> new ConditionNode.MultiLikeNode(null, new String[] {"name"}));
     }
 
     @Test
     void multiLikeNodeNullFieldNamesThrows() {
-        assertThrows(IllegalArgumentException.class,
-            () -> new ConditionNode.MultiLikeNode("keyword", null));
+        assertThrows(IllegalArgumentException.class, () -> new ConditionNode.MultiLikeNode("keyword", null));
     }
 
     @Test
     void multiLikeNodeEmptyFieldNamesThrows() {
-        assertThrows(IllegalArgumentException.class,
-            () -> new ConditionNode.MultiLikeNode("keyword", new String[]{}));
+        assertThrows(IllegalArgumentException.class, () -> new ConditionNode.MultiLikeNode("keyword", new String[] {}));
     }
 
     @Test
     void multiLikeNodeDefensiveCopy() {
-        String[] original = new String[]{"name"};
+        String[] original = new String[] {"name"};
         ConditionNode.MultiLikeNode node = new ConditionNode.MultiLikeNode("keyword", original);
         original[0] = "MUTATED";
         assertEquals("name", node.fieldNames[0]);
@@ -107,7 +105,7 @@ class NodeInnerClassTest {
 
     @Test
     void multiLikeNodeToStringMasksKeyword() {
-        ConditionNode.MultiLikeNode node = new ConditionNode.MultiLikeNode("secret", new String[]{"name"});
+        ConditionNode.MultiLikeNode node = new ConditionNode.MultiLikeNode("secret", new String[] {"name"});
         String str = node.toString();
         assertTrue(str.contains("***("));
         assertFalse(str.contains("secret"));
@@ -131,36 +129,34 @@ class NodeInnerClassTest {
 
     @Test
     void collectionNodeNullOpThrows() {
-        assertThrows(IllegalArgumentException.class,
-            () -> new ConditionNode.CollectionNode("items", null));
+        assertThrows(IllegalArgumentException.class, () -> new ConditionNode.CollectionNode("items", null));
     }
 
     // ---- ExistsNode ----
 
     @Test
     void existsNodeValidConstruction() {
-        ConditionNode.ExistsNode<String> node =
-            new ConditionNode.ExistsNode<>(String.class, sub -> {}, false);
+        ConditionNode.ExistsNode<String> node = new ConditionNode.ExistsNode<>(String.class, sub -> {
+        }, false);
         assertEquals(String.class, node.subEntity);
         assertFalse(node.negate);
     }
 
     @Test
     void existsNodeNullSubEntityThrows() {
-        assertThrows(IllegalArgumentException.class,
-            () -> new ConditionNode.ExistsNode<>(null, sub -> {}, false));
+        assertThrows(IllegalArgumentException.class, () -> new ConditionNode.ExistsNode<>(null, sub -> {
+        }, false));
     }
 
     @Test
     void existsNodeNullConfigThrows() {
-        assertThrows(IllegalArgumentException.class,
-            () -> new ConditionNode.ExistsNode<>(String.class, null, false));
+        assertThrows(IllegalArgumentException.class, () -> new ConditionNode.ExistsNode<>(String.class, null, false));
     }
 
     @Test
     void existsNodeToStringShowsNotWhenNegated() {
-        ConditionNode.ExistsNode<String> node =
-            new ConditionNode.ExistsNode<>(String.class, sub -> {}, true);
+        ConditionNode.ExistsNode<String> node = new ConditionNode.ExistsNode<>(String.class, sub -> {
+        }, true);
         assertTrue(node.toString().contains("NOT"));
     }
 
@@ -168,8 +164,8 @@ class NodeInnerClassTest {
 
     @Test
     void inSubQueryNodeValidConstruction() {
-        ConditionNode.InSubQueryNode<String> node =
-            new ConditionNode.InSubQueryNode<>("fieldId", String.class, sub -> {}, false);
+        ConditionNode.InSubQueryNode<String> node = new ConditionNode.InSubQueryNode<>("fieldId", String.class, sub -> {
+        }, false);
         assertEquals("fieldId", node.outerFieldName);
         assertEquals(String.class, node.subEntity);
         assertFalse(node.negate);
@@ -178,13 +174,14 @@ class NodeInnerClassTest {
     @Test
     void inSubQueryNodeNullOuterFieldThrows() {
         assertThrows(IllegalArgumentException.class,
-            () -> new ConditionNode.InSubQueryNode<>(null, String.class, sub -> {}, false));
+            () -> new ConditionNode.InSubQueryNode<>(null, String.class, sub -> {
+            }, false));
     }
 
     @Test
     void inSubQueryNodeNullSubEntityThrows() {
-        assertThrows(IllegalArgumentException.class,
-            () -> new ConditionNode.InSubQueryNode<>("field", null, sub -> {}, false));
+        assertThrows(IllegalArgumentException.class, () -> new ConditionNode.InSubQueryNode<>("field", null, sub -> {
+        }, false));
     }
 
     @Test
@@ -204,8 +201,7 @@ class NodeInnerClassTest {
 
     @Test
     void rawNodeNullFnThrows() {
-        assertThrows(IllegalArgumentException.class,
-            () -> ConditionNode.ofInternalPredicate(null));
+        assertThrows(IllegalArgumentException.class, () -> ConditionNode.ofInternalPredicate(null));
     }
 
     // ---- NegateNode ----
@@ -247,8 +243,7 @@ class NodeInnerClassTest {
 
     @Test
     void joinNodeNullJoinTypeThrows() {
-        assertThrows(IllegalArgumentException.class,
-            () -> new ConditionNode.JoinNode("parent", null));
+        assertThrows(IllegalArgumentException.class, () -> new ConditionNode.JoinNode("parent", null));
     }
 
     @Test

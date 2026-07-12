@@ -8,10 +8,8 @@ import com.zsubera.jpa.util.SampledEvictionCache;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.EntityTransaction;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -304,8 +302,8 @@ public class MergeSpec<T> {
 
     private int executeWith(EntityManager em, T entityToMerge, DialectStrategy strategy,
         List<String> preComputedConflictFields, java.util.Set<String> preComputedConflictSet) {
-        SqlWithParams sqlWithParams = buildSqlFor(em, entityToMerge, strategy, preComputedConflictFields,
-            preComputedConflictSet);
+        SqlWithParams sqlWithParams =
+            buildSqlFor(em, entityToMerge, strategy, preComputedConflictFields, preComputedConflictSet);
         if (log.isTraceEnabled()) {
             log.trace("Executing UPSERT SQL: {}", sqlWithParams.sql());
         }

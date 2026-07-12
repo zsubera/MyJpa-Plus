@@ -348,7 +348,8 @@ public class CteSpec {
                         }
                         inString = !inString;
                     }
-                    if (!inString && !inDollarQuote && c == '?' && rewrittenSql.regionMatches(j, paramStr, 0, paramStr.length())) {
+                    if (!inString && !inDollarQuote && c == '?'
+                        && rewrittenSql.regionMatches(j, paramStr, 0, paramStr.length())) {
                         sb.append(':').append(namedParam);
                         j += paramStr.length() - 1;
                     } else {
@@ -726,9 +727,8 @@ public class CteSpec {
         Pattern.compile("\\bWAITFOR\\s+DELAY\\b", Pattern.CASE_INSENSITIVE);
 
     /** INTO OUTFILE / LOAD DATA 文件操作检测模式（MySQL）。 */
-    private static final Pattern FILE_OPERATION_PATTERN =
-        Pattern.compile("\\bINTO\\s+(OUTFILE|DUMPFILE)\\b|\\bLOAD\\s+DATA\\s+(INFILE|LOCAL)\\b",
-            Pattern.CASE_INSENSITIVE);
+    private static final Pattern FILE_OPERATION_PATTERN = Pattern
+        .compile("\\bINTO\\s+(OUTFILE|DUMPFILE)\\b|\\bLOAD\\s+DATA\\s+(INFILE|LOCAL)\\b", Pattern.CASE_INSENSITIVE);
 
     /**
      * 检测 SQL 中的潜在危险模式。默认仅记录日志，strictMode=true 时抛出异常。
@@ -789,9 +789,9 @@ public class CteSpec {
         }
         // 非递归 CTE 中 UNION ALL SELECT 不是合法语法，视为注入尝试
         if (!recursive && UNION_ALL_SELECT_PATTERN.matcher(sql).find()) {
-            String message = "SECURITY: " + context
-                + " SQL contains UNION ALL SELECT in non-recursive CTE (not valid syntax). "
-                + "Ensure this is intentional and not user input. SQL: " + truncated;
+            String message =
+                "SECURITY: " + context + " SQL contains UNION ALL SELECT in non-recursive CTE (not valid syntax). "
+                    + "Ensure this is intentional and not user input. SQL: " + truncated;
             if (strictMode) {
                 throw new SecurityException(message);
             }
@@ -808,8 +808,8 @@ public class CteSpec {
         }
         // 检测 INTO OUTFILE / LOAD DATA 文件操作（MySQL）
         if (FILE_OPERATION_PATTERN.matcher(sql).find()) {
-            String message = "SECURITY: " + context
-                + " SQL contains file operation pattern (INTO OUTFILE/LOAD DATA). " + "SQL: " + truncated;
+            String message = "SECURITY: " + context + " SQL contains file operation pattern (INTO OUTFILE/LOAD DATA). "
+                + "SQL: " + truncated;
             if (strictMode) {
                 throw new SecurityException(message);
             }

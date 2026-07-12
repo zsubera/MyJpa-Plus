@@ -397,15 +397,14 @@ public class UpdateSpec<T> extends AbstractBulkOperationSpec<T, UpdateSpec<T>> {
                     tx.rollback();
                     log.warn("Transaction has been rolled back.");
                 } else {
-                    org.springframework.transaction.interceptor.TransactionAspectSupport
-                        .currentTransactionStatus().setRollbackOnly();
+                    org.springframework.transaction.interceptor.TransactionAspectSupport.currentTransactionStatus()
+                        .setRollbackOnly();
                     log.warn("Transaction marked as rollback-only.");
                 }
             } catch (Exception rollbackEx) {
                 log.error("CRITICAL: Rollback FAILED. The UPDATE may be committed. Data corruption risk.", rollbackEx);
             }
-            throw new IllegalStateException("updateAll affected " + affected
-                + " rows, exceeding the limit of " + limit
+            throw new IllegalStateException("updateAll affected " + affected + " rows, exceeding the limit of " + limit
                 + ". Concurrent modifications detected. Transaction has been rolled back or marked rollback-only.");
         }
         if (affected > 0) {
@@ -475,7 +474,8 @@ public class UpdateSpec<T> extends AbstractBulkOperationSpec<T, UpdateSpec<T>> {
      *
      * @return 包含 affected 行数和最后处理 ID 的游标结果
      */
-    public record BatchCursor(int affected, @Nullable Object lastId) {}
+    public record BatchCursor(int affected, @Nullable Object lastId) {
+    }
 
     public BatchCursor executeLimitedCursor(EntityManager em, int limit, @Nullable Object lastId) {
         if (setClauses.isEmpty() && expressionSetClauses.isEmpty()) {

@@ -20,7 +20,6 @@ import jakarta.persistence.TypedQuery;
 import jakarta.persistence.criteria.CriteriaBuilder;
 import jakarta.persistence.criteria.CriteriaQuery;
 import jakarta.persistence.criteria.Root;
-import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
@@ -403,8 +402,8 @@ public class MyJpaTemplate implements MyJpaTemplateOperations {
         String softDeletePart = SoftDeleteContext.isIgnoreSoftDelete() ? "SD ignored" : "SD active";
         // Include maxResults in cache key to prevent returning wrong-sized results when GlobalConfig changes
         int maxResultsLimit = resolveMaxResults();
-        String cacheKey = entityClass.getName() + ":" + spec.cacheKey() + ":" + sortPart + ":" + softDeletePart
-            + ":mr=" + maxResultsLimit;
+        String cacheKey = entityClass.getName() + ":" + spec.cacheKey() + ":" + sortPart + ":" + softDeletePart + ":mr="
+            + maxResultsLimit;
         List<T> cached = cacheAdapter.get(cacheKey);
         if (cached != null) {
             log.debug("Cache hit for key: {}", cacheKey);
@@ -726,8 +725,8 @@ public class MyJpaTemplate implements MyJpaTemplateOperations {
             Specification<T> sdSpec = SoftDeleteHelper.isNotDeleted(entityClass);
             dataSpec = spec != null ? spec.and(sdSpec) : sdSpec;
         }
-        TypedQuery<T> query = QueryBuildHelper.buildSpecificationQuery(entityManager, entityClass, dataSpec, null,
-            resolveMaxResults());
+        TypedQuery<T> query =
+            QueryBuildHelper.buildSpecificationQuery(entityManager, entityClass, dataSpec, null, resolveMaxResults());
         spec.applyQuerySettings(query);
         return query.getResultList();
     }
@@ -1132,7 +1131,8 @@ public class MyJpaTemplate implements MyJpaTemplateOperations {
 
         // 计数查询 - 使用与数据查询相同的过滤条件，确保 totalElements 与返回的数据一致
         long total = QueryBuildHelper.executeCountQuery(entityManager, entityClass, dataSpec);
-        TypedQuery<T> query = buildSpecificationQuery(entityClass, dataSpec, pageable.getSort(), pageable.getPageSize());
+        TypedQuery<T> query =
+            buildSpecificationQuery(entityClass, dataSpec, pageable.getSort(), pageable.getPageSize());
         try {
             query.setFirstResult(Math.toIntExact(pageable.getOffset()));
         } catch (ArithmeticException e) {
@@ -1491,15 +1491,15 @@ public class MyJpaTemplate implements MyJpaTemplateOperations {
             throw new IllegalArgumentException("ids must not be null or empty");
         }
         String idFieldName = EntityClassResolver.resolveIdFieldName(entityClass);
-        Specification<T> idSpec = (root, query, cb) ->
-            com.zsubera.jpa.util.InClauseBuilder.in(cb, root.get(idFieldName), ids);
+        Specification<T> idSpec =
+            (root, query, cb) -> com.zsubera.jpa.util.InClauseBuilder.in(cb, root.get(idFieldName), ids);
         Specification<T> dataSpec = idSpec;
         if (shouldApplySoftDeleteFilter()) {
             Specification<T> sdSpec = SoftDeleteHelper.isNotDeleted(entityClass);
             dataSpec = idSpec.and(sdSpec);
         }
-        TypedQuery<T> query = QueryBuildHelper.buildSpecificationQuery(
-            entityManager, entityClass, dataSpec, null, resolveMaxResults());
+        TypedQuery<T> query =
+            QueryBuildHelper.buildSpecificationQuery(entityManager, entityClass, dataSpec, null, resolveMaxResults());
         return query.getResultList();
     }
 

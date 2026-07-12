@@ -68,7 +68,8 @@ abstract class AbstractDialectStrategy implements DialectStrategy {
             String part = dot >= 0 ? identifier.substring(from, dot) : identifier.substring(from);
             sb.append(part.replace(closeQuoteStr, escapeSeq));
             sb.append(closeQuote);
-            if (dot < 0) break;
+            if (dot < 0)
+                break;
             sb.append('.');
             from = dot + 1;
         }

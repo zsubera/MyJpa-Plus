@@ -2,7 +2,6 @@ package com.zsubera.jpa.util;
 
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
-import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -56,9 +55,7 @@ public class SampledEvictionCache<K, V> {
     }
 
     private static <K, V> Cache<K, V> build(int maxSize) {
-        return Caffeine.newBuilder()
-            .maximumSize(maxSize)
-            .build();
+        return Caffeine.newBuilder().maximumSize(maxSize).build();
     }
 
     @SuppressWarnings("unchecked")
@@ -81,7 +78,7 @@ public class SampledEvictionCache<K, V> {
     }
 
     public int size() {
-        return (int) delegate.estimatedSize();
+        return (int)delegate.estimatedSize();
     }
 
     /**
@@ -102,9 +99,10 @@ public class SampledEvictionCache<K, V> {
         this.delegate = newDelegate;
         this.maxSize = maxSize;
         if (previousSize > 0) {
-            log.warn("Cache resized from {} to {} entries — {} entries dropped. "
-                + "setMaxSize() should only be called during startup initialization.", previousSize, maxSize,
-                previousSize);
+            log.warn(
+                "Cache resized from {} to {} entries — {} entries dropped. "
+                    + "setMaxSize() should only be called during startup initialization.",
+                previousSize, maxSize, previousSize);
         }
     }
 

@@ -48,15 +48,13 @@ class QualityRegressionTest {
     @Test
     @DisplayName("SqlSanitizer should handle normal strings")
     void sqlSanitizer_normalStrings() {
-        assertEquals("SELECT * FROM t WHERE c = ?",
-            SqlSanitizer.sanitize("SELECT * FROM t WHERE c = 'hello'"));
+        assertEquals("SELECT * FROM t WHERE c = ?", SqlSanitizer.sanitize("SELECT * FROM t WHERE c = 'hello'"));
     }
 
     @Test
     @DisplayName("SqlSanitizer should handle escaped quotes")
     void sqlSanitizer_escapedQuotes() {
-        assertEquals("SELECT * FROM t WHERE c = ?",
-            SqlSanitizer.sanitize("SELECT * FROM t WHERE c = 'it''s'"));
+        assertEquals("SELECT * FROM t WHERE c = ?", SqlSanitizer.sanitize("SELECT * FROM t WHERE c = 'it''s'"));
     }
 
     // ---- FuncNode 构造函数白名单 ----
@@ -64,12 +62,12 @@ class QualityRegressionTest {
     @Test
     @DisplayName("FuncNode constructor should reject non-whitelisted functions")
     void funcNode_rejectsNonWhitelisted() {
-        java.lang.reflect.InvocationTargetException ex = assertThrows(
-            java.lang.reflect.InvocationTargetException.class, () -> {
+        java.lang.reflect.InvocationTargetException ex =
+            assertThrows(java.lang.reflect.InvocationTargetException.class, () -> {
                 java.lang.reflect.Method ofMethod =
                     ConditionNode.FuncNode.class.getDeclaredMethod("of", String.class, Object[].class);
                 ofMethod.setAccessible(true);
-                ofMethod.invoke(null, "pg_sleep", new Object[]{1});
+                ofMethod.invoke(null, "pg_sleep", new Object[] {1});
             });
         assertInstanceOf(com.zsubera.jpa.exception.SecurityViolationException.class, ex.getCause());
     }
@@ -81,7 +79,7 @@ class QualityRegressionTest {
             java.lang.reflect.Constructor<ConditionNode.FuncNode> ctor =
                 ConditionNode.FuncNode.class.getDeclaredConstructor(String.class, Object[].class);
             ctor.setAccessible(true);
-            ctor.newInstance("COALESCE", new Object[]{"a", "b"});
+            ctor.newInstance("COALESCE", new Object[] {"a", "b"});
         });
     }
 
@@ -90,8 +88,8 @@ class QualityRegressionTest {
     @Test
     @DisplayName("InClauseBuilder Config should accept valid values")
     void inClauseBuilder_validConfig() {
-        InClauseBuilder.Config original = new InClauseBuilder.Config(
-            InClauseBuilder.getMaxInClauseSize(), InClauseBuilder.getHardLimit());
+        InClauseBuilder.Config original =
+            new InClauseBuilder.Config(InClauseBuilder.getMaxInClauseSize(), InClauseBuilder.getHardLimit());
 
         try {
             InClauseBuilder.Config config = new InClauseBuilder.Config(500, 1000);
@@ -106,8 +104,7 @@ class QualityRegressionTest {
     @Test
     @DisplayName("InClauseBuilder Config should reject values above limit")
     void inClauseBuilder_rejectsOverLimit() {
-        assertThrows(IllegalArgumentException.class,
-            () -> new InClauseBuilder.Config(200000, 200000));
+        assertThrows(IllegalArgumentException.class, () -> new InClauseBuilder.Config(200000, 200000));
     }
 
     // ---- BulkTransactionHelper 类加载 ----
@@ -135,12 +132,11 @@ class QualityRegressionTest {
     void decrypt_errorMessage_hint() {
         EncryptConverter converter = new EncryptConverter();
 
-        MyJpaPlusException ex = assertThrows(MyJpaPlusException.class,
-            () -> converter.convertToEntityAttribute("not-encrypted-data"));
+        MyJpaPlusException ex =
+            assertThrows(MyJpaPlusException.class, () -> converter.convertToEntityAttribute("not-encrypted-data"));
 
         String msg = ex.getMessage().toLowerCase();
-        assertTrue(msg.contains("not be encrypted") || msg.contains("plain text")
-            || msg.contains("corrupted"));
+        assertTrue(msg.contains("not be encrypted") || msg.contains("plain text") || msg.contains("corrupted"));
     }
 
     // ---- EncryptionKeyManager dev salt ----
@@ -179,8 +175,7 @@ class QualityRegressionTest {
     @DisplayName("Consecutive or() calls should merge correctly")
     void orMerge_consecutiveOr() {
         QuerySpec<TestEntity> qs = new QuerySpec<>();
-        qs.or(o -> o.eq(TestEntity::getStatus, 1))
-           .or(o -> o.eq(TestEntity::getStatus, 2));
+        qs.or(o -> o.eq(TestEntity::getStatus, 1)).or(o -> o.eq(TestEntity::getStatus, 2));
 
         assertDoesNotThrow(() -> qs.toSpecification());
     }
@@ -194,10 +189,8 @@ class QualityRegressionTest {
         System.setProperty("myjpa.encrypt.salt", "test-salt");
 
         Thread[] threads = new Thread[10];
-        java.util.concurrent.CountDownLatch latch =
-            new java.util.concurrent.CountDownLatch(1);
-        java.util.concurrent.atomic.AtomicInteger errors =
-            new java.util.concurrent.atomic.AtomicInteger(0);
+        java.util.concurrent.CountDownLatch latch = new java.util.concurrent.CountDownLatch(1);
+        java.util.concurrent.atomic.AtomicInteger errors = new java.util.concurrent.atomic.AtomicInteger(0);
 
         for (int i = 0; i < threads.length; i++) {
             threads[i] = new Thread(() -> {

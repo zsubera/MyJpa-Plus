@@ -37,8 +37,8 @@ public final class SqlSanitizer {
     private SqlSanitizer() {}
 
     /** 所有字符串字面量模式的组合（一次遍历替代10次 replaceAll）。顺序敏感：特殊引号在前。 */
-    private static final Pattern LITERAL_PATTERN = Pattern.compile(
-        "\\$(\\w*)\\$(?s:.{0,4096}?)\\$\\1\\$" // PostgreSQL 美元引用字符串
+    private static final Pattern LITERAL_PATTERN = Pattern.compile("\\$(\\w*)\\$(?s:.{0,4096}?)\\$\\1\\$" // PostgreSQL
+                                                                                                          // 美元引用字符串
         + "|q'\\[[\\s\\S]+?\\]'|q'\\([\\s\\S]+?\\)'|q'\\{[\\s\\S]+?\\}'|q'<[\\s\\S]+?>'" // Oracle q'[...]' 引用
         + "|q'([^\\[({<\\s'\\\\])[\\s\\S]{0,4096}?\\2'" // Oracle q'x...x' 引用
         + "|X'[^'\\\\]*(?:\\\\.[^'\\\\]*|'')*[^'\\\\]*'" // 十六进制字面量

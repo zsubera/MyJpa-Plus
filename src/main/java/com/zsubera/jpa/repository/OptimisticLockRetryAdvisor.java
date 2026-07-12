@@ -137,8 +137,7 @@ public class OptimisticLockRetryAdvisor {
         if (transactionManager != null) {
             DefaultTransactionDefinition def = new DefaultTransactionDefinition();
             // 首次尝试加入现有事务，重试时创建新事务
-            def.setPropagationBehavior(attempt == 0
-                ? TransactionDefinition.PROPAGATION_REQUIRED
+            def.setPropagationBehavior(attempt == 0 ? TransactionDefinition.PROPAGATION_REQUIRED
                 : TransactionDefinition.PROPAGATION_REQUIRES_NEW);
             TransactionStatus status = transactionManager.getTransaction(def);
             try {

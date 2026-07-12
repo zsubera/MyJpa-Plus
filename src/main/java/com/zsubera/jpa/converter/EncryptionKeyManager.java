@@ -168,8 +168,9 @@ final class EncryptionKeyManager {
             }
             String resolved = (version != null && !version.isEmpty()) ? version : "v1";
             if (snap.version != null && !snap.version.equals(resolved)) {
-                log.warn("Encryption key version changed from '{}' to '{}'. "
-                    + "Data encrypted with version '{}' will use the new key after cache refresh.",
+                log.warn(
+                    "Encryption key version changed from '{}' to '{}'. "
+                        + "Data encrypted with version '{}' will use the new key after cache refresh.",
                     snap.version, resolved, snap.version);
             }
             keyVersionSnapshot = new KeyVersionSnapshot(resolved, now);
@@ -186,7 +187,8 @@ final class EncryptionKeyManager {
      */
     static void setKeyVersionRefreshInterval(long intervalMs) {
         if (intervalMs < 1_000) {
-            throw new IllegalArgumentException("Key version refresh interval must be at least 1000ms, got: " + intervalMs);
+            throw new IllegalArgumentException(
+                "Key version refresh interval must be at least 1000ms, got: " + intervalMs);
         }
         keyVersionRefreshIntervalMs = intervalMs;
         log.info("Key version refresh interval set to {}ms", intervalMs);
@@ -291,8 +293,7 @@ final class EncryptionKeyManager {
     private static final AtomicReference<byte[]> CACHED_SALT_REF = new AtomicReference<>();
 
     /** 开发环境专用回退盐值。仅在 skipSaltCheck=true 且非生产环境时使用。 */
-    private static final byte[] DEV_SALT_FALLBACK =
-        "myjpa-plus-dev-salt-fallback".getBytes(StandardCharsets.UTF_8);
+    private static final byte[] DEV_SALT_FALLBACK = "myjpa-plus-dev-salt-fallback".getBytes(StandardCharsets.UTF_8);
 
     private static byte[] getSalt() {
         byte[] cached = CACHED_SALT_REF.get();
@@ -380,9 +381,8 @@ final class EncryptionKeyManager {
                     int byteLen = rawValue.getBytes(StandardCharsets.UTF_8).length;
                     if (byteLen < MIN_KEY_LENGTH) {
                         String version = entry.substring(0, colonIdx).trim();
-                        throw new MyJpaPlusException(
-                            "Encryption key for version '" + version + "' must be at least "
-                                + MIN_KEY_LENGTH + " bytes (UTF-8 encoded). Current: " + byteLen + " bytes.");
+                        throw new MyJpaPlusException("Encryption key for version '" + version + "' must be at least "
+                            + MIN_KEY_LENGTH + " bytes (UTF-8 encoded). Current: " + byteLen + " bytes.");
                     }
                 }
             }

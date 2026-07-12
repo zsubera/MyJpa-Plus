@@ -354,19 +354,16 @@ public final class EntityCodeGenerator {
         return Character.toUpperCase(name.charAt(0)) + name.substring(1);
     }
 
-    private static final java.util.Map<String, String> TYPE_IMPORTS = java.util.Map.ofEntries(
-        java.util.Map.entry("BigDecimal", "java.math.BigDecimal"),
-        java.util.Map.entry("BigInteger", "java.math.BigInteger"),
-        java.util.Map.entry("LocalDate", "java.time.LocalDate"),
-        java.util.Map.entry("LocalDateTime", "java.time.LocalDateTime"),
-        java.util.Map.entry("LocalTime", "java.time.LocalTime"),
-        java.util.Map.entry("Instant", "java.time.Instant"),
-        java.util.Map.entry("Date", "java.util.Date"),
-        java.util.Map.entry("UUID", "java.util.UUID"),
-        java.util.Map.entry("URI", "java.net.URI"),
-        java.util.Map.entry("URL", "java.net.URL"),
-        java.util.Map.entry("byte[]", "byte[]"),
-        java.util.Map.entry("Byte[]", "java.lang.Byte[]"));
+    private static final java.util.Map<String,
+        String> TYPE_IMPORTS = java.util.Map.ofEntries(java.util.Map.entry("BigDecimal", "java.math.BigDecimal"),
+            java.util.Map.entry("BigInteger", "java.math.BigInteger"),
+            java.util.Map.entry("LocalDate", "java.time.LocalDate"),
+            java.util.Map.entry("LocalDateTime", "java.time.LocalDateTime"),
+            java.util.Map.entry("LocalTime", "java.time.LocalTime"),
+            java.util.Map.entry("Instant", "java.time.Instant"), java.util.Map.entry("Date", "java.util.Date"),
+            java.util.Map.entry("UUID", "java.util.UUID"), java.util.Map.entry("URI", "java.net.URI"),
+            java.util.Map.entry("URL", "java.net.URL"), java.util.Map.entry("byte[]", "byte[]"),
+            java.util.Map.entry("Byte[]", "java.lang.Byte[]"));
 
     private static void appendExtraImports(StringBuilder sb, List<ColumnDef> columns) {
         java.util.Set<String> imports = new java.util.LinkedHashSet<>();

@@ -17,7 +17,6 @@ import java.util.List;
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentMap;
 import org.slf4j.Logger;
 import org.springframework.data.jpa.domain.Specification;
 
@@ -91,8 +90,7 @@ public final class SoftDeleteHelper {
      * 缓存: entityClass -> 字段名（或"无字段"的哨兵值）。
      * 使用弱引用键允许类加载器在 OSGi/热重载场景中被 GC 回收。
      */
-    private static final Cache<Class<?>, String> FIELD_CACHE =
-        Caffeine.newBuilder().weakKeys().build();
+    private static final Cache<Class<?>, String> FIELD_CACHE = Caffeine.newBuilder().weakKeys().build();
 
     /**
      * 缓存: entityClass -> isNotDeleted Specification。
@@ -113,8 +111,7 @@ public final class SoftDeleteHelper {
         Caffeine.newBuilder().weakKeys().build();
 
     /** 缓存: entityClass -> SoftDelete annotation，避免每次查询重复反射查找。 */
-    private static final Cache<Class<?>, SoftDelete> ANNOTATION_CACHE =
-        Caffeine.newBuilder().weakKeys().build();
+    private static final Cache<Class<?>, SoftDelete> ANNOTATION_CACHE = Caffeine.newBuilder().weakKeys().build();
 
     /** 列名/ID列名缓存最大条目数，防止动态代理类名导致无限增长。 */
     private static final int MAX_NAME_CACHE_SIZE = 4096;
@@ -743,8 +740,7 @@ public final class SoftDeleteHelper {
                 return false;
             }
             // ponytail: 缓存 SoftDelete 注解，避免高频率调用时重复反射
-            SoftDelete annotation =
-                ANNOTATION_CACHE.get(entityClass, cls -> field.getAnnotation(SoftDelete.class));
+            SoftDelete annotation = ANNOTATION_CACHE.get(entityClass, cls -> field.getAnnotation(SoftDelete.class));
             if (annotation == null) {
                 // ponytail: 防御性检查——弱引用缓存驱逐后重建时 annotation 可能为 null。
                 // 此时回退到 Boolean 类型判断（不依赖 annotation），避免 NPE 导致整个查询失败。
@@ -779,8 +775,7 @@ public final class SoftDeleteHelper {
     }
 
     /** 字段缓存，使用弱引用防止类加载器泄漏（热部署/OSGi 场景） */
-    private static final Cache<Class<?>, java.util.List<Field>> FIELDS_CACHE =
-        Caffeine.newBuilder().weakKeys().build();
+    private static final Cache<Class<?>, java.util.List<Field>> FIELDS_CACHE = Caffeine.newBuilder().weakKeys().build();
 
     private static List<Field> getAllFields(Class<?> clazz) {
         return FIELDS_CACHE.get(clazz, c -> {

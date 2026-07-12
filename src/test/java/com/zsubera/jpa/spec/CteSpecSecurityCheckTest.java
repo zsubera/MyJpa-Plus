@@ -277,8 +277,7 @@ class CteSpecSecurityCheckTest {
 
     @Test
     void as_withCallKeyword_throwsSecurityException() {
-        assertThrows(SecurityException.class,
-            () -> CteSpec.with("ct").as("SELECT * FROM (CALL evil_proc()) sub"));
+        assertThrows(SecurityException.class, () -> CteSpec.with("ct").as("SELECT * FROM (CALL evil_proc()) sub"));
     }
 
     @Test

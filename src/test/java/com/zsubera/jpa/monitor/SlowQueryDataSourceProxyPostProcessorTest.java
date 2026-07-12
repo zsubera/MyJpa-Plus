@@ -15,7 +15,7 @@ class SlowQueryDataSourceProxyPostProcessorTest {
         Object result = processor.postProcessAfterInitialization(raw, "myDataSource");
         assertNotSame(raw, result);
         assertTrue(result instanceof DataSource);
-        assertTrue(SlowQueryDataSourceProxy.isWrapped((DataSource) result));
+        assertTrue(SlowQueryDataSourceProxy.isWrapped((DataSource)result));
     }
 
     @Test
@@ -74,7 +74,7 @@ class SlowQueryDataSourceProxyPostProcessorTest {
         DataSource raw = mockDataSource();
         Object result = processor.postProcessAfterInitialization(raw, "analyticsDataSource");
         assertNotSame(raw, result);
-        assertTrue(SlowQueryDataSourceProxy.isWrapped((DataSource) result));
+        assertTrue(SlowQueryDataSourceProxy.isWrapped((DataSource)result));
     }
 
     @Test
@@ -82,15 +82,13 @@ class SlowQueryDataSourceProxyPostProcessorTest {
         long threshold = 3000L;
         var processor = new SlowQueryDataSourceProxyPostProcessor(threshold);
         DataSource raw = mockDataSource();
-        DataSource wrapped = (DataSource) processor.postProcessAfterInitialization(raw, "appDs");
+        DataSource wrapped = (DataSource)processor.postProcessAfterInitialization(raw, "appDs");
         assertNotNull(wrapped);
         assertTrue(SlowQueryDataSourceProxy.isWrapped(wrapped));
     }
 
     private static DataSource mockDataSource() {
-        return (DataSource) Proxy.newProxyInstance(
-            DataSource.class.getClassLoader(),
-            new Class<?>[] {DataSource.class},
+        return (DataSource)Proxy.newProxyInstance(DataSource.class.getClassLoader(), new Class<?>[] {DataSource.class},
             (proxy, method, args) -> null);
     }
 }

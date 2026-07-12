@@ -200,17 +200,23 @@ final class CacheKeyBuilder {
         if (value instanceof String s) {
             sb.append("S[").append(s.length()).append(":").append(Long.toUnsignedString(hash64(s))).append("]");
         } else if (value instanceof Object[] arr) {
-            sb.append("A[").append(arr.length).append(":").append(Long.toUnsignedString(hashObjectArray(arr))).append("]");
+            sb.append("A[").append(arr.length).append(":").append(Long.toUnsignedString(hashObjectArray(arr)))
+                .append("]");
         } else if (value instanceof int[] arr) {
-            sb.append("AI[").append(arr.length).append(":").append(Long.toUnsignedString(hashIntArray(arr))).append("]");
+            sb.append("AI[").append(arr.length).append(":").append(Long.toUnsignedString(hashIntArray(arr)))
+                .append("]");
         } else if (value instanceof long[] arr) {
-            sb.append("AL[").append(arr.length).append(":").append(Long.toUnsignedString(hashLongArray(arr))).append("]");
+            sb.append("AL[").append(arr.length).append(":").append(Long.toUnsignedString(hashLongArray(arr)))
+                .append("]");
         } else if (value instanceof double[] arr) {
-            sb.append("AD[").append(arr.length).append(":").append(Long.toUnsignedString(hashDoubleArray(arr))).append("]");
+            sb.append("AD[").append(arr.length).append(":").append(Long.toUnsignedString(hashDoubleArray(arr)))
+                .append("]");
         } else if (value instanceof byte[] arr) {
-            sb.append("AB[").append(arr.length).append(":").append(Long.toUnsignedString(hashByteArray(arr))).append("]");
+            sb.append("AB[").append(arr.length).append(":").append(Long.toUnsignedString(hashByteArray(arr)))
+                .append("]");
         } else if (value instanceof float[] arr) {
-            sb.append("AF[").append(arr.length).append(":").append(Long.toUnsignedString(hashFloatArray(arr))).append("]");
+            sb.append("AF[").append(arr.length).append(":").append(Long.toUnsignedString(hashFloatArray(arr)))
+                .append("]");
         } else if (value.getClass().isArray()) {
             // 剩余基本类型数组（short[], boolean[], char[]）使用 String.valueOf 哈希
             sb.append("AX[").append(value.getClass().getSimpleName()).append(":")

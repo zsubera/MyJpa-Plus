@@ -21,26 +21,25 @@ class SimpleNodeDataIntegrityTest {
 
     @Test
     void simpleNodeNullOpThrows() {
-        assertThrows(IllegalArgumentException.class,
-            () -> new ConditionNode.SimpleNode("field", "value", null));
+        assertThrows(IllegalArgumentException.class, () -> new ConditionNode.SimpleNode("field", "value", null));
     }
 
     @Test
     void simpleNodeDefensiveCopyComparableArray() {
-        Comparable<?>[] original = new Comparable[]{1, 5};
+        Comparable<?>[] original = new Comparable[] {1, 5};
         ConditionNode.SimpleNode node = new ConditionNode.SimpleNode("field", original, ConditionNode.Op.BETWEEN);
         original[0] = 999;
         // The internal value should not be affected
-        Comparable<?>[] internal = (Comparable<?>[]) node.value;
+        Comparable<?>[] internal = (Comparable<?>[])node.value;
         assertEquals(1, internal[0]);
     }
 
     @Test
     void simpleNodeDefensiveCopyObjectArray() {
-        Object[] original = new Object[]{"a", "b", "c"};
+        Object[] original = new Object[] {"a", "b", "c"};
         ConditionNode.SimpleNode node = new ConditionNode.SimpleNode("field", original, ConditionNode.Op.IN);
         original[0] = "MUTATED";
-        Object[] internal = (Object[]) node.value;
+        Object[] internal = (Object[])node.value;
         assertEquals("a", internal[0]);
     }
 
@@ -49,14 +48,13 @@ class SimpleNodeDataIntegrityTest {
         List<String> original = new ArrayList<>(Arrays.asList("x", "y"));
         ConditionNode.SimpleNode node = new ConditionNode.SimpleNode("field", original, ConditionNode.Op.IN);
         original.add("z");
-        Collection<?> internal = (Collection<?>) node.value;
+        Collection<?> internal = (Collection<?>)node.value;
         assertEquals(2, internal.size());
     }
 
     @Test
     void simpleNodeToStringMasksStringValue() {
-        ConditionNode.SimpleNode node =
-            new ConditionNode.SimpleNode("password", "secret123", ConditionNode.Op.EQ);
+        ConditionNode.SimpleNode node = new ConditionNode.SimpleNode("password", "secret123", ConditionNode.Op.EQ);
         String str = node.toString();
         assertTrue(str.contains("***("));
         assertTrue(str.contains("chars)"));
@@ -71,7 +69,7 @@ class SimpleNodeDataIntegrityTest {
 
     @Test
     void simpleNodeToStringShowsArraySize() {
-        Object[] arr = new Object[]{1, 2, 3};
+        Object[] arr = new Object[] {1, 2, 3};
         ConditionNode.SimpleNode node = new ConditionNode.SimpleNode("field", arr, ConditionNode.Op.IN);
         String str = node.toString();
         assertTrue(str.contains("ARRAY[3 items]"));
@@ -87,16 +85,14 @@ class SimpleNodeDataIntegrityTest {
 
     @Test
     void simpleNodeToStringShowsClassNameForNonString() {
-        ConditionNode.SimpleNode node =
-            new ConditionNode.SimpleNode("field", Integer.valueOf(42), ConditionNode.Op.EQ);
+        ConditionNode.SimpleNode node = new ConditionNode.SimpleNode("field", Integer.valueOf(42), ConditionNode.Op.EQ);
         String str = node.toString();
         assertTrue(str.contains("Integer[***]"));
     }
 
     @Test
     void simpleNodeEscapeCharPreserved() {
-        ConditionNode.SimpleNode node =
-            new ConditionNode.SimpleNode("field", "%test%", ConditionNode.Op.LIKE, '\\');
+        ConditionNode.SimpleNode node = new ConditionNode.SimpleNode("field", "%test%", ConditionNode.Op.LIKE, '\\');
         assertEquals('\\', node.escapeChar);
     }
 

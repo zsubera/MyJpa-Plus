@@ -31,12 +31,9 @@ public final class EntityClassResolver {
 
     private static final Logger log = LoggerFactory.getLogger(EntityClassResolver.class);
 
-    private static final Cache<Class<?>, Class<?>> CACHE =
-        Caffeine.newBuilder().weakKeys().build();
-    private static final Cache<Class<?>, String> ID_FIELD_CACHE =
-        Caffeine.newBuilder().weakKeys().build();
-    private static final Cache<Class<?>, Boolean> COMPOSITE_KEY_CACHE =
-        Caffeine.newBuilder().weakKeys().build();
+    private static final Cache<Class<?>, Class<?>> CACHE = Caffeine.newBuilder().weakKeys().build();
+    private static final Cache<Class<?>, String> ID_FIELD_CACHE = Caffeine.newBuilder().weakKeys().build();
+    private static final Cache<Class<?>, Boolean> COMPOSITE_KEY_CACHE = Caffeine.newBuilder().weakKeys().build();
 
     private static final Class<?> UNRESOLVABLE_SENTINEL = Unresolvable.class;
 

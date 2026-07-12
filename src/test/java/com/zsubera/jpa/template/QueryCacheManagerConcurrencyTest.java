@@ -119,8 +119,7 @@ class QueryCacheManagerConcurrencyTest {
 
         // 并发缓存允许临时超出限制（采样驱逐策略），但不应无限增长
         // 验证驱逐在发生（size < total puts），而非精确大小
-        assertTrue(cache.size() < 2000,
-            "Cache size should be bounded after concurrent puts, but was: " + cache.size());
+        assertTrue(cache.size() < 2000, "Cache size should be bounded after concurrent puts, but was: " + cache.size());
         executor.shutdown();
     }
 }

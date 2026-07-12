@@ -34,12 +34,10 @@ final class EntityFieldExtractor<T> {
     private static final Logger log = LoggerFactory.getLogger(EntityFieldExtractor.class);
 
     /** 缓存实体类的持久化字段列表，避免每次反射遍历。使用弱引用键防止类加载器泄漏。 */
-    private static final Cache<Class<?>, List<Field>> FIELD_CACHE =
-        Caffeine.newBuilder().weakKeys().build();
+    private static final Cache<Class<?>, List<Field>> FIELD_CACHE = Caffeine.newBuilder().weakKeys().build();
 
     /** getAllFields() 使用独立缓存，避免与 extractFieldValues() 的不同过滤器共享缓存。 */
-    private static final Cache<Class<?>, List<Field>> ALL_FIELDS_CACHE =
-        Caffeine.newBuilder().weakKeys().build();
+    private static final Cache<Class<?>, List<Field>> ALL_FIELDS_CACHE = Caffeine.newBuilder().weakKeys().build();
 
     private static final int MAX_FIELD_CACHE_SIZE = 1024;
 
@@ -59,7 +57,9 @@ final class EntityFieldExtractor<T> {
         Caffeine.newBuilder().maximumSize(MAX_FIELD_CACHE_SIZE).build();
 
     /** 复合缓存键：Class<?>（用于弱引用驱逐）+ getterName（用于区分字段） */
-    private record GetterCacheKey(Class<?> clazz, String getterName) {}
+    private record GetterCacheKey(Class<?> clazz, String getterName) {
+    }
+
     private static final java.lang.reflect.Method NO_GETTER_SENTINEL;
     static {
         try {

@@ -682,18 +682,16 @@ public class DefaultMyJpaRepository<T, ID> extends SimpleJpaRepository<T, ID> im
         if (idList.isEmpty()) {
             return;
         }
-        executeDeleteOrBlock(
-            () -> SoftDeleteBulkExecutor.softDeleteByIds(entityManager, domainClass, idList),
-            () -> {
-                // 硬删除路径使用 CriteriaDelete 批量操作，避免 super.deleteAllById()
-                // 内部回调 this.deleteById() 导致 N 次独立 findById + remove 查询。
-                String idFieldName = EntityClassResolver.resolveIdFieldName(domainClass);
-                jakarta.persistence.criteria.CriteriaBuilder cb = entityManager.getCriteriaBuilder();
-                jakarta.persistence.criteria.CriteriaDelete<T> delete = cb.createCriteriaDelete(domainClass);
-                jakarta.persistence.criteria.Root<T> root = delete.from(domainClass);
-                delete.where(root.get(idFieldName).in(idList));
-                entityManager.createQuery(delete).executeUpdate();
-            });
+        executeDeleteOrBlock(() -> SoftDeleteBulkExecutor.softDeleteByIds(entityManager, domainClass, idList), () -> {
+            // 硬删除路径使用 CriteriaDelete 批量操作，避免 super.deleteAllById()
+            // 内部回调 this.deleteById() 导致 N 次独立 findById + remove 查询。
+            String idFieldName = EntityClassResolver.resolveIdFieldName(domainClass);
+            jakarta.persistence.criteria.CriteriaBuilder cb = entityManager.getCriteriaBuilder();
+            jakarta.persistence.criteria.CriteriaDelete<T> delete = cb.createCriteriaDelete(domainClass);
+            jakarta.persistence.criteria.Root<T> root = delete.from(domainClass);
+            delete.where(root.get(idFieldName).in(idList));
+            entityManager.createQuery(delete).executeUpdate();
+        });
     }
 
     /**
@@ -822,10 +820,10 @@ public class DefaultMyJpaRepository<T, ID> extends SimpleJpaRepository<T, ID> im
             }
         }
         if (!skippedEntities.isEmpty()) {
-            throw new IllegalArgumentException(
-                "deleteAll: Cannot delete " + skippedEntities.size() + " entity(ies) because their IDs could not be extracted. "
-                    + "This typically happens with detached entities or uninitialized proxies. "
-                    + "Load entities within a transaction before calling deleteAll().");
+            throw new IllegalArgumentException("deleteAll: Cannot delete " + skippedEntities.size()
+                + " entity(ies) because their IDs could not be extracted. "
+                + "This typically happens with detached entities or uninitialized proxies. "
+                + "Load entities within a transaction before calling deleteAll().");
         }
         if (ids.isEmpty()) {
             return;
@@ -857,8 +855,8 @@ public class DefaultMyJpaRepository<T, ID> extends SimpleJpaRepository<T, ID> im
         jakarta.persistence.EntityManager em = this.entityManager;
         String sf = this.softDeleteFieldName;
         if (sf != null && shouldApplySoftDeleteFilter()) {
-            spec.addCondition((root, cb) -> com.zsubera.jpa.softdelete.SoftDeleteHelper.buildNotDeleted(cb, root,
-                sf, entityClass));
+            spec.addCondition(
+                (root, cb) -> com.zsubera.jpa.softdelete.SoftDeleteHelper.buildNotDeleted(cb, root, sf, entityClass));
         }
         return spec.executeInTransaction(em);
     }
@@ -878,12 +876,10 @@ public class DefaultMyJpaRepository<T, ID> extends SimpleJpaRepository<T, ID> im
         jakarta.persistence.EntityManager em = this.entityManager;
         String sf = this.softDeleteFieldName;
         if (sf != null && shouldApplySoftDeleteFilter()) {
-            java.lang.reflect.Field field =
-                com.zsubera.jpa.softdelete.SoftDeleteHelper.getField(entityClass, sf);
+            java.lang.reflect.Field field = com.zsubera.jpa.softdelete.SoftDeleteHelper.getField(entityClass, sf);
             if (field == null) {
-                throw new IllegalStateException(
-                    "SoftDelete field '" + sf + "' not found on " + entityClass.getName()
-                        + ". The field may have been removed or renamed.");
+                throw new IllegalStateException("SoftDelete field '" + sf + "' not found on " + entityClass.getName()
+                    + ". The field may have been removed or renamed.");
             }
             com.zsubera.jpa.annotation.SoftDelete annotation =
                 field.getAnnotation(com.zsubera.jpa.annotation.SoftDelete.class);

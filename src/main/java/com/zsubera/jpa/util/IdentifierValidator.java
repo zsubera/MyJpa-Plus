@@ -167,12 +167,15 @@ public final class IdentifierValidator {
     }
 
     private static boolean isValidAsciiIdentifier(String s) {
-        if (s.isEmpty()) return false;
+        if (s.isEmpty())
+            return false;
         char c = s.charAt(0);
-        if (!((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c == '_')) return false;
+        if (!((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c == '_'))
+            return false;
         for (int i = 1; i < s.length(); i++) {
             c = s.charAt(i);
-            if (!((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '_')) return false;
+            if (!((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '_'))
+                return false;
         }
         return true;
     }

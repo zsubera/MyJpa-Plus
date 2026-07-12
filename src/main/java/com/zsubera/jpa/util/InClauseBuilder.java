@@ -146,11 +146,9 @@ public final class InClauseBuilder {
         }
         if (config.maxInClauseSize() > MAX_ALLOWED_VALUE || config.hardLimit() > MAX_ALLOWED_VALUE) {
             log.warn("IN clause config values exceed upper limit ({}). Clamping: maxSize={}, hardLimit={}.",
-                MAX_ALLOWED_VALUE,
-                Math.min(config.maxInClauseSize(), MAX_ALLOWED_VALUE),
+                MAX_ALLOWED_VALUE, Math.min(config.maxInClauseSize(), MAX_ALLOWED_VALUE),
                 Math.min(config.hardLimit(), MAX_ALLOWED_VALUE));
-            config = new Config(
-                Math.min(config.maxInClauseSize(), MAX_ALLOWED_VALUE),
+            config = new Config(Math.min(config.maxInClauseSize(), MAX_ALLOWED_VALUE),
                 Math.min(config.hardLimit(), MAX_ALLOWED_VALUE));
         }
         CONFIG_REF.set(config);

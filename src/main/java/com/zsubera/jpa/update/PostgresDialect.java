@@ -67,10 +67,9 @@ final class PostgresDialect extends AbstractDialectStrategy {
     public SqlWithParams buildBatchUpsertSql(String tableName, List<String> insertColumns,
         List<List<EntityFieldValue>> batchFieldValues, List<String> conflictColumns, List<String> updateColumns) {
         if (insertColumns.isEmpty()) {
-            throw new MyJpaPlusException(
-                "Batch UPSERT requires at least one insert column. "
-                    + "All fields may be auto-generated with null values. "
-                    + "Ensure at least one non-auto-generated field is included.");
+            throw new MyJpaPlusException("Batch UPSERT requires at least one insert column. "
+                + "All fields may be auto-generated with null values. "
+                + "Ensure at least one non-auto-generated field is included.");
         }
         String escapedTable = escapeIdentifier(tableName);
         List<String> escapedCols = new ArrayList<>(insertColumns.size());

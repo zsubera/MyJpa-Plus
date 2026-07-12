@@ -86,8 +86,7 @@ public class MyJpaPlusAutoConfiguration {
 
     private final ApplicationContext applicationContext;
 
-    public MyJpaPlusAutoConfiguration(MyJpaPlusProperties properties,
-        ApplicationContext applicationContext) {
+    public MyJpaPlusAutoConfiguration(MyJpaPlusProperties properties, ApplicationContext applicationContext) {
         if (properties == null) {
             throw new IllegalArgumentException("properties must not be null");
         }
@@ -129,8 +128,7 @@ public class MyJpaPlusAutoConfiguration {
     static class MyJpaPlusConfigInitializer {
 
         MyJpaPlusConfigInitializer(MyJpaPlusProperties properties,
-            @Autowired(required = false) MyJpaPlusGlobalConfig globalConfig,
-            ApplicationContext applicationContext) {
+            @Autowired(required = false) MyJpaPlusGlobalConfig globalConfig, ApplicationContext applicationContext) {
             // 使用全局配置提供者替代静态可变状态
             if (globalConfig != null) {
                 DefaultMyJpaRepository.setGlobalConfigProvider(DefaultMyJpaRepository.createMutableConfigProvider(
@@ -178,8 +176,7 @@ public class MyJpaPlusAutoConfiguration {
                 if ("true".equalsIgnoreCase(skipSalt)) {
                     EncryptConverter.setSkipSaltCheck(true);
                     log.warn("SECURITY: Encryption salt check is DISABLED via "
-                        + "myjpa-plus.encrypt.skip-salt-check=true. "
-                        + "This is unsafe for production environments.");
+                        + "myjpa-plus.encrypt.skip-salt-check=true. " + "This is unsafe for production environments.");
                 }
             }
 

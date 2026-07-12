@@ -97,7 +97,7 @@ class QueryCacheManagerLoadLockTest {
     void computeIfAbsent_afterEviction_reloadsFromLoader() {
         // Put a value, then evict it explicitly
         cache.computeIfAbsent("expire-key", () -> 999, 60);
-        assertEquals(999, (int) cache.get("expire-key"));
+        assertEquals(999, (int)cache.get("expire-key"));
 
         // Evict
         cache.evict("expire-key");

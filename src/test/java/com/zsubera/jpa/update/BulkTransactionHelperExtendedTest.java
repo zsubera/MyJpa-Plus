@@ -47,10 +47,9 @@ class BulkTransactionHelperExtendedTest {
         when(tx.isActive()).thenReturn(false).thenReturn(true);
         when(em.getTransaction()).thenReturn(tx);
 
-        assertThrows(IllegalStateException.class,
-            () -> BulkTransactionHelper.executeInManagedTransaction(em, e -> {
-                throw new IllegalStateException("boom");
-            }));
+        assertThrows(IllegalStateException.class, () -> BulkTransactionHelper.executeInManagedTransaction(em, e -> {
+            throw new IllegalStateException("boom");
+        }));
         verify(tx).begin();
         verify(tx).rollback();
     }
@@ -62,10 +61,9 @@ class BulkTransactionHelperExtendedTest {
         when(tx.isActive()).thenReturn(true);
         when(em.getTransaction()).thenReturn(tx);
 
-        assertThrows(IllegalArgumentException.class,
-            () -> BulkTransactionHelper.executeInManagedTransaction(em, e -> {
-                throw new IllegalArgumentException("bad arg");
-            }));
+        assertThrows(IllegalArgumentException.class, () -> BulkTransactionHelper.executeInManagedTransaction(em, e -> {
+            throw new IllegalArgumentException("bad arg");
+        }));
         verify(tx, never()).rollback();
     }
 
@@ -74,8 +72,7 @@ class BulkTransactionHelperExtendedTest {
         EntityManager em = mock(EntityManager.class);
         when(em.getTransaction()).thenThrow(new IllegalStateException("JTA"));
 
-        assertThrows(MyJpaPlusException.class,
-            () -> BulkTransactionHelper.executeInManagedTransaction(em, e -> 1));
+        assertThrows(MyJpaPlusException.class, () -> BulkTransactionHelper.executeInManagedTransaction(em, e -> 1));
     }
 
     @Test

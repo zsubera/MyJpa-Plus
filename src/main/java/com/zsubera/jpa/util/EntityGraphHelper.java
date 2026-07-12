@@ -280,7 +280,7 @@ public final class EntityGraphHelper<T> {
             if (name.equals(node.getAttributeName())) {
                 java.util.Map subgraphs = node.getSubgraphs();
                 if (!subgraphs.isEmpty()) {
-                    return (Subgraph<Object>) subgraphs.values().iterator().next();
+                    return (Subgraph<Object>)subgraphs.values().iterator().next();
                 }
             }
         }

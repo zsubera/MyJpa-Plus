@@ -119,31 +119,43 @@ class OptimisticLockRetryAdvisorEdgeCaseTest {
 
     static class NegativeRetriesService {
         @RetryOnOptimisticLock(maxRetries = -1, backoffMs = 10)
-        public Object method() { return "ok"; }
+        public Object method() {
+            return "ok";
+        }
     }
 
     static class ExcessiveRetriesService {
         @RetryOnOptimisticLock(maxRetries = 100, backoffMs = 10)
-        public Object method() { return "ok"; }
+        public Object method() {
+            return "ok";
+        }
     }
 
     static class ZeroBackoffService {
         @RetryOnOptimisticLock(maxRetries = 2, backoffMs = 0)
-        public Object method() { return "ok"; }
+        public Object method() {
+            return "ok";
+        }
     }
 
     static class NegativeBackoffService {
         @RetryOnOptimisticLock(maxRetries = 2, backoffMs = -100)
-        public Object method() { return "ok"; }
+        public Object method() {
+            return "ok";
+        }
     }
 
     static class RetryableService {
         @RetryOnOptimisticLock(maxRetries = 2, backoffMs = 10)
-        public Object retry() { return "ok"; }
+        public Object retry() {
+            return "ok";
+        }
     }
 
     static class LongBackoffService {
         @RetryOnOptimisticLock(maxRetries = 5, backoffMs = 60000)
-        public Object retry() { return "ok"; }
+        public Object retry() {
+            return "ok";
+        }
     }
 }

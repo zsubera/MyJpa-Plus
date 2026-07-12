@@ -87,8 +87,7 @@ final class DialectDetector {
     }
 
     /** 每个 EntityManagerFactory 缓存的方言，避免重复检测。Caffeine 内置 LRU 驱逐。 */
-    private static final Cache<String, String> DIALECT_CACHE =
-        Caffeine.newBuilder().maximumSize(32).build();
+    private static final Cache<String, String> DIALECT_CACHE = Caffeine.newBuilder().maximumSize(32).build();
 
     /** 回退键计数器，避免 identityHashCode 碰撞导致缓存误命中。 */
     private static final java.util.concurrent.atomic.AtomicLong emfCounter =

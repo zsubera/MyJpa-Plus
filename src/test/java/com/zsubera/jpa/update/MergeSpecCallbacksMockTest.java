@@ -28,18 +28,16 @@ class MergeSpecCallbacksMockTest {
     void executeWithCallbacks_withOnConflict_throws() {
         TestEntity entity = new TestEntity();
         entity.setName("test");
-        assertThrows(UnsupportedOperationException.class,
-            () -> new MergeSpec<>(TestEntity.class).withEntity(entity).onConflict(TestEntity::getName)
-                .executeWithCallbacks(mock(EntityManager.class)));
+        assertThrows(UnsupportedOperationException.class, () -> new MergeSpec<>(TestEntity.class).withEntity(entity)
+            .onConflict(TestEntity::getName).executeWithCallbacks(mock(EntityManager.class)));
     }
 
     @Test
     void executeWithCallbacks_withUpdateOnConflict_throws() {
         TestEntity entity = new TestEntity();
         entity.setName("test");
-        assertThrows(UnsupportedOperationException.class,
-            () -> new MergeSpec<>(TestEntity.class).withEntity(entity).updateOnConflict(TestEntity::getName)
-                .executeWithCallbacks(mock(EntityManager.class)));
+        assertThrows(UnsupportedOperationException.class, () -> new MergeSpec<>(TestEntity.class).withEntity(entity)
+            .updateOnConflict(TestEntity::getName).executeWithCallbacks(mock(EntityManager.class)));
     }
 
     @Test

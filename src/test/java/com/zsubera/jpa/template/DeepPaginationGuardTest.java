@@ -25,8 +25,8 @@ class DeepPaginationGuardTest {
     @Test
     void exceedsHardLimitThrows() {
         AtomicLong lastWarn = new AtomicLong(0);
-        IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
-            () -> DeepPaginationGuard.check(5001, 1000, 5000, lastWarn));
+        IllegalArgumentException ex =
+            assertThrows(IllegalArgumentException.class, () -> DeepPaginationGuard.check(5001, 1000, 5000, lastWarn));
         assertTrue(ex.getMessage().contains("exceeds"));
         assertTrue(ex.getMessage().contains("5000"));
     }
@@ -54,8 +54,7 @@ class DeepPaginationGuardTest {
     @Test
     void hardLimitOneOverThrows() {
         AtomicLong lastWarn = new AtomicLong(0);
-        assertThrows(IllegalArgumentException.class,
-            () -> DeepPaginationGuard.check(5001, 1000, 5000, lastWarn));
+        assertThrows(IllegalArgumentException.class, () -> DeepPaginationGuard.check(5001, 1000, 5000, lastWarn));
     }
 
     @Test

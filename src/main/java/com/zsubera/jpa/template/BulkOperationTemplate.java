@@ -252,7 +252,7 @@ class BulkOperationTemplate {
         }
         return executeBatchWithCursor(batchSize, "update", (size, lastId) -> {
             UpdateSpec.BatchCursor cursor = spec.executeLimitedCursor(entityManager, size, lastId);
-            return new Object[]{cursor.affected(), cursor.lastId()};
+            return new Object[] {cursor.affected(), cursor.lastId()};
         });
     }
 
@@ -273,7 +273,7 @@ class BulkOperationTemplate {
         }
         return executeBatchWithCursor(batchSize, "delete", (size, lastId) -> {
             DeleteSpec.BatchCursor cursor = spec.executeLimitedCursor(entityManager, size, lastId);
-            return new Object[]{cursor.affected(), cursor.lastId()};
+            return new Object[] {cursor.affected(), cursor.lastId()};
         });
     }
 
@@ -312,8 +312,8 @@ class BulkOperationTemplate {
             lastId = result[1];
             total += affected;
             if (log.isDebugEnabled()) {
-                log.debug("Batch {}: {} rows {}ed in this batch (total: {})", operationName, affected,
-                    operationName, total);
+                log.debug("Batch {}: {} rows {}ed in this batch (total: {})", operationName, affected, operationName,
+                    total);
             }
             iteration++;
             if (iteration >= maxBatchIterations) {
@@ -384,7 +384,7 @@ class BulkOperationTemplate {
         return executeBatchInSeparateTransactionsWithCursor(batchSize, "update", failureStrategy,
             (size, lastId) -> executeInNewTransaction(em -> {
                 UpdateSpec.BatchCursor cursor = spec.executeLimitedCursor(em, size, lastId);
-                return new Object[]{cursor.affected(), cursor.lastId()};
+                return new Object[] {cursor.affected(), cursor.lastId()};
             }));
     }
 
@@ -411,7 +411,7 @@ class BulkOperationTemplate {
         return executeBatchInSeparateTransactionsWithCursor(batchSize, "delete", failureStrategy,
             (size, lastId) -> executeInNewTransaction(em -> {
                 DeleteSpec.BatchCursor cursor = spec.executeLimitedCursor(em, size, lastId);
-                return new Object[]{cursor.affected(), cursor.lastId()};
+                return new Object[] {cursor.affected(), cursor.lastId()};
             }));
     }
 
@@ -490,7 +490,7 @@ class BulkOperationTemplate {
             @SuppressWarnings("unchecked")
             Object[] r = (Object[])executeInNewTransaction(em -> {
                 UpdateSpec.BatchCursor c = spec.executeLimitedCursor(em, size, lastId);
-                return new Object[]{c.affected(), c.lastId()};
+                return new Object[] {c.affected(), c.lastId()};
             });
             return r;
         });
@@ -515,7 +515,7 @@ class BulkOperationTemplate {
             @SuppressWarnings("unchecked")
             Object[] r = (Object[])executeInNewTransaction(em -> {
                 DeleteSpec.BatchCursor c = spec.executeLimitedCursor(em, size, lastId);
-                return new Object[]{c.affected(), c.lastId()};
+                return new Object[] {c.affected(), c.lastId()};
             });
             return r;
         });

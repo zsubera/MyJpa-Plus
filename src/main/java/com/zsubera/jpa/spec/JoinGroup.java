@@ -91,7 +91,7 @@ public class JoinGroup<T, J> implements ConditionBuilder<J, JoinGroup<T, J>> {
         joinNode.innerConditions.add(nestedJoin);
         config.accept(new JoinGroup<>(root, nestedJoin));
         @SuppressWarnings("unchecked")
-        JoinGroup<T, J2> result = (JoinGroup<T, J2>) this;
+        JoinGroup<T, J2> result = (JoinGroup<T, J2>)this;
         return result;
     }
 
@@ -116,7 +116,7 @@ public class JoinGroup<T, J> implements ConditionBuilder<J, JoinGroup<T, J>> {
         joinNode.innerConditions.add(nestedJoin);
         config.accept(new JoinGroup<>(root, nestedJoin));
         @SuppressWarnings("unchecked")
-        JoinGroup<T, J2> result = (JoinGroup<T, J2>) this;
+        JoinGroup<T, J2> result = (JoinGroup<T, J2>)this;
         return result;
     }
 
@@ -141,7 +141,7 @@ public class JoinGroup<T, J> implements ConditionBuilder<J, JoinGroup<T, J>> {
         joinNode.innerConditions.add(nestedJoin);
         config.accept(new JoinGroup<>(root, nestedJoin));
         @SuppressWarnings("unchecked")
-        JoinGroup<T, J2> result = (JoinGroup<T, J2>) this;
+        JoinGroup<T, J2> result = (JoinGroup<T, J2>)this;
         return result;
     }
 
@@ -166,7 +166,7 @@ public class JoinGroup<T, J> implements ConditionBuilder<J, JoinGroup<T, J>> {
         joinNode.innerConditions.add(nestedJoin);
         config.accept(new JoinGroup<>(root, nestedJoin));
         @SuppressWarnings("unchecked")
-        JoinGroup<T, J2> result = (JoinGroup<T, J2>) this;
+        JoinGroup<T, J2> result = (JoinGroup<T, J2>)this;
         return result;
     }
 

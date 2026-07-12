@@ -259,9 +259,8 @@ public interface MyJpaRepository<T, ID> extends JpaRepository<T, ID>, JpaSpecifi
             java.lang.reflect.Field field =
                 com.zsubera.jpa.softdelete.SoftDeleteHelper.getField(entityClass, softDeleteField);
             if (field == null) {
-                throw new IllegalStateException(
-                    "SoftDelete field '" + softDeleteField + "' not found on " + entityClass.getName()
-                        + ". The field may have been removed or renamed.");
+                throw new IllegalStateException("SoftDelete field '" + softDeleteField + "' not found on "
+                    + entityClass.getName() + ". The field may have been removed or renamed.");
             }
             com.zsubera.jpa.annotation.SoftDelete annotation =
                 field.getAnnotation(com.zsubera.jpa.annotation.SoftDelete.class);
@@ -350,9 +349,8 @@ public interface MyJpaRepository<T, ID> extends JpaRepository<T, ID>, JpaSpecifi
             java.lang.reflect.Field field =
                 com.zsubera.jpa.softdelete.SoftDeleteHelper.getField(entityClass, softDeleteField);
             if (field == null) {
-                throw new IllegalStateException(
-                    "SoftDelete field '" + softDeleteField + "' not found on " + entityClass.getName()
-                        + ". The field may have been removed or renamed.");
+                throw new IllegalStateException("SoftDelete field '" + softDeleteField + "' not found on "
+                    + entityClass.getName() + ". The field may have been removed or renamed.");
             }
             com.zsubera.jpa.annotation.SoftDelete annotation =
                 field.getAnnotation(com.zsubera.jpa.annotation.SoftDelete.class);

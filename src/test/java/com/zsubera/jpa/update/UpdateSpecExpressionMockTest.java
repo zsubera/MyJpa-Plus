@@ -14,39 +14,34 @@ class UpdateSpecExpressionMockTest {
 
     @Test
     void withVersionIncrement_addsVersionIncrementClause() {
-        UpdateSpec<TestEntity> spec = new UpdateSpec<>(TestEntity.class)
-            .set(TestEntity::getStatus, 2)
-            .withVersionIncrement(true)
-            .eq(TestEntity::getName, "test");
+        UpdateSpec<TestEntity> spec = new UpdateSpec<>(TestEntity.class).set(TestEntity::getStatus, 2)
+            .withVersionIncrement(true).eq(TestEntity::getName, "test");
 
         // Verify the spec has version increment enabled
         // (The actual SQL generation is tested via integration tests with @Version entities.
-        //  This test verifies the builder chain compiles and doesn't throw.)
+        // This test verifies the builder chain compiles and doesn't throw.)
         assertNotNull(spec);
     }
 
     @Test
     void setAdd_withNumericField_addsExpressionClause() {
-        UpdateSpec<TestEntity> spec = new UpdateSpec<>(TestEntity.class)
-            .setAdd(TestEntity::getStatus, 5)
-            .eq(TestEntity::getName, "test");
+        UpdateSpec<TestEntity> spec =
+            new UpdateSpec<>(TestEntity.class).setAdd(TestEntity::getStatus, 5).eq(TestEntity::getName, "test");
 
         assertNotNull(spec);
     }
 
     @Test
     void setSubtract_withNumericField_addsExpressionClause() {
-        UpdateSpec<TestEntity> spec = new UpdateSpec<>(TestEntity.class)
-            .setSubtract(TestEntity::getStatus, 3)
-            .eq(TestEntity::getName, "test");
+        UpdateSpec<TestEntity> spec =
+            new UpdateSpec<>(TestEntity.class).setSubtract(TestEntity::getStatus, 3).eq(TestEntity::getName, "test");
 
         assertNotNull(spec);
     }
 
     @Test
     void setAdd_withNullField_throws() {
-        assertThrows(IllegalArgumentException.class,
-            () -> new UpdateSpec<>(TestEntity.class).setAdd(null, 5));
+        assertThrows(IllegalArgumentException.class, () -> new UpdateSpec<>(TestEntity.class).setAdd(null, 5));
     }
 
     @Test
@@ -57,8 +52,7 @@ class UpdateSpecExpressionMockTest {
 
     @Test
     void setSubtract_withNullField_throws() {
-        assertThrows(IllegalArgumentException.class,
-            () -> new UpdateSpec<>(TestEntity.class).setSubtract(null, 5));
+        assertThrows(IllegalArgumentException.class, () -> new UpdateSpec<>(TestEntity.class).setSubtract(null, 5));
     }
 
     @Test
@@ -81,19 +75,15 @@ class UpdateSpecExpressionMockTest {
 
     @Test
     void chainedSetAddAndSetSubtract_compiles() {
-        UpdateSpec<TestEntity> spec = new UpdateSpec<>(TestEntity.class)
-            .setAdd(TestEntity::getStatus, 10)
-            .setSubtract(TestEntity::getStatus, 3)
-            .eq(TestEntity::getName, "test");
+        UpdateSpec<TestEntity> spec = new UpdateSpec<>(TestEntity.class).setAdd(TestEntity::getStatus, 10)
+            .setSubtract(TestEntity::getStatus, 3).eq(TestEntity::getName, "test");
         assertNotNull(spec);
     }
 
     @Test
     void withVersionIncrementFalse_noIncrement() {
-        UpdateSpec<TestEntity> spec = new UpdateSpec<>(TestEntity.class)
-            .set(TestEntity::getName, "updated")
-            .withVersionIncrement(false)
-            .eq(TestEntity::getName, "test");
+        UpdateSpec<TestEntity> spec = new UpdateSpec<>(TestEntity.class).set(TestEntity::getName, "updated")
+            .withVersionIncrement(false).eq(TestEntity::getName, "test");
         assertNotNull(spec);
     }
 }

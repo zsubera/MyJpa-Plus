@@ -195,11 +195,10 @@ class BatchSaveTemplate {
         private final List<?> committedResults;
         private final List<?> failedEntities;
 
-        PartialBatchCommitException(int completedBatches, int committedEntities,
-            List<?> committedResults, List<?> failedEntities, Throwable cause) {
-            super("Batch save failed after " + completedBatches + " batches committed "
-                + committedEntities + " entities. " + failedEntities.size()
-                + " entity(ies) were NOT committed.", cause);
+        PartialBatchCommitException(int completedBatches, int committedEntities, List<?> committedResults,
+            List<?> failedEntities, Throwable cause) {
+            super("Batch save failed after " + completedBatches + " batches committed " + committedEntities
+                + " entities. " + failedEntities.size() + " entity(ies) were NOT committed.", cause);
             this.completedBatches = completedBatches;
             this.committedEntities = committedEntities;
             this.committedResults = committedResults;
