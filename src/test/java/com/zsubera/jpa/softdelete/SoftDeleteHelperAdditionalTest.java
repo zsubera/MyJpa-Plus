@@ -278,14 +278,20 @@ class SoftDeleteHelperAdditionalTest {
         repository.save(e1);
         repository.flush();
 
-        // maxRows=0 means unlimited (skip count check), so it won't throw
-        // Use a very small maxRows to trigger the limit
         SoftDeleteTestEntity e2 = new SoftDeleteTestEntity();
         e2.setName("over2");
         e2.setDeleted(false);
         repository.save(e2);
         repository.flush();
 
+        SoftDeleteTestEntity e3 = new SoftDeleteTestEntity();
+        e3.setName("over3");
+        e3.setDeleted(false);
+        repository.save(e3);
+        repository.flush();
+
+        // 3 active rows, maxRows=1 → UPDATE LIMIT 1 affects 1 row,
+        // remaining COUNT=2 > maxRows → throws IllegalStateException
         assertThrows(IllegalStateException.class,
             () -> SoftDeleteBulkExecutor.softDeleteAll(em, SoftDeleteTestEntity.class, true, 1));
     }

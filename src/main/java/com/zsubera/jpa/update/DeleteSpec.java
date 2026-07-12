@@ -185,6 +185,32 @@ public class DeleteSpec<T> extends AbstractBulkOperationSpec<T, DeleteSpec<T>> {
         update.where(cb.and(predicates.toArray(new Predicate[0])));
         update.set(fieldName, deletedValue);
         int affected = em.createQuery(update).executeUpdate();
+        // ponytail: 后置检查处理并发导致超额删除的场景。预检查 COUNT 与 UPDATE 之间
+        // 存在竞态窗口，并发的 INSERT 或其他软删除操作可能导致实际影响行数超过限制。
+        // 后置检查 + 回滚作为安全网。
+        if (limit > 0 && affected > limit) {
+            if (log.isWarnEnabled()) {
+                log.warn("executeAsSoftDelete affected {} rows, exceeding the pre-check limit of {}. "
+                    + "Concurrent modifications detected.", affected, limit);
+            }
+            com.zsubera.jpa.softdelete.SoftDeleteBulkExecutor rollbackHelper = null;
+            try {
+                jakarta.persistence.EntityTransaction tx = em.getTransaction();
+                if (tx != null && tx.isActive()) {
+                    tx.rollback();
+                    log.warn("Transaction has been rolled back.");
+                } else {
+                    org.springframework.transaction.interceptor.TransactionAspectSupport
+                        .currentTransactionStatus().setRollbackOnly();
+                    log.warn("Transaction marked as rollback-only.");
+                }
+            } catch (Exception rollbackEx) {
+                log.error("CRITICAL: Rollback FAILED. The UPDATE may be committed. Data corruption risk.", rollbackEx);
+            }
+            throw new IllegalStateException("executeAsSoftDelete affected " + affected
+                + " rows, exceeding the limit of " + limit
+                + ". Concurrent modifications detected. Transaction has been rolled back or marked rollback-only.");
+        }
         if (affected > 0) {
             em.flush();
             em.clear();
@@ -226,6 +252,31 @@ public class DeleteSpec<T> extends AbstractBulkOperationSpec<T, DeleteSpec<T>> {
         delete.from(entityClass);
         var q = em.createQuery(delete);
         int affected = q.executeUpdate();
+        // ponytail: 后置检查处理并发导致超额删除的场景。预检查 COUNT 与 DELETE 之间
+        // 存在竞态窗口，并发的 INSERT 操作可能导致实际影响行数超过限制。
+        // 后置检查 + 回滚作为安全网。
+        if (limit > 0 && affected > limit) {
+            if (log.isWarnEnabled()) {
+                log.warn("deleteAll affected {} rows, exceeding the pre-check limit of {}. "
+                    + "Concurrent modifications detected.", affected, limit);
+            }
+            try {
+                jakarta.persistence.EntityTransaction tx = em.getTransaction();
+                if (tx != null && tx.isActive()) {
+                    tx.rollback();
+                    log.warn("Transaction has been rolled back.");
+                } else {
+                    org.springframework.transaction.interceptor.TransactionAspectSupport
+                        .currentTransactionStatus().setRollbackOnly();
+                    log.warn("Transaction marked as rollback-only.");
+                }
+            } catch (Exception rollbackEx) {
+                log.error("CRITICAL: Rollback FAILED. The DELETE may be committed. Data corruption risk.", rollbackEx);
+            }
+            throw new IllegalStateException("deleteAll affected " + affected
+                + " rows, exceeding the limit of " + limit
+                + ". Concurrent modifications detected. Transaction has been rolled back or marked rollback-only.");
+        }
         if (affected > 0) {
             em.flush();
             em.clear();

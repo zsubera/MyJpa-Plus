@@ -74,6 +74,48 @@ public final class SoftDeleteBulkExecutor {
         return new ExecContext(fieldName, field, annotation, resolved);
     }
 
+    /**
+     * 检查指定方言是否支持 UPDATE ... LIMIT 语法。
+     * MySQL 和 PostgreSQL 支持此语法，可在 UPDATE 语句中直接限制影响行数，
+     * 消除预检查 COUNT 与 UPDATE 之间的竞态条件。
+     */
+    private static boolean supportsUpdateLimit(String dialect) {
+        return "mysql".equals(dialect) || "postgresql".equals(dialect);
+    }
+
+    /**
+     * 使用 UPDATE ... LIMIT 执行软删除，原子性地限制影响行数。
+     *
+     * <p>MySQL 和 PostgreSQL 均支持 {@code UPDATE ... SET ... WHERE ... LIMIT :limit} 语法。
+     * 数据库引擎在单条语句内同时完成"筛选行"和"更新行"，
+     * 不存在其他事务在此期间修改行数的竞态窗口。
+     *
+     * <p>当 updated == maxRows 时，执行额外的 COUNT 查询判断是否还有更多行需要更新，
+     * 如果有则抛出 IllegalStateException（与旧行为保持一致）。
+     *
+     * @return 实际更新的行数（<= maxRows）
+     */
+    private static int executeSoftDeleteWithLimit(EntityManager em, String escapedTable,
+        String setClause, String whereClause, Object deletedValue, int maxRows, String dialect) {
+        String sql = "UPDATE " + escapedTable + " SET " + setClause + " WHERE " + whereClause + " LIMIT :limit";
+        jakarta.persistence.Query query = em.createNativeQuery(sql);
+        query.setParameter("deletedValue", deletedValue);
+        query.setParameter("limit", maxRows);
+        int updated = query.executeUpdate();
+        // 当 updated >= maxRows 时，可能还有更多行未被更新，需要额外 COUNT 判断
+        if (updated >= maxRows) {
+            long remaining = ((Number) em.createNativeQuery(
+                "SELECT COUNT(*) FROM " + escapedTable + " WHERE " + whereClause)
+                .setParameter("deletedValue", deletedValue).getSingleResult()).longValue();
+            if (remaining > maxRows) {
+                throw new IllegalStateException("softDeleteAll would affect " + remaining
+                    + " rows, exceeding the limit of " + maxRows
+                    + ". Use softDeleteByIds() with explicit ID lists, or increase the limit.");
+            }
+        }
+        return updated;
+    }
+
     private static void publishAfterUpdate(EntityManager em, Class<?> entityClass, int updated) {
         if (updated > 0) {
             com.zsubera.jpa.util.CacheEvictionHelper.evictEntityCache(em, entityClass);
@@ -164,42 +206,50 @@ public final class SoftDeleteBulkExecutor {
             escapedColumn + " = :deletedValue" + (timestampColumn != null ? ", " + timestampColumn + " = CURRENT_TIMESTAMP" : "")
                 + (versionColumn != null ? ", " + versionColumn + " = " + versionColumn + " + 1" : "");
 
-        // 安全检查：先查询受影响行数，再执行 UPDATE，避免 UPDATE 后才发现超限导致脏持久化上下文
-        if (maxRows > 0) {
-            long count;
-            if (ctx.resolved().booleanField()) {
-                count = ((Number) em.createNativeQuery("SELECT COUNT(*) FROM " + escapedTable + " WHERE "
-                    + escapedColumn + " = :deletedValue OR " + escapedColumn + " IS NULL")
-                    .setParameter("deletedValue", Boolean.FALSE).getSingleResult()).longValue();
-            } else {
-                Object dv = ctx.resolved().dbValue();
-                count = ((Number) em.createNativeQuery("SELECT COUNT(*) FROM " + escapedTable + " WHERE "
-                    + escapedColumn + " != :deletedValue OR " + escapedColumn + " IS NULL")
-                    .setParameter("deletedValue", dv).getSingleResult()).longValue();
-            }
-            if (count > maxRows) {
-                throw new IllegalStateException("softDeleteAll would affect " + count
-                    + " rows, exceeding the limit of " + maxRows
-                    + ". Use softDeleteByIds() with explicit ID lists, or increase the limit.");
-            }
-        }
-
         int updated;
         Object deletedValue = ctx.resolved().booleanField() ? Boolean.TRUE : ctx.resolved().dbValue();
-        updated = em.createNativeQuery("UPDATE " + escapedTable + " SET " + setClause + " WHERE " + escapedColumn
-            + " != :deletedValue OR " + escapedColumn + " IS NULL").setParameter("deletedValue", deletedValue).executeUpdate();
+        String whereClause = escapedColumn + " != :deletedValue OR " + escapedColumn + " IS NULL";
 
-        // ponytail: 后置检查处理并发导致超额删除的场景
-        if (maxRows > 0 && updated > maxRows) {
-            if (log.isWarnEnabled()) {
-                log.warn("softDeleteAll affected {} rows, exceeding the pre-check limit of {}. "
-                    + "Concurrent modifications detected.", updated, maxRows);
+        if (maxRows > 0 && supportsUpdateLimit(dialect)) {
+            // ponytail: 对支持 UPDATE LIMIT 的数据库（MySQL、PostgreSQL），直接在 UPDATE 语句中限制行数。
+            // 这消除了预检查 COUNT 与 UPDATE 之间的竞态条件窗口——数据库引擎在单条语句内
+            // 同时完成"筛选行"和"更新行"，不存在其他事务在此期间修改行数的可能。
+            updated = executeSoftDeleteWithLimit(em, escapedTable, setClause, whereClause,
+                deletedValue, maxRows, dialect);
+        } else {
+            // ponytail: 对不支持 UPDATE LIMIT 的数据库（Oracle、SQL Server），使用预检查 COUNT + 后置验证模式。
+            // 预检查与 UPDATE 之间存在竞态窗口，后置检查 + 回滚作为安全网。
+            if (maxRows > 0) {
+                long count;
+                if (ctx.resolved().booleanField()) {
+                    count = ((Number) em.createNativeQuery("SELECT COUNT(*) FROM " + escapedTable + " WHERE "
+                        + whereClause).setParameter("deletedValue", Boolean.FALSE).getSingleResult()).longValue();
+                } else {
+                    Object dv = ctx.resolved().dbValue();
+                    count = ((Number) em.createNativeQuery("SELECT COUNT(*) FROM " + escapedTable + " WHERE "
+                        + escapedColumn + " != :deletedValue OR " + escapedColumn + " IS NULL")
+                        .setParameter("deletedValue", dv).getSingleResult()).longValue();
+                }
+                if (count > maxRows) {
+                    throw new IllegalStateException("softDeleteAll would affect " + count
+                        + " rows, exceeding the limit of " + maxRows
+                        + ". Use softDeleteByIds() with explicit ID lists, or increase the limit.");
+                }
             }
-            boolean rolledBack = rollbackCurrentTransaction(em);
-            String rollbackStatus = rolledBack ? "Transaction has been rolled back."
-                : "CRITICAL: Rollback FAILED. The UPDATE may be committed. Data corruption risk.";
-            throw new MyJpaPlusException("softDeleteAll affected " + updated + " rows, exceeding the pre-check limit of "
-                + maxRows + ". Concurrent modifications detected. " + rollbackStatus);
+            updated = em.createNativeQuery("UPDATE " + escapedTable + " SET " + setClause + " WHERE " + whereClause)
+                .setParameter("deletedValue", deletedValue).executeUpdate();
+            if (maxRows > 0 && updated > maxRows) {
+                if (log.isWarnEnabled()) {
+                    log.warn("softDeleteAll affected {} rows, exceeding the pre-check limit of {}. "
+                        + "Concurrent modifications detected.", updated, maxRows);
+                }
+                boolean rolledBack = rollbackCurrentTransaction(em);
+                String rollbackStatus = rolledBack ? "Transaction has been rolled back."
+                    : "CRITICAL: Rollback FAILED. The UPDATE may be committed. Data corruption risk.";
+                throw new MyJpaPlusException("softDeleteAll affected " + updated
+                    + " rows, exceeding the pre-check limit of " + maxRows
+                    + ". Concurrent modifications detected. " + rollbackStatus);
+            }
         }
 
         publishAfterUpdate(em, entityClass, updated);
@@ -294,8 +344,12 @@ public final class SoftDeleteBulkExecutor {
         if (versionInfo != null)
             update.set(versionInfo.field().getName(), cb.sum(root.get(versionInfo.field().getName()), 1));
 
-        // 安全检查：先查询受影响行数，再执行 UPDATE
+        int updated;
         if (maxRows > 0) {
+            // ponytail: 先执行 COUNT 预检查，确保 count <= maxRows 后再执行修改。
+            // 这保留了原有的"超限即抛异常"语义，防止意外的大量行被修改。
+            // 预检查与后续 UPDATE 之间存在竞态窗口，但对于 CriteriaUpdate 路径
+            // （不支持 UPDATE LIMIT），这是唯一可行的方案。
             jakarta.persistence.criteria.CriteriaQuery<Long> countQuery = cb.createQuery(Long.class);
             jakarta.persistence.criteria.Root<T> countRoot = countQuery.from(entityClass);
             countQuery.select(cb.count(countRoot));
@@ -312,21 +366,47 @@ public final class SoftDeleteBulkExecutor {
                     + " rows, exceeding the limit of " + maxRows
                     + ". Consider using softDeleteByIdsUsingEntityManager() with explicit ID lists.");
             }
-        }
 
-        int updated = em.createQuery(update).executeUpdate();
-        // ponytail: 后置检查处理并发导致超额删除的场景，与 softDeleteAll（原生 SQL 版本）保持一致
-        if (maxRows > 0 && updated > maxRows) {
-            if (log.isWarnEnabled()) {
-                log.warn("softDeleteAllUsingCriteriaUpdate affected {} rows, exceeding the pre-check limit of {}. "
-                    + "Concurrent modifications detected.", updated, maxRows);
+            // ponytail: 使用 SELECT ... FOR UPDATE 获取 ID 列表（带悲观锁），然后按 ID 更新。
+            // 悲观锁持有至事务结束，消除了 COUNT/SELECT 与 UPDATE 之间的竞态条件窗口。
+            // JPA CriteriaUpdate 不支持 setLockMode()，因此无法直接对 UPDATE 加锁，
+            // 但通过先锁定 ID 再按 ID 更新，确保了操作的原子性。
+            String idFieldName = com.zsubera.jpa.util.EntityClassResolver.resolveIdFieldName(entityClass);
+            jakarta.persistence.criteria.CriteriaQuery<?> idQuery = cb.createQuery();
+            jakarta.persistence.criteria.Root<T> idRoot = idQuery.from(entityClass);
+            idQuery.select(idRoot.get(idFieldName));
+            if (ctx.resolved().booleanField()) {
+                idQuery.where(cb.or(cb.isNull(idRoot.get(ctx.fieldName())),
+                    cb.equal(idRoot.get(ctx.fieldName()), false)));
+            } else {
+                idQuery.where(cb.or(cb.isNull(idRoot.get(ctx.fieldName())),
+                    cb.notEqual(idRoot.get(ctx.fieldName()), ctx.resolved().dbValue())));
             }
-            boolean rolledBack = rollbackCurrentTransaction(em);
-            String rollbackStatus = rolledBack ? "Transaction has been rolled back."
-                : "CRITICAL: Rollback FAILED. The UPDATE may be committed. Data corruption risk.";
-            throw new MyJpaPlusException("softDeleteAllUsingCriteriaUpdate affected " + updated
-                + " rows, exceeding the pre-check limit of " + maxRows
-                + ". Concurrent modifications detected. " + rollbackStatus);
+            idQuery.orderBy(cb.asc(idRoot.get(idFieldName)));
+            jakarta.persistence.TypedQuery<?> lockQuery = em.createQuery(idQuery);
+            lockQuery.setMaxResults(maxRows);
+            lockQuery.setLockMode(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE);
+            java.util.List<?> ids = lockQuery.getResultList();
+            if (ids.isEmpty()) {
+                return 0;
+            }
+            // 按锁定的 ID 更新，确保 UPDATE 只影响已锁定的行
+            jakarta.persistence.criteria.CriteriaUpdate<T> boundedUpdate = cb.createCriteriaUpdate(entityClass);
+            jakarta.persistence.criteria.Root<T> boundedRoot = boundedUpdate.from(entityClass);
+            if (ctx.resolved().booleanField()) {
+                boundedUpdate.set(ctx.fieldName(), Boolean.TRUE);
+            } else {
+                boundedUpdate.set(ctx.fieldName(), ctx.resolved().dbValue());
+            }
+            if (timestampField != null)
+                boundedUpdate.set(ctx.annotation().deletedTimestampField(), cb.currentTimestamp());
+            if (versionInfo != null)
+                boundedUpdate.set(versionInfo.field().getName(),
+                    cb.sum(boundedRoot.get(versionInfo.field().getName()), 1));
+            boundedUpdate.where(boundedRoot.get(idFieldName).in(ids));
+            updated = em.createQuery(boundedUpdate).executeUpdate();
+        } else {
+            updated = em.createQuery(update).executeUpdate();
         }
         publishAfterUpdate(em, entityClass, updated);
         return updated;
