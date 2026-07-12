@@ -204,22 +204,24 @@ public final class InClauseBuilder {
         if (values.isEmpty()) {
             return new NullFilterResult(java.util.Collections.emptyList(), false);
         }
+        // 防御性复制，避免并发修改异常
+        java.util.List<Object> valuesCopy = new java.util.ArrayList<>(values);
         // ponytail: 小集合内联 null 检查，避免分配 ArrayList
-        if (values.size() <= 16) {
+        if (valuesCopy.size() <= 16) {
             boolean hasNull = false;
-            for (Object v : values) {
+            for (Object v : valuesCopy) {
                 if (v == null) {
                     hasNull = true;
                     break;
                 }
             }
             if (!hasNull) {
-                return new NullFilterResult(values instanceof List<?> l ? List.copyOf(l) : List.copyOf(values), false);
+                return new NullFilterResult(java.util.Collections.unmodifiableList(valuesCopy), false);
             }
         }
-        List<Object> nonNullValues = new ArrayList<>(values.size());
+        java.util.List<Object> nonNullValues = new ArrayList<>(valuesCopy.size());
         boolean hasNull = false;
-        for (Object v : values) {
+        for (Object v : valuesCopy) {
             if (v == null) {
                 hasNull = true;
             } else {

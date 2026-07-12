@@ -179,7 +179,8 @@ class BatchSaveTemplate {
                 result.addAll(executeBatchSave(batch));
             }
         } catch (RuntimeException e) {
-            throw new PartialBatchCommitException(batchNumber, result.size(), result, e);
+            // batch 在 executeBatchSave 抛异常时未被 clear()，仍持有失败的实体列表
+            throw new PartialBatchCommitException(batchNumber, result.size(), result, batch, e);
         }
         return result;
     }
@@ -192,14 +193,17 @@ class BatchSaveTemplate {
         private final int completedBatches;
         private final int committedEntities;
         private final List<?> committedResults;
+        private final List<?> failedEntities;
 
         PartialBatchCommitException(int completedBatches, int committedEntities,
-            List<?> committedResults, Throwable cause) {
+            List<?> committedResults, List<?> failedEntities, Throwable cause) {
             super("Batch save failed after " + completedBatches + " batches committed "
-                + committedEntities + " entities. Remaining entities were NOT committed.", cause);
+                + committedEntities + " entities. " + failedEntities.size()
+                + " entity(ies) were NOT committed.", cause);
             this.completedBatches = completedBatches;
             this.committedEntities = committedEntities;
             this.committedResults = committedResults;
+            this.failedEntities = failedEntities;
         }
 
         public int getCompletedBatches() {
@@ -212,6 +216,13 @@ class BatchSaveTemplate {
 
         public List<?> getCommittedResults() {
             return committedResults;
+        }
+
+        /**
+         * 返回未成功提交的实体列表，便于调用方进行幂等重试。
+         */
+        public List<?> getFailedEntities() {
+            return failedEntities;
         }
     }
 

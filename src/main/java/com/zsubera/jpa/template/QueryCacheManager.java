@@ -279,7 +279,8 @@ public class QueryCacheManager implements CacheAdapter {
     @Override
     public void evict(String key) {
         cache.invalidate(key);
-        removeFromPrefixIndex(key);
+        // removal listener 已通过 removeFromPrefixIndex 清理前缀索引，
+        // 无需重复调用（避免与 removal listener 竞态）。
         log.debug("Cache evicted for key: {}", key);
     }
 
@@ -288,8 +289,10 @@ public class QueryCacheManager implements CacheAdapter {
      */
     @Override
     public void clear() {
-        cache.invalidateAll();
+        // 先清空 prefixIndex，再清空 cache，确保 concurrent put() 在 cache.invalidateAll()
+        // 之后添加的条目仍会被 removal listener 清理前缀索引。
         prefixIndex.clear();
+        cache.invalidateAll();
         evictionGeneration.incrementAndGet();
         log.debug("Cache cleared");
     }
@@ -319,7 +322,9 @@ public class QueryCacheManager implements CacheAdapter {
         for (String key : keysToRemove) {
             cache.invalidate(key);
         }
-        prefixIndex.remove(normalizedPrefix);
+        // 不显式调用 prefixIndex.remove()：removal listener 已通过 removeFromPrefixIndex
+        // 原子性地清理每个 key 的前缀索引。当 set 为空时自动移除 prefix 条目。
+        // 显式 remove 会与并发 put() 竞态，导致新添加的 key 被遗弃。
         evictionGeneration.incrementAndGet();
         if (!keysToRemove.isEmpty()) {
             log.debug("Cache evicted {} entries with prefix '{}'", keysToRemove.size(), keyPrefix);
@@ -339,13 +344,17 @@ public class QueryCacheManager implements CacheAdapter {
 
     private void removeFromPrefixIndex(String key) {
         String prefix = extractPrefix(key);
-        java.util.Set<String> keys = prefixIndex.get(prefix);
-        if (keys != null) {
-            keys.remove(key);
-            if (keys.isEmpty()) {
-                prefixIndex.remove(prefix);
+        // 使用 compute 原子性地检查 set 是否为空，避免与并发 addToPrefixIndex 竞态：
+        // 仅当 set 移除 key 后为空时才移除 prefix 条目。
+        prefixIndex.compute(prefix, (k, keys) -> {
+            if (keys != null) {
+                keys.remove(key);
+                if (keys.isEmpty()) {
+                    return null;
+                }
             }
-        }
+            return keys;
+        });
     }
 
     /**

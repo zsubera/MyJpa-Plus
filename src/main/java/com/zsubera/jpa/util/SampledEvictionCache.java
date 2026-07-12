@@ -97,8 +97,10 @@ public class SampledEvictionCache<K, V> {
         if (maxSize <= 0)
             throw new IllegalArgumentException("maxSize must be positive, got: " + maxSize);
         long previousSize = delegate.estimatedSize();
+        // 先构建新缓存，再更新 maxSize，确保读者始终看到一致的缓存实例
+        Cache<K, V> newDelegate = build(maxSize);
+        this.delegate = newDelegate;
         this.maxSize = maxSize;
-        this.delegate = build(maxSize);
         if (previousSize > 0) {
             log.warn("Cache resized from {} to {} entries — {} entries dropped. "
                 + "setMaxSize() should only be called during startup initialization.", previousSize, maxSize,

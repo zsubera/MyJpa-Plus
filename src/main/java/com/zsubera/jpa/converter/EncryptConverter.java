@@ -335,6 +335,7 @@ public class EncryptConverter implements AttributeConverter<String, String> {
                 decrypted = cipher.doFinal(encrypted);
                 return new String(decrypted, StandardCharsets.UTF_8);
             } finally {
+                wipe(combined);
                 wipe(iv);
                 wipe(encrypted);
                 wipe(decrypted);

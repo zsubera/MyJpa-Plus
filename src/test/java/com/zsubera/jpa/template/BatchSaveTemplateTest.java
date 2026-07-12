@@ -487,4 +487,21 @@ class BatchSaveTemplateTest {
 
         assertFalse((boolean)isDefault.invoke(null, 0L, ManualIdEntity.class));
     }
+
+    // ---- PartialBatchCommitException failedEntities ----
+
+    @Test
+    void partialBatchCommitException_carryFailedEntities() {
+        List<String> committed = List.of("a", "b");
+        List<String> failed = List.of("c", "d", "e");
+        BatchSaveTemplate.PartialBatchCommitException ex =
+            new BatchSaveTemplate.PartialBatchCommitException(1, 2, committed, failed,
+                new RuntimeException("db error"));
+
+        assertEquals(1, ex.getCompletedBatches());
+        assertEquals(2, ex.getCommittedEntities());
+        assertEquals(committed, ex.getCommittedResults());
+        assertEquals(failed, ex.getFailedEntities());
+        assertTrue(ex.getMessage().contains("3 entity(ies) were NOT committed"));
+    }
 }

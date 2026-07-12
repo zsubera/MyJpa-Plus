@@ -285,7 +285,7 @@ final class EntityFieldExtractor<T> {
         // 尝试 isXxx() getter（boolean 类型，带缓存）
         if (field.getType() == boolean.class || field.getType() == Boolean.class) {
             String isGetterName = "is" + Character.toUpperCase(fieldName.charAt(0)) + fieldName.substring(1);
-            String isCacheKey = cls.getName() + "#" + isGetterName;
+            GetterCacheKey isCacheKey = new GetterCacheKey(cls, isGetterName);
             java.lang.reflect.Method cachedIs = GETTER_CACHE.getIfPresent(isCacheKey);
             if (cachedIs == NO_GETTER_SENTINEL) {
                 // skip

@@ -79,6 +79,9 @@ public final class PredicateHelper {
                 if (Double.isNaN(startVal) || Double.isNaN(endVal)) {
                     throw new IllegalArgumentException("NaN values are not allowed in range comparisons");
                 }
+                if (Double.isInfinite(startVal) || Double.isInfinite(endVal)) {
+                    throw new IllegalArgumentException("Infinity values are not allowed in range comparisons");
+                }
                 if (Double.compare(startVal, endVal) > 0) {
                     throw new IllegalArgumentException("start must not be greater than end");
                 }
@@ -87,6 +90,13 @@ public final class PredicateHelper {
         }
         if (((Comparable)start).compareTo(end) > 0) {
             throw new IllegalArgumentException("start must not be greater than end");
+        }
+        // 拒绝 Infinity 值，防止 CriteriaBuilder.between() 生成无效 SQL
+        if (start instanceof Double d && (Double.isInfinite(d) || Double.isNaN(d))) {
+            throw new IllegalArgumentException("Infinity/NaN values are not allowed in range comparisons");
+        }
+        if (start instanceof Float f && (Float.isInfinite(f) || Float.isNaN(f))) {
+            throw new IllegalArgumentException("Infinity/NaN values are not allowed in range comparisons");
         }
     }
 

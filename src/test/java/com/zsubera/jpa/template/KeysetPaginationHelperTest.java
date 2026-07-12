@@ -672,4 +672,20 @@ class KeysetPaginationHelperTest {
         assertEquals("aaa", page2.content().get(0).getName());
     }
 
+    // ---- pageSize 输入校验 ----
+
+    @Test
+    void findKeysetPage_pageSizeZero_throws() {
+        Specification<TestEntity> spec = (root, query, cb) -> cb.conjunction();
+        assertThrows(IllegalArgumentException.class,
+            () -> keysetPaginationHelper.findKeysetPage(TestEntity.class, spec, Sort.by("name"), 0, null));
+    }
+
+    @Test
+    void findKeysetPage_pageSizeNegative_throws() {
+        Specification<TestEntity> spec = (root, query, cb) -> cb.conjunction();
+        assertThrows(IllegalArgumentException.class,
+            () -> keysetPaginationHelper.findKeysetPage(TestEntity.class, spec, Sort.by("name"), -1, null));
+    }
+
 }

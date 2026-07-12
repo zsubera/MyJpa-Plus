@@ -977,8 +977,13 @@ public class MyJpaTemplate implements MyJpaTemplateOperations {
         if (maxResults <= 0 && maxResults != DISABLED) {
             throw new IllegalArgumentException("maxResults must be positive or -1 (disabled)");
         }
+        Specification<T> dataSpec = spec;
+        if (shouldApplySoftDeleteFilter()) {
+            Specification<T> sdSpec = SoftDeleteHelper.isNotDeleted(entityClass);
+            dataSpec = spec != null ? spec.and(sdSpec) : sdSpec;
+        }
         Integer effectiveMaxResults = maxResults == DISABLED ? null : maxResults;
-        TypedQuery<T> query = buildSpecificationQuery(entityClass, spec, null, effectiveMaxResults);
+        TypedQuery<T> query = buildSpecificationQuery(entityClass, dataSpec, null, effectiveMaxResults);
         return query.getResultList();
     }
 

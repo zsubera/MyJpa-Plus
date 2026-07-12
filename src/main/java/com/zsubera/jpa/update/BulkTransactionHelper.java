@@ -79,8 +79,8 @@ final class BulkTransactionHelper {
         try {
             int result = action.getAsInt();
             if (isNewTransaction) {
-                tx.commit();
                 em.clear();
+                tx.commit();
             }
             return result;
         } catch (RuntimeException | Error e) {

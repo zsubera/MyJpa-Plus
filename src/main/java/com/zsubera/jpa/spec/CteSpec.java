@@ -710,7 +710,7 @@ public class CteSpec {
         Pattern.compile("(xp_cmdshell|sp_executesql)", Pattern.CASE_INSENSITIVE);
 
     /** SQL 注入模式检测正则表达式。 */
-    private static final Pattern COMMENT_INJECTION_PATTERN = Pattern.compile("/\\*|\\*/|--\\s");
+    private static final Pattern COMMENT_INJECTION_PATTERN = Pattern.compile("/\\*|\\*/|--(?!:)");
     private static final Pattern SEMICOLON_INJECTION_PATTERN = Pattern.compile(";\\s*\\w");
 
     /** UNION SELECT 注入检测模式。仅检测 UNION SELECT（不含 ALL），因为 UNION ALL 是递归 CTE 的合法语法。 */

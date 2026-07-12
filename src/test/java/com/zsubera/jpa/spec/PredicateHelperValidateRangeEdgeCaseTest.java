@@ -128,6 +128,26 @@ class PredicateHelperValidateRangeEdgeCaseTest {
             () -> PredicateHelper.validateRange(10.0, 5.0f));
     }
 
+    // ===== Infinity values (cross-Number path) =====
+
+    @Test
+    void validateRange_positiveInfinity_throws() {
+        assertThrows(IllegalArgumentException.class,
+            () -> PredicateHelper.validateRange(0, Double.POSITIVE_INFINITY));
+    }
+
+    @Test
+    void validateRange_negativeInfinity_throws() {
+        assertThrows(IllegalArgumentException.class,
+            () -> PredicateHelper.validateRange(Double.NEGATIVE_INFINITY, 0));
+    }
+
+    @Test
+    void validateRange_bothInfinity_throws() {
+        assertThrows(IllegalArgumentException.class,
+            () -> PredicateHelper.validateRange(Double.NEGATIVE_INFINITY, Double.POSITIVE_INFINITY));
+    }
+
     // ===== escapeLikeWildcards additional coverage =====
 
     @Test

@@ -88,6 +88,40 @@ public final class SoftDeleteBulkExecutor {
                 + "Ensure the calling method is annotated with @Transactional.");
     }
 
+    /**
+     * 尝试回滚当前事务。支持 RESOURCE_LOCAL 和 JTA 环境。
+     *
+     * <p>RESOURCE_LOCAL 环境下使用 {@code em.getTransaction().rollback()}，
+     * JTA 环境下使用 {@code TransactionAspectSupport.currentTransactionStatus().setRollbackOnly()}。
+     *
+     * @return true 如果回滚成功（或标记为 rollback-only），false 如果无法执行回滚
+     */
+    private static boolean rollbackCurrentTransaction(EntityManager em) {
+        // 尝试 RESOURCE_LOCAL rollback（最可靠的方式）
+        try {
+            jakarta.persistence.EntityTransaction tx = em.getTransaction();
+            if (tx != null && tx.isActive()) {
+                tx.rollback();
+                return true;
+            }
+        } catch (IllegalStateException ignored) {
+            // JTA 环境：getTransaction() 抛出 IllegalStateException
+        }
+        // 尝试 Spring TransactionAspectSupport（适用于 Spring 管理的事务）
+        try {
+            org.springframework.transaction.interceptor.TransactionAspectSupport
+                .currentTransactionStatus().setRollbackOnly();
+            return true;
+        } catch (Exception e) {
+            log.debug("Failed to set rollback-only via TransactionAspectSupport: {}", e.getMessage());
+        }
+        log.error("CRITICAL: Unable to rollback transaction. "
+            + "The UPDATE has been executed but the transaction may not roll back. "
+            + "Ensure the calling @Transactional method has proper rollback configuration. "
+            + "Data corruption risk: the UPDATE may be committed at transaction commit time.");
+        return false;
+    }
+
     private static void requireNonNull(Object obj, String name) {
         if (obj == null)
             throw new IllegalArgumentException(name + " must not be null");
@@ -161,14 +195,11 @@ public final class SoftDeleteBulkExecutor {
                 log.warn("softDeleteAll affected {} rows, exceeding the pre-check limit of {}. "
                     + "Concurrent modifications detected.", updated, maxRows);
             }
-            try {
-                em.getTransaction().setRollbackOnly();
-            } catch (IllegalStateException e) {
-                // JTA environment: setRollbackOnly not available on EntityTransaction
-                // The exception will propagate to the caller for transaction rollback
-            }
+            boolean rolledBack = rollbackCurrentTransaction(em);
+            String rollbackStatus = rolledBack ? "Transaction has been rolled back."
+                : "CRITICAL: Rollback FAILED. The UPDATE may be committed. Data corruption risk.";
             throw new MyJpaPlusException("softDeleteAll affected " + updated + " rows, exceeding the pre-check limit of "
-                + maxRows + ". Concurrent modifications detected. Transaction will be rolled back.");
+                + maxRows + ". Concurrent modifications detected. " + rollbackStatus);
         }
 
         publishAfterUpdate(em, entityClass, updated);
@@ -290,15 +321,12 @@ public final class SoftDeleteBulkExecutor {
                 log.warn("softDeleteAllUsingCriteriaUpdate affected {} rows, exceeding the pre-check limit of {}. "
                     + "Concurrent modifications detected.", updated, maxRows);
             }
-            try {
-                em.getTransaction().setRollbackOnly();
-            } catch (IllegalStateException e) {
-                // JTA environment: setRollbackOnly not available on EntityTransaction
-                // The exception will propagate to the caller for transaction rollback
-            }
+            boolean rolledBack = rollbackCurrentTransaction(em);
+            String rollbackStatus = rolledBack ? "Transaction has been rolled back."
+                : "CRITICAL: Rollback FAILED. The UPDATE may be committed. Data corruption risk.";
             throw new MyJpaPlusException("softDeleteAllUsingCriteriaUpdate affected " + updated
                 + " rows, exceeding the pre-check limit of " + maxRows
-                + ". Concurrent modifications detected. Transaction will be rolled back.");
+                + ". Concurrent modifications detected. " + rollbackStatus);
         }
         publishAfterUpdate(em, entityClass, updated);
         return updated;

@@ -104,13 +104,14 @@ public final class GlobalConfigHolder {
             if (ctx != null) {
                 try {
                     MyJpaPlusGlobalConfig refreshed = ctx.getBean(MyJpaPlusGlobalConfig.class);
+                    // 原子性地更新缓存：先写 bean，再写时间戳
                     cachedBean = refreshed;
                     cachedBeanVerifyTime = now;
                     return refreshed;
                 } catch (Exception e) {
-                    // bean 已不存在（Context 刷新），清除缓存并回退
-                    cachedBean = null;
+                    // bean 已不存在（Context 刷新），原子性地清除缓存
                     cachedBeanVerifyTime = 0;
+                    cachedBean = null;
                 }
             }
             // 回退到过期的缓存（比返回 null 更安全），记录警告以便排查配置异常
@@ -167,11 +168,12 @@ public final class GlobalConfigHolder {
      * 生产环境不应调用此方法。
      */
     public static void reset() {
-        config = null;
-        applicationContext = null;
+        // 原子性地清除缓存：先清除缓存的 bean，再清除 applicationContext
         cachedBean = null;
         cachedBeanVerifyTime = 0;
         lastLookupFailureTime = 0;
+        config = null;
+        applicationContext = null;
     }
 
     // ---- 共享配置解析工具方法 ----

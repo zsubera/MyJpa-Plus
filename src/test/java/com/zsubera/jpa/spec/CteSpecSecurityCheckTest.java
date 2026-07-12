@@ -126,6 +126,12 @@ class CteSpecSecurityCheckTest {
         assertThrows(SecurityException.class, () -> CteSpec.with("ct").as("SELECT 1 -- comment"));
     }
 
+    @Test
+    void as_withLineCommentNoSpace_throwsSecurityException() {
+        // PostgreSQL treats --' as a line comment (no whitespace required after --)
+        assertThrows(SecurityException.class, () -> CteSpec.with("ct").as("SELECT 1 --'x"));
+    }
+
     // ---- semicolon injection ----
 
     @Test

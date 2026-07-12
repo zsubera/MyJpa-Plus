@@ -195,73 +195,82 @@ public final class SoftDeleteHelper {
             return cached;
         }
 
-        // 优先使用系统属性
-        String manualDialect = System.getProperty("myjpa-plus.dialect");
-        if (manualDialect != null && !manualDialect.isEmpty()) {
-            cachedDialect = manualDialect.toLowerCase();
-            return cachedDialect;
-        }
-
-        // 通过 Hibernate SessionFactory 的数据库方言检测
-        try {
-            jakarta.persistence.EntityManagerFactory emf = em.getEntityManagerFactory();
-            // 检查 Hibernate dialect 属性
-            Object dialectProp = emf.getProperties().get("hibernate.dialect");
-            if (dialectProp != null) {
-                String dialectStr = dialectProp.toString().toLowerCase();
-                log.debug("Detected Hibernate dialect property: {}", dialectStr);
-                if (dialectStr.contains("mysql")) {
-                    cachedDialect = "mysql";
-                    return cachedDialect;
-                } else if (dialectStr.contains("postgresql")) {
-                    cachedDialect = "postgresql";
-                    return cachedDialect;
-                } else if (dialectStr.contains("oracle")) {
-                    cachedDialect = "oracle";
-                    return cachedDialect;
-                } else if (dialectStr.contains("sqlserver") || dialectStr.contains("microsoft")) {
-                    cachedDialect = "sqlserver";
-                    return cachedDialect;
-                }
+        // 同步检测方言，避免并发检测导致的连接问题
+        synchronized (SoftDeleteHelper.class) {
+            // 双重检查缓存
+            cached = cachedDialect;
+            if (cached != null) {
+                return cached;
             }
 
-            // 尝试通过 JDBC 获取连接
-            java.sql.Connection conn = null;
-            try {
-                conn = em.unwrap(java.sql.Connection.class);
-            } catch (Exception ex) {
-                log.debug("Failed to unwrap Connection directly: {}", ex.getMessage());
-            }
-
-            if (conn != null) {
-                int unwrapAttempts = 0;
-                while (conn.isWrapperFor(java.sql.Connection.class) && unwrapAttempts < 5) {
-                    conn = conn.unwrap(java.sql.Connection.class);
-                    unwrapAttempts++;
-                }
-                String productName = conn.getMetaData().getDatabaseProductName().toLowerCase();
-                log.debug("Detected database product: {}", productName);
-                if (productName.contains("mysql")) {
-                    cachedDialect = "mysql";
-                } else if (productName.contains("postgresql")) {
-                    cachedDialect = "postgresql";
-                } else if (productName.contains("oracle")) {
-                    cachedDialect = "oracle";
-                } else if (productName.contains("microsoft") || productName.contains("sqlserver")) {
-                    cachedDialect = "sqlserver";
-                } else {
-                    cachedDialect = "postgresql";
-                }
+            // 优先使用系统属性
+            String manualDialect = System.getProperty("myjpa-plus.dialect");
+            if (manualDialect != null && !manualDialect.isEmpty()) {
+                cachedDialect = manualDialect.toLowerCase();
                 return cachedDialect;
             }
 
-            log.warn("Could not detect database dialect, defaulting to postgresql");
-            cachedDialect = "postgresql";
-            return cachedDialect;
-        } catch (Exception e) {
-            log.warn("Failed to detect database dialect, defaulting to postgresql: {}", e.getMessage());
-            cachedDialect = "postgresql";
-            return cachedDialect;
+            // 通过 Hibernate SessionFactory 的数据库方言检测
+            try {
+                jakarta.persistence.EntityManagerFactory emf = em.getEntityManagerFactory();
+                // 检查 Hibernate dialect 属性
+                Object dialectProp = emf.getProperties().get("hibernate.dialect");
+                if (dialectProp != null) {
+                    String dialectStr = dialectProp.toString().toLowerCase();
+                    log.debug("Detected Hibernate dialect property: {}", dialectStr);
+                    if (dialectStr.contains("mysql")) {
+                        cachedDialect = "mysql";
+                        return cachedDialect;
+                    } else if (dialectStr.contains("postgresql")) {
+                        cachedDialect = "postgresql";
+                        return cachedDialect;
+                    } else if (dialectStr.contains("oracle")) {
+                        cachedDialect = "oracle";
+                        return cachedDialect;
+                    } else if (dialectStr.contains("sqlserver") || dialectStr.contains("microsoft")) {
+                        cachedDialect = "sqlserver";
+                        return cachedDialect;
+                    }
+                }
+
+                // 尝试通过 JDBC 获取连接
+                java.sql.Connection conn = null;
+                try {
+                    conn = em.unwrap(java.sql.Connection.class);
+                } catch (Exception ex) {
+                    log.debug("Failed to unwrap Connection directly: {}", ex.getMessage());
+                }
+
+                if (conn != null) {
+                    int unwrapAttempts = 0;
+                    while (conn.isWrapperFor(java.sql.Connection.class) && unwrapAttempts < 5) {
+                        conn = conn.unwrap(java.sql.Connection.class);
+                        unwrapAttempts++;
+                    }
+                    String productName = conn.getMetaData().getDatabaseProductName().toLowerCase();
+                    log.debug("Detected database product: {}", productName);
+                    if (productName.contains("mysql")) {
+                        cachedDialect = "mysql";
+                    } else if (productName.contains("postgresql")) {
+                        cachedDialect = "postgresql";
+                    } else if (productName.contains("oracle")) {
+                        cachedDialect = "oracle";
+                    } else if (productName.contains("microsoft") || productName.contains("sqlserver")) {
+                        cachedDialect = "sqlserver";
+                    } else {
+                        cachedDialect = "postgresql";
+                    }
+                    return cachedDialect;
+                }
+
+                log.warn("Could not detect database dialect, defaulting to postgresql");
+                cachedDialect = "postgresql";
+                return cachedDialect;
+            } catch (Exception e) {
+                log.warn("Failed to detect database dialect, defaulting to postgresql: {}", e.getMessage());
+                cachedDialect = "postgresql";
+                return cachedDialect;
+            }
         }
     }
 

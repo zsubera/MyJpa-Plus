@@ -161,6 +161,17 @@ public class QueryMetricsCollector {
     }
 
     /**
+     * 关闭指标收集器，清理缓存资源。
+     *
+     * <p>
+     * 应在应用关闭时调用，防止内存泄漏。
+     */
+    public void shutdown() {
+        metricsMap.invalidateAll();
+        enabled = false;
+    }
+
+    /**
      * 重置指定查询的指标。
      *
      * @param queryName 查询名称

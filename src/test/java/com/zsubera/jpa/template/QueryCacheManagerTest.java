@@ -578,4 +578,37 @@ class QueryCacheManagerTest {
 
         assertEquals(0, cache.getEvictionGeneration());
     }
+
+    // ---- evict() prefix index cleanup (no double-call with removal listener) ----
+
+    @Test
+    void evict_prefixIndexCleanedUp() {
+        cache.put("User:q1", "v1", 60);
+        cache.put("User:q2", "v2", 60);
+        assertEquals(2, cache.size());
+
+        cache.evict("User:q1");
+
+        assertNull(cache.get("User:q1"));
+        assertEquals(1, cache.size());
+        // q2 should still be evictable by prefix
+        int evicted = cache.evictByPrefix("User:");
+        assertEquals(1, evicted);
+    }
+
+    // ---- clear() ordering: prefixIndex cleared before cache ----
+
+    @Test
+    void clear_allEntriesRemoved() {
+        cache.put("User:q1", "v1", 60);
+        cache.put("Order:q1", "v2", 60);
+
+        cache.clear();
+
+        assertEquals(0, cache.size());
+        assertNull(cache.get("User:q1"));
+        assertNull(cache.get("Order:q1"));
+        // After clear, evictByPrefix should find nothing
+        assertEquals(0, cache.evictByPrefix("User:"));
+    }
 }

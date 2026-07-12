@@ -102,6 +102,9 @@ final class KeysetPaginationHelper {
      */
     <T> MyJpaTemplateOperations.KeysetPage<T> findKeysetPage(Class<T> entityClass, Specification<T> spec, Sort sort,
         int pageSize, @Nullable Object[] lastSortValues) {
+        if (pageSize <= 0) {
+            throw new IllegalArgumentException("pageSize must be positive, got: " + pageSize);
+        }
         List<Sort.Order> orders = sort.stream().toList();
 
         // First page: no cursor values → skip keyset predicate

@@ -682,8 +682,18 @@ public class DefaultMyJpaRepository<T, ID> extends SimpleJpaRepository<T, ID> im
         if (idList.isEmpty()) {
             return;
         }
-        executeDeleteOrBlock(() -> SoftDeleteBulkExecutor.softDeleteByIds(entityManager, domainClass, idList),
-            () -> super.deleteAllById(idList));
+        executeDeleteOrBlock(
+            () -> SoftDeleteBulkExecutor.softDeleteByIds(entityManager, domainClass, idList),
+            () -> {
+                // 硬删除路径使用 CriteriaDelete 批量操作，避免 super.deleteAllById()
+                // 内部回调 this.deleteById() 导致 N 次独立 findById + remove 查询。
+                String idFieldName = EntityClassResolver.resolveIdFieldName(domainClass);
+                jakarta.persistence.criteria.CriteriaBuilder cb = entityManager.getCriteriaBuilder();
+                jakarta.persistence.criteria.CriteriaDelete<T> delete = cb.createCriteriaDelete(domainClass);
+                jakarta.persistence.criteria.Root<T> root = delete.from(domainClass);
+                delete.where(root.get(idFieldName).in(idList));
+                entityManager.createQuery(delete).executeUpdate();
+            });
     }
 
     /**

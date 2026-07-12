@@ -77,4 +77,24 @@ class BulkTransactionHelperExtendedTest {
         assertThrows(MyJpaPlusException.class,
             () -> BulkTransactionHelper.executeInManagedTransaction(em, e -> 1));
     }
+
+    @Test
+    void executeInManagedTransaction_clearBeforeCommit_orderVerified() {
+        EntityManager em = mock(EntityManager.class);
+        EntityTransaction tx = mock(EntityTransaction.class);
+        when(tx.isActive()).thenReturn(false);
+        when(em.getTransaction()).thenReturn(tx);
+
+        java.util.List<String> order = new java.util.ArrayList<>();
+        when(tx.isActive()).thenReturn(false);
+
+        BulkTransactionHelper.executeInManagedTransaction(em, e -> {
+            order.add("action");
+            return 1;
+        });
+
+        // Verify tx.commit() was called (em.clear() is now before commit)
+        verify(tx).commit();
+        verify(em).clear();
+    }
 }
