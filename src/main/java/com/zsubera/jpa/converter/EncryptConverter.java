@@ -117,20 +117,16 @@ public class EncryptConverter implements AttributeConverter<String, String> {
     private static void returnCipher(Cipher cipher) {}
 
     /**
-     * 安全清除 byte 数组中的敏感数据。使用 ByteBuffer 包装防止 JIT 逃逸分析将清零优化掉。
+     * 安全清除 byte 数组中的敏感数据。
+     *
+     * <p>{@code Arrays.fill} 是 native 方法，JVM 无法将其优化掉。
+     * 原实现使用 {@code ByteBuffer.allocate()} 复制一份secret再清零，
+     * 实际上多分配了一份敏感数据在堆上，增加了暴露窗口。</p>
      */
     private static void wipe(byte[] secret) {
         if (secret == null)
             return;
-        // 写入 ByteBuffer 确保 side-effect 不被 JIT 消除
-        // 使用堆内 ByteBuffer 而非堆外 DirectByteBuffer，避免堆外内存泄漏
-        ByteBuffer buf = ByteBuffer.allocate(secret.length);
-        buf.put(secret);
-        java.util.Arrays.fill(secret, (byte)0);
-        // 清除 buffer 内部数组中的副本，防止敏感数据残留
-        byte[] bufArray = buf.array();
-        java.util.Arrays.fill(bufArray, (byte)0);
-        buf.clear();
+        java.util.Arrays.fill(secret, (byte) 0);
     }
 
     /**

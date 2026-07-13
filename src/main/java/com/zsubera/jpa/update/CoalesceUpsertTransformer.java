@@ -65,8 +65,14 @@ class CoalesceUpsertTransformer {
                 }
             }
         } catch (Exception e) {
-            log.warn("Failed to parse SQL for COALESCE transformation, falling back to original: {}",
-                e.getMessage());
+            // ponytail: COALESCE protection is critical for data integrity — silently
+            // degrading would cause NULL values from @Embedded fields to overwrite
+            // existing data in conflict rows. Throw to prevent data corruption.
+            throw new com.zsubera.jpa.exception.MyJpaPlusException(
+                "COALESCE transformation failed for UPSERT SQL. "
+                    + "This would cause NULL values to overwrite existing data on conflict. "
+                    + "SQL parse error: " + e.getMessage()
+                    + ". SQL (truncated): " + (sql.length() > 200 ? sql.substring(0, 200) + "..." : sql), e);
         }
         return sql;
     }

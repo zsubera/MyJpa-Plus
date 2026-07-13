@@ -63,20 +63,18 @@ class CoalesceUpsertTransformerTest {
 
     /**
      * MySQL AS new 语法在 JSqlParser 5.3 中不被支持，
-     * 因此 COALESCE 变换会降级返回原始 SQL。
-     * 实际项目中 MySQL 使用 VALUES() 语法（见 mysql_withoutAlias_coalesceApplied）。
+     * 当 coalesceColumns 非空时抛出异常（防止数据损坏）。
      */
     @Test
-    void mysql_withAlias_fallbackToOriginal() {
+    void mysql_withAlias_throwsWhenCoalesceNeeded() {
         String sql = "INSERT INTO `t` (`id`, `name`, `street`, `city`) "
             + "VALUES (1, 'Alice', NULL, NULL), (2, 'Bob', '123 Main St', 'NYC') "
             + "AS new ON DUPLICATE KEY UPDATE "
             + "`name` = new.`name`, `street` = new.`street`, `city` = new.`city`";
 
-        String result = CoalesceUpsertTransformer.applyCoalesce(sql, Set.of("street", "city"));
-
-        // JSqlParser 无法解析 AS new 语法，降级返回原始 SQL
-        assertEquals(sql, result, "AS new syntax not supported by JSqlParser, should return original SQL");
+        assertThrows(com.zsubera.jpa.exception.MyJpaPlusException.class,
+            () -> CoalesceUpsertTransformer.applyCoalesce(sql, Set.of("street", "city")),
+            "Should throw when COALESCE is needed but SQL cannot be parsed (prevents data corruption)");
     }
 
     @Test
@@ -99,16 +97,16 @@ class CoalesceUpsertTransformerTest {
     // ==================== 边界情况 ====================
 
     @Test
-    void nullCoalesceColumns_returnsOriginalSql() {
+    void emptyCoalesceColumns_returnsOriginalSql() {
         String sql = "INSERT INTO t (id, name) VALUES (1, 'test')";
-        String result = CoalesceUpsertTransformer.applyCoalesce(sql, null);
+        String result = CoalesceUpsertTransformer.applyCoalesce(sql, Set.of());
         assertEquals(sql, result);
     }
 
     @Test
-    void emptyCoalesceColumns_returnsOriginalSql() {
+    void nullCoalesceColumns_returnsOriginalSql() {
         String sql = "INSERT INTO t (id, name) VALUES (1, 'test')";
-        String result = CoalesceUpsertTransformer.applyCoalesce(sql, Set.of());
+        String result = CoalesceUpsertTransformer.applyCoalesce(sql, null);
         assertEquals(sql, result);
     }
 
@@ -120,10 +118,18 @@ class CoalesceUpsertTransformerTest {
     }
 
     @Test
-    void malformedSql_returnsOriginalSql() {
+    void malformedSql_throwsWhenCoalesceColumnsNonEmpty() {
         String sql = "THIS IS NOT VALID SQL !!!";
-        String result = CoalesceUpsertTransformer.applyCoalesce(sql, Set.of("name"));
-        assertEquals(sql, result, "Malformed SQL should be returned unchanged");
+        assertThrows(com.zsubera.jpa.exception.MyJpaPlusException.class,
+            () -> CoalesceUpsertTransformer.applyCoalesce(sql, Set.of("name")),
+            "Should throw when COALESCE is needed but SQL cannot be parsed");
+    }
+
+    @Test
+    void malformedSql_noCoalesceColumns_returnsOriginalSql() {
+        String sql = "THIS IS NOT VALID SQL !!!";
+        String result = CoalesceUpsertTransformer.applyCoalesce(sql, Set.of());
+        assertEquals(sql, result, "Malformed SQL with no coalesce columns should be returned unchanged");
     }
 
     @Test
