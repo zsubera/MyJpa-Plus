@@ -91,12 +91,12 @@ public abstract class AbstractBulkOperationSpec<T, SELF extends AbstractBulkOper
     }
 
     /**
-     * 批量操作后清理持久化上下文：根据策略选择性地 flush + clear L1 缓存，然后驱逐 L2 缓存。
+     * 批量操作后清理持久化上下文：根据策略选择性地 clear L1 缓存，然后驱逐 L2 缓存。
      * 子类在每个批量操作方法的 {@code affected > 0} 分支中调用此方法。
      */
     protected void afterBulkOperation(EntityManager em, Class<?> entityClass) {
         if (persistenceContextStrategy == PersistenceContextStrategy.AUTO_CLEAR) {
-            // ponytail: 不调用 em.flush()，因为批量操作（CriteriaUpdate/NativeQuery）已直接发送 SQL 到数据库。
+            // 不调用 em.flush()：批量操作（CriteriaUpdate/NativeQuery）已直接发送 SQL 到数据库，
             // em.flush() 会无意中将持久化上下文中其他无关实体类型的脏数据写入数据库，
             // 然后 em.clear() 又将这些实体分离，导致意外的数据持久化和 LazyInitializationException。
             em.clear();

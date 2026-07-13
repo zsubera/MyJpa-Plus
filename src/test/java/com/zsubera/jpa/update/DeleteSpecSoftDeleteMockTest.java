@@ -54,8 +54,8 @@ class DeleteSpecSoftDeleteMockTest {
         EntityManager em = em();
         when(em.createQuery(any(CriteriaUpdate.class))).thenReturn(q);
         spec.executeAsSoftDelete(em, "deleted", true);
-        // ponytail: afterBulkOperation should NOT flush (bulk ops send SQL directly),
-        // but should clear the L1 cache to avoid stale reads.
+        // afterBulkOperation must NOT flush: bulk ops send SQL directly to the DB,
+        // and em.flush() would accidentally persist unrelated dirty entities in the PC.
         verify(em, never()).flush();
         verify(em, atLeastOnce()).clear();
     }

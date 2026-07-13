@@ -212,7 +212,7 @@ public class UpdateSpec<T> extends AbstractBulkOperationSpec<T, UpdateSpec<T>> {
      * <strong>安全保护：</strong>如果配置了最大批量操作行数限制，执行前会先计数验证，
      * 超过限制时抛出 {@link IllegalStateException} 阻止执行。
      *
-     * <p><strong>副作用：</strong>当 affected > 0 时，会调用 {@code em.flush()} 和 {@code em.clear()}，
+     * <p><strong>副作用：</strong>当 affected > 0 时，会调用 {@code em.clear()}，
      * 清空持久化上下文中的所有托管实体。在此方法之前通过 {@code em.find()} 等加载的实体将变为游离状态，
      * 后续访问其延迟加载属性可能导致 {@code LazyInitializationException}。
      *
@@ -558,7 +558,12 @@ public class UpdateSpec<T> extends AbstractBulkOperationSpec<T, UpdateSpec<T>> {
         }
         idQuery.where(predicateList.isEmpty() ? cb.conjunction() : cb.and(predicateList.toArray(new Predicate[0])));
         idQuery.orderBy(cb.asc(idRoot.get(idFieldName)));
-        List<?> ids = em.createQuery(idQuery).setMaxResults(limit).getResultList();
+        // ponytail: 应用 PESSIMISTIC_WRITE 锁，防止 ID 查询和 UPDATE 之间的 TOCTOU 竞态条件。
+        // 与 executeLimitedWithCursor 保持一致，避免并发 INSERT/DELETE 导致行被跳过或重复处理。
+        TypedQuery<?> query = em.createQuery(idQuery);
+        query.setMaxResults(limit);
+        query.setLockMode(LockModeType.PESSIMISTIC_WRITE);
+        List<?> ids = query.getResultList();
         if (ids.isEmpty()) {
             return new BatchCursor(0, lastId);
         }

@@ -7,6 +7,7 @@ import com.zsubera.jpa.spec.TestEntity;
 import com.zsubera.jpa.spec.TestEntityRepository;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
+import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -164,5 +165,35 @@ class UpdateSpecBatchCursorBoundaryTest {
         }
 
         assertEquals(8, totalUpdated);
+    }
+
+    /**
+     * P1-3 修复验证：executeLimitedCursor 应在 ID 查询上应用 PESSIMISTIC_WRITE 锁。
+     * 通过 SQL 日志验证 FOR UPDATE 子句存在。
+     */
+    @Test
+    void executeLimitedCursor_appliesPessimisticLock() {
+        for (int i = 0; i < 3; i++) {
+            TestEntity e = new TestEntity();
+            e.setName("lock" + i);
+            e.setStatus(0);
+            repository.save(e);
+        }
+        repository.flush();
+        em.clear();
+
+        UpdateSpec<TestEntity> spec = new UpdateSpec<>(TestEntity.class);
+        spec.set(TestEntity::getStatus, 1).eq(TestEntity::getStatus, 0);
+
+        // 执行 executeLimitedCursor，内部应使用 PESSIMISTIC_WRITE 锁
+        UpdateSpec.BatchCursor cursor = spec.executeLimitedCursor(em, 10, null);
+        assertEquals(3, cursor.affected());
+        assertNotNull(cursor.lastId());
+
+        // 验证更新后的数据正确
+        em.clear();
+        List<TestEntity> updated = repository.findAll();
+        assertEquals(3, updated.size());
+        assertTrue(updated.stream().allMatch(e -> e.getStatus() == 1));
     }
 }

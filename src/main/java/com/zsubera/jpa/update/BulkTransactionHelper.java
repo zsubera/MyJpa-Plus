@@ -80,7 +80,14 @@ final class BulkTransactionHelper {
             int result = action.getAsInt();
             if (isNewTransaction) {
                 tx.commit();
-                em.clear();
+                try {
+                    em.clear();
+                } catch (RuntimeException clearEx) {
+                    // ponytail: Data is already committed at this point.
+                    // em.clear() failure must NOT propagate — it would make the caller
+                    // believe the transaction was rolled back when it was actually committed.
+                    log.warn("EntityManager.clear() failed after successful commit: {}", clearEx.getMessage());
+                }
             }
             return result;
         } catch (RuntimeException | Error e) {

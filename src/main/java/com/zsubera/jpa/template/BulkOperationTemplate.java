@@ -89,7 +89,15 @@ class BulkOperationTemplate {
                 return r;
             } catch (RuntimeException | Error e) {
                 if (tx.isActive()) {
-                    tx.rollback();
+                    try {
+                        tx.rollback();
+                    } catch (Exception rollbackEx) {
+                        // ponytail: Preserve the original exception as the root cause.
+                        // If rollback also fails, the caller must see the ORIGINAL failure,
+                        // not a misleading rollback exception.
+                        log.error("Transaction rollback failed after operation error", rollbackEx);
+                        e.addSuppressed(rollbackEx);
+                    }
                 }
                 throw e;
             }

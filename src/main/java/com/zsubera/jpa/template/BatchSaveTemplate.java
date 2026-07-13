@@ -68,7 +68,12 @@ class BatchSaveTemplate {
                 return r;
             } catch (RuntimeException | Error e) {
                 if (tx.isActive()) {
-                    tx.rollback();
+                    try {
+                        tx.rollback();
+                    } catch (Exception rollbackEx) {
+                        log.error("Transaction rollback failed after operation error", rollbackEx);
+                        e.addSuppressed(rollbackEx);
+                    }
                 }
                 throw e;
             }

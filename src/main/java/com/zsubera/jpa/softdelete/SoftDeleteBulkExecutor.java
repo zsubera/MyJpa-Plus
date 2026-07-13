@@ -1,6 +1,7 @@
 package com.zsubera.jpa.softdelete;
 
 import com.zsubera.jpa.annotation.SoftDelete;
+import com.zsubera.jpa.autoconfigure.GlobalConfigHolder;
 import com.zsubera.jpa.exception.MyJpaPlusException;
 import com.zsubera.jpa.update.AuditUtils;
 import jakarta.persistence.EntityManager;
@@ -192,7 +193,8 @@ public final class SoftDeleteBulkExecutor {
     }
 
     public static <T> int softDeleteAll(EntityManager em, Class<T> entityClass, boolean allowUnconditional) {
-        return softDeleteAll(em, entityClass, allowUnconditional, DEFAULT_MAX_ROWS);
+        int maxRows = GlobalConfigHolder.resolveMaxBulkOperationRows(DEFAULT_MAX_ROWS);
+        return softDeleteAll(em, entityClass, allowUnconditional, maxRows);
     }
 
     public static <T> int softDeleteAll(EntityManager em, Class<T> entityClass, boolean allowUnconditional,
@@ -335,7 +337,8 @@ public final class SoftDeleteBulkExecutor {
 
     public static <T> int softDeleteAllUsingCriteriaUpdate(EntityManager em, Class<T> entityClass,
         boolean allowUnconditional) {
-        return softDeleteAllUsingCriteriaUpdate(em, entityClass, allowUnconditional, DEFAULT_MAX_ROWS);
+        int maxRows = GlobalConfigHolder.resolveMaxBulkOperationRows(DEFAULT_MAX_ROWS);
+        return softDeleteAllUsingCriteriaUpdate(em, entityClass, allowUnconditional, maxRows);
     }
 
     public static <T> int softDeleteAllUsingCriteriaUpdate(EntityManager em, Class<T> entityClass,

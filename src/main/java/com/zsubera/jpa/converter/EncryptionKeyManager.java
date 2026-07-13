@@ -246,6 +246,23 @@ final class EncryptionKeyManager {
                 + KEY_VERSION_ENV + " or " + KEY_VERSION_PROPERTY + ".");
         }
 
+        // ponytail: 处理单条目 vN:key 格式（如 "v1:32byteKey"），保持与多密钥模式一致的密钥材料提取。
+        // 若此处将整个 "v1:32byteKey" 字符串（含版本前缀）送入 PBKDF2，则后续新增第二版本（变为
+        // "v1:32byteKey,v2:otherKey"）后 v1 的派生密钥变化，已有数据永久不可解密。
+        int singleColonIdx = allKeys.indexOf(':');
+        if (singleColonIdx > 0) {
+            String prefix = allKeys.substring(0, singleColonIdx).trim();
+            if (prefix.length() > 1 && prefix.charAt(0) == 'v'
+                && prefix.substring(1).chars().allMatch(Character::isDigit)) {
+                String entryKey = allKeys.substring(singleColonIdx + 1).trim();
+                if (version != null && !prefix.equals(version) && !"default".equals(version)) {
+                    logVersionMismatch(version);
+                }
+                validateKeyLength(entryKey);
+                return entryKey.toCharArray();
+            }
+        }
+
         if (version != null && !"v1".equals(version) && !"default".equals(version)) {
             logVersionMismatch(version);
         }
@@ -293,27 +310,28 @@ final class EncryptionKeyManager {
         }
     }
 
-    private static final AtomicReference<byte[]> CACHED_SALT_REF = new AtomicReference<>();
-
     /** 开发环境专用回退盐值。仅在 skipSaltCheck=true 且非生产环境时使用。 */
     private static final byte[] DEV_SALT_FALLBACK = "myjpa-plus-dev-salt-fallback".getBytes(StandardCharsets.UTF_8);
 
+    /**
+     * 获取 PBKDF2 盐值。始终从环境变量/系统属性读取，不缓存盐值本身。
+     *
+     * <p>
+     * ponytail: 移除 CACHED_SALT_REF 缓存，修复 clearCaches() 与并发 getSalt() 之间的竞态条件。
+     * 之前的实现将盐值缓存在 AtomicReference 中，clearCaches() 重置为 null 后，
+     * 已缓存旧盐的线程继续使用旧盐派生密钥，新线程使用新盐，导致不同密钥共存于数据库，
+     * 旧盐加密的数据永久不可解密。
+     *
+     * <p>
+     * System.getenv() 和 System.getProperty() 性能开销极小（纳秒级），无需缓存。
+     */
     private static byte[] getSalt() {
-        byte[] cached = CACHED_SALT_REF.get();
-        if (cached != null) {
-            return cached.clone();
-        }
         String salt = System.getenv(SALT_ENV);
         if (salt == null || salt.isEmpty()) {
             salt = System.getProperty(SALT_PROPERTY);
         }
         if (salt != null && !salt.isEmpty()) {
-            byte[] bytes = salt.getBytes(StandardCharsets.UTF_8);
-            // ponytail: 直接使用 bytes.clone() 而非 CACHED_SALT_REF.get().clone()，
-            // 避免 CAS 和 get() 之间 clearCaches() 置 null 导致 NPE。
-            // bytes 与缓存值等价（同一环境变量/系统属性），CAS 仅确保单次计算。
-            CACHED_SALT_REF.compareAndSet(null, bytes);
-            return bytes.clone();
+            return salt.getBytes(StandardCharsets.UTF_8);
         }
         if (isSaltCheckSkipped()) {
             if (com.zsubera.jpa.autoconfigure.EnvironmentHelper.isProductionEnvironment()) {
@@ -323,7 +341,6 @@ final class EncryptionKeyManager {
             log.warn("SECURITY: Skipping PBKDF2 salt check. Using a dev-only deterministic salt. "
                 + "Encrypted data will be UNRECOVERABLE after application restart. "
                 + "This is ONLY acceptable for local development with disposable data.");
-            CACHED_SALT_REF.compareAndSet(null, DEV_SALT_FALLBACK);
             return DEV_SALT_FALLBACK.clone();
         }
         throw new MyJpaPlusException("PBKDF2 salt must be configured. " + "Set environment variable " + SALT_ENV
@@ -390,6 +407,23 @@ final class EncryptionKeyManager {
                 }
             }
         } else {
+            // ponytail: 单条目 vN:key 格式——仅验证冒号后的密钥材料（与 resolveRawKey 一致）
+            int colonIdx = key.indexOf(':');
+            if (colonIdx > 0) {
+                String prefix = key.substring(0, colonIdx).trim();
+                if (prefix.length() > 1 && prefix.charAt(0) == 'v'
+                    && prefix.substring(1).chars().allMatch(Character::isDigit)) {
+                    String rawValue = key.substring(colonIdx + 1).trim();
+                    int byteLen = rawValue.getBytes(StandardCharsets.UTF_8).length;
+                    if (byteLen < MIN_KEY_LENGTH) {
+                        throw new MyJpaPlusException(
+                            "Encryption key must be at least " + MIN_KEY_LENGTH + " bytes (UTF-8 encoded). "
+                                + "Current byte length: " + byteLen + " (character length: " + rawValue.length()
+                                + ").");
+                    }
+                    return;
+                }
+            }
             int byteLength = key.getBytes(StandardCharsets.UTF_8).length;
             if (byteLength < MIN_KEY_LENGTH) {
                 throw new MyJpaPlusException(
@@ -412,7 +446,6 @@ final class EncryptionKeyManager {
         try {
             KEY_CACHE.invalidateAll();
             KEY_VALIDATED.set(false);
-            CACHED_SALT_REF.set(null);
             configuredPbkdf2Iterations = -1;
             keyVersionSnapshot = new KeyVersionSnapshot(null, 0);
         } finally {

@@ -98,10 +98,15 @@ final class QueryBuildHelper {
         }
 
         if (combinedSpec != null) {
-            // ponytail: 传入 null 作为 CriteriaQuery 参数，避免 toPredicate() 的副作用
-            // 将 DISTINCT/GROUP BY/ORDER BY 应用到 count 查询上。count 查询带 GROUP BY 会
-            // 返回多行导致 getSingleResult() 抛出 NonUniqueResultException。
-            jakarta.persistence.criteria.Predicate countPredicate = combinedSpec.toPredicate(countRoot, null, cb);
+            // ponytail: 传入一个临时 CriteriaQuery 而非 null，以避免 Specification 实现中
+            // 对 query 参数的方法调用（如 query.distinct() / query.groupBy()）抛出 NPE。
+            // 传入 null 违反 JPA 契约——Specification.toPredicate() 的 CriteriaQuery 参数
+            // 可能在任何实现中被访问，NPE 会导致整个 count 查询崩溃。
+            // 使用独立的 countCq 进行计数查询，tempCq 仅用于满足 toPredicate() 签名。
+            // COUNT 查询不受 tempCq 的 DISTINCT/GROUP BY 副作用影响。
+            jakarta.persistence.criteria.CriteriaQuery<?> tempCq = cb.createQuery();
+            jakarta.persistence.criteria.Predicate countPredicate =
+                combinedSpec.toPredicate(countRoot, tempCq, cb);
             if (countPredicate != null) {
                 countCq.where(countPredicate);
             }
