@@ -250,10 +250,24 @@ class CorrectnessGuardTest {
     // ---- executeLimitedCursor 守卫 ----
 
     @Test
-    @DisplayName("executeLimitedCursor should require allowUnconditional for no-condition delete")
-    void executeLimitedCursor_requiresAllowUnconditional() {
+    @DisplayName("executeLimitedCursor should work without allowUnconditional for @SoftDelete entity (auto soft-delete filter)")
+    void executeLimitedCursor_worksWithoutAllowUnconditional_forSoftDeleteEntity() {
+        // SoftDeleteTestEntity has @SoftDelete, so buildPredicates() automatically adds
+        // a soft-delete filter. This means executeLimitedCursor has a WHERE condition
+        // and doesn't need allowUnconditional.
         com.zsubera.jpa.update.DeleteSpec<SoftDeleteTestEntity> spec =
             new com.zsubera.jpa.update.DeleteSpec<>(SoftDeleteTestEntity.class);
+
+        assertDoesNotThrow(() -> spec.executeLimitedCursor(entityManager, 100, null));
+    }
+
+    @Test
+    @DisplayName("executeLimitedCursor should require allowUnconditional for entity without @SoftDelete")
+    void executeLimitedCursor_requiresAllowUnconditional_forNonSoftDeleteEntity() {
+        // TestEntity has no @SoftDelete field, so no auto filter is added.
+        // executeLimitedCursor should require allowUnconditional for unconditional delete.
+        com.zsubera.jpa.update.DeleteSpec<com.zsubera.jpa.spec.TestEntity> spec =
+            new com.zsubera.jpa.update.DeleteSpec<>(com.zsubera.jpa.spec.TestEntity.class);
 
         assertThrows(IllegalStateException.class, () -> spec.executeLimitedCursor(entityManager, 100, null));
     }

@@ -111,6 +111,51 @@ public class DeleteSpec<T> extends AbstractBulkOperationSpec<T, DeleteSpec<T>> {
     }
 
     /**
+     * 构建所有条件节点的 Predicate 数组，自动注入软删除过滤条件。
+     *
+     * <p>
+     * 当实体有 {@code @SoftDelete} 字段且自动过滤启用时，自动在 WHERE 子句中追加
+     * "未删除"条件，防止 DELETE 操作意外删除已软删除的行。
+     *
+     * <p>
+     * 此行为与 {@link com.zsubera.jpa.repository.DefaultMyJpaRepository#delete} 一致，
+     * 确保直接使用 {@code DeleteSpec} 时也能正确感知软删除状态。
+     *
+     * @param root 查询根对象
+     * @param cb 条件构建器
+     * @return Predicate 数组
+     */
+    @Override
+    protected Predicate[] buildPredicates(Root<T> root, CriteriaBuilder cb) {
+        Predicate[] userPredicates = super.buildPredicates(root, cb);
+        String softDeleteField = SoftDeleteHelper.findSoftDeleteField(entityClass);
+        if (softDeleteField == null || !shouldApplySoftDeleteFilter()) {
+            return userPredicates;
+        }
+        Predicate softDeleteFilter = SoftDeleteHelper.buildNotDeleted(cb, root, softDeleteField, entityClass);
+        if (userPredicates.length == 0) {
+            return new Predicate[] {softDeleteFilter};
+        }
+        Predicate[] combined = new Predicate[userPredicates.length + 1];
+        combined[0] = softDeleteFilter;
+        System.arraycopy(userPredicates, 0, combined, 1, userPredicates.length);
+        return combined;
+    }
+
+    private static boolean shouldApplySoftDeleteFilter() {
+        if (com.zsubera.jpa.repository.SoftDeleteContext.isIgnoreSoftDelete()) {
+            return false;
+        }
+        Boolean override = com.zsubera.jpa.repository.DefaultMyJpaRepository.getAutoFilterOverride();
+        if (override != null) {
+            return override;
+        }
+        com.zsubera.jpa.autoconfigure.MyJpaPlusGlobalConfig config =
+            com.zsubera.jpa.autoconfigure.GlobalConfigHolder.getConfig();
+        return config == null || config.isSoftDeleteAutoFilter();
+    }
+
+    /**
      * 构建 {@link CriteriaDelete} 对象但不执行。
      *
      * @param em 实体管理器
