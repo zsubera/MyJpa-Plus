@@ -22,6 +22,6 @@
 - **Spring Boot 3.x**（可选，compile 作用域）— 提供 JPA Criteria API 的框架
 - **Caffeine**（compile 作用域）— 高性能缓存库，用于内部缓存实现
 - **Jackson Databind**（可选，compile 作用域）— 用于字段脱敏序列化
-- **SpotBugs Annotations**（可选，compile 作用域）— 静态分析注解
+- **JSqlParser**（可选，compile 作用域）— SQL 解析器，用于日志脱敏
 
 无任何 Web 框架、日志库或序列化库的运行时依赖。MySQL Connector/J 仅 test 作用域。

@@ -117,6 +117,15 @@ mvn verify -Pintegration-tests -Dtest=MySQL*
 
 ## 升级路径
 
+### 从 1.3.0 升级到 1.3.1
+
+参见 [MIGRATION.md](../MIGRATION.md) 获取详细迁移指南。
+
+主要变更：
+- Caffeine 缓存统一：全部手写缓存实现替换为 Caffeine
+- `persistenceStrategy()` 支持 `DEFER_TO_CALLER` 模式
+- 多个安全漏洞和正确性缺陷修复
+
 ### 从 1.2.x 升级到 1.3.0
 
 参见 [MIGRATION.md](../MIGRATION.md) 获取详细迁移指南。

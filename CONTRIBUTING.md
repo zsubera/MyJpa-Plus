@@ -104,7 +104,7 @@ cd myjpa-plus
 
 - [ ] 格式检查通过：`./mvnw spotless:check`
 - [ ] 构建通过：`./mvnw clean verify -Dgpg.skip=true -Ddependency-check.skip=true`
-- [ ] JaCoCo 覆盖率 >= 90% LINE（spec, update, repository, projection, template, annotation, autoconfigure, codegen, converter, exception, monitor, softdelete, util）
+- [ ] JaCoCo 覆盖率 >= 70% LINE（spec, update, repository, template, annotation, autoconfigure, codegen, converter, exception, monitor, softdelete, util）
 - [ ] 为新增功能添加了测试
 - [ ] 已更新 CHANGELOG.md
 - [ ] 已更新 README.md（如有 API 变更）
