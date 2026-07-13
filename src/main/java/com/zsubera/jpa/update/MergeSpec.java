@@ -557,6 +557,35 @@ public class MergeSpec<T> {
                     effectiveUpdateFields = new ArrayList<>(updateColSet);
                 }
 
+                // ponytail: 计算需要 COALESCE 保护的列。
+                // 当批次中某列在部分实体存在、部分实体缺失时（如混合 null/@Embedded），
+                // 缺失实体会被填充 NULL。在 ON CONFLICT DO UPDATE SET 中，这些 NULL 会
+                // 覆盖冲突行的已有值。通过对这些列应用 COALESCE(EXCLUDED.col, col)，
+                // 使得 NULL 被忽略、已有数据得以保留。
+                java.util.Set<String> coalesceColumns = java.util.Collections.emptySet();
+                if (!explicitUpdateFields && !effectiveUpdateFields.isEmpty()) {
+                    coalesceColumns = new java.util.HashSet<>();
+                    for (String col : effectiveUpdateFields) {
+                        boolean presentInAll = true;
+                        for (List<EntityFieldExtractor.EntityFieldValue> allFvs : cachedAllFvs) {
+                            boolean found = false;
+                            for (EntityFieldExtractor.EntityFieldValue fv : allFvs) {
+                                if (fv.columnName().equals(col)) {
+                                    found = true;
+                                    break;
+                                }
+                            }
+                            if (!found) {
+                                presentInAll = false;
+                                break;
+                            }
+                        }
+                        if (!presentInAll) {
+                            coalesceColumns.add(col);
+                        }
+                    }
+                }
+
                 // Build batch field values in unified column order using cached extraction
                 List<List<EntityFieldExtractor.EntityFieldValue>> batchFieldValues =
                     new ArrayList<>(cachedAllFvs.size());
@@ -579,6 +608,10 @@ public class MergeSpec<T> {
                 }
                 SqlWithParams batchSql = strategy.buildBatchUpsertSql(tableName, insertColumns, batchFieldValues,
                     effectiveConflictFields, effectiveUpdateFields);
+                // 为缺失列填充的 NULL 添加 COALESCE 保护，防止覆盖已有数据
+                batchSql = new SqlWithParams(
+                    CoalesceUpsertTransformer.applyCoalesce(batchSql.sql(), coalesceColumns),
+                    batchSql.params());
                 total += executeNativeQuery(em, batchSql.sql(), batchSql.params());
                 if (persistenceContextStrategy == PersistenceContextStrategy.AUTO_CLEAR) {
                     em.flush();
