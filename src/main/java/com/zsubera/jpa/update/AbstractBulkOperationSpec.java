@@ -96,7 +96,9 @@ public abstract class AbstractBulkOperationSpec<T, SELF extends AbstractBulkOper
      */
     protected void afterBulkOperation(EntityManager em, Class<?> entityClass) {
         if (persistenceContextStrategy == PersistenceContextStrategy.AUTO_CLEAR) {
-            em.flush();
+            // ponytail: 不调用 em.flush()，因为批量操作（CriteriaUpdate/NativeQuery）已直接发送 SQL 到数据库。
+            // em.flush() 会无意中将持久化上下文中其他无关实体类型的脏数据写入数据库，
+            // 然后 em.clear() 又将这些实体分离，导致意外的数据持久化和 LazyInitializationException。
             em.clear();
         }
         com.zsubera.jpa.util.CacheEvictionHelper.evictEntityCache(em, entityClass);
@@ -263,13 +265,17 @@ public abstract class AbstractBulkOperationSpec<T, SELF extends AbstractBulkOper
             // ponytail: Explicit rollback consistent with updateAll()/deleteAll() behavior.
             // In Spring @Transactional context, the framework also rolls back on unchecked exceptions,
             // but this handles RESOURCE_LOCAL transactions where the caller may catch the exception.
-            if (!rollbackOrMarkRollbackOnly(em, "Bulk " + operationName)) {
+            boolean rolledBack = rollbackOrMarkRollbackOnly(em, "Bulk " + operationName);
+            if (!rolledBack) {
                 log.error("CRITICAL: Rollback FAILED. The {} may be committed. Data corruption risk.",
                     operationName);
             }
+            String rollbackStatus = rolledBack
+                ? "Transaction has been rolled back or marked rollback-only."
+                : "CRITICAL: Rollback FAILED. The operation may be committed. Data corruption risk.";
             throw new com.zsubera.jpa.exception.MyJpaPlusException(
                 operationName + " affected " + affected + " rows, exceeding the pre-check limit of " + limit
-                    + ". Concurrent modifications detected. Transaction has been rolled back or marked rollback-only.");
+                    + ". Concurrent modifications detected. " + rollbackStatus);
         }
         return affected;
     }

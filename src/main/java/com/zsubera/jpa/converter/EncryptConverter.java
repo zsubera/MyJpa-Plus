@@ -331,9 +331,9 @@ public class EncryptConverter implements AttributeConverter<String, String> {
             System.arraycopy(combined, 0, iv, 0, GCM_IV_LENGTH);
             byte[] encrypted = new byte[combined.length - GCM_IV_LENGTH];
             System.arraycopy(combined, GCM_IV_LENGTH, encrypted, 0, encrypted.length);
-            SecretKeySpec keySpec = EncryptionKeyManager.getKeySpec(version);
             byte[] decrypted = null;
             try {
+                SecretKeySpec keySpec = EncryptionKeyManager.getKeySpec(version);
                 Cipher cipher = borrowCipher();
                 cipher.init(Cipher.DECRYPT_MODE, keySpec, new GCMParameterSpec(GCM_TAG_LENGTH, iv));
                 decrypted = cipher.doFinal(encrypted);

@@ -251,7 +251,10 @@ public final class QueryProjectionSupport<T> {
         CriteriaQuery<Long> countQuery = cb.createQuery(Long.class);
         Root<T> countRoot = countQuery.from(entityClass);
         countQuery.select(cb.count(countRoot));
-        Predicate predicate = getCombinedPredicate(countRoot, countQuery, cb);
+        // ponytail: 传入 null 作为 CriteriaQuery 参数，避免 toPredicate() 的副作用
+        // 将 DISTINCT/GROUP BY/ORDER BY 应用到 count 查询上。count 查询带 GROUP BY 会
+        // 返回多行导致 getSingleResult() 抛出 NonUniqueResultException。
+        Predicate predicate = getCombinedPredicate(countRoot, null, cb);
         if (predicate != null) {
             countQuery.where(predicate);
         }

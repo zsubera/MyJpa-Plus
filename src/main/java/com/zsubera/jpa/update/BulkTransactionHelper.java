@@ -98,7 +98,17 @@ final class BulkTransactionHelper {
      * @param original 原始异常
      */
     static void safeRollback(EntityTransaction tx, Throwable original) {
-        if (tx != null && tx.isActive()) {
+        if (tx == null) {
+            return;
+        }
+        boolean active;
+        try {
+            active = tx.isActive();
+        } catch (IllegalStateException e) {
+            // JTA environment: isActive() is unsupported, attempt rollback anyway
+            active = true;
+        }
+        if (active) {
             try {
                 tx.rollback();
             } catch (Exception rollbackEx) {

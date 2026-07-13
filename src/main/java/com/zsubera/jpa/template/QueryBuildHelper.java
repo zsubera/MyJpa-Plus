@@ -98,7 +98,10 @@ final class QueryBuildHelper {
         }
 
         if (combinedSpec != null) {
-            jakarta.persistence.criteria.Predicate countPredicate = combinedSpec.toPredicate(countRoot, countCq, cb);
+            // ponytail: 传入 null 作为 CriteriaQuery 参数，避免 toPredicate() 的副作用
+            // 将 DISTINCT/GROUP BY/ORDER BY 应用到 count 查询上。count 查询带 GROUP BY 会
+            // 返回多行导致 getSingleResult() 抛出 NonUniqueResultException。
+            jakarta.persistence.criteria.Predicate countPredicate = combinedSpec.toPredicate(countRoot, null, cb);
             if (countPredicate != null) {
                 countCq.where(countPredicate);
             }

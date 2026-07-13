@@ -246,9 +246,7 @@ public final class SoftDeleteContext {
     public static int captureAndResetForAsync() {
         int[] countHolder = IGNORE_COUNT.get();
         int count = countHolder[0];
-        if (count > 0) {
-            IGNORE_COUNT.remove();
-        }
+        IGNORE_COUNT.remove();
         return count;
     }
 

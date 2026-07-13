@@ -287,12 +287,11 @@ public class QueryCacheManager implements CacheAdapter {
      */
     @Override
     public void clear() {
-        // 先清空 cache，再清空 prefixIndex：removal listener 在 invalidateAll 期间
-        // 会清理每个被驱逐 key 的 prefixIndex 条目；之后再清空 prefixIndex 移除
-        // 任何在 invalidateAll 期间被并发 put() 添加的幽灵条目。
+        // 先递增 generation，确保并发的 findAllCached afterCommit 回调能看到 generation 变化，
+        // 不会将旧查询结果写入已清空的缓存。
+        evictionGeneration.incrementAndGet();
         cache.invalidateAll();
         prefixIndex.clear();
-        evictionGeneration.incrementAndGet();
         log.debug("Cache cleared");
     }
 

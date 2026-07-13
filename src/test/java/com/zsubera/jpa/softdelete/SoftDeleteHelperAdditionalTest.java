@@ -291,9 +291,35 @@ class SoftDeleteHelperAdditionalTest {
         repository.flush();
 
         // 3 active rows, maxRows=1 → UPDATE LIMIT 1 affects 1 row,
-        // remaining COUNT=2 > maxRows → throws IllegalStateException
+        // remaining COUNT=2 > 0 → throws IllegalStateException (partial completion detected)
         assertThrows(IllegalStateException.class,
             () -> SoftDeleteBulkExecutor.softDeleteAll(em, SoftDeleteTestEntity.class, true, 1));
+    }
+
+    @Test
+    void softDeleteAll_withMaxRowsLimit_partialCompletion_throws() {
+        SoftDeleteTestEntity e1 = new SoftDeleteTestEntity();
+        e1.setName("partial1");
+        e1.setDeleted(false);
+        repository.save(e1);
+        repository.flush();
+
+        SoftDeleteTestEntity e2 = new SoftDeleteTestEntity();
+        e2.setName("partial2");
+        e2.setDeleted(false);
+        repository.save(e2);
+        repository.flush();
+
+        SoftDeleteTestEntity e3 = new SoftDeleteTestEntity();
+        e3.setName("partial3");
+        e3.setDeleted(false);
+        repository.save(e3);
+        repository.flush();
+
+        // 3 active rows, maxRows=2 → UPDATE LIMIT 2 affects 2 rows,
+        // remaining COUNT=1 > 0 → throws IllegalStateException (partial completion detected)
+        assertThrows(IllegalStateException.class,
+            () -> SoftDeleteBulkExecutor.softDeleteAll(em, SoftDeleteTestEntity.class, true, 2));
     }
 
     @Test

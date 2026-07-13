@@ -207,12 +207,14 @@ public final class SlowQueryDataSourceProxy {
         }
 
         private Object createProxy(Class<?> stmtClass, Object stmt, InvocationHandler handler) {
-            Class<?> proxyClass = PROXY_CLASS_CACHE.computeIfAbsent(stmtClass,
-                clz -> Proxy.getProxyClass(clz.getClassLoader(), clz.getInterfaces()));
             try {
+                Class<?> proxyClass = PROXY_CLASS_CACHE.computeIfAbsent(stmtClass,
+                    clz -> Proxy.getProxyClass(clz.getClassLoader(), clz.getInterfaces()));
                 return proxyClass.getConstructor(InvocationHandler.class).newInstance(handler);
-            } catch (ReflectiveOperationException e) {
-                return Proxy.newProxyInstance(stmtClass.getClassLoader(), stmtClass.getInterfaces(), handler);
+            } catch (Exception e) {
+                log.debug("Failed to create monitoring proxy for {}, returning raw statement: {}",
+                    stmtClass.getName(), e.getMessage());
+                return stmt;
             }
         }
     }

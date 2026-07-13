@@ -209,27 +209,9 @@ public class DeleteSpec<T> extends AbstractBulkOperationSpec<T, DeleteSpec<T>> {
                 log.warn("executeAsSoftDelete affected {} rows, exceeding the pre-check limit of {}. "
                     + "Concurrent modifications detected.", affected, limit);
             }
-            jakarta.persistence.EntityTransaction tx;
-            try {
-                tx = em.getTransaction();
-            } catch (IllegalStateException jtaEx) {
-                tx = null;
-            }
-            boolean rolledBack = false;
-            try {
-                if (tx != null && tx.isActive()) {
-                    tx.rollback();
-                    rolledBack = true;
-                    log.warn("Transaction has been rolled back.");
-                } else {
-                    org.springframework.transaction.interceptor.TransactionAspectSupport.currentTransactionStatus()
-                        .setRollbackOnly();
-                    rolledBack = true;
-                    log.warn("Transaction marked as rollback-only.");
-                }
-            } catch (Exception rollbackEx) {
-                log.error("CRITICAL: Rollback FAILED. The soft-delete may have been committed. Data corruption risk.",
-                    rollbackEx);
+            boolean rolledBack = AbstractBulkOperationSpec.rollbackOrMarkRollbackOnly(em, "executeAsSoftDelete");
+            if (!rolledBack) {
+                log.error("CRITICAL: Rollback FAILED. The soft-delete may have been committed. Data corruption risk.");
             }
             throw new IllegalStateException(
                 "executeAsSoftDelete affected " + affected + " rows, exceeding the limit of " + limit
@@ -284,26 +266,9 @@ public class DeleteSpec<T> extends AbstractBulkOperationSpec<T, DeleteSpec<T>> {
                 log.warn("deleteAll affected {} rows, exceeding the pre-check limit of {}. "
                     + "Concurrent modifications detected.", affected, limit);
             }
-            boolean rolledBack = false;
-            jakarta.persistence.EntityTransaction tx;
-            try {
-                tx = em.getTransaction();
-            } catch (IllegalStateException jtaEx) {
-                tx = null;
-            }
-            try {
-                if (tx != null && tx.isActive()) {
-                    tx.rollback();
-                    rolledBack = true;
-                    log.warn("Transaction has been rolled back.");
-                } else {
-                    org.springframework.transaction.interceptor.TransactionAspectSupport.currentTransactionStatus()
-                        .setRollbackOnly();
-                    rolledBack = true;
-                    log.warn("Transaction marked as rollback-only.");
-                }
-            } catch (Exception rollbackEx) {
-                log.error("CRITICAL: Rollback FAILED. The DELETE may be committed. Data corruption risk.", rollbackEx);
+            boolean rolledBack = AbstractBulkOperationSpec.rollbackOrMarkRollbackOnly(em, "deleteAll");
+            if (!rolledBack) {
+                log.error("CRITICAL: Rollback FAILED. The DELETE may be committed. Data corruption risk.");
             }
             throw new IllegalStateException("deleteAll affected " + affected + " rows, exceeding the limit of " + limit
                 + ". Concurrent modifications detected. "

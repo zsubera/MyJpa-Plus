@@ -95,7 +95,7 @@ public final class SoftDeleteBulkExecutor {
      * 不存在其他事务在此期间修改行数的竞态窗口。
      *
      * <p>当 updated == maxRows 时，执行额外的 COUNT 查询判断是否还有更多行需要更新，
-     * 如果有则抛出 IllegalStateException（与旧行为保持一致）。
+     * 如果有则抛出 IllegalStateException，引导用户使用更安全的批量操作方式。
      *
      * @return 实际更新的行数（<= maxRows）
      */
@@ -114,9 +114,10 @@ public final class SoftDeleteBulkExecutor {
             long remaining =
                 ((Number)em.createNativeQuery("SELECT COUNT(*) FROM " + escapedTable + " WHERE " + whereClause)
                     .setParameter("deletedValue", deletedValue).getSingleResult()).longValue();
-            if (remaining > maxRows) {
+            if (remaining > 0) {
                 throw new IllegalStateException(
-                    "softDeleteAll would affect " + remaining + " rows, exceeding the limit of " + maxRows
+                    "softDeleteAll partially completed: affected " + updated + " rows, but " + remaining
+                        + " more rows still need soft-deleting. Total would exceed the limit of " + maxRows
                         + ". Use softDeleteByIds() with explicit ID lists, or increase the limit.");
             }
         }
@@ -147,14 +148,29 @@ public final class SoftDeleteBulkExecutor {
      */
     private static boolean rollbackCurrentTransaction(EntityManager em) {
         // 尝试 RESOURCE_LOCAL rollback（最可靠的方式）
+        jakarta.persistence.EntityTransaction tx;
         try {
-            jakarta.persistence.EntityTransaction tx = em.getTransaction();
-            if (tx != null && tx.isActive()) {
-                tx.rollback();
-                return true;
-            }
+            tx = em.getTransaction();
         } catch (IllegalStateException ignored) {
-            // JTA 环境：getTransaction() 抛出 IllegalStateException
+            // JTA 环境：getTransaction() 抛出 IllegalStateException，跳过本地事务回滚
+            tx = null;
+        }
+        if (tx != null) {
+            boolean active;
+            try {
+                active = tx.isActive();
+            } catch (IllegalStateException e) {
+                // JTA 环境：isActive() 不受支持，仍尝试回滚
+                active = true;
+            }
+            if (active) {
+                try {
+                    tx.rollback();
+                    return true;
+                } catch (Exception rollbackEx) {
+                    log.error("Transaction rollback failed", rollbackEx);
+                }
+            }
         }
         // 尝试 Spring TransactionAspectSupport（适用于 Spring 管理的事务）
         try {
