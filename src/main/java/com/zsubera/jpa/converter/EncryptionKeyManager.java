@@ -7,7 +7,6 @@ import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
 import java.util.*;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.locks.ReentrantLock;
 import javax.crypto.SecretKeyFactory;
 import javax.crypto.spec.PBEKeySpec;
@@ -416,10 +415,9 @@ final class EncryptionKeyManager {
                     String rawValue = key.substring(colonIdx + 1).trim();
                     int byteLen = rawValue.getBytes(StandardCharsets.UTF_8).length;
                     if (byteLen < MIN_KEY_LENGTH) {
-                        throw new MyJpaPlusException(
-                            "Encryption key must be at least " + MIN_KEY_LENGTH + " bytes (UTF-8 encoded). "
-                                + "Current byte length: " + byteLen + " (character length: " + rawValue.length()
-                                + ").");
+                        throw new MyJpaPlusException("Encryption key must be at least " + MIN_KEY_LENGTH
+                            + " bytes (UTF-8 encoded). " + "Current byte length: " + byteLen + " (character length: "
+                            + rawValue.length() + ").");
                     }
                     return;
                 }

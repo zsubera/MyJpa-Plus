@@ -3,7 +3,6 @@ package com.zsubera.jpa.update;
 import static org.junit.jupiter.api.Assertions.*;
 
 import jakarta.persistence.*;
-import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
@@ -31,10 +30,21 @@ class MergeSpecBatchEmbeddedTest {
             this.city = city;
         }
 
-        public String getStreet() { return street; }
-        public void setStreet(String street) { this.street = street; }
-        public String getCity() { return city; }
-        public void setCity(String city) { this.city = city; }
+        public String getStreet() {
+            return street;
+        }
+
+        public void setStreet(String street) {
+            this.street = street;
+        }
+
+        public String getCity() {
+            return city;
+        }
+
+        public void setCity(String city) {
+            this.city = city;
+        }
     }
 
     @Entity
@@ -49,12 +59,29 @@ class MergeSpecBatchEmbeddedTest {
         @Embedded
         private Address address;
 
-        public Long getId() { return id; }
-        public void setId(Long id) { this.id = id; }
-        public String getName() { return name; }
-        public void setName(String name) { this.name = name; }
-        public Address getAddress() { return address; }
-        public void setAddress(Address address) { this.address = address; }
+        public Long getId() {
+            return id;
+        }
+
+        public void setId(Long id) {
+            this.id = id;
+        }
+
+        public String getName() {
+            return name;
+        }
+
+        public void setName(String name) {
+            this.name = name;
+        }
+
+        public Address getAddress() {
+            return address;
+        }
+
+        public void setAddress(Address address) {
+            this.address = address;
+        }
     }
 
     /**
@@ -63,8 +90,7 @@ class MergeSpecBatchEmbeddedTest {
      */
     @Test
     void columnUnion_mixedNullEmbedded_containsAllColumns() {
-        EntityFieldExtractor<BatchEmbeddedEntity> extractor =
-            new EntityFieldExtractor<>(BatchEmbeddedEntity.class);
+        EntityFieldExtractor<BatchEmbeddedEntity> extractor = new EntityFieldExtractor<>(BatchEmbeddedEntity.class);
 
         // entity1: @Embedded 为 null
         BatchEmbeddedEntity e1 = new BatchEmbeddedEntity();
@@ -103,8 +129,7 @@ class MergeSpecBatchEmbeddedTest {
      */
     @Test
     void columnSet_firstEntityOnly_missesColumns() {
-        EntityFieldExtractor<BatchEmbeddedEntity> extractor =
-            new EntityFieldExtractor<>(BatchEmbeddedEntity.class);
+        EntityFieldExtractor<BatchEmbeddedEntity> extractor = new EntityFieldExtractor<>(BatchEmbeddedEntity.class);
 
         // entity1: @Embedded 为 null
         BatchEmbeddedEntity e1 = new BatchEmbeddedEntity();
@@ -152,8 +177,7 @@ class MergeSpecBatchEmbeddedTest {
      */
     @Test
     void extractFieldValues_nullEmbedded_skipsSubFields() {
-        EntityFieldExtractor<BatchEmbeddedEntity> extractor =
-            new EntityFieldExtractor<>(BatchEmbeddedEntity.class);
+        EntityFieldExtractor<BatchEmbeddedEntity> extractor = new EntityFieldExtractor<>(BatchEmbeddedEntity.class);
 
         BatchEmbeddedEntity entity = new BatchEmbeddedEntity();
         entity.setName("Test");
@@ -168,8 +192,7 @@ class MergeSpecBatchEmbeddedTest {
             "Null embedded should not produce 'city' column");
 
         // 应包含 name 字段
-        assertTrue(fields.stream().anyMatch(f -> f.columnName().equals("name")),
-            "Should contain 'name' column");
+        assertTrue(fields.stream().anyMatch(f -> f.columnName().equals("name")), "Should contain 'name' column");
     }
 
     /**
@@ -177,8 +200,7 @@ class MergeSpecBatchEmbeddedTest {
      */
     @Test
     void extractFieldValues_nonNullEmbedded_includesSubFields() {
-        EntityFieldExtractor<BatchEmbeddedEntity> extractor =
-            new EntityFieldExtractor<>(BatchEmbeddedEntity.class);
+        EntityFieldExtractor<BatchEmbeddedEntity> extractor = new EntityFieldExtractor<>(BatchEmbeddedEntity.class);
 
         BatchEmbeddedEntity entity = new BatchEmbeddedEntity();
         entity.setName("Test");
@@ -191,7 +213,6 @@ class MergeSpecBatchEmbeddedTest {
             "Non-null embedded should produce 'street' column");
         assertTrue(fields.stream().anyMatch(f -> f.columnName().equals("city")),
             "Non-null embedded should produce 'city' column");
-        assertTrue(fields.stream().anyMatch(f -> f.columnName().equals("name")),
-            "Should contain 'name' column");
+        assertTrue(fields.stream().anyMatch(f -> f.columnName().equals("name")), "Should contain 'name' column");
     }
 }

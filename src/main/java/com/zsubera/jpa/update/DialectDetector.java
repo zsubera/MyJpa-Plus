@@ -98,8 +98,8 @@ final class DialectDetector {
 
     /** 为每个 EntityManagerFactory 稳定地缓存其回退键，避免每次调用 resolveFactoryKey 都生成新键、
      * 导致方言缓存失效并反复触发昂贵的方言探测。键数量等于应用中 EntityManagerFactory 实例数（通常极少）。 */
-    private static final java.util.concurrent.ConcurrentHashMap<jakarta.persistence.EntityManagerFactory, String>
-        EMF_FALLBACK_KEYS = new java.util.concurrent.ConcurrentHashMap<>();
+    private static final java.util.concurrent.ConcurrentHashMap<jakarta.persistence.EntityManagerFactory,
+        String> EMF_FALLBACK_KEYS = new java.util.concurrent.ConcurrentHashMap<>();
 
     private DialectDetector() {}
 

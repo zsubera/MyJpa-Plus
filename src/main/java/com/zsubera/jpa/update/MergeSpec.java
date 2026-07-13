@@ -609,8 +609,7 @@ public class MergeSpec<T> {
                 SqlWithParams batchSql = strategy.buildBatchUpsertSql(tableName, insertColumns, batchFieldValues,
                     effectiveConflictFields, effectiveUpdateFields);
                 // 为缺失列填充的 NULL 添加 COALESCE 保护，防止覆盖已有数据
-                batchSql = new SqlWithParams(
-                    CoalesceUpsertTransformer.applyCoalesce(batchSql.sql(), coalesceColumns),
+                batchSql = new SqlWithParams(CoalesceUpsertTransformer.applyCoalesce(batchSql.sql(), coalesceColumns),
                     batchSql.params());
                 total += executeNativeQuery(em, batchSql.sql(), batchSql.params());
                 if (persistenceContextStrategy == PersistenceContextStrategy.AUTO_CLEAR) {

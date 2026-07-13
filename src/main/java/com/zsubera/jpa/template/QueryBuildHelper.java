@@ -105,8 +105,7 @@ final class QueryBuildHelper {
             // 使用独立的 countCq 进行计数查询，tempCq 仅用于满足 toPredicate() 签名。
             // COUNT 查询不受 tempCq 的 DISTINCT/GROUP BY 副作用影响。
             jakarta.persistence.criteria.CriteriaQuery<?> tempCq = cb.createQuery();
-            jakarta.persistence.criteria.Predicate countPredicate =
-                combinedSpec.toPredicate(countRoot, tempCq, cb);
+            jakarta.persistence.criteria.Predicate countPredicate = combinedSpec.toPredicate(countRoot, tempCq, cb);
             if (countPredicate != null) {
                 countCq.where(countPredicate);
             }

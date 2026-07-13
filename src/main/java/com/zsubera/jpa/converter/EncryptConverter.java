@@ -3,7 +3,6 @@ package com.zsubera.jpa.converter;
 import com.zsubera.jpa.exception.MyJpaPlusException;
 import jakarta.persistence.AttributeConverter;
 
-import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
 import java.security.SecureRandom;
@@ -126,7 +125,7 @@ public class EncryptConverter implements AttributeConverter<String, String> {
     private static void wipe(byte[] secret) {
         if (secret == null)
             return;
-        java.util.Arrays.fill(secret, (byte) 0);
+        java.util.Arrays.fill(secret, (byte)0);
     }
 
     /**

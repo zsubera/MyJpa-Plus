@@ -17,7 +17,7 @@ class EncryptionKeyManagerTest {
         EncryptConverter.clearCaches();
         Field f = EncryptionKeyManager.class.getDeclaredField("KEY_VALIDATED");
         f.setAccessible(true);
-        ((java.util.concurrent.atomic.AtomicBoolean) f.get(null)).set(false);
+        ((java.util.concurrent.atomic.AtomicBoolean)f.get(null)).set(false);
     }
 
     @AfterEach
@@ -29,7 +29,7 @@ class EncryptionKeyManagerTest {
         EncryptConverter.setSkipSaltCheck(false);
         Field f = EncryptionKeyManager.class.getDeclaredField("KEY_VALIDATED");
         f.setAccessible(true);
-        ((java.util.concurrent.atomic.AtomicBoolean) f.get(null)).set(false);
+        ((java.util.concurrent.atomic.AtomicBoolean)f.get(null)).set(false);
     }
 
     @Test
@@ -69,12 +69,12 @@ class EncryptionKeyManagerTest {
 
         // 设置初始盐值
         System.setProperty("myjpa.encrypt.salt", "salt-v1");
-        byte[] salt1 = (byte[]) getSalt.invoke(null);
+        byte[] salt1 = (byte[])getSalt.invoke(null);
         assertArrayEquals("salt-v1".getBytes(java.nio.charset.StandardCharsets.UTF_8), salt1);
 
         // 修改盐值（模拟运行时变更）
         System.setProperty("myjpa.encrypt.salt", "salt-v2");
-        byte[] salt2 = (byte[]) getSalt.invoke(null);
+        byte[] salt2 = (byte[])getSalt.invoke(null);
 
         // 修复前：salt2 == salt1（使用缓存值）
         // 修复后：salt2 != salt1（每次从环境变量读取）
@@ -91,11 +91,11 @@ class EncryptionKeyManagerTest {
         getSalt.setAccessible(true);
 
         System.setProperty("myjpa.encrypt.salt", "persistent-salt");
-        byte[] before = (byte[]) getSalt.invoke(null);
+        byte[] before = (byte[])getSalt.invoke(null);
 
         EncryptConverter.clearCaches();
 
-        byte[] after = (byte[]) getSalt.invoke(null);
+        byte[] after = (byte[])getSalt.invoke(null);
         assertArrayEquals(before, after);
     }
 
@@ -114,14 +114,14 @@ class EncryptionKeyManagerTest {
         // 单条目 v1:key（修复后应仅提取 key after colon）
         System.setProperty("myjpa.encrypt.key", "v1:32byteKeyMaterialHere!!");
         EncryptConverter.clearCaches();
-        char[] singleResult = (char[]) resolveRawKey.invoke(null, "v1");
+        char[] singleResult = (char[])resolveRawKey.invoke(null, "v1");
         assertArrayEquals("32byteKeyMaterialHere!!".toCharArray(), singleResult,
             "single-entry v1:key should extract key after colon");
 
         // 多密钥格式中 v1 的提取
         System.setProperty("myjpa.encrypt.key", "v1:32byteKeyMaterialHere!!,v2:other32byteKeyHere!!");
         EncryptConverter.clearCaches();
-        char[] multiResult = (char[]) resolveRawKey.invoke(null, "v1");
+        char[] multiResult = (char[])resolveRawKey.invoke(null, "v1");
         assertArrayEquals("32byteKeyMaterialHere!!".toCharArray(), multiResult,
             "multi-key v1 should extract key after colon");
 
@@ -141,9 +141,8 @@ class EncryptionKeyManagerTest {
         String plainKey = "thisIsAPlain32ByteKeyForDerivation";
         System.setProperty("myjpa.encrypt.key", plainKey);
         EncryptConverter.clearCaches();
-        char[] result = (char[]) resolveRawKey.invoke(null, "v1");
-        assertArrayEquals(plainKey.toCharArray(), result,
-            "plain key without vN: prefix should be used as-is");
+        char[] result = (char[])resolveRawKey.invoke(null, "v1");
+        assertArrayEquals(plainKey.toCharArray(), result, "plain key without vN: prefix should be used as-is");
     }
 
     /**
@@ -166,8 +165,7 @@ class EncryptionKeyManagerTest {
         EncryptConverter.clearCaches();
 
         String decrypted = converter.convertToEntityAttribute(encrypted);
-        assertEquals("secret-data", decrypted,
-            "Data encrypted with single-entry v1:key must be decryptable "
-                + "after switching to multi-key format with same v1 entry");
+        assertEquals("secret-data", decrypted, "Data encrypted with single-entry v1:key must be decryptable "
+            + "after switching to multi-key format with same v1 entry");
     }
 }
