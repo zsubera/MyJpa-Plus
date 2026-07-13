@@ -58,28 +58,22 @@ public final class SqlSanitizer {
         Pattern.compile("(?:[ENX])'[^'\\\\]*(?:\\\\.[^'\\\\]*|'')*[^'\\\\]*\\\\?'");
 
     /** 后处理：匹配美元引用字符串（$$...$$），内容可包含单个 $。使用占有量词避免回溯。 */
-    private static final Pattern DOLLAR_QUOTED_PATTERN =
-        Pattern.compile("\\$\\$[^$]*+(?:\\$(?!\\$)[^$]*+)*\\$\\$");
+    private static final Pattern DOLLAR_QUOTED_PATTERN = Pattern.compile("\\$\\$[^$]*+(?:\\$(?!\\$)[^$]*+)*\\$\\$");
 
     /** 后处理：匹配带标签的美元引用字符串（$tag$...$tag$），使用反向引用。 */
-    private static final Pattern DOLLAR_TAGGED_PATTERN =
-        Pattern.compile("\\$(\\w+)\\$.*?\\$\\1\\$", Pattern.DOTALL);
+    private static final Pattern DOLLAR_TAGGED_PATTERN = Pattern.compile("\\$(\\w+)\\$.*?\\$\\1\\$", Pattern.DOTALL);
 
     /** 后处理：匹配 Oracle Q-引用字符串。 */
-    private static final Pattern ORACLE_QQUOTE_PATTERN =
-        Pattern.compile("[Qq]'[\\s\\S]+?'");
+    private static final Pattern ORACLE_QQUOTE_PATTERN = Pattern.compile("[Qq]'[\\s\\S]+?'");
 
     /** 后处理：匹配双引号字符串/标识符。 */
-    private static final Pattern DOUBLE_QUOTE_PATTERN =
-        Pattern.compile("\"[^\"]*\"");
+    private static final Pattern DOUBLE_QUOTE_PATTERN = Pattern.compile("\"[^\"]*\"");
 
     /** 后处理：匹配 PostgreSQL 美元参数（$1, $2 等）。 */
-    private static final Pattern DOLLAR_PARAM_PATTERN =
-        Pattern.compile("\\$\\d+");
+    private static final Pattern DOLLAR_PARAM_PATTERN = Pattern.compile("\\$\\d+");
 
     /** 后处理：匹配数字字面量（整数、小数、科学计数法）。 */
-    private static final Pattern NUMBER_LITERAL_PATTERN =
-        Pattern.compile("\\b\\d+\\.?\\d*(?:[eE][+-]?\\d+)?\\b");
+    private static final Pattern NUMBER_LITERAL_PATTERN = Pattern.compile("\\b\\d+\\.?\\d*(?:[eE][+-]?\\d+)?\\b");
 
     /** 保护 LIMIT/OFFSET/FETCH 后的数字不被替换。 */
     private static final Pattern LIMIT_OFFSET_PATTERN =

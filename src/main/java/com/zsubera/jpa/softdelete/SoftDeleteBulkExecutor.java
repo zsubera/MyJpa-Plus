@@ -115,10 +115,9 @@ public final class SoftDeleteBulkExecutor {
                 ((Number)em.createNativeQuery("SELECT COUNT(*) FROM " + escapedTable + " WHERE " + whereClause)
                     .setParameter("deletedValue", deletedValue).getSingleResult()).longValue();
             if (remaining > 0) {
-                throw new IllegalStateException(
-                    "softDeleteAll partially completed: affected " + updated + " rows, but " + remaining
-                        + " more rows still need soft-deleting. Total would exceed the limit of " + maxRows
-                        + ". Use softDeleteByIds() with explicit ID lists, or increase the limit.");
+                throw new IllegalStateException("softDeleteAll partially completed: affected " + updated + " rows, but "
+                    + remaining + " more rows still need soft-deleting. Total would exceed the limit of " + maxRows
+                    + ". Use softDeleteByIds() with explicit ID lists, or increase the limit.");
             }
         }
         return updated;
@@ -263,8 +262,7 @@ public final class SoftDeleteBulkExecutor {
             }
             String updateSql = "UPDATE " + escapedTable + " SET " + setClause + " WHERE " + whereClause;
             validateGeneratedSql(updateSql, "softDeleteAll UPDATE");
-            updated = em.createNativeQuery(updateSql)
-                .setParameter("deletedValue", deletedValue).executeUpdate();
+            updated = em.createNativeQuery(updateSql).setParameter("deletedValue", deletedValue).executeUpdate();
             if (maxRows > 0 && updated > maxRows) {
                 if (log.isWarnEnabled()) {
                     log.warn("softDeleteAll affected {} rows, exceeding the pre-check limit of {}. "

@@ -96,7 +96,7 @@ class UpdateSpecBatchCursorBoundaryTest {
         // 第二批：处理下 3 条
         UpdateSpec.BatchCursor c2 = spec.executeLimitedCursor(em, 3, c1.lastId());
         assertEquals(3, c2.affected());
-        assertTrue(((Comparable) c2.lastId()).compareTo(c1.lastId()) > 0);
+        assertTrue(((Comparable)c2.lastId()).compareTo(c1.lastId()) > 0);
 
         // 第三批：处理下 3 条
         UpdateSpec.BatchCursor c3 = spec.executeLimitedCursor(em, 3, c2.lastId());
@@ -157,7 +157,8 @@ class UpdateSpecBatchCursorBoundaryTest {
         Object lastId = null;
         while (true) {
             UpdateSpec.BatchCursor cursor = spec.executeLimitedCursor(em, 3, lastId);
-            if (cursor.affected() == 0) break;
+            if (cursor.affected() == 0)
+                break;
             totalUpdated += cursor.affected();
             lastId = cursor.lastId();
         }

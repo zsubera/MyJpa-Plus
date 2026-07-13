@@ -259,19 +259,18 @@ public abstract class AbstractBulkOperationSpec<T, SELF extends AbstractBulkOper
         int affected = buildAndExecute.apply(em);
         if (limit > 0 && affected > limit) {
             if (log.isWarnEnabled()) {
-                log.warn("{} affected {} rows, exceeding the pre-check limit of {}. "
-                    + "Concurrent modifications detected.", operationName, affected, limit);
+                log.warn(
+                    "{} affected {} rows, exceeding the pre-check limit of {}. " + "Concurrent modifications detected.",
+                    operationName, affected, limit);
             }
             // ponytail: Explicit rollback consistent with updateAll()/deleteAll() behavior.
             // In Spring @Transactional context, the framework also rolls back on unchecked exceptions,
             // but this handles RESOURCE_LOCAL transactions where the caller may catch the exception.
             boolean rolledBack = rollbackOrMarkRollbackOnly(em, "Bulk " + operationName);
             if (!rolledBack) {
-                log.error("CRITICAL: Rollback FAILED. The {} may be committed. Data corruption risk.",
-                    operationName);
+                log.error("CRITICAL: Rollback FAILED. The {} may be committed. Data corruption risk.", operationName);
             }
-            String rollbackStatus = rolledBack
-                ? "Transaction has been rolled back or marked rollback-only."
+            String rollbackStatus = rolledBack ? "Transaction has been rolled back or marked rollback-only."
                 : "CRITICAL: Rollback FAILED. The operation may be committed. Data corruption risk.";
             throw new com.zsubera.jpa.exception.MyJpaPlusException(
                 operationName + " affected " + affected + " rows, exceeding the pre-check limit of " + limit

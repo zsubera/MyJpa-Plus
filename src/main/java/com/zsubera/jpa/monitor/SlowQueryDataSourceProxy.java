@@ -212,8 +212,8 @@ public final class SlowQueryDataSourceProxy {
                     clz -> Proxy.getProxyClass(clz.getClassLoader(), clz.getInterfaces()));
                 return proxyClass.getConstructor(InvocationHandler.class).newInstance(handler);
             } catch (Exception e) {
-                log.debug("Failed to create monitoring proxy for {}, returning raw statement: {}",
-                    stmtClass.getName(), e.getMessage());
+                log.debug("Failed to create monitoring proxy for {}, returning raw statement: {}", stmtClass.getName(),
+                    e.getMessage());
                 return stmt;
             }
         }

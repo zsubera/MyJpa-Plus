@@ -5,7 +5,6 @@ import com.zsubera.jpa.util.IdentifierValidator;
 import net.sf.jsqlparser.JSQLParserException;
 import net.sf.jsqlparser.parser.CCJSqlParserUtil;
 import net.sf.jsqlparser.statement.Statement;
-import net.sf.jsqlparser.statement.select.PlainSelect;
 import net.sf.jsqlparser.statement.select.Select;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.Query;
@@ -759,8 +758,7 @@ public class CteSpec {
         try {
             Statement stmt = CCJSqlParserUtil.parse(sql);
             if (!(stmt instanceof Select)) {
-                String message = "SECURITY: " + context
-                    + " SQL is not a SELECT statement (detected via AST parsing). "
+                String message = "SECURITY: " + context + " SQL is not a SELECT statement (detected via AST parsing). "
                     + "Ensure this is intentional and not user input. SQL: " + truncated;
                 if (strictMode) {
                     throw new SecurityException(message);
@@ -771,8 +769,8 @@ public class CteSpec {
             // 解析失败时降级为字符串前缀检查
             String trimmed = sql.trim().toUpperCase();
             if (!trimmed.startsWith("SELECT") && !trimmed.startsWith("WITH")) {
-                String message = "SECURITY: " + context + " SQL does not start with SELECT or WITH. " + "SQL: "
-                    + truncated;
+                String message =
+                    "SECURITY: " + context + " SQL does not start with SELECT or WITH. " + "SQL: " + truncated;
                 if (strictMode) {
                     throw new SecurityException(message);
                 }

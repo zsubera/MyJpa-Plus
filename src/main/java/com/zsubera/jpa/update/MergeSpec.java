@@ -487,7 +487,8 @@ public class MergeSpec<T> {
                 if (entity == null) {
                     throw new IllegalArgumentException("entities[" + i + "] must not be null");
                 }
-                if (i > 0 && i % batchSize == 0 && persistenceContextStrategy == PersistenceContextStrategy.AUTO_CLEAR) {
+                if (i > 0 && i % batchSize == 0
+                    && persistenceContextStrategy == PersistenceContextStrategy.AUTO_CLEAR) {
                     em.flush();
                     em.clear();
                 }

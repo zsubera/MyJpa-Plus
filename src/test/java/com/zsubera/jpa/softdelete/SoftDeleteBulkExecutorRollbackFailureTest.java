@@ -116,7 +116,7 @@ class SoftDeleteBulkExecutorRollbackFailureTest {
     void softDeleteByIds_exceedsHardLimit_throwsIllegalArgument() {
         java.util.List<Long> ids = new java.util.ArrayList<>();
         for (int i = 0; i < 100000; i++) {
-            ids.add((long) i);
+            ids.add((long)i);
         }
 
         assertThrows(IllegalArgumentException.class,

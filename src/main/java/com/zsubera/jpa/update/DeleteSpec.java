@@ -213,11 +213,10 @@ public class DeleteSpec<T> extends AbstractBulkOperationSpec<T, DeleteSpec<T>> {
             if (!rolledBack) {
                 log.error("CRITICAL: Rollback FAILED. The soft-delete may have been committed. Data corruption risk.");
             }
-            throw new IllegalStateException(
-                "executeAsSoftDelete affected " + affected + " rows, exceeding the limit of " + limit
-                    + ". Concurrent modifications detected. "
-                    + (rolledBack ? "Transaction has been rolled back or marked rollback-only."
-                        : "WARNING: Rollback FAILED. The soft-delete may have been committed. Data corruption risk."));
+            throw new IllegalStateException("executeAsSoftDelete affected " + affected
+                + " rows, exceeding the limit of " + limit + ". Concurrent modifications detected. "
+                + (rolledBack ? "Transaction has been rolled back or marked rollback-only."
+                    : "WARNING: Rollback FAILED. The soft-delete may have been committed. Data corruption risk."));
         }
         if (affected > 0) {
             afterBulkOperation(em, entityClass);

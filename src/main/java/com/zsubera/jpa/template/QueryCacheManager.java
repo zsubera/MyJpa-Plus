@@ -264,7 +264,7 @@ public class QueryCacheManager implements CacheAdapter {
         }
         hitCount.incrementAndGet();
         if (value instanceof List<?> list) {
-            return (T) java.util.Collections.unmodifiableList(list);
+            return (T)java.util.Collections.unmodifiableList(list);
         }
         return value;
     }

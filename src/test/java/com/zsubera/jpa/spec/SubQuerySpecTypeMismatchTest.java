@@ -142,9 +142,8 @@ class SubQuerySpecTypeMismatchTest {
         em.clear();
 
         QuerySpec<ParentEntity> qs = new QuerySpec<>();
-        qs.inSubQuery(ParentEntity::getId, TestEntity.class, sub -> sub.or(o ->
-            o.eq(TestEntity::getStatus, 1).eq(TestEntity::getStatus, 2)
-        ).select(TestEntity::getId));
+        qs.inSubQuery(ParentEntity::getId, TestEntity.class,
+            sub -> sub.or(o -> o.eq(TestEntity::getStatus, 1).eq(TestEntity::getStatus, 2)).select(TestEntity::getId));
 
         var result = parentRepository.findAll(qs.toSpecification());
         assertTrue(result.size() >= 0);
