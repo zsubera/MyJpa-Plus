@@ -20,6 +20,9 @@ com.zsubera.jpa
 │   ├── QueryAggregates  — count/sum/avg/max/min 表达式工厂
 │   ├── JoinGroup / OrJoinGroup / OrGroup / NotGroup — 条件分组构建器
 │   ├── BulkConditionSupport — 批量操作条件方法接口
+│   ├── CacheKeyBuilder     — 查询缓存键构建（递归深度保护）
+│   ├── AggregateSFunction  — 聚合函数可序列化接口
+│   ├── AggregateHelper     — 聚合表达式辅助工具
 │   └── QueryHavingSupport / QueryConditionSupport / QueryCompositionSupport
 │       / QuerySubQuerySupport / QueryJoinSupport / QueryAggregateSupport
 │       / QueryOrderBySupport — QuerySpec 拆分辅助类
@@ -37,6 +40,8 @@ com.zsubera.jpa
 │   ├── AbstractDialectStrategy — 共享转义逻辑
 │   ├── MysqlDialect / PostgresDialect / OracleDialect / SqlServerDialect
 │   ├── PersistenceContextStrategy — 批量操作后持久化上下文管理策略（AUTO_CLEAR / DEFER_TO_CALLER）
+│   ├── CoalesceUpsertTransformer — UPSERT SQL 参数合并转换器
+│   ├── SqlWithParams       — 原生 SQL + 参数绑定对
 │   └── EntityFieldExtractor — 反射实体字段 → 列名/值对
 │
 ├── template/            # 查询执行与缓存
@@ -49,7 +54,10 @@ com.zsubera.jpa
 │   ├── BatchSaveTemplate — 带 flush/clear 循环的批量持久化/合并
 │   ├── KeysetPaginationHelper — Keyset（游标）分页辅助
 │   ├── QueryBuildHelper — 查询构建辅助（Specification 合并、count 查询）
-│   └── DeepPaginationGuard — 深度分页保护
+│   ├── DeepPaginationGuard — 深度分页保护
+│   ├── CachedQueryResult  — 缓存查询结果封装
+│   ├── DisabledCacheAdapter — 无操作缓存适配器
+│   └── EntityModifiedEvent — 实体修改事件
 │
 ├── projection/        # DTO 与 Tuple 投影（已移除，功能迁移至 QueryProjectionSupport）
 │   └── ProjectionSpec   — 已移除
@@ -58,6 +66,7 @@ com.zsubera.jpa
 │   ├── MyJpaRepository   — 带 Lambda DSL 的 Repository 接口
 │   ├── DefaultMyJpaRepository — 带软删除的基础实现
 │   ├── MyJpaRepositoryFactoryBean — 自定义 RepositoryFactoryBean
+│   ├── MyJpaRepositoryFactory — Repository 工厂实现
 │   ├── SoftDeleteContext  — @IgnoreSoftDelete 的 ThreadLocal 栈
 │   ├── EntityManagerHelper / EntityManagerResolver — 多数据源解析器
 │   ├── IgnoreSoftDeleteAdvisor — @IgnoreSoftDelete 的 AOP 切面
@@ -72,6 +81,7 @@ com.zsubera.jpa
 │   ├── @IgnoreSoftDelete — 禁用自动软删除过滤
 │   ├── @Encrypt          — AES/GCM 透明加密
 │   ├── @Mask             — JSON 输出脱敏
+│   ├── MaskType           — 脱敏类型枚举（PHONE/EMAIL/ID_CARD/NAME 等）
 │   └── @RetryOnOptimisticLock — 指数退避重试的 AOP 注解
 │
 ├── converter/         # 类型转换器
@@ -86,7 +96,6 @@ com.zsubera.jpa
 │   ├── SlowQueryDataSourceProxy — 基于 JDBC 代理的慢查询检测
 │   ├── SlowQueryDataSourceProxyPostProcessor — DataSource 后处理代理
 │   ├── QueryMetricsCollector — 单例指标（计数、平均、最大）
-│   ├── SqlSlowQueryInterceptor — Hibernate StatementInspector 慢查询检测（已废弃）
 │   ├── SqlSanitizer     — 从 SQL 日志中移除敏感数据
 │   └── SlowQueryListener — 慢查询事件监听接口
 │
@@ -103,8 +112,8 @@ com.zsubera.jpa
 │
 ├── exception/         # 自定义异常
 │   ├── MyJpaPlusException — 带 ErrorCode + 上下文清理的基础异常
-│   ├── QueryBuildException / BulkOperationException / DataAccessException
-│   └── SecurityViolationException / TimeoutException
+│   ├── QueryBuildException / BulkOperationException / MyJpaDataAccessException
+│   └── SecurityViolationException
 │
     └── util/             # 共享工具类
     ├── LambdaUtils        — SerializedLambda → 属性名提取

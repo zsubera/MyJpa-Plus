@@ -3,7 +3,7 @@
 所有显著变更均记录在本文件中。格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，
 版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
-## [未发布]
+## [1.3.1] - 2026-07-14
 
 ### 新增
 - **持久化上下文策略** — `AbstractBulkOperationSpec.persistenceStrategy()` 和 `MergeSpec.persistenceStrategy()` 支持 `PersistenceContextStrategy.DEFER_TO_CALLER`，允许调用方自行管理批量操作后的 flush/clear，默认保持 `AUTO_CLEAR` 向后兼容

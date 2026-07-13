@@ -37,17 +37,17 @@ cd myjpa-plus
 
 | 包 | 职责 |
 |---|---|
-| `com.zsubera.jpa.spec` | 核心查询构建：QuerySpec、ConditionBuilder（含子接口）、ConditionNode、NodeResolver、CteSpec、QueryAggregates、FunctionWhitelist、PredicateHelper、Spec、SubQuerySpec、JoinGroup、OrJoinGroup、OrGroup、NotGroup、BulkConditionSupport、ConditionalMethods |
-| `com.zsubera.jpa.update` | 批量操作：UpdateSpec、DeleteSpec、MergeSpec、AbstractBulkOperationSpec、PersistenceContextStrategy、OrConditionBuilder、BulkTransactionHelper、AuditUtils、DialectDetector、DialectStrategy、EntityFieldExtractor、MysqlDialect、PostgresDialect、OracleDialect、SqlServerDialect |
-| `com.zsubera.jpa.repository` | 扩展 Repository：MyJpaRepository、DefaultMyJpaRepository、SoftDeleteContext、EntityManagerHelper、EntityManagerResolver、MyJpaRepositoryFactoryBean、OptimisticLockRetryAdvisor、IgnoreSoftDeleteAdvisor |
+| `com.zsubera.jpa.spec` | 核心查询构建：QuerySpec、ConditionBuilder（含子接口）、ConditionNode、NodeResolver、CteSpec、QueryAggregates、FunctionWhitelist、PredicateHelper、Spec、SubQuerySpec、JoinGroup、OrJoinGroup、OrGroup、NotGroup、BulkConditionSupport、ConditionalMethods、CacheKeyBuilder、AggregateSFunction、AggregateHelper |
+| `com.zsubera.jpa.update` | 批量操作：UpdateSpec、DeleteSpec、MergeSpec、AbstractBulkOperationSpec、PersistenceContextStrategy、OrConditionBuilder、BulkTransactionHelper、AuditUtils、DialectDetector、DialectStrategy、EntityFieldExtractor、MysqlDialect、PostgresDialect、OracleDialect、SqlServerDialect、CoalesceUpsertTransformer、SqlWithParams |
+| `com.zsubera.jpa.repository` | 扩展 Repository：MyJpaRepository、DefaultMyJpaRepository、SoftDeleteContext、EntityManagerHelper、EntityManagerResolver、MyJpaRepositoryFactoryBean、MyJpaRepositoryFactory、OptimisticLockRetryAdvisor、IgnoreSoftDeleteAdvisor |
 | `com.zsubera.jpa.projection` | 投影查询：已移除（功能迁移至 `QueryProjectionSupport`） |
 | `com.zsubera.jpa.template` | 模板与缓存：MyJpaTemplate、MyJpaTemplateOperations、BulkOperationTemplate、BatchSaveTemplate、KeysetPaginationHelper、QueryCacheManager、CacheAdapter、CacheInvalidationListener、QueryBuildHelper、DeepPaginationGuard、CachedQueryResult、DisabledCacheAdapter、EntityModifiedEvent |
-| `com.zsubera.jpa.converter` | 枚举转换与序列化：@CodeEnum、@CodeEnumValue、CodeEnumType、CodeEnumHelper、EncryptConverter、MaskSerializer |
-| `com.zsubera.jpa.annotation` | 注解：@SoftDelete、@IgnoreSoftDelete、@Encrypt、@Mask、@RetryOnOptimisticLock |
+| `com.zsubera.jpa.converter` | 枚举转换与序列化：@CodeEnum、@CodeEnumValue、CodeEnumType、CodeEnumHelper、EncryptConverter、EncryptionKeyManager、MaskSerializer |
+| `com.zsubera.jpa.annotation` | 注解：@SoftDelete、@IgnoreSoftDelete、@Encrypt、@Mask、@RetryOnOptimisticLock、MaskType |
 | `com.zsubera.jpa.autoconfigure` | 自动配置：GlobalConfigHolder、MyJpaPlusAutoConfiguration、MyJpaPlusGlobalConfig、SoftDeleteFilterBean、MyJpaPlusProperties、EnvironmentHelper |
-| `com.zsubera.jpa.monitor` | SQL 监控：SlowQueryDataSourceProxy、SlowQueryDataSourceProxyPostProcessor、QueryMetricsCollector、SqlSlowQueryInterceptor（已废弃）、SqlSanitizer、SlowQueryListener |
+| `com.zsubera.jpa.monitor` | SQL 监控：SlowQueryDataSourceProxy、SlowQueryDataSourceProxyPostProcessor、QueryMetricsCollector、SqlSanitizer、SlowQueryListener |
 | `com.zsubera.jpa.codegen` | 代码生成：EntityCodeGenerator |
-| `com.zsubera.jpa.exception` | 异常类：MyJpaPlusException、QueryBuildException、BulkOperationException、DataAccessException、SecurityViolationException、TimeoutException |
+| `com.zsubera.jpa.exception` | 异常类：MyJpaPlusException、QueryBuildException、BulkOperationException、MyJpaDataAccessException、SecurityViolationException |
 | `com.zsubera.jpa.softdelete` | 软删除：SoftDeleteHelper、SoftDeleteBulkExecutor |
 | `com.zsubera.jpa.util` | 工具类：LambdaUtils、IdentifierValidator、InClauseBuilder、EntityClassResolver、EntityGraphHelper、SampledEvictionCache、CacheEvictionHelper、PageableHelper、StringHelper |
 
