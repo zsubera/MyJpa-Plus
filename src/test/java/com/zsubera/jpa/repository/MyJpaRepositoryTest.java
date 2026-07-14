@@ -26,7 +26,8 @@ class MyJpaRepositoryTest {
     @SpringBootApplication
     @EnableAutoConfiguration
     @EntityScan(basePackageClasses = {MyJpaTestEntity.class, SimpleTestEntity.class})
-    @EnableJpaRepositories(basePackageClasses = {MyJpaTestRepository.class, SimpleTestRepository.class})
+    @EnableJpaRepositories(basePackageClasses = {MyJpaTestRepository.class, SimpleTestRepository.class},
+        repositoryBaseClass = DefaultMyJpaRepository.class)
     static class TestConfig {}
 
     @Autowired
@@ -184,5 +185,33 @@ class MyJpaRepositoryTest {
             org.springframework.data.domain.Sort.by("name"));
         assertEquals(2, result.size());
         assertEquals("a", result.get(0).getName());
+    }
+
+    // ---- Projection mode throws UnsupportedOperationException ----
+
+    @Test
+    void findAll_specWithProjection_throwsUnsupportedOperationException() {
+        var spec = new com.zsubera.jpa.spec.QuerySpec<MyJpaTestEntity>().select(MyJpaTestEntity::getName);
+        assertThrows(UnsupportedOperationException.class, () -> repository.findAll(spec));
+    }
+
+    @Test
+    void findAll_specWithProjectionAndSort_throwsUnsupportedOperationException() {
+        var spec = new com.zsubera.jpa.spec.QuerySpec<MyJpaTestEntity>().select(MyJpaTestEntity::getName);
+        assertThrows(UnsupportedOperationException.class,
+            () -> repository.findAll(spec, org.springframework.data.domain.Sort.by("name")));
+    }
+
+    @Test
+    void findAll_specWithProjectionAndPageable_throwsUnsupportedOperationException() {
+        var spec = new com.zsubera.jpa.spec.QuerySpec<MyJpaTestEntity>().select(MyJpaTestEntity::getName);
+        assertThrows(UnsupportedOperationException.class,
+            () -> repository.findAll(spec, org.springframework.data.domain.PageRequest.of(0, 10)));
+    }
+
+    @Test
+    void findOne_specWithProjection_throwsUnsupportedOperationException() {
+        var spec = new com.zsubera.jpa.spec.QuerySpec<MyJpaTestEntity>().select(MyJpaTestEntity::getName);
+        assertThrows(UnsupportedOperationException.class, () -> repository.findOne(spec));
     }
 }

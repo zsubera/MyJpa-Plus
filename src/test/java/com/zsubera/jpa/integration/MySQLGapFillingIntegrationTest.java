@@ -632,10 +632,10 @@ class MySQLGapFillingIntegrationTest {
     void projection_tuple() {
         save("alice", 1);
         save("bob", 2);
-        List<?> r = repository
-            .findAll(new QuerySpec<MySQLTestEntity>().select(MySQLTestEntity::getName, MySQLTestEntity::getStatus));
+        List<Tuple> r = repository.find(Tuple.class, new QuerySpec<MySQLTestEntity>()
+            .select(MySQLTestEntity::getName, MySQLTestEntity::getStatus));
         assertEquals(2, r.size());
-        assertNotNull(((Tuple)r.get(0)).get("name"));
+        assertNotNull(r.get(0).get("name"));
     }
 
     @Test
@@ -652,9 +652,9 @@ class MySQLGapFillingIntegrationTest {
     void projection_aggregation() {
         save("alice", 100);
         save("bob", 200);
-        List<?> r = repository.findAll(new QuerySpec<MySQLTestEntity>().selectAs(QuerySpec.count(), "cnt")
+        List<Tuple> r = repository.find(Tuple.class, new QuerySpec<MySQLTestEntity>().selectAs(QuerySpec.count(), "cnt")
             .selectAs(QuerySpec.sum(MySQLTestEntity::getStatus), "totalAmount"));
-        Tuple t = (Tuple)r.get(0);
+        Tuple t = r.get(0);
         assertEquals(2L, t.get("cnt"));
         assertEquals(300, t.get("totalAmount"));
     }
@@ -666,7 +666,7 @@ class MySQLGapFillingIntegrationTest {
         repository.delete(del);
         em.flush();
         em.clear();
-        List<?> r = repository.findAll(new QuerySpec<MySQLTestEntity>().select(MySQLTestEntity::getName));
+        List<Tuple> r = repository.find(Tuple.class, new QuerySpec<MySQLTestEntity>().select(MySQLTestEntity::getName));
         assertEquals(1, r.size());
     }
 
@@ -674,11 +674,10 @@ class MySQLGapFillingIntegrationTest {
     void projection_paged() {
         for (int i = 0; i < 10; i++)
             save("u" + i, i);
-        org.springframework.data.domain.Page<?> p = repository.findAll(
-            new QuerySpec<MySQLTestEntity>().select(MySQLTestEntity::getName).orderByAsc(MySQLTestEntity::getName),
-            org.springframework.data.domain.PageRequest.of(0, 3));
-        assertEquals(3, p.getContent().size());
-        assertEquals(10, p.getTotalElements());
+        List<Tuple> r = repository.find(Tuple.class,
+            new QuerySpec<MySQLTestEntity>().select(MySQLTestEntity::getName).orderByAsc(MySQLTestEntity::getName)
+                .distinct());
+        assertEquals(10, r.size());
     }
 
     // ==================== Helper methods ====================

@@ -431,6 +431,11 @@ public class DefaultMyJpaRepository<T, ID> extends SimpleJpaRepository<T, ID> im
 
     @Override
     public Optional<T> findOne(Specification<T> spec) {
+        if (spec instanceof com.zsubera.jpa.spec.QuerySpec sp && sp.isProjectionMode()) {
+            throw new UnsupportedOperationException(
+                "findOne(Specification) does not support projection mode. "
+                    + "Use find(Class<R>, Specification) instead, e.g.: find(Tuple.class, spec)");
+        }
         return super.findOne(mergeSoftDeleteFilter(spec));
     }
 
@@ -451,16 +456,18 @@ public class DefaultMyJpaRepository<T, ID> extends SimpleJpaRepository<T, ID> im
 
     @Override
     public <R> List<R> find(Class<R> resultType, Specification<T> spec) {
-        if (spec instanceof com.zsubera.jpa.spec.QuerySpec<T> sp && sp.isProjectionMode()) {
-            return executeTypedProjection(sp, resultType);
-        }
         if (resultType == domainClass) {
             @SuppressWarnings("unchecked")
             List<R> result = (List<R>)super.findAll(mergeSoftDeleteFilter(spec));
             return result;
         }
+        if (spec instanceof com.zsubera.jpa.spec.QuerySpec<T> sp && sp.isProjectionMode()) {
+            return executeTypedProjection(sp, resultType);
+        }
         throw new IllegalArgumentException(
-            "QuerySpec must have select() configured for projection query when resultType differs from entity type");
+            "Projection query requires a QuerySpec with select(). "
+                + "Use QuerySpec.select() to configure projection fields, e.g.: "
+                + "find(NameDto.class, new QuerySpec<T>().select(...).eq(...))");
     }
 
     // ---- 投影查询分支 ----
