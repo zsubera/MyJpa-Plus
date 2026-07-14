@@ -167,8 +167,7 @@ class QuerySpecProjectionTest {
 
     @Test
     void copy_preservesProjectionState() {
-        QuerySpec<TestEntity> original =
-            new QuerySpec<TestEntity>().select(TestEntity::getName, TestEntity::getStatus);
+        QuerySpec<TestEntity> original = new QuerySpec<TestEntity>().select(TestEntity::getName, TestEntity::getStatus);
 
         QuerySpec<TestEntity> copy = original.copy();
 

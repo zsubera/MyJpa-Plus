@@ -402,9 +402,8 @@ public class DefaultMyJpaRepository<T, ID> extends SimpleJpaRepository<T, ID> im
     @Override
     public List<T> findAll(Specification<T> spec) {
         if (spec instanceof com.zsubera.jpa.spec.QuerySpec sp && sp.isProjectionMode()) {
-            throw new UnsupportedOperationException(
-                "findAll(Specification) does not support projection mode. "
-                    + "Use find(Class<R>, Specification) instead, e.g.: find(Tuple.class, spec)");
+            throw new UnsupportedOperationException("findAll(Specification) does not support projection mode. "
+                + "Use find(Class<R>, Specification) instead, e.g.: find(Tuple.class, spec)");
         }
         return super.findAll(mergeSoftDeleteFilter(spec));
     }
@@ -422,9 +421,8 @@ public class DefaultMyJpaRepository<T, ID> extends SimpleJpaRepository<T, ID> im
     @Override
     public List<T> findAll(Specification<T> spec, Sort sort) {
         if (spec instanceof com.zsubera.jpa.spec.QuerySpec sp && sp.isProjectionMode()) {
-            throw new UnsupportedOperationException(
-                "findAll(Specification, Sort) does not support projection mode. "
-                    + "Use find(Class<R>, Specification) instead, e.g.: find(Tuple.class, spec)");
+            throw new UnsupportedOperationException("findAll(Specification, Sort) does not support projection mode. "
+                + "Use find(Class<R>, Specification) instead, e.g.: find(Tuple.class, spec)");
         }
         return super.findAll(mergeSoftDeleteFilter(spec), sort);
     }
@@ -432,9 +430,8 @@ public class DefaultMyJpaRepository<T, ID> extends SimpleJpaRepository<T, ID> im
     @Override
     public Optional<T> findOne(Specification<T> spec) {
         if (spec instanceof com.zsubera.jpa.spec.QuerySpec sp && sp.isProjectionMode()) {
-            throw new UnsupportedOperationException(
-                "findOne(Specification) does not support projection mode. "
-                    + "Use find(Class<R>, Specification) instead, e.g.: find(Tuple.class, spec)");
+            throw new UnsupportedOperationException("findOne(Specification) does not support projection mode. "
+                + "Use find(Class<R>, Specification) instead, e.g.: find(Tuple.class, spec)");
         }
         return super.findOne(mergeSoftDeleteFilter(spec));
     }
@@ -464,10 +461,9 @@ public class DefaultMyJpaRepository<T, ID> extends SimpleJpaRepository<T, ID> im
         if (spec instanceof com.zsubera.jpa.spec.QuerySpec<T> sp && sp.isProjectionMode()) {
             return executeTypedProjection(sp, resultType);
         }
-        throw new IllegalArgumentException(
-            "Projection query requires a QuerySpec with select(). "
-                + "Use QuerySpec.select() to configure projection fields, e.g.: "
-                + "find(NameDto.class, new QuerySpec<T>().select(...).eq(...))");
+        throw new IllegalArgumentException("Projection query requires a QuerySpec with select(). "
+            + "Use QuerySpec.select() to configure projection fields, e.g.: "
+            + "find(NameDto.class, new QuerySpec<T>().select(...).eq(...))");
     }
 
     // ---- 投影查询分支 ----

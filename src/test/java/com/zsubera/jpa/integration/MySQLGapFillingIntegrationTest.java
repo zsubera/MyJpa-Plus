@@ -632,8 +632,8 @@ class MySQLGapFillingIntegrationTest {
     void projection_tuple() {
         save("alice", 1);
         save("bob", 2);
-        List<Tuple> r = repository.find(Tuple.class, new QuerySpec<MySQLTestEntity>()
-            .select(MySQLTestEntity::getName, MySQLTestEntity::getStatus));
+        List<Tuple> r = repository.find(Tuple.class,
+            new QuerySpec<MySQLTestEntity>().select(MySQLTestEntity::getName, MySQLTestEntity::getStatus));
         assertEquals(2, r.size());
         assertNotNull(r.get(0).get("name"));
     }
@@ -642,8 +642,8 @@ class MySQLGapFillingIntegrationTest {
     void projection_dto() {
         save("alice", 1);
         save("bob", 2);
-        List<MySQLNameStatusDto> r = repository.find(MySQLNameStatusDto.class, new QuerySpec<MySQLTestEntity>()
-            .select(MySQLTestEntity::getName, MySQLTestEntity::getStatus));
+        List<MySQLNameStatusDto> r = repository.find(MySQLNameStatusDto.class,
+            new QuerySpec<MySQLTestEntity>().select(MySQLTestEntity::getName, MySQLTestEntity::getStatus));
         assertEquals(2, r.size());
         assertEquals("alice", r.get(0).name);
     }
@@ -674,9 +674,8 @@ class MySQLGapFillingIntegrationTest {
     void projection_paged() {
         for (int i = 0; i < 10; i++)
             save("u" + i, i);
-        List<Tuple> r = repository.find(Tuple.class,
-            new QuerySpec<MySQLTestEntity>().select(MySQLTestEntity::getName).orderByAsc(MySQLTestEntity::getName)
-                .distinct());
+        List<Tuple> r = repository.find(Tuple.class, new QuerySpec<MySQLTestEntity>().select(MySQLTestEntity::getName)
+            .orderByAsc(MySQLTestEntity::getName).distinct());
         assertEquals(10, r.size());
     }
 

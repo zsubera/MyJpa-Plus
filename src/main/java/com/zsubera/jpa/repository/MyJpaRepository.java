@@ -133,7 +133,8 @@ public interface MyJpaRepository<T, ID> extends JpaRepository<T, ID>, JpaSpecifi
      * @return 投影结果列表
      */
     default <R> List<R> find(Class<R> resultType, Specification<T> spec) {
-        throw new UnsupportedOperationException("find(Class, Specification) must be implemented by repository base class");
+        throw new UnsupportedOperationException(
+            "find(Class, Specification) must be implemented by repository base class");
     }
 
     /**

@@ -1638,9 +1638,9 @@ public class MyJpaTemplate implements MyJpaTemplateOperations {
         Specification<?> softDeleteSpec =
             shouldApplySoftDeleteFilter() ? SoftDeleteHelper.isNotDeleted(entityClass) : null;
         @SuppressWarnings({"unchecked", "rawtypes"})
-        List<jakarta.persistence.Tuple> result = new QueryProjectionSupport(
-            entityClass, spec, softDeleteSpec, spec.getProjectionFieldsWithAlias())
-            .toTupleList(em, resolveMaxResults());
+        List<jakarta.persistence.Tuple> result =
+            new QueryProjectionSupport(entityClass, spec, softDeleteSpec, spec.getProjectionFieldsWithAlias())
+                .toTupleList(em, resolveMaxResults());
         return result;
     }
 
