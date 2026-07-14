@@ -11,6 +11,24 @@
 - **投影查询强制走 `find()`** — `DefaultMyJpaRepository.findAll(spec)` 在投影模式下抛出 `UnsupportedOperationException`，引导用户使用 `find(Tuple.class, spec)` 或 `find(Dto.class, spec)`
 - **`MyJpaTemplate.find(Class, QuerySpec)` 返回类型修正** — 返回 `List<Tuple>` 而非 `List<T>`
 - **移除旧代码生成模块** — 删除 `com.zsubera.jpa.codegen.EntityCodeGenerator`，代码生成功能迁移至独立 Maven 插件项目 `myjpa-plus-maven-plugin`
+- **SampledEvictionCache.setMaxSize() 初始化保护** — 新增 `initialized` 标志，缓存初始化后调用 `setMaxSize()` 会记录警告日志和堆栈跟踪，防止运行时意外调用导致数据丢失
+
+### 新增
+- **SoftDeleteBulkExecutor 软删除乐观锁检查** — 新增 `softDeleteByIdsWithVersionCheck(em, entityClass, ids, expectedVersion)` 方法，支持可选的 `@Version` 乐观锁检查；当提供 `expectedVersion` 时，WHERE 子句包含版本条件，版本不匹配时抛出 `OptimisticLockException`
+- **EncryptionKeyManager Spring Environment 生产检测** — 新增 `setSpringProductionEnvironment(Boolean)` 方法，由自动配置注入 Spring `Environment` 的 active profiles，解决仅通过 `application.yml` 配置 `spring.profiles.active=prod` 时无法检测生产环境的问题
+- **EncryptionKeyManager PBKDF2 迭代次数运行时保护** — 新增 `keysInUse` 标志，密钥首次派生后禁止更改 PBKDF2 迭代次数，防止运行时更改导致现有密文无法解密
+- **DeleteSpec.executeAsSoftDeleteInTransaction** — 新增事务管理方法，包装软删除操作以自动管理事务，修复在非事务上下文中调用时抛出 `TransactionRequiredException` 的问题
+
+### 修复
+- **BatchSaveTemplate.isDefaultPrimitiveValue() Float/Double 缺失** — 添加 `Float` 和 `Double` 零值检查，修复 `@Id float/double` 类型实体被错误识别为已存在的问题
+- **MergeSpec 不必要的 em.flush()** — 移除 `doBatchSingleRow` 和 `doBatchMultiRow` 中的 `em.flush()` 调用，修复 AUTO_CLEAR 模式下意外持久化无关脏数据的问题
+- **DeleteSpec.executeAsSoftDelete() 双重软删除过滤器** — 移除手动添加的软删除守卫谓词，因为 `buildPredicates()` 已经处理，修复 WHERE 子句中冗余的 `deleted = FALSE` 条件
+- **DefaultMyJpaRepository.delete() 软删除事务管理** — 软删除路径现在使用 `executeAsSoftDeleteInTransaction()` 包装，修复在非事务上下文中调用时抛出 `TransactionRequiredException` 的问题
+- **GlobalConfigHolder.getConfig() 重验证失败循环** — 重验证失败时将 `cachedBeanVerifyTime` 设置为当前时间而非 0，避免立即重试导致警告日志风暴
+- **EncryptionKeyManager 非单调时钟** — `getKeyVersion()` 改用 `System.nanoTime()` 替代 `System.currentTimeMillis()`，修复 NTP 同步可能导致的缓存过期异常
+- **QueryCacheManager.computeIfAbsent() 幽灵条目** — 在 `addToPrefixIndex` 之前检查 `cache.getIfPresent(key) != null`，避免创建幽灵条目
+- **MergeSpec.executeBatchInSeparateTransactions 无限制** — 添加 `resolveMaxBulkOperationRows()` 检查，修复批量 UPSERT 操作不遵守最大行数限制的问题
+- **MyJpaTemplate.publishEntityModifiedEvent 多类缓存驱逐** — 为所有不同的实体类发布事件而非仅第一个元素的类，修复混合类型批量保存时缓存驱逐不完整的问题
 
 ### 迁移
 - `asDto()` 已删除，需替换为 `find()` 的 `resultType` 参数
