@@ -503,4 +503,29 @@ class BatchSaveTemplateTest {
         assertEquals(failed, ex.getFailedEntities());
         assertTrue(ex.getMessage().contains("3 entity(ies) were NOT committed"));
     }
+
+    // ---- isDefaultPrimitiveValue for Float/Double ----
+
+    @Test
+    void testIsDefaultPrimitiveValueFloatDouble() throws Exception {
+        java.lang.reflect.Method method =
+            BatchSaveTemplate.class.getDeclaredMethod("isDefaultPrimitiveValue", Object.class, Class.class);
+        method.setAccessible(true);
+
+        // Test with TestEntity (has Long @Id @GeneratedValue)
+        assertTrue((boolean)method.invoke(null, 0L, TestEntity.class), "Long 0 should be default");
+        assertFalse((boolean)method.invoke(null, 1L, TestEntity.class), "Long 1 should not be default");
+        assertTrue((boolean)method.invoke(null, 0, TestEntity.class), "Integer 0 should be default");
+        assertTrue((boolean)method.invoke(null, (short)0, TestEntity.class), "Short 0 should be default");
+        assertTrue((boolean)method.invoke(null, (byte)0, TestEntity.class), "Byte 0 should be default");
+
+        // Test Float/Double - these are the new cases
+        assertTrue((boolean)method.invoke(null, 0.0f, TestEntity.class), "Float 0.0 should be default");
+        assertFalse((boolean)method.invoke(null, 1.0f, TestEntity.class), "Float 1.0 should not be default");
+        assertTrue((boolean)method.invoke(null, 0.0d, TestEntity.class), "Double 0.0 should be default");
+        assertFalse((boolean)method.invoke(null, 1.0d, TestEntity.class), "Double 1.0 should not be default");
+
+        // Test with null
+        assertFalse((boolean)method.invoke(null, null, TestEntity.class), "null should not be default");
+    }
 }

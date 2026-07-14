@@ -256,7 +256,10 @@ public class QueryCacheManager implements CacheAdapter {
             T loaded = loader.get();
             return loaded != null ? packWithTtl(loaded, ttlSeconds) : packWithTtl(NULL_SENTINEL, ttlSeconds);
         });
-        addToPrefixIndex(key);
+        // 检查key是否还在缓存中，避免创建幽灵条目
+        if (cache.getIfPresent(key) != null) {
+            addToPrefixIndex(key);
+        }
         T value = unpackIfPresent(cached);
         if (value == null) {
             missCount.incrementAndGet();
@@ -284,14 +287,23 @@ public class QueryCacheManager implements CacheAdapter {
 
     /**
      * 清除所有缓存条目。
+     *
+     * <p><strong>竞态处理：</strong>先清除 prefixIndex 再清除 cache，确保：
+     * <ul>
+     *   <li>不会产生幽灵条目（在 prefixIndex 中但不在 cache 中）</li>
+     *   <li>可能产生孤儿条目（在 cache 中但不在 prefixIndex 中），但这些条目会通过 TTL 过期自动清理</li>
+     * </ul>
      */
     @Override
     public void clear() {
         // 先递增 generation，确保并发的 findAllCached afterCommit 回调能看到 generation 变化，
         // 不会将旧查询结果写入已清空的缓存。
         evictionGeneration.incrementAndGet();
-        cache.invalidateAll();
+        // 先清除 prefixIndex，再清除 cache
+        // 这样如果并发 put() 在 prefixIndex.clear() 之后添加新条目，
+        // 新条目会在 cache 中但不在 prefixIndex 中（孤儿条目），而不是相反（幽灵条目）
         prefixIndex.clear();
+        cache.invalidateAll();
         log.debug("Cache cleared");
     }
 

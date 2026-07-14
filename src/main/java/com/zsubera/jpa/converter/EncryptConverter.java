@@ -180,6 +180,15 @@ public class EncryptConverter implements AttributeConverter<String, String> {
     }
 
     /**
+     * 设置 Spring Environment 检测到的生产环境标志。由自动配置类在启动时调用。
+     *
+     * @param isProduction true 如果 Spring Environment 检测到生产环境
+     */
+    public static void setSpringProductionEnvironment(Boolean isProduction) {
+        EncryptionKeyManager.setSpringProductionEnvironment(isProduction);
+    }
+
+    /**
      * 设置密钥版本缓存刷新间隔（毫秒）。默认 300,000ms（5分钟）。
      * 缩短此间隔可使密钥版本变更更快生效，但会增加环境变量/系统属性的读取频率。
      *

@@ -351,7 +351,8 @@ class BatchSaveTemplate {
             return false;
         }
         return id instanceof Long l && l == 0L || id instanceof Integer i && i == 0 || id instanceof Short s && s == 0
-            || id instanceof Byte b && b == 0;
+            || id instanceof Byte b && b == 0 || id instanceof Float f && f == 0.0f
+            || id instanceof Double d && d == 0.0d;
     }
 
     /**

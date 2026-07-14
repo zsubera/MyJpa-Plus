@@ -181,6 +181,18 @@ public class DeleteSpec<T> extends AbstractBulkOperationSpec<T, DeleteSpec<T>> {
     }
 
     /**
+     * 在托管事务中执行软删除操作。如果没有活动事务，自动创建新事务。
+     *
+     * @param em 实体管理器
+     * @param fieldName 软删除字段名
+     * @param deletedValue 软删除字段值
+     * @return 受影响的行数
+     */
+    public int executeAsSoftDeleteInTransaction(EntityManager em, String fieldName, Object deletedValue) {
+        return executeInTransaction(em, e -> executeAsSoftDelete(e, fieldName, deletedValue));
+    }
+
+    /**
      * 将已构建的 DELETE 条件转换为软删除 UPDATE 执行。
      *
      * <p>
@@ -196,15 +208,9 @@ public class DeleteSpec<T> extends AbstractBulkOperationSpec<T, DeleteSpec<T>> {
         jakarta.persistence.criteria.CriteriaBuilder cb = em.getCriteriaBuilder();
         jakarta.persistence.criteria.CriteriaUpdate<T> update = cb.createCriteriaUpdate(entityClass);
         jakarta.persistence.criteria.Root<T> root = update.from(entityClass);
-        List<Predicate> predicates = new ArrayList<>();
-        // Guard: exclude already-soft-deleted rows to avoid inflating affected counts
-        String softDeleteField = SoftDeleteHelper.findSoftDeleteField(entityClass);
-        if (softDeleteField != null) {
-            Predicate notDeleted = SoftDeleteHelper.buildNotDeleted(cb, root, softDeleteField, entityClass);
-            predicates.add(notDeleted);
-        }
-        Predicate[] userPredicates = buildPredicates(root, cb);
-        if (userPredicates.length == 0) {
+        // buildPredicates() already injects soft-delete filter when shouldApplySoftDeleteFilter() is true
+        Predicate[] predicates = buildPredicates(root, cb);
+        if (predicates.length == 0) {
             if (!allowUnconditional) {
                 throw new IllegalStateException("No WHERE conditions specified for soft-delete operation. "
                     + "This would soft-delete ALL active rows in the table. "
@@ -213,10 +219,6 @@ public class DeleteSpec<T> extends AbstractBulkOperationSpec<T, DeleteSpec<T>> {
             log.warn(
                 "AUDIT: Executing unconditional soft-delete on {} — this will affect ALL active rows! Call stack: {}",
                 entityClass.getSimpleName(), AuditUtils.getCallStack());
-        } else {
-            for (Predicate p : userPredicates) {
-                predicates.add(p);
-            }
         }
         // ponytail: COUNT must include the soft-delete filter to count only active rows,
         // matching the actual UPDATE's affected row count.
@@ -225,16 +227,9 @@ public class DeleteSpec<T> extends AbstractBulkOperationSpec<T, DeleteSpec<T>> {
             jakarta.persistence.criteria.CriteriaQuery<Long> countQuery = cb.createQuery(Long.class);
             jakarta.persistence.criteria.Root<T> countRoot = countQuery.from(entityClass);
             countQuery.select(cb.count(countRoot));
-            List<Predicate> countPredicates = new ArrayList<>();
-            if (softDeleteField != null) {
-                countPredicates.add(SoftDeleteHelper.buildNotDeleted(cb, countRoot, softDeleteField, entityClass));
-            }
-            Predicate[] countUserPredicates = buildPredicates(countRoot, cb);
-            for (Predicate p : countUserPredicates) {
-                countPredicates.add(p);
-            }
-            if (!countPredicates.isEmpty()) {
-                countQuery.where(cb.and(countPredicates.toArray(new Predicate[0])));
+            Predicate[] countPredicates = buildPredicates(countRoot, cb);
+            if (countPredicates.length > 0) {
+                countQuery.where(cb.and(countPredicates));
             }
             long count = em.createQuery(countQuery).getSingleResult();
             if (count > limit) {
@@ -243,7 +238,9 @@ public class DeleteSpec<T> extends AbstractBulkOperationSpec<T, DeleteSpec<T>> {
                     + "Use executeLimited() with an explicit limit, or adjust myjpa-plus.query.max-bulk-operation-rows.");
             }
         }
-        update.where(cb.and(predicates.toArray(new Predicate[0])));
+        if (predicates.length > 0) {
+            update.where(cb.and(predicates));
+        }
         update.set(fieldName, deletedValue);
         int affected = em.createQuery(update).executeUpdate();
         // ponytail: 后置检查处理并发导致超额删除的场景。预检查 COUNT 与 UPDATE 之间

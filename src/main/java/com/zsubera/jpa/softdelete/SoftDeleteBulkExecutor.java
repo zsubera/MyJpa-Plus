@@ -283,6 +283,89 @@ public final class SoftDeleteBulkExecutor {
         return updated;
     }
 
+    /**
+     * 按 ID 列表执行软删除，支持可选的乐观锁版本检查。
+     *
+     * <p>当提供 expectedVersion 时，WHERE 子句会包含 {@code version = :expectedVersion} 条件，
+     * 确保只有版本匹配的行才会被更新。如果 0 行受影响（版本不匹配），抛出 OptimisticLockException。
+     *
+     * <p>当 expectedVersion 为 null 时，行为与 {@link #softDeleteByIds(EntityManager, Class, List)} 相同，
+     * 不进行版本检查。
+     *
+     * @param em 实体管理器
+     * @param entityClass 实体类
+     * @param ids 要软删除的 ID 列表
+     * @param expectedVersion 期望的版本号，null 表示不检查版本
+     * @return 受影响的行数
+     * @throws jakarta.persistence.OptimisticLockException 如果版本不匹配
+     */
+    public static <T, ID> int softDeleteByIdsWithVersionCheck(EntityManager em, Class<T> entityClass, List<ID> ids,
+        Object expectedVersion) {
+        if (expectedVersion == null) {
+            return softDeleteByIds(em, entityClass, ids);
+        }
+        requireNonNull(em, "em");
+        requireNonNull(entityClass, "entityClass");
+        if (ids == null || ids.isEmpty())
+            return 0;
+        requireActiveTransaction();
+        int hardLimit = com.zsubera.jpa.util.InClauseBuilder.getHardLimit();
+        if (ids.size() > hardLimit)
+            throw new IllegalArgumentException("ID list size (" + ids.size() + ") exceeds the hard limit (" + hardLimit
+                + "). " + "Consider processing in smaller batches or using a temporary table.");
+
+        ExecContext ctx = resolveExecContext(entityClass);
+        VersionFieldInfo versionInfo = resolveVersionFieldInfo(entityClass);
+        if (versionInfo == null) {
+            throw new IllegalArgumentException("Entity " + entityClass.getSimpleName()
+                + " does not have a @Version field. Cannot perform version-checked soft delete.");
+        }
+        String dialect = SoftDeleteHelper.detectDialect(em);
+        String escapedTable = SoftDeleteHelper.quoteIdentifier(
+            SoftDeleteHelper.validateIdentifier(SoftDeleteHelper.resolveTableName(entityClass)), dialect);
+        String escapedColumn = SoftDeleteHelper.quoteIdentifier(
+            SoftDeleteHelper.validateIdentifier(SoftDeleteHelper.resolveColumnName(entityClass, ctx.fieldName())),
+            dialect);
+        String escapedIdColumn = SoftDeleteHelper.quoteIdentifier(
+            SoftDeleteHelper.validateIdentifier(SoftDeleteHelper.resolveIdColumnName(entityClass)), dialect);
+        String escapedVersionColumn =
+            SoftDeleteHelper.quoteIdentifier(SoftDeleteHelper.validateIdentifier(versionInfo.columnName()), dialect);
+        String timestampColumn = resolveTimestampColumn(entityClass, ctx.annotation());
+        String setClause = escapedColumn + " = :deletedValue"
+            + (timestampColumn != null ? ", " + timestampColumn + " = CURRENT_TIMESTAMP" : "") + ", "
+            + escapedVersionColumn + " = " + escapedVersionColumn + " + 1";
+        String whereClause =
+            ctx.resolved().booleanField() ? "(" + escapedColumn + " = FALSE OR " + escapedColumn + " IS NULL)"
+                : "(" + escapedColumn + " != :deletedValue OR " + escapedColumn + " IS NULL)";
+        int batchSize = com.zsubera.jpa.util.InClauseBuilder.getMaxInClauseSize();
+        int total = 0;
+        Object deletedValue = ctx.resolved().booleanField() ? Boolean.TRUE : ctx.resolved().dbValue();
+        for (int i = 0; i < ids.size(); i += batchSize) {
+            List<ID> batch = ids.subList(i, Math.min(i + batchSize, ids.size()));
+            StringBuilder placeholders = new StringBuilder();
+            for (int j = 0; j < batch.size(); j++) {
+                if (j > 0)
+                    placeholders.append(", ");
+                placeholders.append(":id").append(j);
+            }
+            String batchSql = "UPDATE " + escapedTable + " SET " + setClause + " WHERE " + escapedIdColumn + " IN ("
+                + placeholders + ") AND " + whereClause + " AND " + escapedVersionColumn + " = :expectedVersion";
+            validateGeneratedSql(batchSql, "softDeleteByIdsWithVersionCheck batch UPDATE");
+            var query = em.createNativeQuery(batchSql);
+            query.setParameter("deletedValue", deletedValue);
+            query.setParameter("expectedVersion", expectedVersion);
+            for (int j = 0; j < batch.size(); j++)
+                query.setParameter("id" + j, batch.get(j));
+            total += query.executeUpdate();
+        }
+        if (total == 0 && !ids.isEmpty()) {
+            throw new jakarta.persistence.OptimisticLockException("Soft delete failed: all " + ids.size()
+                + " entities have been modified by another transaction. " + "Expected version: " + expectedVersion);
+        }
+        publishAfterUpdate(em, entityClass, total);
+        return total;
+    }
+
     public static <T, ID> int softDeleteByIds(EntityManager em, Class<T> entityClass, List<ID> ids) {
         requireNonNull(em, "em");
         requireNonNull(entityClass, "entityClass");

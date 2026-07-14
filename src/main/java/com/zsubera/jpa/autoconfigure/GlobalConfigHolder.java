@@ -111,7 +111,8 @@ public final class GlobalConfigHolder {
                     return refreshed;
                 } catch (Exception e) {
                     // bean 已不存在（Context 刷新），原子性地清除缓存
-                    cachedBeanVerifyTime = 0;
+                    // 设置当前时间而非0，避免立即重试导致警告日志风暴
+                    cachedBeanVerifyTime = now;
                     cachedBean = null;
                 }
             }

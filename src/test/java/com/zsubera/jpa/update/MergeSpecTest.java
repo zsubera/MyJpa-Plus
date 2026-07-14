@@ -503,6 +503,50 @@ class MergeSpecTest {
         assertTrue(count >= 1);
     }
 
+    // ===== executeWithCallbacks — detached entity persistence =====
+
+    @Test
+    void testExecuteWithCallbacks_detachedEntity_persists() {
+        // Save an entity, then detach it
+        TestEntity saved = repository.save(newEntity("detached", 1));
+        em.flush();
+        em.clear();
+
+        // Verify entity is detached
+        assertFalse(em.contains(saved));
+
+        // Create a detached entity with updated fields
+        TestEntity detached = new TestEntity();
+        detached.setId(saved.getId());
+        detached.setName("detached-updated");
+        detached.setStatus(2);
+
+        // executeWithCallbacks should merge+flush the detached entity
+        int count = new MergeSpec<>(TestEntity.class).withEntity(detached).executeWithCallbacks(em);
+        em.flush();
+        em.clear();
+
+        assertEquals(1, count);
+        TestEntity found = repository.findById(saved.getId()).orElseThrow();
+        assertEquals("detached-updated", found.getName());
+        assertEquals(Integer.valueOf(2), found.getStatus());
+    }
+
+    @Test
+    void testExecuteWithCallbacks_newEntity_persists() {
+        TestEntity entity = newEntity("new-callbacks", 5);
+
+        int count = new MergeSpec<>(TestEntity.class).withEntity(entity).executeWithCallbacks(em);
+        em.flush();
+        em.clear();
+
+        assertEquals(1, count);
+        List<TestEntity> all = repository.findAll();
+        assertEquals(1, all.size());
+        assertEquals("new-callbacks", all.get(0).getName());
+        assertEquals(Integer.valueOf(5), all.get(0).getStatus());
+    }
+
     // ===== executeBatch with dialect strategy =====
 
     @Test

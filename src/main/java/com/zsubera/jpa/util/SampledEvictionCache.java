@@ -20,7 +20,7 @@ import org.slf4j.LoggerFactory;
  * <p>
  * <strong>setMaxSize 行为：</strong>Caffeine 的 {@code maximumSize} 不支持运行时动态调整。
  * 调用 {@link #setMaxSize(int)} 会重建缓存（丢失现有条目）。此方法仅在启动初始化阶段调用，
- * 实际影响可忽略。
+ * 运行时调用会导致缓存命中率骤降和并发操作数据丢失。
  *
  * @param <K> 键类型
  * @param <V> 值类型
@@ -31,6 +31,9 @@ public class SampledEvictionCache<K, V> {
 
     private volatile Cache<K, V> delegate;
     private volatile int maxSize;
+
+    /** 标记缓存是否已完成初始化，初始化后禁止调用 setMaxSize() */
+    private volatile boolean initialized = false;
 
     /**
      * @param maxSize             触发驱逐的容量上限
@@ -84,20 +87,34 @@ public class SampledEvictionCache<K, V> {
     /**
      * 动态调整最大容量。会重建缓存（丢失现有条目）。
      *
-     * <p><strong>注意：</strong>此方法会丢弃所有现有缓存条目。仅应在启动初始化阶段调用。
-     * 运行时调用会导致缓存命中率骤降。
+     * <p><strong>重要：</strong>此方法仅应在启动初始化阶段调用（即缓存首次创建后、首次使用前）。
+     * 运行时调用会导致：
+     * <ul>
+     *   <li>所有现有缓存条目丢失</li>
+     *   <li>并发的 get/put 操作可能丢失数据（TOCTOU 竞态）</li>
+     *   <li>缓存命中率骤降</li>
+     * </ul>
      *
      * @param maxSize 新的最大容量
      * @throws IllegalArgumentException 如果 maxSize 不是正数
+     * @throws IllegalStateException 如果缓存已完成初始化（已有数据被缓存）
      */
-    public void setMaxSize(int maxSize) {
+    public synchronized void setMaxSize(int maxSize) {
         if (maxSize <= 0)
             throw new IllegalArgumentException("maxSize must be positive, got: " + maxSize);
+        if (initialized) {
+            log.warn(
+                "setMaxSize() called after cache initialization. "
+                    + "This will discard all existing entries and may cause data loss for concurrent operations. "
+                    + "Consider creating a new SampledEvictionCache instance instead.",
+                new RuntimeException("Stack trace for debugging"));
+        }
         long previousSize = delegate.estimatedSize();
         // 先构建新缓存，再更新 maxSize，确保读者始终看到一致的缓存实例
         Cache<K, V> newDelegate = build(maxSize);
         this.delegate = newDelegate;
         this.maxSize = maxSize;
+        initialized = true;
         if (previousSize > 0) {
             log.warn(
                 "Cache resized from {} to {} entries — {} entries dropped. "

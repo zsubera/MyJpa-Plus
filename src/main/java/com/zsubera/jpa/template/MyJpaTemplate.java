@@ -493,7 +493,12 @@ public class MyJpaTemplate implements MyJpaTemplateOperations {
         validateBatchParams(entities, "entities", batchSize);
         List<T> result = getBatchSaveTemplate().saveAllBatched(entities, batchSize);
         if (!result.isEmpty()) {
-            publishEntityModifiedEvent(result.get(0).getClass(), result.size());
+            // 为所有不同的实体类发布事件，而非仅第一个元素的类
+            java.util.Map<Class<?>, Integer> classCounts = new java.util.LinkedHashMap<>();
+            for (T entity : result) {
+                classCounts.merge(entity.getClass(), 1, Integer::sum);
+            }
+            classCounts.forEach(this::publishEntityModifiedEvent);
         }
         return result;
     }
@@ -520,7 +525,12 @@ public class MyJpaTemplate implements MyJpaTemplateOperations {
         validateBatchParams(entities, "entities", batchSize);
         List<T> result = getBatchSaveTemplate().saveAllBatchedPure(entities, batchSize);
         if (!result.isEmpty()) {
-            publishEntityModifiedEvent(result.get(0).getClass(), result.size());
+            // 为所有不同的实体类发布事件，而非仅第一个元素的类
+            java.util.Map<Class<?>, Integer> classCounts = new java.util.LinkedHashMap<>();
+            for (T entity : result) {
+                classCounts.merge(entity.getClass(), 1, Integer::sum);
+            }
+            classCounts.forEach(this::publishEntityModifiedEvent);
         }
         return result;
     }
@@ -550,7 +560,12 @@ public class MyJpaTemplate implements MyJpaTemplateOperations {
         validateBatchParams(entities, "entities", batchSize);
         List<T> result = getBatchSaveTemplate().saveAllBatchedInSeparateTransactions(entities, batchSize);
         if (!result.isEmpty()) {
-            publishEntityModifiedEvent(result.get(0).getClass(), result.size());
+            // 为所有不同的实体类发布事件，而非仅第一个元素的类
+            java.util.Map<Class<?>, Integer> classCounts = new java.util.LinkedHashMap<>();
+            for (T entity : result) {
+                classCounts.merge(entity.getClass(), 1, Integer::sum);
+            }
+            classCounts.forEach(this::publishEntityModifiedEvent);
         }
         return result;
     }

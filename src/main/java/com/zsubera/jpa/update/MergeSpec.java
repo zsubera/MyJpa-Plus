@@ -278,8 +278,10 @@ public class MergeSpec<T> {
         }
         T entitySnapshot = this.entity;
         // Step 1: merge if detached to make managed, then flush to trigger callbacks
+        // em.merge() returns a NEW managed instance — the original remains detached.
+        // Must capture the return value so flush() operates on the managed copy.
         if (!em.contains(entitySnapshot)) {
-            em.merge(entitySnapshot);
+            entitySnapshot = em.merge(entitySnapshot);
         }
         em.flush();
         // Step 2: after flush, entity is managed and persisted — skip native UPSERT
@@ -489,13 +491,9 @@ public class MergeSpec<T> {
                 }
                 if (i > 0 && i % batchSize == 0
                     && persistenceContextStrategy == PersistenceContextStrategy.AUTO_CLEAR) {
-                    em.flush();
                     em.clear();
                 }
                 total += executeWith(em, entity, strategy, effectiveConflictFields, conflictSet);
-            }
-            if (persistenceContextStrategy == PersistenceContextStrategy.AUTO_CLEAR) {
-                em.flush();
             }
         } catch (RuntimeException e) {
             if (em.isOpen()) {
@@ -613,7 +611,6 @@ public class MergeSpec<T> {
                     batchSql.params());
                 total += executeNativeQuery(em, batchSql.sql(), batchSql.params());
                 if (persistenceContextStrategy == PersistenceContextStrategy.AUTO_CLEAR) {
-                    em.flush();
                     em.clear();
                 }
             }
@@ -663,11 +660,17 @@ public class MergeSpec<T> {
         int iterationCount = 0;
         // ponytail: 10000 与 BulkOperationTemplate.DEFAULT_MAX_BATCH_ITERATIONS 保持一致
         int maxIterations = com.zsubera.jpa.autoconfigure.GlobalConfigHolder.resolveMaxUpsertBatchIterations(10000);
+        int effectiveLimit = com.zsubera.jpa.autoconfigure.GlobalConfigHolder.resolveMaxBulkOperationRows(0);
         while (batchStart < entities.size()) {
             if (++iterationCount > maxIterations) {
                 throw new MyJpaPlusException("executeBatchInSeparateTransactions exceeded max iterations ("
                     + maxIterations + ") with " + entities.size() + " entities at batchSize " + batchSize
                     + ". This is likely due to an extremely large entity list.");
+            }
+            if (effectiveLimit > 0 && total > effectiveLimit) {
+                throw new MyJpaPlusException("executeBatchInSeparateTransactions exceeded max rows limit ("
+                    + effectiveLimit + ") after committing " + total + " rows. "
+                    + "Adjust myjpa-plus.query.max-bulk-operation-rows or process in smaller batches.");
             }
             int batchEnd = Math.min(batchStart + batchSize, entities.size());
             int committedBatch;

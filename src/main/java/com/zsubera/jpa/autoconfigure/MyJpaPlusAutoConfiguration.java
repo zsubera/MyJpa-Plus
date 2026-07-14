@@ -172,7 +172,19 @@ public class MyJpaPlusAutoConfiguration {
 
             // 应用跳过盐值检查配置：从 Environment 读取（支持 application.yml）
             if (applicationContext != null) {
-                String skipSalt = applicationContext.getEnvironment().getProperty("myjpa-plus.encrypt.skip-salt-check");
+                // 注入 Spring Environment 的生产环境标志，用于检测 application.yml 中的 prod profile
+                org.springframework.core.env.Environment env = applicationContext.getEnvironment();
+                String[] activeProfiles = env.getActiveProfiles();
+                boolean isProduction = false;
+                for (String profile : activeProfiles) {
+                    if (EnvironmentHelper.isProdProfile(profile)) {
+                        isProduction = true;
+                        break;
+                    }
+                }
+                EncryptConverter.setSpringProductionEnvironment(isProduction);
+
+                String skipSalt = env.getProperty("myjpa-plus.encrypt.skip-salt-check");
                 if ("true".equalsIgnoreCase(skipSalt)) {
                     EncryptConverter.setSkipSaltCheck(true);
                     log.warn("SECURITY: Encryption salt check is DISABLED via "

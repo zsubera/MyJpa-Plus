@@ -55,25 +55,32 @@ final class EncryptionKeyManager {
     /** ponytail: 由自动配置通过 setSkipSaltCheck() 注入，优先级高于系统属性/环境变量。 */
     private static volatile boolean skipSaltCheck = false;
 
+    /** 跟踪密钥是否已被使用（加密/解密操作），用于防止运行时更改PBKDF2迭代次数 */
+    private static final AtomicBoolean keysInUse = new AtomicBoolean(false);
+
+    /**
+     * Spring Environment 注入的生产环境标志。
+     * 由 MyJpaPlusAutoConfiguration 在自动配置阶段设置，用于检测 application.yml 中的 prod profile。
+     */
+    private static volatile Boolean springProductionEnvironment = null;
+
     /**
      * 设置 PBKDF2 迭代次数。由自动配置类在启动时调用。
      *
      * @param iterations PBKDF2 迭代次数（100,000 - 10,000,000）
+     * @throws IllegalStateException 如果密钥已被使用，不允许运行时更改
      */
     static void setPbkdf2Iterations(int iterations) {
         if (iterations >= PBKDF2_ITERATIONS_MIN && iterations <= PBKDF2_ITERATIONS_MAX) {
             KEY_VERSION_LOCK.lock();
             try {
-                configuredPbkdf2Iterations = iterations;
-                if (!KEY_CACHE.asMap().isEmpty()) {
-                    log.error("SECURITY CRITICAL: PBKDF2 iterations changed to {} after keys were already derived. "
-                        + "Key cache has been cleared. ALL existing encrypted data in the database "
-                        + "that was encrypted with the previous iteration count will become UNDECRYPTABLE "
-                        + "and throw MyJpaPlusException on next read. "
-                        + "This action is IRREVERSIBLE. To re-encrypt existing data, "
-                        + "use EncryptConverter.reEncrypt() before or immediately after this change.", iterations);
-                    KEY_CACHE.invalidateAll();
+                if (keysInUse.get()) {
+                    throw new IllegalStateException(
+                        "Cannot change PBKDF2 iterations after keys have been used for encryption/decryption. "
+                            + "This would make all existing ciphertext UNDECRYPTABLE. "
+                            + "To change iterations, restart the application before any encryption operations.");
                 }
+                configuredPbkdf2Iterations = iterations;
             } finally {
                 KEY_VERSION_LOCK.unlock();
             }
@@ -86,6 +93,19 @@ final class EncryptionKeyManager {
     static void setSkipSaltCheck(boolean skip) {
         skipSaltCheck = skip;
         log.info("PBKDF2 salt check skip set to: {}", skip);
+    }
+
+    /**
+     * 设置 Spring Environment 检测到的生产环境标志。
+     * 由 MyJpaPlusAutoConfiguration 在自动配置阶段调用，用于检测 application.yml 中的 prod profile。
+     *
+     * @param isProduction true 如果 Spring Environment 检测到生产环境
+     */
+    public static void setSpringProductionEnvironment(Boolean isProduction) {
+        springProductionEnvironment = isProduction;
+        if (isProduction != null) {
+            log.info("Spring Environment production detection: {}", isProduction);
+        }
     }
 
     private static int getPbkdf2Iterations() {
@@ -131,10 +151,10 @@ final class EncryptionKeyManager {
     /** package-private for EncryptConverter access. */
     static final AtomicBoolean KEY_VALIDATED = new AtomicBoolean(false);
 
-    /** 密钥版本快照。 */
+    /** 密钥版本快照。使用 nanoTime 而非 currentTimeMillis 以获得单调时钟。 */
     private static volatile KeyVersionSnapshot keyVersionSnapshot = new KeyVersionSnapshot("v1", 0);
 
-    private record KeyVersionSnapshot(String version, long refreshTimestamp) {
+    private record KeyVersionSnapshot(String version, long refreshTimestampNanos) {
     }
 
     private EncryptionKeyManager() {}
@@ -153,15 +173,16 @@ final class EncryptionKeyManager {
 
     static String getKeyVersion() {
         KeyVersionSnapshot snap = keyVersionSnapshot;
-        long now = System.currentTimeMillis();
-        if (snap.version != null && (now - snap.refreshTimestamp) < keyVersionRefreshIntervalMs) {
+        long now = System.nanoTime();
+        long refreshIntervalNanos = keyVersionRefreshIntervalMs * 1_000_000L;
+        if (snap.version != null && (now - snap.refreshTimestampNanos) < refreshIntervalNanos) {
             return snap.version;
         }
         KEY_VERSION_LOCK.lock();
         try {
             snap = keyVersionSnapshot;
-            now = System.currentTimeMillis();
-            if (snap.version != null && (now - snap.refreshTimestamp) < keyVersionRefreshIntervalMs) {
+            now = System.nanoTime();
+            if (snap.version != null && (now - snap.refreshTimestampNanos) < refreshIntervalNanos) {
                 return snap.version;
             }
             String version = System.getenv(KEY_VERSION_ENV);
@@ -295,6 +316,7 @@ final class EncryptionKeyManager {
             spec = new PBEKeySpec(keyChars, salt, getPbkdf2Iterations(), PBKDF2_KEY_LENGTH);
             SecretKeyFactory factory = SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256");
             derived = factory.generateSecret(spec).getEncoded();
+            keysInUse.set(true);
             return new SecretKeySpec(derived, "AES");
         } catch (GeneralSecurityException e) {
             throw new MyJpaPlusException("Failed to derive encryption key via PBKDF2", e);
@@ -333,7 +355,10 @@ final class EncryptionKeyManager {
             return salt.getBytes(StandardCharsets.UTF_8);
         }
         if (isSaltCheckSkipped()) {
-            if (com.zsubera.jpa.autoconfigure.EnvironmentHelper.isProductionEnvironment()) {
+            // 检查生产环境：优先使用 Spring Environment 注入的标志，回退到系统属性/环境变量检查
+            boolean isProduction = springProductionEnvironment != null ? springProductionEnvironment
+                : com.zsubera.jpa.autoconfigure.EnvironmentHelper.isProductionEnvironment();
+            if (isProduction) {
                 throw new MyJpaPlusException("Cannot skip PBKDF2 salt check in production environment. "
                     + "Set environment variable " + SALT_ENV + " or system property " + SALT_PROPERTY + ".");
             }

@@ -906,7 +906,7 @@ public class DefaultMyJpaRepository<T, ID> extends SimpleJpaRepository<T, ID> im
             com.zsubera.jpa.softdelete.SoftDeleteHelper.ResolvedDeletedValue resolved =
                 com.zsubera.jpa.softdelete.SoftDeleteHelper.resolveDeletedValue(entityClass, field, annotation);
             Object deletedVal = resolved.booleanField() ? Boolean.TRUE : resolved.dbValue();
-            return spec.executeAsSoftDelete(em, sf, deletedVal);
+            return spec.executeAsSoftDeleteInTransaction(em, sf, deletedVal);
         }
         if (sf != null && shouldBlockHardDelete()) {
             throw new IllegalStateException("Hard DELETE on " + entityClass.getSimpleName()
