@@ -132,7 +132,9 @@ public interface MyJpaRepository<T, ID> extends JpaRepository<T, ID>, JpaSpecifi
      * @param <R> 返回元素类型
      * @return 投影结果列表
      */
-    <R> List<R> find(Class<R> resultType, Specification<T> spec);
+    default <R> List<R> find(Class<R> resultType, Specification<T> spec) {
+        throw new UnsupportedOperationException("find(Class, Specification) must be implemented by repository base class");
+    }
 
     /**
      * 使用 Lambda 表达式分页查找所有匹配的实体。

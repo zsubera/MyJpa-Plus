@@ -1626,21 +1626,22 @@ public class MyJpaTemplate implements MyJpaTemplateOperations {
      *
      * @param entityClass 实体类
      * @param spec 查询条件（必须已配置 select()）
-     * @return 投影结果列表
+     * @return Tuple 投影结果列表
      */
-    @SuppressWarnings("unchecked")
     @Transactional(readOnly = true)
-    public final <T> List<T> find(Class<T> entityClass, QuerySpec<T> spec) {
+    public final List<jakarta.persistence.Tuple> find(Class<?> entityClass, QuerySpec<?> spec) {
         validateQueryParams(entityClass, spec);
         if (!spec.isProjectionMode()) {
             throw new IllegalArgumentException("QuerySpec must have select() configured for projection query");
         }
         EntityManager em = requireInitialized(entityManager, "entityManager");
-        Specification<T> softDeleteSpec =
+        Specification<?> softDeleteSpec =
             shouldApplySoftDeleteFilter() ? SoftDeleteHelper.isNotDeleted(entityClass) : null;
-        return (List<
-            T>)new QueryProjectionSupport<>(entityClass, spec, softDeleteSpec, spec.getProjectionFieldsWithAlias())
-                .toTupleList(em, resolveMaxResults());
+        @SuppressWarnings({"unchecked", "rawtypes"})
+        List<jakarta.persistence.Tuple> result = new QueryProjectionSupport(
+            entityClass, spec, softDeleteSpec, spec.getProjectionFieldsWithAlias())
+            .toTupleList(em, resolveMaxResults());
+        return result;
     }
 
     /**

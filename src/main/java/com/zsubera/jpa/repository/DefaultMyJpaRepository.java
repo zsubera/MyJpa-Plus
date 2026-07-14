@@ -402,7 +402,9 @@ public class DefaultMyJpaRepository<T, ID> extends SimpleJpaRepository<T, ID> im
     @Override
     public List<T> findAll(Specification<T> spec) {
         if (spec instanceof com.zsubera.jpa.spec.QuerySpec sp && sp.isProjectionMode()) {
-            return executeProjection(sp);
+            throw new UnsupportedOperationException(
+                "findAll(Specification) does not support projection mode. "
+                    + "Use find(Class<R>, Specification) instead, e.g.: find(Tuple.class, spec)");
         }
         return super.findAll(mergeSoftDeleteFilter(spec));
     }
@@ -410,7 +412,9 @@ public class DefaultMyJpaRepository<T, ID> extends SimpleJpaRepository<T, ID> im
     @Override
     public Page<T> findAll(Specification<T> spec, Pageable pageable) {
         if (spec instanceof com.zsubera.jpa.spec.QuerySpec sp && sp.isProjectionMode()) {
-            return executeProjectionPage(sp, pageable);
+            throw new UnsupportedOperationException(
+                "findAll(Specification, Pageable) does not support projection mode. "
+                    + "Use find(Class<R>, Specification) instead, e.g.: find(Tuple.class, spec)");
         }
         return super.findAll(mergeSoftDeleteFilter(spec), pageable);
     }
@@ -418,7 +422,9 @@ public class DefaultMyJpaRepository<T, ID> extends SimpleJpaRepository<T, ID> im
     @Override
     public List<T> findAll(Specification<T> spec, Sort sort) {
         if (spec instanceof com.zsubera.jpa.spec.QuerySpec sp && sp.isProjectionMode()) {
-            return executeProjection(sp);
+            throw new UnsupportedOperationException(
+                "findAll(Specification, Sort) does not support projection mode. "
+                    + "Use find(Class<R>, Specification) instead, e.g.: find(Tuple.class, spec)");
         }
         return super.findAll(mergeSoftDeleteFilter(spec), sort);
     }
@@ -460,18 +466,6 @@ public class DefaultMyJpaRepository<T, ID> extends SimpleJpaRepository<T, ID> im
     // ---- 投影查询分支 ----
 
     @SuppressWarnings({"unchecked", "rawtypes"})
-    private List<T> executeProjection(com.zsubera.jpa.spec.QuerySpec<T> sp) {
-        Specification<T> softDeleteSpec =
-            shouldApplySoftDeleteFilter() ? SoftDeleteHelper.isNotDeleted(domainClass) : null;
-        com.zsubera.jpa.spec.QueryProjectionSupport qps = new com.zsubera.jpa.spec.QueryProjectionSupport(domainClass,
-            sp, softDeleteSpec, sp.getProjectionFieldsWithAlias());
-        int maxResults = com.zsubera.jpa.autoconfigure.GlobalConfigHolder.resolveConfigValue(
-            com.zsubera.jpa.autoconfigure.MyJpaPlusGlobalConfig::getMaxResults,
-            com.zsubera.jpa.template.MyJpaTemplate.DEFAULT_MAX_RESULTS);
-        return (List)qps.toTupleList(entityManager, maxResults);
-    }
-
-    @SuppressWarnings({"unchecked", "rawtypes"})
     private <R> List<R> executeTypedProjection(com.zsubera.jpa.spec.QuerySpec<T> sp, Class<R> resultType) {
         Specification<T> softDeleteSpec =
             shouldApplySoftDeleteFilter() ? SoftDeleteHelper.isNotDeleted(domainClass) : null;
@@ -484,18 +478,6 @@ public class DefaultMyJpaRepository<T, ID> extends SimpleJpaRepository<T, ID> im
             return (List)qps.toTupleList(entityManager, maxResults);
         }
         return (List)qps.toDtoList(entityManager, resultType, maxResults);
-    }
-
-    @SuppressWarnings({"unchecked", "rawtypes"})
-    private Page<T> executeProjectionPage(com.zsubera.jpa.spec.QuerySpec<T> sp, Pageable pageable) {
-        Specification<T> softDeleteSpec =
-            shouldApplySoftDeleteFilter() ? SoftDeleteHelper.isNotDeleted(domainClass) : null;
-        com.zsubera.jpa.spec.QueryProjectionSupport qps = new com.zsubera.jpa.spec.QueryProjectionSupport(domainClass,
-            sp, softDeleteSpec, sp.getProjectionFieldsWithAlias());
-        int maxResults = com.zsubera.jpa.autoconfigure.GlobalConfigHolder.resolveConfigValue(
-            com.zsubera.jpa.autoconfigure.MyJpaPlusGlobalConfig::getMaxResults,
-            com.zsubera.jpa.template.MyJpaTemplate.DEFAULT_MAX_RESULTS);
-        return (Page)qps.toTuplePage(entityManager, pageable, maxResults);
     }
 
     /**
