@@ -443,22 +443,47 @@ public class DefaultMyJpaRepository<T, ID> extends SimpleJpaRepository<T, ID> im
         return super.exists(mergeSoftDeleteFilter(spec));
     }
 
+    @Override
+    public <R> List<R> find(Class<R> resultType, Specification<T> spec) {
+        if (spec instanceof com.zsubera.jpa.spec.QuerySpec<T> sp && sp.isProjectionMode()) {
+            return executeTypedProjection(sp, resultType);
+        }
+        if (resultType == domainClass) {
+            @SuppressWarnings("unchecked")
+            List<R> result = (List<R>)super.findAll(mergeSoftDeleteFilter(spec));
+            return result;
+        }
+        throw new IllegalArgumentException(
+            "QuerySpec must have select() configured for projection query when resultType differs from entity type");
+    }
+
     // ---- 投影查询分支 ----
 
     @SuppressWarnings({"unchecked", "rawtypes"})
     private List<T> executeProjection(com.zsubera.jpa.spec.QuerySpec<T> sp) {
         Specification<T> softDeleteSpec =
             shouldApplySoftDeleteFilter() ? SoftDeleteHelper.isNotDeleted(domainClass) : null;
-        Class dtoClass = sp.getProjectionDtoClass();
         com.zsubera.jpa.spec.QueryProjectionSupport qps = new com.zsubera.jpa.spec.QueryProjectionSupport(domainClass,
             sp, softDeleteSpec, sp.getProjectionFieldsWithAlias());
         int maxResults = com.zsubera.jpa.autoconfigure.GlobalConfigHolder.resolveConfigValue(
             com.zsubera.jpa.autoconfigure.MyJpaPlusGlobalConfig::getMaxResults,
             com.zsubera.jpa.template.MyJpaTemplate.DEFAULT_MAX_RESULTS);
-        if (dtoClass != null) {
-            return (List)qps.toDtoList(entityManager, dtoClass, maxResults);
-        }
         return (List)qps.toTupleList(entityManager, maxResults);
+    }
+
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    private <R> List<R> executeTypedProjection(com.zsubera.jpa.spec.QuerySpec<T> sp, Class<R> resultType) {
+        Specification<T> softDeleteSpec =
+            shouldApplySoftDeleteFilter() ? SoftDeleteHelper.isNotDeleted(domainClass) : null;
+        com.zsubera.jpa.spec.QueryProjectionSupport qps = new com.zsubera.jpa.spec.QueryProjectionSupport(domainClass,
+            sp, softDeleteSpec, sp.getProjectionFieldsWithAlias());
+        int maxResults = com.zsubera.jpa.autoconfigure.GlobalConfigHolder.resolveConfigValue(
+            com.zsubera.jpa.autoconfigure.MyJpaPlusGlobalConfig::getMaxResults,
+            com.zsubera.jpa.template.MyJpaTemplate.DEFAULT_MAX_RESULTS);
+        if (resultType == jakarta.persistence.Tuple.class) {
+            return (List)qps.toTupleList(entityManager, maxResults);
+        }
+        return (List)qps.toDtoList(entityManager, resultType, maxResults);
     }
 
     @SuppressWarnings({"unchecked", "rawtypes"})

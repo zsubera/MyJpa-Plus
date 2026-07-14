@@ -21,13 +21,13 @@
 <dependency>
     <groupId>io.github.zsubera</groupId>
     <artifactId>myjpa-plus</artifactId>
-    <version>1.3.1</version>
+    <version>1.3.11</version>
 </dependency>
 ```
 
 **Gradle:**
 ```groovy
-implementation 'io.github.zsubera:myjpa-plus:1.3.1'
+implementation 'io.github.zsubera:myjpa-plus:1.3.11'
 ```
 
 ### Q: 需要手动配置吗？

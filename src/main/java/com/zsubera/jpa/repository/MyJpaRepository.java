@@ -93,6 +93,48 @@ public interface MyJpaRepository<T, ID> extends JpaRepository<T, ID>, JpaSpecifi
     List<T> findAll(Specification<T> spec);
 
     /**
+     * 类型安全的投影查询。通过 {@code resultType} 参数指定返回类型，无需手动转换。
+     *
+     * <p>
+     * 支持三种模式：
+     * <ul>
+     * <li>{@code resultType == Tuple.class} — 返回 {@code List<Tuple>}，通过索引或别名访问字段</li>
+     * <li>{@code resultType == entity.class} — 忽略 select()，返回完整实体 {@code List<T>}</li>
+     * <li>其他 DTO/Record 类 — 使用 JPA 构造函数投影，返回 {@code List<R>}</li>
+     * </ul>
+     *
+     * <pre>{@code
+     * // Tuple 投影
+     * List<Tuple> tuples = repo.find(Tuple.class, s -> s.select(User::getName, User::getStatus));
+     *
+     * // DTO 投影（Record 或带 -parameters 编译的普通类）
+     * record NameDto(String name, Integer status) {}
+     * List<NameDto> dtos = repo.find(NameDto.class, s -> s.select(User::getName, User::getStatus));
+     *
+     * // 实体查询（等价于 findAll，忽略 select）
+     * List<User> users = repo.find(User.class, s -> s.eq(User::getStatus, "ACTIVE"));
+     * }</pre>
+     *
+     * @param resultType 返回类型：Tuple.class、实体类、或 DTO/Record 类
+     * @param config 查询条件配置
+     * @param <R> 返回元素类型
+     * @return 投影结果列表
+     */
+    default <R> List<R> find(Class<R> resultType, Consumer<QuerySpec<T>> config) {
+        return find(resultType, QuerySpec.of(config));
+    }
+
+    /**
+     * 类型安全的投影查询（Specification 模式）。
+     *
+     * @param resultType 返回类型
+     * @param spec 查询规格说明（必须已配置 select()，resultType 非实体类时）
+     * @param <R> 返回元素类型
+     * @return 投影结果列表
+     */
+    <R> List<R> find(Class<R> resultType, Specification<T> spec);
+
+    /**
      * 使用 Lambda 表达式分页查找所有匹配的实体。
      *
      * @param config 查询条件配置

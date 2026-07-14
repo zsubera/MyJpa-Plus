@@ -642,10 +642,10 @@ class MySQLGapFillingIntegrationTest {
     void projection_dto() {
         save("alice", 1);
         save("bob", 2);
-        List<?> r = repository.findAll(new QuerySpec<MySQLTestEntity>()
-            .select(MySQLTestEntity::getName, MySQLTestEntity::getStatus).asDto(MySQLNameStatusDto.class));
+        List<MySQLNameStatusDto> r = repository.find(MySQLNameStatusDto.class, new QuerySpec<MySQLTestEntity>()
+            .select(MySQLTestEntity::getName, MySQLTestEntity::getStatus));
         assertEquals(2, r.size());
-        assertEquals("alice", ((MySQLNameStatusDto)r.get(0)).name);
+        assertEquals("alice", r.get(0).name);
     }
 
     @Test

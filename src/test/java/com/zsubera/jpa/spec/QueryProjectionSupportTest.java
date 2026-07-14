@@ -60,21 +60,6 @@ class QueryProjectionSupportTest {
     }
 
     @Test
-    @DisplayName("asDto() sets the DTO class")
-    void shouldSetDtoClass() {
-        QuerySpec<String> spec = new QuerySpec<>();
-        spec.asDto(SimpleDto.class);
-        assertEquals(SimpleDto.class, spec.getProjectionDtoClass());
-    }
-
-    @Test
-    @DisplayName("asDto() rejects null class")
-    void shouldRejectNullDtoClass() {
-        QuerySpec<String> spec = new QuerySpec<>();
-        assertThrows(IllegalArgumentException.class, () -> spec.asDto(null));
-    }
-
-    @Test
     @DisplayName("getProjectionFields returns empty list when no select")
     void shouldReturnEmptyProjectionFields() {
         QuerySpec<String> spec = new QuerySpec<>();
@@ -95,20 +80,18 @@ class QueryProjectionSupportTest {
     void shouldPreserveProjectionStateOnCopy() {
         QuerySpec<String> spec = new QuerySpec<>();
         spec.distinct();
-        spec.asDto(SimpleDto.class);
 
         QuerySpec<String> copy = spec.copy();
         assertTrue(copy.isDistinct());
-        assertEquals(SimpleDto.class, copy.getProjectionDtoClass());
     }
 
     @Test
     @DisplayName("QuerySpec.of() factory method creates configured spec")
     void shouldCreateSpecViaFactoryMethod() {
         QuerySpec<String> spec = QuerySpec.of(s -> {
-            s.asDto(SimpleDto.class);
+            s.distinct();
         });
-        assertEquals(SimpleDto.class, spec.getProjectionDtoClass());
+        assertTrue(spec.isDistinct());
     }
 
     @Test

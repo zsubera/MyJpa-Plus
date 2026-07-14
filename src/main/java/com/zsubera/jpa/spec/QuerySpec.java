@@ -159,7 +159,6 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
 
     // ---- 投影状态 ----
     private final List<ProjectionField> projectionFields = new ArrayList<>();
-    private Class<?> projectionDtoClass;
 
     // ---- 投影配置方法 ----
 
@@ -191,20 +190,6 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
             throw new IllegalArgumentException("alias must not be null or blank");
         }
         projectionFields.add(new ProjectionField(field, alias));
-        return this;
-    }
-
-    /**
-     * 设置 DTO 构造函数投影的目标类。
-     *
-     * @param dtoClass DTO 类
-     * @return 当前 QuerySpec 实例
-     */
-    public QuerySpec<T> asDto(Class<?> dtoClass) {
-        if (dtoClass == null) {
-            throw new IllegalArgumentException("dtoClass must not be null");
-        }
-        this.projectionDtoClass = dtoClass;
         return this;
     }
 
@@ -250,13 +235,6 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
         }
     }
 
-    /**
-     * 获取 DTO 投影类。
-     */
-    public Class<?> getProjectionDtoClass() {
-        return projectionDtoClass;
-    }
-
     /** HAVING 条件辅助类，提供类型安全的聚合 HAVING 方法。 */
     private final QueryHavingSupport<T> havingSupport = new QueryHavingSupport<>(this, havingConditions);
 
@@ -299,7 +277,6 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
             && queryTimeout == null && lockMode == null && projectionFields.isEmpty()) {
             QuerySpec<T> copy = new QuerySpec<>();
             copy.distinct = this.distinct;
-            copy.projectionDtoClass = this.projectionDtoClass;
             copy.projectionFields.addAll(this.projectionFields);
             return copy;
         }
@@ -319,7 +296,6 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
         }
         copy.queryTimeout = this.queryTimeout;
         copy.lockMode = this.lockMode;
-        copy.projectionDtoClass = this.projectionDtoClass;
         // ponytail: ProjectionField 是不可变类（所有字段 final），共享引用安全。
         // 与 condition 树的深拷贝策略不同，此处无需防御性拷贝。
         copy.projectionFields.addAll(this.projectionFields);

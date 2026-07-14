@@ -68,22 +68,6 @@ class QuerySpecProjectionTest {
         assertEquals(2, spec.getProjectionFields().size());
     }
 
-    // ==================== asDto ====================
-
-    @Test
-    void asDto_setsDtoClass() {
-        QuerySpec<TestEntity> spec = new QuerySpec<TestEntity>().select(TestEntity::getName).asDto(String.class);
-
-        assertEquals(String.class, spec.getProjectionDtoClass());
-    }
-
-    @Test
-    void asDto_nullIfNotSet() {
-        QuerySpec<TestEntity> spec = new QuerySpec<TestEntity>().select(TestEntity::getName);
-
-        assertNull(spec.getProjectionDtoClass());
-    }
-
     // ==================== 链式调用兼容性 ====================
 
     @Test
@@ -184,13 +168,12 @@ class QuerySpecProjectionTest {
     @Test
     void copy_preservesProjectionState() {
         QuerySpec<TestEntity> original =
-            new QuerySpec<TestEntity>().select(TestEntity::getName, TestEntity::getStatus).asDto(String.class);
+            new QuerySpec<TestEntity>().select(TestEntity::getName, TestEntity::getStatus);
 
         QuerySpec<TestEntity> copy = original.copy();
 
         assertTrue(copy.isProjectionMode());
         assertEquals(2, copy.getProjectionFields().size());
-        assertEquals(String.class, copy.getProjectionDtoClass());
     }
 
     @Test
@@ -201,13 +184,6 @@ class QuerySpecProjectionTest {
 
         assertTrue(copy.isProjectionMode());
         assertEquals(1, copy.getProjectionFields().size());
-    }
-
-    // ==================== asDto 验证 ====================
-
-    @Test
-    void asDto_null_throws() {
-        assertThrows(IllegalArgumentException.class, () -> new QuerySpec<TestEntity>().asDto(null));
     }
 
     // ==================== getProjectionFieldsWithAlias ====================

@@ -3,6 +3,21 @@
 所有显著变更均记录在本文件中。格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，
 版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [1.3.11] - 未发布
+
+### 变更
+- **删除 `asDto()`** — 移除 `QuerySpec.asDto()` 和 `getProjectionDtoClass()`，投影目标类型改由方法参数决定
+- **类型安全的投影查询** — `MyJpaRepository` 新增 `<R> List<R> find(Class<R> resultType, Consumer<QuerySpec<T>> config)` 和 `<R> List<R> find(Class<R> resultType, Specification<T> spec)` 方法；`MyJpaTemplate` 新增 `<T, R> List<R> find(Class<T> entityClass, Class<R> resultType, QuerySpec<T> spec)` 重载
+
+### 迁移
+- `asDto()` 已删除，需替换为 `find()` 的 `resultType` 参数
+  ```java
+  // 之前
+  repo.findAll(new QuerySpec<User>().select(User::getName).asDto(NameDto.class));
+  // 之后
+  repo.find(NameDto.class, s -> s.select(User::getName));
+  ```
+
 ## [1.3.1] - 2026-07-14
 
 ### 新增

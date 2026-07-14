@@ -1615,17 +1615,13 @@ public class MyJpaTemplate implements MyJpaTemplateOperations {
     // ---- 投影查询方法 ----
 
     /**
-     * 投影查询。通过 {@link QuerySpec#select(SFunction[])} 和 {@link QuerySpec#asDto(Class)} 配置投影字段和 DTO 映射。
+     * Tuple 投影查询。通过 {@link QuerySpec#select(SFunction[])} 配置投影字段。
      *
      * <p>示例：
      * <pre>{@code
      * // Tuple 投影
      * List<Tuple> tuples = template.find(User.class,
      *     new QuerySpec<User>().select(User::getName, User::getStatus).eq(User::getStatus, "ACTIVE"));
-     *
-     * // DTO 投影
-     * List<NameDto> dtos = template.find(User.class,
-     *     new QuerySpec<User>().select(User::getName).asDto(NameDto.class).eq(User::getStatus, "ACTIVE"));
      * }</pre>
      *
      * @param entityClass 实体类
@@ -1642,15 +1638,49 @@ public class MyJpaTemplate implements MyJpaTemplateOperations {
         EntityManager em = requireInitialized(entityManager, "entityManager");
         Specification<T> softDeleteSpec =
             shouldApplySoftDeleteFilter() ? SoftDeleteHelper.isNotDeleted(entityClass) : null;
-        Class<?> dtoClass = spec.getProjectionDtoClass();
-        if (dtoClass != null) {
-            return (List<
-                T>)new QueryProjectionSupport<>(entityClass, spec, softDeleteSpec, spec.getProjectionFieldsWithAlias())
-                    .toDtoList(em, dtoClass, resolveMaxResults());
-        }
         return (List<
             T>)new QueryProjectionSupport<>(entityClass, spec, softDeleteSpec, spec.getProjectionFieldsWithAlias())
                 .toTupleList(em, resolveMaxResults());
+    }
+
+    /**
+     * 类型安全的投影查询。通过 {@code resultType} 参数指定返回类型，无需手动转换。
+     *
+     * <p>示例：
+     * <pre>{@code
+     * // Tuple 投影
+     * List<Tuple> tuples = template.find(User.class, Tuple.class,
+     *     new QuerySpec<User>().select(User::getName, User::getStatus));
+     *
+     * // DTO 投影（Record 或带 -parameters 编译的普通类）
+     * record NameDto(String name, Integer status) {}
+     * List<NameDto> dtos = template.find(User.class, NameDto.class,
+     *     new QuerySpec<User>().select(User::getName, User::getStatus));
+     * }</pre>
+     *
+     * @param entityClass 实体类
+     * @param resultType 返回类型：Tuple.class、或 DTO/Record 类
+     * @param spec 查询条件（必须已配置 select()）
+     * @param <T> 实体类型
+     * @param <R> 返回元素类型
+     * @return 投影结果列表
+     */
+    @SuppressWarnings("unchecked")
+    @Transactional(readOnly = true)
+    public final <T, R> List<R> find(Class<T> entityClass, Class<R> resultType, QuerySpec<T> spec) {
+        validateQueryParams(entityClass, spec);
+        if (!spec.isProjectionMode()) {
+            throw new IllegalArgumentException("QuerySpec must have select() configured for projection query");
+        }
+        EntityManager em = requireInitialized(entityManager, "entityManager");
+        Specification<T> softDeleteSpec =
+            shouldApplySoftDeleteFilter() ? SoftDeleteHelper.isNotDeleted(entityClass) : null;
+        QueryProjectionSupport<T> qps =
+            new QueryProjectionSupport<>(entityClass, spec, softDeleteSpec, spec.getProjectionFieldsWithAlias());
+        if (resultType == jakarta.persistence.Tuple.class) {
+            return (List<R>)qps.toTupleList(em, resolveMaxResults());
+        }
+        return (List<R>)qps.toDtoList(em, resultType, resolveMaxResults());
     }
 
     /**
