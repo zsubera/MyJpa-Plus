@@ -4,7 +4,7 @@
  * <p>
  * This library provides Lambda-based type-safe query building, batch operations,
  * UPSERT/MERGE, CTE, projection queries, field encryption/masking, SQL monitoring,
- * optimistic lock retry, aggregate queries, query caching, and code generation.
+ * optimistic lock retry, aggregate queries, and query caching.
  *
  * <h2>Core Modules</h2>
  * <ul>

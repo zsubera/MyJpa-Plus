@@ -13,7 +13,7 @@
 
 ---
 
-**专为 Spring Data JPA 设计，提供查询构建、批量操作、UPSERT/MERGE、CTE、投影查询、字段加密/脱敏、SQL 慢查询监控、乐观锁自动重试、聚合查询、查询缓存和代码生成。**
+**专为 Spring Data JPA 设计，提供查询构建、批量操作、UPSERT/MERGE、CTE、投影查询、字段加密/脱敏、SQL 慢查询监控、乐观锁自动重试、聚合查询和查询缓存。**
 
 [快速开始](#快速开始) · [特性概览](#特性) · [扩展点](#扩展点) · [架构](docs/architecture.md) · [迁移指南](./MIGRATION.md) · [常见问题](docs/FAQ.md) · [数据库兼容性](docs/database-compatibility.md)
 
@@ -40,7 +40,6 @@
 | 🏗️ | **多数据源** — 按实体类型解析不同的 EntityManagerFactory |
 | ☕ | **Spring Boot 自动配置** — 开箱即用，零配置 |
 | 🔌 | **可插拔缓存** — CacheAdapter SPI 支持注入 Redis 等分布式缓存（默认 Caffeine） |
-| 🛠️ | **代码生成** — 从表元数据生成 JPA 实体和仓库接口 |
 
 </div>
 
@@ -254,10 +253,9 @@ List<Object[]> result = repository.findAll(s ->
 
 // DTO 投影
 record UserStats(String status, long count) {}
-List<UserStats> stats = repository.findAll(s ->
+List<UserStats> stats = repository.find(UserStats.class, s ->
     s.select(User::getStatus, s.count(User::getId))
      .groupBy(User::getStatus)
-     .projectTo(UserStats.class)
 );
 ```
 

@@ -46,7 +46,6 @@ cd myjpa-plus
 | `com.zsubera.jpa.annotation` | 注解：@SoftDelete、@IgnoreSoftDelete、@Encrypt、@Mask、@RetryOnOptimisticLock、MaskType |
 | `com.zsubera.jpa.autoconfigure` | 自动配置：GlobalConfigHolder、MyJpaPlusAutoConfiguration、MyJpaPlusGlobalConfig、SoftDeleteFilterBean、MyJpaPlusProperties、EnvironmentHelper |
 | `com.zsubera.jpa.monitor` | SQL 监控：SlowQueryDataSourceProxy、SlowQueryDataSourceProxyPostProcessor、QueryMetricsCollector、SqlSanitizer、SlowQueryListener |
-| `com.zsubera.jpa.codegen` | 代码生成：EntityCodeGenerator |
 | `com.zsubera.jpa.exception` | 异常类：MyJpaPlusException、QueryBuildException、BulkOperationException、MyJpaDataAccessException、SecurityViolationException |
 | `com.zsubera.jpa.softdelete` | 软删除：SoftDeleteHelper、SoftDeleteBulkExecutor |
 | `com.zsubera.jpa.util` | 工具类：LambdaUtils、IdentifierValidator、InClauseBuilder、EntityClassResolver、EntityGraphHelper、SampledEvictionCache、CacheEvictionHelper、PageableHelper、StringHelper |
@@ -104,7 +103,7 @@ cd myjpa-plus
 
 - [ ] 格式检查通过：`./mvnw spotless:check`
 - [ ] 构建通过：`./mvnw clean verify -Dgpg.skip=true -Ddependency-check.skip=true`
-- [ ] JaCoCo 覆盖率 >= 70% LINE（spec, update, repository, template, annotation, autoconfigure, codegen, converter, exception, monitor, softdelete, util）
+- [ ] JaCoCo 覆盖率 >= 70% LINE（spec, update, repository, template, annotation, autoconfigure, converter, exception, monitor, softdelete, util）
 - [ ] 为新增功能添加了测试
 - [ ] 已更新 CHANGELOG.md
 - [ ] 已更新 README.md（如有 API 变更）

@@ -10,6 +10,7 @@
 - **类型安全的投影查询** — `MyJpaRepository` 新增 `<R> List<R> find(Class<R> resultType, Consumer<QuerySpec<T>> config)` 和 `<R> List<R> find(Class<R> resultType, Specification<T> spec)` 方法；`MyJpaTemplate` 新增 `<T, R> List<R> find(Class<T> entityClass, Class<R> resultType, QuerySpec<T> spec)` 重载
 - **投影查询强制走 `find()`** — `DefaultMyJpaRepository.findAll(spec)` 在投影模式下抛出 `UnsupportedOperationException`，引导用户使用 `find(Tuple.class, spec)` 或 `find(Dto.class, spec)`
 - **`MyJpaTemplate.find(Class, QuerySpec)` 返回类型修正** — 返回 `List<Tuple>` 而非 `List<T>`
+- **移除旧代码生成模块** — 删除 `com.zsubera.jpa.codegen.EntityCodeGenerator`，代码生成功能迁移至独立 Maven 插件项目 `myjpa-plus-maven-plugin`
 
 ### 迁移
 - `asDto()` 已删除，需替换为 `find()` 的 `resultType` 参数

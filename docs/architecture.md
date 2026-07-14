@@ -107,9 +107,6 @@ com.zsubera.jpa
 │   ├── EnvironmentHelper — 环境检测工具
 │   └── SoftDeleteFilterBean — 软删除 JPA Specification 注入
 │
-├── codegen/           # 代码生成
-│   └── EntityCodeGenerator — 从表元数据生成 JPA 实体源码
-│
 ├── exception/         # 自定义异常
 │   ├── MyJpaPlusException — 带 ErrorCode + 上下文清理的基础异常
 │   ├── QueryBuildException / BulkOperationException / MyJpaDataAccessException
