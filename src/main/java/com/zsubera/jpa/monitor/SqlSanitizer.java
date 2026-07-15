@@ -63,8 +63,8 @@ public final class SqlSanitizer {
     /** 后处理：匹配带标签的美元引用字符串（$tag$...$tag$），使用反向引用。 */
     private static final Pattern DOLLAR_TAGGED_PATTERN = Pattern.compile("\\$(\\w+)\\$.*?\\$\\1\\$", Pattern.DOTALL);
 
-    /** 后处理：匹配 Oracle Q-引用字符串。 */
-    private static final Pattern ORACLE_QQUOTE_PATTERN = Pattern.compile("[Qq]'[\\s\\S]+?'");
+    /** 后处理：匹配 Oracle Q-引用字符串。支持多种定界符：括号 Q'[...]'、花括号 Q'{...}'、尖括号 Q'<...>'、单字符 Q'x...x'。 */
+    private static final Pattern ORACLE_QQUOTE_PATTERN = Pattern.compile("[Qq]'");
 
     /** 后处理：匹配双引号字符串/标识符。 */
     private static final Pattern DOUBLE_QUOTE_PATTERN = Pattern.compile("\"[^\"]*\"");
@@ -115,7 +115,7 @@ public final class SqlSanitizer {
         normalized = PREFIXED_STRING_PATTERN.matcher(normalized).replaceAll("?");
         normalized = DOLLAR_QUOTED_PATTERN.matcher(normalized).replaceAll("?");
         normalized = DOLLAR_TAGGED_PATTERN.matcher(normalized).replaceAll("?");
-        normalized = ORACLE_QQUOTE_PATTERN.matcher(normalized).replaceAll("?");
+        normalized = stripOracleQQuotes(normalized);
         normalized = DOUBLE_QUOTE_PATTERN.matcher(normalized).replaceAll("?");
         normalized = DOLLAR_PARAM_PATTERN.matcher(normalized).replaceAll("?");
         normalized = STRING_LITERAL_PATTERN.matcher(normalized).replaceAll("?");
@@ -124,6 +124,87 @@ public final class SqlSanitizer {
         normalized = protectAndReplaceNumbers(normalized);
 
         return normalized;
+    }
+
+    /**
+     * 剥离 Oracle Q-引用字符串（Q'delimiter...delimiter'），替换为 ?。
+     *
+     * <p>
+     * 支持所有 Oracle 定界符类型：
+     * <ul>
+     * <li>括号对：Q'[hello]', Q'(hello)', Q'{hello}', Q'&lt;hello&gt;'</li>
+     * <li>单字符：Q'!hello!', Q'@hello@', Q'#hello#'</li>
+     * <li>单引号（转义）：Q''hello O''world''（内容中的单引号用双写转义）</li>
+     * </ul>
+     *
+     * @param sql 包含 Q-引用的 SQL
+     * @return Q-引用被替换为 ? 的 SQL
+     */
+    public static String stripOracleQQuotes(String sql) {
+        StringBuilder result = new StringBuilder(sql.length());
+        int i = 0;
+        while (i < sql.length()) {
+            // 查找 Q' 或 q' 的起始位置
+            if (i + 1 < sql.length() && (sql.charAt(i) == 'Q' || sql.charAt(i) == 'q') && sql.charAt(i + 1) == '\'') {
+                char afterQuote = (i + 2 < sql.length()) ? sql.charAt(i + 2) : 0;
+                if (afterQuote == '[' || afterQuote == '(' || afterQuote == '{' || afterQuote == '<') {
+                    // 括号类定界符：支持嵌套（如 Q'[hello [world]]'）
+                    char close =
+                        (afterQuote == '[') ? ']' : (afterQuote == '(') ? ')' : (afterQuote == '{') ? '}' : '>';
+                    int depth = 1;
+                    int pos = i + 3;
+                    while (pos < sql.length() && depth > 0) {
+                        char c = sql.charAt(pos);
+                        if (c == afterQuote) {
+                            depth++;
+                        } else if (c == close) {
+                            depth--;
+                        }
+                        pos++;
+                    }
+                    if (depth == 0 && pos > 0 && sql.charAt(pos - 1) == close && pos < sql.length()
+                        && sql.charAt(pos) == '\'') {
+                        result.append('?');
+                        i = pos + 1;
+                        continue;
+                    }
+                } else if (afterQuote == '\'') {
+                    // 单引号定界符：Q''...''，内容中的单引号用双写转义
+                    int pos = i + 3;
+                    while (pos < sql.length()) {
+                        if (sql.charAt(pos) == '\'' && pos + 1 < sql.length() && sql.charAt(pos + 1) == '\'') {
+                            pos += 2; // 跳过转义的 ''
+                        } else if (sql.charAt(pos) == '\'') {
+                            // 到达闭合的单引号定界符
+                            result.append('?');
+                            i = pos + 1;
+                            break;
+                        } else {
+                            pos++;
+                        }
+                    }
+                    if (i != pos) {
+                        // 未找到闭合定界符，不替换
+                        result.append(sql.charAt(i));
+                        i++;
+                    }
+                    continue;
+                } else if (afterQuote != 0 && !Character.isLetterOrDigit(afterQuote) && afterQuote != ' '
+                    && afterQuote != '_') {
+                    // 单字符定界符：Q'x...x'（x 是任意非字母数字、非空格字符）
+                    char delimiter = afterQuote;
+                    int end = sql.indexOf(delimiter, i + 3);
+                    if (end >= 0 && end + 1 < sql.length() && sql.charAt(end + 1) == '\'') {
+                        result.append('?');
+                        i = end + 2;
+                        continue;
+                    }
+                }
+            }
+            result.append(sql.charAt(i));
+            i++;
+        }
+        return result.toString();
     }
 
     /**

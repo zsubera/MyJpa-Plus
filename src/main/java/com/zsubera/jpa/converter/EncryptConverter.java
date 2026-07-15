@@ -158,6 +158,11 @@ public class EncryptConverter implements AttributeConverter<String, String> {
         }
         if (executor != null && !executor.isShutdown()) {
             executor.shutdownNow();
+            try {
+                executor.awaitTermination(2, java.util.concurrent.TimeUnit.SECONDS);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
         }
     }
 

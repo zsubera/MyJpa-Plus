@@ -97,6 +97,11 @@ public class QueryCacheManager implements CacheAdapter {
         }
     }
 
+    /** 检查缓存原始值是否为过期的 CachedValue（排除 NULL_SENTINEL 情况） */
+    private static boolean isExpiredCachedValue(Object cached) {
+        return cached instanceof CachedValue cv && cv.isExpired();
+    }
+
     private Object packWithTtl(Object value, long ttlSeconds) {
         return new CachedValue(value, System.nanoTime(), TimeUnit.SECONDS.toNanos(ttlSeconds));
     }
@@ -188,6 +193,13 @@ public class QueryCacheManager implements CacheAdapter {
         Object cached = cache.getIfPresent(key);
         T value = unpackIfPresent(cached);
         if (value == null) {
+            // 仅当确实是过期的 CachedValue（而非缓存的 null 值）时，主动清理 prefixIndex。
+            // 使用 asMap().remove(key, cached) 条件移除，仅移除我们读到的过期条目，
+            // 避免 TOCTOU 竞态：并发 put() 可能在读取过期条目后插入了新条目，
+            // 无条件 invalidate() 会误删新条目。
+            if (isExpiredCachedValue(cached)) {
+                cache.asMap().remove(key, cached);
+            }
             missCount.incrementAndGet();
             return null;
         }
@@ -252,14 +264,20 @@ public class QueryCacheManager implements CacheAdapter {
      */
     @SuppressWarnings("unchecked")
     public <T> T computeIfAbsent(String key, java.util.function.Supplier<T> loader, long ttlSeconds) {
+        // 手动 TTL 过期检测：Caffeine 的 get(key, mappingFunction) 对已存在键不重新调用 mappingFunction，
+        // 即使条目已过期。需要在调用 Caffeine 之前主动清理过期条目，否则过期的 null 值会阻止重新加载。
+        Object existing = cache.getIfPresent(key);
+        if (isExpiredCachedValue(existing)) {
+            // 使用条件移除，仅移除我们读到的过期条目，避免 TOCTOU 竞态
+            cache.asMap().remove(key, existing);
+        }
         Object cached = cache.get(key, k -> {
             T loaded = loader.get();
             return loaded != null ? packWithTtl(loaded, ttlSeconds) : packWithTtl(NULL_SENTINEL, ttlSeconds);
         });
-        // 检查key是否还在缓存中，避免创建幽灵条目
-        if (cache.getIfPresent(key) != null) {
-            addToPrefixIndex(key);
-        }
+        // 无条件添加到前缀索引。即使条目刚被逐出，多余的 Set 条目开销可忽略不计；
+        // 反之，TOCTOU 窗口导致跳过添加会使条目无法被 evictByPrefix() 找到。
+        addToPrefixIndex(key);
         T value = unpackIfPresent(cached);
         if (value == null) {
             missCount.incrementAndGet();

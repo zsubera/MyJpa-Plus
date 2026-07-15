@@ -122,31 +122,32 @@ class SoftDeleteBulkExecutorResolveTest {
     void shouldResolveTimestampColumn() {
         var annotation = getField(TimestampSoftDeleteEntity.class, "deleted").getAnnotation(SoftDelete.class);
         String timestampCol =
-            SoftDeleteBulkExecutor.resolveTimestampColumn(TimestampSoftDeleteEntity.class, annotation);
+            SoftDeleteBulkExecutor.resolveTimestampColumn(TimestampSoftDeleteEntity.class, annotation, "mysql");
         assertNotNull(timestampCol, "Should resolve timestamp column name");
-        assertEquals("deleted_at", timestampCol, "Should convert camelCase to snake_case");
+        assertEquals("`deleted_at`", timestampCol, "Should convert camelCase to snake_case and quote for MySQL");
     }
 
     @Test
     @DisplayName("resolveTimestampColumn returns null when no deletedTimestampField")
     void shouldReturnNullTimestampColumn() {
         var annotation = getField(BooleanSoftDeleteEntity.class, "deleted").getAnnotation(SoftDelete.class);
-        String timestampCol = SoftDeleteBulkExecutor.resolveTimestampColumn(BooleanSoftDeleteEntity.class, annotation);
+        String timestampCol =
+            SoftDeleteBulkExecutor.resolveTimestampColumn(BooleanSoftDeleteEntity.class, annotation, "mysql");
         assertNull(timestampCol, "Should return null when no deletedTimestampField specified");
     }
 
     @Test
     @DisplayName("resolveVersionColumn returns version column for entity with @Version")
     void shouldResolveVersionColumn() {
-        String versionCol = SoftDeleteBulkExecutor.resolveVersionColumn(VersionedEntity.class);
+        String versionCol = SoftDeleteBulkExecutor.resolveVersionColumn(VersionedEntity.class, "mysql");
         assertNotNull(versionCol, "Should resolve version column");
-        assertEquals("version", versionCol);
+        assertEquals("`version`", versionCol);
     }
 
     @Test
     @DisplayName("resolveVersionColumn returns null for entity without @Version")
     void shouldReturnNullVersionColumn() {
-        String versionCol = SoftDeleteBulkExecutor.resolveVersionColumn(BooleanSoftDeleteEntity.class);
+        String versionCol = SoftDeleteBulkExecutor.resolveVersionColumn(BooleanSoftDeleteEntity.class, "mysql");
         assertNull(versionCol, "Should return null for entity without @Version");
     }
 

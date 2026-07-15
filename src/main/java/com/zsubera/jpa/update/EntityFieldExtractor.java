@@ -445,6 +445,20 @@ final class EntityFieldExtractor<T> {
             }
         } catch (NoSuchMethodException ignored) {
         }
+        // boolean 字段的 isXxx() getter
+        if (field.getType() == boolean.class || field.getType() == Boolean.class) {
+            String isGetterName = "is" + Character.toUpperCase(fieldName.charAt(0)) + fieldName.substring(1);
+            try {
+                java.lang.reflect.Method isGetter = declaringClass.getMethod(isGetterName);
+                Column getterColumn = isGetter.getAnnotation(Column.class);
+                if (getterColumn != null && !getterColumn.name().isEmpty()) {
+                    String name = getterColumn.name();
+                    IdentifierValidator.validateColumnName(name);
+                    return name;
+                }
+            } catch (NoSuchMethodException ignored) {
+            }
+        }
         // 回退到 snake_case 转换
         String name = com.zsubera.jpa.util.StringHelper.camelToSnake(fieldName);
         IdentifierValidator.validateColumnName(name);
@@ -473,6 +487,11 @@ final class EntityFieldExtractor<T> {
             }
         }
         // 回退：未找到 Field，直接使用字段名（安全校验）
+        if (log.isWarnEnabled()) {
+            log.warn("Java field '{}' not found in entity {} hierarchy, falling back to Java field name as DB column. "
+                + "If the actual DB column name differs (e.g. custom PhysicalNamingStrategy), "
+                + "add @Column(name=...) to the field.", javaFieldName, entityClass.getSimpleName());
+        }
         IdentifierValidator.validateColumnName(javaFieldName);
         JAVA_FIELD_TO_DB_COLUMN_CACHE.put(cacheKey, javaFieldName);
         return javaFieldName;

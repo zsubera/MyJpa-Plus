@@ -94,6 +94,15 @@ public class CteSpec {
      */
     private static final Pattern UNBOUND_PARAM_PATTERN = Pattern.compile("(?<!:):([a-zA-Z_][a-zA-Z0-9_]*)");
 
+    /**
+     * 匹配 PostgreSQL 美元引用字符串（$$...$$ 和 $tag$...$tag$）。
+     * 使用 tempered greedy token {@code (?!\\$\\w*\\$).} 匹配内容中可包含 {@code $} 的情况，
+     * 例如 {@code $body$ ... $1$ ... $body$} 中的嵌套美元符号不会导致匹配失败。
+     * 用于 checkSqlSafety/checkUnboundParameters 中剥离字符串内容。
+     */
+    private static final Pattern DOLLAR_QUOTED_STRING_PATTERN =
+        Pattern.compile("\\$\\w*\\$(?:(?!\\$\\w*\\$).)*\\$\\w*\\$", Pattern.DOTALL);
+
     private static final Class<?> HIBERNATE_SESSION_CLASS;
     private static final Class<?> HIBERNATE_WORK_CLASS;
     static {
@@ -449,6 +458,13 @@ public class CteSpec {
         if (name == null || name.isEmpty()) {
             throw new IllegalArgumentException("name must not be null or empty");
         }
+        // ponytail: Validate parameter name against safe identifier pattern.
+        // Without this, names like "1abc" or "name; DROP TABLE" could cause Hibernate
+        // parameter binding failures or unexpected behavior.
+        if (!IdentifierValidator.SAFE_IDENTIFIER_PATTERN.matcher(name).matches()) {
+            throw new IllegalArgumentException("Parameter name contains invalid characters: '" + name
+                + "'. Must start with a letter or underscore and contain only alphanumeric characters and underscores.");
+        }
         parameters.put(name, value);
         return this;
     }
@@ -779,8 +795,13 @@ public class CteSpec {
         }
 
         // 正则检查：危险关键字、存储过程、注释注入、分号注入、方言特定模式
-        // 这些无法通过 AST 结构检测（它们是 SELECT 内部的字符串模式）
-        if (DANGEROUS_KEYWORD_PATTERN.matcher(sql).find()) {
+        // 先剥离字符串字面量，避免内容中的关键词触发误报
+        // 顺序：美元引用 → Oracle Q 引用 → 单引号字符串
+        // （美元引用必须在 Q 引用之前剥离，因为 $tag$ 内可能含 Q'...'；Q 引用必须在单引号之前剥离）
+        String stripped = DOLLAR_QUOTED_STRING_PATTERN.matcher(sql).replaceAll("''");
+        stripped = com.zsubera.jpa.monitor.SqlSanitizer.stripOracleQQuotes(stripped);
+        stripped = stripped.replaceAll("'(?>[^'\\\\]|\\\\.|'')*", "''");
+        if (DANGEROUS_KEYWORD_PATTERN.matcher(stripped).find()) {
             String message = "SECURITY: " + context + " SQL contains potentially dangerous DDL/admin keyword. "
                 + "Ensure this is intentional and not user input. SQL: " + truncated;
             if (strictMode) {
@@ -788,7 +809,7 @@ public class CteSpec {
             }
             log.warn(message);
         }
-        if (DANGEROUS_PROCEDURE_PATTERN.matcher(sql).find()) {
+        if (DANGEROUS_PROCEDURE_PATTERN.matcher(stripped).find()) {
             String message = "SECURITY: " + context
                 + " SQL contains dangerous stored procedure name (xp_cmdshell/sp_executesql). " + "SQL: " + truncated;
             if (strictMode) {
@@ -796,7 +817,7 @@ public class CteSpec {
             }
             log.warn(message);
         }
-        if (COMMENT_INJECTION_PATTERN.matcher(sql).find()) {
+        if (COMMENT_INJECTION_PATTERN.matcher(stripped).find()) {
             String message =
                 "SECURITY: " + context + " SQL contains potential comment injection patterns (/*, */, --). "
                     + "Ensure this is intentional and not user input. SQL: " + truncated;
@@ -805,7 +826,7 @@ public class CteSpec {
             }
             log.warn(message);
         }
-        if (SEMICOLON_INJECTION_PATTERN.matcher(sql).find()) {
+        if (SEMICOLON_INJECTION_PATTERN.matcher(stripped).find()) {
             String message = "SECURITY: " + context + " SQL contains potential semicolon injection pattern. "
                 + "Ensure this is intentional and not user input. SQL: " + truncated;
             if (strictMode) {
@@ -813,7 +834,7 @@ public class CteSpec {
             }
             log.warn(message);
         }
-        if (WAITFOR_DELAY_PATTERN.matcher(sql).find()) {
+        if (WAITFOR_DELAY_PATTERN.matcher(stripped).find()) {
             String message = "SECURITY: " + context
                 + " SQL contains WAITFOR DELAY pattern (time-based blind SQL injection). " + "SQL: " + truncated;
             if (strictMode) {
@@ -821,7 +842,7 @@ public class CteSpec {
             }
             log.warn(message);
         }
-        if (FILE_OPERATION_PATTERN.matcher(sql).find()) {
+        if (FILE_OPERATION_PATTERN.matcher(stripped).find()) {
             String message = "SECURITY: " + context + " SQL contains file operation pattern (INTO OUTFILE/LOAD DATA). "
                 + "SQL: " + truncated;
             if (strictMode) {
@@ -840,7 +861,10 @@ public class CteSpec {
     private static void checkUnboundParameters(String sql, Map<String, Object> boundParams) {
         // 正则检测：先剥离字符串字面量，再查找 :paramName 模式
         // 原子组 (?>...) 防止灾难性回溯
-        String stripped = sql.replaceAll("'(?>[^'\\\\]|\\\\.|'')*", "''");
+        // 顺序：美元引用 → Oracle Q 引用 → 单引号字符串
+        String stripped = DOLLAR_QUOTED_STRING_PATTERN.matcher(sql).replaceAll("''");
+        stripped = com.zsubera.jpa.monitor.SqlSanitizer.stripOracleQQuotes(stripped);
+        stripped = stripped.replaceAll("'(?>[^'\\\\]|\\\\.|'')*", "''");
         java.util.regex.Matcher matcher = UNBOUND_PARAM_PATTERN.matcher(stripped);
         List<String> unboundParams = new ArrayList<>();
         while (matcher.find()) {

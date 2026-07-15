@@ -225,8 +225,9 @@ public final class SoftDeleteBulkExecutor {
         String escapedColumn = SoftDeleteHelper.quoteIdentifier(
             SoftDeleteHelper.validateIdentifier(SoftDeleteHelper.resolveColumnName(entityClass, ctx.fieldName())),
             dialect);
-        String timestampColumn = resolveTimestampColumn(entityClass, ctx.annotation());
-        String versionColumn = versionInfo != null ? versionInfo.columnName : null;
+        String timestampColumn = resolveTimestampColumn(entityClass, ctx.annotation(), dialect);
+        String versionColumn =
+            versionInfo != null ? SoftDeleteHelper.quoteIdentifier(versionInfo.columnName, dialect) : null;
 
         String setClause = escapedColumn + " = :deletedValue"
             + (timestampColumn != null ? ", " + timestampColumn + " = CURRENT_TIMESTAMP" : "")
@@ -330,7 +331,7 @@ public final class SoftDeleteBulkExecutor {
             SoftDeleteHelper.validateIdentifier(SoftDeleteHelper.resolveIdColumnName(entityClass)), dialect);
         String escapedVersionColumn =
             SoftDeleteHelper.quoteIdentifier(SoftDeleteHelper.validateIdentifier(versionInfo.columnName()), dialect);
-        String timestampColumn = resolveTimestampColumn(entityClass, ctx.annotation());
+        String timestampColumn = resolveTimestampColumn(entityClass, ctx.annotation(), dialect);
         String setClause = escapedColumn + " = :deletedValue"
             + (timestampColumn != null ? ", " + timestampColumn + " = CURRENT_TIMESTAMP" : "") + ", "
             + escapedVersionColumn + " = " + escapedVersionColumn + " + 1";
@@ -359,8 +360,9 @@ public final class SoftDeleteBulkExecutor {
             total += query.executeUpdate();
         }
         if (total == 0 && !ids.isEmpty()) {
-            throw new jakarta.persistence.OptimisticLockException("Soft delete failed: all " + ids.size()
-                + " entities have been modified by another transaction. " + "Expected version: " + expectedVersion);
+            throw new jakarta.persistence.OptimisticLockException("Soft delete returned 0 affected rows for "
+                + ids.size() + " IDs. Possible causes: entities already soft-deleted, or version mismatch (expected: "
+                + expectedVersion + ").");
         }
         publishAfterUpdate(em, entityClass, total);
         return total;
@@ -386,8 +388,8 @@ public final class SoftDeleteBulkExecutor {
             dialect);
         String escapedIdColumn = SoftDeleteHelper.quoteIdentifier(
             SoftDeleteHelper.validateIdentifier(SoftDeleteHelper.resolveIdColumnName(entityClass)), dialect);
-        String timestampColumn = resolveTimestampColumn(entityClass, ctx.annotation());
-        String versionColumn = resolveVersionColumn(entityClass);
+        String timestampColumn = resolveTimestampColumn(entityClass, ctx.annotation(), dialect);
+        String versionColumn = resolveVersionColumn(entityClass, dialect);
         String setClause = escapedColumn + " = :deletedValue"
             + (timestampColumn != null ? ", " + timestampColumn + " = CURRENT_TIMESTAMP" : "")
             + (versionColumn != null ? ", " + versionColumn + " = " + versionColumn + " + 1" : "");
@@ -574,11 +576,12 @@ public final class SoftDeleteBulkExecutor {
         return total;
     }
 
-    static String resolveTimestampColumn(Class<?> entityClass, SoftDelete annotation) {
+    static String resolveTimestampColumn(Class<?> entityClass, SoftDelete annotation, String dialect) {
         if (annotation == null || annotation.deletedTimestampField().isEmpty())
             return null;
-        return SoftDeleteHelper
+        String col = SoftDeleteHelper
             .validateIdentifier(SoftDeleteHelper.resolveColumnName(entityClass, annotation.deletedTimestampField()));
+        return SoftDeleteHelper.quoteIdentifier(col, dialect);
     }
 
     static Field resolveTimestampField(Class<?> entityClass, SoftDelete annotation) {
@@ -619,9 +622,9 @@ public final class SoftDeleteBulkExecutor {
         return null;
     }
 
-    static String resolveVersionColumn(Class<?> entityClass) {
+    static String resolveVersionColumn(Class<?> entityClass, String dialect) {
         VersionFieldInfo info = resolveVersionFieldInfo(entityClass);
-        return info != null ? info.columnName : null;
+        return info != null ? SoftDeleteHelper.quoteIdentifier(info.columnName, dialect) : null;
     }
 
     static Field resolveVersionField(Class<?> entityClass) {

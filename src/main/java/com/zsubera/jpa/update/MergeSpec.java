@@ -667,7 +667,7 @@ public class MergeSpec<T> {
                     + maxIterations + ") with " + entities.size() + " entities at batchSize " + batchSize
                     + ". This is likely due to an extremely large entity list.");
             }
-            if (effectiveLimit > 0 && total > effectiveLimit) {
+            if (effectiveLimit > 0 && total >= effectiveLimit) {
                 throw new MyJpaPlusException("executeBatchInSeparateTransactions exceeded max rows limit ("
                     + effectiveLimit + ") after committing " + total + " rows. "
                     + "Adjust myjpa-plus.query.max-bulk-operation-rows or process in smaller batches.");
@@ -719,7 +719,6 @@ public class MergeSpec<T> {
                     batchTotal += executeNativeQuery(em, sqlWithParams.sql(), sqlWithParams.params());
                 }
             }
-            em.flush();
             tx.commit();
             if (log.isDebugEnabled()) {
                 log.debug("Batch UPSERT (separate tx): entities [{}-{}] committed (batch affected: {})", batchStart,

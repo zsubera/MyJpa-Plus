@@ -30,7 +30,14 @@ public final class GlobalConfigHolder {
 
     private GlobalConfigHolder() {}
 
-    private static final MyJpaPlusGlobalConfig DEFAULT_CONFIG = new MyJpaPlusGlobalConfig();
+    /**
+     * 创建默认配置的防御性拷贝，防止调用者修改共享实例影响所有线程。
+     */
+    private static MyJpaPlusGlobalConfig createDefaultConfigCopy() {
+        MyJpaPlusGlobalConfig copy = new MyJpaPlusGlobalConfig();
+        // 默认值与 MyJpaPlusGlobalConfig 字段初始值一致
+        return copy;
+    }
 
     /**
      * 当前全局配置引用。volatile 保证多线程可见性。
@@ -49,8 +56,7 @@ public final class GlobalConfigHolder {
      */
     public static void setApplicationContext(ApplicationContext ctx) {
         applicationContext = ctx;
-        cachedBean = null;
-        cachedBeanVerifyTime = 0;
+        cachedBeanState = CachedBeanState.EMPTY;
     }
 
     /**
@@ -60,20 +66,18 @@ public final class GlobalConfigHolder {
      */
     public static void setConfig(MyJpaPlusGlobalConfig globalConfig) {
         config = globalConfig;
-        cachedBean = null;
-        cachedBeanVerifyTime = 0;
+        cachedBeanState = CachedBeanState.EMPTY;
     }
 
     /**
-     * 缓存的 Spring Bean 引用，避免每次 getConfig() 调用 ctx.getBean()。
+     * 原子缓存持有者：将 bean 引用和验证时间戳封装为单一 volatile 引用，
+     * 避免双 volatile 写入之间的竞态窗口。
      */
-    private static volatile MyJpaPlusGlobalConfig cachedBean;
+    private record CachedBeanState(MyJpaPlusGlobalConfig bean, long verifyTimeNanos) {
+        static final CachedBeanState EMPTY = new CachedBeanState(null, 0);
+    }
 
-    /**
-     * 缓存的 bean 最后验证时间戳（纳秒），用于定期重新验证缓存的有效性。
-     * 每 5 分钟重新从 ApplicationContext 查找一次，防止 Context 刷新后引用过期。
-     */
-    private static volatile long cachedBeanVerifyTime;
+    private static volatile CachedBeanState cachedBeanState = CachedBeanState.EMPTY;
 
     private static final long CACHE_VERIFY_INTERVAL_NANOS = java.util.concurrent.TimeUnit.MINUTES.toNanos(5);
 
@@ -94,10 +98,11 @@ public final class GlobalConfigHolder {
      */
     public static MyJpaPlusGlobalConfig getConfig() {
         // 优先从 ApplicationContext 查找（首次命中后缓存 Bean 引用，每 5 分钟重新验证）
-        MyJpaPlusGlobalConfig bean = cachedBean;
+        CachedBeanState state = cachedBeanState;
+        MyJpaPlusGlobalConfig bean = state.bean();
         if (bean != null) {
             long now = System.nanoTime();
-            if (now - cachedBeanVerifyTime < CACHE_VERIFY_INTERVAL_NANOS) {
+            if (now - state.verifyTimeNanos() < CACHE_VERIFY_INTERVAL_NANOS) {
                 return bean;
             }
             // 缓存过期，尝试重新获取以验证 bean 是否仍然有效
@@ -105,15 +110,13 @@ public final class GlobalConfigHolder {
             if (ctx != null) {
                 try {
                     MyJpaPlusGlobalConfig refreshed = ctx.getBean(MyJpaPlusGlobalConfig.class);
-                    // 原子性地更新缓存：先写 bean，再写时间戳
-                    cachedBean = refreshed;
-                    cachedBeanVerifyTime = now;
+                    // 原子更新：单次 volatile 写入同时更新 bean 和时间戳
+                    cachedBeanState = new CachedBeanState(refreshed, now);
                     return refreshed;
                 } catch (Exception e) {
                     // bean 已不存在（Context 刷新），原子性地清除缓存
                     // 设置当前时间而非0，避免立即重试导致警告日志风暴
-                    cachedBeanVerifyTime = now;
-                    cachedBean = null;
+                    cachedBeanState = new CachedBeanState(null, now);
                 }
             }
             // 回退到过期的缓存（比返回 null 更安全），记录警告以便排查配置异常
@@ -128,25 +131,25 @@ public final class GlobalConfigHolder {
             long now = System.nanoTime();
             if (now - lastLookupFailureTime < LOOKUP_BACKOFF_NANOS) {
                 MyJpaPlusGlobalConfig c = config;
-                return c != null ? c : DEFAULT_CONFIG;
+                return c != null ? c : createDefaultConfigCopy();
             }
             try {
                 bean = ctx.getBean(MyJpaPlusGlobalConfig.class);
-                cachedBean = bean;
+                cachedBeanState = new CachedBeanState(bean, now);
                 return bean;
             } catch (Exception e) {
                 LOG.warn(
                     "Failed to lookup MyJpaPlusGlobalConfig from ApplicationContext, falling back to static config: {}",
                     e.getMessage());
                 // ponytail: 仅在 bean 仍为 null 时设置退避时间，避免其他线程已成功缓存时干扰
-                if (cachedBean == null) {
+                if (cachedBeanState.bean() == null) {
                     lastLookupFailureTime = now;
                 }
             }
         }
         // 回退到静态持有实例
         MyJpaPlusGlobalConfig c = config;
-        return c != null ? c : DEFAULT_CONFIG;
+        return c != null ? c : createDefaultConfigCopy();
     }
 
     /**
@@ -170,9 +173,8 @@ public final class GlobalConfigHolder {
      * 生产环境不应调用此方法。
      */
     public static void reset() {
-        // 原子性地清除缓存：先清除缓存的 bean，再清除 applicationContext
-        cachedBean = null;
-        cachedBeanVerifyTime = 0;
+        // 原子性地清除所有缓存状态
+        cachedBeanState = CachedBeanState.EMPTY;
         lastLookupFailureTime = 0;
         config = null;
         applicationContext = null;

@@ -58,6 +58,9 @@ final class EncryptionKeyManager {
     /** 跟踪密钥是否已被使用（加密/解密操作），用于防止运行时更改PBKDF2迭代次数 */
     private static final AtomicBoolean keysInUse = new AtomicBoolean(false);
 
+    /** 跟踪迭代次数是否已配置。首次设置后锁定，防止跨重启时变更破坏已有密文。 */
+    private static volatile boolean iterationsConfigured = false;
+
     /**
      * Spring Environment 注入的生产环境标志。
      * 由 MyJpaPlusAutoConfiguration 在自动配置阶段设置，用于检测 application.yml 中的 prod profile。
@@ -67,26 +70,38 @@ final class EncryptionKeyManager {
     /**
      * 设置 PBKDF2 迭代次数。由自动配置类在启动时调用。
      *
+     * <p>
+     * 此方法在首次调用后锁定迭代次数。后续调用（即使在密钥使用之前）将抛出
+     * {@link IllegalStateException}，防止跨重启时变更迭代次数导致已有密文不可解密。
+     *
      * @param iterations PBKDF2 迭代次数（100,000 - 10,000,000）
-     * @throws IllegalStateException 如果密钥已被使用，不允许运行时更改
+     * @throws IllegalStateException 如果迭代次数已配置，不允许更改
+     * @throws IllegalArgumentException 如果迭代次数超出有效范围
      */
     static void setPbkdf2Iterations(int iterations) {
-        if (iterations >= PBKDF2_ITERATIONS_MIN && iterations <= PBKDF2_ITERATIONS_MAX) {
-            KEY_VERSION_LOCK.lock();
-            try {
-                if (keysInUse.get()) {
-                    throw new IllegalStateException(
-                        "Cannot change PBKDF2 iterations after keys have been used for encryption/decryption. "
-                            + "This would make all existing ciphertext UNDECRYPTABLE. "
-                            + "To change iterations, restart the application before any encryption operations.");
-                }
-                configuredPbkdf2Iterations = iterations;
-            } finally {
-                KEY_VERSION_LOCK.unlock();
-            }
-        } else {
+        if (iterations < PBKDF2_ITERATIONS_MIN || iterations > PBKDF2_ITERATIONS_MAX) {
             throw new IllegalArgumentException("PBKDF2 iterations must be between " + PBKDF2_ITERATIONS_MIN + " and "
                 + PBKDF2_ITERATIONS_MAX + ", got: " + iterations);
+        }
+        KEY_VERSION_LOCK.lock();
+        try {
+            if (keysInUse.get()) {
+                throw new IllegalStateException(
+                    "Cannot change PBKDF2 iterations after keys have been used for encryption/decryption. "
+                        + "This would make all existing ciphertext UNDECRYPTABLE. "
+                        + "To change iterations, restart the application before any encryption operations.");
+            }
+            if (iterationsConfigured) {
+                throw new IllegalStateException("PBKDF2 iterations already configured. Cannot change from "
+                    + configuredPbkdf2Iterations + " to " + iterations + ". "
+                    + "Changing iterations between restarts makes existing ciphertext UNDECRYPTABLE. "
+                    + "To change iterations, you must migrate all encrypted data first.");
+            }
+            configuredPbkdf2Iterations = iterations;
+            iterationsConfigured = true;
+            log.info("PBKDF2 iterations configured: {}", iterations);
+        } finally {
+            KEY_VERSION_LOCK.unlock();
         }
     }
 
@@ -470,6 +485,7 @@ final class EncryptionKeyManager {
             KEY_CACHE.invalidateAll();
             KEY_VALIDATED.set(false);
             configuredPbkdf2Iterations = -1;
+            iterationsConfigured = false;
             keyVersionSnapshot = new KeyVersionSnapshot(null, 0);
         } finally {
             KEY_VERSION_LOCK.unlock();

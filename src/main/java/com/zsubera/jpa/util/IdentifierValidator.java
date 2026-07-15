@@ -54,11 +54,12 @@ public final class IdentifierValidator {
      *
      * <p>
      * <strong>已知限制：</strong>此模式覆盖西里尔字母、希腊字母、亚美尼亚字母、全角拉丁/数字、
-     * 数学字母符号等常见混淆字符。不覆盖所有 Unicode 混淆字符（如装饰字母、封闭字母数字）。
-     * 如需生产级检测，考虑使用 ICU4J 的 {@code SpoofChecker}。
+     * 数学字母数字符号（粗体、斜体等变体）等常见混淆字符。不覆盖所有 Unicode 混淆字符
+     * （如装饰字母、封闭字母数字补充区）。如需生产级检测，考虑使用 ICU4J 的 {@code SpoofChecker}。
      */
     private static final Pattern HOMOGLYPH_PATTERN =
-        Pattern.compile("[\\u0400-\\u04FF\\u0370-\\u03FF\\u0530-\\u058F\\uFF00-\\uFFEF\\u2100-\\u214F\\u2460-\\u24FF]");
+        Pattern.compile("[\\u0400-\\u04FF\\u0370-\\u03FF\\u0530-\\u058F\\uFF00-\\uFFEF\\u2100-\\u214F\\u2460-\\u24FF"
+            + "\\uD835[\\uDC00-\\uDFFF]]");
 
     /** 标识符最大长度，防止滥用。 */
     private static final int MAX_IDENTIFIER_LENGTH = 128;
@@ -121,9 +122,11 @@ public final class IdentifierValidator {
         if (identifier.endsWith(".")) {
             throw new SecurityViolationException("Identifier must not end with '.': '" + identifier + "'");
         }
+        // 捕获一次 unicodeIdentifiers，确保多段标识符的所有部分在同一策略下验证
+        boolean useUnicode = unicodeIdentifiers;
         String[] parts = identifier.split("\\.");
         for (String part : parts) {
-            validatePart(part, identifier);
+            validatePart(part, identifier, useUnicode);
         }
     }
 
@@ -156,7 +159,7 @@ public final class IdentifierValidator {
                 throw new SecurityViolationException("Invalid column name: '" + columnName
                     + "'. Must contain only Unicode alphanumeric characters and underscores.");
             }
-            checkHomoglyphs(columnName);
+            checkHomoglyphs(columnName, true);
         } else {
             if (!isValidAsciiIdentifier(columnName)) {
                 throw new SecurityViolationException("Invalid column name: '" + columnName
@@ -227,18 +230,18 @@ public final class IdentifierValidator {
      * @param fullIdentifier 完整标识符（用于错误消息）
      * @throws MyJpaPlusException 如果标识符段包含非法字符或同形字符
      */
-    private static void validatePart(String part, String fullIdentifier) {
-        Pattern validationPattern = unicodeIdentifiers ? UNICODE_IDENTIFIER_PART_PATTERN : SAFE_IDENTIFIER_PATTERN;
+    private static void validatePart(String part, String fullIdentifier, boolean useUnicode) {
+        Pattern validationPattern = useUnicode ? UNICODE_IDENTIFIER_PART_PATTERN : SAFE_IDENTIFIER_PATTERN;
         if (!validationPattern.matcher(part).matches()) {
             throw new SecurityViolationException("Invalid SQL identifier: '" + fullIdentifier
                 + "'. Each part must contain only alphanumeric characters and underscores."
-                + (unicodeIdentifiers ? "" : " Use myjpa-plus.merge.unicode-identifiers=true for Unicode support."));
+                + (useUnicode ? "" : " Use myjpa-plus.merge.unicode-identifiers=true for Unicode support."));
         }
-        checkHomoglyphs(part);
+        checkHomoglyphs(part, useUnicode);
     }
 
-    private static void checkHomoglyphs(String part) {
-        if (unicodeIdentifiers && HOMOGLYPH_PATTERN.matcher(part).find()) {
+    private static void checkHomoglyphs(String part, boolean useUnicode) {
+        if (useUnicode && HOMOGLYPH_PATTERN.matcher(part).find()) {
             String homoglyphMsg = "SECURITY: Identifier '" + part + "' contains Unicode homoglyph characters "
                 + "(Cyrillic/Greek/Armenian). This may indicate a homoglyph attack attempt.";
             throw new SecurityViolationException(homoglyphMsg);

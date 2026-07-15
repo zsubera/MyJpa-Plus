@@ -81,8 +81,11 @@ class EncryptionKeyManagerEdgeCaseTest {
     @DisplayName("setPbkdf2Iterations accepts valid range")
     void shouldAcceptValidIterations() {
         assertDoesNotThrow(() -> EncryptionKeyManager.setPbkdf2Iterations(100_000));
+        EncryptionKeyManager.clearCaches();
         assertDoesNotThrow(() -> EncryptionKeyManager.setPbkdf2Iterations(10_000_000));
+        EncryptionKeyManager.clearCaches();
         assertDoesNotThrow(() -> EncryptionKeyManager.setPbkdf2Iterations(600_000));
+        EncryptionKeyManager.clearCaches();
     }
 
     @Test

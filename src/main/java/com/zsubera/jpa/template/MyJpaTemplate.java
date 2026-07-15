@@ -403,7 +403,7 @@ public class MyJpaTemplate implements MyJpaTemplateOperations {
         // Include maxResults in cache key to prevent returning wrong-sized results when GlobalConfig changes
         int maxResultsLimit = resolveMaxResults();
         String cacheKey = entityClass.getName() + ":" + spec.cacheKey() + ":" + sortPart + ":" + softDeletePart + ":mr="
-            + maxResultsLimit;
+            + maxResultsLimit + ":ttl=" + ttlSeconds;
         List<T> cached = cacheAdapter.get(cacheKey);
         if (cached != null) {
             log.debug("Cache hit for key: {}", cacheKey);
@@ -424,6 +424,15 @@ public class MyJpaTemplate implements MyJpaTemplateOperations {
                         // 检查缓存是否在查询后被其他事务驱逐，避免将过期数据重新写入
                         if (cacheAdapter.getEvictionGeneration() != generationBeforeQuery) {
                             log.debug("Cache evicted after query but before commit, skipping stale write for key: {}",
+                                cacheKey);
+                            return;
+                        }
+                        // 二次检查驱逐代数，缩小 TOCTOU 窗口：在检查与写入之间，
+                        // 其他事务可能已驱逐缓存并写入新数据。重新检查可进一步降低
+                        // 将过期数据写入已清空缓存的概率。
+                        if (cacheAdapter.getEvictionGeneration() != generationBeforeQuery) {
+                            log.debug(
+                                "Cache evicted between generation check and put, skipping stale write for key: {}",
                                 cacheKey);
                             return;
                         }
@@ -558,7 +567,22 @@ public class MyJpaTemplate implements MyJpaTemplateOperations {
     @Override
     public <T> List<T> saveAllBatchedInSeparateTransactions(Iterable<T> entities, int batchSize) {
         validateBatchParams(entities, "entities", batchSize);
-        List<T> result = getBatchSaveTemplate().saveAllBatchedInSeparateTransactions(entities, batchSize);
+        List<T> result;
+        try {
+            result = getBatchSaveTemplate().saveAllBatchedInSeparateTransactions(entities, batchSize);
+        } catch (BatchSaveTemplate.PartialBatchCommitException e) {
+            // 部分批次已提交但事件未发布，为已提交的实体发布缓存失效事件
+            @SuppressWarnings("unchecked")
+            List<T> committed = (List<T>)e.getCommittedResults();
+            if (!committed.isEmpty()) {
+                java.util.Map<Class<?>, Integer> classCounts = new java.util.LinkedHashMap<>();
+                for (T entity : committed) {
+                    classCounts.merge(entity.getClass(), 1, Integer::sum);
+                }
+                classCounts.forEach(this::publishEntityModifiedEvent);
+            }
+            throw e;
+        }
         if (!result.isEmpty()) {
             // 为所有不同的实体类发布事件，而非仅第一个元素的类
             java.util.Map<Class<?>, Integer> classCounts = new java.util.LinkedHashMap<>();

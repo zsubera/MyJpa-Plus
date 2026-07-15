@@ -115,6 +115,21 @@ class DefaultMyJpaRepositoryIntegrationTest {
         assertEquals(1, repository.count());
     }
 
+    // ---- deleteInBatch: detached entities with null IDs ----
+
+    @Test
+    void deleteInBatch_detachedEntities_throws() throws Exception {
+        SoftDeleteRepoTestEntity detached = new SoftDeleteRepoTestEntity();
+        detached.setName("detached");
+        // detached entity has null ID
+        java.lang.reflect.Method method =
+            DefaultMyJpaRepository.class.getMethod("deleteInBatch", java.lang.Iterable.class);
+        Exception ex = assertThrows(Exception.class, () -> method.invoke(proxy, java.util.List.of(detached)));
+        // InvocationTargetException wraps IllegalArgumentException
+        assertTrue(ex.getCause() instanceof IllegalArgumentException,
+            "Should throw IllegalArgumentException for detached entities, got: " + ex.getCause());
+    }
+
     // ---- deleteInBatch: blocked path (shouldBlockHardDelete=true) ----
 
     // ---- deleteByIdIfExists: autoFilter disabled (non-soft-delete path) ----

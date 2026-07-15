@@ -722,6 +722,7 @@ public class DefaultMyJpaRepository<T, ID> extends SimpleJpaRepository<T, ID> im
         }
         executeDeleteOrBlock(() -> {
             java.util.List<ID> idList = new java.util.ArrayList<>();
+            java.util.List<T> skippedEntities = new java.util.ArrayList<>();
             jakarta.persistence.PersistenceUnitUtil util =
                 entityManager.getEntityManagerFactory().getPersistenceUnitUtil();
             for (T entity : entities) {
@@ -730,10 +731,14 @@ public class DefaultMyJpaRepository<T, ID> extends SimpleJpaRepository<T, ID> im
                 if (id != null) {
                     idList.add(id);
                 } else {
-                    log.warn("deleteInBatch: Could not extract ID from entity {}. "
-                        + "Entity may be detached. Load the entity within a transaction before calling deleteInBatch().",
-                        entity.getClass().getSimpleName());
+                    skippedEntities.add(entity);
                 }
+            }
+            if (!skippedEntities.isEmpty()) {
+                throw new IllegalArgumentException("deleteInBatch: Cannot delete " + skippedEntities.size()
+                    + " entity(ies) because their IDs could not be extracted. "
+                    + "This typically happens with detached entities or uninitialized proxies. "
+                    + "Load entities within a transaction before calling deleteInBatch().");
             }
             if (!idList.isEmpty()) {
                 SoftDeleteBulkExecutor.softDeleteByIds(entityManager, domainClass, idList);
@@ -797,9 +802,13 @@ public class DefaultMyJpaRepository<T, ID> extends SimpleJpaRepository<T, ID> im
         if (id == null) {
             throw new IllegalArgumentException("Cannot delete transient entity: " + entity.getClass().getSimpleName());
         }
-        executeDeleteOrBlock(
-            () -> SoftDeleteBulkExecutor.softDeleteByIds(entityManager, domainClass, java.util.List.of(id)),
-            () -> entityManager.remove(entity));
+        executeDeleteOrBlock(() -> {
+            SoftDeleteBulkExecutor.softDeleteByIds(entityManager, domainClass, java.util.List.of(id));
+            // Detach entity to prevent stale persistence context state from overwriting
+            // the soft-delete on next em.flush(). Native SQL UPDATE bypasses JPA's
+            // dirty-checking, so the in-memory entity retains old field values.
+            entityManager.detach(entity);
+        }, () -> entityManager.remove(entity));
     }
 
     /**
@@ -873,11 +882,7 @@ public class DefaultMyJpaRepository<T, ID> extends SimpleJpaRepository<T, ID> im
         com.zsubera.jpa.update.UpdateSpec<T> spec = new com.zsubera.jpa.update.UpdateSpec<>(entityClass);
         config.accept(spec);
         jakarta.persistence.EntityManager em = this.entityManager;
-        String sf = this.softDeleteFieldName;
-        if (sf != null && shouldApplySoftDeleteFilter()) {
-            spec.addCondition(
-                (root, cb) -> com.zsubera.jpa.softdelete.SoftDeleteHelper.buildNotDeleted(cb, root, sf, entityClass));
-        }
+        // 软删除过滤由 UpdateSpec.buildPredicates() 自动注入，无需手动添加
         return spec.executeInTransaction(em);
     }
 
@@ -915,5 +920,86 @@ public class DefaultMyJpaRepository<T, ID> extends SimpleJpaRepository<T, ID> im
                 + "myjpa-plus.soft-delete.block-unconditional-delete=false to allow this operation.");
         }
         return spec.executeInTransaction(em);
+    }
+
+    /**
+     * 覆写接口默认的 merge 方法，使用注入的 EntityManager 而非
+     * {@code EntityManagerHelper.getTransactionalEntityManager()}，支持无事务环境。
+     *
+     * <p>
+     * {@link com.zsubera.jpa.repository.MyJpaRepository#merge} 接口默认方法在无活动事务时抛出
+     * {@code IllegalStateException}。此实现使用 Spring 注入的 EntityManager 代理，
+     * 由 {@link com.zsubera.jpa.update.BulkTransactionHelper} 自动管理事务。
+     */
+    @Override
+    public int merge(java.util.function.Consumer<com.zsubera.jpa.update.MergeSpec<T>> config) {
+        if (config == null) {
+            throw new IllegalArgumentException("config must not be null");
+        }
+        Class<T> entityClass = domainClass;
+        com.zsubera.jpa.update.MergeSpec<T> spec = new com.zsubera.jpa.update.MergeSpec<>(entityClass);
+        config.accept(spec);
+        jakarta.persistence.EntityManager em = this.entityManager;
+        return spec.executeInTransaction(em);
+    }
+
+    /**
+     * 覆写接口默认的 execute(UpdateSpec) 方法，使用注入的 EntityManager 而非
+     * {@code EntityManagerHelper.getTransactionalEntityManager()}，支持无事务环境。
+     */
+    @Override
+    public int execute(com.zsubera.jpa.update.UpdateSpec<T> spec) {
+        if (spec == null) {
+            throw new IllegalArgumentException("spec must not be null");
+        }
+        jakarta.persistence.EntityManager em = this.entityManager;
+        // 不手动添加软删除过滤条件 — UpdateSpec.buildPredicates() 已自动注入，
+        // 重复添加会导致 WHERE 子句中出现两次 deleted = FALSE。
+        return spec.executeInTransaction(em);
+    }
+
+    /**
+     * 覆写接口默认的 execute(DeleteSpec) 方法，使用注入的 EntityManager 而非
+     * {@code EntityManagerHelper.getTransactionalEntityManager()}，支持无事务环境。
+     */
+    @Override
+    public int execute(com.zsubera.jpa.update.DeleteSpec<T> spec) {
+        if (spec == null) {
+            throw new IllegalArgumentException("spec must not be null");
+        }
+        jakarta.persistence.EntityManager em = this.entityManager;
+        String sf = this.softDeleteFieldName;
+        if (sf != null && shouldApplySoftDeleteFilter()) {
+            java.lang.reflect.Field field = com.zsubera.jpa.softdelete.SoftDeleteHelper.getField(domainClass, sf);
+            if (field == null) {
+                throw new IllegalStateException("SoftDelete field '" + sf + "' not found on " + domainClass.getName()
+                    + ". The field may have been removed or renamed.");
+            }
+            com.zsubera.jpa.annotation.SoftDelete annotation =
+                field.getAnnotation(com.zsubera.jpa.annotation.SoftDelete.class);
+            com.zsubera.jpa.softdelete.SoftDeleteHelper.ResolvedDeletedValue resolved =
+                com.zsubera.jpa.softdelete.SoftDeleteHelper.resolveDeletedValue(domainClass, field, annotation);
+            Object deletedVal = resolved.booleanField() ? Boolean.TRUE : resolved.dbValue();
+            return spec.executeAsSoftDeleteInTransaction(em, sf, deletedVal);
+        }
+        if (sf != null && shouldBlockHardDelete()) {
+            throw new IllegalStateException("Hard DELETE on " + domainClass.getSimpleName()
+                + " is blocked because the entity has a @SoftDelete field. "
+                + "Set myjpa-plus.soft-delete.auto-filter=false and "
+                + "myjpa-plus.soft-delete.block-unconditional-delete=false to allow this operation.");
+        }
+        return spec.executeInTransaction(em);
+    }
+
+    /**
+     * 覆写接口默认的 execute(MergeSpec) 方法，使用注入的 EntityManager 而非
+     * {@code EntityManagerHelper.getTransactionalEntityManager()}，支持无事务环境。
+     */
+    @Override
+    public int execute(com.zsubera.jpa.update.MergeSpec<T> spec) {
+        if (spec == null) {
+            throw new IllegalArgumentException("spec must not be null");
+        }
+        return spec.executeInTransaction(this.entityManager);
     }
 }

@@ -46,28 +46,29 @@ final class KeysetPaginationHelper {
     private final EntityManager entityManager;
 
     /** 是否假设数据库使用 NULLS FIRST 语义。Oracle/SQL Server 默认 NULLS LAST，PostgreSQL 默认 NULLS LAST，MySQL NULLs 作为最小值。 */
-    private final boolean nullsFirst;
+    private volatile boolean nullsFirst;
+
+    /** 是否需要懒检测数据库类型（仅在无参构造时为 true） */
+    private volatile boolean needsDetection;
 
     /**
-     * 创建使用默认 NULLS LAST 语义的分页助手。
+     * 创建使用自动检测 NULLS FIRST/LAST 语义的分页助手。
      *
      * <p>
-     * 自动检测数据库类型并设置默认 NULLS FIRST/LAST 语义：
-     * <ul>
-     * <li>MySQL/MariaDB: NULLS FIRST（MySQL 将 NULL 视为最小值）</li>
-     * <li>PostgreSQL/Oracle/SQL Server: NULLS LAST（标准 SQL 默认）</li>
-     * </ul>
-     * 对于需要覆盖默认语义的场景，请使用 {@link #KeysetPaginationHelper(EntityManager, boolean)}。
+     * 数据库类型在首次使用时（有活跃事务）懒检测并缓存，避免在 JTA 环境初始化时
+     * 因无活跃事务导致 {@code EntityManager.unwrap(Connection.class)} 失败。
      */
     KeysetPaginationHelper(EntityManager entityManager) {
-        this(entityManager, detectNullsFirst(entityManager));
+        this.entityManager = entityManager;
+        this.needsDetection = true;
+        this.nullsFirst = false;
     }
 
     /**
      * 自动检测数据库类型，返回正确的 NULLS FIRST 默认值。
      * MySQL 将 NULL 视为最小值（ASC 时等效于 NULLS FIRST），其他数据库默认 NULLS LAST。
      */
-    private static boolean detectNullsFirst(EntityManager entityManager) {
+    private boolean detectNullsFirst(EntityManager entityManager) {
         try {
             java.sql.Connection conn = entityManager.unwrap(java.sql.Connection.class);
             // ponytail: 处理连接池代理，递归 unwrap 到物理连接，设置迭代上限防止死循环
@@ -84,9 +85,28 @@ final class KeysetPaginationHelper {
         }
     }
 
+    /**
+     * 获取 NULLS FIRST 设置，懒检测并缓存。
+     */
+    private boolean isNullsFirst(EntityManager em) {
+        if (!needsDetection) {
+            return nullsFirst;
+        }
+        synchronized (this) {
+            if (!needsDetection) {
+                return nullsFirst;
+            }
+            boolean detected = detectNullsFirst(em);
+            this.nullsFirst = detected;
+            this.needsDetection = false;
+            return detected;
+        }
+    }
+
     KeysetPaginationHelper(EntityManager entityManager, boolean nullsFirst) {
         this.entityManager = entityManager;
         this.nullsFirst = nullsFirst;
+        this.needsDetection = false;
     }
 
     /**
@@ -127,8 +147,9 @@ final class KeysetPaginationHelper {
 
         // 应用 keyset 条件（游标定位）
         if (!isFirstPage) {
+            boolean effectiveNullsFirst = isNullsFirst(entityManager);
             jakarta.persistence.criteria.Predicate keysetPredicate =
-                buildKeysetPredicate(root, cb, orders, lastSortValues, nullsFirst);
+                buildKeysetPredicate(root, cb, orders, lastSortValues, effectiveNullsFirst);
             if (userPredicate != null) {
                 cq.where(cb.and(userPredicate, keysetPredicate));
             } else {
@@ -139,10 +160,11 @@ final class KeysetPaginationHelper {
         // 应用排序（包含 NULLS FIRST/LAST 以匹配 keyset predicate 的 NULL 语义）
         // ponytail: JPA 3.1 Order doesn't have nullsFirst/nullsLast. Use Hibernate's sort() with NullPrecedence
         // when available; fall back to standard JPA asc()/desc() for other providers (EclipseLink, OpenJPA, etc.).
+        boolean effectiveNullsFirst = isNullsFirst(entityManager);
         List<jakarta.persistence.criteria.Order> orderList = new ArrayList<>();
         if (cb instanceof org.hibernate.query.criteria.HibernateCriteriaBuilder hcb) {
-            org.hibernate.query.NullPrecedence nullPrecedence =
-                nullsFirst ? org.hibernate.query.NullPrecedence.FIRST : org.hibernate.query.NullPrecedence.LAST;
+            org.hibernate.query.NullPrecedence nullPrecedence = effectiveNullsFirst
+                ? org.hibernate.query.NullPrecedence.FIRST : org.hibernate.query.NullPrecedence.LAST;
             for (Sort.Order order : orders) {
                 jakarta.persistence.criteria.Expression<?> expr = root.get(order.getProperty());
                 jakarta.persistence.criteria.Order sorted;

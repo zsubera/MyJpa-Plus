@@ -34,10 +34,14 @@ class EncryptionKeyManagerTest {
 
     @Test
     void setPbkdf2IterationsValidRange() {
-        // Should not throw
+        // First set succeeds
         EncryptionKeyManager.setPbkdf2Iterations(100000);
+        // Subsequent sets throw (iterations immutable after first configuration)
+        EncryptionKeyManager.clearCaches();
         EncryptionKeyManager.setPbkdf2Iterations(1000000);
+        EncryptionKeyManager.clearCaches();
         EncryptionKeyManager.setPbkdf2Iterations(10000000);
+        EncryptionKeyManager.clearCaches();
     }
 
     @Test

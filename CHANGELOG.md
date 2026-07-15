@@ -29,6 +29,9 @@
 - **QueryCacheManager.computeIfAbsent() 幽灵条目** — 在 `addToPrefixIndex` 之前检查 `cache.getIfPresent(key) != null`，避免创建幽灵条目
 - **MergeSpec.executeBatchInSeparateTransactions 无限制** — 添加 `resolveMaxBulkOperationRows()` 检查，修复批量 UPSERT 操作不遵守最大行数限制的问题
 - **MyJpaTemplate.publishEntityModifiedEvent 多类缓存驱逐** — 为所有不同的实体类发布事件而非仅第一个元素的类，修复混合类型批量保存时缓存驱逐不完整的问题
+- **MergeSpec.executeSingleBatchInTransaction() em.flush() 持久化无关脏实体** — 移除 `tx.commit()` 前的 `em.flush()` 调用，修复首次批量 UPSERT 时将调用方持久化上下文中无关脏实体意外持久化的问题
+- **EntityFieldExtractor.resolveColumnName() boolean 字段列名解析错误** — 添加 `isXxx()` getter 回退，修复属性访问模式下 `@Column` 注解在 `isActive()` getter 上时列名解析为 snake_case 而非注解值的问题
+- **SoftDeleteHelper.doResolveColumnName() 缺少标识符校验和 boolean getter** — 在 camelToSnake 回退路径添加 `IdentifierValidator.validateColumnName()` 调用，并添加 boolean 字段的 `isXxx()` getter 回退，与 `doResolveIdColumnName()` 保持一致
 
 ### 迁移
 - `asDto()` 已删除，需替换为 `find()` 的 `resultType` 参数

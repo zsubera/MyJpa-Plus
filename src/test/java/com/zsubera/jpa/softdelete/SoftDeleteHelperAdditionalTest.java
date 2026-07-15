@@ -725,6 +725,13 @@ class SoftDeleteHelperAdditionalTest {
         assertEquals("active", result.get(0).getName());
     }
 
+    @Test
+    void resolveIdColumnName_validatesThroughIdentifierValidator() {
+        String col = SoftDeleteHelper.resolveIdColumnName(SoftDeleteTestEntity.class);
+        assertNotNull(col);
+        assertFalse(col.isEmpty());
+    }
+
     private TestEntity newEntity(String name, int status) {
         TestEntity entity = new TestEntity();
         entity.setName(name);

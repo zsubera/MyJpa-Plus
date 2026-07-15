@@ -242,6 +242,14 @@ public class DeleteSpec<T> extends AbstractBulkOperationSpec<T, DeleteSpec<T>> {
             update.where(cb.and(predicates));
         }
         update.set(fieldName, deletedValue);
+        // Increment @Version field if present, consistent with all other soft-delete paths
+        // (SoftDeleteBulkExecutor.softDeleteAll/softDeleteByIds/softDeleteAllUsingCriteriaUpdate).
+        java.lang.reflect.Field versionField = resolveVersionField(entityClass);
+        if (versionField != null) {
+            String versionFieldName = versionField.getName();
+            jakarta.persistence.criteria.Expression<Integer> versionExpr = root.get(versionFieldName);
+            update.set(versionFieldName, cb.sum(versionExpr, 1));
+        }
         int affected = em.createQuery(update).executeUpdate();
         // ponytail: 后置检查处理并发导致超额删除的场景。预检查 COUNT 与 UPDATE 之间
         // 存在竞态窗口，并发的 INSERT 或其他软删除操作可能导致实际影响行数超过限制。
@@ -502,6 +510,23 @@ public class DeleteSpec<T> extends AbstractBulkOperationSpec<T, DeleteSpec<T>> {
             afterBulkOperation(em, entityClass);
         }
         return deleted;
+    }
+
+    /**
+     * 解析实体类中的 {@link jakarta.persistence.Version} 字段。
+     *
+     * @param entityClass 实体类
+     * @return Version 字段，如果没有则返回 null
+     */
+    private static java.lang.reflect.Field resolveVersionField(Class<?> entityClass) {
+        for (Class<?> c = entityClass; c != null && c != Object.class; c = c.getSuperclass()) {
+            for (java.lang.reflect.Field f : c.getDeclaredFields()) {
+                if (f.isAnnotationPresent(jakarta.persistence.Version.class)) {
+                    return f;
+                }
+            }
+        }
+        return null;
     }
 
 }

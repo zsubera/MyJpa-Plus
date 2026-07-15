@@ -266,9 +266,10 @@ public final class SoftDeleteHelper {
                 cachedDialect = "postgresql";
                 return cachedDialect;
             } catch (Exception e) {
-                log.warn("Failed to detect database dialect, defaulting to postgresql: {}", e.getMessage());
-                cachedDialect = "postgresql";
-                return cachedDialect;
+                log.warn("Failed to detect database dialect, will retry on next call: {}", e.getMessage());
+                // 不缓存失败结果 — 瞬态错误（连接超时、Hibernate 属性未就绪）不应永久锁定方言，
+                // 否则 MySQL/Oracle/SQL Server 上所有原生 SQL 都会使用错误语法。
+                return "postgresql";
             }
         }
     }
@@ -401,18 +402,36 @@ public final class SoftDeleteHelper {
                     if (columnAnnotation != null && !columnAnnotation.name().isEmpty()) {
                         return validateAndReturnColumnName(columnAnnotation.name());
                     }
-                    return StringHelper.camelToSnake(fieldName);
+                    String name = StringHelper.camelToSnake(fieldName);
+                    IdentifierValidator.validateColumnName(name);
+                    return name;
                 }
             }
         }
-        return StringHelper.camelToSnake(fieldName);
+        // boolean 字段的 isXxx() getter
+        Class<?> fieldType = field != null ? field.getType() : null;
+        if (fieldType == boolean.class || fieldType == Boolean.class) {
+            String isGetterName = "is" + Character.toUpperCase(fieldName.charAt(0)) + fieldName.substring(1);
+            for (Class<?> c = entityClass; c != null && c != Object.class; c = c.getSuperclass()) {
+                for (java.lang.reflect.Method m : c.getDeclaredMethods()) {
+                    if (m.getName().equals(isGetterName) && m.getParameterCount() == 0) {
+                        jakarta.persistence.Column columnAnnotation = m.getAnnotation(jakarta.persistence.Column.class);
+                        if (columnAnnotation != null && !columnAnnotation.name().isEmpty()) {
+                            return validateAndReturnColumnName(columnAnnotation.name());
+                        }
+                    }
+                }
+            }
+        }
+        String fallback = StringHelper.camelToSnake(fieldName);
+        IdentifierValidator.validateColumnName(fallback);
+        return fallback;
     }
 
     private static String validateAndReturnColumnName(String name) {
-        if (!IdentifierValidator.SAFE_IDENTIFIER_PATTERN.matcher(name).matches()) {
-            throw new IllegalArgumentException(
-                "Invalid @Column name: " + name + ". Must contain only alphanumeric characters and underscores.");
-        }
+        // ponytail: Use IdentifierValidator.validateColumnName() instead of simple pattern check.
+        // The previous check bypassed max-length (128 chars) and homoglyph detection.
+        IdentifierValidator.validateColumnName(name);
         return name;
     }
 
@@ -463,13 +482,12 @@ public final class SoftDeleteHelper {
                     jakarta.persistence.Column columnAnnotation = m.getAnnotation(jakarta.persistence.Column.class);
                     if (columnAnnotation != null && !columnAnnotation.name().isEmpty()) {
                         String name = columnAnnotation.name();
-                        if (!IdentifierValidator.SAFE_IDENTIFIER_PATTERN.matcher(name).matches()) {
-                            throw new IllegalArgumentException("Invalid @Column name for @Id method: " + name
-                                + ". Must contain only alphanumeric characters and underscores.");
-                        }
+                        IdentifierValidator.validateColumnName(name);
                         return name;
                     }
-                    return StringHelper.camelToSnake(fieldName);
+                    String name = StringHelper.camelToSnake(fieldName);
+                    IdentifierValidator.validateColumnName(name);
+                    return name;
                 }
             }
         }
@@ -481,13 +499,12 @@ public final class SoftDeleteHelper {
         jakarta.persistence.Column columnAnnotation = f.getAnnotation(jakarta.persistence.Column.class);
         if (columnAnnotation != null && !columnAnnotation.name().isEmpty()) {
             String name = columnAnnotation.name();
-            if (!IdentifierValidator.SAFE_IDENTIFIER_PATTERN.matcher(name).matches()) {
-                throw new IllegalArgumentException("Invalid @Column name for @Id field: " + name
-                    + ". Must contain only alphanumeric characters and underscores.");
-            }
+            IdentifierValidator.validateColumnName(name);
             return name;
         }
-        return StringHelper.camelToSnake(f.getName());
+        String name = StringHelper.camelToSnake(f.getName());
+        IdentifierValidator.validateColumnName(name);
+        return name;
     }
 
     /**

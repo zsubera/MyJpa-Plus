@@ -611,4 +611,37 @@ class QueryCacheManagerTest {
         // After clear, evictByPrefix should find nothing
         assertEquals(0, cache.evictByPrefix("User:"));
     }
+
+    @Test
+    void expiredEntry_prefixIndexCleanedUpOnGet() throws Exception {
+        cache = new QueryCacheManager(100);
+        cache.put("User:q1", "v1", 1);
+        cache.put("User:q2", "v2", 1);
+        cache.put("Order:q1", "v3", 60);
+
+        // Wait for TTL to expire
+        Thread.sleep(1500);
+
+        // get() triggers cleanup of expired entries
+        assertNull(cache.get("User:q1"));
+        assertNull(cache.get("User:q2"));
+
+        // evictByPrefix should not find stale prefixIndex entries
+        assertEquals(0, cache.evictByPrefix("User:"));
+        // Order entry should still be there
+        assertNotNull(cache.get("Order:q1"));
+    }
+
+    @Test
+    void expiredEntry_prefixIndexCleanedUpOnComputeIfAbsent() throws Exception {
+        cache = new QueryCacheManager(100);
+        cache.put("User:q1", "v1", 1);
+
+        Thread.sleep(1500);
+
+        // computeIfAbsent triggers cleanup of expired entry
+        String result = cache.computeIfAbsent("User:q1", () -> "reloaded", 60);
+        assertEquals("reloaded", result);
+        assertEquals(1, cache.size());
+    }
 }

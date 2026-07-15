@@ -107,17 +107,16 @@ class QueryCacheManagerComputeIfAbsentTest {
         assertNull(r2);
         assertEquals(1, loaderCalls.get());
 
-        // After TTL expires: entry is still in Caffeine (no per-entry TTL configured),
-        // so computeIfAbsent does NOT re-invoke the loader. The expired CachedValue is
-        // returned by Caffeine, but unpackIfPresent detects the expiry and returns null.
+        // After TTL expires: expired entry is invalidated (prefixIndex cleaned up),
+        // so computeIfAbsent re-invokes the loader and caches the new value.
         Thread.sleep(2500);
         assertNull(cache.get("k"));
         String r3 = cache.computeIfAbsent("k", () -> {
             loaderCalls.incrementAndGet();
             return "now-present";
         }, 60);
-        assertNull(r3);
-        assertEquals(1, loaderCalls.get());
+        assertEquals("now-present", r3);
+        assertEquals(2, loaderCalls.get());
     }
 
     @Test
