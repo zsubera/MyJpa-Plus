@@ -484,8 +484,10 @@ final class EncryptionKeyManager {
         try {
             KEY_CACHE.invalidateAll();
             KEY_VALIDATED.set(false);
-            configuredPbkdf2Iterations = -1;
-            iterationsConfigured = false;
+            // 不重置 configuredPbkdf2Iterations 和 iterationsConfigured：
+            // 这些值代表派生已有密钥时使用的迭代次数，必须在应用生命周期内保持一致。
+            // 重置会导致 refreshKeyVersion() 后使用不同的迭代次数派生新密钥，
+            // 使之前加密的数据永久无法解密。
             keyVersionSnapshot = new KeyVersionSnapshot(null, 0);
         } finally {
             KEY_VERSION_LOCK.unlock();

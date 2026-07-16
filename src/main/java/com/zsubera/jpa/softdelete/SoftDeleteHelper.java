@@ -402,9 +402,8 @@ public final class SoftDeleteHelper {
                     if (columnAnnotation != null && !columnAnnotation.name().isEmpty()) {
                         return validateAndReturnColumnName(columnAnnotation.name());
                     }
-                    String name = StringHelper.camelToSnake(fieldName);
-                    IdentifierValidator.validateColumnName(name);
-                    return name;
+                    // getXxx() 存在但无 @Column — 继续检查 isXxx() getter（boolean 字段可能在 isXxx() 上有 @Column）
+                    break;
                 }
             }
         }

@@ -33,11 +33,11 @@ public final class CacheEvictionHelper {
     private static volatile boolean reflectionInitialized;
 
     /** 反射初始化失败重试计数器，超过上限后停止重试 */
-    private static volatile int reflectionRetryCount;
+    private static int reflectionRetryCount;
     private static final int MAX_REFLECTION_RETRIES = 3;
 
     /** 反射初始化最后失败时间戳，用于退避重试 */
-    private static volatile long lastReflectionFailureTime;
+    private static long lastReflectionFailureTime;
     private static final long REFLECTION_RETRY_BACKOFF_NANOS = java.util.concurrent.TimeUnit.SECONDS.toNanos(30);
 
     /**
@@ -91,6 +91,19 @@ public final class CacheEvictionHelper {
             em.clear();
             return;
         }
+        evictL2CacheOnly(em, entityClass);
+        em.clear();
+    }
+
+    /**
+     * 仅驱逐 L2 缓存，不清除 L1 持久化上下文。
+     * 用于 {@code PersistenceContextStrategy.DEFER_TO_CALLER} 场景，
+     * 由调用方自行管理持久化上下文生命周期。
+     *
+     * @param em 实体管理器
+     * @param entityClass 要驱逐 L2 缓存的实体类型
+     */
+    public static void evictL2CacheOnly(EntityManager em, Class<?> entityClass) {
         ensureReflectionInitialized();
         if (hibernateAvailable) {
             try {
@@ -101,10 +114,9 @@ public final class CacheEvictionHelper {
                     evictEntityDataMethod.invoke(cache, entityClass);
                 }
             } catch (Exception e) {
-                log.warn("Failed to evict entity L2 cache selectively for {}, falling back to em.clear()",
-                    entityClass.getSimpleName(), e);
+                log.warn("Failed to evict entity L2 cache selectively for {}: {}", entityClass.getSimpleName(),
+                    e.getMessage());
             }
         }
-        em.clear();
     }
 }

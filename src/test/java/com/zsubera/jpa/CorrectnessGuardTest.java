@@ -145,7 +145,7 @@ class CorrectnessGuardTest {
             new com.zsubera.jpa.update.DeleteSpec<>(SoftDeleteTestEntity.class);
         spec.addCondition((root, cb) -> cb.equal(root.get("deleted"), true));
 
-        int affected = spec.executeAsSoftDelete(entityManager, "deleted", true);
+        int affected = spec.executeAsSoftDelete(entityManager, "deleted", true, null);
 
         assertEquals(0, affected);
     }

@@ -808,7 +808,12 @@ public class MyJpaTemplate implements MyJpaTemplateOperations {
         if (sort == null) {
             throw new IllegalArgumentException("sort must not be null");
         }
-        TypedQuery<T> query = buildSpecificationQuery(entityClass, spec.toSpecification(), sort, resolveMaxResults());
+        Specification<T> dataSpec = spec != null ? spec.toSpecification() : null;
+        if (shouldApplySoftDeleteFilter()) {
+            Specification<T> sdSpec = SoftDeleteHelper.isNotDeleted(entityClass);
+            dataSpec = dataSpec != null ? dataSpec.and(sdSpec) : sdSpec;
+        }
+        TypedQuery<T> query = buildSpecificationQuery(entityClass, dataSpec, sort, resolveMaxResults());
         spec.applyQuerySettings(query);
         return query.getResultList();
     }

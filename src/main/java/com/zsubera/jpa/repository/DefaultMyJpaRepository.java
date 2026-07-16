@@ -3,6 +3,7 @@ package com.zsubera.jpa.repository;
 import com.zsubera.jpa.softdelete.SoftDeleteBulkExecutor;
 import com.zsubera.jpa.softdelete.SoftDeleteHelper;
 import com.zsubera.jpa.update.AuditUtils;
+import com.zsubera.jpa.util.CacheEvictionHelper;
 import com.zsubera.jpa.util.EntityClassResolver;
 import com.zsubera.jpa.util.InClauseBuilder;
 import jakarta.persistence.EntityManager;
@@ -628,6 +629,9 @@ public class DefaultMyJpaRepository<T, ID> extends SimpleJpaRepository<T, ID> im
         jakarta.persistence.criteria.Root<T> root = delete.from(domainClass);
         delete.where(cb.equal(root.get(idFieldName), id));
         int deleted = entityManager.createQuery(delete).executeUpdate();
+        if (deleted > 0) {
+            com.zsubera.jpa.util.CacheEvictionHelper.evictEntityCache(entityManager, domainClass);
+        }
         return deleted > 0;
     }
 
@@ -707,6 +711,7 @@ public class DefaultMyJpaRepository<T, ID> extends SimpleJpaRepository<T, ID> im
                 delete.where(root.get(idFieldName).in(batch));
                 entityManager.createQuery(delete).executeUpdate();
             }
+            CacheEvictionHelper.evictEntityCache(entityManager, domainClass);
         });
     }
 
@@ -720,12 +725,22 @@ public class DefaultMyJpaRepository<T, ID> extends SimpleJpaRepository<T, ID> im
         if (entities == null) {
             throw new IllegalArgumentException("entities must not be null");
         }
+        // 在分派到软删除/硬删除路径之前验证 null 实体，确保两条路径都受益
+        java.util.List<T> validatedEntities = new java.util.ArrayList<>();
+        int index = 0;
+        for (T entity : entities) {
+            if (entity == null) {
+                throw new IllegalArgumentException("entities[" + index + "] must not be null");
+            }
+            index++;
+            validatedEntities.add(entity);
+        }
         executeDeleteOrBlock(() -> {
             java.util.List<ID> idList = new java.util.ArrayList<>();
             java.util.List<T> skippedEntities = new java.util.ArrayList<>();
             jakarta.persistence.PersistenceUnitUtil util =
                 entityManager.getEntityManagerFactory().getPersistenceUnitUtil();
-            for (T entity : entities) {
+            for (T entity : validatedEntities) {
                 @SuppressWarnings("unchecked")
                 ID id = (ID)util.getIdentifier(entity);
                 if (id != null) {
@@ -743,7 +758,7 @@ public class DefaultMyJpaRepository<T, ID> extends SimpleJpaRepository<T, ID> im
             if (!idList.isEmpty()) {
                 SoftDeleteBulkExecutor.softDeleteByIds(entityManager, domainClass, idList);
             }
-        }, () -> super.deleteInBatch(entities));
+        }, () -> super.deleteInBatch(validatedEntities));
     }
 
     /**
@@ -831,7 +846,12 @@ public class DefaultMyJpaRepository<T, ID> extends SimpleJpaRepository<T, ID> im
         java.util.List<ID> ids = new java.util.ArrayList<>();
         java.util.List<T> skippedEntities = new java.util.ArrayList<>();
         jakarta.persistence.PersistenceUnitUtil util = entityManager.getEntityManagerFactory().getPersistenceUnitUtil();
+        int index = 0;
         for (T entity : entities) {
+            if (entity == null) {
+                throw new IllegalArgumentException("entities[" + index + "] must not be null");
+            }
+            index++;
             @SuppressWarnings("unchecked")
             ID id = (ID)util.getIdentifier(entity);
             if (id != null) {
@@ -864,6 +884,7 @@ public class DefaultMyJpaRepository<T, ID> extends SimpleJpaRepository<T, ID> im
                 delete.where(root.get(idFieldName).in(batch));
                 entityManager.createQuery(delete).executeUpdate();
             }
+            CacheEvictionHelper.evictEntityCache(entityManager, domainClass);
         });
     }
 
@@ -911,7 +932,9 @@ public class DefaultMyJpaRepository<T, ID> extends SimpleJpaRepository<T, ID> im
             com.zsubera.jpa.softdelete.SoftDeleteHelper.ResolvedDeletedValue resolved =
                 com.zsubera.jpa.softdelete.SoftDeleteHelper.resolveDeletedValue(entityClass, field, annotation);
             Object deletedVal = resolved.booleanField() ? Boolean.TRUE : resolved.dbValue();
-            return spec.executeAsSoftDeleteInTransaction(em, sf, deletedVal);
+            String tsField = annotation.deletedTimestampField();
+            return spec.executeAsSoftDeleteInTransaction(em, sf, deletedVal,
+                tsField != null && !tsField.isEmpty() ? tsField : null);
         }
         if (sf != null && shouldBlockHardDelete()) {
             throw new IllegalStateException("Hard DELETE on " + entityClass.getSimpleName()
@@ -980,7 +1003,9 @@ public class DefaultMyJpaRepository<T, ID> extends SimpleJpaRepository<T, ID> im
             com.zsubera.jpa.softdelete.SoftDeleteHelper.ResolvedDeletedValue resolved =
                 com.zsubera.jpa.softdelete.SoftDeleteHelper.resolveDeletedValue(domainClass, field, annotation);
             Object deletedVal = resolved.booleanField() ? Boolean.TRUE : resolved.dbValue();
-            return spec.executeAsSoftDeleteInTransaction(em, sf, deletedVal);
+            String tsField = annotation.deletedTimestampField();
+            return spec.executeAsSoftDeleteInTransaction(em, sf, deletedVal,
+                tsField != null && !tsField.isEmpty() ? tsField : null);
         }
         if (sf != null && shouldBlockHardDelete()) {
             throw new IllegalStateException("Hard DELETE on " + domainClass.getSimpleName()

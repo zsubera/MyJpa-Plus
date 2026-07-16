@@ -309,6 +309,11 @@ public final class SoftDeleteBulkExecutor {
         requireNonNull(entityClass, "entityClass");
         if (ids == null || ids.isEmpty())
             return 0;
+        for (int i = 0; i < ids.size(); i++) {
+            if (ids.get(i) == null) {
+                throw new IllegalArgumentException("ids[" + i + "] must not be null");
+            }
+        }
         requireActiveTransaction();
         int hardLimit = com.zsubera.jpa.util.InClauseBuilder.getHardLimit();
         if (ids.size() > hardLimit)
@@ -373,6 +378,11 @@ public final class SoftDeleteBulkExecutor {
         requireNonNull(entityClass, "entityClass");
         if (ids == null || ids.isEmpty())
             return 0;
+        for (int i = 0; i < ids.size(); i++) {
+            if (ids.get(i) == null) {
+                throw new IllegalArgumentException("ids[" + i + "] must not be null");
+            }
+        }
         requireActiveTransaction();
         int hardLimit = com.zsubera.jpa.util.InClauseBuilder.getHardLimit();
         if (ids.size() > hardLimit)
@@ -535,6 +545,11 @@ public final class SoftDeleteBulkExecutor {
         requireNonNull(entityClass, "entityClass");
         if (ids == null || ids.isEmpty())
             return 0;
+        for (int i = 0; i < ids.size(); i++) {
+            if (ids.get(i) == null) {
+                throw new IllegalArgumentException("ids[" + i + "] must not be null");
+            }
+        }
         requireActiveTransaction();
         int hardLimit = com.zsubera.jpa.util.InClauseBuilder.getHardLimit();
         if (ids.size() > hardLimit)

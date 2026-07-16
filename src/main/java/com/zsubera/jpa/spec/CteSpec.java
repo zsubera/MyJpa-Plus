@@ -95,13 +95,18 @@ public class CteSpec {
     private static final Pattern UNBOUND_PARAM_PATTERN = Pattern.compile("(?<!:):([a-zA-Z_][a-zA-Z0-9_]*)");
 
     /**
+     * 匹配未被 asSafe() 替换的遗留位置参数（?N）。
+     */
+    private static final Pattern ORPHANED_POSITIONAL_PARAM_PATTERN = Pattern.compile("\\?\\d+");
+
+    /**
      * 匹配 PostgreSQL 美元引用字符串（$$...$$ 和 $tag$...$tag$）。
      * 使用 tempered greedy token {@code (?!\\$\\w*\\$).} 匹配内容中可包含 {@code $} 的情况，
      * 例如 {@code $body$ ... $1$ ... $body$} 中的嵌套美元符号不会导致匹配失败。
      * 用于 checkSqlSafety/checkUnboundParameters 中剥离字符串内容。
      */
     private static final Pattern DOLLAR_QUOTED_STRING_PATTERN =
-        Pattern.compile("\\$\\w*\\$(?:(?!\\$\\w*\\$).)*\\$\\w*\\$", Pattern.DOTALL);
+        Pattern.compile("\\$(\\w*)\\$(?:(?!\\$\\1\\$).)*\\$\\1\\$", Pattern.DOTALL);
 
     private static final Class<?> HIBERNATE_SESSION_CLASS;
     private static final Class<?> HIBERNATE_WORK_CLASS;
@@ -306,7 +311,20 @@ public class CteSpec {
                     // ponytail: 处理 PostgreSQL dollar-quoted strings ($$...$$ 或 $tag$...$tag$)
                     if (!inString && c == '$') {
                         int tagEnd = rewrittenSql.indexOf('$', j + 1);
-                        if (tagEnd > j + 1) {
+                        if (tagEnd == j + 1) {
+                            // $$...$$ 形式：相邻的两个美元符号
+                            if (!inDollarQuote) {
+                                inDollarQuote = true;
+                                dollarTag = "$$";
+                                j += 1; // skip second $
+                                continue;
+                            } else if ("$$".equals(dollarTag)) {
+                                inDollarQuote = false;
+                                dollarTag = null;
+                                j += 1; // skip second $
+                                continue;
+                            }
+                        } else if (tagEnd > j + 1) {
                             String candidateTag = rewrittenSql.substring(j + 1, tagEnd);
                             if (!candidateTag.contains("$") && !candidateTag.isEmpty()) {
                                 // $tag$...$tag$ 形式
@@ -323,19 +341,6 @@ public class CteSpec {
                                         j += closeTag.length() - 1;
                                         continue;
                                     }
-                                }
-                            } else if (candidateTag.isEmpty()) {
-                                // $$...$$ 形式
-                                if (!inDollarQuote) {
-                                    inDollarQuote = true;
-                                    dollarTag = "$$";
-                                    j += 1; // skip second $
-                                    continue;
-                                } else if ("$$".equals(dollarTag)) {
-                                    inDollarQuote = false;
-                                    dollarTag = null;
-                                    j += 1; // skip second $
-                                    continue;
                                 }
                             }
                         }
@@ -363,7 +368,9 @@ public class CteSpec {
                         inString = !inString;
                     }
                     if (!inString && !inDollarQuote && c == '?'
-                        && rewrittenSql.regionMatches(j, paramStr, 0, paramStr.length())) {
+                        && rewrittenSql.regionMatches(j, paramStr, 0, paramStr.length())
+                        && (j + paramStr.length() >= rewrittenSql.length()
+                            || !Character.isDigit(rewrittenSql.charAt(j + paramStr.length())))) {
                         sb.append(':').append(namedParam);
                         j += paramStr.length() - 1;
                     } else {
@@ -372,6 +379,12 @@ public class CteSpec {
                 }
                 rewrittenSql = sb.toString();
                 parameters.put(namedParam, params[i]);
+            }
+            // 检测未被替换的遗留位置参数（如 ?5 超出参数数量）
+            java.util.regex.Matcher orphaned = ORPHANED_POSITIONAL_PARAM_PATTERN.matcher(rewrittenSql);
+            while (orphaned.find()) {
+                log.warn("asSafe: positional parameter {} was not replaced (only {} params provided). "
+                    + "Ensure all ?N parameters are within the parameter range.", orphaned.group(), params.length);
             }
             current.sql = rewrittenSql;
         } else {
@@ -800,7 +813,7 @@ public class CteSpec {
         // （美元引用必须在 Q 引用之前剥离，因为 $tag$ 内可能含 Q'...'；Q 引用必须在单引号之前剥离）
         String stripped = DOLLAR_QUOTED_STRING_PATTERN.matcher(sql).replaceAll("''");
         stripped = com.zsubera.jpa.monitor.SqlSanitizer.stripOracleQQuotes(stripped);
-        stripped = stripped.replaceAll("'(?>[^'\\\\]|\\\\.|'')*", "''");
+        stripped = stripped.replaceAll("'(?:[^'\\\\]|\\\\.|'')*'", "''");
         if (DANGEROUS_KEYWORD_PATTERN.matcher(stripped).find()) {
             String message = "SECURITY: " + context + " SQL contains potentially dangerous DDL/admin keyword. "
                 + "Ensure this is intentional and not user input. SQL: " + truncated;
@@ -864,7 +877,7 @@ public class CteSpec {
         // 顺序：美元引用 → Oracle Q 引用 → 单引号字符串
         String stripped = DOLLAR_QUOTED_STRING_PATTERN.matcher(sql).replaceAll("''");
         stripped = com.zsubera.jpa.monitor.SqlSanitizer.stripOracleQQuotes(stripped);
-        stripped = stripped.replaceAll("'(?>[^'\\\\]|\\\\.|'')*", "''");
+        stripped = stripped.replaceAll("'(?:[^'\\\\]|\\\\.|'')*'", "''");
         java.util.regex.Matcher matcher = UNBOUND_PARAM_PATTERN.matcher(stripped);
         List<String> unboundParams = new ArrayList<>();
         while (matcher.find()) {

@@ -233,4 +233,26 @@ class CteSpecTest {
         String built = spec.buildSql();
         assertTrue(built.contains("it''s a :test"), "Escaped string literal should be preserved");
     }
+
+    @Test
+    void testSingleQuoteRegex_detectsInjectionInMismatchedQuotes() {
+        // The old atomic-group regex '(?>[^'\\]|\\\\.|'')* would consume injection content
+        // between mismatched quotes, hiding DROP/semicolon from heuristic checks.
+        // The fixed regex '(?:[^'\\]|\\\\.|'')*' matches complete string literals only.
+        String injectionSql = "SELECT * FROM users WHERE name = '' OR 1=1; DROP TABLE users; --'";
+        assertThrows(SecurityException.class,
+            () -> CteSpec.with("cte").as(injectionSql).select("SELECT * from cte").buildSql(),
+            "Injection pattern between mismatched quotes should be detected");
+    }
+
+    @Test
+    void testSingleQuoteRegex_validStringLiteralsStillStripped() {
+        // Complete string literals (opening ' through closing ') should still be stripped
+        // to avoid false positives from keywords inside strings.
+        String sql = "SELECT * FROM t WHERE name = 'DROP' AND status = 'DELETE'";
+        CteSpec spec = CteSpec.with("cte").as(sql).select("SELECT * FROM cte");
+        // Should not throw - DROP and DELETE are inside complete string literals
+        String built = spec.buildSql();
+        assertTrue(built.contains("'DROP'"), "String literal should be preserved");
+    }
 }

@@ -186,10 +186,13 @@ public class DeleteSpec<T> extends AbstractBulkOperationSpec<T, DeleteSpec<T>> {
      * @param em 实体管理器
      * @param fieldName 软删除字段名
      * @param deletedValue 软删除字段值
+     * @param deletedTimestampFieldName 软删除时间戳字段名（可为 null）
      * @return 受影响的行数
      */
-    public int executeAsSoftDeleteInTransaction(EntityManager em, String fieldName, Object deletedValue) {
-        return executeInTransaction(em, e -> executeAsSoftDelete(e, fieldName, deletedValue));
+    public int executeAsSoftDeleteInTransaction(EntityManager em, String fieldName, Object deletedValue,
+        @Nullable String deletedTimestampFieldName) {
+        return executeInTransaction(em,
+            e -> executeAsSoftDelete(e, fieldName, deletedValue, deletedTimestampFieldName));
     }
 
     /**
@@ -202,9 +205,11 @@ public class DeleteSpec<T> extends AbstractBulkOperationSpec<T, DeleteSpec<T>> {
      * @param em 实体管理器
      * @param fieldName 软删除字段名
      * @param deletedValue 软删除字段值
+     * @param deletedTimestampFieldName 软删除时间戳字段名（可为 null）
      * @return 受影响的行数
      */
-    public int executeAsSoftDelete(EntityManager em, String fieldName, Object deletedValue) {
+    public int executeAsSoftDelete(EntityManager em, String fieldName, Object deletedValue,
+        @Nullable String deletedTimestampFieldName) {
         jakarta.persistence.criteria.CriteriaBuilder cb = em.getCriteriaBuilder();
         jakarta.persistence.criteria.CriteriaUpdate<T> update = cb.createCriteriaUpdate(entityClass);
         jakarta.persistence.criteria.Root<T> root = update.from(entityClass);
@@ -247,8 +252,15 @@ public class DeleteSpec<T> extends AbstractBulkOperationSpec<T, DeleteSpec<T>> {
         java.lang.reflect.Field versionField = resolveVersionField(entityClass);
         if (versionField != null) {
             String versionFieldName = versionField.getName();
-            jakarta.persistence.criteria.Expression<Integer> versionExpr = root.get(versionFieldName);
-            update.set(versionFieldName, cb.sum(versionExpr, 1));
+            @SuppressWarnings({"unchecked", "rawtypes"})
+            jakarta.persistence.criteria.Expression versionPath = root.get(versionFieldName);
+            update.set(versionFieldName, cb.sum(versionPath, 1));
+        }
+        // 设置软删除时间戳字段，与其他软删除路径保持一致
+        // （SoftDeleteBulkExecutor.softDeleteAll/softDeleteByIds/softDeleteAllUsingCriteriaUpdate）
+        // CriteriaUpdate.set() 接受 Java 属性名（非数据库列名），直接使用 deletedTimestampFieldName
+        if (deletedTimestampFieldName != null && !deletedTimestampFieldName.isEmpty()) {
+            update.set(deletedTimestampFieldName, cb.currentTimestamp());
         }
         int affected = em.createQuery(update).executeUpdate();
         // ponytail: 后置检查处理并发导致超额删除的场景。预检查 COUNT 与 UPDATE 之间

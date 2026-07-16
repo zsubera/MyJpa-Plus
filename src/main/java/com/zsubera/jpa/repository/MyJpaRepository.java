@@ -312,7 +312,9 @@ public interface MyJpaRepository<T, ID> extends JpaRepository<T, ID>, JpaSpecifi
             com.zsubera.jpa.softdelete.SoftDeleteHelper.ResolvedDeletedValue resolved =
                 com.zsubera.jpa.softdelete.SoftDeleteHelper.resolveDeletedValue(entityClass, field, annotation);
             Object deletedVal = resolved.booleanField() ? Boolean.TRUE : resolved.dbValue();
-            return spec.executeAsSoftDelete(em, softDeleteField, deletedVal);
+            String tsField = annotation.deletedTimestampField();
+            return spec.executeAsSoftDelete(em, softDeleteField, deletedVal,
+                tsField != null && !tsField.isEmpty() ? tsField : null);
         }
         if (softDeleteField != null && isBlockUnconditionalDelete()) {
             throw new IllegalStateException("Hard DELETE on " + entityClass.getSimpleName()
@@ -402,7 +404,9 @@ public interface MyJpaRepository<T, ID> extends JpaRepository<T, ID>, JpaSpecifi
             com.zsubera.jpa.softdelete.SoftDeleteHelper.ResolvedDeletedValue resolved =
                 com.zsubera.jpa.softdelete.SoftDeleteHelper.resolveDeletedValue(entityClass, field, annotation);
             Object deletedVal = resolved.booleanField() ? Boolean.TRUE : resolved.dbValue();
-            return spec.executeAsSoftDelete(em, softDeleteField, deletedVal);
+            String tsField = annotation.deletedTimestampField();
+            return spec.executeAsSoftDelete(em, softDeleteField, deletedVal,
+                tsField != null && !tsField.isEmpty() ? tsField : null);
         }
         if (softDeleteField != null && isBlockUnconditionalDelete()) {
             throw new IllegalStateException("execute(DeleteSpec) on " + entityClass.getSimpleName()

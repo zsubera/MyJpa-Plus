@@ -137,7 +137,12 @@ class BatchSaveTemplate {
         java.util.function.Function<T, T> saveFunction) {
         ArrayList<T> result = new ArrayList<>();
         int count = 0;
+        int index = 0;
         for (T entity : entities) {
+            if (entity == null) {
+                throw new IllegalArgumentException("entities[" + index + "] must not be null");
+            }
+            index++;
             try {
                 result.add(saveFunction.apply(entity));
             } catch (RuntimeException e) {
@@ -171,8 +176,13 @@ class BatchSaveTemplate {
         ArrayList<T> result = new ArrayList<>();
         ArrayList<T> batch = new ArrayList<>();
         int batchNumber = 0;
+        int index = 0;
         try {
             for (T entity : entities) {
+                if (entity == null) {
+                    throw new IllegalArgumentException("entities[" + index + "] must not be null");
+                }
+                index++;
                 batch.add(entity);
                 if (batch.size() >= batchSize) {
                     result.addAll(executeBatchSave(batch));
@@ -185,7 +195,8 @@ class BatchSaveTemplate {
             }
         } catch (RuntimeException e) {
             // batch 在 executeBatchSave 抛异常时未被 clear()，仍持有失败的实体列表
-            throw new PartialBatchCommitException(batchNumber, result.size(), result, batch, e);
+            throw new PartialBatchCommitException(batchNumber, result.size(), List.copyOf(result), List.copyOf(batch),
+                e);
         }
         return result;
     }

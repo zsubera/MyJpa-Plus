@@ -99,9 +99,12 @@ public abstract class AbstractBulkOperationSpec<T, SELF extends AbstractBulkOper
             // 不调用 em.flush()：批量操作（CriteriaUpdate/NativeQuery）已直接发送 SQL 到数据库，
             // em.flush() 会无意中将持久化上下文中其他无关实体类型的脏数据写入数据库，
             // 然后 em.clear() 又将这些实体分离，导致意外的数据持久化和 LazyInitializationException。
-            em.clear();
+            com.zsubera.jpa.util.CacheEvictionHelper.evictEntityCache(em, entityClass);
+        } else {
+            // DEFER_TO_CALLER：仅驱逐 L2 缓存，不清除 L1 持久化上下文，
+            // 由调用方自行管理持久化上下文生命周期。
+            com.zsubera.jpa.util.CacheEvictionHelper.evictL2CacheOnly(em, entityClass);
         }
-        com.zsubera.jpa.util.CacheEvictionHelper.evictEntityCache(em, entityClass);
     }
 
     /**
@@ -662,7 +665,8 @@ public abstract class AbstractBulkOperationSpec<T, SELF extends AbstractBulkOper
             return resolveCompositeNode(o.children(), root, cb, depth, cb::or, cb.disjunction());
         }
         if (node instanceof BulkConditionNode.NotNode n) {
-            return cb.not(resolveNodeWithDepth(n.child(), root, cb, depth + 1));
+            Predicate child = resolveNodeWithDepth(n.child(), root, cb, depth + 1);
+            return child != null ? cb.not(child) : cb.conjunction();
         }
         throw new IllegalArgumentException("Unknown BulkConditionNode type: " + node.getClass().getName());
     }
@@ -674,7 +678,10 @@ public abstract class AbstractBulkOperationSpec<T, SELF extends AbstractBulkOper
         int depth, java.util.function.BinaryOperator<Predicate> combiner, Predicate emptyDefault) {
         List<Predicate> childPredicates = new ArrayList<>();
         for (BulkConditionNode child : children) {
-            childPredicates.add(resolveNodeWithDepth(child, root, cb, depth + 1));
+            Predicate p = resolveNodeWithDepth(child, root, cb, depth + 1);
+            if (p != null) {
+                childPredicates.add(p);
+            }
         }
         if (childPredicates.isEmpty()) {
             return emptyDefault;
@@ -698,7 +705,10 @@ public abstract class AbstractBulkOperationSpec<T, SELF extends AbstractBulkOper
         }
         List<Predicate> predicates = new ArrayList<>();
         for (BulkConditionNode node : conditionNodes) {
-            predicates.add(resolveNode(node, root, cb));
+            Predicate p = resolveNode(node, root, cb);
+            if (p != null) {
+                predicates.add(p);
+            }
         }
         return predicates.toArray(new Predicate[0]);
     }

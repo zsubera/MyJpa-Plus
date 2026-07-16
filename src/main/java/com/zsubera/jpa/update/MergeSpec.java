@@ -496,8 +496,12 @@ public class MergeSpec<T> {
                 total += executeWith(em, entity, strategy, effectiveConflictFields, conflictSet);
             }
         } catch (RuntimeException e) {
-            if (em.isOpen()) {
-                em.clear();
+            if (em.isOpen() && persistenceContextStrategy == PersistenceContextStrategy.AUTO_CLEAR) {
+                try {
+                    em.clear();
+                } catch (RuntimeException clearEx) {
+                    log.warn("em.clear() failed during batch error cleanup: {}", clearEx.getMessage());
+                }
             }
             throw e;
         }
@@ -615,8 +619,12 @@ public class MergeSpec<T> {
                 }
             }
         } catch (RuntimeException e) {
-            if (em.isOpen()) {
-                em.clear();
+            if (em.isOpen() && persistenceContextStrategy == PersistenceContextStrategy.AUTO_CLEAR) {
+                try {
+                    em.clear();
+                } catch (RuntimeException clearEx) {
+                    log.warn("em.clear() failed during batch error cleanup: {}", clearEx.getMessage());
+                }
             }
             throw e;
         }
@@ -667,6 +675,7 @@ public class MergeSpec<T> {
                     + maxIterations + ") with " + entities.size() + " entities at batchSize " + batchSize
                     + ". This is likely due to an extremely large entity list.");
             }
+            effectiveLimit = com.zsubera.jpa.autoconfigure.GlobalConfigHolder.resolveMaxBulkOperationRows(0);
             if (effectiveLimit > 0 && total >= effectiveLimit) {
                 throw new MyJpaPlusException("executeBatchInSeparateTransactions exceeded max rows limit ("
                     + effectiveLimit + ") after committing " + total + " rows. "
@@ -697,7 +706,11 @@ public class MergeSpec<T> {
             throw new MyJpaPlusException("JTA environment detected in executeSingleBatchInTransaction. "
                 + "executeBatchInSeparateTransactions requires RESOURCE_LOCAL transaction manager.", e);
         }
-        if (tx == null || tx.isActive()) {
+        if (tx == null) {
+            throw new MyJpaPlusException("executeBatchInSeparateTransactions: EntityTransaction is null. "
+                + "Ensure the EntityManager is backed by a RESOURCE_LOCAL transaction manager.");
+        }
+        if (tx.isActive()) {
             throw new MyJpaPlusException("executeBatchInSeparateTransactions requires no active transaction. "
                 + "An active RESOURCE_LOCAL transaction was detected. "
                 + "Use executeBatch() to run within the existing transaction.");

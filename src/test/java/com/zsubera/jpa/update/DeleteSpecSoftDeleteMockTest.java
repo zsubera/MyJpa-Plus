@@ -22,7 +22,7 @@ class DeleteSpecSoftDeleteMockTest {
     @Test
     void executeAsSoftDelete_noConditionsNoUnconditional_throws() {
         DeleteSpec<TestEntity> spec = new DeleteSpec<>(TestEntity.class);
-        assertThrows(IllegalStateException.class, () -> spec.executeAsSoftDelete(em(), "deleted", true));
+        assertThrows(IllegalStateException.class, () -> spec.executeAsSoftDelete(em(), "deleted", true, null));
     }
 
     @Test
@@ -30,7 +30,7 @@ class DeleteSpecSoftDeleteMockTest {
         DeleteSpec<TestEntity> spec = new DeleteSpec<>(TestEntity.class).allowUnconditional(true);
         EntityManager em = em();
         when(em.createQuery(any(CriteriaUpdate.class))).thenReturn(mock(jakarta.persistence.Query.class));
-        int affected = spec.executeAsSoftDelete(em, "deleted", true);
+        int affected = spec.executeAsSoftDelete(em, "deleted", true, null);
         assertEquals(0, affected);
     }
 
@@ -42,7 +42,7 @@ class DeleteSpecSoftDeleteMockTest {
         when(q.executeUpdate()).thenReturn(3);
         EntityManager em = em();
         when(em.createQuery(any(CriteriaUpdate.class))).thenReturn(q);
-        int affected = spec.executeAsSoftDelete(em, "deleted", true);
+        int affected = spec.executeAsSoftDelete(em, "deleted", true, null);
         assertEquals(3, affected);
     }
 
@@ -53,7 +53,7 @@ class DeleteSpecSoftDeleteMockTest {
         when(q.executeUpdate()).thenReturn(3);
         EntityManager em = em();
         when(em.createQuery(any(CriteriaUpdate.class))).thenReturn(q);
-        spec.executeAsSoftDelete(em, "deleted", true);
+        spec.executeAsSoftDelete(em, "deleted", true, null);
         // afterBulkOperation must NOT flush: bulk ops send SQL directly to the DB,
         // and em.flush() would accidentally persist unrelated dirty entities in the PC.
         verify(em, never()).flush();
@@ -67,7 +67,7 @@ class DeleteSpecSoftDeleteMockTest {
         when(q.executeUpdate()).thenReturn(0);
         EntityManager em = em();
         when(em.createQuery(any(CriteriaUpdate.class))).thenReturn(q);
-        spec.executeAsSoftDelete(em, "deleted", true);
+        spec.executeAsSoftDelete(em, "deleted", true, null);
         verify(em, never()).flush();
     }
 
@@ -79,7 +79,7 @@ class DeleteSpecSoftDeleteMockTest {
         when(q.executeUpdate()).thenReturn(1);
         EntityManager em = em();
         when(em.createQuery(any(CriteriaUpdate.class))).thenReturn(q);
-        int affected = spec.executeAsSoftDelete(em, "deleted", 1);
+        int affected = spec.executeAsSoftDelete(em, "deleted", 1, null);
         assertEquals(1, affected);
     }
 
@@ -91,7 +91,7 @@ class DeleteSpecSoftDeleteMockTest {
         when(q.executeUpdate()).thenReturn(1);
         EntityManager em = em();
         when(em.createQuery(any(CriteriaUpdate.class))).thenReturn(q);
-        int affected = spec.executeAsSoftDelete(em, "deleted", "Y");
+        int affected = spec.executeAsSoftDelete(em, "deleted", "Y", null);
         assertEquals(1, affected);
     }
 
@@ -102,7 +102,7 @@ class DeleteSpecSoftDeleteMockTest {
         when(q.executeUpdate()).thenReturn(1);
         EntityManager em = em();
         when(em.createQuery(any(CriteriaUpdate.class))).thenReturn(q);
-        spec.executeAsSoftDelete(em, "archived", true);
+        spec.executeAsSoftDelete(em, "archived", true, null);
         verify(em).createQuery(any(CriteriaUpdate.class));
     }
 

@@ -55,8 +55,9 @@ public final class GlobalConfigHolder {
      * @param ctx Spring 应用上下文
      */
     public static void setApplicationContext(ApplicationContext ctx) {
-        applicationContext = ctx;
+        // 先清空缓存，再写入新 context，避免并发读取者看到新 context + 旧缓存 bean
         cachedBeanState = CachedBeanState.EMPTY;
+        applicationContext = ctx;
     }
 
     /**
@@ -65,8 +66,9 @@ public final class GlobalConfigHolder {
      * @param globalConfig 全局配置实例
      */
     public static void setConfig(MyJpaPlusGlobalConfig globalConfig) {
-        config = globalConfig;
+        // 先清空缓存，再写入新 config，避免并发读取者看到新 config + 旧缓存 bean
         cachedBeanState = CachedBeanState.EMPTY;
+        config = globalConfig;
     }
 
     /**
