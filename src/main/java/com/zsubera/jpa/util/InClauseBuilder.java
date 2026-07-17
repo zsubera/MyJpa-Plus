@@ -195,31 +195,51 @@ public final class InClauseBuilder {
     }
 
     private static NullFilterResult filterNulls(Object[] values) {
-        return filterNulls(Arrays.asList(values));
+        if (values.length == 0) {
+            return new NullFilterResult(java.util.Collections.emptyList(), false);
+        }
+        // ponytail: 直接遍历数组检测 null，避免创建 Arrays.asList 包装
+        boolean hasNull = false;
+        for (Object v : values) {
+            if (v == null) {
+                hasNull = true;
+                break;
+            }
+        }
+        if (!hasNull) {
+            // 无 null 时直接包装为不可变列表，避免 ArrayList 分配
+            return new NullFilterResult(java.util.Arrays.asList(values), false);
+        }
+        // 有 null 时才创建 ArrayList 过滤
+        java.util.List<Object> nonNullValues = new ArrayList<>(values.length);
+        for (Object v : values) {
+            if (v != null) {
+                nonNullValues.add(v);
+            }
+        }
+        return new NullFilterResult(nonNullValues, true);
     }
 
     private static NullFilterResult filterNulls(Collection<?> values) {
         if (values.isEmpty()) {
             return new NullFilterResult(java.util.Collections.emptyList(), false);
         }
-        // 防御性复制，避免并发修改异常
-        java.util.List<Object> valuesCopy = new java.util.ArrayList<>(values);
         // ponytail: 小集合内联 null 检查，避免分配 ArrayList
-        if (valuesCopy.size() <= 16) {
+        if (values.size() <= 16) {
             boolean hasNull = false;
-            for (Object v : valuesCopy) {
+            for (Object v : values) {
                 if (v == null) {
                     hasNull = true;
                     break;
                 }
             }
             if (!hasNull) {
-                return new NullFilterResult(java.util.Collections.unmodifiableList(valuesCopy), false);
+                return new NullFilterResult(java.util.Collections.unmodifiableList(new ArrayList<>(values)), false);
             }
         }
-        java.util.List<Object> nonNullValues = new ArrayList<>(valuesCopy.size());
+        java.util.List<Object> nonNullValues = new ArrayList<>(values.size());
         boolean hasNull = false;
-        for (Object v : valuesCopy) {
+        for (Object v : values) {
             if (v == null) {
                 hasNull = true;
             } else {

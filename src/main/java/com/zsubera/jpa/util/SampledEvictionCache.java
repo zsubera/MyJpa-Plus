@@ -63,7 +63,8 @@ public class SampledEvictionCache<K, V> {
 
     @SuppressWarnings("unchecked")
     public V get(Object key) {
-        return delegate.asMap().get(key);
+        // ponytail: 使用 Caffeine 原生 API，避免创建 ConcurrentHashMap 视图
+        return delegate.getIfPresent((K)key);
     }
 
     /**

@@ -84,12 +84,13 @@ public sealed interface ConditionNode permits ConditionNode.SimpleNode, Conditio
          */
         @SuppressWarnings({"unchecked", "rawtypes"})
         public Predicate resolve(Path<?> path, String fieldName, Object value, char escapeChar, CriteriaBuilder cb) {
+            // ponytail: 预计算 fieldPath，避免 PredicateHelper 中重复调用 path.get(fieldName)
             Path<?> fieldPath = path.get(fieldName);
             switch (this) {
                 case EQ:
-                    return PredicateHelper.eq(path, fieldName, value, cb);
+                    return value == null ? cb.isNull(fieldPath) : cb.equal(fieldPath, value);
                 case NE:
-                    return PredicateHelper.ne(path, fieldName, value, cb);
+                    return value == null ? cb.isNotNull(fieldPath) : cb.notEqual(fieldPath, value);
                 case GT:
                     if (value == null) {
                         throw new IllegalArgumentException("GT operator requires non-null value");
@@ -98,7 +99,7 @@ public sealed interface ConditionNode permits ConditionNode.SimpleNode, Conditio
                         throw new IllegalArgumentException(
                             "GT operator requires Comparable value, got " + value.getClass().getName());
                     }
-                    return PredicateHelper.gt(path, fieldName, (Comparable)value, cb);
+                    return cb.greaterThan((Path<Comparable>)fieldPath, (Comparable)value);
                 case GE:
                     if (value == null) {
                         throw new IllegalArgumentException("GE operator requires non-null value");
@@ -107,7 +108,7 @@ public sealed interface ConditionNode permits ConditionNode.SimpleNode, Conditio
                         throw new IllegalArgumentException(
                             "GE operator requires Comparable value, got " + value.getClass().getName());
                     }
-                    return PredicateHelper.ge(path, fieldName, (Comparable)value, cb);
+                    return cb.greaterThanOrEqualTo((Path<Comparable>)fieldPath, (Comparable)value);
                 case LT:
                     if (value == null) {
                         throw new IllegalArgumentException("LT operator requires non-null value");
@@ -116,7 +117,7 @@ public sealed interface ConditionNode permits ConditionNode.SimpleNode, Conditio
                         throw new IllegalArgumentException(
                             "LT operator requires Comparable value, got " + value.getClass().getName());
                     }
-                    return PredicateHelper.lt(path, fieldName, (Comparable)value, cb);
+                    return cb.lessThan((Path<Comparable>)fieldPath, (Comparable)value);
                 case LE:
                     if (value == null) {
                         throw new IllegalArgumentException("LE operator requires non-null value");
@@ -125,37 +126,40 @@ public sealed interface ConditionNode permits ConditionNode.SimpleNode, Conditio
                         throw new IllegalArgumentException(
                             "LE operator requires Comparable value, got " + value.getClass().getName());
                     }
-                    return PredicateHelper.le(path, fieldName, (Comparable)value, cb);
+                    return cb.lessThanOrEqualTo((Path<Comparable>)fieldPath, (Comparable)value);
                 case LIKE:
                     if (value == null) {
                         throw new IllegalArgumentException("LIKE operator requires non-null value");
                     }
                     if (escapeChar != '\0') {
-                        return PredicateHelper.like(path, fieldName, (String)value, cb, escapeChar);
+                        return cb.like(fieldPath.as(String.class), (String)value, escapeChar);
                     }
-                    return PredicateHelper.like(path, fieldName, (String)value, cb);
+                    return cb.like(fieldPath.as(String.class), (String)value);
                 case NOT_LIKE:
                     if (value == null) {
                         throw new IllegalArgumentException("NOT_LIKE operator requires non-null value");
                     }
                     if (escapeChar != '\0') {
-                        return PredicateHelper.notLike(path, fieldName, (String)value, cb, escapeChar);
+                        return cb.not(cb.like(fieldPath.as(String.class), (String)value, escapeChar));
                     }
-                    return PredicateHelper.notLike(path, fieldName, (String)value, cb);
+                    return cb.not(cb.like(fieldPath.as(String.class), (String)value));
                 case EQ_IGNORE_CASE:
-                    return PredicateHelper.eqIgnoreCase(path, fieldName, (String)value, cb);
+                    return cb.equal(cb.lower(fieldPath.as(String.class)),
+                        ((String)value).toLowerCase(java.util.Locale.ROOT));
                 case NE_IGNORE_CASE:
-                    return PredicateHelper.neIgnoreCase(path, fieldName, (String)value, cb);
+                    return cb.notEqual(cb.lower(fieldPath.as(String.class)),
+                        ((String)value).toLowerCase(java.util.Locale.ROOT));
                 case LIKE_IGNORE_CASE:
                     if (value == null) {
                         throw new IllegalArgumentException("LIKE_IGNORE_CASE operator requires non-null value");
                     }
                     char esc = escapeChar != '\0' ? escapeChar : LIKE_ESCAPE;
-                    return PredicateHelper.likeIgnoreCase(path, fieldName, (String)value, cb, esc);
+                    return cb.like(cb.lower(fieldPath.as(String.class)),
+                        ((String)value).toLowerCase(java.util.Locale.ROOT), esc);
                 case IS_NULL:
-                    return PredicateHelper.isNull(path, fieldName, cb);
+                    return cb.isNull(fieldPath);
                 case IS_NOT_NULL:
-                    return PredicateHelper.isNotNull(path, fieldName, cb);
+                    return cb.isNotNull(fieldPath);
                 case IN:
                     return resolveInOrNotIn(fieldPath, value, cb, false);
                 case NOT_IN:
