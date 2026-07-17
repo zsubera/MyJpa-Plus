@@ -185,4 +185,34 @@ public class JoinGroup<T, J> implements ConditionBuilder<J, JoinGroup<T, J>> {
         config.accept(orJoinGroup);
         return this;
     }
+
+    /**
+     * 使用多个消费者构建 OR 组内的 INNER JOIN，每个消费者代表一个 OR 分支。
+     *
+     * @param branches 多个 OrJoinGroup 配置消费者
+     * @return 当前 JoinGroup 实例，支持链式调用
+     */
+    @SafeVarargs
+    public final JoinGroup<T, J> or(Consumer<OrJoinGroup<T, J>>... branches) {
+        if (branches == null || branches.length == 0) {
+            throw new IllegalArgumentException("At least one OR branch required");
+        }
+
+        ConditionNode.OrNode orNode = new ConditionNode.OrNode();
+        joinNode.innerConditions.add(orNode);
+
+        for (Consumer<OrJoinGroup<T, J>> branch : branches) {
+            if (branch == null) {
+                throw new IllegalArgumentException("OR branch must not be null");
+            }
+
+            ConditionNode.AndNode andNode = new ConditionNode.AndNode();
+            orNode.nodes.add(andNode);
+
+            OrJoinGroup<T, J> orJoinGroup = new OrJoinGroup<>(root, joinNode, andNode);
+            branch.accept(orJoinGroup);
+        }
+
+        return this;
+    }
 }

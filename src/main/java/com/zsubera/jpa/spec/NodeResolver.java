@@ -38,18 +38,34 @@ final class NodeResolver {
     /**
      * 解析上下文，封装节点解析所需的所有参数。
      *
-     * @param path 当前路径
-     * @param rootPath 查询根路径（用于 EXISTS/IN 子查询关联）
-     * @param query Criteria 查询对象
-     * @param cb Criteria 构建器
-     * @param joinCache JOIN 缓存
-     * @param pathPrefix 路径前缀
-     * @param depth 当前递归深度
-     * @param fetchPaths 已获取的路径集合
+     * <p>
+     * 可变对象，递归过程中复用同一个实例（仅更新 path、pathPrefix、depth），
+     * 避免每次递归都创建新对象。
      */
-    record NodeContext(@NonNull Path<?> path, @NonNull Path<?> rootPath, @Nullable CriteriaQuery<?> query,
-        @NonNull CriteriaBuilder cb, @NonNull Map<String, Join<?, ?>> joinCache, @Nullable String pathPrefix, int depth,
-        @NonNull java.util.Set<String> fetchPaths) {
+    static final class NodeContext {
+        Path<?> path;
+        Path<?> rootPath;
+        CriteriaQuery<?> query;
+        CriteriaBuilder cb;
+        Map<String, Join<?, ?>> joinCache;
+        String pathPrefix;
+        int depth;
+        java.util.Set<String> fetchPaths;
+        boolean applySoftDeleteFilter;
+
+        NodeContext(Path<?> path, Path<?> rootPath, @Nullable CriteriaQuery<?> query,
+            CriteriaBuilder cb, Map<String, Join<?, ?>> joinCache, @Nullable String pathPrefix,
+            java.util.Set<String> fetchPaths, boolean applySoftDeleteFilter) {
+            this.path = path;
+            this.rootPath = rootPath;
+            this.query = query;
+            this.cb = cb;
+            this.joinCache = joinCache;
+            this.pathPrefix = pathPrefix;
+            this.depth = 0;
+            this.fetchPaths = fetchPaths;
+            this.applySoftDeleteFilter = applySoftDeleteFilter;
+        }
     }
 
     /**
@@ -89,19 +105,6 @@ final class NodeResolver {
         Map.entry(ConditionNode.FuncNode.class, (node, ctx) -> resolveFuncNode((ConditionNode.FuncNode)node, ctx)));
 
     private NodeResolver() {}
-
-    /** ponytail: 将软删除自动过滤与全局配置及 IgnoreSoftDelete 上下文联动。 */
-    private static boolean shouldApplySoftDeleteAutoFilter() {
-        com.zsubera.jpa.autoconfigure.MyJpaPlusGlobalConfig config =
-            com.zsubera.jpa.autoconfigure.GlobalConfigHolder.getConfig();
-        if (config != null && !config.isSoftDeleteAutoFilter()) {
-            return false;
-        }
-        if (com.zsubera.jpa.repository.SoftDeleteContext.isIgnoreSoftDelete()) {
-            return false;
-        }
-        return true;
-    }
 
     /**
      * 解析条件节点并转换为 Predicate。
@@ -149,23 +152,47 @@ final class NodeResolver {
                 + "nested condition structure. Please simplify your query conditions.");
         }
 
+        // ponytail: 在顶层计算一次软删除过滤，避免每个 JoinNode 都重复调用
+        boolean applySoftDeleteFilter = shouldApplySoftDeleteAutoFilter();
+
+        NodeContext ctx = new NodeContext(path, rootPath, query, cb, joinCache, pathPrefix, fetchPaths,
+            applySoftDeleteFilter);
+        ctx.depth = depth;
+        return resolveNodeInternal(node, ctx);
+    }
+
+    /**
+     * 内部节点解析，复用已有的 NodeContext（仅更新 path、pathPrefix、depth）。
+     */
+    private static Predicate resolveNodeInternal(ConditionNode node, NodeContext ctx) {
         NodeStrategy strategy = STRATEGIES.get(node.getClass());
         if (strategy == null) {
             throw new IllegalArgumentException("Unknown ConditionNode type: " + node.getClass().getName());
         }
-
-        NodeContext ctx = new NodeContext(path, rootPath, query, cb, joinCache, pathPrefix, depth, fetchPaths);
         return strategy.resolve(node, ctx);
     }
 
+    /** ponytail: 将软删除自动过滤与全局配置及 IgnoreSoftDelete 上下文联动。 */
+    private static boolean shouldApplySoftDeleteAutoFilter() {
+        com.zsubera.jpa.autoconfigure.MyJpaPlusGlobalConfig config =
+            com.zsubera.jpa.autoconfigure.GlobalConfigHolder.getConfig();
+        if (config != null && !config.isSoftDeleteAutoFilter()) {
+            return false;
+        }
+        if (com.zsubera.jpa.repository.SoftDeleteContext.isIgnoreSoftDelete()) {
+            return false;
+        }
+        return true;
+    }
+
     private static Predicate resolveSimple(ConditionNode.SimpleNode node, NodeContext ctx) {
-        return PredicateHelper.resolveSimplePredicate(ctx.path(), node, ctx.cb());
+        return PredicateHelper.resolveSimplePredicate(ctx.path, node, ctx.cb);
     }
 
     @SuppressWarnings({"unchecked", "rawtypes"})
     private static Predicate resolveFuncNode(ConditionNode.FuncNode node, NodeContext ctx) {
-        CriteriaBuilder cb = ctx.cb();
-        Path<?> path = ctx.path();
+        CriteriaBuilder cb = ctx.cb;
+        Path<?> path = ctx.path;
         Expression<?>[] args = new Expression[node.params.length];
         for (int i = 0; i < node.params.length; i++) {
             Object param = node.params[i];
@@ -192,14 +219,14 @@ final class NodeResolver {
 
     @SuppressWarnings({"unchecked", "rawtypes"})
     private static Predicate resolveJoin(ConditionNode.JoinNode node, NodeContext ctx) {
-        Path<?> path = ctx.path();
-        Path<?> rootPath = ctx.rootPath();
-        CriteriaQuery<?> query = ctx.query();
-        CriteriaBuilder cb = ctx.cb();
-        Map<String, Join<?, ?>> joinCache = ctx.joinCache();
-        String pathPrefix = ctx.pathPrefix();
-        int depth = ctx.depth();
-        java.util.Set<String> fetchPaths = ctx.fetchPaths();
+        Path<?> path = ctx.path;
+        Path<?> rootPath = ctx.rootPath;
+        CriteriaQuery<?> query = ctx.query;
+        CriteriaBuilder cb = ctx.cb;
+        Map<String, Join<?, ?>> joinCache = ctx.joinCache;
+        String pathPrefix = ctx.pathPrefix;
+        int depth = ctx.depth;
+        java.util.Set<String> fetchPaths = ctx.fetchPaths;
 
         String fullPath = (pathPrefix != null && !pathPrefix.isEmpty() ? pathPrefix + "." : "") + node.fieldName;
 
@@ -239,17 +266,16 @@ final class NodeResolver {
             }
             joinCache.put(cacheKey, join);
         }
-        List<Predicate> innerPredicates = new ArrayList<>();
+        // ponytail: 使用预估容量的 ArrayList，减少 resize 开销
+        List<Predicate> innerPredicates = new ArrayList<>(Math.max(node.innerConditions.size(), 2));
 
-        if (!isFetch && shouldApplySoftDeleteAutoFilter()) {
+        // ponytail: 使用预计算的 softDeleteFilter，避免重复调用 shouldApplySoftDeleteAutoFilter()
+        if (!isFetch && ctx.applySoftDeleteFilter) {
             Class<?> joinEntityType = join.getJavaType();
             if (joinEntityType != null) {
                 String softDeleteFieldName =
                     com.zsubera.jpa.softdelete.SoftDeleteHelper.findSoftDeleteField(joinEntityType);
                 if (softDeleteFieldName != null) {
-                    // ponytail: pass join (not join.get(softDeleteFieldName)) to buildNotDeleted,
-                    // which internally calls path.get(fieldName). Passing a pre-resolved path would
-                    // cause double resolution: join.get("deleted").get("deleted").
                     Predicate softDeleteFilter = com.zsubera.jpa.softdelete.SoftDeleteHelper.buildNotDeleted(cb, join,
                         softDeleteFieldName, joinEntityType);
                     if (softDeleteFilter != null) {
@@ -260,8 +286,8 @@ final class NodeResolver {
         }
 
         for (ConditionNode inner : node.innerConditions) {
-            Predicate p =
-                resolveNodeWithDepth(inner, join, rootPath, query, cb, joinCache, fullPath, depth + 1, fetchPaths);
+            Predicate p = resolveJoinChild(inner, join, rootPath, query, cb, joinCache, fullPath, depth + 1, fetchPaths,
+                ctx.applySoftDeleteFilter);
             if (p != null) {
                 innerPredicates.add(p);
             }
@@ -288,54 +314,94 @@ final class NodeResolver {
         return innerPredicates.isEmpty() ? cb.conjunction() : cb.and(innerPredicates.toArray(new Predicate[0]));
     }
 
+    /** ponytail: JOIN 子节点解析，使用扁平参数避免创建 NodeContext。 */
+    private static Predicate resolveJoinChild(ConditionNode child, Join<?, ?> join, Path<?> rootPath,
+        CriteriaQuery<?> query, CriteriaBuilder cb, Map<String, Join<?, ?>> joinCache, String pathPrefix, int depth,
+        java.util.Set<String> fetchPaths, boolean applySoftDeleteFilter) {
+
+        if (depth > MAX_RECURSION_DEPTH) {
+            throw new QueryBuildException("Condition node recursion depth exceeded maximum limit ("
+                + MAX_RECURSION_DEPTH + "). This may indicate a circular condition tree or excessively "
+                + "nested condition structure. Please simplify your query conditions.");
+        }
+
+        NodeContext ctx = new NodeContext(join, rootPath, query, cb, joinCache, pathPrefix, fetchPaths,
+            applySoftDeleteFilter);
+        ctx.depth = depth;
+        return resolveNodeInternal(child, ctx);
+    }
+
     private static Predicate resolveOr(ConditionNode.OrNode node, NodeContext ctx) {
+        // ponytail: 单子节点优化，避免创建列表和 cb.or() 包装
         if (node.nodes.size() == 1) {
-            return resolveNodeWithDepth(node.nodes.get(0), ctx.path(), ctx.rootPath(), ctx.query(), ctx.cb(),
-                ctx.joinCache(), ctx.pathPrefix(), ctx.depth() + 1, ctx.fetchPaths());
+            return resolveChild(node.nodes.get(0), ctx);
         }
         List<Predicate> childPredicates = new ArrayList<>(node.nodes.size());
         for (ConditionNode child : node.nodes) {
-            Predicate p = resolveNodeWithDepth(child, ctx.path(), ctx.rootPath(), ctx.query(), ctx.cb(),
-                ctx.joinCache(), ctx.pathPrefix(), ctx.depth() + 1, ctx.fetchPaths());
+            Predicate p = resolveChild(child, ctx);
             if (p != null) {
                 childPredicates.add(p);
             }
         }
         if (childPredicates.isEmpty()) {
-            return ctx.cb().disjunction();
+            return ctx.cb.disjunction();
         }
         if (childPredicates.size() == 1) {
             return childPredicates.get(0);
         }
-        return ctx.cb().or(childPredicates.toArray(new Predicate[0]));
+        return ctx.cb.or(childPredicates.toArray(new Predicate[0]));
     }
 
     private static Predicate resolveAnd(ConditionNode.AndNode node, NodeContext ctx) {
+        // ponytail: 单子节点优化，避免创建列表和 cb.and() 包装
         if (node.nodes.size() == 1) {
-            return resolveNodeWithDepth(node.nodes.get(0), ctx.path(), ctx.rootPath(), ctx.query(), ctx.cb(),
-                ctx.joinCache(), ctx.pathPrefix(), ctx.depth() + 1, ctx.fetchPaths());
+            return resolveChild(node.nodes.get(0), ctx);
         }
         List<Predicate> childPredicates = new ArrayList<>(node.nodes.size());
         for (ConditionNode child : node.nodes) {
-            Predicate p = resolveNodeWithDepth(child, ctx.path(), ctx.rootPath(), ctx.query(), ctx.cb(),
-                ctx.joinCache(), ctx.pathPrefix(), ctx.depth() + 1, ctx.fetchPaths());
+            Predicate p = resolveChild(child, ctx);
             if (p != null) {
                 childPredicates.add(p);
             }
         }
         if (childPredicates.isEmpty()) {
-            return ctx.cb().conjunction();
+            return ctx.cb.conjunction();
         }
         if (childPredicates.size() == 1) {
             return childPredicates.get(0);
         }
-        return ctx.cb().and(childPredicates.toArray(new Predicate[0]));
+        return ctx.cb.and(childPredicates.toArray(new Predicate[0]));
+    }
+
+    /** ponytail: 递归解析子节点，复用 NodeContext（仅更新 path、pathPrefix、depth）。 */
+    private static Predicate resolveChild(ConditionNode child, NodeContext ctx) {
+        int newDepth = ctx.depth + 1;
+        if (newDepth > MAX_RECURSION_DEPTH) {
+            throw new QueryBuildException("Condition node recursion depth exceeded maximum limit ("
+                + MAX_RECURSION_DEPTH + "). This may indicate a circular condition tree or excessively "
+                + "nested condition structure. Please simplify your query conditions.");
+        }
+        // ponytail: 保存并恢复 ctx 状态，避免创建新 NodeContext
+        Path<?> savedPath = ctx.path;
+        String savedPathPrefix = ctx.pathPrefix;
+        int savedDepth = ctx.depth;
+        ctx.path = ctx.path;
+        ctx.pathPrefix = ctx.pathPrefix;
+        ctx.depth = newDepth;
+        try {
+            return resolveNodeInternal(child, ctx);
+        } finally {
+            ctx.path = savedPath;
+            ctx.pathPrefix = savedPathPrefix;
+            ctx.depth = savedDepth;
+        }
     }
 
     private static Predicate resolveMultiLike(ConditionNode.MultiLikeNode node, NodeContext ctx) {
-        CriteriaBuilder cb = ctx.cb();
-        Path<?> path = ctx.path();
-        List<Predicate> likes = new ArrayList<>();
+        CriteriaBuilder cb = ctx.cb;
+        Path<?> path = ctx.path;
+        // ponytail: 使用预估容量的 ArrayList，避免 resize 开销
+        List<Predicate> likes = new ArrayList<>(node.fieldNames.length);
         String pattern = ConditionalMethods.wrapLikePattern(node.keyword);
         for (String fieldName : node.fieldNames) {
             likes.add(cb.like(path.get(fieldName).as(String.class), pattern, PredicateHelper.LIKE_ESCAPE_CHAR));
@@ -345,8 +411,8 @@ final class NodeResolver {
 
     @SuppressWarnings("unchecked")
     private static Predicate resolveCollection(ConditionNode.CollectionNode node, NodeContext ctx) {
-        CriteriaBuilder cb = ctx.cb();
-        Path<?> fieldPath = ctx.path().get(node.fieldName);
+        CriteriaBuilder cb = ctx.cb;
+        Path<?> fieldPath = ctx.path.get(node.fieldName);
         if (node.op == ConditionNode.CollectionOp.IS_EMPTY) {
             return cb.isEmpty((Expression<Collection<?>>)fieldPath);
         }
@@ -355,12 +421,12 @@ final class NodeResolver {
 
     @SuppressWarnings("unchecked")
     private static <S> Predicate resolveExists(ConditionNode.ExistsNode<S> node, NodeContext ctx) {
-        CriteriaQuery<?> query = ctx.query();
+        CriteriaQuery<?> query = ctx.query;
         if (query == null) {
             throw new QueryBuildException("EXISTS subquery is not supported in count query context (query=null). "
                 + "Use a separate count query without subqueries.");
         }
-        return resolveExistsInternal(node, ctx.rootPath(), query, ctx.cb());
+        return resolveExistsInternal(node, ctx.rootPath, query, ctx.cb);
     }
 
     private static <S> Predicate resolveExistsInternal(ConditionNode.ExistsNode<S> node, Path<?> rootPath,
@@ -394,12 +460,12 @@ final class NodeResolver {
     }
 
     private static <S> Predicate resolveInSubQuery(ConditionNode.InSubQueryNode<S> node, NodeContext ctx) {
-        CriteriaQuery<?> query = ctx.query();
+        CriteriaQuery<?> query = ctx.query;
         if (query == null) {
             throw new QueryBuildException("IN subquery is not supported in count query context (query=null). "
                 + "Use a separate count query without subqueries.");
         }
-        return resolveInSubQueryInternal(node, ctx.path(), ctx.rootPath(), query, ctx.cb());
+        return resolveInSubQueryInternal(node, ctx.path, ctx.rootPath, query, ctx.cb);
     }
 
     @SuppressWarnings({"unchecked", "rawtypes"})
@@ -424,15 +490,14 @@ final class NodeResolver {
     }
 
     private static Predicate resolveRaw(ConditionNode.RawNode node, NodeContext ctx) {
-        return node.fn.apply(ctx.path(), ctx.cb());
+        return node.fn.apply(ctx.path, ctx.cb);
     }
 
     private static Predicate resolveNegate(ConditionNode.NegateNode node, NodeContext ctx) {
-        Predicate inner = resolveNodeWithDepth(node.inner, ctx.path(), ctx.rootPath(), ctx.query(), ctx.cb(),
-            ctx.joinCache(), ctx.pathPrefix(), ctx.depth() + 1, ctx.fetchPaths());
+        Predicate inner = resolveChild(node.inner, ctx);
         if (inner == null) {
-            return ctx.cb().disjunction();
+            return ctx.cb.disjunction();
         }
-        return ctx.cb().not(inner);
+        return ctx.cb.not(inner);
     }
 }

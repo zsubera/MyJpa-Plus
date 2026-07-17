@@ -427,7 +427,7 @@ class JoinGroupCoverageTest {
     void joinGroup_or_nullConfig_throws() {
         QuerySpec<TestEntity> qs = new QuerySpec<>();
         qs.join(TestEntity::getParent, (JoinGroup<TestEntity, ParentEntity> jg) -> {
-            assertThrows(IllegalArgumentException.class, () -> jg.or(null));
+            assertThrows(IllegalArgumentException.class, () -> jg.or((java.util.function.Consumer<OrJoinGroup<TestEntity, ParentEntity>>) null));
         });
     }
 

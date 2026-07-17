@@ -190,7 +190,6 @@ final class AggregateHelper {
      * @return 比较谓词
      * @param <Y> 可比较类型
      */
-    @SuppressWarnings({"unchecked", "rawtypes"})
     static <Y extends Comparable<? super Y>> Predicate compareComparable(CriteriaBuilder cb, Expression<Y> expr,
         ConditionNode.Op op, Y value) {
         return switch (op) {

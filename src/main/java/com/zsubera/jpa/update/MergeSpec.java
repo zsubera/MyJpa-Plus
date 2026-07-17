@@ -742,7 +742,11 @@ public class MergeSpec<T> {
             safeRollback(tx, e);
             throw e;
         } finally {
-            em.clear();
+            try {
+                em.clear();
+            } catch (RuntimeException clearEx) {
+                log.warn("em.clear() failed after executeSingleBatchInTransaction: {}", clearEx.getMessage());
+            }
         }
     }
 

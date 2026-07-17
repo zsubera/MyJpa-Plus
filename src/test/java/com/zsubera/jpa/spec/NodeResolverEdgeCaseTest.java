@@ -147,13 +147,11 @@ class NodeResolverEdgeCaseTest {
         repository.save(newEntity("c", 3));
 
         QuerySpec<TestEntity> qs = new QuerySpec<>();
-        qs.or(o -> {
-            o.eq(TestEntity::getStatus, 1);
-            o.or(inner -> {
-                inner.eq(TestEntity::getStatus, 2);
-                inner.eq(TestEntity::getName, "b");
-            });
-        });
+        // status=1 OR (status=2 AND name='b')
+        qs.or(
+            o -> o.eq(TestEntity::getStatus, 1),
+            o -> o.eq(TestEntity::getStatus, 2).eq(TestEntity::getName, "b")
+        );
         List<TestEntity> result = repository.findAll(qs.toSpecification());
         assertEquals(2, result.size());
     }

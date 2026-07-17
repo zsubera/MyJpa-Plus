@@ -617,13 +617,37 @@ public class QuerySpec<T> implements Specification<T>, ConditionBuilder<T, Query
     // ---- OR/NOT 方法（委托给 QueryConditionSupport） ----
 
     /**
-     * 使用消费者构建 OR 条件组，自动关闭组。
+     * 使用多个消费者构建 OR 条件组，每个消费者代表一个 OR 分支。
      *
-     * @param config OR 组配置消费者
+     * <p>
+     * 每个 lambda 代表一个 OR 分支，lambda 内部的链式调用（如 {@code .eq().eq()}）表示 AND 语义，
+     * 与外层保持一致，消除了"相同语法不同含义"的困惑。
+     *
+     * <p>
+     * <strong>示例：</strong>
+     *
+     * <pre>{@code
+     * // 每个 lambda 是一个 OR 分支
+     * s.or(
+     *     o -> o.eq(User::getRole, "ADMIN"),           // 分支1: role='ADMIN'
+     *     o -> o.eq(User::getStatus, "ACTIVE")         // 分支2: status='ACTIVE'
+     * );
+     * // → role='ADMIN' OR status='ACTIVE'
+     *
+     * // lambda 内部 .eq().eq() = AND（与外层一致）
+     * s.or(
+     *     o -> o.eq(User::getRole, "ADMIN").eq(User::getStatus, "ACTIVE"),   // 分支1: (ADMIN AND ACTIVE)
+     *     o -> o.eq(User::getRole, "USER")                                    // 分支2: (USER)
+     * );
+     * // → (role='ADMIN' AND status='ACTIVE') OR (role='USER')
+     * }</pre>
+     *
+     * @param branches 多个 OR 分支消费者
      * @return 当前 QuerySpec 实例，支持链式调用
      */
-    public QuerySpec<T> or(Consumer<OrGroup<T>> config) {
-        return conditionSupport.or(config);
+    @SafeVarargs
+    public final QuerySpec<T> or(Consumer<OrGroup<T>>... branches) {
+        return conditionSupport.or(branches);
     }
 
     /**

@@ -398,4 +398,84 @@ class EntityFieldExtractorTest {
         assertTrue(fields.stream().anyMatch(f -> f.fieldName().equals("name")));
         assertFalse(fields.stream().anyMatch(f -> f.fieldName().equals("computedField")));
     }
+
+    @Embeddable
+    static class EmbeddableWithVersion {
+        private String street;
+
+        @Version
+        private int version;
+
+        public String getStreet() {
+            return street;
+        }
+
+        public void setStreet(String street) {
+            this.street = street;
+        }
+
+        public int getVersion() {
+            return version;
+        }
+
+        public void setVersion(int version) {
+            this.version = version;
+        }
+    }
+
+    @Entity
+    @Table(name = "test_entity_embedded_version")
+    static class EntityWithEmbeddedVersion {
+        @Id
+        @GeneratedValue
+        private Long id;
+
+        private String name;
+
+        @Embedded
+        private EmbeddableWithVersion address;
+
+        public Long getId() {
+            return id;
+        }
+
+        public void setId(Long id) {
+            this.id = id;
+        }
+
+        public String getName() {
+            return name;
+        }
+
+        public void setName(String name) {
+            this.name = name;
+        }
+
+        public EmbeddableWithVersion getAddress() {
+            return address;
+        }
+
+        public void setAddress(EmbeddableWithVersion address) {
+            this.address = address;
+        }
+    }
+
+    @Test
+    void extractFieldValues_excludesVersionFieldFromEmbedded() {
+        EmbeddableWithVersion address = new EmbeddableWithVersion();
+        address.setStreet("Main St");
+        address.setVersion(5);
+
+        EntityWithEmbeddedVersion entity = new EntityWithEmbeddedVersion();
+        entity.setName("test");
+        entity.setAddress(address);
+
+        EntityFieldExtractor<EntityWithEmbeddedVersion> extractor =
+            new EntityFieldExtractor<>(EntityWithEmbeddedVersion.class);
+        List<EntityFieldExtractor.EntityFieldValue> fields = extractor.extractFieldValues(entity);
+
+        assertTrue(fields.stream().anyMatch(f -> f.fieldName().equals("name")));
+        assertTrue(fields.stream().anyMatch(f -> f.fieldName().equals("address.street")));
+        assertFalse(fields.stream().anyMatch(f -> f.fieldName().equals("address.version")));
+    }
 }

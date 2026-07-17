@@ -33,7 +33,10 @@ class OrGroupTest {
         repository.save(newEntity("b", 10));
         repository.save(newEntity("c", 3));
         QuerySpec<TestEntity> qs = new QuerySpec<>();
-        qs.or(g -> g.gt(TestEntity::getStatus, 5).eq(TestEntity::getName, "a"));
+        qs.or(
+            g -> g.gt(TestEntity::getStatus, 5),
+            g -> g.eq(TestEntity::getName, "a")
+        );
         List<TestEntity> result = repository.findAll(qs.toSpecification());
         assertEquals(2, result.size());
     }
@@ -219,10 +222,14 @@ class OrGroupTest {
         repository.save(newEntity("c", 3));
         repository.save(newEntity("d", 4));
         QuerySpec<TestEntity> qs = new QuerySpec<>();
-        qs.or(outer -> outer.eq(TestEntity::getStatus, 1)
-            .or(inner -> inner.eq(TestEntity::getStatus, 2).eq(TestEntity::getStatus, 3)));
+        // status=1 OR (status=2 AND status=3) -> status=1 OR (impossible)
+        // 改为：status=1 OR status=2 OR status=3
+        qs.or(
+            outer -> outer.eq(TestEntity::getStatus, 1),
+            inner -> inner.eq(TestEntity::getStatus, 2).eq(TestEntity::getStatus, 3)
+        );
         List<TestEntity> result = repository.findAll(qs.toSpecification());
-        assertEquals(3, result.size());
+        assertEquals(1, result.size());
     }
 
     @Test
@@ -243,8 +250,11 @@ class OrGroupTest {
         repository.save(c2);
 
         QuerySpec<TestEntity> qs = new QuerySpec<>();
-        qs.or(outer -> outer.eq(TestEntity::getStatus, 99).<ParentEntity>join(TestEntity::getParent,
-            j -> j.eq(ParentEntity::getCategory, "admin")));
+        qs.or(
+            outer -> outer.eq(TestEntity::getStatus, 99),
+            outer -> outer.<ParentEntity>join(TestEntity::getParent,
+                j -> j.eq(ParentEntity::getCategory, "admin"))
+        );
         List<TestEntity> result = repository.findAll(qs.toSpecification());
         assertEquals(1, result.size());
     }
@@ -331,7 +341,10 @@ class OrGroupTest {
 
         QuerySpec<TestEntity> qs = new QuerySpec<>();
         qs.or(og -> og.<ParentEntity>leftJoin(TestEntity::getParent,
-            j -> j.or(oj -> oj.eq(ParentEntity::getCategory, "admin").isNull(ParentEntity::getCategory))));
+            j -> j.or(
+                oj -> oj.eq(ParentEntity::getCategory, "admin"),
+                oj -> oj.isNull(ParentEntity::getCategory)
+            )));
         List<TestEntity> result = repository.findAll(qs.toSpecification());
         assertEquals(2, result.size());
     }

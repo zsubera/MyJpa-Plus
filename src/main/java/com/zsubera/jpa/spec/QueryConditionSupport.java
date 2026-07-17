@@ -74,8 +74,9 @@ final class QueryConditionSupport<T> {
 
     // ---- OR/NOT 方法（委托给 QueryCompositionSupport） ----
 
-    QuerySpec<T> or(Consumer<OrGroup<T>> config) {
-        return compositionSupport.or(config);
+    @SafeVarargs
+    final QuerySpec<T> or(Consumer<OrGroup<T>>... branches) {
+        return compositionSupport.or(branches);
     }
 
     QuerySpec<T> not(Consumer<NotGroup<T>> config) {

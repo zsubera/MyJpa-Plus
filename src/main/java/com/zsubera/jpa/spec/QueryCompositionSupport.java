@@ -32,18 +32,40 @@ final class QueryCompositionSupport<T> {
     // ---- OR/NOT 方法 ----
 
     /**
-     * 使用消费者构建 OR 条件组，自动关闭组。
+     * 使用多个消费者构建 OR 条件组，每个消费者代表一个 OR 分支。
      *
      * <p>
-     * 多个 {@code or()} 调用会合并到同一个 OR 组中，生成 {@code WHERE A OR B} 而非 {@code WHERE A AND B}。
+     * 每个 lambda 代表一个 OR 分支，lambda 内部的链式调用（如 {@code .eq().eq()}）表示 AND 语义，
+     * 与外层保持一致，消除了"相同语法不同含义"的困惑。
      *
-     * @param config OR 组配置消费者
+     * <p>
+     * <strong>示例：</strong>
+     *
+     * <pre>{@code
+     * // 每个 lambda 是一个 OR 分支
+     * s.or(
+     *     o -> o.eq(User::getRole, "ADMIN"),           // 分支1: role='ADMIN'
+     *     o -> o.eq(User::getStatus, "ACTIVE")         // 分支2: status='ACTIVE'
+     * );
+     * // → role='ADMIN' OR status='ACTIVE'
+     *
+     * // lambda 内部 .eq().eq() = AND（与外层一致）
+     * s.or(
+     *     o -> o.eq(User::getRole, "ADMIN").eq(User::getStatus, "ACTIVE"),   // 分支1: (ADMIN AND ACTIVE)
+     *     o -> o.eq(User::getRole, "USER")                                    // 分支2: (USER)
+     * );
+     * // → (role='ADMIN' AND status='ACTIVE') OR (role='USER')
+     * }</pre>
+     *
+     * @param branches 多个 OR 分支消费者
      * @return 当前 QuerySpec 实例
      */
-    QuerySpec<T> or(Consumer<OrGroup<T>> config) {
-        if (config == null) {
-            throw new IllegalArgumentException("config must not be null");
+    @SafeVarargs
+    final QuerySpec<T> or(Consumer<OrGroup<T>>... branches) {
+        if (branches == null || branches.length == 0) {
+            throw new IllegalArgumentException("At least one OR branch required");
         }
+
         List<ConditionNode> group = parent.currentGroup();
         ConditionNode.OrNode orNode;
         boolean isNewOrNode = false;
@@ -58,19 +80,40 @@ final class QueryCompositionSupport<T> {
         }
 
         int sizeBefore = orNode.nodes.size();
-        parent.getGroupStack().push(orNode.nodes);
-        try {
-            config.accept(new OrGroup<>(parent));
-        } catch (RuntimeException e) {
-            // 消费者异常时移除本次添加的部分条件，恢复 OrNode 到添加前的状态
-            orNode.nodes.subList(sizeBefore, orNode.nodes.size()).clear();
-            if (isNewOrNode && orNode.nodes.isEmpty()) {
-                group.remove(orNode);
+
+        // 为每个 lambda 创建独立的 OrGroup，lambda 内部的条件会添加到独立的 AndNode 中
+        for (Consumer<OrGroup<T>> branch : branches) {
+            if (branch == null) {
+                throw new IllegalArgumentException("OR branch must not be null");
             }
-            throw e;
-        } finally {
-            parent.getGroupStack().pop();
+
+            ConditionNode.AndNode andNode = new ConditionNode.AndNode();
+            orNode.nodes.add(andNode);
+
+            int andSizeBefore = andNode.nodes.size();
+            parent.getGroupStack().push(andNode.nodes);
+            try {
+                branch.accept(new OrGroup<>(parent));
+            } catch (RuntimeException e) {
+                // 消费者异常时移除本次添加的部分条件
+                andNode.nodes.subList(andSizeBefore, andNode.nodes.size()).clear();
+                orNode.nodes.remove(andNode);
+                throw e;
+            } finally {
+                parent.getGroupStack().pop();
+            }
+
+            // 如果 AndNode 为空（lambda 没有条件），则移除 AndNode
+            if (andNode.nodes.isEmpty()) {
+                orNode.nodes.remove(andNode);
+            }
         }
+
+        // 如果 OrNode 为空（所有分支都失败或为空），则移除 OrNode
+        if (isNewOrNode && orNode.nodes.isEmpty()) {
+            group.remove(orNode);
+        }
+
         return parent;
     }
 

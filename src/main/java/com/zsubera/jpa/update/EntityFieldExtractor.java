@@ -228,7 +228,8 @@ final class EntityFieldExtractor<T> {
                         && !f.isAnnotationPresent(jakarta.persistence.OneToMany.class)
                         && !f.isAnnotationPresent(jakarta.persistence.ManyToOne.class)
                         && !f.isAnnotationPresent(jakarta.persistence.ManyToMany.class)
-                        && !f.isAnnotationPresent(jakarta.persistence.OneToOne.class) && !isInsertableFalse(f)) {
+                        && !f.isAnnotationPresent(jakarta.persistence.OneToOne.class)
+                        && !f.isAnnotationPresent(jakarta.persistence.Version.class) && !isInsertableFalse(f)) {
                         fields.add(f);
                     }
                 }
