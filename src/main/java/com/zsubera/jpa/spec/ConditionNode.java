@@ -307,7 +307,8 @@ public sealed interface ConditionNode permits ConditionNode.SimpleNode, Conditio
          * <li>外部用户无法访问此字段（包级私有）</li>
          * </ul>
          */
-        final List<ConditionNode> innerConditions = new ArrayList<>();
+        // ponytail: JOIN 内部条件通常较少，使用较小的初始容量
+        final List<ConditionNode> innerConditions = new ArrayList<>(2);
 
         public JoinNode(String fieldName, JoinType joinType) {
             if (fieldName == null) {
@@ -342,7 +343,8 @@ public sealed interface ConditionNode permits ConditionNode.SimpleNode, Conditio
 
     /** 条件的 OR 组。 */
     final class OrNode implements ConditionNode {
-        final List<ConditionNode> nodes = new ArrayList<>();
+        // ponytail: 大多数 OR/AND 组只有 2-3 个条件，使用较小的初始容量减少内存浪费
+        final List<ConditionNode> nodes = new ArrayList<>(4);
 
         /** 向 OR 组添加一个条件节点。 */
         void addNode(ConditionNode node) {
@@ -365,7 +367,8 @@ public sealed interface ConditionNode permits ConditionNode.SimpleNode, Conditio
 
     /** 条件的 AND 组。 */
     final class AndNode implements ConditionNode {
-        final List<ConditionNode> nodes = new ArrayList<>();
+        // ponytail: 大多数 OR/AND 组只有 2-3 个条件，使用较小的初始容量减少内存浪费
+        final List<ConditionNode> nodes = new ArrayList<>(4);
 
         /** 向 AND 组添加一个条件节点。 */
         void addNode(ConditionNode node) {
