@@ -50,6 +50,15 @@ public class MyJpaPlusProperties {
     private Cache cache = new Cache();
 
     /**
+     * 数据库方言。留空表示自动检测（从 JDBC 元数据推断）。
+     *
+     * <p>
+     * 可选值：{@code mysql}、{@code postgresql}、{@code oracle}、{@code h2} 等。
+     * 仅在自动检测失败或需要强制指定方言时使用。
+     */
+    private String dialect;
+
+    /**
      * 启动时验证所有配置属性的合法性。
      */
     @PostConstruct
@@ -90,6 +99,14 @@ public class MyJpaPlusProperties {
         this.cache = cache;
     }
 
+    public String getDialect() {
+        return dialect;
+    }
+
+    public void setDialect(String dialect) {
+        this.dialect = dialect;
+    }
+
     public static class SoftDelete {
         /**
          * 是否自动对所有查询应用软删除过滤器。启用后，带有 {@link com.zsubera.jpa.annotation.SoftDelete @SoftDelete} 字段的实体将自动过滤掉
@@ -103,6 +120,11 @@ public class MyJpaPlusProperties {
          * {@code @SoftDelete} 字段的实体生效，无该字段的实体不受影响。 默认值：{@code true}（生产环境最安全）
          */
         private boolean blockUnconditionalDelete = true;
+
+        /**
+         * 软删除忽略计数器的安全上限。防止 ThreadLocal 忽略计数器无限增长。 默认值：{@code 64}
+         */
+        private int maxIgnoreCount = 64;
 
         public boolean isAutoFilter() {
             return autoFilter;
@@ -118,6 +140,17 @@ public class MyJpaPlusProperties {
 
         public void setBlockUnconditionalDelete(boolean blockUnconditionalDelete) {
             this.blockUnconditionalDelete = blockUnconditionalDelete;
+        }
+
+        public int getMaxIgnoreCount() {
+            return maxIgnoreCount;
+        }
+
+        public void setMaxIgnoreCount(int maxIgnoreCount) {
+            if (maxIgnoreCount <= 0) {
+                throw new IllegalArgumentException("maxIgnoreCount must be positive");
+            }
+            this.maxIgnoreCount = maxIgnoreCount;
         }
     }
 
@@ -195,6 +228,11 @@ public class MyJpaPlusProperties {
          * Upsert 批量独立事务最大迭代次数。超过此限制时抛出异常，防止输入过大耗尽资源。 默认值：{@code 10000}
          */
         private int maxUpsertBatchIterations = 10000;
+
+        /**
+         * 是否启用 Unicode 标识符验证。启用后，SQL 中的表名和列名将进行 Unicode 合法性检查。 默认值：{@code false}
+         */
+        private boolean unicodeIdentifiers = false;
 
         /**
          * 验证所有查询配置的跨字段关系。
@@ -325,6 +363,14 @@ public class MyJpaPlusProperties {
             }
             this.maxUpsertBatchIterations = maxUpsertBatchIterations;
         }
+
+        public boolean isUnicodeIdentifiers() {
+            return unicodeIdentifiers;
+        }
+
+        public void setUnicodeIdentifiers(boolean unicodeIdentifiers) {
+            this.unicodeIdentifiers = unicodeIdentifiers;
+        }
     }
 
     public static class Monitoring {
@@ -333,6 +379,11 @@ public class MyJpaPlusProperties {
 
         /** 是否启用 SQL 慢查询监控。启用后会通过 DataSource 代理拦截 JDBC 执行并记录慢查询。 默认值：{@code false} */
         private boolean enabled = false;
+
+        /**
+         * 审计日志中保留的堆栈跟踪深度。默认值：{@code 5}
+         */
+        private int stackTraceDepth = 5;
 
         void validate() {
             if (slowQueryThresholdMs <= 0) {
@@ -358,6 +409,17 @@ public class MyJpaPlusProperties {
 
         public void setEnabled(boolean enabled) {
             this.enabled = enabled;
+        }
+
+        public int getStackTraceDepth() {
+            return stackTraceDepth;
+        }
+
+        public void setStackTraceDepth(int stackTraceDepth) {
+            if (stackTraceDepth <= 0) {
+                throw new IllegalArgumentException("stackTraceDepth must be positive");
+            }
+            this.stackTraceDepth = stackTraceDepth;
         }
     }
 
