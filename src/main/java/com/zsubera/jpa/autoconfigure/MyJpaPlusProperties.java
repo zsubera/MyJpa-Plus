@@ -363,6 +363,11 @@ public class MyJpaPlusProperties {
 
     public static class Cache {
         /**
+         * 是否启用缓存。默认值：{@code true}
+         */
+        private boolean enabled = true;
+
+        /**
          * 是否启用缓存自动失效。启用后，当实体发生变更时（通过发布 {@link com.zsubera.jpa.template.EntityModifiedEvent}），
          * 相关查询缓存会自动在事务提交后清除。 默认值：{@code true}
          */
@@ -370,6 +375,28 @@ public class MyJpaPlusProperties {
 
         /** 缓存最大条目数。默认值：{@code 10000} */
         private int maxEntries = 10000;
+
+        /**
+         * 缓存后端类型。默认值：{@code caffeine}
+         * <p>
+         * 可选值：
+         * <ul>
+         * <li>{@code caffeine} - 本地缓存（默认）</li>
+         * <li>{@code redis} - Redis 分布式缓存（需要引入 spring-boot-starter-data-redis）</li>
+         * </ul>
+         */
+        private String type = "caffeine";
+
+        /** Redis 配置 */
+        private Redis redis = new Redis();
+
+        public boolean isEnabled() {
+            return enabled;
+        }
+
+        public void setEnabled(boolean enabled) {
+            this.enabled = enabled;
+        }
 
         public boolean isAutoInvalidationEnabled() {
             return autoInvalidationEnabled;
@@ -388,6 +415,101 @@ public class MyJpaPlusProperties {
                 throw new IllegalArgumentException("maxEntries must be positive");
             }
             this.maxEntries = maxEntries;
+        }
+
+        public String getType() {
+            return type;
+        }
+
+        public void setType(String type) {
+            this.type = type;
+        }
+
+        public Redis getRedis() {
+            return redis;
+        }
+
+        public void setRedis(Redis redis) {
+            this.redis = redis;
+        }
+
+        public static class Redis {
+            /** Redis 主机。默认值：{@code localhost} */
+            private String host = "localhost";
+
+            /** Redis 端口。默认值：{@code 6379} */
+            private int port = 6379;
+
+            /** Redis 密码（可选） */
+            private String password;
+
+            /** Redis 数据库索引。默认值：{@code 0} */
+            private int database = 0;
+
+            /** 缓存键前缀。默认值：{@code myjpa:} */
+            private String keyPrefix = "myjpa:";
+
+            /** 连接超时（毫秒）。默认值：{@code 5000} */
+            private int connectionTimeout = 5000;
+
+            /** 命令超时（毫秒）。默认值：{@code 5000} */
+            private int commandTimeout = 5000;
+
+            public String getHost() {
+                return host;
+            }
+
+            public void setHost(String host) {
+                this.host = host;
+            }
+
+            public int getPort() {
+                return port;
+            }
+
+            public void setPort(int port) {
+                this.port = port;
+            }
+
+            public String getPassword() {
+                return password;
+            }
+
+            public void setPassword(String password) {
+                this.password = password;
+            }
+
+            public int getDatabase() {
+                return database;
+            }
+
+            public void setDatabase(int database) {
+                this.database = database;
+            }
+
+            public String getKeyPrefix() {
+                return keyPrefix;
+            }
+
+            public void setKeyPrefix(String keyPrefix) {
+                this.keyPrefix = keyPrefix;
+            }
+
+            public int getConnectionTimeout() {
+                return connectionTimeout;
+            }
+
+            public void setConnectionTimeout(int connectionTimeout) {
+                this.connectionTimeout = connectionTimeout;
+            }
+
+            public int getCommandTimeout() {
+                return commandTimeout;
+            }
+
+            public void setCommandTimeout(int commandTimeout) {
+                this.commandTimeout = commandTimeout;
+            }
         }
     }
 }

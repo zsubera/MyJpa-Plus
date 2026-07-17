@@ -64,6 +64,13 @@
             <artifactId>caffeine</artifactId>
         </dependency>
 
+        <!-- Redis: distributed caching support (optional, enabled via myjpa-plus.cache.type=redis) -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-data-redis</artifactId>
+            <optional>true</optional>
+        </dependency>
+
         <!-- JSqlParser: SQL parser for AST-based log sanitization (replaces hand-written regex) -->
         <dependency>
             <groupId>com.github.jsqlparser</groupId>
