@@ -472,37 +472,43 @@ public class MyJpaPlusAutoConfiguration {
      * @param properties 配置属性
      * @return RedisCacheAdapter 实例
      */
-    @Bean
-    @ConditionalOnMissingBean(CacheAdapter.class)
-    @ConditionalOnProperty(prefix = "myjpa-plus.cache", name = "type", havingValue = "redis")
-    public CacheAdapter redisCacheAdapter(MyJpaPlusProperties properties,
-        @Autowired(required = false) org.springframework.data.redis.core.RedisTemplate<String, Object> redisTemplate) {
-        if (redisTemplate == null) {
-            throw new org.springframework.beans.factory.UnsatisfiedDependencyException(
-                "MyJpaPlusAutoConfiguration", "redisCacheAdapter", "",
-                "RedisTemplate not found. Please add spring-boot-starter-data-redis dependency "
-                    + "and configure Redis connection properties.");
-        }
-        MyJpaPlusProperties.Cache.Redis redisConfig = properties.getCache().getRedis();
-        CacheAdapter adapter = new com.zsubera.jpa.template.RedisCacheAdapter(redisTemplate, redisConfig.getKeyPrefix());
-        cachedCacheAdapter = adapter;
-        log.info("RedisCacheAdapter initialized — key prefix: {}", redisConfig.getKeyPrefix());
-        return adapter;
-    }
-
     /**
-     * 创建缓存适配器 Bean。默认使用 {@link QueryCacheManager}（Caffeine）。
+     * 创建缓存适配器 Bean。根据 cache.type 配置选择 Caffeine 或 Redis。
      *
      * <p>
-     * 用户可通过提供自定义 {@link CacheAdapter} Bean 来替换为
-     * Redis、Caffeine 等分布式或近端缓存实现。
+     * - type=CAFFEINE（默认）：使用 {@link QueryCacheManager}
+     * - type=REDIS：使用 {@link com.zsubera.jpa.template.RedisCacheAdapter}（需要 RedisTemplate）
+     * - 用户可通过提供自定义 {@link CacheAdapter} Bean 来完全替换
      *
-     * @param cacheManager 查询缓存管理器（可能为 null，如果用户提供了自定义 CacheAdapter）
+     * @param properties 配置属性
+     * @param cacheManager 查询缓存管理器（可能为 null）
+     * @param redisTemplate Redis 模板（可能为 null）
      * @return CacheAdapter 实例
      */
     @Bean
     @ConditionalOnMissingBean(CacheAdapter.class)
-    public CacheAdapter cacheAdapter(@Autowired(required = false) QueryCacheManager cacheManager) {
+    public CacheAdapter cacheAdapter(MyJpaPlusProperties properties,
+        @Autowired(required = false) QueryCacheManager cacheManager,
+        @Autowired(required = false) org.springframework.data.redis.core.RedisTemplate<String, Object> redisTemplate) {
+
+        MyJpaPlusProperties.Cache.Type cacheType = properties.getCache().getType();
+
+        if (cacheType == MyJpaPlusProperties.Cache.Type.REDIS) {
+            if (redisTemplate == null) {
+                throw new org.springframework.beans.factory.UnsatisfiedDependencyException(
+                    "MyJpaPlusAutoConfiguration", "cacheAdapter", "",
+                    "RedisTemplate not found. Please add spring-boot-starter-data-redis dependency "
+                        + "and configure Redis connection properties (spring.data.redis.*).");
+            }
+            MyJpaPlusProperties.Cache.Redis redisConfig = properties.getCache().getRedis();
+            CacheAdapter adapter =
+                new com.zsubera.jpa.template.RedisCacheAdapter(redisTemplate, redisConfig.getKeyPrefix());
+            cachedCacheAdapter = adapter;
+            log.info("RedisCacheAdapter initialized — key prefix: {}", redisConfig.getKeyPrefix());
+            return adapter;
+        }
+
+        // 默认使用 Caffeine
         if (cacheManager != null) {
             CacheAdapter adapter = cacheManager;
             cachedCacheAdapter = adapter;
