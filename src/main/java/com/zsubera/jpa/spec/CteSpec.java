@@ -532,6 +532,12 @@ public class CteSpec {
             throw new IllegalArgumentException("Parameter name contains invalid characters: '" + name
                 + "'. Must start with a letter or underscore and contain only alphanumeric characters and underscores.");
         }
+        // 防止用户参数名与 asSafe() 内部生成的参数名冲突
+        if (name.startsWith("_cte_")) {
+            throw new IllegalArgumentException("Parameter name '" + name
+                + "' conflicts with internal CTE parameter naming convention (prefixed with '_cte_'). "
+                + "Please use a different parameter name.");
+        }
         parameters.put(name, value);
         return this;
     }

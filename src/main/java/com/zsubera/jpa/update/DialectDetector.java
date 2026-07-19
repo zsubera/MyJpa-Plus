@@ -135,19 +135,21 @@ final class DialectDetector {
             }
             if (jdbcUrl != null) {
                 String url = jdbcUrl.toString().toLowerCase();
-                if (url.contains("postgresql")) {
+                // 匹配 JDBC 子协议而非整个 URL，避免主机名包含关键词导致误判
+                // 例如：jdbc:mysql://postgresql-replica.internal:3306/mydb 不应匹配 postgresql
+                if (url.contains(":postgresql:") || url.contains(":postgres:")) {
                     cacheDialect(factoryKey, "postgresql");
                     return "postgresql";
                 }
-                if (url.contains("mysql")) {
+                if (url.contains(":mysql:") || url.contains(":mariadb:")) {
                     cacheDialect(factoryKey, "mysql");
                     return "mysql";
                 }
-                if (url.contains("oracle")) {
+                if (url.contains(":oracle:")) {
                     cacheDialect(factoryKey, "oracle");
                     return "oracle";
                 }
-                if (url.contains("sqlserver") || url.contains("microsoft")) {
+                if (url.contains(":sqlserver:") || url.contains(":microsoft:")) {
                     cacheDialect(factoryKey, "sqlserver");
                     return "sqlserver";
                 }
