@@ -137,9 +137,11 @@ public class RedisCacheAdapter implements CacheAdapter {
 
             // 使用 SCAN 遍历匹配的键
             redisTemplate.execute((RedisCallback<Void>)connection -> {
-                Cursor<byte[]> cursor = connection.scan(ScanOptions.scanOptions().match(pattern).count(100).build());
-                while (cursor.hasNext()) {
-                    keys.add(new String(cursor.next()));
+                try (Cursor<byte[]> cursor = connection.scan(
+                    ScanOptions.scanOptions().match(pattern).count(100).build())) {
+                    while (cursor.hasNext()) {
+                        keys.add(new String(cursor.next()));
+                    }
                 }
                 return null;
             });
@@ -163,9 +165,11 @@ public class RedisCacheAdapter implements CacheAdapter {
             Set<String> keys = new HashSet<>();
 
             redisTemplate.execute((RedisCallback<Void>)connection -> {
-                Cursor<byte[]> cursor = connection.scan(ScanOptions.scanOptions().match(pattern).count(100).build());
-                while (cursor.hasNext()) {
-                    keys.add(new String(cursor.next()));
+                try (Cursor<byte[]> cursor = connection.scan(
+                    ScanOptions.scanOptions().match(pattern).count(100).build())) {
+                    while (cursor.hasNext()) {
+                        keys.add(new String(cursor.next()));
+                    }
                 }
                 return null;
             });
@@ -187,10 +191,12 @@ public class RedisCacheAdapter implements CacheAdapter {
             final int[] count = {0};
 
             redisTemplate.execute((RedisCallback<Void>)connection -> {
-                Cursor<byte[]> cursor = connection.scan(ScanOptions.scanOptions().match(pattern).count(100).build());
-                while (cursor.hasNext()) {
-                    cursor.next();
-                    count[0]++;
+                try (Cursor<byte[]> cursor = connection.scan(
+                    ScanOptions.scanOptions().match(pattern).count(100).build())) {
+                    while (cursor.hasNext()) {
+                        cursor.next();
+                        count[0]++;
+                    }
                 }
                 return null;
             });
