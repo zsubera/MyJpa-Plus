@@ -205,8 +205,8 @@ public class MyJpaPlusAutoConfiguration {
             }
 
             // 应用 Unicode 标识符验证配置
-            com.zsubera.jpa.util.IdentifierValidator.setUnicodeIdentifiers(
-                properties.getQuery().isUnicodeIdentifiers());
+            com.zsubera.jpa.util.IdentifierValidator
+                .setUnicodeIdentifiers(properties.getQuery().isUnicodeIdentifiers());
 
             if (log.isDebugEnabled()) {
                 log.debug("  soft-delete.auto-filter = {}", properties.getSoftDelete().isAutoFilter());

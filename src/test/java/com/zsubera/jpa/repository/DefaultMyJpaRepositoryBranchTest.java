@@ -464,6 +464,128 @@ class DefaultMyJpaRepositoryBranchTest {
         assertEquals("active", ref.getName());
     }
 
+    // ---- Spec-based operations should publish EntityModifiedEvent ----
+
+    @Test
+    void specUpdate_publishesEvent() {
+        saveEntity("test", false);
+        repository.flush();
+        java.util.concurrent.CopyOnWriteArrayList<com.zsubera.jpa.template.EntityModifiedEvent> events =
+            new java.util.concurrent.CopyOnWriteArrayList<>();
+        // Manually set up event publisher since @DataJpaTest doesn't load MyJpaPlusAutoConfiguration
+        com.zsubera.jpa.softdelete.SoftDeleteBulkExecutor.setEventPublisher((entityClass, affectedRows) -> {
+            events.add(new com.zsubera.jpa.template.EntityModifiedEvent(entityClass, affectedRows));
+        });
+        try {
+            int affected = repository.update(
+                s -> s.set(SoftDeleteRepoTestEntity::getName, "updated").eq(SoftDeleteRepoTestEntity::getName, "test"));
+            assertEquals(1, affected);
+            assertFalse(events.isEmpty(), "update(Consumer) should publish event");
+        } finally {
+            com.zsubera.jpa.softdelete.SoftDeleteBulkExecutor.setEventPublisher(null);
+        }
+    }
+
+    @Test
+    void specDelete_publishesEvent() {
+        saveEntity("test", false);
+        repository.flush();
+        java.util.concurrent.CopyOnWriteArrayList<com.zsubera.jpa.template.EntityModifiedEvent> events =
+            new java.util.concurrent.CopyOnWriteArrayList<>();
+        com.zsubera.jpa.softdelete.SoftDeleteBulkExecutor.setEventPublisher((entityClass, affectedRows) -> {
+            events.add(new com.zsubera.jpa.template.EntityModifiedEvent(entityClass, affectedRows));
+        });
+        try {
+            int affected = repository.delete(s -> s.eq(SoftDeleteRepoTestEntity::getName, "test"));
+            assertEquals(1, affected);
+            assertFalse(events.isEmpty(), "delete(Consumer) should publish event");
+        } finally {
+            com.zsubera.jpa.softdelete.SoftDeleteBulkExecutor.setEventPublisher(null);
+        }
+    }
+
+    @Test
+    void specExecuteUpdate_publishesEvent() {
+        saveEntity("test", false);
+        repository.flush();
+        java.util.concurrent.CopyOnWriteArrayList<com.zsubera.jpa.template.EntityModifiedEvent> events =
+            new java.util.concurrent.CopyOnWriteArrayList<>();
+        com.zsubera.jpa.softdelete.SoftDeleteBulkExecutor.setEventPublisher((entityClass, affectedRows) -> {
+            events.add(new com.zsubera.jpa.template.EntityModifiedEvent(entityClass, affectedRows));
+        });
+        try {
+            com.zsubera.jpa.update.UpdateSpec<SoftDeleteRepoTestEntity> spec =
+                new com.zsubera.jpa.update.UpdateSpec<>(SoftDeleteRepoTestEntity.class);
+            spec.set(SoftDeleteRepoTestEntity::getName, "updated");
+            spec.eq(SoftDeleteRepoTestEntity::getName, "test");
+            int affected = repository.execute(spec);
+            assertEquals(1, affected);
+            assertFalse(events.isEmpty(), "execute(UpdateSpec) should publish event");
+        } finally {
+            com.zsubera.jpa.softdelete.SoftDeleteBulkExecutor.setEventPublisher(null);
+        }
+    }
+
+    @Test
+    void specExecuteDelete_publishesEvent() {
+        saveEntity("test", false);
+        repository.flush();
+        java.util.concurrent.CopyOnWriteArrayList<com.zsubera.jpa.template.EntityModifiedEvent> events =
+            new java.util.concurrent.CopyOnWriteArrayList<>();
+        com.zsubera.jpa.softdelete.SoftDeleteBulkExecutor.setEventPublisher((entityClass, affectedRows) -> {
+            events.add(new com.zsubera.jpa.template.EntityModifiedEvent(entityClass, affectedRows));
+        });
+        try {
+            com.zsubera.jpa.update.DeleteSpec<SoftDeleteRepoTestEntity> spec =
+                new com.zsubera.jpa.update.DeleteSpec<>(SoftDeleteRepoTestEntity.class);
+            spec.eq(SoftDeleteRepoTestEntity::getName, "test");
+            int affected = repository.execute(spec);
+            assertEquals(1, affected);
+            assertFalse(events.isEmpty(), "execute(DeleteSpec) should publish event");
+        } finally {
+            com.zsubera.jpa.softdelete.SoftDeleteBulkExecutor.setEventPublisher(null);
+        }
+    }
+
+    @Test
+    void specMerge_publishesEvent() {
+        java.util.concurrent.CopyOnWriteArrayList<com.zsubera.jpa.template.EntityModifiedEvent> events =
+            new java.util.concurrent.CopyOnWriteArrayList<>();
+        com.zsubera.jpa.softdelete.SoftDeleteBulkExecutor.setEventPublisher((entityClass, affectedRows) -> {
+            events.add(new com.zsubera.jpa.template.EntityModifiedEvent(entityClass, affectedRows));
+        });
+        try {
+            SoftDeleteRepoTestEntity entity = new SoftDeleteRepoTestEntity();
+            entity.setName("merged-entity");
+            com.zsubera.jpa.update.MergeSpec<SoftDeleteRepoTestEntity> spec =
+                new com.zsubera.jpa.update.MergeSpec<>(SoftDeleteRepoTestEntity.class);
+            spec.withEntity(entity);
+            int affected = repository.execute(spec);
+            assertTrue(affected > 0, "merge should affect at least 1 row");
+            assertFalse(events.isEmpty(), "execute(MergeSpec) should publish event");
+        } finally {
+            com.zsubera.jpa.softdelete.SoftDeleteBulkExecutor.setEventPublisher(null);
+        }
+    }
+
+    @Test
+    void specMergeConsumer_publishesEvent() {
+        java.util.concurrent.CopyOnWriteArrayList<com.zsubera.jpa.template.EntityModifiedEvent> events =
+            new java.util.concurrent.CopyOnWriteArrayList<>();
+        com.zsubera.jpa.softdelete.SoftDeleteBulkExecutor.setEventPublisher((entityClass, affectedRows) -> {
+            events.add(new com.zsubera.jpa.template.EntityModifiedEvent(entityClass, affectedRows));
+        });
+        try {
+            SoftDeleteRepoTestEntity entity = new SoftDeleteRepoTestEntity();
+            entity.setName("merged-consumer-entity");
+            int affected = repository.merge(s -> s.withEntity(entity));
+            assertTrue(affected > 0, "merge(Consumer) should affect at least 1 row");
+            assertFalse(events.isEmpty(), "merge(Consumer) should publish event");
+        } finally {
+            com.zsubera.jpa.softdelete.SoftDeleteBulkExecutor.setEventPublisher(null);
+        }
+    }
+
     private SoftDeleteRepoTestEntity saveEntity(String name, boolean deleted) {
         SoftDeleteRepoTestEntity entity = new SoftDeleteRepoTestEntity();
         entity.setName(name);
