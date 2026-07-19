@@ -87,8 +87,8 @@ class CoalesceUpsertTransformer {
                 String colName = col.getUnquotedColumnName();
                 if (coalesceColumns.contains(colName)) {
                     Expression originalValue = expressions.get(i);
-                    Function coalesce = new Function().withName("COALESCE").withParameters(originalValue,
-                        new Column(col.getColumnName()));
+                    // 复用原始 Column 对象以保留引号元数据（如 "order" 不会被去引号）
+                    Function coalesce = new Function().withName("COALESCE").withParameters(originalValue, col);
                     expressions.set(i, coalesce);
                     modified = true;
                 }

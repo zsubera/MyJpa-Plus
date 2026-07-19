@@ -29,6 +29,9 @@
 - **PostgresDialect.buildUpsertSql() 缺少空列检查** — 单行 UPSERT 路径未检查 `insertColumns` 是否为空，当实体仅有 `@GeneratedValue` 的 `@Id` 字段时生成无效 SQL `INSERT INTO t () VALUES ()`。修复：添加与 MySQL 方言一致的空列检查
 - **SoftDeleteBulkExecutor.resolveTimestampColumn() 未验证字段存在性** — 原生 SQL 路径在 `deletedTimestampField` 引用不存在的字段时，会通过 `camelToSnake()` 生成引用不存在列的 SQL，导致运行时 SQL 异常。而 Criteria API 路径会优雅忽略。修复：添加字段存在性检查，不存在时返回 null 跳过时间戳列
 - **PredicateHelper.validateRange() 未检查 end 值的 Infinity/NaN** — 同类型路径仅检查 `start` 值的 Infinity/NaN，`end` 值的 Infinity/NaN 会通过验证并生成无效 SQL。修复：对 Double 和 Float 类型同时检查 start 和 end 值
+- **CoalesceUpsertTransformer COALESCE 回退列名未引用** — `new Column(col.getColumnName())` 创建的 Column 对象丢失引号元数据，保留字列名（如 `order`）生成无效 SQL。修复：复用原始 Column 对象保留引号
+- **Oracle/SqlServer MERGE ON 子句引用不存在的源列** — 当冲突列不在 insertColumns 中时，MERGE ON 子句引用 `source."conflict_col"` 导致数据库报错。修复：将缺失的冲突列以 NULL 值添加到源子查询
+- **softDeleteByIdsWithVersionCheck() 部分成功静默** — 批量软删除部分 ID 版本不匹配时，仅返回成功计数而不抛异常或记录警告，调用方无法识别哪些 ID 未被删除。修复：添加警告日志
 - **Spec-based 操作缺失 EntityModifiedEvent 发布** — `MyJpaRepository` 接口默认方法和 `DefaultMyJpaRepository` 覆写方法中，`update(Consumer)`、`delete(Consumer)`、`merge(Consumer)`、`execute(UpdateSpec)`、`execute(DeleteSpec)`、`execute(MergeSpec)` 六个 spec-based 操作在成功变更后（`affected > 0`）发布 `EntityModifiedEvent`，修复应用级缓存（Redis、Caffeine QueryCacheManager、CacheAdapter）在这些操作后未失效导致脏数据的问题
 - **BatchSaveTemplate.isDefaultPrimitiveValue() Float/Double 缺失** — 添加 `Float` 和 `Double` 零值检查，修复 `@Id float/double` 类型实体被错误识别为已存在的问题
 - **MergeSpec 不必要的 em.flush()** — 移除 `doBatchSingleRow` 和 `doBatchMultiRow` 中的 `em.flush()` 调用，修复 AUTO_CLEAR 模式下意外持久化无关脏数据的问题

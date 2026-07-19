@@ -369,6 +369,12 @@ public final class SoftDeleteBulkExecutor {
                 + ids.size() + " IDs. Possible causes: entities already soft-deleted, or version mismatch (expected: "
                 + expectedVersion + ").");
         }
+        if (total > 0 && total < ids.size()) {
+            log.warn(
+                "Soft delete with version check: only {}/{} rows affected (expectedVersion={}). "
+                    + "Some entities may have been modified by another transaction.",
+                total, ids.size(), expectedVersion);
+        }
         publishAfterUpdate(em, entityClass, total);
         return total;
     }

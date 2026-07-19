@@ -48,12 +48,23 @@ final class OracleDialect extends AbstractDialectStrategy {
         StringBuilder sql = new StringBuilder("MERGE INTO ").append(escapedTable).append(" target USING (SELECT ");
 
         // SELECT clause: use parameter placeholders with column aliases for DUAL
+        // 包含所有 insertColumns + 不在 insertColumns 中的 conflictColumns
         List<String> escapedInsertCols = new ArrayList<>();
         List<String> selectClauses = new ArrayList<>();
+        java.util.Set<String> insertColSet = new java.util.HashSet<>(insertColumns);
         for (String col : insertColumns) {
             String escaped = escapeIdentifier(col);
             escapedInsertCols.add(escaped);
             selectClauses.add("? AS " + escaped);
+        }
+        // 将不在 insertColumns 中的 conflictColumns 添加到源子查询（值为 NULL）
+        List<String> missingConflictCols = new ArrayList<>();
+        for (String col : conflictColumns) {
+            if (!insertColSet.contains(col)) {
+                String escaped = escapeIdentifier(col);
+                missingConflictCols.add(escaped);
+                selectClauses.add("NULL AS " + escaped);
+            }
         }
         sql.append(String.join(", ", selectClauses));
         sql.append(" FROM DUAL) source ON (");

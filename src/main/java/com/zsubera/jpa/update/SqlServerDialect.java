@@ -54,20 +54,34 @@ final class SqlServerDialect extends AbstractDialectStrategy {
         StringBuilder sql = new StringBuilder("MERGE INTO ").append(escapedTable).append(" AS target USING (SELECT ");
 
         // SELECT clause for source values
+        // 包含所有 insertColumns + 不在 insertColumns 中的 conflictColumns
         List<String> escapedInsertCols = new ArrayList<>();
+        java.util.Set<String> insertColSet = new java.util.HashSet<>(insertColumns);
         for (String col : insertColumns) {
             escapedInsertCols.add(escapeIdentifier(col));
+        }
+        // 将不在 insertColumns 中的 conflictColumns 添加到列列表（无对应参数值）
+        for (String col : conflictColumns) {
+            if (!insertColSet.contains(col)) {
+                escapedInsertCols.add(escapeIdentifier(col));
+            }
         }
         sql.append(String.join(", ", escapedInsertCols));
         sql.append(" FROM (VALUES (");
 
-        // VALUES clause with parameters
+        // VALUES clause with parameters (insertColumns only)
         for (int i = 0; i < insertFieldValues.size(); i++) {
             if (i > 0) {
                 sql.append(", ");
             }
             sql.append("?");
             allParams.add(insertFieldValues.get(i).value());
+        }
+        // 为不在 insertColumns 中的 conflictColumns 添加 NULL 占位符
+        for (String col : conflictColumns) {
+            if (!insertColSet.contains(col)) {
+                sql.append(", NULL");
+            }
         }
         sql.append(")) AS vals (");
         sql.append(String.join(", ", escapedInsertCols));
