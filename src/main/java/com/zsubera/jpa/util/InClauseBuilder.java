@@ -4,7 +4,6 @@ import jakarta.persistence.criteria.CriteriaBuilder;
 import jakarta.persistence.criteria.Path;
 import jakarta.persistence.criteria.Predicate;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collection;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicReference;

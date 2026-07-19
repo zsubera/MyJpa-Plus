@@ -205,6 +205,9 @@ final class EntityFieldExtractor<T> {
             } else {
                 Object subValue = getFieldValue(embeddedValue, subField);
                 String columnName = overrideMap.getOrDefault(subField.getName(), resolveColumnName(subField));
+                if (overrideMap.containsKey(subField.getName())) {
+                    com.zsubera.jpa.util.IdentifierValidator.validateColumnName(columnName);
+                }
                 fieldValues.add(new EntityFieldValue(prefix + "." + subField.getName(), columnName, subValue,
                     !isUpdatableFalse(subField)));
             }

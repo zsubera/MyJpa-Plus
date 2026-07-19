@@ -299,6 +299,7 @@ public class CteSpec {
         if (params != null && params.length > 0) {
             int cteIndex = cteEntries.size() - 1;
             String rewrittenSql = sqlTemplate;
+            java.util.Set<String> paramNames = new java.util.HashSet<>();
             for (int i = params.length - 1; i >= 0; i--) {
                 String paramStr = "?" + (i + 1);
                 String namedParam = "_cte_" + cteIndex + "_param_" + i;
@@ -306,6 +307,10 @@ public class CteSpec {
                 boolean inString = false;
                 boolean inDollarQuote = false;
                 String dollarTag = null;
+                boolean inDoubleQuote = false;
+                boolean inBacktick = false;
+                boolean inOracleQQuote = false;
+                char qQuoteCloseChar = 0;
                 for (int j = 0; j < rewrittenSql.length(); j++) {
                     char c = rewrittenSql.charAt(j);
                     // ponytail: 处理 PostgreSQL dollar-quoted strings ($$...$$ 或 $tag$...$tag$)
@@ -353,11 +358,58 @@ public class CteSpec {
                         sb.append(c);
                         continue;
                     }
-                    if (c == '\\' && inString && j + 1 < rewrittenSql.length()) {
+                    // ponytail: 处理 Oracle Q-quoted strings (Q'x...x' 或 Q'[...]') 和
+                    // double-quoted/backtick-quoted identifiers — 内部的 ?N 不应被替换
+                    if (!inString && !inDollarQuote && !inDoubleQuote && !inBacktick && !inOracleQQuote) {
+                        if ((c == 'Q' || c == 'q') && j + 1 < rewrittenSql.length()
+                            && rewrittenSql.charAt(j + 1) == '\'') {
+                            j += 2; // skip Q'
+                            if (j < rewrittenSql.length()) {
+                                char delim = rewrittenSql.charAt(j);
+                                inOracleQQuote = true;
+                                if (delim == '[') {
+                                    qQuoteCloseChar = ']';
+                                } else if (delim == '{') {
+                                    qQuoteCloseChar = '}';
+                                } else {
+                                    qQuoteCloseChar = delim;
+                                }
+                                sb.append("Q'").append(delim);
+                                continue;
+                            }
+                        } else if (c == '"') {
+                            inDoubleQuote = true;
+                        } else if (c == '`') {
+                            inBacktick = true;
+                        }
+                    }
+                    if (inOracleQQuote) {
                         sb.append(c);
-                        sb.append(rewrittenSql.charAt(++j));
+                        if (c == qQuoteCloseChar && j + 1 < rewrittenSql.length()
+                            && rewrittenSql.charAt(j + 1) == '\'') {
+                            sb.append('\'');
+                            j++; // skip closing single quote
+                            inOracleQQuote = false;
+                        }
                         continue;
                     }
+                    if (inDoubleQuote) {
+                        sb.append(c);
+                        if (c == '"') {
+                            inDoubleQuote = false;
+                        }
+                        continue;
+                    }
+                    if (inBacktick) {
+                        sb.append(c);
+                        if (c == '`') {
+                            inBacktick = false;
+                        }
+                        continue;
+                    }
+                    // 不处理反斜杠转义：PostgreSQL standard_conforming_strings=on（默认）和
+                    // MySQL NO_BACKSLASH_ESCAPES 模式下 \' 是字面反引号+关闭引号，不是转义序列。
+                    // 与 checkSqlSafety() 的正则剥离行为保持一致。
                     if (c == '\'') {
                         // ponytail: 处理 SQL 转义引号 '' — 两个连续单引号不切换 inString
                         if (inString && j + 1 < rewrittenSql.length() && rewrittenSql.charAt(j + 1) == '\'') {
@@ -367,7 +419,7 @@ public class CteSpec {
                         }
                         inString = !inString;
                     }
-                    if (!inString && !inDollarQuote && c == '?'
+                    if (!inString && !inDollarQuote && !inOracleQQuote && !inDoubleQuote && !inBacktick && c == '?'
                         && rewrittenSql.regionMatches(j, paramStr, 0, paramStr.length())
                         && (j + paramStr.length() >= rewrittenSql.length()
                             || !Character.isDigit(rewrittenSql.charAt(j + paramStr.length())))) {
@@ -379,7 +431,9 @@ public class CteSpec {
                 }
                 rewrittenSql = sb.toString();
                 parameters.put(namedParam, params[i]);
+                paramNames.add(namedParam);
             }
+            current.asSafeParamNames = paramNames;
             // 检测未被替换的遗留位置参数（如 ?5 超出参数数量）
             java.util.regex.Matcher orphaned = ORPHANED_POSITIONAL_PARAM_PATTERN.matcher(rewrittenSql);
             while (orphaned.find()) {
@@ -732,7 +786,7 @@ public class CteSpec {
         sb.append(mainSql);
         String sql = sb.toString();
         // 警告 SQL 中未绑定的命名参数，以鼓励使用参数化查询
-        checkUnboundParameters(sql, parameters);
+        checkUnboundParameters(sql, parameters, collectAsSafeParamNames());
         return sql;
     }
 
@@ -813,7 +867,9 @@ public class CteSpec {
         // （美元引用必须在 Q 引用之前剥离，因为 $tag$ 内可能含 Q'...'；Q 引用必须在单引号之前剥离）
         String stripped = DOLLAR_QUOTED_STRING_PATTERN.matcher(sql).replaceAll("''");
         stripped = com.zsubera.jpa.monitor.SqlSanitizer.stripOracleQQuotes(stripped);
-        stripped = stripped.replaceAll("'(?:[^'\\\\]|\\\\.|'')*'", "''");
+        // ponytail: 使用字符扫描器替代正则剥离单引号字符串，正确处理 PG 标准模式
+        // （standard_conforming_strings=on）下 \' 是字面反引号+关闭引号的行为
+        stripped = stripSingleQuotedStrings(stripped);
         if (DANGEROUS_KEYWORD_PATTERN.matcher(stripped).find()) {
             String message = "SECURITY: " + context + " SQL contains potentially dangerous DDL/admin keyword. "
                 + "Ensure this is intentional and not user input. SQL: " + truncated;
@@ -866,24 +922,82 @@ public class CteSpec {
     }
 
     /**
+     * 收集所有 CTE 条目中 asSafe() 创建的参数名集合。
+     */
+    private java.util.Set<String> collectAsSafeParamNames() {
+        java.util.Set<String> names = new java.util.HashSet<>();
+        for (CteEntry entry : cteEntries) {
+            if (entry.asSafeParamNames != null) {
+                names.addAll(entry.asSafeParamNames);
+            }
+        }
+        return names;
+    }
+
+    /**
+     * 剥离 SQL 中的单引号字符串字面量，替换为 ''。
+     *
+     * <p>
+     * 使用字符扫描器而非正则，正确处理 PostgreSQL standard_conforming_strings=on
+     * （默认）下 {@code \'} 是字面反引号+关闭引号的行为。{@code ''} 转义引号正确跳过。
+     *
+     * @param sql 包含单引号字符串的 SQL
+     * @return 剥离字符串后的 SQL
+     */
+    private static String stripSingleQuotedStrings(String sql) {
+        StringBuilder sb = new StringBuilder(sql.length());
+        int i = 0;
+        while (i < sql.length()) {
+            char c = sql.charAt(i);
+            if (c == '\'') {
+                // 进入字符串，扫描到关闭引号
+                int j = i + 1;
+                while (j < sql.length()) {
+                    char sc = sql.charAt(j);
+                    if (sc == '\'' && j + 1 < sql.length() && sql.charAt(j + 1) == '\'') {
+                        j += 2; // 跳过 '' 转义引号
+                    } else if (sc == '\'' || sc == '\\') {
+                        break; // 字符串在 ' 或 \ 处结束（PG 标准模式：\ 是字面字符，下一个 ' 关闭字符串）
+                    } else {
+                        j++;
+                    }
+                }
+                if (j < sql.length() && sql.charAt(j) == '\'') {
+                    sb.append("''");
+                    i = j + 1;
+                } else {
+                    sb.append(c);
+                    i++;
+                }
+            } else {
+                sb.append(c);
+                i++;
+            }
+        }
+        return sb.toString();
+    }
+
+    /**
      * 检查 SQL 中是否存在未绑定的命名参数。
      *
      * @param sql 完整 SQL 字符串
      * @param boundParams 已绑定的参数映射
+     * @param asSafeParamNames asSafe() 创建的参数名集合，用于精确跳过内部参数
      */
-    private static void checkUnboundParameters(String sql, Map<String, Object> boundParams) {
+    private static void checkUnboundParameters(String sql, Map<String, Object> boundParams,
+        java.util.Set<String> asSafeParamNames) {
         // 正则检测：先剥离字符串字面量，再查找 :paramName 模式
         // 原子组 (?>...) 防止灾难性回溯
         // 顺序：美元引用 → Oracle Q 引用 → 单引号字符串
         String stripped = DOLLAR_QUOTED_STRING_PATTERN.matcher(sql).replaceAll("''");
         stripped = com.zsubera.jpa.monitor.SqlSanitizer.stripOracleQQuotes(stripped);
-        stripped = stripped.replaceAll("'(?:[^'\\\\]|\\\\.|'')*'", "''");
+        stripped = stripSingleQuotedStrings(stripped);
         java.util.regex.Matcher matcher = UNBOUND_PARAM_PATTERN.matcher(stripped);
         List<String> unboundParams = new ArrayList<>();
         while (matcher.find()) {
             String paramName = matcher.group(1);
-            // 跳过 asSafe() 内部管理的参数（如 :_cte_0_param_0）
-            if (paramName.startsWith("_cte_") && paramName.contains("_param_")) {
+            // 精确跳过 asSafe() 内部创建的参数，避免用户同名参数被误跳过
+            if (asSafeParamNames.contains(paramName)) {
                 continue;
             }
             if (!boundParams.containsKey(paramName)) {
@@ -925,6 +1039,7 @@ public class CteSpec {
         final String name;
         List<String> columns;
         String sql;
+        java.util.Set<String> asSafeParamNames;
 
         CteEntry(String name) {
             this.name = name;

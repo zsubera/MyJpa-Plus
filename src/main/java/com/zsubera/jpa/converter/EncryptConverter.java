@@ -176,6 +176,14 @@ public class EncryptConverter implements AttributeConverter<String, String> {
     }
 
     /**
+     * 重置 PBKDF2 迭代次数配置状态，仅用于测试隔离。
+     * 允许后续测试类重新配置 PBKDF2 迭代次数。
+     */
+    public static void resetIterationsConfigured() {
+        EncryptionKeyManager.resetIterationsConfigured();
+    }
+
+    /**
      * 设置是否跳过 PBKDF2 盐值检查（开发环境使用）。由自动配置类在启动时调用。
      *
      * @param skip true 跳过盐值检查

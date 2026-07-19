@@ -112,6 +112,7 @@ public final class IdentifierValidator {
      * @throws MyJpaPlusException 如果标识符包含非法字符、超长或包含同形字符
      */
     public static void validate(String identifier) {
+        ensurePropsLoaded();
         if (identifier == null || identifier.isEmpty()) {
             throw new SecurityViolationException("Identifier must not be null or empty");
         }
@@ -147,6 +148,7 @@ public final class IdentifierValidator {
      * @throws MyJpaPlusException 如果列名包含非法字符
      */
     public static void validateColumnName(String columnName) {
+        ensurePropsLoaded();
         if (columnName == null || columnName.isEmpty()) {
             throw new SecurityViolationException("Column name must not be null or empty");
         }

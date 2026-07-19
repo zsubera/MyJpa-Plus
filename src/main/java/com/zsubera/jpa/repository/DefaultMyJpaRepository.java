@@ -331,15 +331,25 @@ public class DefaultMyJpaRepository<T, ID> extends SimpleJpaRepository<T, ID> im
      * ponytail: 在事务完成后自动清理 AUTO_FILTER_OVERRIDE ThreadLocal，防止泄漏。
      * 当使用 withAutoFilterOverride() 时，try/finally 已保证清理。
      * 此方法作为安全网，处理直接设置 ThreadLocal 但忘记清理的场景。
+     *
+     * <p>
+     * 注意：仅清理注册时已存在的 ThreadLocal 状态。如果外层作用域在事务期间
+     * 设置了新的 ThreadLocal 值，清理不会覆盖外层作用域的状态。
      */
     public static void registerTransactionCleanup() {
         if (org.springframework.transaction.support.TransactionSynchronizationManager.isActualTransactionActive()) {
+            // 捕获注册时的 ThreadLocal 快照，仅清理本次事务设置的状态
+            Boolean overrideSnapshot = AUTO_FILTER_OVERRIDE.get();
             org.springframework.transaction.support.TransactionSynchronizationManager
                 .registerSynchronization(new org.springframework.transaction.support.TransactionSynchronization() {
                     @Override
                     public void afterCompletion(int status) {
-                        AUTO_FILTER_OVERRIDE.remove();
-                        SoftDeleteContext.reset();
+                        // 仅在 ThreadLocal 未被外层作用域修改时清理
+                        if (java.util.Objects.equals(AUTO_FILTER_OVERRIDE.get(), overrideSnapshot)) {
+                            AUTO_FILTER_OVERRIDE.remove();
+                        }
+                        // SoftDeleteContext 由 pushIgnore/popIgnore 的 try/finally 管理，
+                        // 此处不重置以避免破坏外层作用域的 IGNORE_COUNT
                     }
                 });
         }
@@ -631,6 +641,7 @@ public class DefaultMyJpaRepository<T, ID> extends SimpleJpaRepository<T, ID> im
         int deleted = entityManager.createQuery(delete).executeUpdate();
         if (deleted > 0) {
             com.zsubera.jpa.util.CacheEvictionHelper.evictEntityCache(entityManager, domainClass);
+            com.zsubera.jpa.softdelete.SoftDeleteBulkExecutor.publishEvent(domainClass, deleted);
         }
         return deleted > 0;
     }
@@ -679,7 +690,11 @@ public class DefaultMyJpaRepository<T, ID> extends SimpleJpaRepository<T, ID> im
                     domainClass.getSimpleName(), AuditUtils.getCallStack());
             }
             SoftDeleteBulkExecutor.softDeleteAll(entityManager, domainClass, true);
-        }, super::deleteAll);
+        }, () -> {
+            super.deleteAll();
+            com.zsubera.jpa.util.CacheEvictionHelper.evictEntityCache(entityManager, domainClass);
+            com.zsubera.jpa.softdelete.SoftDeleteBulkExecutor.publishEvent(domainClass, 1);
+        });
     }
 
     /**
@@ -712,6 +727,7 @@ public class DefaultMyJpaRepository<T, ID> extends SimpleJpaRepository<T, ID> im
                 entityManager.createQuery(delete).executeUpdate();
             }
             CacheEvictionHelper.evictEntityCache(entityManager, domainClass);
+            com.zsubera.jpa.softdelete.SoftDeleteBulkExecutor.publishEvent(domainClass, idList.size());
         });
     }
 
@@ -758,7 +774,11 @@ public class DefaultMyJpaRepository<T, ID> extends SimpleJpaRepository<T, ID> im
             if (!idList.isEmpty()) {
                 SoftDeleteBulkExecutor.softDeleteByIds(entityManager, domainClass, idList);
             }
-        }, () -> super.deleteInBatch(validatedEntities));
+        }, () -> {
+            super.deleteInBatch(validatedEntities);
+            com.zsubera.jpa.util.CacheEvictionHelper.evictEntityCache(entityManager, domainClass);
+            com.zsubera.jpa.softdelete.SoftDeleteBulkExecutor.publishEvent(domainClass, validatedEntities.size());
+        });
     }
 
     /**
@@ -772,7 +792,11 @@ public class DefaultMyJpaRepository<T, ID> extends SimpleJpaRepository<T, ID> im
                     domainClass.getSimpleName(), AuditUtils.getCallStack());
             }
             SoftDeleteBulkExecutor.softDeleteAll(entityManager, domainClass, true);
-        }, super::deleteAllInBatch);
+        }, () -> {
+            super.deleteAllInBatch();
+            com.zsubera.jpa.util.CacheEvictionHelper.evictEntityCache(entityManager, domainClass);
+            com.zsubera.jpa.softdelete.SoftDeleteBulkExecutor.publishEvent(domainClass, 1);
+        });
     }
 
     /**
@@ -823,7 +847,11 @@ public class DefaultMyJpaRepository<T, ID> extends SimpleJpaRepository<T, ID> im
             // the soft-delete on next em.flush(). Native SQL UPDATE bypasses JPA's
             // dirty-checking, so the in-memory entity retains old field values.
             entityManager.detach(entity);
-        }, () -> entityManager.remove(entity));
+        }, () -> {
+            entityManager.remove(entity);
+            com.zsubera.jpa.util.CacheEvictionHelper.evictL2CacheOnly(entityManager, domainClass);
+            com.zsubera.jpa.softdelete.SoftDeleteBulkExecutor.publishEvent(domainClass, 1);
+        });
     }
 
     /**
@@ -885,6 +913,7 @@ public class DefaultMyJpaRepository<T, ID> extends SimpleJpaRepository<T, ID> im
                 entityManager.createQuery(delete).executeUpdate();
             }
             CacheEvictionHelper.evictEntityCache(entityManager, domainClass);
+            com.zsubera.jpa.softdelete.SoftDeleteBulkExecutor.publishEvent(domainClass, ids.size());
         });
     }
 

@@ -111,6 +111,20 @@ final class EncryptionKeyManager {
     }
 
     /**
+     * 重置迭代次数配置状态，仅用于测试隔离。
+     * 允许后续测试类重新配置 PBKDF2 迭代次数。
+     */
+    static void resetIterationsConfigured() {
+        KEY_VERSION_LOCK.lock();
+        try {
+            iterationsConfigured = false;
+            keysInUse.set(false);
+        } finally {
+            KEY_VERSION_LOCK.unlock();
+        }
+    }
+
+    /**
      * 设置 Spring Environment 检测到的生产环境标志。
      * 由 MyJpaPlusAutoConfiguration 在自动配置阶段调用，用于检测 application.yml 中的 prod profile。
      *

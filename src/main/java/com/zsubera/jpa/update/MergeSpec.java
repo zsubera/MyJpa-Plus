@@ -230,7 +230,11 @@ public class MergeSpec<T> {
         warnIdentityGeneration();
         // Snapshot entity to avoid race condition with concurrent withEntity() calls
         T entitySnapshot = this.entity;
-        return executeWith(em, entitySnapshot);
+        int affected = executeWith(em, entitySnapshot);
+        if (affected > 0) {
+            com.zsubera.jpa.util.CacheEvictionHelper.evictL2CacheOnly(em, entityClass);
+        }
+        return affected;
     }
 
     /**
@@ -286,6 +290,7 @@ public class MergeSpec<T> {
         em.flush();
         // Step 2: after flush, entity is managed and persisted — skip native UPSERT
         // since merge+flush already handled the persistence and lifecycle callbacks.
+        com.zsubera.jpa.util.CacheEvictionHelper.evictL2CacheOnly(em, entityClass);
         return 1;
     }
 
@@ -491,14 +496,14 @@ public class MergeSpec<T> {
                 }
                 if (i > 0 && i % batchSize == 0
                     && persistenceContextStrategy == PersistenceContextStrategy.AUTO_CLEAR) {
-                    em.clear();
+                    com.zsubera.jpa.util.CacheEvictionHelper.evictEntityCache(em, entityClass);
                 }
                 total += executeWith(em, entity, strategy, effectiveConflictFields, conflictSet);
             }
         } catch (RuntimeException e) {
             if (em.isOpen() && persistenceContextStrategy == PersistenceContextStrategy.AUTO_CLEAR) {
                 try {
-                    em.clear();
+                    com.zsubera.jpa.util.CacheEvictionHelper.evictEntityCache(em, entityClass);
                 } catch (RuntimeException clearEx) {
                     log.warn("em.clear() failed during batch error cleanup: {}", clearEx.getMessage());
                 }
@@ -615,13 +620,13 @@ public class MergeSpec<T> {
                     batchSql.params());
                 total += executeNativeQuery(em, batchSql.sql(), batchSql.params());
                 if (persistenceContextStrategy == PersistenceContextStrategy.AUTO_CLEAR) {
-                    em.clear();
+                    com.zsubera.jpa.util.CacheEvictionHelper.evictEntityCache(em, entityClass);
                 }
             }
         } catch (RuntimeException e) {
             if (em.isOpen() && persistenceContextStrategy == PersistenceContextStrategy.AUTO_CLEAR) {
                 try {
-                    em.clear();
+                    com.zsubera.jpa.util.CacheEvictionHelper.evictEntityCache(em, entityClass);
                 } catch (RuntimeException clearEx) {
                     log.warn("em.clear() failed during batch error cleanup: {}", clearEx.getMessage());
                 }
@@ -743,7 +748,7 @@ public class MergeSpec<T> {
             throw e;
         } finally {
             try {
-                em.clear();
+                com.zsubera.jpa.util.CacheEvictionHelper.evictEntityCache(em, entityClass);
             } catch (RuntimeException clearEx) {
                 log.warn("em.clear() failed after executeSingleBatchInTransaction: {}", clearEx.getMessage());
             }

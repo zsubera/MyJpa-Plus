@@ -127,6 +127,12 @@ class BatchSaveTemplate {
     /**
      * 通用分批保存逻辑，消除 saveAllBatched 和 saveAllBatchedPure 的重复代码。
      *
+     * <p>
+     * <strong>注意：</strong>返回的实体处于 detached 状态（clear 后分离）。
+     * 数据库计算的默认值（如 {@code DEFAULT CURRENT_TIMESTAMP}）不会反映到返回的实体中
+     * （字段仍为 null），除非实体使用了 {@code @Generated} 注解。
+     * 如需获取数据库默认值，应在保存后重新查询实体。
+     *
      * @param entities 要保存的实体列表
      * @param batchSize 每批大小
      * @param saveFunction 保存函数，接收实体并返回保存后的实体

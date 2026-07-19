@@ -24,6 +24,7 @@ class AutoconfigureExtendedCoverageTest {
         GlobalConfigHolder.setConfig(null);
         com.zsubera.jpa.autoconfigure.GlobalConfigHolder.getConfig().setSoftDeleteAutoFilter(true);
         com.zsubera.jpa.autoconfigure.GlobalConfigHolder.getConfig().setBlockUnconditionalDelete(true);
+        com.zsubera.jpa.converter.EncryptConverter.resetIterationsConfigured();
     }
 
     @Test

@@ -814,6 +814,10 @@ public final class SoftDeleteHelper {
 
     /**
      * 清除所有缓存。用于应用关闭时清理，防止热部署场景下的类加载器泄漏。
+     *
+     * <p>
+     * 注意：9 个缓存的清除非原子操作。并发查询线程可能看到部分清除状态。
+     * 这在关断阶段是可接受的——此时不应有新的业务请求到达。
      */
     public static void shutdown() {
         FIELD_CACHE.invalidateAll();

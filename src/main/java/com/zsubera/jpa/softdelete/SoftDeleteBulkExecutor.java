@@ -46,7 +46,7 @@ public final class SoftDeleteBulkExecutor {
         eventPublisher = publisher;
     }
 
-    static void publishEvent(Class<?> entityClass, int affectedRows) {
+    public static void publishEvent(Class<?> entityClass, int affectedRows) {
         EventPublisher publisher = eventPublisher;
         if (publisher != null && affectedRows > 0) {
             try {
@@ -499,6 +499,9 @@ public final class SoftDeleteBulkExecutor {
             // 悲观锁持有至事务结束，消除了 COUNT/SELECT 与 UPDATE 之间的竞态条件窗口。
             // JPA CriteriaUpdate 不支持 setLockMode()，因此无法直接对 UPDATE 加锁，
             // 但通过先锁定 ID 再按 ID 更新，确保了操作的原子性。
+            //
+            // 锁定范围：一次锁定最多 maxRows 行（默认 10000）。高并发场景下可能产生锁争用。
+            // 建议：并发写入频繁的表使用较小的 maxRows 值，或通过分批调用 softDeleteByIds() 控制锁粒度。
             String idFieldName = com.zsubera.jpa.util.EntityClassResolver.resolveIdFieldName(entityClass);
             jakarta.persistence.criteria.CriteriaQuery<?> idQuery = cb.createQuery();
             jakarta.persistence.criteria.Root<T> idRoot = idQuery.from(entityClass);

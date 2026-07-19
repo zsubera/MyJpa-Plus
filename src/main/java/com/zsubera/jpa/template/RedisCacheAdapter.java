@@ -1,6 +1,5 @@
 package com.zsubera.jpa.template;
 
-import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashSet;
@@ -10,7 +9,6 @@ import java.util.Set;
 import java.util.concurrent.atomic.AtomicLong;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.data.redis.connection.RedisConnection;
 import org.springframework.data.redis.core.Cursor;
 import org.springframework.data.redis.core.RedisCallback;
 import org.springframework.data.redis.core.RedisTemplate;
@@ -234,8 +232,8 @@ public class RedisCacheAdapter implements CacheAdapter {
         try {
             for (Map.Entry<String, Object> entry : entries.entrySet()) {
                 if (defaultTtlSeconds > 0) {
-                    redisTemplate.opsForValue().set(fullKey(entry.getKey()), entry.getValue(),
-                        defaultTtlSeconds, java.util.concurrent.TimeUnit.SECONDS);
+                    redisTemplate.opsForValue().set(fullKey(entry.getKey()), entry.getValue(), defaultTtlSeconds,
+                        java.util.concurrent.TimeUnit.SECONDS);
                 } else {
                     redisTemplate.opsForValue().set(fullKey(entry.getKey()), entry.getValue());
                 }

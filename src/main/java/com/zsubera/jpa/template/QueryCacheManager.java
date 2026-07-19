@@ -243,6 +243,9 @@ public class QueryCacheManager implements CacheAdapter {
             return false;
         }
         cache.put(key, packWithTtl(value, ttlSeconds));
+        // ponytail: cache.put() 与 addToPrefixIndex() 之间存在微小竞态窗口：
+        // 并发 evictByPrefix() 可能在两次写入之间快照前缀索引，遗漏新条目。
+        // 影响范围有限：遗漏的条目会在 TTL 到期后自然过期，不会导致数据错误。
         addToPrefixIndex(key);
         log.debug("Cache put for key: {} (ttl={}s)", key, ttlSeconds);
         return true;

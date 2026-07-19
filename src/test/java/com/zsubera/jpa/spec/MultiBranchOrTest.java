@@ -61,9 +61,8 @@ class MultiBranchOrTest {
         repository.save(newEntity("guest", 3));
 
         QuerySpec<TestEntity> qs = new QuerySpec<>();
-        qs.or(
-            o -> o.eq(TestEntity::getName, "admin"),    // 分支1: name='admin'
-            o -> o.eq(TestEntity::getStatus, 2)         // 分支2: status=2
+        qs.or(o -> o.eq(TestEntity::getName, "admin"), // 分支1: name='admin'
+            o -> o.eq(TestEntity::getStatus, 2) // 分支2: status=2
         );
 
         // 期望：name='admin' OR status=2
@@ -76,23 +75,25 @@ class MultiBranchOrTest {
     @Test
     void testMultiBranchOrWithAndInside() {
         // lambda 内部 .eq().eq() = AND（与外层一致）
-        repository.save(newEntity("admin", 1));      // name='admin', status=1
-        repository.save(newEntity("admin", 2));      // name='admin', status=2
-        repository.save(newEntity("user", 2));       // name='user', status=2
-        repository.save(newEntity("guest", 3));      // name='guest', status=3
+        repository.save(newEntity("admin", 1)); // name='admin', status=1
+        repository.save(newEntity("admin", 2)); // name='admin', status=2
+        repository.save(newEntity("user", 2)); // name='user', status=2
+        repository.save(newEntity("guest", 3)); // name='guest', status=3
 
         QuerySpec<TestEntity> qs = new QuerySpec<>();
-        qs.or(
-            o -> o.eq(TestEntity::getName, "admin").eq(TestEntity::getStatus, 1),  // 分支1: (admin AND 1)
-            o -> o.eq(TestEntity::getStatus, 2)                                      // 分支2: status=2
+        qs.or(o -> o.eq(TestEntity::getName, "admin").eq(TestEntity::getStatus, 1), // 分支1: (admin AND 1)
+            o -> o.eq(TestEntity::getStatus, 2) // 分支2: status=2
         );
 
         // 期望：(name='admin' AND status=1) OR status=2
         List<TestEntity> result = repository.findAll(qs.toSpecification());
         assertEquals(3, result.size());
-        assertTrue(result.stream().anyMatch(e -> "admin".equals(e.getName()) && Integer.valueOf(1).equals(e.getStatus())));
-        assertTrue(result.stream().anyMatch(e -> "admin".equals(e.getName()) && Integer.valueOf(2).equals(e.getStatus())));
-        assertTrue(result.stream().anyMatch(e -> "user".equals(e.getName()) && Integer.valueOf(2).equals(e.getStatus())));
+        assertTrue(
+            result.stream().anyMatch(e -> "admin".equals(e.getName()) && Integer.valueOf(1).equals(e.getStatus())));
+        assertTrue(
+            result.stream().anyMatch(e -> "admin".equals(e.getName()) && Integer.valueOf(2).equals(e.getStatus())));
+        assertTrue(
+            result.stream().anyMatch(e -> "user".equals(e.getName()) && Integer.valueOf(2).equals(e.getStatus())));
     }
 
     @Test
@@ -104,11 +105,8 @@ class MultiBranchOrTest {
         repository.save(newEntity("other", 4));
 
         QuerySpec<TestEntity> qs = new QuerySpec<>();
-        qs.or(
-            o -> o.eq(TestEntity::getName, "admin"),
-            o -> o.eq(TestEntity::getName, "user"),
-            o -> o.eq(TestEntity::getName, "guest")
-        );
+        qs.or(o -> o.eq(TestEntity::getName, "admin"), o -> o.eq(TestEntity::getName, "user"),
+            o -> o.eq(TestEntity::getName, "guest"));
 
         // 期望：name='admin' OR name='user' OR name='guest'
         List<TestEntity> result = repository.findAll(qs.toSpecification());
@@ -119,22 +117,23 @@ class MultiBranchOrTest {
     @Test
     void testMultiBranchOrWithComplexConditions() {
         // 复杂条件：每个分支可以有多个 AND 条件
-        repository.save(newEntity("admin", 1));      // name='admin', status=1
-        repository.save(newEntity("admin", 2));      // name='admin', status=2
-        repository.save(newEntity("user", 1));       // name='user', status=1
-        repository.save(newEntity("user", 2));       // name='user', status=2
+        repository.save(newEntity("admin", 1)); // name='admin', status=1
+        repository.save(newEntity("admin", 2)); // name='admin', status=2
+        repository.save(newEntity("user", 1)); // name='user', status=1
+        repository.save(newEntity("user", 2)); // name='user', status=2
 
         QuerySpec<TestEntity> qs = new QuerySpec<>();
-        qs.or(
-            o -> o.eq(TestEntity::getName, "admin").eq(TestEntity::getStatus, 1),  // 分支1: (admin AND 1)
-            o -> o.eq(TestEntity::getName, "user").eq(TestEntity::getStatus, 2)    // 分支2: (user AND 2)
+        qs.or(o -> o.eq(TestEntity::getName, "admin").eq(TestEntity::getStatus, 1), // 分支1: (admin AND 1)
+            o -> o.eq(TestEntity::getName, "user").eq(TestEntity::getStatus, 2) // 分支2: (user AND 2)
         );
 
         // 期望：(name='admin' AND status=1) OR (name='user' AND status=2)
         List<TestEntity> result = repository.findAll(qs.toSpecification());
         assertEquals(2, result.size());
-        assertTrue(result.stream().anyMatch(e -> "admin".equals(e.getName()) && Integer.valueOf(1).equals(e.getStatus())));
-        assertTrue(result.stream().anyMatch(e -> "user".equals(e.getName()) && Integer.valueOf(2).equals(e.getStatus())));
+        assertTrue(
+            result.stream().anyMatch(e -> "admin".equals(e.getName()) && Integer.valueOf(1).equals(e.getStatus())));
+        assertTrue(
+            result.stream().anyMatch(e -> "user".equals(e.getName()) && Integer.valueOf(2).equals(e.getStatus())));
     }
 
     // ---- 不同操作符测试 ----
@@ -147,9 +146,8 @@ class MultiBranchOrTest {
         repository.save(newEntity("c", 10));
 
         QuerySpec<TestEntity> qs = new QuerySpec<>();
-        qs.or(
-            o -> o.lt(TestEntity::getStatus, 3),   // 分支1: status < 3
-            o -> o.gt(TestEntity::getStatus, 7)    // 分支2: status > 7
+        qs.or(o -> o.lt(TestEntity::getStatus, 3), // 分支1: status < 3
+            o -> o.gt(TestEntity::getStatus, 7) // 分支2: status > 7
         );
 
         // 期望：status < 3 OR status > 7
@@ -167,9 +165,8 @@ class MultiBranchOrTest {
         repository.save(newEntity("help", 0));
 
         QuerySpec<TestEntity> qs = new QuerySpec<>();
-        qs.or(
-            o -> o.like(TestEntity::getName, "hel"),   // 分支1: name LIKE '%hel%'
-            o -> o.like(TestEntity::getName, "wor")    // 分支2: name LIKE '%wor%'
+        qs.or(o -> o.like(TestEntity::getName, "hel"), // 分支1: name LIKE '%hel%'
+            o -> o.like(TestEntity::getName, "wor") // 分支2: name LIKE '%wor%'
         );
 
         // 期望：name LIKE '%hel%' OR name LIKE '%wor%'
@@ -186,9 +183,8 @@ class MultiBranchOrTest {
         repository.save(newEntity("d", 4));
 
         QuerySpec<TestEntity> qs = new QuerySpec<>();
-        qs.or(
-            o -> o.in(TestEntity::getStatus, 1, 2),   // 分支1: status IN (1, 2)
-            o -> o.in(TestEntity::getStatus, 3, 4)    // 分支2: status IN (3, 4)
+        qs.or(o -> o.in(TestEntity::getStatus, 1, 2), // 分支1: status IN (1, 2)
+            o -> o.in(TestEntity::getStatus, 3, 4) // 分支2: status IN (3, 4)
         );
 
         // 期望：status IN (1, 2) OR status IN (3, 4)
@@ -206,9 +202,8 @@ class MultiBranchOrTest {
         repository.save(nullName);
 
         QuerySpec<TestEntity> qs = new QuerySpec<>();
-        qs.or(
-            o -> o.isNull(TestEntity::getName),           // 分支1: name IS NULL
-            o -> o.eq(TestEntity::getStatus, 0)           // 分支2: status = 0
+        qs.or(o -> o.isNull(TestEntity::getName), // 分支1: name IS NULL
+            o -> o.eq(TestEntity::getStatus, 0) // 分支2: status = 0
         );
 
         // 期望：name IS NULL OR status = 0
@@ -226,9 +221,8 @@ class MultiBranchOrTest {
         repository.save(newEntity("c", 10));
 
         QuerySpec<TestEntity> qs = new QuerySpec<>();
-        qs.or(
-            o -> o.between(TestEntity::getStatus, 1, 3),    // 分支1: status BETWEEN 1 AND 3
-            o -> o.between(TestEntity::getStatus, 8, 10)    // 分支2: status BETWEEN 8 AND 10
+        qs.or(o -> o.between(TestEntity::getStatus, 1, 3), // 分支1: status BETWEEN 1 AND 3
+            o -> o.between(TestEntity::getStatus, 8, 10) // 分支2: status BETWEEN 8 AND 10
         );
 
         // 期望：status BETWEEN 1 AND 3 OR status BETWEEN 8 AND 10
@@ -249,11 +243,10 @@ class MultiBranchOrTest {
         repository.save(newEntity("user", 2));
 
         QuerySpec<TestEntity> qs = new QuerySpec<>();
-        qs.eq(TestEntity::getName, "admin")   // 外层 AND: name='admin'
-          .or(
-              o -> o.eq(TestEntity::getStatus, 1),   // 分支1: status=1
-              o -> o.eq(TestEntity::getStatus, 2)    // 分支2: status=2
-          );
+        qs.eq(TestEntity::getName, "admin") // 外层 AND: name='admin'
+            .or(o -> o.eq(TestEntity::getStatus, 1), // 分支1: status=1
+                o -> o.eq(TestEntity::getStatus, 2) // 分支2: status=2
+            );
 
         // 期望：name='admin' AND (status=1 OR status=2)
         List<TestEntity> result = repository.findAll(qs.toSpecification());
@@ -269,11 +262,10 @@ class MultiBranchOrTest {
         repository.save(newEntity("guest", 3));
 
         QuerySpec<TestEntity> qs = new QuerySpec<>();
-        qs.not(n -> n.eq(TestEntity::getName, "admin"))   // not(name='admin')
-          .or(
-              o -> o.eq(TestEntity::getName, "user"),     // 分支1: name='user'
-              o -> o.eq(TestEntity::getName, "guest")     // 分支2: name='guest'
-          );
+        qs.not(n -> n.eq(TestEntity::getName, "admin")) // not(name='admin')
+            .or(o -> o.eq(TestEntity::getName, "user"), // 分支1: name='user'
+                o -> o.eq(TestEntity::getName, "guest") // 分支2: name='guest'
+            );
 
         // 期望：name != 'admin' AND (name='user' OR name='guest')
         List<TestEntity> result = repository.findAll(qs.toSpecification());
@@ -290,8 +282,8 @@ class MultiBranchOrTest {
         repository.save(newEntity("other", 4));
 
         QuerySpec<TestEntity> qs = new QuerySpec<>();
-        qs.or(o -> o.eq(TestEntity::getName, "admin"))    // 第一次 or()
-          .or(o -> o.eq(TestEntity::getName, "user"));    // 第二次 or()，应该合并
+        qs.or(o -> o.eq(TestEntity::getName, "admin")) // 第一次 or()
+            .or(o -> o.eq(TestEntity::getName, "user")); // 第二次 or()，应该合并
 
         // 期望：name='admin' OR name='user'
         List<TestEntity> result = repository.findAll(qs.toSpecification());
@@ -310,11 +302,10 @@ class MultiBranchOrTest {
         repository.save(newEntity("guest", 3));
 
         QuerySpec<TestEntity> qs = new QuerySpec<>();
-        qs.ge(TestEntity::getStatus, 1)   // 外层: status >= 1
-          .or(
-              o -> o.eq(TestEntity::getName, "admin"),   // 分支1: name='admin'
-              o -> o.eq(TestEntity::getName, "user")    // 分支2: name='user'
-          );
+        qs.ge(TestEntity::getStatus, 1) // 外层: status >= 1
+            .or(o -> o.eq(TestEntity::getName, "admin"), // 分支1: name='admin'
+                o -> o.eq(TestEntity::getName, "user") // 分支2: name='user'
+            );
 
         // 期望：status >= 1 AND (name='admin' OR name='user')
         List<TestEntity> result = repository.findAll(qs.toSpecification());
@@ -332,9 +323,8 @@ class MultiBranchOrTest {
         repository.save(newEntity("c", 10));
 
         QuerySpec<TestEntity> qs = new QuerySpec<>();
-        qs.or(
-            o -> o.eq(TestEntity::getName, "a").lt(TestEntity::getStatus, 3),   // 分支1: (name='a' AND status < 3)
-            o -> o.eq(TestEntity::getName, "c").gt(TestEntity::getStatus, 7)    // 分支2: (name='c' AND status > 7)
+        qs.or(o -> o.eq(TestEntity::getName, "a").lt(TestEntity::getStatus, 3), // 分支1: (name='a' AND status < 3)
+            o -> o.eq(TestEntity::getName, "c").gt(TestEntity::getStatus, 7) // 分支2: (name='c' AND status > 7)
         );
 
         // 期望：(name='a' AND status < 3) OR (name='c' AND status > 7)
@@ -356,9 +346,8 @@ class MultiBranchOrTest {
         repository.save(nullStatus);
 
         QuerySpec<TestEntity> qs = new QuerySpec<>();
-        qs.or(
-            o -> o.eq(TestEntity::getName, "admin"),   // 分支1: name='admin'
-            o -> o.isNull(TestEntity::getStatus)       // 分支2: status IS NULL
+        qs.or(o -> o.eq(TestEntity::getName, "admin"), // 分支1: name='admin'
+            o -> o.isNull(TestEntity::getStatus) // 分支2: status IS NULL
         );
 
         // 期望：name='admin' OR status IS NULL
@@ -381,7 +370,7 @@ class MultiBranchOrTest {
     void testNullBranchThrowsException() {
         // null 分支应抛出异常
         QuerySpec<TestEntity> qs = new QuerySpec<>();
-        assertThrows(IllegalArgumentException.class, () -> qs.or((Consumer<OrGroup<TestEntity>>) null));
+        assertThrows(IllegalArgumentException.class, () -> qs.or((Consumer<OrGroup<TestEntity>>)null));
     }
 
     @Test
@@ -392,16 +381,13 @@ class MultiBranchOrTest {
         repository.save(newEntity("guest", 3));
 
         QuerySpec<TestEntity> qs = new QuerySpec<>();
-        qs.eq(TestEntity::getStatus, 1);  // 先添加一个正常条件
+        qs.eq(TestEntity::getStatus, 1); // 先添加一个正常条件
 
         // 第一个分支正常，第二个分支抛出异常
         try {
-            qs.or(
-                o -> o.eq(TestEntity::getName, "admin"),
-                (Consumer<OrGroup<TestEntity>>) o -> {
-                    throw new RuntimeException("branch error");
-                }
-            );
+            qs.or(o -> o.eq(TestEntity::getName, "admin"), (Consumer<OrGroup<TestEntity>>)o -> {
+                throw new RuntimeException("branch error");
+            });
             fail("Should have thrown exception");
         } catch (RuntimeException e) {
             assertEquals("branch error", e.getMessage());
@@ -409,7 +395,7 @@ class MultiBranchOrTest {
 
         // 异常后查询应该只包含之前的条件
         List<TestEntity> result = repository.findAll(qs.toSpecification());
-        assertEquals(1, result.size());  // 只有 admin/1 符合 status=1
+        assertEquals(1, result.size()); // 只有 admin/1 符合 status=1
         assertEquals("admin", result.get(0).getName());
     }
 
@@ -420,9 +406,8 @@ class MultiBranchOrTest {
         repository.save(newEntity("user", 2));
 
         QuerySpec<TestEntity> qs = new QuerySpec<>();
-        qs.or(
-            o -> o.eq(TestEntity::getName, "guest"),   // 分支1: name='guest'（不存在）
-            o -> o.eq(TestEntity::getName, "other")   // 分支2: name='other'（不存在）
+        qs.or(o -> o.eq(TestEntity::getName, "guest"), // 分支1: name='guest'（不存在）
+            o -> o.eq(TestEntity::getName, "other") // 分支2: name='other'（不存在）
         );
 
         // 期望：无结果
@@ -438,11 +423,8 @@ class MultiBranchOrTest {
         repository.save(newEntity("guest", 3));
 
         QuerySpec<TestEntity> qs = new QuerySpec<>();
-        qs.or(
-            o -> o.eq(TestEntity::getName, "admin"),
-            o -> o.eq(TestEntity::getName, "user"),
-            o -> o.eq(TestEntity::getName, "guest")
-        );
+        qs.or(o -> o.eq(TestEntity::getName, "admin"), o -> o.eq(TestEntity::getName, "user"),
+            o -> o.eq(TestEntity::getName, "guest"));
 
         // 期望：所有记录
         List<TestEntity> result = repository.findAll(qs.toSpecification());

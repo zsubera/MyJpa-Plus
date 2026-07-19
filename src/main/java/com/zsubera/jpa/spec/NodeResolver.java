@@ -15,7 +15,6 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import org.slf4j.Logger;
-import org.springframework.lang.NonNull;
 import org.springframework.lang.Nullable;
 import org.slf4j.LoggerFactory;
 
@@ -53,9 +52,9 @@ final class NodeResolver {
         java.util.Set<String> fetchPaths;
         boolean applySoftDeleteFilter;
 
-        NodeContext(Path<?> path, Path<?> rootPath, @Nullable CriteriaQuery<?> query,
-            CriteriaBuilder cb, Map<String, Join<?, ?>> joinCache, @Nullable String pathPrefix,
-            java.util.Set<String> fetchPaths, boolean applySoftDeleteFilter) {
+        NodeContext(Path<?> path, Path<?> rootPath, @Nullable CriteriaQuery<?> query, CriteriaBuilder cb,
+            Map<String, Join<?, ?>> joinCache, @Nullable String pathPrefix, java.util.Set<String> fetchPaths,
+            boolean applySoftDeleteFilter) {
             this.path = path;
             this.rootPath = rootPath;
             this.query = query;
@@ -155,8 +154,8 @@ final class NodeResolver {
         // ponytail: 在顶层计算一次软删除过滤，避免每个 JoinNode 都重复调用
         boolean applySoftDeleteFilter = shouldApplySoftDeleteAutoFilter();
 
-        NodeContext ctx = new NodeContext(path, rootPath, query, cb, joinCache, pathPrefix, fetchPaths,
-            applySoftDeleteFilter);
+        NodeContext ctx =
+            new NodeContext(path, rootPath, query, cb, joinCache, pathPrefix, fetchPaths, applySoftDeleteFilter);
         ctx.depth = depth;
         return resolveNodeInternal(node, ctx);
     }
@@ -325,8 +324,8 @@ final class NodeResolver {
                 + "nested condition structure. Please simplify your query conditions.");
         }
 
-        NodeContext ctx = new NodeContext(join, rootPath, query, cb, joinCache, pathPrefix, fetchPaths,
-            applySoftDeleteFilter);
+        NodeContext ctx =
+            new NodeContext(join, rootPath, query, cb, joinCache, pathPrefix, fetchPaths, applySoftDeleteFilter);
         ctx.depth = depth;
         return resolveNodeInternal(child, ctx);
     }

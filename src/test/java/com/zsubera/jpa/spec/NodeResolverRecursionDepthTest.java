@@ -103,10 +103,7 @@ class NodeResolverRecursionDepthTest {
         QuerySpec<TestEntity> spec = new QuerySpec<>();
 
         // name='test' OR status > 0
-        spec.or(
-            orSpec -> orSpec.eq(TestEntity::getName, "test"),
-            orSpec -> orSpec.gt(TestEntity::getStatus, 0)
-        );
+        spec.or(orSpec -> orSpec.eq(TestEntity::getName, "test"), orSpec -> orSpec.gt(TestEntity::getStatus, 0));
 
         var result = repository.findAll(spec.toSpecification());
         assertEquals(2, result.size());

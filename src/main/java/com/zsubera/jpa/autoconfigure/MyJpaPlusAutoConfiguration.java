@@ -459,8 +459,7 @@ public class MyJpaPlusAutoConfiguration {
      */
     @Bean
     @ConditionalOnMissingBean(QueryCacheManager.class)
-    @ConditionalOnProperty(prefix = "myjpa-plus.cache", name = "type", havingValue = "caffeine",
-        matchIfMissing = true)
+    @ConditionalOnProperty(prefix = "myjpa-plus.cache", name = "type", havingValue = "caffeine", matchIfMissing = true)
     public QueryCacheManager queryCacheManager(MyJpaPlusProperties properties) {
         int maxEntries = properties.getCache().getMaxEntries();
         return new QueryCacheManager(maxEntries);
@@ -495,9 +494,8 @@ public class MyJpaPlusAutoConfiguration {
 
         if (cacheType == MyJpaPlusProperties.Cache.Type.REDIS) {
             if (redisTemplate == null) {
-                throw new org.springframework.beans.factory.UnsatisfiedDependencyException(
-                    "MyJpaPlusAutoConfiguration", "cacheAdapter", "",
-                    "RedisTemplate not found. Please add spring-boot-starter-data-redis dependency "
+                throw new org.springframework.beans.factory.UnsatisfiedDependencyException("MyJpaPlusAutoConfiguration",
+                    "cacheAdapter", "", "RedisTemplate not found. Please add spring-boot-starter-data-redis dependency "
                         + "and configure Redis connection properties (spring.data.redis.*).");
             }
             MyJpaPlusProperties.Cache.Redis redisConfig = properties.getCache().getRedis();

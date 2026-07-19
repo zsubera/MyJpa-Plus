@@ -114,10 +114,7 @@ public class QuerySpecTest {
         repository.save(newEntity("beta", 2));
         repository.save(newEntity("gamma", 3));
         QuerySpec<TestEntity> qs = new QuerySpec<>();
-        qs.or(
-            g -> g.eq(TestEntity::getName, "alpha"),
-            g -> g.eq(TestEntity::getName, "beta")
-        );
+        qs.or(g -> g.eq(TestEntity::getName, "alpha"), g -> g.eq(TestEntity::getName, "beta"));
         List<TestEntity> result = repository.findAll(qs.toSpecification());
         assertEquals(2, result.size());
     }
@@ -630,10 +627,7 @@ public class QuerySpecTest {
         repository.save(newEntity("beta", 2));
         repository.save(newEntity("gamma", 3));
         QuerySpec<TestEntity> qs = new QuerySpec<>();
-        qs.or(
-            g -> g.eq(TestEntity::getName, "alpha"),
-            g -> g.eq(TestEntity::getName, "beta")
-        );
+        qs.or(g -> g.eq(TestEntity::getName, "alpha"), g -> g.eq(TestEntity::getName, "beta"));
         List<TestEntity> result = repository.findAll(qs.toSpecification());
         assertEquals(2, result.size());
     }
@@ -756,10 +750,8 @@ public class QuerySpecTest {
         repository.save(newEntity("d", 4));
         QuerySpec<TestEntity> qs = new QuerySpec<>();
         // status=1 OR status=2 OR (status=2 AND status=3) -> status=1 OR status=2
-        qs.or(
-            outer -> outer.eq(TestEntity::getStatus, 1),
-            inner -> inner.eq(TestEntity::getStatus, 2).eq(TestEntity::getStatus, 3)
-        );
+        qs.or(outer -> outer.eq(TestEntity::getStatus, 1),
+            inner -> inner.eq(TestEntity::getStatus, 2).eq(TestEntity::getStatus, 3));
         List<TestEntity> result = repository.findAll(qs.toSpecification());
         assertEquals(1, result.size());
     }
@@ -1027,11 +1019,8 @@ public class QuerySpecTest {
         repository.save(newEntity("d", 4));
         QuerySpec<TestEntity> qs = new QuerySpec<>();
         // status=1 OR status=2 OR status=3
-        qs.or(
-            outer -> outer.eq(TestEntity::getStatus, 1),
-            mid -> mid.eq(TestEntity::getStatus, 2),
-            inner -> inner.eq(TestEntity::getStatus, 3)
-        );
+        qs.or(outer -> outer.eq(TestEntity::getStatus, 1), mid -> mid.eq(TestEntity::getStatus, 2),
+            inner -> inner.eq(TestEntity::getStatus, 3));
         List<TestEntity> result = repository.findAll(qs.toSpecification());
         assertEquals(3, result.size());
     }
@@ -1201,8 +1190,7 @@ public class QuerySpecTest {
         QuerySpec<TestEntity> spec = new QuerySpec<TestEntity>().or(
             group -> group.inSubQuery(TestEntity::getStatus, TestEntity.class,
                 sub -> sub.select(TestEntity::getStatus).eq(TestEntity::getName, "sub_match")),
-            group -> group.eq(TestEntity::getName, "direct")
-        );
+            group -> group.eq(TestEntity::getName, "direct"));
         List<TestEntity> results = repository.findAll(spec.toSpecification());
         assertEquals(2, results.size());
         assertTrue(results.stream().anyMatch(e -> "direct".equals(e.getName())));
@@ -1355,10 +1343,7 @@ public class QuerySpecTest {
 
         QuerySpec<TestEntity> qs = new QuerySpec<>();
         qs.eq(TestEntity::getName, "a");
-        qs.or(
-            o -> o.eq(TestEntity::getStatus, 1),
-            o -> o.eq(TestEntity::getStatus, 2)
-        );
+        qs.or(o -> o.eq(TestEntity::getStatus, 1), o -> o.eq(TestEntity::getStatus, 2));
 
         QuerySpec<TestEntity> copy = qs.copy();
 

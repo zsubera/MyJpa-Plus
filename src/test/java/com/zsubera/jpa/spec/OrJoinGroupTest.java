@@ -21,7 +21,7 @@ class OrJoinGroupTest {
     @Test
     void testConstructorNullOrNode() {
         assertThrows(IllegalArgumentException.class, () -> new OrJoinGroup<>(new QuerySpec<>(),
-            new ConditionNode.JoinNode("x", ConditionNode.JoinType.INNER), (ConditionNode.OrNode) null));
+            new ConditionNode.JoinNode("x", ConditionNode.JoinType.INNER), (ConditionNode.OrNode)null));
     }
 
     @Test

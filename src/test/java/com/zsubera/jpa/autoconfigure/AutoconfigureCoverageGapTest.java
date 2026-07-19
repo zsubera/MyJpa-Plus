@@ -19,6 +19,7 @@ class AutoconfigureCoverageGapTest {
     @AfterEach
     void tearDown() {
         GlobalConfigHolder.setConfig(null);
+        com.zsubera.jpa.converter.EncryptConverter.resetIterationsConfigured();
     }
 
     @Test
