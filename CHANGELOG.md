@@ -20,6 +20,8 @@
 - **DeleteSpec.executeAsSoftDeleteInTransaction** — 新增事务管理方法，包装软删除操作以自动管理事务，修复在非事务上下文中调用时抛出 `TransactionRequiredException` 的问题
 
 ### 修复
+- **硬删除路径 EntityModifiedEvent affectedRows 不准确** — `deleteAll()`、`deleteAllInBatch()` 硬删除路径发布事件时硬编码 `affectedRows=1`，`deleteAllById()`、`deleteAll(Iterable)`、`deleteInBatch()` 硬删除路径使用输入列表大小而非实际删除行数。修复：所有硬删除路径改用 CriteriaDelete 批量操作并捕获 `executeUpdate()` 返回值，确保事件发布准确的 affectedRows 计数
+- **Spec-based 操作缺失 EntityModifiedEvent 发布** — `MyJpaRepository` 接口默认方法和 `DefaultMyJpaRepository` 覆写方法中，`update(Consumer)`、`delete(Consumer)`、`merge(Consumer)`、`execute(UpdateSpec)`、`execute(DeleteSpec)`、`execute(MergeSpec)` 六个 spec-based 操作在成功变更后（`affected > 0`）发布 `EntityModifiedEvent`，修复应用级缓存（Redis、Caffeine QueryCacheManager、CacheAdapter）在这些操作后未失效导致脏数据的问题
 - **BatchSaveTemplate.isDefaultPrimitiveValue() Float/Double 缺失** — 添加 `Float` 和 `Double` 零值检查，修复 `@Id float/double` 类型实体被错误识别为已存在的问题
 - **MergeSpec 不必要的 em.flush()** — 移除 `doBatchSingleRow` 和 `doBatchMultiRow` 中的 `em.flush()` 调用，修复 AUTO_CLEAR 模式下意外持久化无关脏数据的问题
 - **DeleteSpec.executeAsSoftDelete() 双重软删除过滤器** — 移除手动添加的软删除守卫谓词，因为 `buildPredicates()` 已经处理，修复 WHERE 子句中冗余的 `deleted = FALSE` 条件

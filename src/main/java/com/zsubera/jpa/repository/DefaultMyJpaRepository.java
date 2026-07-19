@@ -691,9 +691,12 @@ public class DefaultMyJpaRepository<T, ID> extends SimpleJpaRepository<T, ID> im
             }
             SoftDeleteBulkExecutor.softDeleteAll(entityManager, domainClass, true);
         }, () -> {
-            super.deleteAll();
+            jakarta.persistence.criteria.CriteriaBuilder cb = entityManager.getCriteriaBuilder();
+            jakarta.persistence.criteria.CriteriaDelete<T> delete = cb.createCriteriaDelete(domainClass);
+            delete.from(domainClass);
+            int affected = entityManager.createQuery(delete).executeUpdate();
             com.zsubera.jpa.util.CacheEvictionHelper.evictEntityCache(entityManager, domainClass);
-            com.zsubera.jpa.softdelete.SoftDeleteBulkExecutor.publishEvent(domainClass, 1);
+            com.zsubera.jpa.softdelete.SoftDeleteBulkExecutor.publishEvent(domainClass, affected);
         });
     }
 
@@ -718,16 +721,17 @@ public class DefaultMyJpaRepository<T, ID> extends SimpleJpaRepository<T, ID> im
             // 按 InClauseBuilder 的 maxInClauseSize 分批执行，避免超出数据库 IN 子句参数限制。
             String idFieldName = EntityClassResolver.resolveIdFieldName(domainClass);
             int batchSize = InClauseBuilder.getMaxInClauseSize();
+            int totalAffected = 0;
             for (int i = 0; i < idList.size(); i += batchSize) {
                 List<ID> batch = idList.subList(i, Math.min(i + batchSize, idList.size()));
                 jakarta.persistence.criteria.CriteriaBuilder cb = entityManager.getCriteriaBuilder();
                 jakarta.persistence.criteria.CriteriaDelete<T> delete = cb.createCriteriaDelete(domainClass);
                 jakarta.persistence.criteria.Root<T> root = delete.from(domainClass);
                 delete.where(root.get(idFieldName).in(batch));
-                entityManager.createQuery(delete).executeUpdate();
+                totalAffected += entityManager.createQuery(delete).executeUpdate();
             }
             CacheEvictionHelper.evictEntityCache(entityManager, domainClass);
-            com.zsubera.jpa.softdelete.SoftDeleteBulkExecutor.publishEvent(domainClass, idList.size());
+            com.zsubera.jpa.softdelete.SoftDeleteBulkExecutor.publishEvent(domainClass, totalAffected);
         });
     }
 
@@ -775,9 +779,29 @@ public class DefaultMyJpaRepository<T, ID> extends SimpleJpaRepository<T, ID> im
                 SoftDeleteBulkExecutor.softDeleteByIds(entityManager, domainClass, idList);
             }
         }, () -> {
-            super.deleteInBatch(validatedEntities);
+            // 硬删除路径使用 CriteriaDelete 批量操作，避免 super.deleteInBatch()
+            // 内部回调 this.delete(T entity) 导致无限递归。
+            java.util.List<ID> idList = new java.util.ArrayList<>();
+            jakarta.persistence.PersistenceUnitUtil util =
+                entityManager.getEntityManagerFactory().getPersistenceUnitUtil();
+            for (T entity : validatedEntities) {
+                @SuppressWarnings("unchecked")
+                ID id = (ID)util.getIdentifier(entity);
+                idList.add(id);
+            }
+            String idFieldName = EntityClassResolver.resolveIdFieldName(domainClass);
+            int batchSize = InClauseBuilder.getMaxInClauseSize();
+            int totalAffected = 0;
+            for (int i = 0; i < idList.size(); i += batchSize) {
+                List<ID> batch = idList.subList(i, Math.min(i + batchSize, idList.size()));
+                jakarta.persistence.criteria.CriteriaBuilder cb = entityManager.getCriteriaBuilder();
+                jakarta.persistence.criteria.CriteriaDelete<T> delete = cb.createCriteriaDelete(domainClass);
+                jakarta.persistence.criteria.Root<T> root = delete.from(domainClass);
+                delete.where(root.get(idFieldName).in(batch));
+                totalAffected += entityManager.createQuery(delete).executeUpdate();
+            }
             com.zsubera.jpa.util.CacheEvictionHelper.evictEntityCache(entityManager, domainClass);
-            com.zsubera.jpa.softdelete.SoftDeleteBulkExecutor.publishEvent(domainClass, validatedEntities.size());
+            com.zsubera.jpa.softdelete.SoftDeleteBulkExecutor.publishEvent(domainClass, totalAffected);
         });
     }
 
@@ -793,9 +817,12 @@ public class DefaultMyJpaRepository<T, ID> extends SimpleJpaRepository<T, ID> im
             }
             SoftDeleteBulkExecutor.softDeleteAll(entityManager, domainClass, true);
         }, () -> {
-            super.deleteAllInBatch();
+            jakarta.persistence.criteria.CriteriaBuilder cb = entityManager.getCriteriaBuilder();
+            jakarta.persistence.criteria.CriteriaDelete<T> delete = cb.createCriteriaDelete(domainClass);
+            delete.from(domainClass);
+            int affected = entityManager.createQuery(delete).executeUpdate();
             com.zsubera.jpa.util.CacheEvictionHelper.evictEntityCache(entityManager, domainClass);
-            com.zsubera.jpa.softdelete.SoftDeleteBulkExecutor.publishEvent(domainClass, 1);
+            com.zsubera.jpa.softdelete.SoftDeleteBulkExecutor.publishEvent(domainClass, affected);
         });
     }
 
@@ -904,16 +931,17 @@ public class DefaultMyJpaRepository<T, ID> extends SimpleJpaRepository<T, ID> im
         executeDeleteOrBlock(() -> SoftDeleteBulkExecutor.softDeleteByIds(entityManager, domainClass, ids), () -> {
             String idFieldName = EntityClassResolver.resolveIdFieldName(domainClass);
             int batchSize = InClauseBuilder.getMaxInClauseSize();
+            int totalAffected = 0;
             for (int i = 0; i < ids.size(); i += batchSize) {
                 List<ID> batch = ids.subList(i, Math.min(i + batchSize, ids.size()));
                 jakarta.persistence.criteria.CriteriaBuilder cb = entityManager.getCriteriaBuilder();
                 jakarta.persistence.criteria.CriteriaDelete<T> delete = cb.createCriteriaDelete(domainClass);
                 jakarta.persistence.criteria.Root<T> root = delete.from(domainClass);
                 delete.where(root.get(idFieldName).in(batch));
-                entityManager.createQuery(delete).executeUpdate();
+                totalAffected += entityManager.createQuery(delete).executeUpdate();
             }
             CacheEvictionHelper.evictEntityCache(entityManager, domainClass);
-            com.zsubera.jpa.softdelete.SoftDeleteBulkExecutor.publishEvent(domainClass, ids.size());
+            com.zsubera.jpa.softdelete.SoftDeleteBulkExecutor.publishEvent(domainClass, totalAffected);
         });
     }
 
@@ -933,7 +961,11 @@ public class DefaultMyJpaRepository<T, ID> extends SimpleJpaRepository<T, ID> im
         config.accept(spec);
         jakarta.persistence.EntityManager em = this.entityManager;
         // 软删除过滤由 UpdateSpec.buildPredicates() 自动注入，无需手动添加
-        return spec.executeInTransaction(em);
+        int affected = spec.executeInTransaction(em);
+        if (affected > 0) {
+            com.zsubera.jpa.softdelete.SoftDeleteBulkExecutor.publishEvent(entityClass, affected);
+        }
+        return affected;
     }
 
     /**
@@ -950,6 +982,7 @@ public class DefaultMyJpaRepository<T, ID> extends SimpleJpaRepository<T, ID> im
         config.accept(spec);
         jakarta.persistence.EntityManager em = this.entityManager;
         String sf = this.softDeleteFieldName;
+        int affected;
         if (sf != null && shouldApplySoftDeleteFilter()) {
             java.lang.reflect.Field field = com.zsubera.jpa.softdelete.SoftDeleteHelper.getField(entityClass, sf);
             if (field == null) {
@@ -962,16 +995,20 @@ public class DefaultMyJpaRepository<T, ID> extends SimpleJpaRepository<T, ID> im
                 com.zsubera.jpa.softdelete.SoftDeleteHelper.resolveDeletedValue(entityClass, field, annotation);
             Object deletedVal = resolved.booleanField() ? Boolean.TRUE : resolved.dbValue();
             String tsField = annotation.deletedTimestampField();
-            return spec.executeAsSoftDeleteInTransaction(em, sf, deletedVal,
+            affected = spec.executeAsSoftDeleteInTransaction(em, sf, deletedVal,
                 tsField != null && !tsField.isEmpty() ? tsField : null);
-        }
-        if (sf != null && shouldBlockHardDelete()) {
+        } else if (sf != null && shouldBlockHardDelete()) {
             throw new IllegalStateException("Hard DELETE on " + entityClass.getSimpleName()
                 + " is blocked because the entity has a @SoftDelete field. "
                 + "Set myjpa-plus.soft-delete.auto-filter=false and "
                 + "myjpa-plus.soft-delete.block-unconditional-delete=false to allow this operation.");
+        } else {
+            affected = spec.executeInTransaction(em);
         }
-        return spec.executeInTransaction(em);
+        if (affected > 0) {
+            com.zsubera.jpa.softdelete.SoftDeleteBulkExecutor.publishEvent(entityClass, affected);
+        }
+        return affected;
     }
 
     /**
@@ -992,7 +1029,11 @@ public class DefaultMyJpaRepository<T, ID> extends SimpleJpaRepository<T, ID> im
         com.zsubera.jpa.update.MergeSpec<T> spec = new com.zsubera.jpa.update.MergeSpec<>(entityClass);
         config.accept(spec);
         jakarta.persistence.EntityManager em = this.entityManager;
-        return spec.executeInTransaction(em);
+        int affected = spec.executeInTransaction(em);
+        if (affected > 0) {
+            com.zsubera.jpa.softdelete.SoftDeleteBulkExecutor.publishEvent(entityClass, affected);
+        }
+        return affected;
     }
 
     /**
@@ -1007,7 +1048,11 @@ public class DefaultMyJpaRepository<T, ID> extends SimpleJpaRepository<T, ID> im
         jakarta.persistence.EntityManager em = this.entityManager;
         // 不手动添加软删除过滤条件 — UpdateSpec.buildPredicates() 已自动注入，
         // 重复添加会导致 WHERE 子句中出现两次 deleted = FALSE。
-        return spec.executeInTransaction(em);
+        int affected = spec.executeInTransaction(em);
+        if (affected > 0) {
+            com.zsubera.jpa.softdelete.SoftDeleteBulkExecutor.publishEvent(domainClass, affected);
+        }
+        return affected;
     }
 
     /**
@@ -1021,6 +1066,7 @@ public class DefaultMyJpaRepository<T, ID> extends SimpleJpaRepository<T, ID> im
         }
         jakarta.persistence.EntityManager em = this.entityManager;
         String sf = this.softDeleteFieldName;
+        int affected;
         if (sf != null && shouldApplySoftDeleteFilter()) {
             java.lang.reflect.Field field = com.zsubera.jpa.softdelete.SoftDeleteHelper.getField(domainClass, sf);
             if (field == null) {
@@ -1033,16 +1079,20 @@ public class DefaultMyJpaRepository<T, ID> extends SimpleJpaRepository<T, ID> im
                 com.zsubera.jpa.softdelete.SoftDeleteHelper.resolveDeletedValue(domainClass, field, annotation);
             Object deletedVal = resolved.booleanField() ? Boolean.TRUE : resolved.dbValue();
             String tsField = annotation.deletedTimestampField();
-            return spec.executeAsSoftDeleteInTransaction(em, sf, deletedVal,
+            affected = spec.executeAsSoftDeleteInTransaction(em, sf, deletedVal,
                 tsField != null && !tsField.isEmpty() ? tsField : null);
-        }
-        if (sf != null && shouldBlockHardDelete()) {
+        } else if (sf != null && shouldBlockHardDelete()) {
             throw new IllegalStateException("Hard DELETE on " + domainClass.getSimpleName()
                 + " is blocked because the entity has a @SoftDelete field. "
                 + "Set myjpa-plus.soft-delete.auto-filter=false and "
                 + "myjpa-plus.soft-delete.block-unconditional-delete=false to allow this operation.");
+        } else {
+            affected = spec.executeInTransaction(em);
         }
-        return spec.executeInTransaction(em);
+        if (affected > 0) {
+            com.zsubera.jpa.softdelete.SoftDeleteBulkExecutor.publishEvent(domainClass, affected);
+        }
+        return affected;
     }
 
     /**
@@ -1054,6 +1104,10 @@ public class DefaultMyJpaRepository<T, ID> extends SimpleJpaRepository<T, ID> im
         if (spec == null) {
             throw new IllegalArgumentException("spec must not be null");
         }
-        return spec.executeInTransaction(this.entityManager);
+        int affected = spec.executeInTransaction(this.entityManager);
+        if (affected > 0) {
+            com.zsubera.jpa.softdelete.SoftDeleteBulkExecutor.publishEvent(domainClass, affected);
+        }
+        return affected;
     }
 }
