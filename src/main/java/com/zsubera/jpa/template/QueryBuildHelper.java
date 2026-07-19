@@ -83,8 +83,9 @@ final class QueryBuildHelper {
         if (override != null) {
             autoFilterEnabled = override;
         } else {
-            autoFilterEnabled = com.zsubera.jpa.autoconfigure.GlobalConfigHolder.getConfig() != null
-                && com.zsubera.jpa.autoconfigure.GlobalConfigHolder.getConfig().isSoftDeleteAutoFilter();
+            com.zsubera.jpa.autoconfigure.MyJpaPlusGlobalConfig cfg =
+                com.zsubera.jpa.autoconfigure.GlobalConfigHolder.getConfig();
+            autoFilterEnabled = cfg == null || cfg.isSoftDeleteAutoFilter();
         }
         boolean applySoftDelete = softDeleteFieldName != null && autoFilterEnabled
             && !com.zsubera.jpa.repository.SoftDeleteContext.isIgnoreSoftDelete();

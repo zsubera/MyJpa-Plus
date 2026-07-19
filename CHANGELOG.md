@@ -20,6 +20,8 @@
 - **DeleteSpec.executeAsSoftDeleteInTransaction** — 新增事务管理方法，包装软删除操作以自动管理事务，修复在非事务上下文中调用时抛出 `TransactionRequiredException` 的问题
 
 ### 修复
+- **JoinGroup.or(Consumer) 单消费者 OR 语义错误** — `JoinGroup.or(Consumer)` 单消费者变体未将 lambda 内部条件包装在 AndNode 中，导致链式调用的条件被 OR 而非 AND 组合。修复：单消费者变体与多消费者变体保持一致，将 lambda 内部条件包装在 AndNode 中
+- **QueryBuildHelper.executeCountQuery() 软删除过滤不一致** — 当 `GlobalConfigHolder.getConfig()` 返回 null 时，count 查询忽略软删除过滤（`autoFilterEnabled=false`），而 `MyJpaTemplate.shouldApplySoftDeleteFilter()` 返回 true（`cfg == null` 时默认开启）。修复：count 查询与数据查询保持一致的软删除过滤逻辑
 - **硬删除路径 EntityModifiedEvent affectedRows 不准确** — `deleteAll()`、`deleteAllInBatch()` 硬删除路径发布事件时硬编码 `affectedRows=1`，`deleteAllById()`、`deleteAll(Iterable)`、`deleteInBatch()` 硬删除路径使用输入列表大小而非实际删除行数。修复：所有硬删除路径改用 CriteriaDelete 批量操作并捕获 `executeUpdate()` 返回值，确保事件发布准确的 affectedRows 计数
 - **Spec-based 操作缺失 EntityModifiedEvent 发布** — `MyJpaRepository` 接口默认方法和 `DefaultMyJpaRepository` 覆写方法中，`update(Consumer)`、`delete(Consumer)`、`merge(Consumer)`、`execute(UpdateSpec)`、`execute(DeleteSpec)`、`execute(MergeSpec)` 六个 spec-based 操作在成功变更后（`affected > 0`）发布 `EntityModifiedEvent`，修复应用级缓存（Redis、Caffeine QueryCacheManager、CacheAdapter）在这些操作后未失效导致脏数据的问题
 - **BatchSaveTemplate.isDefaultPrimitiveValue() Float/Double 缺失** — 添加 `Float` 和 `Double` 零值检查，修复 `@Id float/double` 类型实体被错误识别为已存在的问题

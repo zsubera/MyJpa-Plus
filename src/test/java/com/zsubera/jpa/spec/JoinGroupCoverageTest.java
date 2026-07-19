@@ -186,7 +186,7 @@ class JoinGroupCoverageTest {
         QuerySpec<TestEntity> qs = new QuerySpec<>();
         qs.join(TestEntity::getParent,
             (JoinGroup<TestEntity, ParentEntity> j) -> j.eq(ParentEntity::getCategory, "admin")
-                .or(o -> o.eq(ParentEntity::getLevel, 10).eq(ParentEntity::getLevel, 20)));
+                .or(o -> o.eq(ParentEntity::getLevel, 10), o -> o.eq(ParentEntity::getLevel, 20)));
         List<TestEntity> result = repository.findAll(qs.toSpecification());
         assertEquals(1, result.size());
     }
@@ -206,7 +206,7 @@ class JoinGroupCoverageTest {
 
         QuerySpec<TestEntity> qs = new QuerySpec<>();
         qs.join(TestEntity::getParent, (JoinGroup<TestEntity, ParentEntity> j) -> j
-            .or(o -> o.eq(ParentEntity::getCategory, "admin").eq(ParentEntity::getCategory, "user")));
+            .or(o -> o.eq(ParentEntity::getCategory, "admin"), o -> o.eq(ParentEntity::getCategory, "user")));
         List<TestEntity> result = repository.findAll(qs.toSpecification());
         assertEquals(2, result.size());
     }

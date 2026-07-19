@@ -65,7 +65,9 @@ public class JoinGroup<T, J> implements ConditionBuilder<J, JoinGroup<T, J>> {
     OrJoinGroup<T, J> pushOrJoinGroup() {
         ConditionNode.OrNode orNode = new ConditionNode.OrNode();
         joinNode.innerConditions.add(orNode);
-        return new OrJoinGroup<>(root, joinNode, orNode);
+        ConditionNode.AndNode andNode = new ConditionNode.AndNode();
+        orNode.nodes.add(andNode);
+        return new OrJoinGroup<>(root, joinNode, andNode);
     }
 
     // ---- 基于 Consumer 的 API（自动关闭） ----

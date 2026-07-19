@@ -548,10 +548,7 @@ public class QuerySpecTest {
 
         QuerySpec<TestEntity> qs = new QuerySpec<>();
         qs.<ParentEntity>join(TestEntity::getParent, jg -> {
-            jg.or(org -> {
-                org.eq(ParentEntity::getCategory, "admin");
-                org.eq(ParentEntity::getCategory, "user");
-            });
+            jg.or(org -> org.eq(ParentEntity::getCategory, "admin"), org -> org.eq(ParentEntity::getCategory, "user"));
         });
 
         List<TestEntity> result = repository.findAll(qs.toSpecification());
