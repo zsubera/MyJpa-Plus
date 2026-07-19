@@ -248,6 +248,11 @@ public final class QueryProjectionSupport<T> {
     }
 
     private long executeCountQuery(CriteriaBuilder cb, EntityManager em) {
+        // 当存在 GROUP BY 时，count 查询应统计分组数而非原始行数。
+        boolean hasGroupBy = spec.getGroupByFields() != null && !spec.getGroupByFields().isEmpty();
+        if (hasGroupBy) {
+            return executeGroupCountQuery(cb, em);
+        }
         CriteriaQuery<Long> countQuery = cb.createQuery(Long.class);
         Root<T> countRoot = countQuery.from(entityClass);
         countQuery.select(cb.count(countRoot));
@@ -259,6 +264,26 @@ public final class QueryProjectionSupport<T> {
             countQuery.where(predicate);
         }
         return em.createQuery(countQuery).getSingleResult();
+    }
+
+    /**
+     * 当查询包含 GROUP BY 时，统计分组数。
+     * 使用子查询包装：SELECT COUNT(*) FROM (SELECT ... GROUP BY ...) 无法在 JPA Criteria API 中直接实现，
+     * 因此采用执行数据查询后在 Java 中计数的方式。对于大量分组的场景，这比 COUNT(*) 略慢但结果正确。
+     */
+    private long executeGroupCountQuery(CriteriaBuilder cb, EntityManager em) {
+        CriteriaQuery<Tuple> dataQuery = cb.createTupleQuery();
+        Root<T> dataRoot = dataQuery.from(entityClass);
+        List<Selection<?>> selections = buildSelectionList(dataRoot, cb);
+        dataQuery.multiselect(selections);
+        dataQuery.where(getCombinedPredicate(dataRoot, dataQuery, cb));
+        spec.applyDistinctAndGroupBy(dataRoot, dataQuery, cb);
+        // 不应用 ORDER BY（计数不需要排序）
+        TypedQuery<Tuple> query = em.createQuery(dataQuery);
+        // 限制最大返回行数以避免内存溢出
+        query.setMaxResults(MyJpaTemplate.DEFAULT_MAX_RESULTS);
+        List<Tuple> results = query.getResultList();
+        return results.size();
     }
 
     /**
