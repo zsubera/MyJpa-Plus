@@ -26,6 +26,9 @@
 - **RedisCacheAdapter.putAll() TTL <= 0 时仍缓存条目** — `putAll()` 在 `defaultTtlSeconds <= 0` 时使用无过期时间的 `set()` 存储条目，导致 Redis 中永久积累过期数据。修复：`ttlSeconds <= 0` 时直接返回，与 `put()` 方法行为一致
 - **AbstractBulkOperationSpec.rollbackOrMarkRollbackOnly() Spring 双重回滚** — 在 Spring 管理的事务中直接调用 `tx.rollback()` 后，Spring 的 `processRollback()` 会再次尝试回滚，抛出 `IllegalStateException("Not valid without active transaction")` 并丢失原始异常信息。修复：优先检测 Spring 事务并使用 `setRollbackOnly()`，仅在非 Spring 事务中使用 `tx.rollback()`
 - **DefaultMyJpaRepository.findById/existsById/findAllById 复合主键不兼容** — 对 `@IdClass` 实体，`EntityClassResolver.resolveIdFieldName()` 仅返回第一个 `@Id` 字段名，导致 `cb.equal(root.get(firstIdFieldName), id)` 将单列与 `@IdClass` 实例比较，类型不匹配抛出异常。修复：复合主键实体回退到 `entityManager.find()` + 手动软删除检查
+- **PostgresDialect.buildUpsertSql() 缺少空列检查** — 单行 UPSERT 路径未检查 `insertColumns` 是否为空，当实体仅有 `@GeneratedValue` 的 `@Id` 字段时生成无效 SQL `INSERT INTO t () VALUES ()`。修复：添加与 MySQL 方言一致的空列检查
+- **SoftDeleteBulkExecutor.resolveTimestampColumn() 未验证字段存在性** — 原生 SQL 路径在 `deletedTimestampField` 引用不存在的字段时，会通过 `camelToSnake()` 生成引用不存在列的 SQL，导致运行时 SQL 异常。而 Criteria API 路径会优雅忽略。修复：添加字段存在性检查，不存在时返回 null 跳过时间戳列
+- **PredicateHelper.validateRange() 未检查 end 值的 Infinity/NaN** — 同类型路径仅检查 `start` 值的 Infinity/NaN，`end` 值的 Infinity/NaN 会通过验证并生成无效 SQL。修复：对 Double 和 Float 类型同时检查 start 和 end 值
 - **Spec-based 操作缺失 EntityModifiedEvent 发布** — `MyJpaRepository` 接口默认方法和 `DefaultMyJpaRepository` 覆写方法中，`update(Consumer)`、`delete(Consumer)`、`merge(Consumer)`、`execute(UpdateSpec)`、`execute(DeleteSpec)`、`execute(MergeSpec)` 六个 spec-based 操作在成功变更后（`affected > 0`）发布 `EntityModifiedEvent`，修复应用级缓存（Redis、Caffeine QueryCacheManager、CacheAdapter）在这些操作后未失效导致脏数据的问题
 - **BatchSaveTemplate.isDefaultPrimitiveValue() Float/Double 缺失** — 添加 `Float` 和 `Double` 零值检查，修复 `@Id float/double` 类型实体被错误识别为已存在的问题
 - **MergeSpec 不必要的 em.flush()** — 移除 `doBatchSingleRow` 和 `doBatchMultiRow` 中的 `em.flush()` 调用，修复 AUTO_CLEAR 模式下意外持久化无关脏数据的问题

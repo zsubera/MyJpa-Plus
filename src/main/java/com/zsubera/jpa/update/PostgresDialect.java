@@ -49,6 +49,10 @@ final class PostgresDialect extends AbstractDialectStrategy {
     @Override
     public SqlWithParams buildUpsertSql(String tableName, List<String> insertColumns,
         List<EntityFieldValue> insertFieldValues, List<String> conflictColumns, List<String> updateColumns) {
+        if (insertColumns.isEmpty()) {
+            throw new com.zsubera.jpa.exception.MyJpaPlusException("No insertable columns found for UPSERT on "
+                + tableName + ". Ensure at least one non-auto-generated field has a value.");
+        }
         String escapedTable = escapeIdentifier(tableName);
         SqlWithParams insertPart =
             DialectStrategy.buildInsertPart(escapedTable, this, insertColumns, insertFieldValues);

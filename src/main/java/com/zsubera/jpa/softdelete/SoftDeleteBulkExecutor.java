@@ -597,6 +597,12 @@ public final class SoftDeleteBulkExecutor {
     static String resolveTimestampColumn(Class<?> entityClass, SoftDelete annotation, String dialect) {
         if (annotation == null || annotation.deletedTimestampField().isEmpty())
             return null;
+        // 检查字段是否存在，避免生成引用不存在列的 SQL
+        if (SoftDeleteHelper.getField(entityClass, annotation.deletedTimestampField()) == null) {
+            log.warn("SoftDelete deletedTimestampField '{}' not found in {}. Ignoring timestamp in native SQL.",
+                annotation.deletedTimestampField(), entityClass.getName());
+            return null;
+        }
         String col = SoftDeleteHelper
             .validateIdentifier(SoftDeleteHelper.resolveColumnName(entityClass, annotation.deletedTimestampField()));
         return SoftDeleteHelper.quoteIdentifier(col, dialect);

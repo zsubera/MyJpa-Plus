@@ -95,7 +95,13 @@ public final class PredicateHelper {
         if (start instanceof Double d && (Double.isInfinite(d) || Double.isNaN(d))) {
             throw new IllegalArgumentException("Infinity/NaN values are not allowed in range comparisons");
         }
+        if (end instanceof Double d && (Double.isInfinite(d) || Double.isNaN(d))) {
+            throw new IllegalArgumentException("Infinity/NaN values are not allowed in range comparisons");
+        }
         if (start instanceof Float f && (Float.isInfinite(f) || Float.isNaN(f))) {
+            throw new IllegalArgumentException("Infinity/NaN values are not allowed in range comparisons");
+        }
+        if (end instanceof Float f && (Float.isInfinite(f) || Float.isNaN(f))) {
             throw new IllegalArgumentException("Infinity/NaN values are not allowed in range comparisons");
         }
     }
