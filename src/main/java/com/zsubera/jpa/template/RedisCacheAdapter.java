@@ -137,8 +137,8 @@ public class RedisCacheAdapter implements CacheAdapter {
 
             // 使用 SCAN 遍历匹配的键
             redisTemplate.execute((RedisCallback<Void>)connection -> {
-                try (Cursor<byte[]> cursor = connection.scan(
-                    ScanOptions.scanOptions().match(pattern).count(100).build())) {
+                try (Cursor<byte[]> cursor =
+                    connection.scan(ScanOptions.scanOptions().match(pattern).count(100).build())) {
                     while (cursor.hasNext()) {
                         keys.add(new String(cursor.next()));
                     }
@@ -165,8 +165,8 @@ public class RedisCacheAdapter implements CacheAdapter {
             Set<String> keys = new HashSet<>();
 
             redisTemplate.execute((RedisCallback<Void>)connection -> {
-                try (Cursor<byte[]> cursor = connection.scan(
-                    ScanOptions.scanOptions().match(pattern).count(100).build())) {
+                try (Cursor<byte[]> cursor =
+                    connection.scan(ScanOptions.scanOptions().match(pattern).count(100).build())) {
                     while (cursor.hasNext()) {
                         keys.add(new String(cursor.next()));
                     }
@@ -191,8 +191,8 @@ public class RedisCacheAdapter implements CacheAdapter {
             final int[] count = {0};
 
             redisTemplate.execute((RedisCallback<Void>)connection -> {
-                try (Cursor<byte[]> cursor = connection.scan(
-                    ScanOptions.scanOptions().match(pattern).count(100).build())) {
+                try (Cursor<byte[]> cursor =
+                    connection.scan(ScanOptions.scanOptions().match(pattern).count(100).build())) {
                     while (cursor.hasNext()) {
                         cursor.next();
                         count[0]++;
@@ -235,14 +235,14 @@ public class RedisCacheAdapter implements CacheAdapter {
         if (entries == null || entries.isEmpty()) {
             return;
         }
+        if (defaultTtlSeconds <= 0) {
+            // ttl <= 0 表示不缓存
+            return;
+        }
         try {
             for (Map.Entry<String, Object> entry : entries.entrySet()) {
-                if (defaultTtlSeconds > 0) {
-                    redisTemplate.opsForValue().set(fullKey(entry.getKey()), entry.getValue(), defaultTtlSeconds,
-                        java.util.concurrent.TimeUnit.SECONDS);
-                } else {
-                    redisTemplate.opsForValue().set(fullKey(entry.getKey()), entry.getValue());
-                }
+                redisTemplate.opsForValue().set(fullKey(entry.getKey()), entry.getValue(), defaultTtlSeconds,
+                    java.util.concurrent.TimeUnit.SECONDS);
             }
         } catch (Exception e) {
             log.warn("Redis putAll failed, error: {}", e.getMessage());

@@ -566,6 +566,18 @@ public class DefaultMyJpaRepository<T, ID> extends SimpleJpaRepository<T, ID> im
             // 两种路径的实体生命周期状态不同，调用方应注意一致性。
             return Optional.ofNullable(entityManager.find(domainClass, id));
         }
+        // 复合主键（@IdClass / @EmbeddedId）无法用单字段 Specification 比较，
+        // 回退到 entityManager.find() + 手动软删除检查。
+        if (com.zsubera.jpa.util.EntityClassResolver.hasCompositeKey(domainClass)) {
+            T entity = entityManager.find(domainClass, id);
+            if (entity == null) {
+                return Optional.empty();
+            }
+            if (isSoftDeleted(entity)) {
+                return Optional.empty();
+            }
+            return Optional.of(entity);
+        }
         return findOne(withIdAndSoftDelete(id));
     }
 
@@ -576,6 +588,10 @@ public class DefaultMyJpaRepository<T, ID> extends SimpleJpaRepository<T, ID> im
         }
         if (!shouldApplySoftDeleteFilter()) {
             return super.existsById(id);
+        }
+        if (com.zsubera.jpa.util.EntityClassResolver.hasCompositeKey(domainClass)) {
+            T entity = entityManager.find(domainClass, id);
+            return entity != null && !isSoftDeleted(entity);
         }
         return exists(withIdAndSoftDelete(id));
     }
@@ -602,6 +618,15 @@ public class DefaultMyJpaRepository<T, ID> extends SimpleJpaRepository<T, ID> im
         if (idList.isEmpty()) {
             return java.util.Collections.emptyList();
         }
+        // 复合主键无法用单字段 Specification 的 IN 子句比较，
+        // 回退到默认查询 + 手动过滤软删除记录。
+        if (com.zsubera.jpa.util.EntityClassResolver.hasCompositeKey(domainClass)) {
+            List<T> all = super.findAllById(idList);
+            if (softDeleteFieldName == null) {
+                return all;
+            }
+            return all.stream().filter(e -> !isSoftDeleted(e)).toList();
+        }
         String idFieldName = EntityClassResolver.resolveIdFieldName(domainClass);
         Specification<T> idSpec = Specification
             .where((root, query, cb) -> com.zsubera.jpa.util.InClauseBuilder.in(cb, root.get(idFieldName), idList));
@@ -610,6 +635,39 @@ public class DefaultMyJpaRepository<T, ID> extends SimpleJpaRepository<T, ID> im
             return super.findAll(idSpec);
         }
         return super.findAll(idSpec.and(softDeleteSpec));
+    }
+
+    /**
+     * 检查实体是否已被软删除。
+     *
+     * @param entity 要检查的实体
+     * @return 如果实体已被软删除返回 true
+     */
+    @SuppressWarnings("unchecked")
+    private boolean isSoftDeleted(T entity) {
+        if (softDeleteFieldName == null) {
+            return false;
+        }
+        java.lang.reflect.Field field =
+            com.zsubera.jpa.softdelete.SoftDeleteHelper.getField(domainClass, softDeleteFieldName);
+        if (field == null) {
+            return false;
+        }
+        try {
+            field.setAccessible(true);
+            Object value = field.get(entity);
+            com.zsubera.jpa.annotation.SoftDelete annotation =
+                field.getAnnotation(com.zsubera.jpa.annotation.SoftDelete.class);
+            com.zsubera.jpa.softdelete.SoftDeleteHelper.ResolvedDeletedValue resolved =
+                com.zsubera.jpa.softdelete.SoftDeleteHelper.resolveDeletedValue(domainClass, field, annotation);
+            if (resolved.booleanField()) {
+                return Boolean.TRUE.equals(value);
+            }
+            return java.util.Objects.equals(value, resolved.dbValue());
+        } catch (IllegalAccessException e) {
+            log.warn("Failed to check soft-delete status for {}: {}", domainClass.getSimpleName(), e.getMessage());
+            return false;
+        }
     }
 
     /**

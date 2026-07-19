@@ -213,6 +213,16 @@ public abstract class AbstractBulkOperationSpec<T, SELF extends AbstractBulkOper
      * @return true 如果回滚成功或已标记为 rollback-only
      */
     static boolean rollbackOrMarkRollbackOnly(EntityManager em, String operationDesc) {
+        // Spring 管理的事务：优先使用 setRollbackOnly()，避免直接 tx.rollback()
+        // 导致 Spring 二次回滚时丢失原始异常信息。
+        try {
+            org.springframework.transaction.interceptor.TransactionAspectSupport.currentTransactionStatus()
+                .setRollbackOnly();
+            log.warn("Transaction marked as rollback-only for {}.", operationDesc);
+            return true;
+        } catch (Exception ignored) {
+            // 非 Spring 管理的事务（RESOURCE_LOCAL 或 JTA），继续尝试直接回滚
+        }
         try {
             jakarta.persistence.EntityTransaction tx = em.getTransaction();
             if (tx != null && tx.isActive()) {
@@ -224,14 +234,6 @@ public abstract class AbstractBulkOperationSpec<T, SELF extends AbstractBulkOper
             // JTA 环境：getTransaction() 抛出 IllegalStateException
         } catch (Exception e) {
             log.warn("Failed to rollback via EntityTransaction for {}: {}", operationDesc, e.getMessage());
-        }
-        try {
-            org.springframework.transaction.interceptor.TransactionAspectSupport.currentTransactionStatus()
-                .setRollbackOnly();
-            log.warn("Transaction marked as rollback-only for {}.", operationDesc);
-            return true;
-        } catch (Exception e) {
-            log.error("Failed to mark rollback-only for {}: {}", operationDesc, e.getMessage());
         }
         return false;
     }
