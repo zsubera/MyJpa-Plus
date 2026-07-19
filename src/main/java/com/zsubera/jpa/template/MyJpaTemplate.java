@@ -398,8 +398,23 @@ public class MyJpaTemplate implements MyJpaTemplateOperations {
         } else {
             sortPart = "U"; // unsorted
         }
-        // Include SoftDeleteContext state to prevent stale cached results when soft delete filtering is toggled
-        String softDeletePart = SoftDeleteContext.isIgnoreSoftDelete() ? "SD ignored" : "SD active";
+        // ponytail: Cache key must reflect the COMPLETE soft-delete filter state, not just
+        // SoftDeleteContext.isIgnoreSoftDelete(). AUTO_FILTER_OVERRIDE and global config
+        // also affect which rows are returned. Without this, toggling filter at runtime
+        // serves stale cached results.
+        String softDeletePart;
+        if (SoftDeleteContext.isIgnoreSoftDelete()) {
+            softDeletePart = "SD ignored";
+        } else {
+            Boolean override = com.zsubera.jpa.repository.DefaultMyJpaRepository.getAutoFilterOverride();
+            if (override != null) {
+                softDeletePart = override ? "SD active" : "SD disabled";
+            } else {
+                MyJpaPlusGlobalConfig cfg = GlobalConfigHolder.getConfig();
+                boolean globalFilter = cfg == null || cfg.isSoftDeleteAutoFilter();
+                softDeletePart = globalFilter ? "SD active" : "SD disabled";
+            }
+        }
         // Include maxResults in cache key to prevent returning wrong-sized results when GlobalConfig changes
         int maxResultsLimit = resolveMaxResults();
         String cacheKey = entityClass.getName() + ":" + spec.cacheKey() + ":" + sortPart + ":" + softDeletePart + ":mr="
@@ -621,6 +636,20 @@ public class MyJpaTemplate implements MyJpaTemplateOperations {
         if (softDeleteFieldName == null || !shouldApplySoftDeleteFilter()) {
             return Optional.ofNullable(entityManager.find(entityClass, id));
         }
+        // ponytail: Composite key entities (@IdClass/@EmbeddedId) cannot be compared with a single
+        // field Specification. Fall back to em.find() + manual soft-delete check, consistent with
+        // DefaultMyJpaRepository.findById().
+        if (EntityClassResolver.hasCompositeKey(entityClass)) {
+            T entity = entityManager.find(entityClass, id);
+            if (entity == null) {
+                return Optional.empty();
+            }
+            if (isSoftDeleted(entity, softDeleteFieldName)) {
+                entityManager.detach(entity);
+                return Optional.empty();
+            }
+            return Optional.of(entity);
+        }
         String idFieldName = EntityClassResolver.resolveIdFieldName(entityClass);
         Specification<T> idSpec = (root, query, cb) -> cb.equal(root.get(idFieldName), id);
         Specification<T> softDeleteSpec = SoftDeleteHelper.isNotDeleted(entityClass);
@@ -636,6 +665,29 @@ public class MyJpaTemplate implements MyJpaTemplateOperations {
         query.setMaxResults(1);
         List<T> results = query.getResultList();
         return results.isEmpty() ? Optional.empty() : Optional.of(results.get(0));
+    }
+
+    private <T> boolean isSoftDeleted(T entity, String softDeleteFieldName) {
+        java.lang.reflect.Field field = SoftDeleteHelper.getField(entity.getClass(), softDeleteFieldName);
+        if (field == null) {
+            return false;
+        }
+        try {
+            field.setAccessible(true);
+            Object value = field.get(entity);
+            com.zsubera.jpa.annotation.SoftDelete annotation =
+                field.getAnnotation(com.zsubera.jpa.annotation.SoftDelete.class);
+            SoftDeleteHelper.ResolvedDeletedValue resolved =
+                SoftDeleteHelper.resolveDeletedValue(entity.getClass(), field, annotation);
+            if (resolved.booleanField()) {
+                return Boolean.TRUE.equals(value);
+            }
+            return java.util.Objects.equals(value, resolved.dbValue());
+        } catch (IllegalAccessException e) {
+            log.warn("Failed to check soft-delete status for {}: {}", entity.getClass().getSimpleName(),
+                e.getMessage());
+            return false;
+        }
     }
 
     private boolean shouldApplySoftDeleteFilter() {

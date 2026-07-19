@@ -154,7 +154,8 @@ public class MyJpaPlusAutoConfiguration {
                             applicationContext.getBean(org.springframework.context.ApplicationEventPublisher.class);
                         publisher.publishEvent(new EntityModifiedEvent(entityClass, affectedRows));
                     } catch (Exception e) {
-                        log.debug("Failed to publish EntityModifiedEvent: {}", e.getMessage());
+                        log.warn("Failed to publish EntityModifiedEvent for {}: {}", entityClass.getSimpleName(),
+                            e.getMessage(), e);
                     }
                 });
             }

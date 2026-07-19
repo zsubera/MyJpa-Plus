@@ -144,10 +144,10 @@ public sealed interface ConditionNode permits ConditionNode.SimpleNode, Conditio
                     }
                     return cb.not(cb.like(fieldPath.as(String.class), (String)value));
                 case EQ_IGNORE_CASE:
-                    return cb.equal(cb.lower(fieldPath.as(String.class)),
+                    return value == null ? cb.isNull(fieldPath) : cb.equal(cb.lower(fieldPath.as(String.class)),
                         ((String)value).toLowerCase(java.util.Locale.ROOT));
                 case NE_IGNORE_CASE:
-                    return cb.notEqual(cb.lower(fieldPath.as(String.class)),
+                    return value == null ? cb.isNotNull(fieldPath) : cb.notEqual(cb.lower(fieldPath.as(String.class)),
                         ((String)value).toLowerCase(java.util.Locale.ROOT));
                 case LIKE_IGNORE_CASE:
                     if (value == null) {

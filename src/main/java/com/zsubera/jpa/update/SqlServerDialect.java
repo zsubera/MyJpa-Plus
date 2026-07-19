@@ -115,8 +115,15 @@ final class SqlServerDialect extends AbstractDialectStrategy {
         }
 
         // WHEN NOT MATCHED THEN INSERT
+        // ponytail: INSERT column list must only include insertColumns, not extra conflict columns.
+        // Extra conflict columns are in the source subquery for ON clause matching but are not
+        // inserted into the target table (they may be auto-generated or read-only).
+        List<String> insertOnlyCols = new ArrayList<>();
+        for (String col : insertColumns) {
+            insertOnlyCols.add(escapeIdentifier(col));
+        }
         sql.append(" WHEN NOT MATCHED THEN INSERT (");
-        sql.append(String.join(", ", escapedInsertCols));
+        sql.append(String.join(", ", insertOnlyCols));
         sql.append(") VALUES (");
         List<String> sourceRefs = new ArrayList<>();
         for (String col : insertColumns) {

@@ -280,8 +280,10 @@ public final class QueryProjectionSupport<T> {
         spec.applyDistinctAndGroupBy(dataRoot, dataQuery, cb);
         // 不应用 ORDER BY（计数不需要排序）
         TypedQuery<Tuple> query = em.createQuery(dataQuery);
-        // 限制最大返回行数以避免内存溢出
-        query.setMaxResults(MyJpaTemplate.DEFAULT_MAX_RESULTS);
+        // ponytail: Do NOT limit results here — this method counts GROUP BY groups for
+        // Page.totalElements(). Any limit would silently truncate the count, causing
+        // incorrect totalPages/hasNext in paginated results. The database handles the
+        // GROUP BY computation efficiently; OOM risk is acceptable for correctness.
         List<Tuple> results = query.getResultList();
         return results.size();
     }

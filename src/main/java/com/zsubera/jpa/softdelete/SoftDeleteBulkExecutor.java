@@ -309,6 +309,14 @@ public final class SoftDeleteBulkExecutor {
         requireNonNull(entityClass, "entityClass");
         if (ids == null || ids.isEmpty())
             return 0;
+        // ponytail: Native SQL WHERE id IN (...) cannot represent composite keys (@IdClass/@EmbeddedId).
+        // No Criteria API version-checked path exists, so throw explicitly.
+        if (com.zsubera.jpa.util.EntityClassResolver.hasCompositeKey(entityClass)) {
+            throw new UnsupportedOperationException(
+                "softDeleteByIdsWithVersionCheck does not support composite key entities ("
+                    + entityClass.getSimpleName()
+                    + "). Use softDeleteByIds() without version check, or implement a custom version-checked Criteria API path.");
+        }
         for (int i = 0; i < ids.size(); i++) {
             if (ids.get(i) == null) {
                 throw new IllegalArgumentException("ids[" + i + "] must not be null");
@@ -388,6 +396,11 @@ public final class SoftDeleteBulkExecutor {
             if (ids.get(i) == null) {
                 throw new IllegalArgumentException("ids[" + i + "] must not be null");
             }
+        }
+        // ponytail: Native SQL WHERE id IN (...) cannot represent composite keys (@IdClass/@EmbeddedId).
+        // Fall back to Criteria API path which correctly handles composite key comparison.
+        if (com.zsubera.jpa.util.EntityClassResolver.hasCompositeKey(entityClass)) {
+            return softDeleteByIdsUsingEntityManager(em, entityClass, ids);
         }
         requireActiveTransaction();
         int hardLimit = com.zsubera.jpa.util.InClauseBuilder.getHardLimit();
@@ -564,6 +577,15 @@ public final class SoftDeleteBulkExecutor {
         if (ids.size() > hardLimit)
             throw new IllegalArgumentException("ID list size (" + ids.size() + ") exceeds the hard limit (" + hardLimit
                 + "). " + "Consider processing in smaller batches or using a temporary table.");
+        // ponytail: @IdClass entities cannot use single-field IN clause in Criteria API.
+        // root.get(idFieldName) returns only the first @Id field, but batch contains @IdClass
+        // objects — type mismatch causes runtime exception. Throw explicitly.
+        if (entityClass.getAnnotation(jakarta.persistence.IdClass.class) != null) {
+            throw new UnsupportedOperationException(
+                "softDeleteByIdsUsingEntityManager does not support @IdClass composite key entities ("
+                    + entityClass.getSimpleName()
+                    + "). Use softDeleteAll() or implement a custom per-entity soft-delete path.");
+        }
 
         ExecContext ctx = resolveExecContext(entityClass);
         jakarta.persistence.criteria.CriteriaBuilder cb = em.getCriteriaBuilder();

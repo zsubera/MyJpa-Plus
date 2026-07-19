@@ -686,7 +686,9 @@ public class MergeSpec<T> {
                     + effectiveLimit + ") after committing " + total + " rows. "
                     + "Adjust myjpa-plus.query.max-bulk-operation-rows or process in smaller batches.");
             }
-            int batchEnd = Math.min(batchStart + batchSize, entities.size());
+            // ponytail: Clamp batch size to remaining limit to prevent overshoot.
+            int effectiveBatchSize = (effectiveLimit > 0) ? Math.min(batchSize, effectiveLimit - total) : batchSize;
+            int batchEnd = Math.min(batchStart + effectiveBatchSize, entities.size());
             int committedBatch;
             try {
                 committedBatch = executeSingleBatchInTransaction(entities, em, cachedStrategy, batchStart, batchEnd);

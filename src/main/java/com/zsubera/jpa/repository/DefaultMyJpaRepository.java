@@ -574,6 +574,10 @@ public class DefaultMyJpaRepository<T, ID> extends SimpleJpaRepository<T, ID> im
                 return Optional.empty();
             }
             if (isSoftDeleted(entity)) {
+                // ponytail: Detach the soft-deleted entity to prevent persistence context pollution.
+                // Without detach, the managed entity remains in PC and could interfere with
+                // other operations in the same transaction (e.g., JPQL queries without soft-delete filter).
+                entityManager.detach(entity);
                 return Optional.empty();
             }
             return Optional.of(entity);
@@ -591,7 +595,14 @@ public class DefaultMyJpaRepository<T, ID> extends SimpleJpaRepository<T, ID> im
         }
         if (com.zsubera.jpa.util.EntityClassResolver.hasCompositeKey(domainClass)) {
             T entity = entityManager.find(domainClass, id);
-            return entity != null && !isSoftDeleted(entity);
+            if (entity == null) {
+                return false;
+            }
+            if (isSoftDeleted(entity)) {
+                entityManager.detach(entity);
+                return false;
+            }
+            return true;
         }
         return exists(withIdAndSoftDelete(id));
     }
@@ -840,12 +851,23 @@ public class DefaultMyJpaRepository<T, ID> extends SimpleJpaRepository<T, ID> im
             // 硬删除路径使用 CriteriaDelete 批量操作，避免 super.deleteInBatch()
             // 内部回调 this.delete(T entity) 导致无限递归。
             java.util.List<ID> idList = new java.util.ArrayList<>();
+            java.util.List<T> skippedEntities = new java.util.ArrayList<>();
             jakarta.persistence.PersistenceUnitUtil util =
                 entityManager.getEntityManagerFactory().getPersistenceUnitUtil();
             for (T entity : validatedEntities) {
                 @SuppressWarnings("unchecked")
                 ID id = (ID)util.getIdentifier(entity);
-                idList.add(id);
+                if (id != null) {
+                    idList.add(id);
+                } else {
+                    skippedEntities.add(entity);
+                }
+            }
+            if (!skippedEntities.isEmpty()) {
+                throw new IllegalArgumentException("deleteInBatch: Cannot delete " + skippedEntities.size()
+                    + " entity(ies) because their IDs could not be extracted. "
+                    + "This typically happens with detached entities or uninitialized proxies. "
+                    + "Load entities within a transaction before calling deleteInBatch().");
             }
             String idFieldName = EntityClassResolver.resolveIdFieldName(domainClass);
             int batchSize = InClauseBuilder.getMaxInClauseSize();

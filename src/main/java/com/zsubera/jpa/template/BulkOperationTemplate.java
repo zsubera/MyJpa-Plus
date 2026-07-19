@@ -314,7 +314,12 @@ class BulkOperationTemplate {
         Object lastId = null;
         int effectiveLimit = resolveMaxBulkOperationRows();
         while (true) {
-            Object[] result = executor.execute(batchSize, lastId);
+            // ponytail: Clamp batch size to remaining limit to prevent overshoot.
+            // Without clamping, if batchSize > effectiveLimit, a single batch can
+            // commit more rows than the configured limit.
+            int effectiveBatchSize =
+                (effectiveLimit > 0) ? Math.min(batchSize, Math.max(1, effectiveLimit - total)) : batchSize;
+            Object[] result = executor.execute(effectiveBatchSize, lastId);
             int affected = (Integer)result[0];
             if (affected == 0) {
                 break;
@@ -440,8 +445,12 @@ class BulkOperationTemplate {
         Object lastId = null;
         while (shouldContinue) {
             batchCount++;
+            int effectiveLimit = resolveMaxBulkOperationRows();
+            // ponytail: Clamp batch size to remaining limit to prevent overshoot.
+            int effectiveBatchSize =
+                (effectiveLimit > 0) ? Math.min(batchSize, Math.max(1, effectiveLimit - total)) : batchSize;
             try {
-                Object[] result = executor.execute(batchSize, lastId);
+                Object[] result = executor.execute(effectiveBatchSize, lastId);
                 int batchResult = (Integer)result[0];
                 lastId = result[1];
                 total += batchResult;
@@ -453,7 +462,6 @@ class BulkOperationTemplate {
                 if (batchResult == 0) {
                     shouldContinue = false;
                 }
-                int effectiveLimit = resolveMaxBulkOperationRows();
                 if (effectiveLimit > 0 && total >= effectiveLimit) {
                     shouldContinue = false;
                 } else if (!isWithinLimit(total, effectiveLimit)) {
