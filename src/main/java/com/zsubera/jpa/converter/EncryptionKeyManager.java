@@ -290,6 +290,15 @@ final class EncryptionKeyManager {
                     availableVersions.add(entry.substring(0, idx).trim());
                 }
             }
+            // 当版本为 "default"（旧密文无 vN: 前缀）时，提供明确的迁移指引
+            if ("default".equals(version)) {
+                throw new MyJpaPlusException(
+                    "Legacy encrypted data (without vN: version prefix) cannot be decrypted with multi-key configuration. "
+                        + "Available key versions: " + availableVersions + ". "
+                        + "To migrate: 1) Temporarily revert to single-key configuration; "
+                        + "2) Re-encrypt all data; 3) Switch to multi-key configuration. "
+                        + "Or set MYJPA_ENCRYPT_KEY_VERSION to an existing version to decrypt specific data.");
+            }
             throw new MyJpaPlusException("Key version '" + version + "' not found in multi-key configuration. "
                 + "Available versions: " + availableVersions + ". " + "Set the correct key version via "
                 + KEY_VERSION_ENV + " or " + KEY_VERSION_PROPERTY + ".");
