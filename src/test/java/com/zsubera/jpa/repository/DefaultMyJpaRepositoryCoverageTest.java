@@ -54,7 +54,8 @@ class DefaultMyJpaRepositoryCoverageTest {
 
     @Test
     void withAutoFilterOverride_runnable_null_removesOverride() {
-        DefaultMyJpaRepository.withAutoFilterOverride(null, () -> {});
+        DefaultMyJpaRepository.withAutoFilterOverride(null, () -> {
+        });
         assertNull(DefaultMyJpaRepository.getAutoFilterOverride());
     }
 
@@ -102,7 +103,8 @@ class DefaultMyJpaRepositoryCoverageTest {
     void createTaskDecorator_restoresStateAfterExecution() {
         DefaultMyJpaRepository.withAutoFilterOverride(false, () -> {
             var decorator = DefaultMyJpaRepository.createTaskDecorator();
-            Runnable decorated = decorator.decorate(() -> {});
+            Runnable decorated = decorator.decorate(() -> {
+            });
             decorated.run();
         });
     }
@@ -371,8 +373,7 @@ class DefaultMyJpaRepositoryCoverageTest {
         // Use Spring's PlatformTransactionManager to create an active transaction
         org.springframework.transaction.PlatformTransactionManager txManager =
             new org.springframework.jdbc.datasource.DataSourceTransactionManager(
-                new org.springframework.jdbc.datasource.SingleConnectionDataSource(
-                    createMockConnection(), false));
+                new org.springframework.jdbc.datasource.SingleConnectionDataSource(createMockConnection(), false));
         org.springframework.transaction.support.TransactionTemplate txTemplate =
             new org.springframework.transaction.support.TransactionTemplate(txManager);
         txTemplate.executeWithoutResult(status -> {
@@ -404,15 +405,15 @@ class DefaultMyJpaRepositoryCoverageTest {
 
     @Test
     void mutableConfigProvider_setters() throws Exception {
-        DefaultMyJpaRepository.ConfigProvider provider =
-            DefaultMyJpaRepository.createMutableConfigProvider(true, true);
+        DefaultMyJpaRepository.ConfigProvider provider = DefaultMyJpaRepository.createMutableConfigProvider(true, true);
         // MutableConfigProvider is a private inner class, use reflection
         java.lang.reflect.Method setAuto = provider.getClass().getDeclaredMethod("setAutoFilterEnabled", boolean.class);
         setAuto.setAccessible(true);
         setAuto.invoke(provider, false);
         assertFalse(provider.isAutoFilterEnabled());
 
-        java.lang.reflect.Method setBlock = provider.getClass().getDeclaredMethod("setBlockUnconditionalDelete", boolean.class);
+        java.lang.reflect.Method setBlock =
+            provider.getClass().getDeclaredMethod("setBlockUnconditionalDelete", boolean.class);
         setBlock.setAccessible(true);
         setBlock.invoke(provider, false);
         assertFalse(provider.isBlockUnconditionalDelete());

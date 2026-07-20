@@ -110,7 +110,7 @@ class IgnoreSoftDeleteAdvisorMockTest {
     @Test
     void aroundRepositoryMethod_withAnnotation_traceLogging() throws Throwable {
         ch.qos.logback.classic.Logger logger =
-            (ch.qos.logback.classic.Logger) org.slf4j.LoggerFactory.getLogger(IgnoreSoftDeleteAdvisor.class);
+            (ch.qos.logback.classic.Logger)org.slf4j.LoggerFactory.getLogger(IgnoreSoftDeleteAdvisor.class);
         ch.qos.logback.classic.Level oldLevel = logger.getLevel();
         try {
             logger.setLevel(ch.qos.logback.classic.Level.TRACE);

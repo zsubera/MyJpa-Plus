@@ -4,7 +4,6 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
 import com.zsubera.jpa.annotation.SoftDelete;
-import com.zsubera.jpa.exception.MyJpaPlusException;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.EntityTransaction;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -52,7 +51,8 @@ class SoftDeleteBulkExecutorCoverageTest {
     @Test
     void publishEvent_getEventPublisher_returnsCurrent() {
         assertNull(SoftDeleteBulkExecutor.getEventPublisher());
-        SoftDeleteBulkExecutor.setEventPublisher((cls, rows) -> {});
+        SoftDeleteBulkExecutor.setEventPublisher((cls, rows) -> {
+        });
         assertNotNull(SoftDeleteBulkExecutor.getEventPublisher());
     }
 
@@ -159,15 +159,15 @@ class SoftDeleteBulkExecutorCoverageTest {
     @Test
     void softDeleteByIdsUsingEntityManager_emptyIds_returnsZero() {
         EntityManager em = mock(EntityManager.class);
-        assertEquals(0, SoftDeleteBulkExecutor.softDeleteByIdsUsingEntityManager(em, TestEntity.class, java.util.List.of()));
+        assertEquals(0,
+            SoftDeleteBulkExecutor.softDeleteByIdsUsingEntityManager(em, TestEntity.class, java.util.List.of()));
     }
 
     @Test
     void softDeleteByIdsUsingEntityManager_nullId_throws() {
         EntityManager em = mock(EntityManager.class);
-        assertThrows(IllegalArgumentException.class,
-            () -> SoftDeleteBulkExecutor.softDeleteByIdsUsingEntityManager(em, TestEntity.class,
-                java.util.Arrays.asList(1L, null)));
+        assertThrows(IllegalArgumentException.class, () -> SoftDeleteBulkExecutor.softDeleteByIdsUsingEntityManager(em,
+            TestEntity.class, java.util.Arrays.asList(1L, null)));
     }
 
     // ---- softDeleteAll null checks ----
@@ -194,16 +194,14 @@ class SoftDeleteBulkExecutorCoverageTest {
 
     @Test
     void softDeleteByIdsWithVersionCheck_nullEm_throws() {
-        assertThrows(IllegalArgumentException.class,
-            () -> SoftDeleteBulkExecutor.softDeleteByIdsWithVersionCheck(null, TestEntity.class,
-                java.util.List.of(1L), 1L));
+        assertThrows(IllegalArgumentException.class, () -> SoftDeleteBulkExecutor.softDeleteByIdsWithVersionCheck(null,
+            TestEntity.class, java.util.List.of(1L), 1L));
     }
 
     @Test
     void softDeleteByIdsWithVersionCheck_nullEntityClass_throws() {
-        assertThrows(IllegalArgumentException.class,
-            () -> SoftDeleteBulkExecutor.softDeleteByIdsWithVersionCheck(mock(EntityManager.class), null,
-                java.util.List.of(1L), 1L));
+        assertThrows(IllegalArgumentException.class, () -> SoftDeleteBulkExecutor
+            .softDeleteByIdsWithVersionCheck(mock(EntityManager.class), null, java.util.List.of(1L), 1L));
     }
 
     @Test
@@ -216,8 +214,7 @@ class SoftDeleteBulkExecutorCoverageTest {
     @Test
     void softDeleteByIdsWithVersionCheck_nullIds_returnsZero() {
         EntityManager em = mock(EntityManager.class);
-        assertEquals(0,
-            SoftDeleteBulkExecutor.softDeleteByIdsWithVersionCheck(em, TestEntity.class, null, 1L));
+        assertEquals(0, SoftDeleteBulkExecutor.softDeleteByIdsWithVersionCheck(em, TestEntity.class, null, 1L));
     }
 
     // ---- softDeleteByIds null checks ----
