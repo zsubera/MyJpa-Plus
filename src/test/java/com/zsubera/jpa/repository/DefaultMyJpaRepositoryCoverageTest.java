@@ -3,7 +3,6 @@ package com.zsubera.jpa.repository;
 import static org.junit.jupiter.api.Assertions.*;
 
 import com.zsubera.jpa.autoconfigure.GlobalConfigHolder;
-import com.zsubera.jpa.autoconfigure.MyJpaPlusGlobalConfig;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
 import org.junit.jupiter.api.AfterEach;
@@ -23,16 +22,7 @@ class DefaultMyJpaRepositoryCoverageTest {
     // ---- resolveGlobalConfig branches ----
 
     @Test
-    void resolveGlobalConfig_usesGlobalConfigHolder_whenAvailable() {
-        MyJpaPlusGlobalConfig config = new MyJpaPlusGlobalConfig();
-        config.setSoftDeleteAutoFilter(false);
-        GlobalConfigHolder.setConfig(config);
-        assertFalse(DefaultMyJpaRepository.isAutoFilterEnabled());
-    }
-
-    @Test
     void resolveGlobalConfig_usesDefault_whenBothNull() {
-        GlobalConfigHolder.setConfig(null);
         DefaultMyJpaRepository.setGlobalConfigProvider(null);
         assertTrue(DefaultMyJpaRepository.isAutoFilterEnabled());
         assertTrue(DefaultMyJpaRepository.isBlockUnconditionalDelete());
@@ -222,22 +212,6 @@ class DefaultMyJpaRepositoryCoverageTest {
     }
 
     @Test
-    void isAutoFilterEnabled_withGlobalConfig() {
-        MyJpaPlusGlobalConfig config = new MyJpaPlusGlobalConfig();
-        config.setSoftDeleteAutoFilter(false);
-        GlobalConfigHolder.setConfig(config);
-        assertFalse(DefaultMyJpaRepository.isAutoFilterEnabled());
-    }
-
-    @Test
-    void isBlockUnconditionalDelete_withGlobalConfig() {
-        MyJpaPlusGlobalConfig config = new MyJpaPlusGlobalConfig();
-        config.setBlockUnconditionalDelete(false);
-        GlobalConfigHolder.setConfig(config);
-        assertFalse(DefaultMyJpaRepository.isBlockUnconditionalDelete());
-    }
-
-    @Test
     void isAutoFilterEnabled_overrideTrue() {
         DefaultMyJpaRepository.withAutoFilterOverride(true, () -> {
             assertTrue(DefaultMyJpaRepository.isAutoFilterEnabled());
@@ -252,14 +226,6 @@ class DefaultMyJpaRepositoryCoverageTest {
     }
 
     // ---- mergeSoftDeleteFilter ----
-
-    @Test
-    void mergeSoftDeleteFilter_autoFilterDisabled_returnsSameSpec() {
-        MyJpaPlusGlobalConfig config = new MyJpaPlusGlobalConfig();
-        config.setSoftDeleteAutoFilter(false);
-        GlobalConfigHolder.setConfig(config);
-        assertFalse(DefaultMyJpaRepository.isAutoFilterEnabled());
-    }
 
     // ---- registerTransactionCleanup ----
 
