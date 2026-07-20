@@ -43,8 +43,13 @@ class BaseClassDispatchMethodInterceptor implements RepositoryProxyPostProcessor
         org.springframework.aop.Advisor[] advisors = factory.getAdvisors();
         for (org.springframework.aop.Advisor advisor : advisors) {
             if (advisor.getAdvice() instanceof DefaultMethodInvokingMethodInterceptor) {
-                factory.removeAdvisor(advisor);
-                log.debug("Removed DefaultMethodInvokingMethodInterceptor, replacing with virtual-dispatch version");
+                int idx = factory.indexOf(advisor);
+                if (idx >= 0) {
+                    factory.removeAdvisor(idx);
+                    log.debug(
+                        "Removed DefaultMethodInvokingMethodInterceptor at index {}, replacing with virtual-dispatch version",
+                        idx);
+                }
                 break;
             }
         }
