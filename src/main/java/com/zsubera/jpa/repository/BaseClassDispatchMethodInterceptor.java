@@ -38,23 +38,28 @@ class BaseClassDispatchMethodInterceptor implements RepositoryProxyPostProcessor
     @Override
     public void postProcess(org.springframework.aop.framework.ProxyFactory factory,
         org.springframework.data.repository.core.RepositoryInformation metadata) {
-        // 移除 Spring Data 的 DefaultMethodInvokingMethodInterceptor
-        // 它使用 findSpecial()（非虚分派），绕过 CGLIB 代理的方法覆盖
-        org.springframework.aop.Advisor[] advisors = factory.getAdvisors();
-        for (org.springframework.aop.Advisor advisor : advisors) {
-            if (advisor.getAdvice() instanceof DefaultMethodInvokingMethodInterceptor) {
-                int idx = factory.indexOf(advisor);
-                if (idx >= 0) {
-                    factory.removeAdvisor(idx);
-                    log.debug(
-                        "Removed DefaultMethodInvokingMethodInterceptor at index {}, replacing with virtual-dispatch version",
-                        idx);
-                }
-                break;
-            }
-        }
+        // 通过反射访问 AdvisedSupport 内部的 advisors 列表，移除 DefaultMethodInvokingMethodInterceptor
+        removeDefaultMethodInterceptor(factory);
         // 添加使用虚分派的拦截器
         factory.addAdvice(new VirtualDispatchInterceptor());
+    }
+
+    @SuppressWarnings("unchecked")
+    private void removeDefaultMethodInterceptor(org.springframework.aop.framework.ProxyFactory factory) {
+        try {
+            java.lang.reflect.Field field =
+                org.springframework.aop.framework.AdvisedSupport.class.getDeclaredField("advisors");
+            field.setAccessible(true);
+            java.util.List<org.springframework.aop.Advisor> advisors =
+                (java.util.List<org.springframework.aop.Advisor>)field.get(factory);
+            boolean removed =
+                advisors.removeIf(advisor -> advisor.getAdvice() instanceof DefaultMethodInvokingMethodInterceptor);
+            if (removed) {
+                log.debug("Removed DefaultMethodInvokingMethodInterceptor from advisor list");
+            }
+        } catch (Exception e) {
+            log.warn("Failed to remove DefaultMethodInvokingMethodInterceptor via reflection", e);
+        }
     }
 
     /**
