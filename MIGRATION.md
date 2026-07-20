@@ -1,5 +1,66 @@
 # 升级指南
 
+## 从 1.3.1 升级到 1.3.11
+
+### 破坏性变更
+
+- **删除 `asDto()`** — `QuerySpec.asDto()` 和 `getProjectionDtoClass()` 已移除，投影目标类型改由方法参数决定
+- **`findAll(spec)` 不再支持投影模式** — 在投影模式下抛出 `UnsupportedOperationException`
+- **`MyJpaTemplate.find(Class, QuerySpec)` 返回类型修正** — 返回 `List<Tuple>` 而非 `List<T>`
+- **移除代码生成模块** — `com.zsubera.jpa.codegen.EntityCodeGenerator` 已删除，代码生成功能迁移至独立 Maven 插件 `myjpa-plus-maven-plugin`
+- **`SampledEvictionCache.setMaxSize()` 初始化保护** — 新增 `initialized` 标志，缓存初始化后调用 `setMaxSize()` 会记录警告日志，不再允许运行时调整
+
+### 迁移代码示例
+
+**投影查询迁移**（`asDto()` → `find()`）：
+
+```java
+// 之前
+repo.findAll(new QuerySpec<User>().select(User::getName).asDto(NameDto.class));
+// 之后
+repo.find(NameDto.class, s -> s.select(User::getName));
+```
+
+**`findAll(spec)` 投影迁移**：
+
+```java
+// 之前
+repo.findAll(new QuerySpec<User>().select(User::getName));
+// 之后
+repo.find(Tuple.class, s -> s.select(User::getName));
+```
+
+### 新增 API
+
+- **类型安全的投影查询** — `MyJpaRepository` 新增 `<R> List<R> find(Class<R> resultType, Consumer<QuerySpec<T>> config)` 和 `<R> List<R> find(Class<R> resultType, Specification<T> spec)` 方法
+- **`MyJpaTemplate` 投影查询重载** — 新增 `<T, R> List<R> find(Class<T> entityClass, Class<R> resultType, QuerySpec<T> spec)`
+- **`SoftDeleteBulkExecutor` 乐观锁检查** — 新增 `softDeleteByIdsWithVersionCheck(em, entityClass, ids, expectedVersion)` 方法
+- **`EncryptionKeyManager` Spring Environment 生产检测** — 新增 `setSpringProductionEnvironment(Boolean)` 方法
+- **`EncryptionKeyManager` PBKDF2 迭代次数运行时保护** — 密钥首次派生后禁止更改 PBKDF2 迭代次数
+- **`DeleteSpec.executeAsSoftDeleteInTransaction`** — 新增事务管理方法，修复非事务上下文中调用时抛出 `TransactionRequiredException` 的问题
+- **可插拔缓存后端** — `CacheAdapter` SPI 支持 Caffeine/Redis 自动切换
+
+### 行为变更
+
+| 变更项 | 旧行为 | 新行为 | 影响 |
+|-------|--------|--------|------|
+| `asDto()` | `QuerySpec.asDto(Class)` 设置投影目标类型 | 已移除，改由 `find(Class<R>, ...)` 参数决定 | 必须迁移投影查询调用 |
+| `findAll(spec)` 投影模式 | 返回投影结果 | 抛出 `UnsupportedOperationException` | 必须改用 `find(Tuple.class, spec)` |
+| `SampledEvictionCache.setMaxSize()` | 运行时可动态调整 | 初始化后记录警告日志，不再调整 | 仅在启动初始化阶段调用无影响 |
+
+### 缺陷修复（关键项）
+
+- JoinGroup.or(Consumer) 单消费者 OR 语义错误
+- QueryBuildHelper.executeCountQuery() 软删除过滤不一致
+- 硬删除路径 EntityModifiedEvent affectedRows 不准确
+- RedisCacheAdapter.putAll() TTL <= 0 时仍缓存条目
+- DefaultMyJpaRepository.findById/existsById/findAllById 复合主键不兼容
+- PostgreSQL UPSERT 空列检查缺失
+- SoftDeleteBulkExecutor 并发操作中软删除实体被硬删除的安全问题
+- CteSpec setParameter() 与内部参数名冲突
+- Spec-based 操作缺失 EntityModifiedEvent 发布
+- 更多修复详见 [CHANGELOG.md](CHANGELOG.md)
+
 ## 从 1.3.0 升级到 1.3.1
 
 ### 依赖变更
