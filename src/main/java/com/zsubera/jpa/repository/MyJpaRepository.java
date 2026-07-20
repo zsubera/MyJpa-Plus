@@ -127,6 +127,8 @@ public interface MyJpaRepository<T, ID> extends JpaRepository<T, ID>, JpaSpecifi
     /**
      * 类型安全的投影查询（Specification 模式）。
      *
+     * <p>此方法必须由仓库基类 {@link DefaultMyJpaRepository} 实现。
+     *
      * @param resultType 返回类型
      * @param spec 查询规格说明（必须已配置 select()，resultType 非实体类时）
      * @param <R> 返回元素类型
