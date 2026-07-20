@@ -50,8 +50,11 @@ class DefaultMyJpaRepositoryIntegrationTest {
         repository.flush();
         simpleRepository.deleteAll();
         simpleRepository.flush();
-        com.zsubera.jpa.autoconfigure.GlobalConfigHolder.getConfig().setSoftDeleteAutoFilter(true);
-        com.zsubera.jpa.autoconfigure.GlobalConfigHolder.getConfig().setBlockUnconditionalDelete(true);
+        com.zsubera.jpa.autoconfigure.MyJpaPlusGlobalConfig cfg =
+            com.zsubera.jpa.autoconfigure.GlobalConfigHolder.getConfig();
+        cfg.setSoftDeleteAutoFilter(true);
+        cfg.setBlockUnconditionalDelete(true);
+        com.zsubera.jpa.autoconfigure.GlobalConfigHolder.setConfig(cfg);
         SoftDeleteContext.reset();
         proxy = org.springframework.test.util.AopTestUtils.getTargetObject(repository);
     }
@@ -59,8 +62,11 @@ class DefaultMyJpaRepositoryIntegrationTest {
     @AfterEach
     void tearDown() {
         SoftDeleteContext.reset();
-        com.zsubera.jpa.autoconfigure.GlobalConfigHolder.getConfig().setSoftDeleteAutoFilter(true);
-        com.zsubera.jpa.autoconfigure.GlobalConfigHolder.getConfig().setBlockUnconditionalDelete(true);
+        com.zsubera.jpa.autoconfigure.MyJpaPlusGlobalConfig cfg =
+            com.zsubera.jpa.autoconfigure.GlobalConfigHolder.getConfig();
+        cfg.setSoftDeleteAutoFilter(true);
+        cfg.setBlockUnconditionalDelete(true);
+        com.zsubera.jpa.autoconfigure.GlobalConfigHolder.setConfig(cfg);
         DefaultMyJpaRepository.clearThreadLocal();
     }
 
@@ -236,7 +242,10 @@ class DefaultMyJpaRepositoryIntegrationTest {
     @Test
     void templateFindById_autoFilterDisabled_returnsSoftDeletedEntity() {
         SoftDeleteRepoTestEntity deleted = saveDeleted("deleted");
-        com.zsubera.jpa.autoconfigure.GlobalConfigHolder.getConfig().setSoftDeleteAutoFilter(false);
+        com.zsubera.jpa.autoconfigure.MyJpaPlusGlobalConfig cfg =
+            com.zsubera.jpa.autoconfigure.GlobalConfigHolder.getConfig();
+        cfg.setSoftDeleteAutoFilter(false);
+        com.zsubera.jpa.autoconfigure.GlobalConfigHolder.setConfig(cfg);
 
         Optional<SoftDeleteRepoTestEntity> result = template.findById(SoftDeleteRepoTestEntity.class, deleted.getId());
 

@@ -173,6 +173,12 @@ final class NodeResolver {
 
     /** ponytail: 将软删除自动过滤与全局配置及 IgnoreSoftDelete 上下文联动。 */
     private static boolean shouldApplySoftDeleteAutoFilter() {
+        // ponytail: 检查 AUTO_FILTER_OVERRIDE ThreadLocal，与 DefaultMyJpaRepository 和 MyJpaTemplate 保持一致。
+        // withAutoFilterOverride(false) 应该同时抑制 JOIN 作用域的软删除过滤器。
+        Boolean override = com.zsubera.jpa.repository.DefaultMyJpaRepository.getAutoFilterOverride();
+        if (override != null && !override) {
+            return false;
+        }
         com.zsubera.jpa.autoconfigure.MyJpaPlusGlobalConfig config =
             com.zsubera.jpa.autoconfigure.GlobalConfigHolder.getConfig();
         if (config != null && !config.isSoftDeleteAutoFilter()) {

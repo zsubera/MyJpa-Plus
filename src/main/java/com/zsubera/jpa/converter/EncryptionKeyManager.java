@@ -92,6 +92,9 @@ final class EncryptionKeyManager {
                         + "To change iterations, restart the application before any encryption operations.");
             }
             if (iterationsConfigured) {
+                if (configuredPbkdf2Iterations == iterations) {
+                    return;
+                }
                 throw new IllegalStateException("PBKDF2 iterations already configured. Cannot change from "
                     + configuredPbkdf2Iterations + " to " + iterations + ". "
                     + "Changing iterations between restarts makes existing ciphertext UNDECRYPTABLE. "

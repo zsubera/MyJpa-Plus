@@ -527,7 +527,19 @@ public class DeleteSpec<T> extends AbstractBulkOperationSpec<T, DeleteSpec<T>> {
 
         CriteriaDelete<T> delete = cb.createCriteriaDelete(entityClass);
         Root<T> deleteRoot = delete.from(entityClass);
-        delete.where(InClauseBuilder.in(cb, deleteRoot.get(idFieldName), ids));
+        // ponytail: The ID list was queried with soft-delete filter, but the DELETE WHERE clause
+        // must also include it to prevent hard-deleting already-soft-deleted rows during concurrent
+        // soft-delete operations (another transaction may soft-delete a row between ID query and DELETE).
+        Predicate idPredicate = InClauseBuilder.in(cb, deleteRoot.get(idFieldName), ids);
+        Predicate[] softDeletePredicates = buildPredicates(deleteRoot, cb);
+        if (softDeletePredicates.length > 0) {
+            Predicate[] all = new Predicate[softDeletePredicates.length + 1];
+            all[0] = idPredicate;
+            System.arraycopy(softDeletePredicates, 0, all, 1, softDeletePredicates.length);
+            delete.where(cb.and(all));
+        } else {
+            delete.where(idPredicate);
+        }
         var dq = em.createQuery(delete);
         int deleted = dq.executeUpdate();
         if (deleted > 0) {

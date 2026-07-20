@@ -23,6 +23,7 @@ class EncryptConverterEdgeCaseTest {
         System.setProperty("myjpa.encrypt.key", TEST_KEY);
         System.setProperty("myjpa.encrypt.salt", "test-salt-value");
         System.setProperty("myjpa-plus.encrypt.skip-salt-check", "true");
+        EncryptConverter.resetIterationsConfigured();
         EncryptConverter.clearCaches();
     }
 
@@ -31,6 +32,7 @@ class EncryptConverterEdgeCaseTest {
         System.clearProperty("myjpa.encrypt.key");
         System.clearProperty("myjpa.encrypt.salt");
         System.clearProperty("myjpa-plus.encrypt.skip-salt-check");
+        EncryptConverter.resetIterationsConfigured();
         EncryptConverter.clearCaches();
     }
 

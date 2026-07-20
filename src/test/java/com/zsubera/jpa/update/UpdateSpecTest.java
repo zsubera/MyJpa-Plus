@@ -1259,6 +1259,7 @@ class UpdateSpecTest {
         Integer oldLimit = config.getMaxBulkOperationRows();
         try {
             config.setMaxBulkOperationRows(1);
+            com.zsubera.jpa.autoconfigure.GlobalConfigHolder.setConfig(config);
 
             repository.save(newEntity("a", 1));
             repository.save(newEntity("b", 1));
@@ -1271,6 +1272,9 @@ class UpdateSpecTest {
         } finally {
             if (oldLimit != null) {
                 config.setMaxBulkOperationRows(oldLimit);
+                com.zsubera.jpa.autoconfigure.GlobalConfigHolder.setConfig(config);
+            } else {
+                com.zsubera.jpa.autoconfigure.GlobalConfigHolder.reset();
             }
         }
     }
@@ -1282,6 +1286,7 @@ class UpdateSpecTest {
         Integer oldLimit = config.getMaxBulkOperationRows();
         try {
             config.setMaxBulkOperationRows(10);
+            com.zsubera.jpa.autoconfigure.GlobalConfigHolder.setConfig(config);
 
             repository.save(newEntity("a", 1));
             em.flush();
@@ -1293,6 +1298,9 @@ class UpdateSpecTest {
         } finally {
             if (oldLimit != null) {
                 config.setMaxBulkOperationRows(oldLimit);
+                com.zsubera.jpa.autoconfigure.GlobalConfigHolder.setConfig(config);
+            } else {
+                com.zsubera.jpa.autoconfigure.GlobalConfigHolder.reset();
             }
         }
     }
@@ -1304,6 +1312,7 @@ class UpdateSpecTest {
         Integer oldLimit = config.getMaxBulkOperationRows();
         try {
             config.setMaxBulkOperationRows(Integer.MAX_VALUE);
+            com.zsubera.jpa.autoconfigure.GlobalConfigHolder.setConfig(config);
 
             repository.save(newEntity("a", 1));
             em.flush();
@@ -1315,6 +1324,9 @@ class UpdateSpecTest {
         } finally {
             if (oldLimit != null) {
                 config.setMaxBulkOperationRows(oldLimit);
+                com.zsubera.jpa.autoconfigure.GlobalConfigHolder.setConfig(config);
+            } else {
+                com.zsubera.jpa.autoconfigure.GlobalConfigHolder.reset();
             }
         }
     }

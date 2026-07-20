@@ -20,6 +20,7 @@ class EncryptionKeyManagerEdgeCaseTest {
     void setUp() {
         System.setProperty("myjpa.encrypt.key", "1234567890123456");
         System.setProperty("myjpa.encrypt.salt", "test-salt-value");
+        EncryptionKeyManager.resetIterationsConfigured();
         EncryptionKeyManager.clearCaches();
     }
 
@@ -28,6 +29,7 @@ class EncryptionKeyManagerEdgeCaseTest {
         System.clearProperty("myjpa.encrypt.key");
         System.clearProperty("myjpa.encrypt.salt");
         System.clearProperty("myjpa.encrypt.key.version");
+        EncryptionKeyManager.resetIterationsConfigured();
         EncryptionKeyManager.clearCaches();
     }
 
@@ -81,11 +83,11 @@ class EncryptionKeyManagerEdgeCaseTest {
     @DisplayName("setPbkdf2Iterations accepts valid range")
     void shouldAcceptValidIterations() {
         assertDoesNotThrow(() -> EncryptionKeyManager.setPbkdf2Iterations(100_000));
-        EncryptionKeyManager.clearCaches();
+        EncryptionKeyManager.resetIterationsConfigured();
         assertDoesNotThrow(() -> EncryptionKeyManager.setPbkdf2Iterations(10_000_000));
-        EncryptionKeyManager.clearCaches();
+        EncryptionKeyManager.resetIterationsConfigured();
         assertDoesNotThrow(() -> EncryptionKeyManager.setPbkdf2Iterations(600_000));
-        EncryptionKeyManager.clearCaches();
+        EncryptionKeyManager.resetIterationsConfigured();
     }
 
     @Test

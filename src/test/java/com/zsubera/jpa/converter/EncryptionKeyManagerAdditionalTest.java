@@ -8,12 +8,13 @@ class EncryptionKeyManagerAdditionalTest {
 
     @Test
     void setPbkdf2Iterations_validBounds_succeeds() {
+        EncryptionKeyManager.resetIterationsConfigured();
         assertDoesNotThrow(() -> EncryptionKeyManager.setPbkdf2Iterations(100_000));
-        EncryptionKeyManager.clearCaches();
+        EncryptionKeyManager.resetIterationsConfigured();
         assertDoesNotThrow(() -> EncryptionKeyManager.setPbkdf2Iterations(10_000_000));
-        EncryptionKeyManager.clearCaches();
+        EncryptionKeyManager.resetIterationsConfigured();
         assertDoesNotThrow(() -> EncryptionKeyManager.setPbkdf2Iterations(1_000_000));
-        EncryptionKeyManager.clearCaches();
+        EncryptionKeyManager.resetIterationsConfigured();
     }
 
     @Test

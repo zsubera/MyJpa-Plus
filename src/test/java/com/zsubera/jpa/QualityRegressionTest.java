@@ -23,6 +23,7 @@ class QualityRegressionTest {
     void setUp() {
         System.setProperty("myjpa.encrypt.key", "1234567890123456");
         System.setProperty("myjpa.encrypt.salt", "test-salt");
+        EncryptConverter.resetIterationsConfigured();
         EncryptConverter.clearCaches();
     }
 
@@ -31,6 +32,7 @@ class QualityRegressionTest {
         System.clearProperty("myjpa.encrypt.key");
         System.clearProperty("myjpa.encrypt.salt");
         System.clearProperty("myjpa-plus.encrypt.skip-salt-check");
+        EncryptConverter.resetIterationsConfigured();
         EncryptConverter.clearCaches();
     }
 

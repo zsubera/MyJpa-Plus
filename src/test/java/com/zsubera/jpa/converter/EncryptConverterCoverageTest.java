@@ -21,7 +21,9 @@ class EncryptConverterCoverageTest {
         System.setProperty("myjpa.encrypt.key", TEST_KEY);
         System.setProperty("myjpa.encrypt.salt", "test-salt-value");
         System.setProperty("myjpa-plus.encrypt.skip-salt-check", "true");
+        EncryptConverter.resetIterationsConfigured();
         EncryptConverter.clearCaches();
+        EncryptConverter.setSpringProductionEnvironment(null);
         Field f = EncryptionKeyManager.class.getDeclaredField("KEY_VALIDATED");
         f.setAccessible(true);
         ((java.util.concurrent.atomic.AtomicBoolean)f.get(null)).set(false);
@@ -33,8 +35,10 @@ class EncryptConverterCoverageTest {
         System.clearProperty("myjpa.encrypt.salt");
         System.clearProperty("myjpa-plus.encrypt.skip-salt-check");
         System.clearProperty("myjpa.encrypt.key.version");
+        EncryptConverter.resetIterationsConfigured();
         EncryptConverter.clearCaches();
         EncryptConverter.setSkipSaltCheck(false);
+        EncryptConverter.setSpringProductionEnvironment(null);
         Field f = EncryptionKeyManager.class.getDeclaredField("KEY_VALIDATED");
         f.setAccessible(true);
         ((java.util.concurrent.atomic.AtomicBoolean)f.get(null)).set(false);

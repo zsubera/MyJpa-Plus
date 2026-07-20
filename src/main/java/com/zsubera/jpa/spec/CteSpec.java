@@ -108,6 +108,12 @@ public class CteSpec {
     private static final Pattern DOLLAR_QUOTED_STRING_PATTERN =
         Pattern.compile("\\$(\\w*)\\$(?:(?!\\$\\1\\$).)*\\$\\1\\$", Pattern.DOTALL);
 
+    /** 剥离双引号标识符（PostgreSQL/ANSI SQL），避免标识符内容触发危险关键字/未绑定参数误报。 */
+    private static final Pattern DOUBLE_QUOTE_IDENTIFIER_PATTERN = Pattern.compile("\"[^\"]*\"");
+
+    /** 剥离反引号标识符（MySQL），避免标识符内容触发危险关键字/未绑定参数误报。 */
+    private static final Pattern BACKTICK_IDENTIFIER_PATTERN = Pattern.compile("`[^`]*`");
+
     private static final Class<?> HIBERNATE_SESSION_CLASS;
     private static final Class<?> HIBERNATE_WORK_CLASS;
     static {
@@ -869,13 +875,16 @@ public class CteSpec {
 
         // 正则检查：危险关键字、存储过程、注释注入、分号注入、方言特定模式
         // 先剥离字符串字面量，避免内容中的关键词触发误报
-        // 顺序：美元引用 → Oracle Q 引用 → 单引号字符串
+        // 顺序：美元引用 → Oracle Q 引用 → 单引号字符串 → 双引号标识符 → 反引号标识符
         // （美元引用必须在 Q 引用之前剥离，因为 $tag$ 内可能含 Q'...'；Q 引用必须在单引号之前剥离）
         String stripped = DOLLAR_QUOTED_STRING_PATTERN.matcher(sql).replaceAll("''");
         stripped = com.zsubera.jpa.monitor.SqlSanitizer.stripOracleQQuotes(stripped);
         // ponytail: 使用字符扫描器替代正则剥离单引号字符串，正确处理 PG 标准模式
         // （standard_conforming_strings=on）下 \' 是字面反引号+关闭引号的行为
         stripped = stripSingleQuotedStrings(stripped);
+        // ponytail: 剥离双引号和反引号标识符，避免标识符内容（如 "DROP"）触发危险关键字误报
+        stripped = DOUBLE_QUOTE_IDENTIFIER_PATTERN.matcher(stripped).replaceAll("");
+        stripped = BACKTICK_IDENTIFIER_PATTERN.matcher(stripped).replaceAll("");
         if (DANGEROUS_KEYWORD_PATTERN.matcher(stripped).find()) {
             String message = "SECURITY: " + context + " SQL contains potentially dangerous DDL/admin keyword. "
                 + "Ensure this is intentional and not user input. SQL: " + truncated;
@@ -994,10 +1003,13 @@ public class CteSpec {
         java.util.Set<String> asSafeParamNames) {
         // 正则检测：先剥离字符串字面量，再查找 :paramName 模式
         // 原子组 (?>...) 防止灾难性回溯
-        // 顺序：美元引用 → Oracle Q 引用 → 单引号字符串
+        // 顺序：美元引用 → Oracle Q 引用 → 单引号字符串 → 双引号标识符 → 反引号标识符
         String stripped = DOLLAR_QUOTED_STRING_PATTERN.matcher(sql).replaceAll("''");
         stripped = com.zsubera.jpa.monitor.SqlSanitizer.stripOracleQQuotes(stripped);
         stripped = stripSingleQuotedStrings(stripped);
+        // ponytail: 剥离双引号和反引号标识符，避免标识符中的冒号触发未绑定参数误报
+        stripped = DOUBLE_QUOTE_IDENTIFIER_PATTERN.matcher(stripped).replaceAll("");
+        stripped = BACKTICK_IDENTIFIER_PATTERN.matcher(stripped).replaceAll("");
         java.util.regex.Matcher matcher = UNBOUND_PARAM_PATTERN.matcher(stripped);
         List<String> unboundParams = new ArrayList<>();
         while (matcher.find()) {

@@ -2,7 +2,6 @@ package com.zsubera.jpa.converter;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -14,10 +13,8 @@ class EncryptionKeyManagerTest {
     void setUp() throws Exception {
         System.setProperty("myjpa.encrypt.key", "1234567890123456");
         System.setProperty("myjpa.encrypt.salt", "test-salt-value");
+        EncryptConverter.resetIterationsConfigured();
         EncryptConverter.clearCaches();
-        Field f = EncryptionKeyManager.class.getDeclaredField("KEY_VALIDATED");
-        f.setAccessible(true);
-        ((java.util.concurrent.atomic.AtomicBoolean)f.get(null)).set(false);
     }
 
     @AfterEach
@@ -25,23 +22,21 @@ class EncryptionKeyManagerTest {
         System.clearProperty("myjpa.encrypt.key");
         System.clearProperty("myjpa.encrypt.salt");
         System.clearProperty("myjpa-plus.encrypt.skip-salt-check");
+        EncryptConverter.resetIterationsConfigured();
         EncryptConverter.clearCaches();
         EncryptConverter.setSkipSaltCheck(false);
-        Field f = EncryptionKeyManager.class.getDeclaredField("KEY_VALIDATED");
-        f.setAccessible(true);
-        ((java.util.concurrent.atomic.AtomicBoolean)f.get(null)).set(false);
     }
 
     @Test
     void setPbkdf2IterationsValidRange() {
         // First set succeeds
         EncryptionKeyManager.setPbkdf2Iterations(100000);
-        // Subsequent sets throw (iterations immutable after first configuration)
-        EncryptionKeyManager.clearCaches();
+        // Reset iterations configured state, then subsequent sets should succeed
+        EncryptionKeyManager.resetIterationsConfigured();
         EncryptionKeyManager.setPbkdf2Iterations(1000000);
-        EncryptionKeyManager.clearCaches();
+        EncryptionKeyManager.resetIterationsConfigured();
         EncryptionKeyManager.setPbkdf2Iterations(10000000);
-        EncryptionKeyManager.clearCaches();
+        EncryptionKeyManager.resetIterationsConfigured();
     }
 
     @Test

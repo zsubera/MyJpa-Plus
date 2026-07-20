@@ -157,10 +157,15 @@ public class EncryptConverter implements AttributeConverter<String, String> {
             }
         }
         if (executor != null && !executor.isShutdown()) {
-            executor.shutdownNow();
+            executor.shutdown();
             try {
-                executor.awaitTermination(2, java.util.concurrent.TimeUnit.SECONDS);
+                if (!executor.awaitTermination(5, java.util.concurrent.TimeUnit.SECONDS)) {
+                    executor.shutdownNow();
+                    log.warn("Encryption key warm-up executor did not terminate gracefully, forced shutdown");
+                    executor.awaitTermination(2, java.util.concurrent.TimeUnit.SECONDS);
+                }
             } catch (InterruptedException e) {
+                executor.shutdownNow();
                 Thread.currentThread().interrupt();
             }
         }

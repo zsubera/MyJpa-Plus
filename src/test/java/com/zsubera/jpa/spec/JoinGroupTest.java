@@ -304,7 +304,7 @@ class JoinGroupTest {
 
         QuerySpec<TestEntity> qs = new QuerySpec<>();
         qs.<ParentEntity>join(TestEntity::getParent, jg -> {
-            jg.or(oj -> oj.eq(ParentEntity::getCategory, "admin").eq(ParentEntity::getCategory, "moderator"));
+            jg.or(oj -> oj.eq(ParentEntity::getCategory, "admin"), oj -> oj.eq(ParentEntity::getCategory, "moderator"));
         });
 
         List<TestEntity> result = repository.findAll(qs.toSpecification());

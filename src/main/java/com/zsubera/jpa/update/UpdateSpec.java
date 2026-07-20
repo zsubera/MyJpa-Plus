@@ -705,7 +705,19 @@ public class UpdateSpec<T> extends AbstractBulkOperationSpec<T, UpdateSpec<T>> {
         }
         applyExpressionSetClauses(update, updateRoot, cb);
         applyVersionIncrement(update, updateRoot, cb);
-        update.where(InClauseBuilder.in(cb, updateRoot.get(idFieldName), ids));
+        // ponytail: The ID list was queried with soft-delete filter, but the UPDATE WHERE clause
+        // must also include it to prevent modifying already-soft-deleted rows during concurrent
+        // operations (another transaction may soft-delete a row between ID query and UPDATE).
+        Predicate idPredicate = InClauseBuilder.in(cb, updateRoot.get(idFieldName), ids);
+        Predicate[] softDeletePredicates = buildPredicates(updateRoot, cb);
+        if (softDeletePredicates.length > 0) {
+            Predicate[] all = new Predicate[softDeletePredicates.length + 1];
+            all[0] = idPredicate;
+            System.arraycopy(softDeletePredicates, 0, all, 1, softDeletePredicates.length);
+            update.where(cb.and(all));
+        } else {
+            update.where(idPredicate);
+        }
         var uq = em.createQuery(update);
         int updated = uq.executeUpdate();
         if (updated > 0) {

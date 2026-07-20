@@ -651,27 +651,23 @@ public final class SoftDeleteBulkExecutor {
 
     static VersionFieldInfo resolveVersionFieldInfo(Class<?> entityClass) {
         String cacheKey = SoftDeleteHelper.getEntityBaseName(entityClass);
-        VersionFieldInfo cached = VERSION_FIELD_INFO_CACHE.get(cacheKey);
-        if (cached != null) {
-            return cached;
-        }
-        for (Class<?> c = entityClass; c != null && c != Object.class; c = c.getSuperclass()) {
-            for (Field f : c.getDeclaredFields()) {
-                if (f.isAnnotationPresent(jakarta.persistence.Version.class)) {
-                    jakarta.persistence.Column colAnn = f.getAnnotation(jakarta.persistence.Column.class);
-                    String colName;
-                    if (colAnn != null && !colAnn.name().isEmpty()) {
-                        colName = SoftDeleteHelper.validateIdentifier(colAnn.name());
-                    } else {
-                        colName = SoftDeleteHelper.resolveColumnName(entityClass, f.getName());
+        return VERSION_FIELD_INFO_CACHE.computeIfAbsent(cacheKey, k -> {
+            for (Class<?> c = entityClass; c != null && c != Object.class; c = c.getSuperclass()) {
+                for (Field f : c.getDeclaredFields()) {
+                    if (f.isAnnotationPresent(jakarta.persistence.Version.class)) {
+                        jakarta.persistence.Column colAnn = f.getAnnotation(jakarta.persistence.Column.class);
+                        String colName;
+                        if (colAnn != null && !colAnn.name().isEmpty()) {
+                            colName = SoftDeleteHelper.validateIdentifier(colAnn.name());
+                        } else {
+                            colName = SoftDeleteHelper.resolveColumnName(entityClass, f.getName());
+                        }
+                        return new VersionFieldInfo(colName, f);
                     }
-                    VersionFieldInfo result = new VersionFieldInfo(colName, f);
-                    VERSION_FIELD_INFO_CACHE.put(cacheKey, result);
-                    return result;
                 }
             }
-        }
-        return null;
+            return null;
+        });
     }
 
     static String resolveVersionColumn(Class<?> entityClass, String dialect) {

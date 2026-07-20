@@ -176,7 +176,7 @@ public final class SoftDeleteContext {
             log.error("SoftDeleteContext pushIgnore() exceeded safety ceiling ({}). "
                 + "Auto-resetting to prevent soft-delete filter bypass. " + "Check for pushIgnore/popIgnore imbalance.",
                 limit);
-            countHolder[0] = 0;
+            IGNORE_COUNT.remove();
             throw new IllegalStateException("SoftDeleteContext ignore count exceeded maximum (" + limit + "). "
                 + "ThreadLocal has been auto-reset to prevent soft-delete filter bypass. "
                 + "Ensure every pushIgnore() has a matching popIgnore() in a finally block.");

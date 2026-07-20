@@ -98,7 +98,7 @@ public class SampledEvictionCache<K, V> {
      *
      * @param maxSize 新的最大容量
      * @throws IllegalArgumentException 如果 maxSize 不是正数
-     * @throws IllegalStateException 如果缓存已完成初始化（已有数据被缓存）
+     * @apiNote 如果缓存已完成初始化（已有数据被缓存），会记录警告并重建缓存（丢弃现有条目）。
      */
     public synchronized void setMaxSize(int maxSize) {
         if (maxSize <= 0)

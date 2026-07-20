@@ -51,6 +51,7 @@ class DefectRegressionTest {
     void cleanUp() {
         repository.deleteAll();
         repository.flush();
+        EncryptConverter.resetIterationsConfigured();
         EncryptConverter.clearCaches();
     }
 
@@ -59,6 +60,7 @@ class DefectRegressionTest {
         System.clearProperty("myjpa.encrypt.key");
         System.clearProperty("myjpa.encrypt.salt");
         System.clearProperty("myjpa-plus.encrypt.pbkdf2-iterations");
+        EncryptConverter.resetIterationsConfigured();
         EncryptConverter.clearCaches();
     }
 
