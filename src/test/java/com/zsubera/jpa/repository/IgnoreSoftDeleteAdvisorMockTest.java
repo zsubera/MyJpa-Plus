@@ -106,4 +106,27 @@ class IgnoreSoftDeleteAdvisorMockTest {
         @IgnoreSoftDelete
         Object findAll();
     }
+
+    @Test
+    void aroundRepositoryMethod_withAnnotation_traceLogging() throws Throwable {
+        ch.qos.logback.classic.Logger logger =
+            (ch.qos.logback.classic.Logger) org.slf4j.LoggerFactory.getLogger(IgnoreSoftDeleteAdvisor.class);
+        ch.qos.logback.classic.Level oldLevel = logger.getLevel();
+        try {
+            logger.setLevel(ch.qos.logback.classic.Level.TRACE);
+            ProceedingJoinPoint pjp = mock(ProceedingJoinPoint.class);
+            MethodSignature signature = mock(MethodSignature.class);
+            Method method = AnnotatedInterface.class.getMethod("findAll");
+            when(pjp.getSignature()).thenReturn(signature);
+            when(signature.getMethod()).thenReturn(method);
+            when(pjp.proceed()).thenReturn("result");
+
+            Object result = advisor.aroundRepositoryMethod(pjp);
+
+            assertEquals("result", result);
+            verify(pjp, times(1)).proceed();
+        } finally {
+            logger.setLevel(oldLevel);
+        }
+    }
 }
