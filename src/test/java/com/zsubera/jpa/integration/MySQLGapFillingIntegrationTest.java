@@ -632,8 +632,8 @@ class MySQLGapFillingIntegrationTest {
     void projection_tuple() {
         save("alice", 1);
         save("bob", 2);
-        List<Tuple> r = repository.find(Tuple.class,
-            new QuerySpec<MySQLTestEntity>().select(MySQLTestEntity::getName, MySQLTestEntity::getStatus));
+        List<Tuple> r =
+            repository.find(Tuple.class, s -> s.select(MySQLTestEntity::getName, MySQLTestEntity::getStatus));
         assertEquals(2, r.size());
         assertNotNull(r.get(0).get("name"));
     }
@@ -643,7 +643,7 @@ class MySQLGapFillingIntegrationTest {
         save("alice", 1);
         save("bob", 2);
         List<MySQLNameStatusDto> r = repository.find(MySQLNameStatusDto.class,
-            new QuerySpec<MySQLTestEntity>().select(MySQLTestEntity::getName, MySQLTestEntity::getStatus));
+            s -> s.select(MySQLTestEntity::getName, MySQLTestEntity::getStatus));
         assertEquals(2, r.size());
         assertEquals("alice", r.get(0).name);
     }
@@ -652,7 +652,7 @@ class MySQLGapFillingIntegrationTest {
     void projection_aggregation() {
         save("alice", 100);
         save("bob", 200);
-        List<Tuple> r = repository.find(Tuple.class, new QuerySpec<MySQLTestEntity>().selectAs(QuerySpec.count(), "cnt")
+        List<Tuple> r = repository.find(Tuple.class, s -> s.selectAs(QuerySpec.count(), "cnt")
             .selectAs(QuerySpec.sum(MySQLTestEntity::getStatus), "totalAmount"));
         Tuple t = r.get(0);
         assertEquals(2L, t.get("cnt"));
@@ -666,7 +666,7 @@ class MySQLGapFillingIntegrationTest {
         repository.delete(del);
         em.flush();
         em.clear();
-        List<Tuple> r = repository.find(Tuple.class, new QuerySpec<MySQLTestEntity>().select(MySQLTestEntity::getName));
+        List<Tuple> r = repository.find(Tuple.class, s -> s.select(MySQLTestEntity::getName));
         assertEquals(1, r.size());
     }
 
@@ -674,8 +674,8 @@ class MySQLGapFillingIntegrationTest {
     void projection_paged() {
         for (int i = 0; i < 10; i++)
             save("u" + i, i);
-        List<Tuple> r = repository.find(Tuple.class, new QuerySpec<MySQLTestEntity>().select(MySQLTestEntity::getName)
-            .orderByAsc(MySQLTestEntity::getName).distinct());
+        List<Tuple> r = repository.find(Tuple.class,
+            s -> s.select(MySQLTestEntity::getName).orderByAsc(MySQLTestEntity::getName).distinct());
         assertEquals(10, r.size());
     }
 

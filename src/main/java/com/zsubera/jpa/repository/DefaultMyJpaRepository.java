@@ -474,24 +474,20 @@ public class DefaultMyJpaRepository<T, ID> extends SimpleJpaRepository<T, ID> im
     }
 
     @Override
-    public <R> List<R> find(Class<R> resultType, Specification<T> spec) {
+    public <R> List<R> find(Class<R> resultType,
+        java.util.function.Consumer<com.zsubera.jpa.spec.QuerySpec<T>> config) {
+        com.zsubera.jpa.spec.QuerySpec<T> querySpec = com.zsubera.jpa.spec.QuerySpec.of(config);
         if (resultType == domainClass) {
             @SuppressWarnings("unchecked")
-            List<R> result = (List<R>)super.findAll(mergeSoftDeleteFilter(spec));
+            List<R> result = (List<R>)super.findAll(mergeSoftDeleteFilter(querySpec));
             return result;
         }
-        if (spec instanceof com.zsubera.jpa.spec.QuerySpec<T> sp && sp.isProjectionMode()) {
-            return executeTypedProjection(sp, resultType);
+        if (querySpec.isProjectionMode()) {
+            return executeTypedProjection(querySpec, resultType);
         }
         throw new IllegalArgumentException("Projection query requires a QuerySpec with select(). "
             + "Use QuerySpec.select() to configure projection fields, e.g.: "
             + "find(NameDto.class, new QuerySpec<T>().select(...).eq(...))");
-    }
-
-    @Override
-    public <R> List<R> find(Class<R> resultType,
-        java.util.function.Consumer<com.zsubera.jpa.spec.QuerySpec<T>> config) {
-        return find(resultType, com.zsubera.jpa.spec.QuerySpec.of(config));
     }
 
     // ---- 投影查询分支 ----
