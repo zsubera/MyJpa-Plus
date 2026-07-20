@@ -127,16 +127,28 @@ public interface MyJpaRepository<T, ID> extends JpaRepository<T, ID>, JpaSpecifi
     /**
      * 类型安全的投影查询（Specification 模式）。
      *
-     * <p>此方法必须由仓库基类 {@link DefaultMyJpaRepository} 实现。
+     * <p>此方法由 {@link DefaultMyJpaRepository} 实现。
+     *
+     * <p><strong>已知限制：</strong>Spring Data 的
+     * {@code DefaultMethodInvokingMethodInterceptor} 使用
+     * {@code MethodHandles.findSpecial()}（非虚分派）调用接口默认方法，
+     * 绕过 CGLIB 代理的基类方法覆盖。因此通过仓库代理直接调用此方法会抛出
+     * {@link UnsupportedOperationException}。
+     * 请使用 {@link #find(Class, Consumer)} 重载代替，例如：
+     * <pre>{@code
+     * repo.find(Tuple.class, s -> s.select(User::getName));
+     * }</pre>
      *
      * @param resultType 返回类型
      * @param spec 查询规格说明（必须已配置 select()，resultType 非实体类时）
      * @param <R> 返回元素类型
      * @return 投影结果列表
+     * @see DefaultMyJpaRepository#find(Class, Specification)
      */
     default <R> List<R> find(Class<R> resultType, Specification<T> spec) {
         throw new UnsupportedOperationException(
-            "find(Class, Specification) must be implemented by repository base class");
+            "find(Class, Specification) is not supported through the repository proxy. "
+                + "Use find(Class, Consumer<QuerySpec>) instead.");
     }
 
     /**

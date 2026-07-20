@@ -20,7 +20,6 @@ class MyJpaRepositoryFactory extends JpaRepositoryFactory {
 
     MyJpaRepositoryFactory(EntityManager entityManager) {
         super(entityManager);
-        addRepositoryProxyPostProcessor(new BaseClassMethodDispatchInterceptor());
     }
 
     @Override
