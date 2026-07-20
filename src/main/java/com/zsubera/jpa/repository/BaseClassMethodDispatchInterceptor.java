@@ -7,6 +7,7 @@ import org.aopalliance.intercept.MethodInterceptor;
 import org.aopalliance.intercept.MethodInvocation;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.aop.support.DefaultPointcutAdvisor;
 import org.springframework.data.repository.core.support.RepositoryProxyPostProcessor;
 
 /**
@@ -38,7 +39,8 @@ class BaseClassMethodDispatchInterceptor implements RepositoryProxyPostProcessor
             m.setAccessible(true);
             baseClassMethods.put(new MethodSignature(m), m);
         }
-        factory.addAdvice(new DispatchInterceptor(baseClass, baseClassMethods));
+        // 使用 addAdvisor(0, ...) 确保在链的最前面，优先于 DefaultMethodInvokingMethodInterceptor
+        factory.addAdvisor(0, new DefaultPointcutAdvisor(new DispatchInterceptor(baseClass, baseClassMethods)));
     }
 
     /**
