@@ -419,6 +419,17 @@ public class DefaultMyJpaRepository<T, ID> extends SimpleJpaRepository<T, ID> im
         return super.findAll(mergeSoftDeleteFilter(spec));
     }
 
+    /**
+     * 覆写 QuerySpec 重载，避免 Spring Data 的 {@code DefaultMethodInvokingMethodInterceptor}
+     * 通过 {@code MethodHandles.findSpecial()}（非虚分派）调用接口默认方法时绕过 CGLIB 代理。
+     *
+     * <p>此覆盖确保代理类的方法表中有此方法的覆盖，使 {@code MethodHandle.invoke()}
+     * 通过虚分派正确路由到基类实现。
+     */
+    public List<T> findAll(com.zsubera.jpa.spec.QuerySpec<T> qs) {
+        return findAll((Specification<T>)qs);
+    }
+
     @Override
     public Page<T> findAll(Specification<T> spec, Pageable pageable) {
         if (spec instanceof com.zsubera.jpa.spec.QuerySpec sp && sp.isProjectionMode()) {
