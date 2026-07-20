@@ -86,6 +86,9 @@ final class EncryptionKeyManager {
         KEY_VERSION_LOCK.lock();
         try {
             if (keysInUse.get()) {
+                if (iterationsConfigured && configuredPbkdf2Iterations == iterations) {
+                    return;
+                }
                 throw new IllegalStateException(
                     "Cannot change PBKDF2 iterations after keys have been used for encryption/decryption. "
                         + "This would make all existing ciphertext UNDECRYPTABLE. "
