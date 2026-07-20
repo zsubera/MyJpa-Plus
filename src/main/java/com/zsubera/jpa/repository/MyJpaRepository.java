@@ -121,7 +121,8 @@ public interface MyJpaRepository<T, ID> extends JpaRepository<T, ID>, JpaSpecifi
      * @return 投影结果列表
      */
     default <R> List<R> find(Class<R> resultType, Consumer<QuerySpec<T>> config) {
-        throw new UnsupportedOperationException("find(Class, Consumer) must be implemented by repository base class");
+        throw new UnsupportedOperationException("find(Class, Consumer) must be implemented by repository base class. "
+            + "Use MyJpaTemplate.find() for projection queries.");
     }
 
     /**
