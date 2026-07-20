@@ -337,10 +337,6 @@ final class NodeResolver {
     }
 
     private static Predicate resolveOr(ConditionNode.OrNode node, NodeContext ctx) {
-        // ponytail: 单子节点优化，避免创建列表和 cb.or() 包装
-        if (node.nodes.size() == 1) {
-            return resolveChild(node.nodes.get(0), ctx);
-        }
         List<Predicate> childPredicates = new ArrayList<>(node.nodes.size());
         for (ConditionNode child : node.nodes) {
             Predicate p = resolveChild(child, ctx);

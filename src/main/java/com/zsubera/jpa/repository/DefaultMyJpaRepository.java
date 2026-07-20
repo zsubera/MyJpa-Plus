@@ -477,6 +477,12 @@ public class DefaultMyJpaRepository<T, ID> extends SimpleJpaRepository<T, ID> im
             + "find(NameDto.class, new QuerySpec<T>().select(...).eq(...))");
     }
 
+    @Override
+    public <R> List<R> find(Class<R> resultType,
+        java.util.function.Consumer<com.zsubera.jpa.spec.QuerySpec<T>> config) {
+        return find(resultType, com.zsubera.jpa.spec.QuerySpec.of(config));
+    }
+
     // ---- 投影查询分支 ----
 
     @SuppressWarnings({"unchecked", "rawtypes"})
