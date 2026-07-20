@@ -38,18 +38,9 @@ class BaseClassDispatchMethodInterceptor implements RepositoryProxyPostProcessor
     @Override
     public void postProcess(org.springframework.aop.framework.ProxyFactory factory,
         org.springframework.data.repository.core.RepositoryInformation metadata) {
-        // 查找并移除 DefaultMethodInvokingMethodInterceptor
-        Object[] advisors = factory.getAdvisors();
-        for (int i = 0; i < advisors.length; i++) {
-            if (advisors[i] instanceof org.springframework.aop.Advisor advisor) {
-                if (advisor.getAdvice() instanceof DefaultMethodInvokingMethodInterceptor) {
-                    factory.removeAdvisor(i);
-                    log.debug(
-                        "Removed DefaultMethodInvokingMethodInterceptor, replacing with virtual-dispatch version");
-                    break;
-                }
-            }
-        }
+        // 移除 Spring Data 的 DefaultMethodInvokingMethodInterceptor
+        // 它使用 findSpecial()（非虚分派），绕过 CGLIB 代理的方法覆盖
+        factory.removeAdvice(new DefaultMethodInvokingMethodInterceptor());
         // 添加使用虚分派的拦截器
         factory.addAdvice(new VirtualDispatchInterceptor());
     }
