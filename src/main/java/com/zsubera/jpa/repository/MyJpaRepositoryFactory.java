@@ -33,7 +33,7 @@ class MyJpaRepositoryFactory extends JpaRepositoryFactory {
                     return;
                 }
                 factory.addAdvice(new DefaultMethodOverrideInterceptor(target));
-                log.debug("Installed DefaultMethodOverrideInterceptor for {}",
+                log.warn("Installed DefaultMethodOverrideInterceptor for {}",
                     metadata.getRepositoryInterface().getSimpleName());
             } catch (Exception e) {
                 log.error("Failed to install DefaultMethodOverrideInterceptor", e);
