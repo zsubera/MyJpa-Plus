@@ -1,15 +1,10 @@
 package com.zsubera.jpa.integration;
 
 import com.zsubera.jpa.repository.MyJpaRepository;
-import com.zsubera.jpa.spec.QuerySpec;
-import java.util.List;
 import java.util.Optional;
 
 interface MySQLTestEntityRepository extends MyJpaRepository<MySQLTestEntity, Long> {
-    default List<MySQLTestEntity> findAll(QuerySpec<MySQLTestEntity> qs) {
-        return findAll(qs.toSpecification());
-    }
-
+    // 注意：不定义 findAll(QuerySpec) 默认方法，直接使用 MyJpaRepository 的 findAll(Specification)
     Optional<MySQLTestEntity> findByName(String name);
 }
 
