@@ -96,6 +96,25 @@ public interface MyJpaRepository<T, ID> extends JpaRepository<T, ID>, JpaSpecifi
      * 类型安全的投影查询。通过 {@code resultType} 参数指定返回类型，无需手动转换。
      *
      * <p>
+     * <strong>已知限制：</strong>由于 Spring Data 的
+     * {@code DefaultMethodInvokingMethodInterceptor} 使用
+     * {@code MethodHandles.findSpecial()}（非虚分派）调用接口默认方法，
+     * 绕过 CGLIB 代理的基类方法覆盖，此方法通过仓库代理调用时会抛出
+     * {@link UnsupportedOperationException}。
+     *
+     * <p>推荐使用 {@link com.zsubera.jpa.template.MyJpaTemplate#find(Class, Class,
+     * com.zsubera.jpa.spec.QuerySpec)} 进行投影查询：
+     * <pre>{@code
+     * // 通过 MyJpaTemplate（推荐）
+     * List<Tuple> tuples = template.find(User.class, Tuple.class,
+     *     new QuerySpec<User>().select(User::getName, User::getStatus));
+     *
+     * // DTO 投影
+     * List<NameDto> dtos = template.find(User.class, NameDto.class,
+     *     new QuerySpec<User>().select(User::getName, User::getStatus));
+     * }</pre>
+     *
+     * <p>
      * 支持三种模式：
      * <ul>
      * <li>{@code resultType == Tuple.class} — 返回 {@code List<Tuple>}，通过索引或别名访问字段</li>

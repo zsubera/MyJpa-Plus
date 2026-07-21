@@ -251,11 +251,11 @@ List<Object[]> result = repository.findAll(s ->
      .having(s.gt(s.count(User::getId), 10))
 );
 
-// DTO 投影
+// DTO 投影（通过 MyJpaTemplate）
 record UserStats(String status, long count) {}
-List<UserStats> stats = repository.find(UserStats.class, s ->
-    s.select(User::getStatus, s.count(User::getId))
-     .groupBy(User::getStatus)
+List<UserStats> stats = jpaTemplate.find(User.class, UserStats.class,
+    s -> s.select(User::getStatus, s.count(User::getId))
+         .groupBy(User::getStatus)
 );
 ```
 
