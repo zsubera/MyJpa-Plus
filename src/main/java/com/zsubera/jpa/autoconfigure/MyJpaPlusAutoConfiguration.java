@@ -681,14 +681,16 @@ public class MyJpaPlusAutoConfiguration {
             for (String beanName : registry.getBeanDefinitionNames()) {
                 try {
                     var bd = registry.getBeanDefinition(beanName);
-                    if (!bd.getPropertyValues().contains("repositoryInterface")) {
+                    boolean hasRepoInterface = bd.getPropertyValues().contains("repositoryInterface");
+                    String currentClass = bd.getBeanClassName();
+                    if (!hasRepoInterface) {
                         continue;
                     }
                     // 仅当 bean class 仍为默认值（未通过 @EnableJpaRepositories 手动指定）时替换
-                    String currentClass = bd.getBeanClassName();
                     if (DEFAULT_FACTORY_BEAN.equals(currentClass)) {
                         bd.setBeanClassName(factoryBeanClassName);
                         count++;
+                        postProcessorLog.info("Replaced {} with {}", currentClass, factoryBeanClassName);
                     }
                 } catch (Exception e) {
                     // ponytail: 单个 bean 处理失败不应影响其他 bean，也不应阻断启动
