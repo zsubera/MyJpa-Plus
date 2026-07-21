@@ -20,6 +20,14 @@ class MyJpaRepositoryFactory extends JpaRepositoryFactory {
 
     MyJpaRepositoryFactory(EntityManager entityManager) {
         super(entityManager);
+        addRepositoryProxyPostProcessor((factory, metadata) -> {
+            try {
+                Object target = factory.getTargetSource().getTarget();
+                factory.addAdvice(new DefaultMethodOverrideInterceptor(target));
+            } catch (Exception e) {
+                throw new RuntimeException("Failed to install DefaultMethodOverrideInterceptor", e);
+            }
+        });
     }
 
     @Override

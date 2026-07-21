@@ -96,25 +96,6 @@ public interface MyJpaRepository<T, ID> extends JpaRepository<T, ID>, JpaSpecifi
      * 类型安全的投影查询。通过 {@code resultType} 参数指定返回类型，无需手动转换。
      *
      * <p>
-     * <strong>已知限制：</strong>由于 Spring Data 的
-     * {@code DefaultMethodInvokingMethodInterceptor} 使用
-     * {@code MethodHandles.findSpecial()}（非虚分派）调用接口默认方法，
-     * 绕过 CGLIB 代理的基类方法覆盖，此方法通过仓库代理调用时会抛出
-     * {@link UnsupportedOperationException}。
-     *
-     * <p>推荐使用 {@link com.zsubera.jpa.template.MyJpaTemplate#find(Class, Class,
-     * com.zsubera.jpa.spec.QuerySpec)} 进行投影查询：
-     * <pre>{@code
-     * // 通过 MyJpaTemplate（推荐）
-     * List<Tuple> tuples = template.find(User.class, Tuple.class,
-     *     new QuerySpec<User>().select(User::getName, User::getStatus));
-     *
-     * // DTO 投影
-     * List<NameDto> dtos = template.find(User.class, NameDto.class,
-     *     new QuerySpec<User>().select(User::getName, User::getStatus));
-     * }</pre>
-     *
-     * <p>
      * 支持三种模式：
      * <ul>
      * <li>{@code resultType == Tuple.class} — 返回 {@code List<Tuple>}，通过索引或别名访问字段</li>
@@ -134,14 +115,25 @@ public interface MyJpaRepository<T, ID> extends JpaRepository<T, ID>, JpaSpecifi
      * List<User> users = repo.find(User.class, s -> s.eq(User::getStatus, "ACTIVE"));
      * }</pre>
      *
+     * <pre>{@code
+     * // Tuple 投影
+     * List<Tuple> tuples = repo.find(Tuple.class, s -> s.select(User::getName, User::getStatus));
+     *
+     * // DTO 投影（Record 或带 -parameters 编译的普通类）
+     * record NameDto(String name, Integer status) {}
+     * List<NameDto> dtos = repo.find(NameDto.class, s -> s.select(User::getName, User::getStatus));
+     *
+     * // 实体查询（等价于 findAll，忽略 select）
+     * List<User> users = repo.find(User.class, s -> s.eq(User::getStatus, "ACTIVE"));
+     * }</pre>
+     *
      * @param resultType 返回类型：Tuple.class、实体类、或 DTO/Record 类
      * @param config 查询条件配置
      * @param <R> 返回元素类型
      * @return 投影结果列表
      */
     default <R> List<R> find(Class<R> resultType, Consumer<QuerySpec<T>> config) {
-        throw new UnsupportedOperationException("find(Class, Consumer) must be implemented by repository base class. "
-            + "Use MyJpaTemplate.find() for projection queries.");
+        throw new UnsupportedOperationException("find(Class, Consumer) must be implemented by repository base class");
     }
 
     /**
