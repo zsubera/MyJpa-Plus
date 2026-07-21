@@ -13,6 +13,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.ApplicationContext;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.transaction.annotation.Transactional;
@@ -50,6 +51,8 @@ class MySQLGapFillingIntegrationTest {
     private MySQLParentEntityRepository parentRepository;
     @Autowired
     private EntityManager em;
+    @Autowired
+    private ApplicationContext applicationContext;
     private MyJpaTemplate jpaTemplate;
 
     @BeforeEach
@@ -57,6 +60,12 @@ class MySQLGapFillingIntegrationTest {
         repository.deleteAll();
         parentRepository.deleteAll();
         jpaTemplate = new MyJpaTemplate(em);
+        try {
+            java.lang.reflect.Field f = MyJpaTemplate.class.getDeclaredField("applicationContext");
+            f.setAccessible(true);
+            f.set(jpaTemplate, applicationContext);
+        } catch (Exception ignored) {
+        }
     }
 
     // ==================== GROUP BY + HAVING ====================
