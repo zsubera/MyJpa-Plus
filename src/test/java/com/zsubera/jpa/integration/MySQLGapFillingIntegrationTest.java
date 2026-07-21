@@ -49,14 +49,14 @@ class MySQLGapFillingIntegrationTest {
     @Autowired
     private MySQLParentEntityRepository parentRepository;
     @Autowired
-    private MyJpaTemplate jpaTemplate;
-    @Autowired
     private EntityManager em;
+    private MyJpaTemplate jpaTemplate;
 
     @BeforeEach
     void setUp() {
         repository.deleteAll();
         parentRepository.deleteAll();
+        jpaTemplate = new MyJpaTemplate(em);
     }
 
     // ==================== GROUP BY + HAVING ====================
