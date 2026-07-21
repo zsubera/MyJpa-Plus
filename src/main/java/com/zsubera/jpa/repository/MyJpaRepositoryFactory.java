@@ -28,11 +28,13 @@ class MyJpaRepositoryFactory extends JpaRepositoryFactory {
             try {
                 Object target = factory.getTargetSource().getTarget();
                 if (target == null) {
-                    log.warn("Target is null for {}, skipping DefaultMethodOverrideInterceptor", metadata.getRepositoryInterface().getSimpleName());
+                    log.warn("Target is null for {}, skipping DefaultMethodOverrideInterceptor",
+                        metadata.getRepositoryInterface().getSimpleName());
                     return;
                 }
                 factory.addAdvice(new DefaultMethodOverrideInterceptor(target));
-                log.debug("Installed DefaultMethodOverrideInterceptor for {}", metadata.getRepositoryInterface().getSimpleName());
+                log.debug("Installed DefaultMethodOverrideInterceptor for {}",
+                    metadata.getRepositoryInterface().getSimpleName());
             } catch (Exception e) {
                 log.error("Failed to install DefaultMethodOverrideInterceptor", e);
                 throw new RuntimeException("Failed to install DefaultMethodOverrideInterceptor", e);

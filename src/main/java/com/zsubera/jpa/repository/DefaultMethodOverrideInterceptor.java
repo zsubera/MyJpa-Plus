@@ -62,8 +62,8 @@ class DefaultMethodOverrideInterceptor implements MethodInterceptor {
                 return targetMethod;
             }
             if (log.isTraceEnabled()) {
-                log.trace("No override found for {} (target: {}, declaringClass: {})",
-                    m.getName(), target.getClass().getSimpleName(),
+                log.trace("No override found for {} (target: {}, declaringClass: {})", m.getName(),
+                    target.getClass().getSimpleName(),
                     targetMethod != null ? targetMethod.getDeclaringClass().getSimpleName() : "null");
             }
             return null;
