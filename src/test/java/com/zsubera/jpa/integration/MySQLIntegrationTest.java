@@ -252,7 +252,7 @@ class MySQLIntegrationTest {
         save("charlie", 3);
 
         QuerySpec<MySQLTestEntity> qs = new QuerySpec<>();
-        qs.or(g -> g.eq(MySQLTestEntity::getName, "alice").eq(MySQLTestEntity::getName, "bob"));
+        qs.or(g -> g.eq(MySQLTestEntity::getName, "alice"), g -> g.eq(MySQLTestEntity::getName, "bob"));
         assertEquals(2, repository.findAll(qs).size());
     }
 
@@ -335,7 +335,7 @@ class MySQLIntegrationTest {
         save("c", 3);
 
         QuerySpec<MySQLTestEntity> qs = new QuerySpec<>();
-        qs.or(g -> g.eq(MySQLTestEntity::getStatus, 1).eq(MySQLTestEntity::getStatus, 3));
+        qs.or(g -> g.eq(MySQLTestEntity::getStatus, 1), g -> g.eq(MySQLTestEntity::getStatus, 3));
         assertEquals(2, repository.findAll(qs).size());
     }
 

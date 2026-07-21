@@ -183,7 +183,7 @@ class MySQLFullIntegrationTest {
         save("bob", 2);
         save("charlie", 3);
         QuerySpec<MySQLTestEntity> qs = new QuerySpec<>();
-        qs.or(g -> g.eq(MySQLTestEntity::getName, "alice").eq(MySQLTestEntity::getName, "bob"));
+        qs.or(g -> g.eq(MySQLTestEntity::getName, "alice"), g -> g.eq(MySQLTestEntity::getName, "bob"));
         assertEquals(2, repository.findAll(qs).size());
     }
 
@@ -204,8 +204,8 @@ class MySQLFullIntegrationTest {
         save("c", 3);
         save("d", 4);
         QuerySpec<MySQLTestEntity> qs = new QuerySpec<>();
-        qs.or(g -> g.eq(MySQLTestEntity::getStatus, 1).eq(MySQLTestEntity::getStatus, 4)).ne(MySQLTestEntity::getName,
-            "a");
+        qs.or(g -> g.eq(MySQLTestEntity::getStatus, 1), g -> g.eq(MySQLTestEntity::getStatus, 4))
+            .ne(MySQLTestEntity::getName, "a");
         // (status=1 OR status=4) AND name!=a => d(4) only, since a(1) is excluded by ne
         assertEquals(1, repository.findAll(qs).size());
     }
@@ -217,7 +217,7 @@ class MySQLFullIntegrationTest {
         save("c", 3);
         save("d", 4);
         QuerySpec<MySQLTestEntity> qs = new QuerySpec<>();
-        qs.or(g -> g.eq(MySQLTestEntity::getStatus, 1).eq(MySQLTestEntity::getStatus, 2))
+        qs.or(g -> g.eq(MySQLTestEntity::getStatus, 1), g -> g.eq(MySQLTestEntity::getStatus, 2))
             .or(g -> g.eq(MySQLTestEntity::getStatus, 3));
         // 多个 .or() 调用会合并为单个 OR 组: status=1 OR status=2 OR status=3 => a, b, c
         assertEquals(3, repository.findAll(qs).size());
@@ -637,7 +637,7 @@ class MySQLFullIntegrationTest {
         save("bob", 2);
         save("charlie", 3);
         QuerySpec<MySQLTestEntity> qs = new QuerySpec<>();
-        qs.or(g -> g.eq(MySQLTestEntity::getName, "alice").eq(MySQLTestEntity::getName, "bob"))
+        qs.or(g -> g.eq(MySQLTestEntity::getName, "alice"), g -> g.eq(MySQLTestEntity::getName, "bob"))
             .ne(MySQLTestEntity::getName, "bob");
         assertEquals(1, repository.findAll(qs).size());
     }
