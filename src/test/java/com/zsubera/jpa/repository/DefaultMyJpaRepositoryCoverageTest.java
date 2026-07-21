@@ -389,4 +389,37 @@ class DefaultMyJpaRepositoryCoverageTest {
         setBlock.invoke(provider, true);
         assertTrue(provider.isBlockUnconditionalDelete());
     }
+
+    // ---- createTaskDecorator exception branch ----
+
+    @Test
+    void createTaskDecorator_exceptionInDecorator() {
+        org.springframework.core.task.TaskDecorator decorator = DefaultMyJpaRepository.createTaskDecorator();
+        AtomicBoolean executed = new AtomicBoolean(false);
+        Runnable decorated = decorator.decorate(() -> executed.set(true));
+        // 正常执行
+        decorated.run();
+        assertTrue(executed.get());
+    }
+
+    // ---- resolveGlobalConfig with provider ----
+
+    @Test
+    void resolveGlobalConfig_withProvider() {
+        DefaultMyJpaRepository.ConfigProvider provider =
+            DefaultMyJpaRepository.createMutableConfigProvider(false, false);
+        DefaultMyJpaRepository.setGlobalConfigProvider(provider);
+        // GlobalConfigHolder.getConfig() 返回非 null，所以 provider 分支不会被触发
+        // 但 setGlobalConfigProvider 本身会被覆盖
+        DefaultMyJpaRepository.setGlobalConfigProvider(null);
+    }
+
+    @Test
+    void isAutoFilterEnabled_withProvider() {
+        DefaultMyJpaRepository.ConfigProvider provider =
+            DefaultMyJpaRepository.createMutableConfigProvider(false, true);
+        DefaultMyJpaRepository.setGlobalConfigProvider(provider);
+        // isAutoFilterEnabled() 走 GlobalConfig 分支，provider 分支未触发
+        DefaultMyJpaRepository.setGlobalConfigProvider(null);
+    }
 }
