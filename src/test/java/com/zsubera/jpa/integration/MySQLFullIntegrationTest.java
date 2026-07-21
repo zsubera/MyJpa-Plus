@@ -824,8 +824,8 @@ class MySQLFullIntegrationTest {
         save("child3", 3, parent1);
 
         QuerySpec<MySQLTestEntity> qs = new QuerySpec<>();
-        qs.<MySQLParentEntity>join(MySQLTestEntity::getParent,
-            j -> j.or(o -> o.eq(MySQLParentEntity::getCategory, "cat1").eq(MySQLParentEntity::getCategory, "cat2")));
+        qs.<MySQLParentEntity>join(MySQLTestEntity::getParent, j -> j
+            .or(o -> o.eq(MySQLParentEntity::getCategory, "cat1"), o -> o.eq(MySQLParentEntity::getCategory, "cat2")));
         assertEquals(3, repository.findAll(qs).size());
     }
 
