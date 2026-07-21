@@ -1,6 +1,8 @@
 package com.zsubera.jpa.repository;
 
 import jakarta.persistence.EntityManager;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.data.jpa.repository.support.JpaRepositoryFactory;
 import org.springframework.data.repository.core.RepositoryMetadata;
 
@@ -18,13 +20,21 @@ import org.springframework.data.repository.core.RepositoryMetadata;
  */
 class MyJpaRepositoryFactory extends JpaRepositoryFactory {
 
+    private static final Logger log = LoggerFactory.getLogger(MyJpaRepositoryFactory.class);
+
     MyJpaRepositoryFactory(EntityManager entityManager) {
         super(entityManager);
         addRepositoryProxyPostProcessor((factory, metadata) -> {
             try {
                 Object target = factory.getTargetSource().getTarget();
+                if (target == null) {
+                    log.warn("Target is null for {}, skipping DefaultMethodOverrideInterceptor", metadata.getRepositoryInterface().getSimpleName());
+                    return;
+                }
                 factory.addAdvice(new DefaultMethodOverrideInterceptor(target));
+                log.debug("Installed DefaultMethodOverrideInterceptor for {}", metadata.getRepositoryInterface().getSimpleName());
             } catch (Exception e) {
+                log.error("Failed to install DefaultMethodOverrideInterceptor", e);
                 throw new RuntimeException("Failed to install DefaultMethodOverrideInterceptor", e);
             }
         });

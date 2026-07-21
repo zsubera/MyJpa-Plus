@@ -55,8 +55,16 @@ class DefaultMethodOverrideInterceptor implements MethodInterceptor {
         return overrideCache.computeIfAbsent(interfaceMethod, m -> {
             Method targetMethod = ReflectionUtils.findMethod(target.getClass(), m.getName(), m.getParameterTypes());
             if (targetMethod != null && targetMethod.getDeclaringClass() != m.getDeclaringClass()) {
+                if (log.isTraceEnabled()) {
+                    log.trace("Found override {} on {}", m.getName(), targetMethod.getDeclaringClass().getSimpleName());
+                }
                 ReflectionUtils.makeAccessible(targetMethod);
                 return targetMethod;
+            }
+            if (log.isTraceEnabled()) {
+                log.trace("No override found for {} (target: {}, declaringClass: {})",
+                    m.getName(), target.getClass().getSimpleName(),
+                    targetMethod != null ? targetMethod.getDeclaringClass().getSimpleName() : "null");
             }
             return null;
         });
